@@ -3,6 +3,7 @@ from __future__ import annotations
 from compiler.context import Variable
 from compiler.typing import TerminalType, Type
 
+
 class CppTyper:
     TYPE_TO_CPP_TYPE_STR = {
         "integer": "int",
@@ -29,6 +30,7 @@ class CppTyper:
 
     def get_size_t(self) -> str:
         return "size_t"
+
 
 class FortranTyper:
     TYPE_TO_FORTRAN_TYPE_STR = {

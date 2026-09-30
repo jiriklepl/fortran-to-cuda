@@ -6,6 +6,7 @@ from compiler.context import Context, ContextWithArguments, DoLoopContext, Local
 from compiler.fparser_tree_abstraction import CallStmtNode, FparserTree, LoopStatement
 from compiler.debugging.color_printer import Colors as c
 
+
 class Kernel:
     def __init__(self, context: Context):
         self._code_lines = []
@@ -62,6 +63,7 @@ class Kernel:
     
     def get_all_do_loop_contexts_from_inner_to_outer(self) -> list[DoLoopContext]:
         return list(self.context.enum_do_loop_contexts())
+
 
 class KernelFunctionDefinition:
     def __init__(self, kernel_ast):
@@ -158,4 +160,3 @@ class KernelFunctionDefinition:
 
         current_kernels.finish_current_sub_kernel()
         return current_kernels.kernels
-

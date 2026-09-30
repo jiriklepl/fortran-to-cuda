@@ -1,4 +1,6 @@
 from compiler.debugging.color_printer import Colors as c
+
+
 class Type:
     def get_dim_count(self) -> int:
         raise NotImplementedError()
@@ -11,6 +13,7 @@ class Type:
 
     def get_underlying_type(self):
         raise NotImplementedError()
+
 
 class TerminalType(Type):
     def __init__(self, name):
@@ -27,6 +30,7 @@ class TerminalType(Type):
 
     def __str__(self):
         return f"{c.TYPE}T_{self.name}{c.END}"
+
 
 class ArrayType(Type):
     def __init__(self, element_type: Type, spec_ast):

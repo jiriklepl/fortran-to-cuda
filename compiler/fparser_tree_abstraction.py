@@ -1,6 +1,7 @@
 from __future__ import annotations
 from decimal import Context
 
+
 class FparserTree:
     def __init__(self, tree):
         if tree.__class__ == FparserTree:
@@ -19,6 +20,8 @@ class FparserTree:
                 return None
             
             current_node = current_node.parent
+
+        return None
 
     def get_all_nodes_of_type(self, node_type: str) -> list:
         def add_if_node_is_of_type(node, acc):
@@ -65,7 +68,6 @@ class FparserTree:
                 acc = self._reduce_impl(child, reduction_function, acc)
 
         return acc
-
 
     def children(self) -> list:
         if hasattr(self.tree, "children"):
@@ -116,6 +118,7 @@ class FparserTree:
         return [
             child for child in self.children() 
             if child.__class__.__name__.lower() not in to_exclude]
+
 
 class LoopStatement:
     def __init__(self, loop_ast):

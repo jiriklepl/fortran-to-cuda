@@ -9,6 +9,7 @@ from compiler.cuda_generation.code_parts.pure_cpp_gen import PureCppGenerator
 from compiler.cuda_generation.templates.template import Template
 from compiler.kernel_abstraction import Kernel, KernelFunctionDefinition
 
+
 class FullCodeGenerator:
     def __init__(self, kernels: list[Kernel], entry_kernel_func: KernelFunctionDefinition):
 
@@ -16,7 +17,6 @@ class FullCodeGenerator:
         self.cu_file_template_path = path_to_templates / "kernels_interface_template.cu"
         self.fortran_interface_template_path = path_to_templates / "fortran_interface.f90"
         self.pure_cpp_template_path = path_to_templates / "cpp_impl.cpp"
-
 
         self.host_params_generator = ParamsGenerator(kernels, preceding_kernels=[])
         self.cuda_mem_code_generator = CudaMemCodeGenerator(kernels)
@@ -94,7 +94,6 @@ class FullCodeGenerator:
         fortran_interface_template.replace_placeholder("FORTRAN_KERNEL_ARGS_DECLS", original_fortran_func_args_decls, tabs=2)
 
         return fortran_interface_template.code
-
 
     def generate_pure_cpp_code(self) -> str:
         cpp_file_template = Template(self.pure_cpp_template_path)

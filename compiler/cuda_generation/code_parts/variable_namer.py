@@ -5,6 +5,7 @@ from compiler.cuda_generation.code_parts.cpp_types_gen import CppTyper
 from compiler.debugging.color_printer import Colors as c
 from compiler.context import Context, Variable
 
+
 class VariableNamer:
     def __init__(self):
         self.cpp_typer = CppTyper()

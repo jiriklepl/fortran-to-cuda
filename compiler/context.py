@@ -4,6 +4,7 @@ from compiler.debugging.color_printer import Colors as c
 from compiler.fparser_tree_abstraction import FparserTree, LoopStatement
 from compiler.typing import ArrayType, TerminalType
 
+
 class Variable:
     def __init__(self, name, type, attributes: str | list[str] = ""):
         self._name = name
@@ -64,8 +65,8 @@ class Variable:
         for shape in shape_list:
             final_type = ArrayType(final_type, shape)
 
-
         return Variable(variable_name, final_type, attributes)
+
 
 class IterationVariable:
     def __init__(self, original_variable: Variable, loop_statement: LoopStatement):
@@ -89,6 +90,7 @@ class IterationVariable:
     
     def __str__(self):
         return f"{c.CLASS}IterationVariable{c.END}({c.FIELD}name{c.END}={c.VAR}{self.name()}{c.END}, {c.FIELD}original_variable{c.END}={self.original_variable})"
+
 
 class Context:
     def _load_variables(self, specifications_ast, declaration_ast):
@@ -168,6 +170,7 @@ class LocalContext(Context):
     def enum_do_loop_contexts(self):
         return [] 
 
+
 class DoLoopContext(Context):
     def __init__(self, do_statement: LoopStatement, parent_context: Context):
         self.parent_context = parent_context
@@ -213,6 +216,7 @@ class DoLoopContext(Context):
         parent_context_str = str(self.parent_context)
         tabbed_parent_context_str = "\t" + parent_context_str.replace("\n", "\n\t")
         return f"{c.CLASS}DoLoopContext{c.END}({c.FIELD}iteration_variable{c.END}={self.iteration_variable}, {c.FIELD}parent_context{c.END}=\n{tabbed_parent_context_str}\n)"
+
 
 class ContextWithArguments(Context):
     def __init__(self,

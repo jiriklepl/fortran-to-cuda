@@ -27,6 +27,7 @@ class KernelGroup:
         else:
             return self.preceding_group.kernels + self.preceding_group.get_all_preceding_kernels()
 
+
 class DependenceResolver:
     def group_kernels(self, kernels: list[Kernel]) -> list[KernelGroup]:
         loop_contexts_from_outer_to_inner = [

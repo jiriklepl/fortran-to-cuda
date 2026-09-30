@@ -27,7 +27,7 @@ python -m compiler \
 
 ## CLI Reference
 
-```
+```bash
 python -m compiler --input FILE --kernel NAME [options]
 ```
 
