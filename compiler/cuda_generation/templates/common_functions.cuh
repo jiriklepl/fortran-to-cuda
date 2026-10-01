@@ -48,10 +48,10 @@ struct StaticLoop<N, N> {
 template <typename... Args>
 CUDA_CALLABLE size_t F_IDX(Args... args) {
     constexpr size_t total_args = sizeof...(Args);
-    
+
     static_assert(total_args % 2 == 0, "IDX requires N indices followed by N dimensions.");
     static_assert(total_args > 0, "IDX requires at least 2 arguments.");
-    
+
     constexpr size_t N = total_args / 2;
 
     const size_t arr[total_args] = { static_cast<size_t>(args)... };
@@ -210,7 +210,7 @@ void print_timing_summary() {
     std::cout << "d2h_total_ms:       " << d2h_total_ms << " (" << throughput_gbps(d2h_total_bytes, d2h_total_ms) << " GBps)\n";
     std::cout << "free_total_ms:      " << free_total_ms << "\n";
 }
-   
+
 }
 #endif  // __CUDACC__
 

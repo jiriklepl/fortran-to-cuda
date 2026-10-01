@@ -1,10 +1,13 @@
 [project]
 name = "fort_to_cuda"
 version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["fparser>=0.2.0,<0.3", "islpy==2026.2.2"]
 
 [dependency-groups]
 dev = [
     "fparser>=0.2.0,<0.3",
+    "islpy==2026.2.2",
     "pytest>=8.3,<10",
     "ruff==0.16.4",
 ]
@@ -13,6 +16,7 @@ dev = [
 minversion = "8.3"
 testpaths = ["tests"]
 addopts = ["--import-mode=importlib", "--strict-config", "--strict-markers", "-ra"]
+markers = ["native: requires native Fortran and C++ compilers", "cuda: requires CUDA toolkit or device"]
 
 [tool.ruff]
 target-version = "py310"

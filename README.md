@@ -30,7 +30,7 @@ path-to-this-repository/
 ├── memory-framework/       ← proof-of-concept: transparent lazy GPU memory
 │   └── README.md           ← concept, state machine, and PoC documentation
 │
-├── requirements.txt        ← Python dependencies (fparser, matplotlib)
+├── requirements.txt        ← Python dependencies (fparser, islpy, matplotlib)
 └── README.md               ← this file
 ```
 
@@ -202,11 +202,12 @@ Fortran.
 
 ### `compiler/` — Source-to-Source Compiler
 
-A Python package (`python -m compiler`) built on the `fparser` library.  Parses
-Fortran modules annotated with `! kernels` / `! kernel` comments, extracts the
-kernel call graph, groups do-loop nests for fusion, and emits:
+A Python package (`python -m compiler`) built on `fparser` and `islpy`. It lowers
+annotated Fortran into an immutable computation IR, proves each loop nest safe
+for parallel execution, and emits both backends from one ordered execution plan.
+Unsafe regions are rejected; this milestone performs no fusion or rescheduling.
 
-- **CUDA** — each do-loop group becomes a `__global__` kernel; the host wrapper
+- **CUDA** — each source loop nest becomes a `__global__` kernel; the host wrapper
   handles memory allocation, H→D upload, kernel launch, D→H download.
 - **C++ (with/without OpenMP)** — all sub-kernels inlined into a single flat
   function; the `#pragma omp` line is present in the OMP variant and stripped for
@@ -278,8 +279,10 @@ contains
 
   ! kernel
   subroutine CDU(U2, U, V, W, dxmin, dymin, dzmin, Unx, Uny, Unz)
+    real(knd) :: zero
     ! entry point — calls set, CDUdiv, CDUadv, multiply
-    call set(U2, 0.0_knd, Unx, Uny, Unz)
+    zero = 0.0_knd
+    call set(U2, zero, Unx, Uny, Unz)
     call CDUdiv(...)
     call CDUadv(...)
   end subroutine CDU
