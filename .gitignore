@@ -7,3 +7,6 @@
 /venv
 /out
 **/pure_fortran_app
+.venv/
+.pytest_cache/
+.ruff_cache/

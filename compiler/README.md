@@ -77,3 +77,36 @@ subroutines; the compiler inlines them all.
 - Multiple source files per invocation
 - `if`/`select case` inside kernels, reductions
 - Fortran intrinsics beyond arithmetic operators
+
+---
+
+## Development
+
+Run these commands from the **repository root** with Python 3.10 or newer.
+The `dev` dependency group includes the parser, pytest, and Ruff; the smoke tests
+do not need CUDA, a GPU, or a native Fortran/C++ compiler.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade "pip>=25.1"
+python -m pip install --group ./compiler/pyproject.toml:dev
+
+python -m pytest compiler/tests
+python -m ruff check compiler
+python -m ruff format --check compiler
+```
+
+The two smoke cases in `tests/` generate CUDA, C++, and Fortran interface files
+from tiny annotated Fortran modules. They only check that the CLI runs and writes
+the expected artifacts into pytest's temporary directories. They provide a place
+to add future tests; they do not compile or execute the generated code or attempt
+comprehensive library coverage. Add future Fortran inputs under `tests/fixtures/`.
+
+Pytest uses [importlib mode](https://docs.pytest.org/en/stable/explanation/goodpractices.html)
+and discovers the compiler tests using `pyproject.toml`.
+[Ruff](https://docs.astral.sh/ruff/configuration/) provides linting, import sorting
+checks, and formatting with an 120-column line length and double quotes. Its
+configuration applies to `compiler/`. The commands above only report issues and
+return a nonzero status when existing code does not conform, including the
+unfinished `for_loops.py` stub. Existing source cleanup is deferred.
