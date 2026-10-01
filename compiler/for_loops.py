@@ -1,1 +1,2 @@
-class ForLoopHelper
+class ForLoopHelper:
+    pass

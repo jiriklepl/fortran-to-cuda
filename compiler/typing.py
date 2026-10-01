@@ -4,7 +4,7 @@ from compiler.debugging.color_printer import Colors as c
 class Type:
     def get_dim_count(self) -> int:
         raise NotImplementedError()
-    
+
     def is_base_type(self):
         raise NotImplementedError()
 
@@ -21,7 +21,7 @@ class TerminalType(Type):
 
     def get_dim_count(self) -> int:
         return 0
-    
+
     def is_base_type(self):
         return True
 

@@ -22,16 +22,16 @@ class Variable:
 
     def is_output(self):
         return "intent(out)" in self.attributes or "intent(inout)" in self.attributes
-    
+
     def type(self) -> TerminalType | ArrayType:
         return self._type
 
     def is_input_output(self):
         return "intent(inout)" in self.attributes
-    
+
     def is_function_param(self):
         return self._is_param
-    
+
     def is_iterator_var(self):
         return False
 
@@ -46,7 +46,7 @@ class Variable:
 
     def __str__(self):
         return f"{c.CLASS}Variable{c.END}({c.FIELD}name{c.END}={c.VAR}{self.name()}{c.END}, {c.FIELD}type{c.END}={self.type()}, {c.FIELD}attributes{c.END}={c.ATTR}{self.attributes}{c.END})"
-    
+
     @staticmethod
     def from_(intrinsic_type_ast, variable_ast, attributes):
         base_type_name = str(intrinsic_type_ast[0]).lower()
@@ -78,16 +78,16 @@ class IterationVariable:
 
     def is_named(self, name):
         return self.name() == name
-    
+
     def is_function_param(self):
         return False
-    
+
     def type(self):
         return self.original_variable.type()
-    
+
     def is_iterator_var(self):
         return True
-    
+
     def __str__(self):
         return f"{c.CLASS}IterationVariable{c.END}({c.FIELD}name{c.END}={c.VAR}{self.name()}{c.END}, {c.FIELD}original_variable{c.END}={self.original_variable})"
 
@@ -111,7 +111,7 @@ class Context:
                 variable.set_as_param()
 
         return all_variables
-    
+
     def _load_variables_from_specification(self, specification_ast):
         tree = FparserTree(specification_ast)
 
@@ -124,7 +124,7 @@ class Context:
             variables.append(Variable.from_(intrinsic_type, var, attributes))
 
         return variables
-    
+
     def get_variable_by_name(self, name) -> Variable:
         raise NotImplementedError("This method should be implemented by subclasses of Context")
 
@@ -136,7 +136,7 @@ class Context:
 
     def is_call_context(self):
         return False
-    
+
 class LocalContext(Context):
     def __init__(self, specifications_ast, declaration_ast):
         self.specifications_ast = FparserTree(specifications_ast)
@@ -147,28 +147,28 @@ class LocalContext(Context):
         for variable in self.variables:
             if variable.name() == name:
                 return variable
-        
+
         raise Exception(f"Variable with name {name} not found in context")
 
     def variable_defined(self, variable: Variable) -> bool:
         for var in self.variables:
             if var.name() == variable.name():
                 return True
-        
+
         return False
 
     def __str__(self):
         variables_str = "\n".join([str(var) for var in self.variables])
         tabbed_variables_str = "\t" + variables_str.replace("\n", "\n\t")
         return f"{c.CLASS}LocalContext{c.END}({c.FIELD}variables{c.END}=\n{tabbed_variables_str}\n)"
-    
+
     def get_call_arg_names(self):
         arg_list = self.declaration_ast.get_all_nodes_of_type("Dummy_Arg_List")
         arg_list = FparserTree(arg_list[0]).children()
         return [str(arg) for arg in arg_list]
-    
+
     def enum_do_loop_contexts(self):
-        return [] 
+        return []
 
 
 class DoLoopContext(Context):
@@ -187,13 +187,13 @@ class DoLoopContext(Context):
     def get_variable_by_name(self, name) -> Variable | IterationVariable:
         if self.iteration_variable.is_named(name):
             return self.iteration_variable
-        
+
         return self.parent_context.get_variable_by_name(name)
 
     def variable_defined(self, variable: Variable) -> bool:
         if self.iteration_variable.is_named(variable.name()):
             return True
-        
+
         return self.parent_context.variable_defined(variable)
 
     def enum_do_loop_contexts(self):
@@ -205,7 +205,7 @@ class DoLoopContext(Context):
         range_from_to = loop_control_part.children[1]
         range_from = range_from_to[0]
         range_to = range_from_to[1]
-        
+
         yield range_from, self
         yield range_to, self
 
@@ -230,7 +230,7 @@ class ContextWithArguments(Context):
         function_arg_list = function_local_context.get_call_arg_names()
         if len(function_arg_list) != len(call_arguments):
             raise Exception(f"Number of call arguments ({len(call_arguments)}) does not match number of function arguments ({len(function_arg_list)})")
-        
+
         self.translation_dict = {arg_name: arg for arg_name, arg in zip(function_arg_list, call_arguments)}
         self.translation_dict.update(self._rename_reused_variables())
 
@@ -267,7 +267,7 @@ class ContextWithArguments(Context):
 
     def is_call_context(self):
         return True
-    
+
     def enum_do_loop_contexts(self):
         yield from self.caller_context.enum_do_loop_contexts()
 
@@ -282,4 +282,3 @@ class ContextWithArguments(Context):
         tabbed_arguments_str = "\t" + arguments_str.replace("\n", "\n\t")
 
         return f"{c.CLASS}ContextWithArguments{c.END}({c.FIELD}call_arguments{c.END}=\n{tabbed_arguments_str}, \n\t{c.FIELD}function_local_context{c.END}={tabbed_function_local_context_str}, \n{c.FIELD}caller_context{c.END}=\n{tabbed_caller_context_str}\n)"
-    

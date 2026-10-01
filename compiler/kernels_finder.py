@@ -16,7 +16,7 @@ class SourceFilesCollection_FromFilesystem:
                 if file.endswith(files_extensions):
                     self.files_paths.append(os.path.join(root, file))
         return self
-    
+
     def load_file(self, path):
         self.files_paths.append(path)
         return self
@@ -26,7 +26,7 @@ class SourceFilesCollection_FromFilesystem:
             if first_line_predicate is None:
                 yield file_path
             else:
-                with open(file_path, 'r') as f:
+                with open(file_path, 'r', encoding='utf-8') as f:
                     first_line = f.readline().strip().lower()
 
                 if first_line_predicate(first_line):
@@ -40,7 +40,7 @@ class KernelFinder:
     def load_all_kernels(self):
         def is_kernel_module(first_line):
             return "! kernels" == first_line.lower()
-        
+
         self.kernels_dict = {}
 
         for file_path in self.source_files.iterate_paths(is_kernel_module):
@@ -68,7 +68,7 @@ class KernelFinder:
         kernel_functions = [KernelFunctionDefinition(kernel_node) for kernel_node in kernel_functions]
 
         symbol_table = {kernel_function.name(): kernel_function for kernel_function in kernel_functions}
-        
+
         for kernel_function in kernel_functions:
             kernel_function.set_symbol_table(symbol_table)
 

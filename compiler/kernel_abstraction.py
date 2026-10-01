@@ -18,14 +18,14 @@ class Kernel:
 
     def is_empty(self):
         return len(self._code_lines) == 0 and self.sub_kernel is None
-    
+
     def has_top_level_context(self):
         return self.context.is_call_context()
 
     def merge_with(self, other_kernel):
         if self.sub_kernel is not None:
             raise Exception("Cannot merge with another kernel because this kernel already has a sub-kernel")
-        
+
         self.sub_kernel = other_kernel
 
     def enum_lines_with_context(self):
@@ -60,7 +60,7 @@ class Kernel:
         contexts = list(self.context.enum_do_loop_contexts())
         contexts.reverse()
         return list(contexts)
-    
+
     def get_all_do_loop_contexts_from_inner_to_outer(self) -> list[DoLoopContext]:
         return list(self.context.enum_do_loop_contexts())
 
@@ -88,20 +88,20 @@ class KernelFunctionDefinition:
         name = FparserTree(module_stmt).get_all_nodes_in_children_of_type("Name")[0]
 
         return str(name)
-        
+
     def set_symbol_table(self, symbol_table: dict[str, "KernelFunctionDefinition"]):
         self.symbol_table = symbol_table
 
     def name(self):
         return str(self.declaration_ast.get_all_nodes_in_children_of_type("Name")[0])
-   
+
     def extract_kernels_graph(self) -> list[Kernel]:
         return self._extract_kernels_sub_graph(self.code_ast.tree, self.local_context)
-    
+
     def extract_kernels_graph_with_calls(self, caller_context: Context, call_args: list[Variable]) -> list[Kernel]:
         context_with_args = ContextWithArguments(self.local_context, caller_context, call_args)
         return self._extract_kernels_sub_graph(self.code_ast.tree, context_with_args)
-    
+
     def parameters(self) -> list[Variable]:
         return [var for var in self.local_context.variables if var.is_function_param()]
 
@@ -135,22 +135,22 @@ class KernelFunctionDefinition:
 
                 execution_part = loop_statement.get_execution_part()
 
-                sub_kernels = self._extract_kernels_sub_graph(execution_part, loop_context)  
+                sub_kernels = self._extract_kernels_sub_graph(execution_part, loop_context)
                 current_kernels.kernels.extend(sub_kernels)
 
             elif line.is_call_statement():
                 call = CallStmtNode(line)
-                
+
                 kernel_func_name = call.called_function_name()
                 arg_list = call.get_arg_list(current_context)
 
                 called_kernel = self.symbol_table[kernel_func_name]
                 sub_kernels = called_kernel.extract_kernels_graph_with_calls(current_context, arg_list)
-                
+
                 if len(sub_kernels) > 0 and sub_kernels[0].has_top_level_context():
                     current_kernels.current_sub_kernel.merge_with(sub_kernels[0])
                     sub_kernels = sub_kernels[1:]
-                
+
                 if len(sub_kernels) > 0:
                     current_kernels.finish_current_sub_kernel()
                     current_kernels.kernels.extend(sub_kernels)
