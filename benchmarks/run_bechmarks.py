@@ -78,7 +78,7 @@ def build(case: str, variant: str,
         return path
 
     log(f'   building {case}/{variant} {nx}x{ny}x{nz} niter={niter} nwarmup={nwarmup} ...')
-    
+
     # Pass the variant straight through (e.g. VARIANT=CUDA-pinned)
     command = ['make',
          f'CASE={case}', f'VARIANT={variant}',
@@ -195,4 +195,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
