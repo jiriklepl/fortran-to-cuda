@@ -239,3 +239,27 @@ def test_mixed_parallel_fallback_matches_fortran_on_cuda(tmp_path):
         driver,
         backend="cuda",
     )
+
+
+def test_memory_plan_preserves_host_fallback_and_partial_write_coherence(tmp_path):
+    from compiler.memory import plan_memory
+
+    function, _ = mixed_case(tmp_path)
+    plan = plan_memory(build_execution_plan(function, options=HOST), function.parameters)
+    kinds = [operation.kind for operation in plan.run]
+    assert kinds == [
+        "device",
+        "execute",
+        "device_write",
+        "execute",
+        "host",
+        "execute",
+        "host_write",
+        "host",
+        "execute",
+        "host_write",
+        "device",
+        "execute",
+        "device_write",
+    ]
+    assert all(operation.symbols == (function.parameters[0],) for operation in plan.run if operation.symbols)

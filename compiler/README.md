@@ -43,7 +43,8 @@ compiler/
 ├── analysis/                Semantics, effects, dependence proofs, execution policy
 ├── transforms/              Checked scalar setup motion and greedy loop fusion
 ├── scheduling/              Locality ordering and explicit spatial tile plans
-├── runtime/                 Shared scalar numeric helpers
+├── memory/                  Explicit acquisition, coherence, and lifecycle plans
+├── runtime/                 Numeric helpers, profiling, owned buffers, token registry
 ├── emission/
 │   ├── driver.py            Generate all sources from one shared ABI
 │   ├── common/              ABI descriptors, expressions, loops, runtime header
@@ -57,8 +58,9 @@ compiler/
 The frontend and analyzer depend on the IR. Emitters consume the IR and checked
 execution plan without importing fparser or ISL. Shared emission helpers do not
 import backends; each backend owns its language-specific rendering. The runtime
-header combines the template under `emission/common/templates/` with the numeric
-helpers in `runtime/`, preserving a single distributable support header.
+header combines the template under `emission/common/templates/` with numeric,
+profiling, and storage units in `runtime/`, preserving a single distributable
+support header and `--common-header` behavior.
 
 Package entry points remain `compiler.frontend.lower_file`,
 `compiler.analysis.build_execution_plan`, and `compiler.emission.generate_sources`.
@@ -111,8 +113,10 @@ python -m compiler --input FILE --kernel NAME [options]
 The ABI preserves the original dummy argument order, public names, and
 `cpp_<procedure>` C symbol. Array extents follow their array pointer in dimension
 order. The generated bridge keeps `knd` mapped to binary64 and retains
-`start_hot`/`finish_hot` timing hooks. These three public names are reserved for
-that generated API. All sources are generated and validated before destination
+`start_hot`/`finish_hot` timing hooks. Profiling starts disabled: `start_hot` resets
+and enables collection, and `finish_hot` reports and disables it. Ordinary
+execution creates no profiling events or phase-by-phase profiling barriers.
+These three public names are reserved for that generated API. All sources are generated and validated before destination
 files are written; an unsupported or unsafe input leaves existing outputs intact.
 
 CUDA allocates device arrays, uploads `intent(in)` and `intent(inout)` data,
@@ -124,6 +128,26 @@ device-produced cells before uploading the changed array. Array-valued launch
 bounds and strides also see previous device writes. These extra transfers are
 included in timing hooks. Unwritten `intent(inout)` cells are preserved. Unwritten portions of
 `intent(out)` arrays have no promised values.
+
+## Memory planning and runtime foundations
+
+`compiler.memory.plan_memory(plan, parameters)` derives immutable acquisition,
+host/device access, execution, write-invalidation, synchronization, and release
+operations from an execution plan. It preserves conditional branches, counts
+predicate and array-valued launch-bound reads, and requests current contents before
+partial writes. `format_memory` describes these operations independently of
+emission. Host/device access operations represent conditional transfers: a storage
+runtime decides whether its current ownership state requires a copy.
+
+`runtime/storage.hpp` provides owned fixed-shape CPU/CUDA buffers, lazy CUDA host
+mirrors, selective updates, checked extent/byte products, scoped pinned-memory
+registration, and a registry that diagnoses invalid or stale tokens. Buffers retain
+no caller pointers. `runtime/timing.hpp` contains opt-in profiling. Both units are
+assembled into the existing support header and tested with instrumented CUDA calls.
+
+These are foundations for persistent sessions. Generated entry points still use
+the existing per-call allocation/transfer path; session APIs and memory-plan-driven
+wrapper emission are introduced separately.
 
 ## Supported Fortran subset
 
@@ -329,9 +353,11 @@ compilation, imperfect nests, fresh host/device values, indirect gathers,
 squared indices, and default-real arithmetic. Fallback tests cover recurrences,
 scalar live-outs, final induction values, neighboring parallel regions, and CUDA
 host/device transitions; invalid source is checked under both execution policies.
-Native compiler absence skips the corresponding capability; CUDA compilation
-requires `nvcc`, and execution also requires a usable device. Once those capabilities are available, build or runtime
-failures fail the tests. All builds and outputs use temporary directories.
+Runtime tests also check CPU ownership, selective host/device coherence, pinned
+registration lifetimes, stale tokens, shape/size errors, and profiling events with
+instrumented CUDA calls. Native compiler absence skips the corresponding capability;
+CUDA compilation requires `nvcc`, and execution also requires a usable device. Once
+those capabilities are available, build or runtime failures fail the tests. All builds and outputs use temporary directories.
 
 ```bash
 # Parser/analysis checks without native builds:
