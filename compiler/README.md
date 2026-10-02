@@ -2,7 +2,7 @@
 
 The compiler lowers annotated Fortran into immutable computation IR, validates
 types and definite definitions, proves loop independence with `islpy`, and emits C++, CUDA,
-and a Fortran bridge from the same ordered execution plan.
+and a Fortran bridge from checked execution, scheduling, and memory plans.
 
 ```mermaid
 flowchart LR
@@ -13,8 +13,9 @@ flowchart LR
     T --> A
     T --> S[Explicit target schedules]
     S --> E[Checked execution plan]
-    E --> C[C++ / OpenMP]
-    E --> G[CUDA]
+    E --> M[Memory operations]
+    M --> C[C++ / OpenMP and owned CPU sessions]
+    M --> G[CUDA and owned GPU sessions]
     E --> B[Fortran bridge / shared ABI]
 ```
 
@@ -26,8 +27,9 @@ assignments, conditionals, and sequential inner loops. `--opt-level 0` retains t
 source regions and source axis order unless overridden by `--schedule`. Automatic
 axis ordering favors Fortran locality; spatial tiling is explicit through
 `--tile-sizes`. Strict parallelization is the default; `--fallback host` executes
-valid regions whose independence is unproved sequentially on the host. Persistent
-device storage remains unsupported.
+valid regions whose independence is unproved sequentially on the host. Explicit
+sessions retain owned storage across calls, using the same Fortran interface for
+CPU and CUDA backends.
 See [CODE_MAP.md](CODE_MAP.md) for the implementation and extension points.
 
 ## Implementation layout
@@ -47,17 +49,18 @@ compiler/
 ├── runtime/                 Numeric helpers, profiling, owned buffers, token registry
 ├── emission/
 │   ├── driver.py            Generate all sources from one shared ABI
-│   ├── common/              ABI descriptors, expressions, loops, runtime header
+│   ├── common/              ABI, expressions, loops, session glue, runtime header
 │   ├── c/                   C declarations and serial/OpenMP C++ generation
-│   ├── cuda/                Device kernels, launches, transfers, host wrapper
-│   └── fortran/             C bindings and public Fortran bridge
+│   ├── cuda/                Device kernels, launches, memory-plan execution
+│   └── fortran/             C bindings, public bridge, workspace procedures
 ├── tests/                   Python and native acceptance tests
 └── debugging/               Standalone fparser tree viewer
 ```
 
 The frontend and analyzer depend on the IR. Emitters consume the IR and checked
-execution plan without importing fparser or ISL. Shared emission helpers do not
-import backends; each backend owns its language-specific rendering. The runtime
+plans without importing fparser or ISL. `emission/driver.py` derives the memory plan
+after scheduling, and shared session glue renders buffer ownership through the
+runtime. Shared emission helpers do not import backends; each backend owns its language-specific rendering. The runtime
 header combines the template under `emission/common/templates/` with numeric,
 profiling, and storage units in `runtime/`, preserving a single distributable
 support header and `--common-header` behavior.
@@ -102,13 +105,13 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--cuda-output` | `generated_code.cu` | CUDA kernels and host C wrapper |
 | `--cpp-output` | `generated_cpp_impl.cpp` | C++ implementation with OpenMP annotations |
 | `--fortran-output` | `generated_interface.f90` | Original module/procedure interface using `iso_c_binding` |
-| `--common-header` | `common_functions.cuh` | Shared indexing, numeric, and timing header |
+| `--common-header` | `common_functions.cuh` | Shared indexing, numeric, storage, and timing header |
 | `--no-common-header` | off | Use a separately supplied shared header |
 | `--opt-level {0,1}` | `1` | Enable proved scalar motion and fusion; `0` retains source passes |
 | `--schedule {source,auto}` | `auto` at level 1, `source` at level 0 | Select axis ordering independently of fusion |
 | `--tile-sizes N[,N...]` | untiled | Positive tile sizes in scheduled fastest-to-slowest order; omitted axes use 1 |
 | `--fallback {error,host}` | `error` | Reject unproved regions or run them sequentially on the host |
-| `--verbose`, `-v` | off | Normalized IR, applied/skipped transformations, selected schedules, region boundaries, scalar privacy, ISL relations, and legality results |
+| `--verbose`, `-v` | off | Normalized IR, applied/skipped transformations, selected schedules, region boundaries, scalar privacy, ISL relations, legality results, and memory operations |
 
 The ABI preserves the original dummy argument order, public names, and
 `cpp_<procedure>` C symbol. Array extents follow their array pointer in dimension
@@ -119,17 +122,17 @@ execution creates no profiling events or phase-by-phase profiling barriers.
 These three public names are reserved for that generated API. All sources are generated and validated before destination
 files are written; an unsupported or unsafe input leaves existing outputs intact.
 
-CUDA allocates device arrays, uploads `intent(in)` and `intent(inout)` data,
-executes ordered launches, downloads outputs, and frees device arrays on each
-wrapper call. `USE_PINNED_MEMORY` enables optional pinned-memory support. Host
-array reads and writes between launches synchronize affected arrays:
+The ordinary CUDA wrapper creates an owned session, uploads `intent(in)` and
+`intent(inout)` data, executes the memory plan, downloads outputs, and destroys the
+session on each call. It remains synchronous and host-visible. `USE_PINNED_MEMORY`
+enables optional pinned-memory support. Host array reads and writes between launches synchronize affected arrays:
 a read sees previous device updates, and a partial host write preserves other
 device-produced cells before uploading the changed array. Array-valued launch
 bounds and strides also see previous device writes. These extra transfers are
 included in timing hooks. Unwritten `intent(inout)` cells are preserved. Unwritten portions of
 `intent(out)` arrays have no promised values.
 
-## Memory planning and runtime foundations
+## Memory planning and runtime
 
 `compiler.memory.plan_memory(plan, parameters)` derives immutable acquisition,
 host/device access, execution, write-invalidation, synchronization, and release
@@ -145,9 +148,52 @@ registration, and a registry that diagnoses invalid or stale tokens. Buffers ret
 no caller pointers. `runtime/timing.hpp` contains opt-in profiling. Both units are
 assembled into the existing support header and tested with instrumented CUDA calls.
 
-These are foundations for persistent sessions. Generated entry points still use
-the existing per-call allocation/transfer path; session APIs and memory-plan-driven
-wrapper emission are introduced separately.
+CUDA emission renders the planned host/device requirements, executions, and
+ownership transitions. Host statements, branches, fallback regions, and
+array-valued launch bounds share this coherence path. The ordinary CUDA entry
+point and persistent GPU sessions use the same runtime. CPU sessions wrap the
+ordinary C++ implementation with owned host buffers. Verbose output displays the
+memory operations; `FORT_RUNTIME_TRACE=1` logs actual GPU allocations, transfers,
+kernel launches, and frees.
+
+## Persistent workspaces
+
+Each entry gains an additive workspace API. For example, the CDU module exports:
+
+```fortran
+type(CDU_workspace) :: work
+call CDU_create(work, U2, U, V, W)
+do iteration = 1, niter
+  call CDU_run(work, dxmin, dymin, dzmin, NX, NY, NZ)
+end do
+call CDU_update_host(work, U2=U2)
+call CDU_destroy(work)
+```
+
+`create` takes all original arrays in dummy order, owns fixed-shape storage,
+and copies only `in`/`inout` data. `run` takes the original scalar arguments in
+dummy order. Neither retains caller addresses. `update_device(work, U=U)`
+publishes a complete replacement for a selected slot; `update_host` retrieves
+selected slots. Both accept optional array keywords, require matching shapes,
+and complete borrowed-pointer transfers before returning. Ordinary host writes
+are not automatically visible to resident execution.
+
+CUDA runs may enqueue work on the default stream. Updates, destruction, and
+profiling boundaries synchronize. Host blocks and fallback use lazy owned host
+mirrors and the same coherence plan. C++ implements the same API using owned
+host buffers, allowing the Fortran module to link with either backend.
+
+Workspaces use validated opaque tokens. Assignment aliases a session; destroying
+one alias invalidates the others. Creating into a live workspace and using stale
+tokens are errors. Destroying an empty workspace is a no-op and does not retrieve
+outputs. There is no automatic finalizer. Sessions are per entry, fixed-shape,
+and exclude concurrent use or cross-entry buffer sharing. Long/colliding API names
+receive deterministic shortened names in the generated interface.
+
+Profiling starts disabled. `start_hot` synchronizes, clears measurements, and
+enables recording; `finish_hot` synchronizes, prints the existing timing summary,
+and disables recording. `FORT_RUNTIME_TRACE=1` separately logs successful CUDA
+allocations, transfers, launches, and releases to stderr for validation.
 
 ## Supported Fortran subset
 
@@ -355,7 +401,12 @@ scalar live-outs, final induction values, neighboring parallel regions, and CUDA
 host/device transitions; invalid source is checked under both execution policies.
 Runtime tests also check CPU ownership, selective host/device coherence, pinned
 registration lifetimes, stale tokens, shape/size errors, and profiling events with
-instrumented CUDA calls. Native compiler absence skips the corresponding capability;
+instrumented CUDA calls. Session tests cover temporary inputs, changed scalars,
+selective updates, multiple workspaces, aliases, and lifecycle errors. Generated
+CUDA sessions are also executed with a simulated runtime to check exact transfer
+counts without a GPU. Resident fallback and logical arguments are compared with
+original Fortran across serial C++, OpenMP, and simulated CUDA.
+Native compiler absence skips the corresponding capability;
 CUDA compilation requires `nvcc`, and execution also requires a usable device. Once
 those capabilities are available, build or runtime failures fail the tests. All builds and outputs use temporary directories.
 

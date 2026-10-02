@@ -15,6 +15,7 @@ class FortranKinds:
     real32: str
     extent: str
     logical: str
+    token: str
 
 
 def public_declaration(symbol: Symbol, name: str) -> str:

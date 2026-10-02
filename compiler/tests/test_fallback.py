@@ -205,46 +205,70 @@ call entry(a,0)
 print *,a
 end program
 """
-    return function, driver
+    resident_driver = """program main
+use language_case
+real(knd)::a(4)
+type(entry_workspace)::work
+a=[1.d0,2.d0,3.d0,4.d0]
+call entry_create(work,a)
+call entry_run(work,4)
+call entry_update_host(work,a=a)
+print *,a
+call entry_run(work,3)
+call entry_update_host(work,a=a)
+print *,a
+a=7
+call entry_update_device(work,a=a)
+call entry_run(work,0)
+call entry_update_host(work,a=a)
+print *,a
+call entry_destroy(work)
+end program
+"""
+    return function, driver, resident_driver
 
 
 @pytest.mark.native
 @pytest.mark.parametrize("openmp", [False, True])
-def test_fallback_signed_stride_liveout_and_following_parallel_loop(tmp_path, openmp):
-    function, driver = mixed_case(tmp_path)
+@pytest.mark.parametrize("resident", [False, True])
+def test_fallback_signed_stride_liveout_and_following_parallel_loop(tmp_path, openmp, resident):
+    function, driver, resident_driver = mixed_case(tmp_path)
     run_reference_and_cpp(
         tmp_path,
         function,
         build_execution_plan(function, options=HOST),
         driver,
         openmp=openmp,
+        generated_driver=resident_driver if resident else None,
     )
 
 
 @pytest.mark.cuda
 def test_mixed_parallel_fallback_plan_compiles_for_cuda(tmp_path):
-    function, _ = mixed_case(tmp_path)
+    function, _, _ = mixed_case(tmp_path)
     compile_cuda_sources(tmp_path, function, build_execution_plan(function, options=HOST))
 
 
 @pytest.mark.native
 @pytest.mark.cuda
 @pytest.mark.usefixtures("cuda_device")
-def test_mixed_parallel_fallback_matches_fortran_on_cuda(tmp_path):
-    function, driver = mixed_case(tmp_path)
+@pytest.mark.parametrize("resident", [False, True])
+def test_mixed_parallel_fallback_matches_fortran_on_cuda(tmp_path, resident):
+    function, driver, resident_driver = mixed_case(tmp_path)
     run_reference_and_cpp(
         tmp_path,
         function,
         build_execution_plan(function, options=HOST),
         driver,
         backend="cuda",
+        generated_driver=resident_driver if resident else None,
     )
 
 
 def test_memory_plan_preserves_host_fallback_and_partial_write_coherence(tmp_path):
     from compiler.memory import plan_memory
 
-    function, _ = mixed_case(tmp_path)
+    function, _, _ = mixed_case(tmp_path)
     plan = plan_memory(build_execution_plan(function, options=HOST), function.parameters)
     kinds = [operation.kind for operation in plan.run]
     assert kinds == [

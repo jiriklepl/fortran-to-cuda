@@ -9,6 +9,7 @@ from compiler.driver.pipeline import prepare_function
 from compiler.emission import generate_sources, read_common_header
 from compiler.frontend import lower_file
 from compiler.ir import CompilationError, format_ir
+from compiler.memory import format_memory, plan_memory
 
 
 def _tile_sizes(value: str) -> tuple[int, ...]:
@@ -99,7 +100,7 @@ def _parse_args() -> argparse.Namespace:
         "--verbose",
         "-v",
         action="store_true",
-        help="Print normalized IR, transformations, selected schedules, ordered regions, and parallel-legality results.",
+        help="Print normalized IR, transformations, selected schedules, ordered regions, legality, and memory operations.",
     )
     return parser.parse_args()
 
@@ -127,6 +128,8 @@ def main() -> None:
         print(format_ir(function))
         print("\nExecution plan and dependence checks:")
         print(format_plan(plan))
+        print("\nMemory operations:")
+        print(format_memory(plan_memory(plan, function.parameters)))
 
     # Publish only after every stage has validated and generated successfully.
     output_dir = Path(args.output_dir).resolve()

@@ -196,5 +196,5 @@ def generate_launch(region: ParallelRegion) -> list[str]:
     lines.extend(
         indent([argument + ("," if index < len(arguments) - 1 else "") for index, argument in enumerate(arguments)], 3)
     )
-    lines.extend(["        );", "        CUCH(cudaGetLastError());", "    }", "}"])
+    lines.extend(["        );", "        CUCH(cudaGetLastError());", '        storage::trace("kernel");', "    }", "}"])
     return lines

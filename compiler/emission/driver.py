@@ -7,9 +7,11 @@ from typing import TYPE_CHECKING
 
 from compiler.emission.c.generator import generate_cpp
 from compiler.emission.common.abi import abi_arguments
+from compiler.emission.common.sessions import append_cpu_sessions
 from compiler.emission.cuda.generator import generate_cuda
 from compiler.emission.fortran.generator import generate_fortran
 from compiler.ir import CompilationError, FunctionIR, SourceLocation
+from compiler.memory import plan_memory
 
 if TYPE_CHECKING:
     from compiler.ir import ExecutionPlan
@@ -35,8 +37,9 @@ def generate_sources(
     if any(character in common_header for character in ('"', "\n", "\r")):
         raise CompilationError("Common header filename cannot contain quotes or newlines")
     abi = abi_arguments(function.parameters)
+    memory = plan_memory(plan, function.parameters)
     return GeneratedSources(
-        cuda=generate_cuda(function, plan, abi, common_header),
-        cpp=generate_cpp(function, plan, abi, common_header),
+        cuda=generate_cuda(function, plan, abi, common_header, memory=memory),
+        cpp=generate_cpp(function, plan, abi, common_header) + append_cpu_sessions(function, abi, memory=memory),
         fortran=generate_fortran(function, abi),
     )
