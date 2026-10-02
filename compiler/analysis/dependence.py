@@ -36,6 +36,8 @@ from compiler.ir import (
     walk_expr,
 )
 
+from .proof import ParallelizationError, ParallelProof
+
 
 @dataclass(frozen=True)
 class Affine:
@@ -523,16 +525,23 @@ def _region(
             names = ", ".join(
                 sorted({access.symbol.name for access in (*source.reads, *source.writes, *sink.reads, *sink.writes)})
             )
-            raise CompilationError(
+            raise ParallelizationError(
                 f"Cannot parallelize: {kind} {'possible ' if conservative else ''}loop-carried conflict involving {names}; "
                 + ("conservative access/stride model; " if conservative else "")
                 + f"accesses at {source.origin.location} and {sink.origin.location}; "
                 f"relation {mapping}; witness {mapping.wrap().sample_point()}",
                 loop.location,
+                witness=str(mapping.wrap().sample_point()),
+                conservative=conservative,
             )
     domains = parallel.domain()
     report = RegionReport(
-        str(domains), str(reads), str(writes), str(schedule), *(str(conflicts[k]) for k in ("RAW", "WAR", "WAW"))
+        str(domains),
+        str(reads),
+        str(writes),
+        str(schedule),
+        *(str(conflicts[k]) for k in ("RAW", "WAR", "WAW")),
+        conservative=conservative,
     )
     read_arrays = {access.symbol for event in events for access in event.reads}
     read_arrays.update(
@@ -554,6 +563,14 @@ def _region(
         tuple(sorted(read_arrays, key=lambda s: s.id)),
         tuple(sorted(write_arrays, key=lambda s: s.id)),
     )
+
+
+def prove_region(region_id, loop, environment, defined, later):
+    """Return modeled dependence failures; other compilation errors propagate."""
+    try:
+        return ParallelProof(region=_region(region_id, loop, environment, defined, later))
+    except ParallelizationError as error:
+        return ParallelProof(failure=error.failure)
 
 
 def build_execution_plan(function: FunctionIR) -> ExecutionPlan:
