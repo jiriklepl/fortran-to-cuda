@@ -32,6 +32,7 @@ from .plan import (
     HostBlock,
     ParallelRegion,
     RegionReport,
+    RegionSchedule,
 )
 
 __all__ = [
@@ -43,6 +44,7 @@ __all__ = [
     "ConditionalRegion",
     "If",
     "IntrinsicCall",
+    "RegionSchedule",
     "ExecutionPlan",
     "Expr",
     "FunctionIR",
