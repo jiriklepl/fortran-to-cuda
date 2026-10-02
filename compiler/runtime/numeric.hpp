@@ -13,4 +13,10 @@ CUDA_CALLABLE T maximum(T value, Rest... remaining) {
     return value;
 }
 
+// Addressing analysis proves that negation stays representable before using this.
+template <typename T>
+CUDA_CALLABLE T absolute(T value) {
+    return value < T{0} ? -value : value;
+}
+
 } // namespace generated_kernels::numeric

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from compiler.emission.common.abi import dimension_name
 from compiler.ir import (
     ArrayAccess,
@@ -19,6 +21,9 @@ from compiler.ir import (
 )
 from compiler.ir.integers import INTEGER_MAX, INTEGER_MIN, integer_literal
 
+if TYPE_CHECKING:
+    from compiler.ir import RegionAddressing
+
 
 def cpp_type(symbol: Symbol) -> str:
     return {
@@ -29,7 +34,47 @@ def cpp_type(symbol: Symbol) -> str:
     }[symbol.dtype]
 
 
-def render_expression(expression: Expr) -> str:
+def wide_iterator_name(symbol: Symbol) -> str:
+    return f"fort_internal_wide{symbol.id}"
+
+
+def _wide_expression(expression: Expr, addressing: RegionAddressing) -> str:
+    """Render a proved subscript in one signed wide type, preserving its tree."""
+    if isinstance(expression, Literal) and expression.dtype is ScalarType.INTEGER:
+        value = integer_literal(expression.value)
+        # Signed literals can occur in manually constructed IR. Parentheses
+        # prevent a surrounding unary minus from becoming C++ decrement.
+        return f"({value}LL)" if value < 0 else f"{value}LL"
+    if isinstance(expression, Reference) and expression.symbol in addressing.wide_iterators:
+        return wide_iterator_name(expression.symbol)
+    if isinstance(expression, (Reference, Size, ArrayAccess)):
+        # SIZE conversions and integer loads retain their source value type.
+        # Nested array subscripts can independently consume their own decisions.
+        return f"static_cast<long long>({render_expression(expression, addressing=addressing)})"
+    if isinstance(expression, Unary) and expression.operator in {"+", "-"}:
+        return f"({expression.operator}{_wide_expression(expression.operand, addressing)})"
+    if isinstance(expression, Binary) and expression.operator in {"+", "-", "*", "/"}:
+        left = _wide_expression(expression.left, addressing)
+        right = _wide_expression(expression.right, addressing)
+        return f"({left} {expression.operator} {right})"
+    if isinstance(expression, IntrinsicCall) and expression.dtype is ScalarType.INTEGER:
+        names = {"min": "minimum", "max": "maximum", "abs": "absolute"}
+        name = names.get(expression.name.lower())
+        if name is not None:
+            arguments = ", ".join(_wide_expression(argument, addressing) for argument in expression.arguments)
+            return f"::generated_kernels::numeric::{name}({arguments})"
+    raise TypeError(f"Unsupported proved-wide subscript: {type(expression).__name__}")
+
+
+def _render_subscript(expression: Expr, addressing: RegionAddressing | None) -> str:
+    if addressing is not None and any(
+        decision.expression == expression and decision.mode == "wide" for decision in addressing.decisions
+    ):
+        return _wide_expression(expression, addressing)
+    return render_expression(expression, addressing=addressing)
+
+
+def render_expression(expression: Expr, *, addressing: RegionAddressing | None = None) -> str:
     if isinstance(expression, Literal):
         if expression.dtype is ScalarType.LOGICAL:
             return "true" if expression.value.lower() in {".true.", "true"} else "false"
@@ -46,12 +91,12 @@ def render_expression(expression: Expr) -> str:
     if isinstance(expression, Size):
         return f"static_cast<int>({dimension_name(expression.symbol, expression.dimension)})"
     if isinstance(expression, ArrayAccess):
-        values = [render_expression(index) for index in expression.indices]
+        values = [_render_subscript(index, addressing) for index in expression.indices]
         values.extend(dimension_name(expression.symbol, dim) for dim in range(1, expression.symbol.rank + 1))
         return f"{expression.symbol.cpp_name}[F_IDX({', '.join(values)})]"
     if isinstance(expression, IntrinsicCall):
         intrinsic = expression.name.lower()
-        arguments = [render_expression(arg) for arg in expression.arguments]
+        arguments = [render_expression(arg, addressing=addressing) for arg in expression.arguments]
         if intrinsic in {"min", "max"}:
             name = "minimum" if intrinsic == "min" else "maximum"
             return f"::generated_kernels::numeric::{name}({', '.join(arguments)})"
@@ -66,7 +111,7 @@ def render_expression(expression: Expr) -> str:
         return f"::{name}({arguments[0]})"
     if isinstance(expression, Unary):
         operator = "!" if expression.operator == ".not." else expression.operator
-        return f"({operator}{render_expression(expression.operand)})"
+        return f"({operator}{render_expression(expression.operand, addressing=addressing)})"
     if isinstance(expression, Binary):
         operators = {
             ".and.": "&&",
@@ -84,12 +129,15 @@ def render_expression(expression: Expr) -> str:
         operator = operators.get(expression.operator, expression.operator)
         if operator not in {"+", "-", "*", "/", "<", ">", "<=", ">=", "==", "!=", "&&", "||"}:
             raise CompilationError(f"unsupported emission operator: {expression.operator}")
-        return f"({render_expression(expression.left)} {operator} {render_expression(expression.right)})"
+        return f"({render_expression(expression.left, addressing=addressing)} {operator} {render_expression(expression.right, addressing=addressing)})"
     raise CompilationError(f"unsupported IR expression: {type(expression).__name__}")
 
 
-def render_assignment(assignment: Assignment) -> str:
-    return f"{render_expression(assignment.target)} = {render_expression(assignment.value)};"
+def render_assignment(assignment: Assignment, *, addressing: RegionAddressing | None = None) -> str:
+    return (
+        f"{render_expression(assignment.target, addressing=addressing)} = "
+        f"{render_expression(assignment.value, addressing=addressing)};"
+    )
 
 
 def indent(lines: list[str], depth: int = 1) -> list[str]:

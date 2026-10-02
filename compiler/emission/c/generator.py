@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from compiler.emission.c.declarations import cpp_declaration
 from compiler.emission.common.abi import AbiArgument
 from compiler.emission.common.c_family import cpp_type, indent, render_assignment, render_expression
-from compiler.emission.common.loops import iteration_value, mapped_snapshots, sequential_block
+from compiler.emission.common.loops import mapped_coordinates, mapped_snapshots, sequential_block
 from compiler.emission.common.schedules import checked_product, region_schedule, tile_counts
 from compiler.emission.common.symbols import host_symbols, region_body
 from compiler.ir import ConditionalRegion, FunctionIR, HostBlock, ParallelRegion, SequentialRegion
@@ -17,16 +17,9 @@ if TYPE_CHECKING:
 
 
 def _point_body(region: ParallelRegion, depth: int) -> list[str]:
-    lines = []
-    for axis, loop in enumerate(region.loops):
-        lines.extend(
-            indent(
-                [f"const int {loop.iterator.cpp_name} = {iteration_value(str(axis), f'fort_internal_ordinal{axis}')};"],
-                depth,
-            )
-        )
+    lines = indent(mapped_coordinates(region), depth)
     lines.extend(indent([f"{cpp_type(symbol)} {symbol.cpp_name};" for symbol in region.private_symbols], depth))
-    lines.extend(sequential_block(region_body(region), depth, [0]))
+    lines.extend(sequential_block(region_body(region), depth, [0], addressing=region.addressing))
     return lines
 
 

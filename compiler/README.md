@@ -2,7 +2,7 @@
 
 The compiler lowers annotated Fortran into immutable computation IR, validates
 types and definite definitions, proves loop independence with `islpy`, and emits C++, CUDA,
-and a Fortran bridge from checked execution, scheduling, and memory plans.
+and a Fortran bridge from checked execution, scheduling, addressing, and memory plans.
 
 ```mermaid
 flowchart LR
@@ -12,7 +12,8 @@ flowchart LR
     A --> T[Checked scalar motion and fusion]
     T --> A
     T --> S[Explicit target schedules]
-    S --> E[Checked execution plan]
+    S --> D[Proved subscript widths]
+    D --> E[Checked execution plan]
     E --> M[Memory operations]
     M --> C[C++ / OpenMP and owned CPU sessions]
     M --> G[CUDA and owned GPU sessions]
@@ -24,7 +25,8 @@ loop domains fuse only when fresh dependence analysis proves the combined region
 independent; inconclusive candidates retain their original passes. A rectangular
 perfect prefix maps to parallel iterations; its remaining ordered body can contain
 assignments, conditionals, and sequential inner loops. `--opt-level 0` retains the
-source regions and source axis order unless overridden by `--schedule`. Automatic
+source regions, source indexing, and source axis order unless overridden by
+`--indexing` or `--schedule`. Automatic
 axis ordering favors Fortran locality; spatial tiling is explicit through
 `--tile-sizes`. Strict parallelization is the default; `--fallback host` executes
 valid regions whose independence is unproved sequentially on the host. Explicit
@@ -45,6 +47,7 @@ compiler/
 ├── analysis/                Semantics, effects, dependence proofs, execution policy
 ├── transforms/              Checked scalar setup motion and greedy loop fusion
 ├── scheduling/              Locality ordering and explicit spatial tile plans
+├── addressing/              Static integer ranges and proved subscript widths
 ├── memory/                  Explicit acquisition, coherence, and lifecycle plans
 ├── runtime/                 Numeric helpers, profiling, owned buffers, token registry
 ├── emission/
@@ -59,7 +62,7 @@ compiler/
 
 The frontend and analyzer depend on the IR. Emitters consume the IR and checked
 plans without importing fparser or ISL. `emission/driver.py` derives the memory plan
-after scheduling, and shared session glue renders buffer ownership through the
+after scheduling and addressing, and shared session glue renders buffer ownership through the
 runtime. Shared emission helpers do not import backends; each backend owns its language-specific rendering. The runtime
 header combines the template under `emission/common/templates/` with numeric,
 profiling, and storage units in `runtime/`, preserving a single distributable
@@ -68,10 +71,10 @@ support header and `--common-header` behavior.
 Package entry points remain `compiler.frontend.lower_file`,
 `compiler.analysis.build_execution_plan`, and `compiler.emission.generate_sources`.
 `compiler.driver.pipeline.prepare_function(function, *, options=CompilerOptions())`
-returns the optimized function and freshly checked, scheduled plan. The immutable
+returns the optimized function and freshly checked plan with schedules and addressing decisions. The immutable
 `CompilerOptions` in `compiler.driver.options` is shared by this pipeline and the
 CLI; direct calls to `build_execution_plan` keep their existing analysis behavior.
-Emitters accept these unscheduled plans using source axis order. Schedule records
+Emitters accept these unscheduled plans using source axis order and source indexing. Schedule and addressing records
 remain independent of fparser and ISL.
 
 ## Quick start
@@ -107,11 +110,12 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--fortran-output` | `generated_interface.f90` | Original module/procedure interface using `iso_c_binding` |
 | `--common-header` | `common_functions.cuh` | Shared indexing, numeric, storage, and timing header |
 | `--no-common-header` | off | Use a separately supplied shared header |
-| `--opt-level {0,1}` | `1` | Enable proved scalar motion and fusion; `0` retains source passes |
+| `--opt-level {0,1}` | `1` | Enable proved scalar motion, fusion, and wide addressing; `0` retains source passes |
 | `--schedule {source,auto}` | `auto` at level 1, `source` at level 0 | Select axis ordering independently of fusion |
+| `--indexing {source,auto}` | `auto` at level 1, `source` at level 0 | Select source INTEGER addressing or statically proved wide subscripts independently of fusion and scheduling |
 | `--tile-sizes N[,N...]` | untiled | Positive tile sizes in scheduled fastest-to-slowest order; omitted axes use 1 |
 | `--fallback {error,host}` | `error` | Reject unproved regions or run them sequentially on the host |
-| `--verbose`, `-v` | off | Normalized IR, applied/skipped transformations, selected schedules, region boundaries, scalar privacy, ISL relations, legality results, and memory operations |
+| `--verbose`, `-v` | off | Normalized IR, applied/skipped transformations, schedules, indexing decisions and reasons, region boundaries, scalar privacy, ISL relations, legality results, and memory operations |
 
 The ABI preserves the original dummy argument order, public names, and
 `cpp_<procedure>` C symbol. Array extents follow their array pointer in dimension
@@ -367,6 +371,36 @@ points across threads, including tiles larger than a block, with guards for tile
 tails. Flattened tile coordinates support arbitrary rank. Iteration products are
 checked for overflow before launch, and zero factors suppress spurious overflow
 errors for empty domains.
+
+### Checked wide addressing
+
+After scheduling, the addressing planner selects subscript arithmetic that can
+use signed 64-bit loop coordinates directly. Static interval proofs must show
+that every original intermediate result fits default INTEGER, including division
+and integer `ABS`, `MIN`, and `MAX`. Unknown or unsafe arithmetic keeps its
+existing lowering; expressions are never reassociated. This is separate from
+dependence analysis and does not add runtime guards or additional kernels.
+
+Only mapped iterator ranges are refined, using bounds and signed strides;
+constant loops use their exact last executed index. Other integer values retain
+the full signed 32-bit range. There is no branch-sensitive or assignment-based
+refinement. Bound arithmetic without a safe range proof contributes an unknown
+INTEGER snapshot. Neither array extents nor valid accesses imply tighter scalar
+bounds. For example, a loop beginning at 2 with an unknown upper INTEGER bound
+can use wide `i` and `i-1` subscripts, while `i+1` retains source arithmetic.
+
+Each complete subscript is selected independently, including nested array
+accesses. Shared C++/CUDA rendering consumes the plan and preserves scalar
+INTEGER arithmetic, the ABI, `SIZE` conversions, and integer array-load values.
+Loop-bound snapshots, retained-loop headers, host statements, and sequential
+fallback remain unchanged. Source-order bound evaluation and empty-loop
+suppression are preserved. No array bounds checks are introduced.
+
+Use `--indexing source` and `--indexing auto` with the same optimization level,
+schedule, and tiles to measure addressing independently. Both choices override
+the optimization-level default. Plans constructed without addressing metadata
+use source indexing. Verbose reports count promoted and retained subscript
+occurrences and explain decisions; accesses in unchanged loop headers are excluded.
 
 ### Sequential host fallback
 

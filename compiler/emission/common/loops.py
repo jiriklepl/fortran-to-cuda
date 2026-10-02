@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from compiler.emission.common.c_family import indent, render_assignment, render_expression
+from compiler.emission.common.c_family import indent, render_assignment, render_expression, wide_iterator_name
 from compiler.ir import Assignment, Block, If, Loop
 
 if TYPE_CHECKING:
-    from compiler.ir import ParallelRegion
+    from compiler.ir import ParallelRegion, RegionAddressing
 
 
 def _loop_step(loop: Loop) -> str:
@@ -53,24 +53,52 @@ def _loop_snapshot(loop: Loop, suffix: str, active: str | None = None, *, device
 
 
 def iteration_value(suffix: str, ordinal: str) -> str:
+    return f"static_cast<int>({_wide_iteration_value(suffix, ordinal)})"
+
+
+def _wide_iteration_value(suffix: str, ordinal: str) -> str:
     return (
-        f"static_cast<int>(static_cast<long long>(fort_internal_lower{suffix})"
-        f" + static_cast<long long>({ordinal}) * fort_internal_stride{suffix})"
+        f"static_cast<long long>(fort_internal_lower{suffix})"
+        f" + static_cast<long long>({ordinal}) * fort_internal_stride{suffix}"
     )
 
 
-def sequential_block(block: Block, depth: int, counter: list[int], *, device: bool = False) -> list[str]:
+def mapped_coordinates(region: ParallelRegion) -> list[str]:
+    """Reconstruct source integers and independently planned wide address aliases."""
+    lines = []
+    for axis, loop in enumerate(region.loops):
+        ordinal = f"fort_internal_ordinal{axis}"
+        lines.append(f"const int {loop.iterator.cpp_name} = {iteration_value(str(axis), ordinal)};")
+        if region.addressing is not None and loop.iterator in region.addressing.wide_iterators:
+            lines.append(
+                f"const long long {wide_iterator_name(loop.iterator)} = {_wide_iteration_value(str(axis), ordinal)};"
+            )
+    return lines
+
+
+def sequential_block(
+    block: Block,
+    depth: int,
+    counter: list[int],
+    *,
+    device: bool = False,
+    addressing: RegionAddressing | None = None,
+) -> list[str]:
     lines: list[str] = []
     for statement in block.statements:
         if isinstance(statement, Assignment):
-            lines.extend(indent([render_assignment(statement)], depth))
+            lines.extend(indent([render_assignment(statement, addressing=addressing)], depth))
             continue
         if isinstance(statement, If):
-            lines.extend(indent([f"if ({render_expression(statement.condition)}) {{"], depth))
-            lines.extend(sequential_block(statement.then_body, depth + 1, counter, device=device))
+            lines.extend(indent([f"if ({render_expression(statement.condition, addressing=addressing)}) {{"], depth))
+            lines.extend(
+                sequential_block(statement.then_body, depth + 1, counter, device=device, addressing=addressing)
+            )
             if statement.else_body.statements:
                 lines.extend(indent(["} else {"], depth))
-                lines.extend(sequential_block(statement.else_body, depth + 1, counter, device=device))
+                lines.extend(
+                    sequential_block(statement.else_body, depth + 1, counter, device=device, addressing=addressing)
+                )
             lines.extend(indent(["}"], depth))
             continue
         suffix = f"_serial{counter[0]}"
@@ -87,7 +115,7 @@ def sequential_block(block: Block, depth: int, counter: list[int], *, device: bo
                 depth + 1,
             )
         )
-        lines.extend(sequential_block(statement.body, depth + 2, counter, device=device))
+        lines.extend(sequential_block(statement.body, depth + 2, counter, device=device, addressing=addressing))
         lines.extend(
             indent(
                 [
