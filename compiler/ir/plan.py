@@ -27,6 +27,13 @@ class HostBlock:
 
 
 @dataclass(frozen=True)
+class RegionSchedule:
+    axis_order: tuple[int, ...]
+    tile_sizes: tuple[int, ...] = ()
+    cuda_threads: int = 256
+
+
+@dataclass(frozen=True)
 class ParallelRegion:
     id: int
     loops: tuple[Loop, ...]
@@ -37,6 +44,8 @@ class ParallelRegion:
     body: Block
     read_symbols: tuple[Symbol, ...] = ()
     write_symbols: tuple[Symbol, ...] = ()
+
+    schedule: RegionSchedule | None = None
 
 
 @dataclass(frozen=True)

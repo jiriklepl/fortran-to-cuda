@@ -11,7 +11,8 @@ flowchart LR
     I --> A[Scalar lifetime and ISL conflicts]
     A --> T[Checked scalar motion and fusion]
     T --> A
-    T --> E[Checked execution plan]
+    T --> S[Explicit target schedules]
+    S --> E[Checked execution plan]
     E --> C[C++ / OpenMP]
     E --> G[CUDA]
     E --> B[Fortran bridge / shared ABI]
@@ -22,8 +23,10 @@ loop domains fuse only when fresh dependence analysis proves the combined region
 independent; inconclusive candidates retain their original passes. A rectangular
 perfect prefix maps to parallel iterations; its remaining ordered body can contain
 assignments, conditionals, and sequential inner loops. `--opt-level 0` retains the
-source regions. Tiling, automatic scheduling, persistent device storage, and
-sequential fallback for rejected regions are unsupported.
+source regions and source axis order unless overridden by `--schedule`. Automatic
+axis ordering favors Fortran locality; spatial tiling is explicit through
+`--tile-sizes`. Persistent device storage and sequential fallback for rejected
+regions are unsupported.
 See [CODE_MAP.md](CODE_MAP.md) for the implementation and extension points.
 
 ## Implementation layout
@@ -38,6 +41,7 @@ compiler/
 ├── ir/                      Immutable computation nodes and execution plans
 ├── analysis/                Semantics, effects, dependence proofs, execution plans
 ├── transforms/              Checked scalar setup motion and greedy loop fusion
+├── scheduling/              Locality ordering and explicit spatial tile plans
 ├── runtime/                 Shared scalar numeric helpers
 ├── emission/
 │   ├── driver.py            Generate all sources from one shared ABI
@@ -58,9 +62,11 @@ helpers in `runtime/`, preserving a single distributable support header.
 Package entry points remain `compiler.frontend.lower_file`,
 `compiler.analysis.build_execution_plan`, and `compiler.emission.generate_sources`.
 `compiler.driver.pipeline.prepare_function(function, *, options=CompilerOptions())`
-returns the optimized function and freshly checked plan. The immutable
+returns the optimized function and freshly checked, scheduled plan. The immutable
 `CompilerOptions` in `compiler.driver.options` is shared by this pipeline and the
 CLI; direct calls to `build_execution_plan` keep their existing analysis behavior.
+Emitters accept these unscheduled plans using source axis order. Schedule records
+remain independent of fparser and ISL.
 
 ## Quick start
 
@@ -74,9 +80,10 @@ python -m compiler --input fortran-stencils/elmm_cdu.f90 --kernel CDU --output-d
 Runtime dependencies include `fparser` and **`islpy==2026.2.2`**. Generated C++ uses
 C++17; add `-fopenmp` to enable its verified OpenMP loops. Compile without that
 flag for serial execution of the same generated implementation. CUDA uses one
-kernel per accepted region, 256 threads per block, and maps the innermost parallel
-index first. Empty domains skip the launch. CDU, CDV, and CDW each produce one
-CUDA kernel by default and four with `--opt-level 0`.
+kernel per accepted region and 256 threads per block. Axis order comes from the
+schedule; bounded grids use grid-stride iteration to cover larger domains. Empty
+domains skip the launch. CDU, CDV, and CDW each produce one CUDA kernel by default
+and four with `--opt-level 0`.
 
 ## CLI and outputs
 
@@ -95,7 +102,9 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--common-header` | `common_functions.cuh` | Shared indexing, numeric, and timing header |
 | `--no-common-header` | off | Use a separately supplied shared header |
 | `--opt-level {0,1}` | `1` | Enable proved scalar motion and fusion; `0` retains source passes |
-| `--verbose`, `-v` | off | Normalized IR, applied/skipped transformations, region boundaries, scalar privacy, ISL relations, and legality results |
+| `--schedule {source,auto}` | `auto` at level 1, `source` at level 0 | Select axis ordering independently of fusion |
+| `--tile-sizes N[,N...]` | untiled | Positive tile sizes in scheduled fastest-to-slowest order; omitted axes use 1 |
+| `--verbose`, `-v` | off | Normalized IR, applied/skipped transformations, selected schedules, region boundaries, scalar privacy, ISL relations, and legality results |
 
 The ABI preserves the original dummy argument order, public names, and
 `cpp_<procedure>` C symbol. Array extents follow their array pointer in dimension
@@ -239,6 +248,29 @@ source provenance are preserved. Fusion stays inside each host branch. Invalid
 source remains a compilation error; an inconclusive optimization keeps its original
 form. Verbose reports explain each applied or skipped candidate.
 
+### Scheduling and explicit tiles
+
+Scheduling follows legality analysis and fusion. `RegionSchedule` records axis
+order, optional tile sizes, and CUDA thread count; emitters render those choices.
+Automatic ordering scores unit-stride accesses in Fortran storage order, weighting
+writes twice as heavily as reads. Unknown accesses receive no locality credit,
+and ties keep original innermost-first order. `--schedule source` preserves that
+order; either explicit schedule choice overrides the optimization-level default.
+
+For example, `--schedule auto --tile-sizes 32,4` sets sizes for the two fastest
+scheduled axes; remaining axes use size 1. The compiler rejects specifications
+longer than the maximum mapped rank. Omitting `--tile-sizes` keeps execution
+untiled; no default tile size is selected.
+
+Bounds are captured in source order, with inner bounds suppressed when an outer
+loop is empty. The schedule reorders ordinal coordinates and reconstructs signed
+Fortran indices. CPU emission parallelizes a flattened tile loop and executes
+points sequentially inside each tile. CUDA maps tiles to blocks and distributes
+points across threads, including tiles larger than a block, with guards for tile
+tails. Flattened tile coordinates support arbitrary rank. Iteration products are
+checked for overflow before launch, and zero factors suppress spurious overflow
+errors for empty domains.
+
 Distinct array arguments must not overlap whenever either is written. The
 compiler does not perform runtime overlap checks. Repeated actual arguments in
 an inlined helper retain shared identity and are analyzed as aliases. Callers
@@ -262,7 +294,10 @@ Tests cover lowering, source ordering, inline aliases, scalar lifetimes, ISL
 relations against brute-force ordered accesses, rejection without publication,
 and deterministic generation. Fusion tests cover scalar motion, shifted conflicts,
 unequal domains, conservative accesses, branch boundaries, and signed-stride small
-domains compared with source execution. Native tests exercise both optimization
+domains compared with source execution. Scheduling tests execute serial/OpenMP
+and simulated CUDA coordinate maps for signed strides, tile tails, oversized
+tiles, and arbitrary rank; CUDA launches are also compiled with nvcc when available.
+Native tests exercise both optimization
 levels and compile and compare original Fortran,
 generated serial C++, OpenMP, and CUDA using deterministic nonuniform inputs and
 absolute tolerance `1e-10` for real values and exact comparison for integers.

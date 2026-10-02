@@ -1,4 +1,4 @@
-"""Exercise option publication safety and checked fusion against source execution."""
+"""Exercise option publication safety and checked schedules against source execution."""
 
 from __future__ import annotations
 
@@ -62,6 +62,40 @@ def test_invalid_optimization_options_preserve_outputs(
     assert actual == expected
 
 
+@pytest.mark.parametrize("existing_outputs", [False, True], ids=["new-directory", "existing-outputs"])
+@pytest.mark.parametrize("tiles", ["0", "-2", "1,,2", "x", "1,2,3,4", str(2**64)])
+def test_invalid_tile_options_preserve_outputs(tmp_path: Path, tiles: str, *, existing_outputs: bool) -> None:
+    output = tmp_path / "generated"
+    expected = {name: f"original {name}" for name in OUTPUT_FILES} if existing_outputs else {}
+    if existing_outputs:
+        output.mkdir()
+        for name, contents in expected.items():
+            (output / name).write_text(contents)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "compiler",
+            "--input",
+            str(Path(__file__).parent / "fixtures" / "fill_array.f90"),
+            "--kernel",
+            "fill_array",
+            "--output-dir",
+            str(output),
+            f"--tile-sizes={tiles}",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert result.returncode != 0
+    assert "tile" in result.stderr.lower()
+    actual = {path.name: path.read_text() for path in output.iterdir()} if output.exists() else {}
+    assert actual == expected
+
+
 def _evaluate(expression, scalars, arrays, extents):
     if isinstance(expression, Literal):
         return int(expression.value) if expression.dtype.value == "integer" else float(expression.value)
@@ -107,17 +141,31 @@ def _interpret(block, scalars, arrays, extents):
 
 
 def _ordered_points(region, scalars, arrays, extents):
+    schedule = region.schedule
     ranges = []
     for loop in region.loops:
         lower = _evaluate(loop.lower, scalars, arrays, extents)
         upper = _evaluate(loop.upper, scalars, arrays, extents)
         stride = loop.step if isinstance(loop.step, int) else _evaluate(loop.step, scalars, arrays, extents)
         ranges.append(tuple(range(lower, upper + (1 if stride > 0 else -1), stride)))
-    return list(itertools.product(*ranges))
+    coordinates = list(itertools.product(*(range(len(axis)) for axis in ranges)))
+    if schedule.tile_sizes:
+        coordinates.sort(
+            key=lambda point: (
+                tuple(point[axis] // schedule.tile_sizes[axis] for axis in reversed(schedule.axis_order)),
+                tuple(point[axis] % schedule.tile_sizes[axis] for axis in reversed(schedule.axis_order)),
+            )
+        )
+    else:
+        coordinates.sort(key=lambda point: tuple(point[axis] for axis in reversed(schedule.axis_order)))
+    return [tuple(ranges[axis][coordinate] for axis, coordinate in enumerate(point)) for point in coordinates]
 
 
 @pytest.mark.parametrize("stride", [1, -1, 2, -2])
-def test_fusion_matches_brute_force_source_execution(tmp_path: Path, stride: int) -> None:
+@pytest.mark.parametrize("tiles", [(), (2, 3)])
+def test_fusion_and_schedule_match_brute_force_source_execution(
+    tmp_path: Path, stride: int, tiles: tuple[int, ...]
+) -> None:
     source = tmp_path / "small_domain.f90"
     lower, upper = ("1", "n") if stride > 0 else ("n", "1")
     source.write_text(f"""! kernels
@@ -143,7 +191,7 @@ contains
 end module
 """)
     function = lower_file(source, "entry")
-    optimized, plan = prepare_function(function)
+    optimized, plan = prepare_function(function, options=CompilerOptions(tile_sizes=tiles))
     assert len(plan.regions) == 1
     for n in range(5):
         shape = {"a": (n, n), "b": (n, n)}
