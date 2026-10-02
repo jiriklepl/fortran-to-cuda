@@ -3,7 +3,9 @@
 import argparse
 from pathlib import Path
 
-from compiler.analysis import build_execution_plan, format_plan
+from compiler.analysis import format_plan
+from compiler.driver.options import CompilerOptions
+from compiler.driver.pipeline import prepare_function
 from compiler.emission import generate_sources, read_common_header
 from compiler.frontend import lower_file
 from compiler.ir import CompilationError, format_ir
@@ -65,10 +67,17 @@ def _parse_args() -> argparse.Namespace:
         help="Skip writing the common_functions.cuh header.",
     )
     parser.add_argument(
+        "--opt-level",
+        type=int,
+        choices=(0, 1),
+        default=1,
+        help="Optimization level: 0 retains source passes; 1 enables checked scalar motion and fusion (default).",
+    )
+    parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
-        help="Print normalized IR, ordered regions, and parallel-legality results.",
+        help="Print normalized IR, transformations, ordered regions, and parallel-legality results.",
     )
     return parser.parse_args()
 
@@ -81,8 +90,9 @@ def main() -> None:
         raise SystemExit(f"error: input file not found: {source_file}")
 
     try:
+        options = CompilerOptions(opt_level=args.opt_level)
         function = lower_file(source_file, args.kernel)
-        plan = build_execution_plan(function)
+        function, plan = prepare_function(function, options=options)
         sources = generate_sources(function, plan, common_header=args.common_header)
         common_header = read_common_header()
     except CompilationError as error:

@@ -168,7 +168,7 @@ def _tool(name: str) -> str:
     return executable
 
 
-def _generate(case: Case, output: Path, *, verbose: bool = False) -> None:
+def _generate(case: Case, output: Path, *, verbose: bool = False, opt_level: int = 1) -> None:
     command = [
         sys.executable,
         "-m",
@@ -179,6 +179,8 @@ def _generate(case: Case, output: Path, *, verbose: bool = False) -> None:
         case.kernel,
         "--output-dir",
         str(output),
+        "--opt-level",
+        str(opt_level),
     ]
     if verbose:
         command.append("--verbose")
@@ -228,15 +230,20 @@ class Generated:
     case: Case
     directory: Path
     driver: Path
+    opt_level: int
 
 
-@pytest.fixture(scope="module", params=CASES, ids=lambda case: case.name)
+@pytest.fixture(
+    scope="module",
+    params=[(case, opt_level) for case in CASES for opt_level in (0, 1)],
+    ids=lambda item: f"{item[0].name}-opt{item[1]}",
+)
 def generated(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory) -> Generated:
-    case = request.param
-    directory = tmp_path_factory.mktemp(f"native_{case.name}")
+    case, opt_level = request.param
+    directory = tmp_path_factory.mktemp(f"native_{case.name}_opt{opt_level}")
     output = directory / "generated"
-    _generate(case, output)
-    return Generated(case, output, _driver(case, directory / "driver.f90"))
+    _generate(case, output, opt_level=opt_level)
+    return Generated(case, output, _driver(case, directory / "driver.f90"), opt_level)
 
 
 def _fortran_objects(generated: Generated, directory: Path, *, reference: bool = False) -> list[Path]:
@@ -285,13 +292,13 @@ def reference(generated: Generated) -> list[float | int]:
 def test_generation_is_deterministic(generated: Generated, tmp_path: Path) -> None:
     for verbose in (False, True):
         output = tmp_path / ("verbose" if verbose else "normal")
-        _generate(generated.case, output, verbose=verbose)
+        _generate(generated.case, output, verbose=verbose, opt_level=generated.opt_level)
         for filename in OUTPUT_FILES:
             assert (output / filename).read_bytes() == (generated.directory / filename).read_bytes(), filename
 
     if generated.case.name in ("CDU", "CDV", "CDW"):
         cuda = (generated.directory / "generated_code.cu").read_text()
-        assert len(re.findall(r"\b__global__\s+void\b", cuda)) == 4
+        assert len(re.findall(r"\b__global__\s+void\b", cuda)) == (4 if generated.opt_level == 0 else 1)
 
 
 @pytest.mark.parametrize("existing_outputs", [False, True], ids=["new-directory", "existing-outputs"])
