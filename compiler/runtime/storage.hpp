@@ -4,6 +4,7 @@
 #include <initializer_list>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 
 namespace generated_kernels::storage {
@@ -194,6 +195,8 @@ template <typename T> class Buffer {
     }
 };
 
+template <typename T> using BufferSlot = std::optional<Buffer<T>>;
+
 template <typename State> class Registry {
     std::unordered_map<std::int64_t, std::unique_ptr<State>> entries_;
     std::int64_t next_ = 1;
@@ -216,7 +219,6 @@ template <typename State> class Registry {
         if (!token)
             return;
         get(token);
-        synchronize();
         entries_.erase(token);
     }
 };

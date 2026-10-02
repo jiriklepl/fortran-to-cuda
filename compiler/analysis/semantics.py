@@ -18,12 +18,19 @@ from compiler.ir import (
     referenced_symbols,
     statement_reads,
 )
+from compiler.ir.integers import constant_integer
 from compiler.ir.intrinsics import intrinsic_type
 
 from .effects import header_reads, loop_step
 
 
 def expression_type(expression, location):
+    dtype = _expression_type(expression, location)
+    constant_integer(expression, location)
+    return dtype
+
+
+def _expression_type(expression, location):
     if isinstance(expression, Literal):
         return expression.dtype
     if isinstance(expression, (Reference, ArrayAccess)):
@@ -32,7 +39,7 @@ def expression_type(expression, location):
         if isinstance(expression, ArrayAccess):
             if len(expression.indices) != expression.symbol.rank:
                 raise CompilationError("array access rank mismatch", location)
-            if any(expression_type(index, location) is not ScalarType.INTEGER for index in expression.indices):
+            if any(_expression_type(index, location) is not ScalarType.INTEGER for index in expression.indices):
                 raise CompilationError("array subscripts must be INTEGER expressions", location)
         return expression.symbol.dtype
     if isinstance(expression, Size):
@@ -41,7 +48,7 @@ def expression_type(expression, location):
         return ScalarType.INTEGER
     if isinstance(expression, IntrinsicCall):
         dtype = intrinsic_type(
-            expression.name, tuple(expression_type(arg, location) for arg in expression.arguments), location
+            expression.name, tuple(_expression_type(arg, location) for arg in expression.arguments), location
         )
         if expression.dtype is not dtype:
             raise CompilationError("intrinsic result type does not match its signature", location)
@@ -49,7 +56,7 @@ def expression_type(expression, location):
     if isinstance(expression, Unary):
         if expression.operator not in {"+", "-", ".not."}:
             raise CompilationError("unsupported unary operator " + expression.operator, location)
-        dtype = expression_type(expression.operand, location)
+        dtype = _expression_type(expression.operand, location)
         if (expression.operator == ".not.") != (dtype is ScalarType.LOGICAL):
             raise CompilationError("invalid operand type for unary operator", location)
         return dtype
@@ -77,7 +84,7 @@ def expression_type(expression, location):
             ".neqv.",
         }:
             raise CompilationError("unsupported binary operator " + expression.operator, location)
-        left, right = expression_type(expression.left, location), expression_type(expression.right, location)
+        left, right = _expression_type(expression.left, location), _expression_type(expression.right, location)
         logical = expression.operator in {".and.", ".or.", ".eqv.", ".neqv."}
         if any((dtype is ScalarType.LOGICAL) != logical for dtype in (left, right)):
             raise CompilationError("invalid operand types for operator " + expression.operator, location)
@@ -91,28 +98,6 @@ def expression_type(expression, location):
             else ScalarType.INTEGER
         )
     raise CompilationError("unsupported expression", location)
-
-
-def constant_integer(expression):
-    if isinstance(expression, Literal) and expression.dtype is ScalarType.INTEGER:
-        return int(expression.value)
-    if isinstance(expression, Unary) and expression.operator in {"+", "-"}:
-        value = constant_integer(expression.operand)
-        return None if value is None else value * (-1 if expression.operator == "-" else 1)
-    if isinstance(expression, Binary) and expression.operator in {"+", "-", "*", "/"}:
-        left, right = constant_integer(expression.left), constant_integer(expression.right)
-        if left is None or right is None:
-            return None
-        if expression.operator == "+":
-            return left + right
-        if expression.operator == "-":
-            return left - right
-        if expression.operator == "*":
-            return left * right
-        if right:
-            value = abs(left) // abs(right)
-            return -value if (left < 0) != (right < 0) else value
-    return None
 
 
 def validate_block(block: Block, defined: set, active=frozenset()):

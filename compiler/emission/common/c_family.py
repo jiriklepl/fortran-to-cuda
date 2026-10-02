@@ -17,6 +17,7 @@ from compiler.ir import (
     Symbol,
     Unary,
 )
+from compiler.ir.integers import INTEGER_MAX, INTEGER_MIN, integer_literal
 
 
 def cpp_type(symbol: Symbol) -> str:
@@ -34,7 +35,8 @@ def render_expression(expression: Expr) -> str:
             return "true" if expression.value.lower() in {".true.", "true"} else "false"
         if expression.dtype is ScalarType.INTEGER:
             # Fortran integer literals are decimal even with leading zeros.
-            return str(int(expression.value))
+            value = integer_literal(expression.value)
+            return f"(-{INTEGER_MAX} - 1)" if value == INTEGER_MIN else str(value)
         # The frontend normalizes literals; accepting Fortran exponent spelling
         # here also makes standalone construction of the public IR convenient.
         value = expression.value.split("_", 1)[0].replace("d", "e").replace("D", "e")

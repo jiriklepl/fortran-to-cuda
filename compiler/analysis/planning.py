@@ -126,7 +126,7 @@ def format_plan(plan):
         elif isinstance(step, ParallelRegion):
             lines.append(f"region {step.id}: {len(step.loops)} mapped dimensions, parallel legality PROVEN")
             lines.append(f"  retained sequential loops: {len(tuple(all_loops(step.body)))}")
-            lines.append(f"  access model: {'conservative' if step.report.conservative else 'exact'}")
+            lines.append(f"  dependence model: {'conservative' if step.report.conservative else 'exact'}")
             lines.append(f"  private: {', '.join(s.cpp_name for s in step.private_symbols) or '(none)'}")
             for name in ("domain", "schedule", "raw", "war", "waw"):
                 lines.append(

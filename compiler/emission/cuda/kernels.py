@@ -192,9 +192,19 @@ def generate_launch(region: ParallelRegion) -> list[str]:
     arguments.append("fort_internal_total")
     if schedule.tile_sizes:
         arguments.append("fort_internal_tile_volume")
-    lines.append(f"        {kernel_name(region)}<<<fort_internal_blocks, fort_internal_threads>>>(")
+    lines.append("        timing::measure_kernel_executions([&]() {")
+    lines.append(f"            {kernel_name(region)}<<<fort_internal_blocks, fort_internal_threads>>>(")
     lines.extend(
-        indent([argument + ("," if index < len(arguments) - 1 else "") for index, argument in enumerate(arguments)], 3)
+        indent([argument + ("," if index < len(arguments) - 1 else "") for index, argument in enumerate(arguments)], 4)
     )
-    lines.extend(["        );", "        CUCH(cudaGetLastError());", '        storage::trace("kernel");', "    }", "}"])
+    lines.extend(
+        [
+            "            );",
+            "        });",
+            "        CUCH(cudaGetLastError());",
+            '        storage::trace("kernel");',
+            "    }",
+            "}",
+        ]
+    )
     return lines

@@ -19,6 +19,7 @@ from compiler.ir import (
     Block,
     CompilationError,
     FunctionIR,
+    If,
     Literal,
     Loop,
     Reference,
@@ -65,7 +66,7 @@ def test_success_preserves_model_precision_and_existing_entry_points(indirect):
     plan = build_execution_plan(function)
     assert result.region == plan.regions[0]
     assert result.region.report.conservative is indirect
-    assert f"access model: {'conservative' if indirect else 'exact'}" in format_plan(plan)
+    assert f"dependence model: {'conservative' if indirect else 'exact'}" in format_plan(plan)
     assert dependence.build_execution_plan(function) == plan
     assert dependence.format_plan(plan) == format_plan(plan)
 
@@ -117,3 +118,40 @@ def test_internal_errors_propagate(monkeypatch):
     monkeypatch.setattr(dependence, "_region", broken_region)
     with pytest.raises(RuntimeError, match="proof engine failed"):
         query(function_with_assignment(POINT, ONE))
+
+
+def conditional_function(target, *, predicate=None):
+    function = function_with_assignment(target, ONE)
+    loop = function.body.statements[0]
+    condition = predicate or Binary("==", Reference(ITERATOR), ONE)
+    branch = If(condition, loop.body, Block(()), LOCATION)
+    return replace(function, body=Block((replace(loop, body=Block((branch,))),)))
+
+
+def test_branch_union_success_reports_conservative_dependence_model():
+    function = conditional_function(POINT)
+    proof = query(function)
+    assert proof.proven
+    assert proof.region.report.conservative
+    assert "dependence model: conservative" in format_plan(build_execution_plan(function))
+
+
+def test_branch_union_conflict_is_possible_even_when_predicate_excludes_witness():
+    # Only i=1 writes in the actual program. Path-insensitive analysis includes
+    # the same write at every iteration and must identify its witness as possible.
+    function = conditional_function(ArrayAccess(A, (ONE,)))
+    proof = query(function)
+    assert not proof.proven
+    assert proof.failure.conservative
+    assert proof.failure.witness
+    assert "WAW possible loop-carried conflict" in proof.failure.reason
+    assert "conservative dependence model" in proof.failure.reason
+
+
+def test_branch_predicate_reads_remain_in_conservative_dependence_model():
+    predicate = Binary(">", ArrayAccess(A, (Binary("-", Reference(ITERATOR), ONE),)), ONE)
+    proof = query(conditional_function(POINT, predicate=predicate))
+    assert not proof.proven
+    assert proof.failure.conservative
+    assert "RAW possible loop-carried conflict" in proof.failure.reason
+    assert proof.failure.witness

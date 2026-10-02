@@ -33,6 +33,7 @@ from compiler.ir import (
     Symbol,
     Unary,
 )
+from compiler.ir.integers import constant_integer, integer_literal
 from compiler.ir.intrinsics import intrinsic_type
 
 
@@ -65,14 +66,19 @@ class _Lowerer:
         self.routine_nodes: dict[tuple[str, str], tuple[str, Any]] = {}
 
     def location(self, node: Any, stack: tuple[str, ...] = ()) -> SourceLocation:
-        item = getattr(node, "item", None)
-        if item is None:
-            for child in walk(node):
-                item = getattr(child, "item", None)
-                if item is not None:
-                    break
-        span = getattr(item, "span", None)
-        return SourceLocation(self.path, span[0] if span else 1, stack)
+        for child in walk(node):
+            span = getattr(getattr(child, "item", None), "span", None)
+            if span:
+                return SourceLocation(self.path, span[0], stack)
+        # Embedded actions (for example single-line IF assignments/calls) inherit
+        # their source span from the enclosing parser node.
+        parent = getattr(node, "parent", None)
+        while parent is not None:
+            span = getattr(getattr(parent, "item", None), "span", None)
+            if span:
+                return SourceLocation(self.path, span[0], stack)
+            parent = getattr(parent, "parent", None)
+        return SourceLocation(self.path, 1, stack)
 
     def error(self, message: str, node: Any, stack: tuple[str, ...] = ()) -> CompilationError:
         return CompilationError(message, self.location(node, stack))
@@ -443,6 +449,11 @@ class _Lowerer:
         return bindings[name]
 
     def expression(self, node: Any, bindings: dict[str, Symbol], location: SourceLocation) -> Expr:
+        expression = self._expression(node, bindings, location)
+        constant_integer(expression, location)
+        return expression
+
+    def _expression(self, node: Any, bindings: dict[str, Symbol], location: SourceLocation) -> Expr:
         kind = type(node).__name__
         if kind == "Name":
             symbol = self.lookup(node, bindings, location)
@@ -463,6 +474,7 @@ class _Lowerer:
             if literal_kind is not None and str(literal_kind).lower() != "knd":
                 raise CompilationError(f"unsupported literal kind {literal_kind}; only knd is supported", location)
             if kind == "Int_Literal_Constant":
+                integer_literal(str(value), location, source_token=True)
                 dtype = ScalarType.INTEGER
             elif literal_kind is not None or "d" in str(value).lower():
                 dtype = ScalarType.REAL
@@ -470,13 +482,13 @@ class _Lowerer:
                 dtype = ScalarType.REAL32
             return Literal(str(value).replace("D", "e").replace("d", "e"), dtype)
         if kind == "Parenthesis":
-            return self.expression(node.items[1], bindings, location)
+            return self._expression(node.items[1], bindings, location)
         if kind == "Part_Ref":
             symbol = self.lookup(node.items[0], bindings, location)
             subscripts = node.items[1].items
             if not symbol.rank or len(subscripts) != symbol.rank:
                 raise CompilationError(f"array access rank mismatch for {symbol.name}", location)
-            indices = tuple(self.expression(index, bindings, location) for index in subscripts)
+            indices = tuple(self._expression(index, bindings, location) for index in subscripts)
             if any(self.dtype(index) != ScalarType.INTEGER for index in indices):
                 raise CompilationError("array subscripts must be INTEGER expressions", location)
             return ArrayAccess(symbol, indices)
@@ -484,7 +496,7 @@ class _Lowerer:
             name, argument_list = node.items
             if str(name).upper() != "SIZE":
                 args = argument_list.items if argument_list is not None else ()
-                arguments = tuple(self.expression(arg, bindings, location) for arg in args)
+                arguments = tuple(self._expression(arg, bindings, location) for arg in args)
                 dtype = intrinsic_type(str(name), tuple(self.dtype(arg) for arg in arguments), location)
                 return IntrinsicCall(str(name).lower(), arguments, dtype)
             args = argument_list.items if argument_list is not None else ()
@@ -502,7 +514,7 @@ class _Lowerer:
                 raise CompilationError("SIZE requires a whole array and an optional literal dimension", location)
             if args[1].items[1] is not None:
                 raise CompilationError("SIZE dimensions require default INTEGER literals without a kind", location)
-            dimension = int(args[1].items[0])
+            dimension = integer_literal(str(args[1].items[0]), location, source_token=True)
             if not 1 <= dimension <= symbol.rank:
                 raise CompilationError(
                     f"SIZE dimension {dimension} is outside rank {symbol.rank} of {symbol.name}", location
@@ -511,7 +523,7 @@ class _Lowerer:
         items = getattr(node, "items", ())
         if len(items) == 2 and str(items[0]).upper() in {"+", "-", ".NOT."}:
             operator = str(items[0]).lower()
-            operand = self.expression(items[1], bindings, location)
+            operand = self._expression(items[1], bindings, location)
             logical = self.dtype(operand) is ScalarType.LOGICAL
             if (operator == ".not.") != logical:
                 raise CompilationError("invalid operand type for unary operator", location)
@@ -542,8 +554,8 @@ class _Lowerer:
                 ".neqv.",
             }
             if operator in operators:
-                left = self.expression(left_node, bindings, location)
-                right = self.expression(right_node, bindings, location)
+                left = self._expression(left_node, bindings, location)
+                right = self._expression(right_node, bindings, location)
                 logical_operator = operator in {".and.", ".or.", ".eqv.", ".neqv."}
                 if any((self.dtype(operand) is ScalarType.LOGICAL) != logical_operator for operand in (left, right)):
                     raise CompilationError("invalid operand types for operator " + operator, location)

@@ -119,12 +119,19 @@ order. The generated bridge keeps `knd` mapped to binary64 and retains
 `start_hot`/`finish_hot` timing hooks. Profiling starts disabled: `start_hot` resets
 and enables collection, and `finish_hot` reports and disables it. Ordinary
 execution creates no profiling events or phase-by-phase profiling barriers.
+Profiled public CUDA calls serialize through a shared profiling lock. Unprofiled
+calls do not take that lock. The timing hooks delimit quiescent batches: start
+profiling before starting concurrent callers and join them before finishing it.
+`calls` counts entry runs, including empty and host-only runs; `kernel_launches`
+counts actual launches. Kernel time excludes host execution and transfers.
 These three public names are reserved for that generated API. All sources are generated and validated before destination
 files are written; an unsupported or unsafe input leaves existing outputs intact.
 
-The ordinary CUDA wrapper creates an owned session, uploads `intent(in)` and
-`intent(inout)` data, executes the memory plan, downloads outputs, and destroys the
-session on each call. It remains synchronous and host-visible. `USE_PINNED_MEMORY`
+The ordinary CUDA wrapper creates private owned state, uploads `intent(in)` and
+`intent(inout)` data, executes the memory plan, downloads outputs, and releases the
+state on each call. Ordinary calls do not use the session token registry, so
+independent concurrent callers have independent storage. Ordinary calls remain
+synchronous and host-visible. `USE_PINNED_MEMORY`
 enables optional pinned-memory support. Host array reads and writes between launches synchronize affected arrays:
 a read sees previous device updates, and a partial host write preserves other
 device-produced cells before uploading the changed array. Array-valued launch
@@ -135,12 +142,16 @@ included in timing hooks. Unwritten `intent(inout)` cells are preserved. Unwritt
 ## Memory planning and runtime
 
 `compiler.memory.plan_memory(plan, parameters)` derives immutable acquisition,
-host/device access, execution, write-invalidation, synchronization, and release
+caller uploads/downloads, host/device access, execution, write-invalidation, synchronization, and release
 operations from an execution plan. It preserves conditional branches, counts
 predicate and array-valued launch-bound reads, and requests current contents before
 partial writes. `format_memory` describes these operations independently of
 emission. Host/device access operations represent conditional transfers: a storage
 runtime decides whether its current ownership state requires a copy.
+Explicit uploads/downloads always transfer the selected caller arrays. Before
+emission, `validate_memory` checks operation payloads, phase placement, array
+ownership, and complete acquisition, input upload, output retrieval, and release.
+Unsupported operations fail instead of being silently skipped.
 
 `runtime/storage.hpp` provides owned fixed-shape CPU/CUDA buffers, lazy CUDA host
 mirrors, selective updates, checked extent/byte products, scoped pinned-memory
@@ -148,11 +159,15 @@ registration, and a registry that diagnoses invalid or stale tokens. Buffers ret
 no caller pointers. `runtime/timing.hpp` contains opt-in profiling. Both units are
 assembled into the existing support header and tested with instrumented CUDA calls.
 
-CUDA emission renders the planned host/device requirements, executions, and
-ownership transitions. Host statements, branches, fallback regions, and
-array-valued launch bounds share this coherence path. The ordinary CUDA entry
-point and persistent GPU sessions use the same runtime. CPU sessions wrap the
-ordinary C++ implementation with owned host buffers. Verbose output displays the
+Emission renders every lifecycle operation, including synchronization without an
+array payload. State starts with empty buffer slots and fixed extent metadata;
+planned acquisition constructs buffers and planned release destroys them, with
+RAII as a cleanup backstop. Shared state helpers implement ordinary CUDA calls
+and explicit sessions; the registry only owns states and validates tokens.
+Host statements, branches, fallback regions, and array-valued launch bounds share
+the coherence path. CPU sessions consume the same memory operations with both
+address spaces mapped to owned host buffers; ordinary C++ calls use direct lowering.
+Verbose output displays the
 memory operations; `FORT_RUNTIME_TRACE=1` logs actual GPU allocations, transfers,
 kernel launches, and frees.
 
@@ -221,9 +236,13 @@ contains
 end module example
 ```
 
-- Default `integer`, default `real` (binary32), and `real(knd)` (binary64)
+- Default `integer` (signed 32-bit), default `real` (binary32), and `real(knd)` (binary64)
   scalars and assumed-shape dummy arrays. Array rank and loop nesting depth
   follow native Fortran language/compiler limits.
+  Integer literal tokens must fit before applying unary signs: `-2147483648`
+  rejects, while `(-2147483647-1)` is valid. Constant integer operations check
+  every intermediate result, including division by zero and `ABS(INT_MIN)`.
+  Unknown runtime values retain the existing arithmetic and ABI.
 - Explicit `intent(in/out/inout)` arrays. Omitted array intent is conservatively
   treated as `inout`; omitted scalar intent is treated as read-only input. Scalar
   argument writes remain unsupported. `contiguous` and `target` are accepted;
@@ -298,10 +317,14 @@ requested. A perfect rectangular nest maps all its dimensions; an inner
 recurrence in such a mapped nest requires host fallback.
 
 A dependence error includes source/call provenance, affected accesses, the
-symbolic conflict relation, and a conflicting-iteration witness. If unknown
-indices or variable-stride congruences widen the model, the diagnostic labels
-its relation and witness conservative: it shows why independence could not be
-proved, rather than promising a collision for every caller's runtime data.
+symbolic conflict relation, and a conflicting-iteration witness. Embedded
+single-line actions inherit their enclosing source span while retaining inline
+call stacks. If unknown indices, variable-stride congruences, or branch effects
+without predicate constraints widen the model, successful reports and conflict
+diagnostics label the dependence model conservative. A conservative conflict
+witness shows why independence could not be proved, rather than promising a
+collision for every caller's runtime data.
+Branch-free affine models remain exact; proofs do not split paths by predicates.
 `--verbose` also displays exact/conservative modeling and retained loop counts.
 Unfused regions execute in original order, honoring cross-region dependencies.
 
