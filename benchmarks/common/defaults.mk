@@ -22,13 +22,12 @@ FFLAGS       ?= -O3 -march=native -flto
 EXTRA_FFLAGS ?=
 
 # ---- C++ compiler & flags ---------------------------------
-# Use the same GCC installation as gfortran to ensure consistent code generation,
-# ABI compatibility, and the ability to link LTO objects from both compilers.
+# Select compatible gfortran/g++ installations through PATH or command-line overrides.
 # Guard against make's built-in CXX=g++ default (same pattern as FC above).
 ifeq ($(origin CXX),default)
-  CXX = /usr/local/gcc152/bin/g++
+  CXX = g++
 else
-  CXX ?= /usr/local/gcc152/bin/g++
+  CXX ?= g++
 endif
 CXXFLAGS     ?= -O3 -march=native -flto
 EXTRA_CXXFLAGS ?=
