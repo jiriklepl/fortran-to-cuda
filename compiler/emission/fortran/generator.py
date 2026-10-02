@@ -3,37 +3,19 @@
 from __future__ import annotations
 
 from compiler.emission.common.abi import AbiArgument
+from compiler.emission.common.sessions import session_names
 from compiler.emission.fortran.declarations import FortranKinds, abi_call, abi_declaration, public_declaration
+from compiler.emission.fortran.formatting import _fortran_line, _fortran_list
+from compiler.emission.fortran.sessions import fortran_sessions
 from compiler.ir import FunctionIR
-
-
-def _fortran_list(prefix: str, values: list[str], suffix: str, indentation: int) -> list[str]:
-    """Continue every argument separately to stay within free-form line limits."""
-    if not values:
-        return [" " * indentation + prefix + suffix]
-    lines = [" " * indentation + prefix + " &"]
-    lines.extend(
-        " " * (indentation + 4) + value + (", &" if index < len(values) - 1 else " &")
-        for index, value in enumerate(values)
-    )
-    lines.append(" " * indentation + suffix)
-    return lines
-
-
-def _fortran_line(declaration: str, indentation: int) -> list[str]:
-    line = " " * indentation + declaration
-    if len(line) <= 132:
-        return [line]
-    # A rank-15 assumed shape and a long public dummy name can exceed the
-    # free-form limit. A continuation before its name keeps both parts short.
-    left, right = line.split("::", 1)
-    return [left.rstrip() + " :: &", " " * (indentation + 4) + right.strip()]
 
 
 def generate_fortran(function: FunctionIR, abi: tuple[AbiArgument, ...]) -> str:
     # Keep the public dummy labels for keyword callers. Conversion intrinsics
     # belong in a separate scope where user names cannot hide SIZE/INT/REAL.
-    occupied = {symbol.name.lower() for symbol in function.parameters}
+    names = session_names(function)
+    occupied = set(names.__dict__.values())
+    occupied.update({symbol.name.lower() for symbol in function.parameters})
     occupied.update({function.name.lower(), function.module.lower(), "start_hot", "finish_hot", "knd"})
 
     def unique_name(base: str) -> str:
@@ -51,11 +33,13 @@ def generate_fortran(function: FunctionIR, abi: tuple[AbiArgument, ...]) -> str:
         real32=unique_name("fort_internal_c_real32"),
         extent=unique_name("fort_internal_c_extent"),
         logical=unique_name("fort_internal_c_logical"),
+        token=unique_name("fort_internal_c_token"),
     )
     c_entry = unique_name("fort_internal_c_entry")
     bridge = unique_name("fort_internal_bridge")
     c_start = unique_name("fort_internal_c_start")
     c_finish = unique_name("fort_internal_c_finish")
+    declarations, interfaces, bodies = fortran_sessions(function, kinds, unique_name)
     lines = [
         f"module {function.module}",
         "  use iso_c_binding, only: &",
@@ -63,13 +47,16 @@ def generate_fortran(function: FunctionIR, abi: tuple[AbiArgument, ...]) -> str:
         f"    {kinds.real} => c_double, &",
         f"    {kinds.real32} => c_float, &",
         f"    {kinds.extent} => c_size_t, &",
-        f"    {kinds.logical} => c_bool",
+        f"    {kinds.logical} => c_bool, &",
+        f"    {kinds.token} => c_int64_t",
         "  implicit none",
         "  private",
         f"  public :: {function.name}, knd, start_hot, finish_hot",
         f"  integer, parameter :: knd = {kinds.real}",
         "",
+        *declarations,
         "  interface",
+        *interfaces,
     ]
     lines.extend(
         _fortran_list(
@@ -121,6 +108,7 @@ def generate_fortran(function: FunctionIR, abi: tuple[AbiArgument, ...]) -> str:
             f"    call {c_finish}()",
             "  end subroutine finish_hot",
             "",
+            *bodies,
             f"end module {function.module}",
             "",
         ]
