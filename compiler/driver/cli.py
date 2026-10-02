@@ -90,6 +90,12 @@ def _parse_args() -> argparse.Namespace:
         "--tile-sizes", type=_tile_sizes, default=(), metavar="N[,N...]", help="Spatial tiles, fastest axis first."
     )
     parser.add_argument(
+        "--fallback",
+        choices=("error", "host"),
+        default="error",
+        help="Unproved parallel regions: reject or execute on the host (default: error).",
+    )
+    parser.add_argument(
         "--verbose",
         "-v",
         action="store_true",
@@ -106,7 +112,9 @@ def main() -> None:
         raise SystemExit(f"error: input file not found: {source_file}")
 
     try:
-        options = CompilerOptions(opt_level=args.opt_level, schedule=args.schedule, tile_sizes=args.tile_sizes)
+        options = CompilerOptions(
+            opt_level=args.opt_level, schedule=args.schedule, tile_sizes=args.tile_sizes, fallback=args.fallback
+        )
         function = lower_file(source_file, args.kernel)
         function, plan = prepare_function(function, options=options)
         sources = generate_sources(function, plan, common_header=args.common_header)

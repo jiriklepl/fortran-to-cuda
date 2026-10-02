@@ -1,6 +1,8 @@
-"""Build strict execution plans from validated source and dependence proofs."""
+"""Execution policy: validated source, proof queries, and explicit host fallback."""
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from compiler.ir import (
     Assignment,
@@ -14,6 +16,7 @@ from compiler.ir import (
     ParallelRegion,
     Reference,
     ScalarType,
+    SequentialRegion,
     block_writes,
 )
 
@@ -22,8 +25,14 @@ from .effects import all_loops, array_effects
 from .proof import ParallelizationError
 from .semantics import validate_block, validate_function
 
+if TYPE_CHECKING:
+    from compiler.driver.options import CompilerOptions
 
-def build_execution_plan(function: FunctionIR) -> ExecutionPlan:
+
+def build_execution_plan(function: FunctionIR, *, options: CompilerOptions | None = None) -> ExecutionPlan:
+    from compiler.driver.options import CompilerOptions
+
+    options = options or CompilerOptions()
     validate_function(function)
     environment = {
         symbol: Affine(terms=((f"p{symbol.id}", 1),))
@@ -80,6 +89,10 @@ def build_execution_plan(function: FunctionIR) -> ExecutionPlan:
                 proof = prove_region(region_id, statement, environment, defined, later)
                 if proof.proven:
                     steps.append(proof.region)
+                elif options.fallback == "host":
+                    body = Block((statement,))
+                    reads, writes = array_effects(body)
+                    steps.append(SequentialRegion(region_id, body, proof.failure.reason, reads, writes))
                 else:
                     failure = proof.failure
                     raise ParallelizationError(
@@ -104,6 +117,8 @@ def format_plan(plan):
             lines.append(f"host block: {len(step.assignments)} ordered assignment(s)")
             lines.append(f"  array reads: {', '.join(s.name for s in step.read_symbols) or '(none)'}")
             lines.append(f"  array writes: {', '.join(s.name for s in step.write_symbols) or '(none)'}")
+        elif isinstance(step, SequentialRegion):
+            lines.append(f"region {step.id}: sequential host fallback: {step.reason}")
         elif isinstance(step, ConditionalRegion):
             lines.append(f"host conditional at {step.location}")
             lines.extend("  then: " + line for line in format_plan(step.then_plan).splitlines())

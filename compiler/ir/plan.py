@@ -49,6 +49,15 @@ class ParallelRegion:
 
 
 @dataclass(frozen=True)
+class SequentialRegion:
+    id: int
+    body: Block
+    reason: str
+    read_symbols: tuple[Symbol, ...] = ()
+    write_symbols: tuple[Symbol, ...] = ()
+
+
+@dataclass(frozen=True)
 class ConditionalRegion:
     condition: Expr
     then_plan: ExecutionPlan
@@ -60,7 +69,7 @@ class ConditionalRegion:
 
 @dataclass(frozen=True)
 class ExecutionPlan:
-    steps: tuple[HostBlock | ParallelRegion | ConditionalRegion, ...]
+    steps: tuple[HostBlock | ParallelRegion | SequentialRegion | ConditionalRegion, ...]
     reports: tuple[str, ...] = ()
 
     @property
