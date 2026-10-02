@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 
 from compiler.emission.c.declarations import cpp_declaration
 from compiler.emission.common.abi import AbiArgument
-from compiler.emission.common.c_family import cpp_type, indent, render_assignment
+from compiler.emission.common.c_family import cpp_type, indent, render_assignment, render_expression
 from compiler.emission.common.loops import iteration_value, mapped_snapshots, sequential_block
 from compiler.emission.common.symbols import host_symbols, region_body
-from compiler.ir import FunctionIR
+from compiler.ir import ConditionalRegion, FunctionIR, HostBlock, ParallelRegion
 
 if TYPE_CHECKING:
-    from compiler.ir import ExecutionPlan, ParallelRegion
+    from compiler.ir import ExecutionPlan
 
 
 def _cpp_region(region: ParallelRegion) -> list[str]:
@@ -53,6 +53,25 @@ def _cpp_region(region: ParallelRegion) -> list[str]:
     return lines
 
 
+def cpp_plan_lines(plan: ExecutionPlan, depth: int = 0) -> list[str]:
+    """Render nested host control flow and proved parallel regions."""
+    lines: list[str] = []
+    for step in plan.steps:
+        if isinstance(step, ParallelRegion):
+            lines.extend(indent(_cpp_region(step), depth))
+        elif isinstance(step, HostBlock):
+            lines.extend(indent([render_assignment(assignment) for assignment in step.assignments], depth))
+        elif isinstance(step, ConditionalRegion):
+            lines.extend(indent([f"if ({render_expression(step.condition)}) {{"], depth))
+            lines.extend(cpp_plan_lines(step.then_plan, depth + 1))
+            lines.extend(indent(["} else {"], depth))
+            lines.extend(cpp_plan_lines(step.else_plan, depth + 1))
+            lines.extend(indent(["}"], depth))
+        else:
+            raise TypeError(f"Unsupported execution-plan step: {type(step).__name__}")
+    return lines
+
+
 def generate_cpp(function: FunctionIR, plan: ExecutionPlan, abi: tuple[AbiArgument, ...], common_header: str) -> str:
     lines = [
         "#include <cstdlib>",
@@ -73,10 +92,6 @@ def generate_cpp(function: FunctionIR, plan: ExecutionPlan, abi: tuple[AbiArgume
     )
     lines.append(") {")
     lines.extend(indent([f"{cpp_type(symbol)} {symbol.cpp_name};" for symbol in host_symbols(function, plan)]))
-    for step in plan.steps:
-        if hasattr(step, "loops"):
-            lines.extend(indent(_cpp_region(step)))
-        else:
-            lines.extend(indent([render_assignment(assignment) for assignment in step.assignments]))
+    lines.extend(cpp_plan_lines(plan, 1))
     lines.extend(["}", "}", ""])
     return "\n".join(lines)

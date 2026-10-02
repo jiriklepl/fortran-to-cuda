@@ -1,8 +1,11 @@
-"""Load the support header packaged with the emitters."""
+"""Assemble packaged runtime units into the existing shared-header artifact."""
 
 from importlib.resources import files
 
 
 def read_common_header() -> str:
-    """Read the shared C++/CUDA support header as a package resource."""
-    return files(__package__).joinpath("templates").joinpath("common_functions.cuh").read_text(encoding="utf-8")
+    """Keep a single distributable support header with separately maintained units."""
+    base = files(__package__).joinpath("templates").joinpath("common_functions.cuh").read_text(encoding="utf-8")
+    runtime = files("compiler.runtime")
+    units = "\n".join(runtime.joinpath(name).read_text(encoding="utf-8") for name in ("numeric.hpp",))
+    return base.replace("// FORT_RUNTIME_UNITS", units)

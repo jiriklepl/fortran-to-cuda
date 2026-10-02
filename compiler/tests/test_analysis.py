@@ -132,7 +132,7 @@ def test_unknown_indirect_write_and_undefined_bound_are_rejected():
     def body(arr, i, temp):
         return [Assignment(ArrayAccess(arr, (ArrayAccess(arr, (Reference(i),)),)), integer(2), LOCATION)]
 
-    with pytest.raises(CompilationError, match="loop-carried conflict"):
+    with pytest.raises(CompilationError, match="subscripts must be INTEGER"):
         build_execution_plan(one_loop(body))
     i = Symbol(2, "i", ScalarType.INTEGER)
     with pytest.raises(CompilationError, match="read before definition"):

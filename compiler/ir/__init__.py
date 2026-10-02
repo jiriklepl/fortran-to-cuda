@@ -8,6 +8,8 @@ from .nodes import (
     CompilationError,
     Expr,
     FunctionIR,
+    If,
+    IntrinsicCall,
     Literal,
     Loop,
     Reference,
@@ -24,7 +26,13 @@ from .nodes import (
     statement_reads,
     walk_expr,
 )
-from .plan import ExecutionPlan, HostBlock, ParallelRegion, RegionReport
+from .plan import (
+    ConditionalRegion,
+    ExecutionPlan,
+    HostBlock,
+    ParallelRegion,
+    RegionReport,
+)
 
 __all__ = [
     "ArrayAccess",
@@ -32,6 +40,9 @@ __all__ = [
     "Binary",
     "Block",
     "CompilationError",
+    "ConditionalRegion",
+    "If",
+    "IntrinsicCall",
     "ExecutionPlan",
     "Expr",
     "FunctionIR",

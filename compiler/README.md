@@ -1,7 +1,7 @@
 # Fortran-to-CUDA/C++ compiler
 
-The compiler lowers annotated Fortran into an immutable computation IR, proves
-that each loop nest can execute independently with `islpy`, and emits C++, CUDA,
+The compiler lowers annotated Fortran into immutable computation IR, validates
+types and definite definitions, proves loop independence with `islpy`, and emits C++, CUDA,
 and a Fortran bridge from the same ordered execution plan.
 
 ```mermaid
@@ -17,7 +17,7 @@ flowchart LR
 
 Each source outer loop remains a separate region. Host assignments and regions
 retain source order. A rectangular perfect prefix maps to parallel iterations;
-its remaining ordered body can contain assignments and sequential inner loops.
+its remaining ordered body can contain assignments, conditionals, and sequential inner loops.
 Fusion, tiling, automatic scheduling, persistent device storage, and sequential
 fallback for rejected regions are unsupported.
 See [CODE_MAP.md](CODE_MAP.md) for the implementation and extension points.
@@ -32,7 +32,8 @@ compiler/
 ├── driver/                  CLI, pipeline orchestration, output publication
 ├── frontend/                Fortran parsing and lowering
 ├── ir/                      Immutable computation nodes and execution plans
-├── analysis/                Scalar lifetimes and parallel-legality checks
+├── analysis/                Semantics, effects, dependence proofs, execution plans
+├── runtime/                 Shared scalar numeric helpers
 ├── emission/
 │   ├── driver.py            Generate all sources from one shared ABI
 │   ├── common/              ABI descriptors, expressions, loops, runtime header
@@ -46,8 +47,8 @@ compiler/
 The frontend and analyzer depend on the IR. Emitters consume the IR and checked
 execution plan without importing fparser or ISL. Shared emission helpers do not
 import backends; each backend owns its language-specific rendering. The runtime
-header is a resource under `emission/common/templates/`, loaded by the emission
-package rather than located by the CLI.
+header combines the template under `emission/common/templates/` with the numeric
+helpers in `runtime/`, preserving a single distributable support header.
 
 Package entry points remain `compiler.frontend.lower_file`,
 `compiler.analysis.build_execution_plan`, and `compiler.emission.generate_sources`.
@@ -82,7 +83,7 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--cuda-output` | `generated_code.cu` | CUDA kernels and host C wrapper |
 | `--cpp-output` | `generated_cpp_impl.cpp` | C++ implementation with OpenMP annotations |
 | `--fortran-output` | `generated_interface.f90` | Original module/procedure interface using `iso_c_binding` |
-| `--common-header` | `common_functions.cuh` | Shared indexing and timing header |
+| `--common-header` | `common_functions.cuh` | Shared indexing, numeric, and timing header |
 | `--no-common-header` | off | Use a separately supplied shared header |
 | `--verbose`, `-v` | off | Normalized IR, region boundaries, scalar privacy, ISL relations, and legality results |
 
@@ -163,7 +164,7 @@ end module example
   locals per call and preserves actual storage identities and case-insensitive
   Fortran name resolution.
 
-Branches, local arrays, writable scalar arguments, recursion, slices/expression
+Local arrays, logical arrays, writable scalar arguments, recursion, slices/expression
 call arguments, other intrinsics/operators, explicit lower array bounds, and
 unsupported specification statements reject with a source location.
 Reductions or scalar values carried across mapped iterations, scalar live-outs,
@@ -171,6 +172,25 @@ and final mapped induction values are unsupported. There is no serial-only
 fallback. General nonlinear or indirect writes are accepted only when the
 conservative relations prove mapped iterations independent; no runtime alias or
 index-uniqueness checks are introduced.
+
+### Conditions and scalar intrinsics
+
+Scalar `LOGICAL` values, logical literals/operators, numeric comparisons, block
+and single-line `IF`, `ELSEIF`, and `ELSE` are supported. Definitions after a branch
+must be valid on every path. Host branches use recursive execution plans, and
+device predicates participate in conservative dependence analysis. CUDA preserves
+host/device coherence when entering and leaving host branches. Logical scalar
+arguments are explicitly converted to `logical(c_bool)` by the Fortran bridge.
+
+Scalar `ABS`, `MIN`, `MAX`, and `SQRT` preserve supported numeric kinds and
+arithmetic grouping. `MIN`/`MAX` require at least two arguments of the same type;
+`SQRT` requires a real argument. Numeric helpers emit and evaluate each argument
+once. Logical arrays and other intrinsics remain unsupported.
+
+Semantic validation and definite definitions live in `analysis/semantics.py`;
+structural effects live in `analysis/effects.py`; `analysis/planning.py` builds
+strict execution plans. Intrinsic signatures live in `ir/intrinsics.py`, and
+`runtime/numeric.hpp` is assembled into the existing shared support header.
 
 ## Legality and caller contract
 

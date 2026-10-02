@@ -50,6 +50,7 @@ def generate_fortran(function: FunctionIR, abi: tuple[AbiArgument, ...]) -> str:
         real=unique_name("fort_internal_c_real"),
         real32=unique_name("fort_internal_c_real32"),
         extent=unique_name("fort_internal_c_extent"),
+        logical=unique_name("fort_internal_c_logical"),
     )
     c_entry = unique_name("fort_internal_c_entry")
     bridge = unique_name("fort_internal_bridge")
@@ -61,7 +62,8 @@ def generate_fortran(function: FunctionIR, abi: tuple[AbiArgument, ...]) -> str:
         f"    {kinds.integer} => c_int, &",
         f"    {kinds.real} => c_double, &",
         f"    {kinds.real32} => c_float, &",
-        f"    {kinds.extent} => c_size_t",
+        f"    {kinds.extent} => c_size_t, &",
+        f"    {kinds.logical} => c_bool",
         "  implicit none",
         "  private",
         f"  public :: {function.name}, knd, start_hot, finish_hot",
@@ -77,7 +79,9 @@ def generate_fortran(function: FunctionIR, abi: tuple[AbiArgument, ...]) -> str:
             4,
         )
     )
-    lines.append(f"      import :: {kinds.integer}, {kinds.real}, {kinds.real32}, {kinds.extent}")
+    lines.extend(
+        f"      import :: {kind}" for kind in (kinds.integer, kinds.real, kinds.real32, kinds.extent, kinds.logical)
+    )
     for argument in abi:
         lines.extend(_fortran_line(abi_declaration(argument, kinds), 6))
     lines.extend(
@@ -101,7 +105,7 @@ def generate_fortran(function: FunctionIR, abi: tuple[AbiArgument, ...]) -> str:
     lines.extend(_fortran_list(f"call {bridge}(", public_names, ")", 4))
     lines.extend([f"  end subroutine {function.name}", ""])
     lines.extend(_fortran_list(f"subroutine {bridge}(", private_names, ")", 2))
-    lines.append("    intrinsic :: size, int, real")
+    lines.append("    intrinsic :: size, int, real, logical")
     for symbol in function.parameters:
         lines.extend(_fortran_line(public_declaration(symbol, symbol.cpp_name), 4))
     lines.extend(_fortran_list(f"call {c_entry}(", [abi_call(argument, kinds) for argument in abi], ")", 4))

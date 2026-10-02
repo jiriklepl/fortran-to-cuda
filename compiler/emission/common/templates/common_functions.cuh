@@ -2,6 +2,9 @@
 #define COMMON_FUNCTIONS_CUH
 
 #include <cstddef>
+#include <cmath>
+#include <cstdlib>
+#include <utility>
 #include <cstdint>
 #include <iostream>
 #include <numeric>
@@ -65,6 +68,8 @@ CUDA_CALLABLE size_t F_IDX(Args... args) {
 }
 
 }
+// FORT_RUNTIME_UNITS
+
 // ── Timing infrastructure — CUDA only ───────────────────────────────────────────
 // The functions below use cudaEvent_t and related CUDA runtime APIs.
 // They are excluded entirely from plain C++ compilation.

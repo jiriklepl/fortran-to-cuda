@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .nodes import Assignment, Block, Loop, Symbol
+from .nodes import Assignment, Block, Expr, Loop, SourceLocation, Symbol
 
 
 @dataclass(frozen=True)
@@ -40,9 +40,26 @@ class ParallelRegion:
 
 
 @dataclass(frozen=True)
+class ConditionalRegion:
+    condition: Expr
+    then_plan: ExecutionPlan
+    else_plan: ExecutionPlan
+    location: SourceLocation
+    read_symbols: tuple[Symbol, ...] = ()
+    write_symbols: tuple[Symbol, ...] = ()
+
+
+@dataclass(frozen=True)
 class ExecutionPlan:
-    steps: tuple[HostBlock | ParallelRegion, ...]
+    steps: tuple[HostBlock | ParallelRegion | ConditionalRegion, ...]
 
     @property
     def regions(self) -> tuple[ParallelRegion, ...]:
-        return tuple(step for step in self.steps if isinstance(step, ParallelRegion))
+        result = []
+        for step in self.steps:
+            if isinstance(step, ParallelRegion):
+                result.append(step)
+            elif isinstance(step, ConditionalRegion):
+                result.extend(step.then_plan.regions)
+                result.extend(step.else_plan.regions)
+        return tuple(result)
