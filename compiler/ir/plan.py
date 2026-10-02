@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 from .nodes import Assignment, Block, Expr, Loop, SourceLocation, Symbol
 
@@ -34,6 +35,32 @@ class RegionSchedule:
 
 
 @dataclass(frozen=True)
+class IntegerRange:
+    """Inclusive bounds for a source-width integer value."""
+
+    lower: int
+    upper: int
+
+
+@dataclass(frozen=True)
+class SubscriptDecision:
+    expression: Expr
+    mode: Literal["source", "wide"]
+    interval: IntegerRange | None
+    reason: str
+    occurrences: int = 1
+
+
+@dataclass(frozen=True)
+class RegionAddressing:
+    """Uniform region facts; equal subscript expressions share a decision."""
+
+    decisions: tuple[SubscriptDecision, ...]
+    iterator_ranges: tuple[tuple[Symbol, IntegerRange], ...]
+    wide_iterators: tuple[Symbol, ...]
+
+
+@dataclass(frozen=True)
 class ParallelRegion:
     id: int
     loops: tuple[Loop, ...]
@@ -46,6 +73,7 @@ class ParallelRegion:
     write_symbols: tuple[Symbol, ...] = ()
 
     schedule: RegionSchedule | None = None
+    addressing: RegionAddressing | None = None
 
 
 @dataclass(frozen=True)

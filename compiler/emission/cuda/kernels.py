@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from compiler.emission.c.declarations import cpp_declaration
 from compiler.emission.common.abi import abi_arguments
 from compiler.emission.common.c_family import cpp_type, indent
-from compiler.emission.common.loops import iteration_value, mapped_snapshots, sequential_block
+from compiler.emission.common.loops import mapped_coordinates, mapped_snapshots, sequential_block
 from compiler.emission.common.schedules import checked_product, region_schedule, tile_counts
 from compiler.emission.common.symbols import region_body, region_symbols
 
@@ -20,16 +20,9 @@ def kernel_name(region: ParallelRegion) -> str:
 
 
 def _point_body(region: ParallelRegion, depth: int) -> list[str]:
-    lines = []
-    for axis, loop in enumerate(region.loops):
-        lines.extend(
-            indent(
-                [f"const int {loop.iterator.cpp_name} = {iteration_value(str(axis), f'fort_internal_ordinal{axis}')};"],
-                depth,
-            )
-        )
+    lines = indent(mapped_coordinates(region), depth)
     lines.extend(indent([f"{cpp_type(symbol)} {symbol.cpp_name};" for symbol in region.private_symbols], depth))
-    lines.extend(sequential_block(region_body(region), depth, [0], device=True))
+    lines.extend(sequential_block(region_body(region), depth, [0], device=True, addressing=region.addressing))
     return lines
 
 

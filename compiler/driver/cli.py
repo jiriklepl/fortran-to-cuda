@@ -82,10 +82,15 @@ def _parse_args() -> argparse.Namespace:
         type=int,
         choices=(0, 1),
         default=1,
-        help="Optimization level: 0 retains source passes; 1 enables checked scalar motion and fusion (default).",
+        help="Optimization level: 0 retains source passes; 1 enables checked scalar motion, fusion, and addressing (default).",
     )
     parser.add_argument(
         "--schedule", choices=("source", "auto"), help="Axis policy (default: auto at level 1, source at 0)."
+    )
+    parser.add_argument(
+        "--indexing",
+        choices=("source", "auto"),
+        help="Array addressing: source INTEGER arithmetic or proved wide indices (default: auto at level 1, source at 0).",
     )
     parser.add_argument(
         "--tile-sizes", type=_tile_sizes, default=(), metavar="N[,N...]", help="Spatial tiles, fastest axis first."
@@ -100,7 +105,7 @@ def _parse_args() -> argparse.Namespace:
         "--verbose",
         "-v",
         action="store_true",
-        help="Print normalized IR, transformations, selected schedules, ordered regions, legality, and memory operations.",
+        help="Print normalized IR, transformations, schedules, addressing proofs, ordered regions, legality, and memory operations.",
     )
     return parser.parse_args()
 
@@ -114,7 +119,11 @@ def main() -> None:
 
     try:
         options = CompilerOptions(
-            opt_level=args.opt_level, schedule=args.schedule, tile_sizes=args.tile_sizes, fallback=args.fallback
+            opt_level=args.opt_level,
+            schedule=args.schedule,
+            tile_sizes=args.tile_sizes,
+            fallback=args.fallback,
+            indexing=args.indexing,
         )
         function = lower_file(source_file, args.kernel)
         function, plan = prepare_function(function, options=options)

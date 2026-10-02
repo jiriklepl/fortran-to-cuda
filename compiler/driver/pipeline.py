@@ -1,5 +1,6 @@
 """Explicit orchestration of validation, transforms, schedules, and emission."""
 
+from compiler.addressing import plan_addressing
 from compiler.driver.options import CompilerOptions
 from compiler.ir import ExecutionPlan, FunctionIR
 from compiler.scheduling import schedule_plan
@@ -11,4 +12,5 @@ def prepare_function(
 ) -> tuple[FunctionIR, ExecutionPlan]:
     options = options or CompilerOptions()
     function, plan = optimize_function(function, options=options)
-    return function, schedule_plan(function, plan, options=options)
+    plan = schedule_plan(function, plan, options=options)
+    return function, plan_addressing(plan, options=options)
