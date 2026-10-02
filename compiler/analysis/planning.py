@@ -98,7 +98,7 @@ def build_execution_plan(function: FunctionIR) -> ExecutionPlan:
 
 
 def format_plan(plan):
-    lines = []
+    lines = list(plan.reports)
     for step in plan.steps:
         if isinstance(step, HostBlock):
             lines.append(f"host block: {len(step.assignments)} ordered assignment(s)")

@@ -9,17 +9,21 @@ flowchart LR
     F[Annotated Fortran] --> P[fparser frontend]
     P --> I[Typed computation IR]
     I --> A[Scalar lifetime and ISL conflicts]
-    A --> E[Checked execution plan]
+    A --> T[Checked scalar motion and fusion]
+    T --> A
+    T --> E[Checked execution plan]
     E --> C[C++ / OpenMP]
     E --> G[CUDA]
     E --> B[Fortran bridge / shared ABI]
 ```
 
-Each source outer loop remains a separate region. Host assignments and regions
-retain source order. A rectangular perfect prefix maps to parallel iterations;
-its remaining ordered body can contain assignments, conditionals, and sequential inner loops.
-Fusion, tiling, automatic scheduling, persistent device storage, and sequential
-fallback for rejected regions are unsupported.
+Proved scalar motion and loop fusion are enabled by default. Equal rectangular
+loop domains fuse only when fresh dependence analysis proves the combined region
+independent; inconclusive candidates retain their original passes. A rectangular
+perfect prefix maps to parallel iterations; its remaining ordered body can contain
+assignments, conditionals, and sequential inner loops. `--opt-level 0` retains the
+source regions. Tiling, automatic scheduling, persistent device storage, and
+sequential fallback for rejected regions are unsupported.
 See [CODE_MAP.md](CODE_MAP.md) for the implementation and extension points.
 
 ## Implementation layout
@@ -33,6 +37,7 @@ compiler/
 ├── frontend/                Fortran parsing and lowering
 ├── ir/                      Immutable computation nodes and execution plans
 ├── analysis/                Semantics, effects, dependence proofs, execution plans
+├── transforms/              Checked scalar setup motion and greedy loop fusion
 ├── runtime/                 Shared scalar numeric helpers
 ├── emission/
 │   ├── driver.py            Generate all sources from one shared ABI
@@ -52,6 +57,10 @@ helpers in `runtime/`, preserving a single distributable support header.
 
 Package entry points remain `compiler.frontend.lower_file`,
 `compiler.analysis.build_execution_plan`, and `compiler.emission.generate_sources`.
+`compiler.driver.pipeline.prepare_function(function, *, options=CompilerOptions())`
+returns the optimized function and freshly checked plan. The immutable
+`CompilerOptions` in `compiler.driver.options` is shared by this pipeline and the
+CLI; direct calls to `build_execution_plan` keep their existing analysis behavior.
 
 ## Quick start
 
@@ -65,9 +74,9 @@ python -m compiler --input fortran-stencils/elmm_cdu.f90 --kernel CDU --output-d
 Runtime dependencies include `fparser` and **`islpy==2026.2.2`**. Generated C++ uses
 C++17; add `-fopenmp` to enable its verified OpenMP loops. Compile without that
 flag for serial execution of the same generated implementation. CUDA uses one
-kernel per accepted source outer loop, 256 threads per block, and maps the
-innermost parallel index first. Empty domains skip the launch. CDU, CDV, and CDW each produce four
-CUDA kernels.
+kernel per accepted region, 256 threads per block, and maps the innermost parallel
+index first. Empty domains skip the launch. CDU, CDV, and CDW each produce one
+CUDA kernel by default and four with `--opt-level 0`.
 
 ## CLI and outputs
 
@@ -85,7 +94,8 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--fortran-output` | `generated_interface.f90` | Original module/procedure interface using `iso_c_binding` |
 | `--common-header` | `common_functions.cuh` | Shared indexing, numeric, and timing header |
 | `--no-common-header` | off | Use a separately supplied shared header |
-| `--verbose`, `-v` | off | Normalized IR, region boundaries, scalar privacy, ISL relations, and legality results |
+| `--opt-level {0,1}` | `1` | Enable proved scalar motion and fusion; `0` retains source passes |
+| `--verbose`, `-v` | off | Normalized IR, applied/skipped transformations, region boundaries, scalar privacy, ISL relations, and legality results |
 
 The ABI preserves the original dummy argument order, public names, and
 `cpp_<procedure>` C symbol. Array extents follow their array pointer in dimension
@@ -143,7 +153,7 @@ end module example
 - Perfect and imperfect nests. The analyzer maps a rectangular perfect prefix;
   assignments and remaining inner loops execute in their original order within
   each parallel iteration. Bounds may depend on outer indices in retained loops.
-  Source order is retained rather than splitting or fusing imperfect nests.
+  Fusion retains the ordered body of each original mapped iteration.
 - Host scalar and array element assignments before, between, or after nests.
   Private temporaries must be defined before each read in the mapped iteration
   and unused after the region. Retained sequential loops may carry a scalar
@@ -210,7 +220,24 @@ indices or variable-stride congruences widen the model, the diagnostic labels
 its relation and witness conservative: it shows why independence could not be
 proved, rather than promising a collision for every caller's runtime data.
 `--verbose` also displays exact/conservative modeling and retained loop counts.
-Independent regions execute in original order, honoring cross-region dependencies.
+Unfused regions execute in original order, honoring cross-region dependencies.
+
+### Checked fusion
+
+The pipeline first proves source regions independently. Greedy fusion then matches
+equal rectangular domains with constant nonzero strides and scalar/extent-only
+bounds, substituting iterator identities without regrouping expressions. Same-point
+operations retain their order. Fresh analysis must prove that combining the bodies
+introduces no conflicts between parallel iterations; shifted RAW, WAR, or WAW
+conflicts keep the passes separate. Conservative non-affine models may prevent
+fusion even when each original region is independently legal.
+
+Intervening scalar setup can move before the first pass only when its inputs are
+available and unchanged and its destinations are unused by the crossed loop. Array
+accesses never move. Scalar lifetimes, bound snapshots, symbol identities, and
+source provenance are preserved. Fusion stays inside each host branch. Invalid
+source remains a compilation error; an inconclusive optimization keeps its original
+form. Verbose reports explain each applied or skipped candidate.
 
 Distinct array arguments must not overlap whenever either is written. The
 compiler does not perform runtime overlap checks. Repeated actual arguments in
@@ -233,7 +260,10 @@ python -m ruff format --check compiler
 
 Tests cover lowering, source ordering, inline aliases, scalar lifetimes, ISL
 relations against brute-force ordered accesses, rejection without publication,
-and deterministic generation. Native tests compile and compare original Fortran,
+and deterministic generation. Fusion tests cover scalar motion, shifted conflicts,
+unequal domains, conservative accesses, branch boundaries, and signed-stride small
+domains compared with source execution. Native tests exercise both optimization
+levels and compile and compare original Fortran,
 generated serial C++, OpenMP, and CUDA using deterministic nonuniform inputs and
 absolute tolerance `1e-10` for real values and exact comparison for integers.
 Coverage includes fill/scale, non-cubic/singleton/empty domains, sentinel halos,

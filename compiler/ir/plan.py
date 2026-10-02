@@ -52,6 +52,7 @@ class ConditionalRegion:
 @dataclass(frozen=True)
 class ExecutionPlan:
     steps: tuple[HostBlock | ParallelRegion | ConditionalRegion, ...]
+    reports: tuple[str, ...] = ()
 
     @property
     def regions(self) -> tuple[ParallelRegion, ...]:
