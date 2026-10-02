@@ -1,0 +1,25 @@
+# Tested with Python 3.13; install in a separate virtual environment.
+annotated-types==0.8.0
+click==8.5.0
+click-option-group==0.5.9
+codetiming==1.4.0
+coloredlogs==15.0.1
+fparser==0.2.5
+graphviz==0.21
+humanfriendly==10.0
+junit-xml==1.9
+loki @ git+https://github.com/ecmwf-ifs/loki.git@be67f4ae348c15d88413111590f1b42a058e21c3
+more-itertools==11.1.0
+networkx==3.7
+numpy==2.5.3
+pcpp==1.30
+platformdirs==4.12.2
+pydantic==2.9.2
+pydantic_core==2.23.4
+pymbolic==2022.2
+pytools==2026.1.1
+PyYAML==6.0.3
+siphash24==1.9
+six==1.17.0
+tqdm==4.70.1
+typing_extensions==4.16.0

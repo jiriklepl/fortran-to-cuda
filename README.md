@@ -95,13 +95,13 @@ source directory. `Fortran-ACC` is maintained as a handwritten OpenACC variant.
 To regenerate the generated sources from the Fortran originals:
 
 ```bash
-python benchmarks/generate_all_sources.py
+python -m benchmarks.harness.generate
 
 # Per-case output:
-#   benchmarks/CDU/CUDA/generated_code.cu
-#   benchmarks/CDU/CUDA/cdu.f90          ← Fortran interface
-#   benchmarks/CDU/CPP-OMP/generated_cpp_impl.cpp
-#   benchmarks/CDU/CPP/generated_cpp_impl.cpp   ← #pragma omp lines stripped
+#   benchmarks/generated/CDU/CUDA/generated_code.cu
+#   benchmarks/generated/CDU/CUDA/cdu.f90          ← Fortran interface
+#   benchmarks/generated/CDU/CPP-OMP/generated_cpp_impl.cpp
+#   benchmarks/generated/CDU/CPP/generated_cpp_impl.cpp   ← #pragma omp lines stripped
 #   ... (same for CDW, CDV)
 ```
 
@@ -120,23 +120,21 @@ make -C benchmarks CASE=CDU VARIANT=CUDA NX=256 NY=256 NZ=256 CUDA_ARCH=sm_80
 ./benchmarks/bin/CDU_CUDA_NX256_NY256_NZ256_NITER100_NWARMUP5/benchmark
 
 # CUDA with pinned host memory, using the same CUDA sources
-make -C benchmarks CASE=CDU VARIANT=CUDA-pinned USE_PINNED_MEMORY=1 NX=256 NY=256 NZ=256 CUDA_ARCH=sm_80
+make -C benchmarks CASE=CDU VARIANT=CUDA-pinned NX=256 NY=256 NZ=256 CUDA_ARCH=sm_80
 ./benchmarks/bin/CDU_CUDA-pinned_NX256_NY256_NZ256_NITER100_NWARMUP5/benchmark
 ```
 
 ### 4 — Run the full benchmark sweep → CSV
 
 ```bash
-cd benchmarks
-python run_bechmarks.py > results.csv   # progress on stderr, clean CSV on stdout
+python -m benchmarks.harness.run > benchmarks/results/latest.csv   # progress on stderr, clean CSV on stdout
 ```
 
 ### 5 — Run correctness tests
 
 ```bash
-cd benchmarks
-python run_tests.py        # all three cases
-python run_tests.py CDU    # single case
+python -m benchmarks.harness.check       # all three cases
+python -m benchmarks.harness.check CDU   # single case
 ```
 
 Expected output:
@@ -160,9 +158,8 @@ The current correctness script checks `Fortran`, `Fortran-OMP`, `Fortran-ACC`,
 ### 6 — Generate figures
 
 ```bash
-cd benchmarks
-python graphs/plot_benchmarks.py
-# → graphs/figs/grid_512x512x512_niter100.{png,pdf}
+python -m benchmarks.harness.plot --results benchmarks/results/latest.csv
+# → benchmarks/results/figures/grid_512x512x512_niter100.{png,pdf}
 ```
 
 ---
@@ -194,7 +191,7 @@ bandwidth from roughly **33/26 GB/s** (H→D/D→H) to about **76/57 GB/s**,
 improving observed end-to-end speedup to roughly **~4.6–6.3×** over serial
 Fortran.
 
-![Benchmark results — 512×512×512 grid](benchmarks/graphs/figs/grid_512x512x512_niter100.png)
+![Benchmark results — 512×512×512 grid](benchmarks/results/figures/grid_512x512x512_niter100.png)
 
 ---
 
@@ -222,15 +219,19 @@ Unsafe regions are rejected; this milestone performs no fusion or rescheduling.
 Seven implementation variants of three momentum-advection stencil kernels
 (`Fortran`, `Fortran-OMP`, `Fortran-ACC`, `CUDA`, `CUDA-pinned`, `CPP`,
 `CPP-OMP`) across CDU, CDW, and CDV, driven by a unified GNU Make build system.
+Maintained sources live in `cases/`, compiler output in `generated/`, shared
+measurement code in `harness/`, and small external-tool recipes in `tools/`.
 Includes:
 
-- Automated runner (`run_bechmarks.py`) that sweeps grids, builds on demand, and
+- Automated runner (`harness/run.py`) that sweeps grids, builds on demand, and
   writes structured CSV output.
-- Correctness test runner (`run_tests.py`) with deterministic inputs and
+- Correctness test runner (`harness/check.py`) with deterministic inputs and
   element-wise comparison against the serial Fortran reference.
-- Figure generator (`graphs/plot_benchmarks.py`).
-- `generate_all_sources.py` — regenerates all CUDA/C++ sources from the Fortran
+- Figure generator (`harness/plot.py`).
+- `harness/generate.py` — regenerates all CUDA/C++ sources from the Fortran
   originals via the compiler.
+- A [Loki/PSyclone comparison](benchmarks/docs/tool-comparison.md) with shared
+  correctness/timing drivers, fused Fortran/OpenACC and archived measurements.
 
 → Full documentation: [`benchmarks/README.md`](benchmarks/README.md)
 
