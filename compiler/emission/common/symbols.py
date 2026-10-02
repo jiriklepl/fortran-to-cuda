@@ -13,6 +13,7 @@ from compiler.ir import (
     If,
     Loop,
     ParallelRegion,
+    SequentialRegion,
     Symbol,
     referenced_symbols,
 )
@@ -56,6 +57,8 @@ def host_symbols(function: FunctionIR, plan: ExecutionPlan) -> tuple[Symbol, ...
                 used.update(referenced_symbols(loop.upper))
                 used.update(_step_symbols(loop))
             used.update(symbol for symbol in step.captured_symbols if not symbol.rank)
+        elif isinstance(step, SequentialRegion):
+            used.update(_block_symbols(step.body))
         elif isinstance(step, ConditionalRegion):
             used.update(referenced_symbols(step.condition))
             used.update(host_symbols(function, step.then_plan))

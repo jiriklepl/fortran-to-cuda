@@ -7,10 +7,20 @@ from typing import TYPE_CHECKING
 from compiler.emission.c.declarations import cpp_declaration
 from compiler.emission.common.abi import AbiArgument, dimension_name
 from compiler.emission.common.c_family import cpp_type, indent, render_assignment, render_expression
+from compiler.emission.common.loops import sequential_block
 from compiler.emission.common.symbols import host_symbols
 from compiler.emission.cuda.kernels import generate_kernel, generate_launch
 from compiler.emission.cuda.transfers import array_bytes, generate_transfer
-from compiler.ir import ArrayAccess, ConditionalRegion, FunctionIR, HostBlock, ParallelRegion, Symbol, walk_expr
+from compiler.ir import (
+    ArrayAccess,
+    ConditionalRegion,
+    FunctionIR,
+    HostBlock,
+    ParallelRegion,
+    SequentialRegion,
+    Symbol,
+    walk_expr,
+)
 
 if TYPE_CHECKING:
     from compiler.ir import ExecutionPlan
@@ -31,14 +41,17 @@ def _plan_lines(plan: ExecutionPlan, arrays: tuple[Symbol, ...], device_dirty: s
             device_dirty.difference_update(downloads)
             lines.extend(generate_launch(step))
             device_dirty.update(step.write_symbols)
-        elif isinstance(step, HostBlock):
+        elif isinstance(step, (HostBlock, SequentialRegion)):
             # A partial host write must first preserve every device-produced
             # value elsewhere in the array, even if it does not read that value.
             needed = device_dirty & (set(step.read_symbols) | set(step.write_symbols))
             downloads = tuple(symbol for symbol in arrays if symbol in needed)
             lines.extend(generate_transfer(downloads, to_device=False))
             device_dirty.difference_update(downloads)
-            lines.extend(render_assignment(assignment) for assignment in step.assignments)
+            if isinstance(step, SequentialRegion):
+                lines.extend(sequential_block(step.body, 0, [0]))
+            else:
+                lines.extend(render_assignment(assignment) for assignment in step.assignments)
             uploads = tuple(symbol for symbol in arrays if symbol in step.write_symbols)
             lines.extend(generate_transfer(uploads, to_device=True))
         elif isinstance(step, ConditionalRegion):

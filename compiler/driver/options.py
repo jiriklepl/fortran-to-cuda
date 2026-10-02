@@ -10,6 +10,7 @@ class CompilerOptions:
     opt_level: int = 1
     schedule: str | None = None
     tile_sizes: tuple[int, ...] = ()
+    fallback: str = "error"
 
     def __post_init__(self) -> None:
         if self.opt_level not in (0, 1):
@@ -18,6 +19,8 @@ class CompilerOptions:
             raise CompilationError("schedule must be source or auto")
         if any(isinstance(size, bool) or not isinstance(size, int) or size <= 0 for size in self.tile_sizes):
             raise CompilationError("tile sizes must be positive integers")
+        if self.fallback not in ("error", "host"):
+            raise CompilationError("fallback must be error or host")
 
     @property
     def resolved_schedule(self) -> str:

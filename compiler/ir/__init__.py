@@ -33,6 +33,7 @@ from .plan import (
     ParallelRegion,
     RegionReport,
     RegionSchedule,
+    SequentialRegion,
 )
 
 __all__ = [
@@ -45,6 +46,7 @@ __all__ = [
     "If",
     "IntrinsicCall",
     "RegionSchedule",
+    "SequentialRegion",
     "ExecutionPlan",
     "Expr",
     "FunctionIR",

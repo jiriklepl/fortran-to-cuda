@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from compiler.analysis import ParallelizationError, build_execution_plan
+from compiler.driver.options import CompilerOptions
 from compiler.emission import generate_sources, read_common_header
 from compiler.frontend import lower_file
 from compiler.ir import CompilationError, ConditionalRegion, If, IntrinsicCall, ScalarType, walk_expr
@@ -72,15 +73,17 @@ def test_intrinsics_have_resolved_numeric_result_types(tmp_path, call):
         ("a(1)=1", "logical::flags(:)", "LOGICAL arrays"),
     ],
 )
-def test_invalid_types_are_rejected(tmp_path, body, declarations, message):
+@pytest.mark.parametrize("fallback", ["error", "host"])
+def test_invalid_types_are_rejected_with_either_policy(tmp_path, body, declarations, message, fallback):
     with pytest.raises(CompilationError, match=message):
-        build_execution_plan(lower(tmp_path, body, declarations))
+        build_execution_plan(lower(tmp_path, body, declarations), options=CompilerOptions(fallback=fallback))
 
 
-def test_branch_definition_join_uses_intersection(tmp_path):
+@pytest.mark.parametrize("fallback", ["error", "host"])
+def test_branch_definition_join_uses_intersection(tmp_path, fallback):
     function = lower(tmp_path, "if(n>0) t=1\na(1)=t", "real(knd)::t")
     with pytest.raises(CompilationError, match="read before definition"):
-        build_execution_plan(function)
+        build_execution_plan(function, options=CompilerOptions(fallback=fallback))
     function = lower(tmp_path, "if(n>0) then\nt=1\nelse\nt=2\nendif\na(1)=t", "real(knd)::t")
     assert len(build_execution_plan(function).steps) == 2
 

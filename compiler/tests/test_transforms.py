@@ -201,6 +201,40 @@ def test_conflicting_branch_passes_remain_separate(tmp_path: Path) -> None:
     assert any("skipped" in report for report in plan.reports)
 
 
+def test_branch_fusion_keeps_outer_liveness_checks(tmp_path: Path) -> None:
+    from compiler.ir import ConditionalRegion, SequentialRegion
+
+    source = tmp_path / "branch_liveout.f90"
+    source.write_text("""! kernels
+module branch_liveout
+contains
+  ! kernel
+  subroutine entry(a,b,n,flag)
+    integer, intent(inout) :: a(:),b(:)
+    integer, intent(in) :: n
+    logical, intent(in) :: flag
+    integer :: i
+    i=0
+    if (flag) then
+      do i=1,n
+        a(i)=i
+      end do
+      do i=1,n
+        b(i)=a(i)
+      end do
+    end if
+    b(1)=i
+  end subroutine
+end module
+""")
+    function = lower_file(source, "entry")
+    unchanged, plan = optimize_function(function, options=CompilerOptions(fallback="host"))
+    assert unchanged is function
+    conditional = next(step for step in plan.steps if isinstance(step, ConditionalRegion))
+    assert isinstance(conditional.then_plan.steps[-1], SequentialRegion)
+    assert "live after" in conditional.then_plan.steps[-1].reason
+
+
 def test_fusion_does_not_capture_retained_serial_iterator(tmp_path: Path) -> None:
     source = tmp_path / "iterator_capture.f90"
     source.write_text("""! kernels

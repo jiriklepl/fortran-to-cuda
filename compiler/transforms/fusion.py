@@ -101,7 +101,7 @@ def _regions(plan: ExecutionPlan) -> dict[int, ParallelRegion]:
 
 
 def _host_blocks(block: Block):
-    """Visit host branch bodies, never the bodies of parallel loops."""
+    """Visit host branch bodies, never the bodies of parallel or fallback loops."""
     yield block
     for statement in block.statements:
         if isinstance(statement, If):
@@ -144,7 +144,7 @@ def optimize_function(
 ) -> tuple[FunctionIR, ExecutionPlan]:
     """Return a transformed function and freshly checked execution plan."""
     options = options or CompilerOptions()
-    plan = build_execution_plan(function)
+    plan = build_execution_plan(function, options=options)
     if not options.opt_level:
         return function, replace(plan, reports=(*plan.reports, "optimization: disabled (source regions retained)"))
 
@@ -184,7 +184,7 @@ def optimize_function(
             candidate_block = Block((*statements[:index], *setup, fused, *statements[next_index + 1 :]))
             candidate = replace(function, body=_replace_host_block(function.body, block, candidate_block))
             try:
-                checked = build_execution_plan(candidate)
+                checked = build_execution_plan(candidate, options=options)
             except ParallelizationError as error:
                 reports.append(f"{label}: skipped ({error.message})")
                 continue

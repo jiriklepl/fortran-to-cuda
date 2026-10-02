@@ -10,7 +10,7 @@ from compiler.emission.common.c_family import cpp_type, indent, render_assignmen
 from compiler.emission.common.loops import iteration_value, mapped_snapshots, sequential_block
 from compiler.emission.common.schedules import checked_product, region_schedule, tile_counts
 from compiler.emission.common.symbols import host_symbols, region_body
-from compiler.ir import ConditionalRegion, FunctionIR, HostBlock, ParallelRegion
+from compiler.ir import ConditionalRegion, FunctionIR, HostBlock, ParallelRegion, SequentialRegion
 
 if TYPE_CHECKING:
     from compiler.ir import ExecutionPlan
@@ -105,13 +105,17 @@ def _cpp_region(region: ParallelRegion) -> list[str]:
 
 
 def cpp_plan_lines(plan: ExecutionPlan, depth: int = 0) -> list[str]:
-    """Render nested host control flow and proved parallel regions."""
+    """Render nested host control flow and typed sequential/parallel regions."""
     lines: list[str] = []
+    counter = [0]
     for step in plan.steps:
         if isinstance(step, ParallelRegion):
             lines.extend(indent(_cpp_region(step), depth))
         elif isinstance(step, HostBlock):
             lines.extend(indent([render_assignment(assignment) for assignment in step.assignments], depth))
+        elif isinstance(step, SequentialRegion):
+            lines.extend(indent([f"// Sequential fallback region {step.id}."], depth))
+            lines.extend(sequential_block(step.body, depth, counter))
         elif isinstance(step, ConditionalRegion):
             lines.extend(indent([f"if ({render_expression(step.condition)}) {{"], depth))
             lines.extend(cpp_plan_lines(step.then_plan, depth + 1))

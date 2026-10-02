@@ -567,11 +567,11 @@ def prove_region(region_id, loop, environment, defined, later):
         return ParallelProof(failure=error.failure)
 
 
-def build_execution_plan(function: FunctionIR) -> ExecutionPlan:
+def build_execution_plan(function: FunctionIR, *, options=None) -> ExecutionPlan:
     # Historical module-level entry point; planning itself is independent of ISL.
     from .planning import build_execution_plan as build
 
-    return build(function)
+    return build(function, options=options)
 
 
 def format_plan(plan: ExecutionPlan) -> str:

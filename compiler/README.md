@@ -25,8 +25,9 @@ perfect prefix maps to parallel iterations; its remaining ordered body can conta
 assignments, conditionals, and sequential inner loops. `--opt-level 0` retains the
 source regions and source axis order unless overridden by `--schedule`. Automatic
 axis ordering favors Fortran locality; spatial tiling is explicit through
-`--tile-sizes`. Persistent device storage and sequential fallback for rejected
-regions are unsupported.
+`--tile-sizes`. Strict parallelization is the default; `--fallback host` executes
+valid regions whose independence is unproved sequentially on the host. Persistent
+device storage remains unsupported.
 See [CODE_MAP.md](CODE_MAP.md) for the implementation and extension points.
 
 ## Implementation layout
@@ -39,7 +40,7 @@ compiler/
 ├── driver/                  CLI, pipeline orchestration, output publication
 ├── frontend/                Fortran parsing and lowering
 ├── ir/                      Immutable computation nodes and execution plans
-├── analysis/                Semantics, effects, dependence proofs, execution plans
+├── analysis/                Semantics, effects, dependence proofs, execution policy
 ├── transforms/              Checked scalar setup motion and greedy loop fusion
 ├── scheduling/              Locality ordering and explicit spatial tile plans
 ├── runtime/                 Shared scalar numeric helpers
@@ -104,6 +105,7 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--opt-level {0,1}` | `1` | Enable proved scalar motion and fusion; `0` retains source passes |
 | `--schedule {source,auto}` | `auto` at level 1, `source` at level 0 | Select axis ordering independently of fusion |
 | `--tile-sizes N[,N...]` | untiled | Positive tile sizes in scheduled fastest-to-slowest order; omitted axes use 1 |
+| `--fallback {error,host}` | `error` | Reject unproved regions or run them sequentially on the host |
 | `--verbose`, `-v` | off | Normalized IR, applied/skipped transformations, selected schedules, region boundaries, scalar privacy, ISL relations, and legality results |
 
 The ABI preserves the original dummy argument order, public names, and
@@ -186,11 +188,11 @@ end module example
 Local arrays, logical arrays, writable scalar arguments, recursion, slices/expression
 call arguments, other intrinsics/operators, explicit lower array bounds, and
 unsupported specification statements reject with a source location.
-Reductions or scalar values carried across mapped iterations, scalar live-outs,
-and final mapped induction values are unsupported. There is no serial-only
-fallback. General nonlinear or indirect writes are accepted only when the
-conservative relations prove mapped iterations independent; no runtime alias or
-index-uniqueness checks are introduced.
+Parallel reductions remain unsupported. Initialized scalar recurrences, valid
+scalar live-outs, final induction values, and otherwise unproved regions can
+execute sequentially with `--fallback host`. General nonlinear or indirect writes
+are parallelized only when conservative relations prove independence; no runtime
+alias or index-uniqueness checks are introduced.
 
 ### Conditions and scalar intrinsics
 
@@ -208,8 +210,9 @@ once. Logical arrays and other intrinsics remain unsupported.
 
 Semantic validation and definite definitions live in `analysis/semantics.py`;
 structural effects live in `analysis/effects.py`; `analysis/planning.py` builds
-strict execution plans. Intrinsic signatures live in `ir/intrinsics.py`, and
-`runtime/numeric.hpp` is assembled into the existing shared support header.
+execution plans according to the selected fallback policy. Intrinsic signatures
+live in `ir/intrinsics.py`; `runtime/numeric.hpp` is assembled into the existing
+shared support header.
 
 ## Legality and caller contract
 
@@ -220,8 +223,9 @@ composes access maps to find ordered read-after-write (RAW), write-after-read
 identical **mapped iteration coordinates**, including every dimension assigned
 to CUDA threads. Ordered same-cell updates and recurrences inside retained
 sequential loops are accepted within one mapped iteration. Conflicts between
-mapped iterations reject. A perfect rectangular nest maps all its dimensions;
-an inner recurrence in such a mapped nest rejects.
+mapped iterations reject by default or select sequential host fallback when
+requested. A perfect rectangular nest maps all its dimensions; an inner
+recurrence in such a mapped nest requires host fallback.
 
 A dependence error includes source/call provenance, affected accesses, the
 symbolic conflict relation, and a conflicting-iteration witness. If unknown
@@ -271,6 +275,24 @@ tails. Flattened tile coordinates support arbitrary rank. Iteration products are
 checked for overflow before launch, and zero factors suppress spurious overflow
 errors for empty domains.
 
+### Sequential host fallback
+
+`--fallback error` keeps strict parallelization. `--fallback host` permits otherwise
+valid regions with unproved independence, initialized recurrences, or scalar
+live-outs to run in source order. Proved neighboring regions stay parallel, and
+fusion never crosses a fallback region. Verbose output identifies each sequential
+region and its proof-failure reason.
+
+The execution plan represents these loops as `SequentialRegion` nodes. Shared
+loop lowering preserves signed and runtime strides, empty domains, final induction
+values, and scalar state. Analysis discards obsolete scalar substitutions before
+proving later regions. CUDA synchronizes affected arrays before host execution and
+uploads host writes before later device work; partial writes preserve other cells.
+
+Fallback is an execution policy after semantic validation. Undefined scalar reads,
+invalid types, unsupported constructs, zero-stride errors, and internal failures
+remain errors. It does not implement parallel reductions.
+
 Distinct array arguments must not overlap whenever either is written. The
 compiler does not perform runtime overlap checks. Repeated actual arguments in
 an inlined helper retain shared identity and are analyzed as aliases. Callers
@@ -304,9 +326,11 @@ absolute tolerance `1e-10` for real values and exact comparison for integers.
 Coverage includes fill/scale, non-cubic/singleton/empty domains, sentinel halos,
 CDU/CDV/CDW, signed/runtime strides, rank-5 integer arrays, rank-15 bridge
 compilation, imperfect nests, fresh host/device values, indirect gathers,
-squared indices, and default-real arithmetic. Native compiler absence skips the
-corresponding capability; CUDA compilation requires `nvcc`, and execution also
-requires a usable device. Once those capabilities are available, build or runtime
+squared indices, and default-real arithmetic. Fallback tests cover recurrences,
+scalar live-outs, final induction values, neighboring parallel regions, and CUDA
+host/device transitions; invalid source is checked under both execution policies.
+Native compiler absence skips the corresponding capability; CUDA compilation
+requires `nvcc`, and execution also requires a usable device. Once those capabilities are available, build or runtime
 failures fail the tests. All builds and outputs use temporary directories.
 
 ```bash
