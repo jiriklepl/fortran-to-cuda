@@ -16,11 +16,15 @@ from compiler.ir import (
     Binary,
     Block,
     CompilationError,
+    ExecutionPlan,
     Expr,
     FunctionIR,
+    HostBlock,
     Literal,
     Loop,
+    ParallelRegion,
     Reference,
+    RegionReport,
     ScalarType,
     Size,
     SourceLocation,
@@ -49,47 +53,6 @@ class Affine:
 
     def __str__(self) -> str:
         return " + ".join([str(self.constant), *(f"{value}*{name}" for name, value in self.terms)])
-
-
-@dataclass(frozen=True)
-class RegionReport:
-    domain: str
-    reads: str
-    writes: str
-    schedule: str
-    raw: str
-    war: str
-    waw: str
-    conservative: bool = False
-
-
-@dataclass(frozen=True)
-class HostBlock:
-    assignments: tuple[Assignment, ...]
-    read_symbols: tuple[Symbol, ...] = ()
-    write_symbols: tuple[Symbol, ...] = ()
-
-
-@dataclass(frozen=True)
-class ParallelRegion:
-    id: int
-    loops: tuple[Loop, ...]
-    assignments: tuple[Assignment, ...]
-    private_symbols: tuple[Symbol, ...]
-    captured_symbols: tuple[Symbol, ...]
-    report: RegionReport
-    body: Block
-    read_symbols: tuple[Symbol, ...] = ()
-    write_symbols: tuple[Symbol, ...] = ()
-
-
-@dataclass(frozen=True)
-class ExecutionPlan:
-    steps: tuple[HostBlock | ParallelRegion, ...]
-
-    @property
-    def regions(self) -> tuple[ParallelRegion, ...]:
-        return tuple(step for step in self.steps if isinstance(step, ParallelRegion))
 
 
 def affine_expression(

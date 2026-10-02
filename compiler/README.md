@@ -22,6 +22,36 @@ Fusion, tiling, automatic scheduling, persistent device storage, and sequential
 fallback for rejected regions are unsupported.
 See [CODE_MAP.md](CODE_MAP.md) for the implementation and extension points.
 
+## Implementation layout
+
+The only Python modules at the package root are the package marker and
+`python -m compiler` entry point. Implementation code is grouped by pipeline stage:
+
+```text
+compiler/
+├── driver/                  CLI, pipeline orchestration, output publication
+├── frontend/                Fortran parsing and lowering
+├── ir/                      Immutable computation nodes and execution plans
+├── analysis/                Scalar lifetimes and parallel-legality checks
+├── emission/
+│   ├── driver.py            Generate all sources from one shared ABI
+│   ├── common/              ABI descriptors, expressions, loops, runtime header
+│   ├── c/                   C declarations and serial/OpenMP C++ generation
+│   ├── cuda/                Device kernels, launches, transfers, host wrapper
+│   └── fortran/             C bindings and public Fortran bridge
+├── tests/                   Python and native acceptance tests
+└── debugging/               Standalone fparser tree viewer
+```
+
+The frontend and analyzer depend on the IR. Emitters consume the IR and checked
+execution plan without importing fparser or ISL. Shared emission helpers do not
+import backends; each backend owns its language-specific rendering. The runtime
+header is a resource under `emission/common/templates/`, loaded by the emission
+package rather than located by the CLI.
+
+Package entry points remain `compiler.frontend.lower_file`,
+`compiler.analysis.build_execution_plan`, and `compiler.emission.generate_sources`.
+
 ## Quick start
 
 Run from the repository root with Python 3.10 or newer:

@@ -1,12 +1,12 @@
+"""Command-line orchestration and output publication."""
+
 import argparse
 from pathlib import Path
 
 from compiler.analysis import build_execution_plan, format_plan
-from compiler.emission import generate_sources
+from compiler.emission import generate_sources, read_common_header
 from compiler.frontend import lower_file
 from compiler.ir import CompilationError, format_ir
-
-_TEMPLATES_DIR = Path(__file__).resolve().parent / "cuda_generation" / "templates"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -84,7 +84,7 @@ def main() -> None:
         function = lower_file(source_file, args.kernel)
         plan = build_execution_plan(function)
         sources = generate_sources(function, plan, common_header=args.common_header)
-        common_header = (_TEMPLATES_DIR / "common_functions.cuh").read_text(encoding="utf-8")
+        common_header = read_common_header()
     except CompilationError as error:
         raise SystemExit(f"error: {error}") from None
 
