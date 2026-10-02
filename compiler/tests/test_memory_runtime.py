@@ -92,6 +92,7 @@ int main(int argc, char** argv) {
     if (mode == "bytes") { storage::Buffer<double> huge({std::numeric_limits<std::size_t>::max()}); }
     timing::reset_timing_vectors();
     assert(syncs == 1);
+    timing::record_run();
     timing::measure_kernel_executions([]() {});
     assert(events == 2);
     timing::print_timing_summary();
@@ -160,8 +161,8 @@ def test_memory_lifecycle_preserves_parameters_after_skipped_intents():
     updated = Symbol(2, "updated", ScalarType.REAL, rank=1, intent="inout", parameter=True)
     for symbols in ((output, source, updated), (source, output, updated)):
         memory = plan_memory(ExecutionPlan(()), symbols)
-        assert next(op.symbols for op in memory.create if op.kind == "device") == (source, updated)
-        assert set(next(op.symbols for op in memory.retrieve if op.kind == "host")) == {output, updated}
+        assert next(op.symbols for op in memory.create if op.kind == "upload") == (source, updated)
+        assert set(next(op.symbols for op in memory.retrieve if op.kind == "download")) == {output, updated}
 
 
 def test_memory_plan_preserves_predicate_and_launch_bound_reads(tmp_path):

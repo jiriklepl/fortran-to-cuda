@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from compiler.emission.c.generator import generate_cpp
+from compiler.emission.c.sessions import append_cpu_sessions
 from compiler.emission.common.abi import abi_arguments
-from compiler.emission.common.sessions import append_cpu_sessions
 from compiler.emission.cuda.generator import generate_cuda
 from compiler.emission.fortran.generator import generate_fortran
 from compiler.ir import CompilationError, FunctionIR, SourceLocation
@@ -40,6 +40,6 @@ def generate_sources(
     memory = plan_memory(plan, function.parameters)
     return GeneratedSources(
         cuda=generate_cuda(function, plan, abi, common_header, memory=memory),
-        cpp=generate_cpp(function, plan, abi, common_header) + append_cpu_sessions(function, abi, memory=memory),
+        cpp=generate_cpp(function, plan, abi, common_header) + append_cpu_sessions(function, plan, memory=memory),
         fortran=generate_fortran(function, abi),
     )

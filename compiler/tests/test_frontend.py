@@ -557,3 +557,46 @@ def test_helper_without_intent_cannot_write_through_readonly_actual(tmp_path: Pa
         lower_file(path, "entry")
     assert "helper" in str(failure.value)
     assert failure.value.location.call_stack
+
+
+@pytest.mark.parametrize(
+    ("action", "message"),
+    [("a(1)=missing", "unknown or undeclared"), ("n=0", "cannot write INTENT")],
+)
+def test_single_line_action_errors_retain_enclosing_source_line(tmp_path: Path, action: str, message: str) -> None:
+    statement = f"if(n>0) {action}"
+    path = source_file(
+        tmp_path,
+        one_routine("real(knd), intent(inout) :: a(:)\ninteger, intent(in) :: n", statement),
+    )
+    with pytest.raises(CompilationError, match=message) as failure:
+        lower_file(path, "entry")
+    assert failure.value.location.path == str(path)
+    assert failure.value.location.line == path.read_text().splitlines().index(statement) + 1
+    assert failure.value.location.call_stack == ()
+
+
+@pytest.mark.parametrize("invalid", [False, True], ids=["lowered-action", "action-error"])
+def test_inlined_single_line_actions_preserve_source_and_call_lines(tmp_path: Path, invalid: bool) -> None:
+    statement = "if(n>0) a(1)=" + ("missing" if invalid else "1")
+    call = "if(n>0) call helper(a,n)"
+    path = source_file(
+        tmp_path,
+        "! kernel\nsubroutine helper(a,n)\nreal(knd), intent(inout) :: a(:)\ninteger, intent(in) :: n\n"
+        + statement
+        + "\nend subroutine helper\n"
+        + one_routine("real(knd), intent(inout) :: a(:)\ninteger, intent(in) :: n", call),
+    )
+    if invalid:
+        with pytest.raises(CompilationError, match="unknown or undeclared") as failure:
+            lower_file(path, "entry")
+        location = failure.value.location
+    else:
+        function = lower_file(path, "entry")
+        entry_if = function.body.statements[0]
+        helper_if = entry_if.then_body.statements[0]
+        location = helper_if.then_body.statements[0].location
+    source = path.read_text().splitlines()
+    assert location.path == str(path)
+    assert location.line == source.index(statement) + 1
+    assert location.call_stack == (f"entry at {path}:{source.index(call) + 1} -> helper",)

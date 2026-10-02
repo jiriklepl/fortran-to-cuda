@@ -280,6 +280,7 @@ def _region(
         available.add(item.iterator)
 
     def visit(block, values, definitions, available, active, coords, domain, position, timing):
+        nonlocal conservative
         values = dict(values)
         definitions = dict(definitions)
         available = set(available)
@@ -321,6 +322,8 @@ def _region(
                         else:
                             values[symbol] = value
             elif isinstance(statement, If):
+                # Both arms use the enclosing domain; predicates do not constrain events.
+                conservative = True
                 check_reads(referenced_symbols(statement.condition), available, statement.location)
                 predicate_reads = tuple(
                     node for node in walk_expr(statement.condition) if isinstance(node, ArrayAccess)
@@ -521,7 +524,7 @@ def _region(
             )
             raise ParallelizationError(
                 f"Cannot parallelize: {kind} {'possible ' if conservative else ''}loop-carried conflict involving {names}; "
-                + ("conservative access/stride model; " if conservative else "")
+                + ("conservative dependence model; " if conservative else "")
                 + f"accesses at {source.origin.location} and {sink.origin.location}; "
                 f"relation {mapping}; witness {mapping.wrap().sample_point()}",
                 loop.location,
