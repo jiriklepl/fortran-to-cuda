@@ -13,7 +13,7 @@ OUTPUTS = ("generated_code.cu", "generated_cpp_impl.cpp", "generated_interface.f
 @pytest.mark.parametrize(
     ("body", "reason"),
     [
-        ("if(n>0) a(1)=1.0_knd", "If_Stmt"),
+        ("if(n) a(1)=1.0_knd", "condition must be LOGICAL"),
         ("do i=1,n,0\n a(i)=1.0_knd\nenddo", "zero"),
         ("do i=2,n\n a(i)=a(i-1)\nenddo", "RAW"),
         ("do i=1,n\n a(1)=1.0_knd\nenddo", "WAW"),

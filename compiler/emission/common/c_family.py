@@ -9,6 +9,7 @@ from compiler.ir import (
     Binary,
     CompilationError,
     Expr,
+    IntrinsicCall,
     Literal,
     Reference,
     ScalarType,
@@ -19,11 +20,18 @@ from compiler.ir import (
 
 
 def cpp_type(symbol: Symbol) -> str:
-    return {ScalarType.INTEGER: "int", ScalarType.REAL: "double", ScalarType.REAL32: "float"}[symbol.dtype]
+    return {
+        ScalarType.INTEGER: "int",
+        ScalarType.REAL: "double",
+        ScalarType.REAL32: "float",
+        ScalarType.LOGICAL: "bool",
+    }[symbol.dtype]
 
 
 def render_expression(expression: Expr) -> str:
     if isinstance(expression, Literal):
+        if expression.dtype is ScalarType.LOGICAL:
+            return "true" if expression.value.lower() in {".true.", "true"} else "false"
         if expression.dtype is ScalarType.INTEGER:
             # Fortran integer literals are decimal even with leading zeros.
             return str(int(expression.value))
@@ -39,12 +47,42 @@ def render_expression(expression: Expr) -> str:
         values = [render_expression(index) for index in expression.indices]
         values.extend(dimension_name(expression.symbol, dim) for dim in range(1, expression.symbol.rank + 1))
         return f"{expression.symbol.cpp_name}[F_IDX({', '.join(values)})]"
+    if isinstance(expression, IntrinsicCall):
+        intrinsic = expression.name.lower()
+        arguments = [render_expression(arg) for arg in expression.arguments]
+        if intrinsic in {"min", "max"}:
+            name = "minimum" if intrinsic == "min" else "maximum"
+            return f"::generated_kernels::numeric::{name}({', '.join(arguments)})"
+        name = {
+            "abs": "abs"
+            if expression.dtype is ScalarType.INTEGER
+            else "fabsf"
+            if expression.dtype is ScalarType.REAL32
+            else "fabs",
+            "sqrt": "sqrtf" if expression.dtype is ScalarType.REAL32 else "sqrt",
+        }[intrinsic]
+        return f"::{name}({arguments[0]})"
     if isinstance(expression, Unary):
-        return f"({expression.operator}{render_expression(expression.operand)})"
+        operator = "!" if expression.operator == ".not." else expression.operator
+        return f"({operator}{render_expression(expression.operand)})"
     if isinstance(expression, Binary):
-        if expression.operator not in {"+", "-", "*", "/"}:
+        operators = {
+            ".and.": "&&",
+            ".or.": "||",
+            ".eqv.": "==",
+            ".neqv.": "!=",
+            "/=": "!=",
+            ".eq.": "==",
+            ".ne.": "!=",
+            ".lt.": "<",
+            ".le.": "<=",
+            ".gt.": ">",
+            ".ge.": ">=",
+        }
+        operator = operators.get(expression.operator, expression.operator)
+        if operator not in {"+", "-", "*", "/", "<", ">", "<=", ">=", "==", "!=", "&&", "||"}:
             raise CompilationError(f"unsupported emission operator: {expression.operator}")
-        return f"({render_expression(expression.left)} {expression.operator} {render_expression(expression.right)})"
+        return f"({render_expression(expression.left)} {operator} {render_expression(expression.right)})"
     raise CompilationError(f"unsupported IR expression: {type(expression).__name__}")
 
 

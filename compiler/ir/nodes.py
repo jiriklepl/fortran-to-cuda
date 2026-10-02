@@ -10,6 +10,7 @@ class ScalarType(Enum):
     INTEGER = "integer"
     REAL = "real"
     REAL32 = "real32"
+    LOGICAL = "logical"
 
 
 @dataclass(frozen=True)
@@ -83,7 +84,14 @@ class Size:
     dimension: int
 
 
-Expr = Literal | Reference | ArrayAccess | Unary | Binary | Size
+@dataclass(frozen=True)
+class IntrinsicCall:
+    name: str
+    arguments: tuple[Expr, ...]
+    dtype: ScalarType
+
+
+Expr = Literal | Reference | ArrayAccess | Unary | Binary | Size | IntrinsicCall
 
 
 @dataclass(frozen=True)
@@ -108,7 +116,15 @@ class Loop:
     step: Expr | int = 1
 
 
-Statement = Assignment | Loop
+@dataclass(frozen=True)
+class If:
+    condition: Expr
+    then_body: Block
+    else_body: Block
+    location: SourceLocation
+
+
+Statement = Assignment | Loop | If
 
 
 @dataclass(frozen=True)
@@ -129,6 +145,9 @@ def walk_expr(expression: Expr):
         yield from walk_expr(expression.right)
     elif isinstance(expression, Unary):
         yield from walk_expr(expression.operand)
+    elif isinstance(expression, IntrinsicCall):
+        for argument in expression.arguments:
+            yield from walk_expr(argument)
     elif isinstance(expression, ArrayAccess):
         for index in expression.indices:
             yield from walk_expr(index)
@@ -145,6 +164,12 @@ def statement_reads(statement: Statement) -> frozenset[Symbol]:
             for index in statement.target.indices:
                 result |= referenced_symbols(index)
         return result
+    if isinstance(statement, If):
+        return (
+            referenced_symbols(statement.condition)
+            | block_reads(statement.then_body)
+            | block_reads(statement.else_body)
+        )
     step_reads = referenced_symbols(statement.step) if not isinstance(statement.step, int) else frozenset()
     return (
         referenced_symbols(statement.lower)
@@ -166,6 +191,8 @@ def block_writes(block: Block) -> frozenset[Symbol]:
     for statement in block.statements:
         if isinstance(statement, Assignment):
             result |= {statement.target.symbol}
+        elif isinstance(statement, If):
+            result |= block_writes(statement.then_body) | block_writes(statement.else_body)
         else:
             result |= {statement.iterator} | block_writes(statement.body)
     return result
@@ -181,6 +208,8 @@ def format_ir(function: FunctionIR) -> str:
             return f"{expr.symbol.cpp_name}({', '.join(expression(i) for i in expr.indices)})"
         if isinstance(expr, Size):
             return f"size({expr.symbol.cpp_name}, {expr.dimension})"
+        if isinstance(expr, IntrinsicCall):
+            return f"{expr.name}({', '.join(expression(arg) for arg in expr.arguments)})"
         if isinstance(expr, Unary):
             return f"({expr.operator}{expression(expr.operand)})"
         return f"({expression(expr.left)} {expr.operator} {expression(expr.right)})"
@@ -190,6 +219,13 @@ def format_ir(function: FunctionIR) -> str:
             prefix = "  " * depth
             if isinstance(statement, Assignment):
                 yield f"{prefix}{expression(statement.target)} = {expression(statement.value)}"
+            elif isinstance(statement, If):
+                yield f"{prefix}if ({expression(statement.condition)}) then"
+                yield from block(statement.then_body, depth + 1)
+                if statement.else_body.statements:
+                    yield prefix + "else"
+                    yield from block(statement.else_body, depth + 1)
+                yield prefix + "end if"
             else:
                 step = str(statement.step) if isinstance(statement.step, int) else expression(statement.step)
                 yield f"{prefix}do {statement.iterator.cpp_name} = {expression(statement.lower)}, {expression(statement.upper)}, {step}"

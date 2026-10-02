@@ -22,6 +22,8 @@ from compiler.ir import (
     CompilationError,
     Expr,
     FunctionIR,
+    If,
+    IntrinsicCall,
     Literal,
     Loop,
     Reference,
@@ -31,6 +33,7 @@ from compiler.ir import (
     Symbol,
     Unary,
 )
+from compiler.ir.intrinsics import intrinsic_type
 
 
 @dataclass(frozen=True)
@@ -157,10 +160,12 @@ class _Lowerer:
     def declaration(self, node: Any, arguments: set[str]) -> list[_Declaration]:
         type_node, attributes, entities = node.items
         if type(type_node).__name__ != "Intrinsic_Type_Spec":
-            raise self.error("only INTEGER, REAL, and REAL(knd) declarations are supported", node)
+            raise self.error("only INTEGER, LOGICAL, REAL, and REAL(knd) declarations are supported", node)
         type_name, selector = type_node.items
         if str(type_name).upper() == "INTEGER" and selector is None:
             dtype = ScalarType.INTEGER
+        elif str(type_name).upper() == "LOGICAL" and selector is None:
+            dtype = ScalarType.LOGICAL
         elif str(type_name).upper() == "REAL" and selector is None:
             dtype = ScalarType.REAL32
         elif (
@@ -171,7 +176,7 @@ class _Lowerer:
         ):
             dtype = ScalarType.REAL
         else:
-            raise self.error("only default INTEGER, REAL, and REAL(knd) declarations are supported", node)
+            raise self.error("only default INTEGER, LOGICAL, REAL, and REAL(knd) declarations are supported", node)
         intent: str | None = None
         dimensions = None
         contiguous = False
@@ -209,6 +214,8 @@ class _Lowerer:
                 ):
                     raise self.error("arrays must have assumed shape ':' in every dimension", node)
                 rank = len(shape.items)
+                if dtype is ScalarType.LOGICAL:
+                    raise self.error("LOGICAL arrays are unsupported", node)
                 if name not in arguments:
                     raise self.error(f"local arrays are unsupported: {name}", node)
             elif contiguous:
@@ -281,7 +288,7 @@ class _Lowerer:
         provenance: tuple[str, ...],
         active_iterators: frozenset[Symbol],
     ) -> Block:
-        statements: list[Assignment | Loop] = []
+        statements: list[Assignment | Loop | If] = []
         for node in nodes:
             kind = type(node).__name__
             if kind == "Comment":
@@ -298,7 +305,47 @@ class _Lowerer:
                 if target.symbol in active_iterators:
                     raise CompilationError(f"cannot modify active loop iterator {name}", location)
                 value = self.expression(value_node, bindings, location)
+                if (target.symbol.dtype is ScalarType.LOGICAL) != (self.dtype(value) is ScalarType.LOGICAL):
+                    raise CompilationError("assignment requires compatible logical or numeric types", location)
                 statements.append(Assignment(target, value, location))
+            elif kind in {"If_Stmt", "If_Construct"}:
+
+                def lower_branch(children):
+                    return self.block(
+                        tuple(children), routine, bindings, declarations, ancestors, provenance, active_iterators
+                    )
+
+                if kind == "If_Stmt":
+                    condition = self.expression(node.items[0], bindings, location)
+                    then_body = lower_branch((node.items[1],))
+                    else_body = Block(())
+                else:
+                    branches = []
+                    children = []
+                    header = node.content[0]
+                    for child in node.content[1:]:
+                        child_kind = type(child).__name__
+                        if child_kind in {"Else_If_Stmt", "Else_Stmt", "End_If_Stmt"}:
+                            branches.append((header, lower_branch(children)))
+                            header, children = child, []
+                        else:
+                            children.append(child)
+                    else_body = Block(())
+                    for header, branch_body in reversed(branches):
+                        if type(header).__name__ == "Else_Stmt":
+                            else_body = branch_body
+                            continue
+                        branch_location = self.location(header, provenance)
+                        condition = self.expression(header.items[0], bindings, branch_location)
+                        if self.dtype(condition) is not ScalarType.LOGICAL:
+                            raise CompilationError("IF condition must be LOGICAL", branch_location)
+                        then_body = branch_body
+                        else_body = Block((If(condition, then_body, else_body, branch_location),))
+                    statements.extend(else_body.statements)
+                    continue
+                if self.dtype(condition) is not ScalarType.LOGICAL:
+                    raise CompilationError("IF condition must be LOGICAL", location)
+                statements.append(If(condition, then_body, else_body, location))
             elif kind == "Block_Nonlabel_Do_Construct":
                 loop_nodes = [child for child in node.content if type(child).__name__ != "Comment"]
                 header = loop_nodes[0]
@@ -402,6 +449,11 @@ class _Lowerer:
             if symbol.rank:
                 raise CompilationError(f"array {symbol.name} must be accessed with {symbol.rank} subscripts", location)
             return Reference(symbol)
+        if kind == "Logical_Literal_Constant":
+            value, literal_kind = node.items
+            if literal_kind is not None:
+                raise CompilationError("logical literal kinds are unsupported", location)
+            return Literal(str(value).lower(), ScalarType.LOGICAL)
         if kind in {"Int_Literal_Constant", "Real_Literal_Constant"}:
             value, literal_kind = node.items
             if kind == "Int_Literal_Constant" and literal_kind is not None:
@@ -431,9 +483,10 @@ class _Lowerer:
         if kind == "Intrinsic_Function_Reference":
             name, argument_list = node.items
             if str(name).upper() != "SIZE":
-                raise CompilationError(
-                    f"unsupported intrinsic {name}; only SIZE(array[, literal_dimension]) is supported", location
-                )
+                args = argument_list.items if argument_list is not None else ()
+                arguments = tuple(self.expression(arg, bindings, location) for arg in args)
+                dtype = intrinsic_type(str(name), tuple(self.dtype(arg) for arg in arguments), location)
+                return IntrinsicCall(str(name).lower(), arguments, dtype)
             args = argument_list.items if argument_list is not None else ()
             if len(args) not in {1, 2} or type(args[0]).__name__ != "Name":
                 raise CompilationError("SIZE requires a whole array and an optional literal dimension", location)
@@ -456,18 +509,49 @@ class _Lowerer:
                 )
             return Size(symbol, dimension)
         items = getattr(node, "items", ())
-        if kind == "Level_2_Unary_Expr" and len(items) == 2 and items[0] in {"+", "-"}:
-            return Unary(items[0], self.expression(items[1], bindings, location))
-        if kind in {"Level_2_Expr", "Add_Operand", "Mult_Operand"} and len(items) == 3:
-            left, operator, right = items
-            if operator in {"+", "-", "*", "/"}:
-                return Binary(
-                    operator, self.expression(left, bindings, location), self.expression(right, bindings, location)
-                )
+        if len(items) == 2 and str(items[0]).upper() in {"+", "-", ".NOT."}:
+            operator = str(items[0]).lower()
+            operand = self.expression(items[1], bindings, location)
+            logical = self.dtype(operand) is ScalarType.LOGICAL
+            if (operator == ".not.") != logical:
+                raise CompilationError("invalid operand type for unary operator", location)
+            return Unary(operator, operand)
+        if len(items) == 3:
+            left_node, operator, right_node = items
+            operator = str(operator).lower()
+            operators = {
+                "+",
+                "-",
+                "*",
+                "/",
+                "==",
+                "/=",
+                "<",
+                "<=",
+                ">",
+                ">=",
+                ".eq.",
+                ".ne.",
+                ".lt.",
+                ".le.",
+                ".gt.",
+                ".ge.",
+                ".and.",
+                ".or.",
+                ".eqv.",
+                ".neqv.",
+            }
+            if operator in operators:
+                left = self.expression(left_node, bindings, location)
+                right = self.expression(right_node, bindings, location)
+                logical_operator = operator in {".and.", ".or.", ".eqv.", ".neqv."}
+                if any((self.dtype(operand) is ScalarType.LOGICAL) != logical_operator for operand in (left, right)):
+                    raise CompilationError("invalid operand types for operator " + operator, location)
+                return Binary(operator, left, right)
         raise CompilationError(f"unsupported expression {kind}: {node}", location)
 
     def dtype(self, expression: Expr) -> ScalarType:
-        if isinstance(expression, Literal):
+        if isinstance(expression, (Literal, IntrinsicCall)):
             return expression.dtype
         if isinstance(expression, (Reference, ArrayAccess)):
             return expression.symbol.dtype
@@ -475,6 +559,8 @@ class _Lowerer:
             return ScalarType.INTEGER
         if isinstance(expression, Unary):
             return self.dtype(expression.operand)
+        if expression.operator not in {"+", "-", "*", "/"}:
+            return ScalarType.LOGICAL
         operand_types = {self.dtype(expression.left), self.dtype(expression.right)}
         if ScalarType.REAL in operand_types:
             return ScalarType.REAL

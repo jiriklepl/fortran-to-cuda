@@ -6,14 +6,59 @@ from typing import TYPE_CHECKING
 
 from compiler.emission.c.declarations import cpp_declaration
 from compiler.emission.common.abi import AbiArgument, dimension_name
-from compiler.emission.common.c_family import cpp_type, indent, render_assignment
+from compiler.emission.common.c_family import cpp_type, indent, render_assignment, render_expression
 from compiler.emission.common.symbols import host_symbols
 from compiler.emission.cuda.kernels import generate_kernel, generate_launch
 from compiler.emission.cuda.transfers import array_bytes, generate_transfer
-from compiler.ir import ArrayAccess, FunctionIR, Symbol, walk_expr
+from compiler.ir import ArrayAccess, ConditionalRegion, FunctionIR, HostBlock, ParallelRegion, Symbol, walk_expr
 
 if TYPE_CHECKING:
     from compiler.ir import ExecutionPlan
+
+
+def _plan_lines(plan: ExecutionPlan, arrays: tuple[Symbol, ...], device_dirty: set[Symbol]) -> list[str]:
+    """Render ordered host/device work, synchronizing branch entry and joins."""
+    lines = []
+    for step in plan.steps:
+        if isinstance(step, ParallelRegion):
+            bounds = [expression for loop in step.loops for expression in (loop.lower, loop.upper)]
+            bounds.extend(loop.step for loop in step.loops if not isinstance(loop.step, int))
+            bound_reads = {
+                node.symbol for expression in bounds for node in walk_expr(expression) if isinstance(node, ArrayAccess)
+            }
+            downloads = tuple(symbol for symbol in arrays if symbol in device_dirty & bound_reads)
+            lines.extend(generate_transfer(downloads, to_device=False))
+            device_dirty.difference_update(downloads)
+            lines.extend(generate_launch(step))
+            device_dirty.update(step.write_symbols)
+        elif isinstance(step, HostBlock):
+            # A partial host write must first preserve every device-produced
+            # value elsewhere in the array, even if it does not read that value.
+            needed = device_dirty & (set(step.read_symbols) | set(step.write_symbols))
+            downloads = tuple(symbol for symbol in arrays if symbol in needed)
+            lines.extend(generate_transfer(downloads, to_device=False))
+            device_dirty.difference_update(downloads)
+            lines.extend(render_assignment(assignment) for assignment in step.assignments)
+            uploads = tuple(symbol for symbol in arrays if symbol in step.write_symbols)
+            lines.extend(generate_transfer(uploads, to_device=True))
+        elif isinstance(step, ConditionalRegion):
+            # Both copies agree at branch boundaries. Each arm can then use
+            # the ordinary source-order transfer logic independently.
+            downloads = tuple(symbol for symbol in arrays if symbol in device_dirty)
+            lines.extend(generate_transfer(downloads, to_device=False))
+            device_dirty.clear()
+            lines.append(f"if ({render_expression(step.condition)}) {{")
+            for index, branch in enumerate((step.then_plan, step.else_plan)):
+                if index:
+                    lines.append("} else {")
+                branch_dirty: set[Symbol] = set()
+                lines.extend(indent(_plan_lines(branch, arrays, branch_dirty)))
+                downloads = tuple(symbol for symbol in arrays if symbol in branch_dirty)
+                lines.extend(indent(generate_transfer(downloads, to_device=False)))
+            lines.append("}")
+        else:
+            raise TypeError(f"Unknown execution step: {type(step).__name__}")
+    return lines
 
 
 def generate_cuda(function: FunctionIR, plan: ExecutionPlan, abi: tuple[AbiArgument, ...], common_header: str) -> str:
@@ -38,9 +83,8 @@ def generate_cuda(function: FunctionIR, plan: ExecutionPlan, abi: tuple[AbiArgum
         "#endif",
         "",
     ]
-    for step in plan.steps:
-        if hasattr(step, "loops"):
-            lines.extend(generate_kernel(step))
+    for region in plan.regions:
+        lines.extend(generate_kernel(region))
     lines.extend(
         [
             'extern "C" void cpp_start_hot() { reset_timing_vectors(); }',
@@ -103,29 +147,7 @@ def generate_cuda(function: FunctionIR, plan: ExecutionPlan, abi: tuple[AbiArgum
     lines.append("    });")
     lines.extend(indent([f"{cpp_type(symbol)} {symbol.cpp_name};" for symbol in host_symbols(function, plan)]))
     lines.append("    measure_kernel_executions([&]() {")
-    device_dirty: set[Symbol] = set()
-    for step in plan.steps:
-        if hasattr(step, "loops"):
-            bounds = [expression for loop in step.loops for expression in (loop.lower, loop.upper)]
-            bounds.extend(loop.step for loop in step.loops if not isinstance(loop.step, int))
-            bound_reads = {
-                node.symbol for expression in bounds for node in walk_expr(expression) if isinstance(node, ArrayAccess)
-            }
-            downloads = tuple(symbol for symbol in arrays if symbol in device_dirty & bound_reads)
-            lines.extend(indent(generate_transfer(downloads, to_device=False), 2))
-            device_dirty.difference_update(downloads)
-            lines.extend(indent(generate_launch(step), 2))
-            device_dirty.update(step.write_symbols)
-        else:
-            # A partial host write must first preserve every device-produced
-            # value elsewhere in the array, even if it does not read that value.
-            needed = device_dirty & (set(step.read_symbols) | set(step.write_symbols))
-            downloads = tuple(symbol for symbol in arrays if symbol in needed)
-            lines.extend(indent(generate_transfer(downloads, to_device=False), 2))
-            device_dirty.difference_update(downloads)
-            lines.extend(indent([render_assignment(assignment) for assignment in step.assignments], 2))
-            uploads = tuple(symbol for symbol in arrays if symbol in step.write_symbols)
-            lines.extend(indent(generate_transfer(uploads, to_device=True), 2))
+    lines.extend(indent(_plan_lines(plan, arrays, set()), 2))
     lines.extend(["    });", "    CUCH(cudaDeviceSynchronize());", f"    measure_d2h({output_bytes}, [&]() {{"])
     lines.extend(
         indent(

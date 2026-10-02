@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from compiler.emission.common.c_family import indent, render_assignment, render_expression
-from compiler.ir import Assignment, Block, Loop
+from compiler.ir import Assignment, Block, If, Loop
 
 if TYPE_CHECKING:
     from compiler.ir import ParallelRegion
@@ -64,6 +64,14 @@ def sequential_block(block: Block, depth: int, counter: list[int], *, device: bo
     for statement in block.statements:
         if isinstance(statement, Assignment):
             lines.extend(indent([render_assignment(statement)], depth))
+            continue
+        if isinstance(statement, If):
+            lines.extend(indent([f"if ({render_expression(statement.condition)}) {{"], depth))
+            lines.extend(sequential_block(statement.then_body, depth + 1, counter, device=device))
+            if statement.else_body.statements:
+                lines.extend(indent(["} else {"], depth))
+                lines.extend(sequential_block(statement.else_body, depth + 1, counter, device=device))
+            lines.extend(indent(["}"], depth))
             continue
         suffix = f"_serial{counter[0]}"
         counter[0] += 1

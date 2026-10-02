@@ -19,7 +19,8 @@ from compiler.ir import (
     ExecutionPlan,
     Expr,
     FunctionIR,
-    HostBlock,
+    If,
+    IntrinsicCall,
     Literal,
     Loop,
     ParallelRegion,
@@ -36,6 +37,24 @@ from compiler.ir import (
     walk_expr,
 )
 
+from .effects import (
+    all_loops as _all_loops,
+)
+from .effects import (
+    assignments as _assignments,
+)
+from .effects import (
+    header_reads as _header_reads,
+)
+from .effects import (
+    loop_step as _step,
+)
+from .effects import (
+    mapped_prefix as _mapped_prefix,
+)
+from .effects import (
+    upward_reads as _upward_reads,
+)
 from .proof import ParallelizationError, ParallelProof
 
 
@@ -95,51 +114,6 @@ def affine_expression(
     raise CompilationError("Unsupported non-affine array index or loop bound", location)
 
 
-def _step(loop: Loop) -> Expr:
-    return Literal(str(loop.step), ScalarType.INTEGER) if isinstance(loop.step, int) else loop.step
-
-
-def _header_reads(loop: Loop) -> frozenset[Symbol]:
-    return referenced_symbols(loop.lower) | referenced_symbols(loop.upper) | referenced_symbols(_step(loop))
-
-
-def _all_loops(block: Block):
-    for statement in block.statements:
-        if isinstance(statement, Loop):
-            yield statement
-            yield from _all_loops(statement.body)
-
-
-def _assignments(block: Block):
-    for statement in block.statements:
-        if isinstance(statement, Assignment):
-            yield statement
-        else:
-            yield from _assignments(statement.body)
-
-
-def _mapped_prefix(loop: Loop) -> tuple[tuple[Loop, ...], Block]:
-    """Map a rectangular perfect prefix; retain the remaining ordered body."""
-    loops = [loop]
-    body = loop.body
-    written = block_writes(body)
-    while len(body.statements) == 1 and isinstance(body.statements[0], Loop):
-        inner = body.statements[0]
-        # SIZE reads immutable extents, not the array cells written by the body.
-        header_values = frozenset(
-            node.symbol
-            for expression in (inner.lower, inner.upper, _step(inner))
-            for node in walk_expr(expression)
-            if isinstance(node, (Reference, ArrayAccess))
-        )
-        changing = header_values & (written | {item.iterator for item in loops})
-        if changing:
-            break
-        loops.append(inner)
-        body = inner.body
-    return tuple(loops), body
-
-
 def ordered_conflicts(reads: isl.UnionMap, writes: isl.UnionMap, schedule: isl.UnionMap):
     """Relations map earlier statement instances to later conflicting instances."""
     before = schedule.lex_lt_union_map(schedule)
@@ -150,24 +124,9 @@ def ordered_conflicts(reads: isl.UnionMap, writes: isl.UnionMap, schedule: isl.U
     }
 
 
-def _upward_reads(block: Block) -> frozenset[Symbol]:
-    """Reads needing an incoming value; loop writes do not define values on zero trips."""
-    reads: set[Symbol] = set()
-    defined: set[Symbol] = set()
-    for statement in block.statements:
-        if isinstance(statement, Assignment):
-            reads.update(statement_reads(statement) - defined)
-            if isinstance(statement.target, Reference):
-                defined.add(statement.target.symbol)
-        else:
-            incoming = _header_reads(statement) | (_upward_reads(statement.body) - {statement.iterator})
-            reads.update(incoming - defined)
-    return frozenset(reads)
-
-
 @dataclass(frozen=True)
 class _Event:
-    origin: Assignment | Loop
+    origin: Assignment | Loop | If
     coordinates: tuple[str, ...]
     conditions: tuple[str, ...]
     order: tuple[str, ...]
@@ -188,6 +147,10 @@ def _resolve(expression: Expr, definitions: dict[Symbol, Expr]) -> Expr:
         )
     if isinstance(expression, Unary):
         return Unary(expression.operator, _resolve(expression.operand, definitions))
+    if isinstance(expression, IntrinsicCall):
+        return IntrinsicCall(
+            expression.name, tuple(_resolve(arg, definitions) for arg in expression.arguments), expression.dtype
+        )
     if isinstance(expression, ArrayAccess):
         return ArrayAccess(expression.symbol, tuple(_resolve(index, definitions) for index in expression.indices))
     return expression
@@ -214,7 +177,7 @@ def _region(
     live_out = (private | mapped) & _upward_reads(later)
     if live_out:
         symbol = min(live_out, key=lambda s: s.id)
-        raise CompilationError(f"Loop-written scalar '{symbol.name}' is live after the region", loop.location)
+        raise ParallelizationError(f"Loop-written scalar '{symbol.name}' is live after the region", loop.location)
 
     captured: set[Symbol] = set()
     events: list[_Event] = []
@@ -229,7 +192,7 @@ def _region(
                 captured.add(symbol)
             elif symbol in private:
                 if symbol not in available:
-                    raise CompilationError(
+                    raise ParallelizationError(
                         f"Scalar '{symbol.name}' is read before its per-iteration definition (reduction or carried value)",
                         location,
                     )
@@ -303,7 +266,7 @@ def _region(
     available: set[Symbol] = set()
     for item in loops:
         if item is not loops[0] and _header_reads(item) & (mapped - available):
-            raise CompilationError("Nonrectangular mapped loop prefix", item.location)
+            raise ParallelizationError("Nonrectangular mapped loop prefix", item.location)
         for symbol in _header_reads(item):
             if not symbol.rank and symbol not in defined and symbol not in available:
                 raise CompilationError(f"Scalar '{symbol.name}' is read before definition", item.location)
@@ -357,6 +320,37 @@ def _region(
                             values.pop(symbol, None)
                         else:
                             values[symbol] = value
+            elif isinstance(statement, If):
+                check_reads(referenced_symbols(statement.condition), available, statement.location)
+                predicate_reads = tuple(
+                    node for node in walk_expr(statement.condition) if isinstance(node, ArrayAccess)
+                )
+                if predicate_reads:
+                    events.append(
+                        _Event(
+                            statement,
+                            coords,
+                            domain,
+                            (*path, "0"),
+                            timing,
+                            predicate_reads,
+                            (),
+                            dict(values),
+                            dict(definitions),
+                            dict(active),
+                        )
+                    )
+                then_available = visit(
+                    statement.then_body, values, definitions, available, active, coords, domain, (*path, "1"), timing
+                )
+                else_available = visit(
+                    statement.else_body, values, definitions, available, active, coords, domain, (*path, "2"), timing
+                )
+                available.update(then_available & else_available)
+                # Branch-local values cannot be substituted after the join.
+                for symbol in block_writes(statement.then_body) | block_writes(statement.else_body):
+                    values.pop(symbol, None)
+                    definitions.pop(symbol, None)
             else:
                 check_reads(_header_reads(statement), available, statement.location)
                 expressions = (statement.lower, statement.upper, _step(statement))
@@ -566,7 +560,7 @@ def _region(
 
 
 def prove_region(region_id, loop, environment, defined, later):
-    """Return modeled dependence failures; other compilation errors propagate."""
+    """Query legality after semantic validation; carry failure evidence as data."""
     try:
         return ParallelProof(region=_region(region_id, loop, environment, defined, later))
     except ParallelizationError as error:
@@ -574,74 +568,13 @@ def prove_region(region_id, loop, environment, defined, later):
 
 
 def build_execution_plan(function: FunctionIR) -> ExecutionPlan:
-    """Prove mapped iterations independent and retain all host/body source order."""
-    environment = {
-        symbol: Affine(terms=((f"p{symbol.id}", 1),))
-        for symbol in function.parameters
-        if not symbol.rank and symbol.dtype is ScalarType.INTEGER
-    }
-    defined = {symbol for symbol in function.parameters if not symbol.rank}
-    steps: list[HostBlock | ParallelRegion] = []
-    host: list[Assignment] = []
-    region_id = 0
+    # Historical module-level entry point; planning itself is independent of ISL.
+    from .planning import build_execution_plan as build
 
-    def flush_host():
-        if not host:
-            return
-        reads = {
-            node.symbol
-            for stmt in host
-            for expr in (stmt.value, stmt.target)
-            for node in walk_expr(expr)
-            if isinstance(node, ArrayAccess)
-        }
-        writes = {stmt.target.symbol for stmt in host if isinstance(stmt.target, ArrayAccess)}
-        steps.append(
-            HostBlock(tuple(host), tuple(sorted(reads, key=lambda s: s.id)), tuple(sorted(writes, key=lambda s: s.id)))
-        )
-        host.clear()
-
-    for index, statement in enumerate(function.body.statements):
-        if isinstance(statement, Assignment):
-            for symbol in statement_reads(statement):
-                if not symbol.rank and symbol not in defined:
-                    raise CompilationError(f"Scalar '{symbol.name}' is read before definition", statement.location)
-            if isinstance(statement.target, Reference):
-                symbol = statement.target.symbol
-                if symbol.parameter:
-                    raise CompilationError("Assignments to scalar dummy arguments are unsupported", statement.location)
-                if symbol.dtype is ScalarType.INTEGER:
-                    try:
-                        environment[symbol] = affine_expression(statement.value, environment, {}, statement.location)
-                    except CompilationError:
-                        environment[symbol] = Affine(terms=((f"h{index}_{symbol.id}", 1),))
-                defined.add(symbol)
-            host.append(statement)
-        else:
-            flush_host()
-            steps.append(
-                _region(region_id, statement, environment, defined, Block(function.body.statements[index + 1 :]))
-            )
-            region_id += 1
-    flush_host()
-    return ExecutionPlan(tuple(steps))
+    return build(function)
 
 
 def format_plan(plan: ExecutionPlan) -> str:
-    lines = []
-    for step in plan.steps:
-        if isinstance(step, HostBlock):
-            lines.append(f"host block: {len(step.assignments)} ordered assignment(s)")
-            lines.append(f"  array reads: {', '.join(s.name for s in step.read_symbols) or '(none)'}")
-            lines.append(f"  array writes: {', '.join(s.name for s in step.write_symbols) or '(none)'}")
-        else:
-            lines.append(f"region {step.id}: {len(step.loops)} mapped dimensions, parallel legality PROVEN")
-            lines.append(f"  retained sequential loops: {len(tuple(_all_loops(step.body)))}")
-            lines.append(f"  access model: {'conservative' if step.report.conservative else 'exact'}")
-            lines.append(f"  private: {', '.join(s.cpp_name for s in step.private_symbols) or '(none)'}")
-            lines.append(f"  domain: {step.report.domain}")
-            lines.append(f"  schedule: {step.report.schedule}")
-            lines.append(f"  RAW: {step.report.raw}")
-            lines.append(f"  WAR: {step.report.war}")
-            lines.append(f"  WAW: {step.report.waw}")
-    return "\n".join(lines)
+    from .planning import format_plan as render
+
+    return render(plan)

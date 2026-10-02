@@ -4,10 +4,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from compiler.ir import Assignment, Block, FunctionIR, Loop, Symbol, referenced_symbols
+from compiler.ir import (
+    Assignment,
+    Block,
+    ConditionalRegion,
+    FunctionIR,
+    HostBlock,
+    If,
+    Loop,
+    ParallelRegion,
+    Symbol,
+    referenced_symbols,
+)
 
 if TYPE_CHECKING:
-    from compiler.ir import ExecutionPlan, ParallelRegion
+    from compiler.ir import ExecutionPlan
 
 
 def _step_symbols(loop: Loop) -> frozenset[Symbol]:
@@ -20,12 +31,18 @@ def _block_symbols(block: Block) -> set[Symbol]:
         if isinstance(statement, Assignment):
             used.update(referenced_symbols(statement.value))
             used.update(referenced_symbols(statement.target))
-        else:
+        elif isinstance(statement, If):
+            used.update(referenced_symbols(statement.condition))
+            used.update(_block_symbols(statement.then_body))
+            used.update(_block_symbols(statement.else_body))
+        elif isinstance(statement, Loop):
             used.update(referenced_symbols(statement.lower))
             used.update(referenced_symbols(statement.upper))
             used.update(_step_symbols(statement))
             used.add(statement.iterator)
             used.update(_block_symbols(statement.body))
+        else:
+            raise TypeError(f"Unknown statement: {type(statement).__name__}")
     return used
 
 
@@ -33,16 +50,22 @@ def host_symbols(function: FunctionIR, plan: ExecutionPlan) -> tuple[Symbol, ...
     """Only locals used by host blocks or captured by a launch need host storage."""
     used: set[Symbol] = set()
     for step in plan.steps:
-        if hasattr(step, "loops"):
+        if isinstance(step, ParallelRegion):
             for loop in step.loops:
                 used.update(referenced_symbols(loop.lower))
                 used.update(referenced_symbols(loop.upper))
                 used.update(_step_symbols(loop))
             used.update(symbol for symbol in step.captured_symbols if not symbol.rank)
-        else:
+        elif isinstance(step, ConditionalRegion):
+            used.update(referenced_symbols(step.condition))
+            used.update(host_symbols(function, step.then_plan))
+            used.update(host_symbols(function, step.else_plan))
+        elif isinstance(step, HostBlock):
             for assignment in step.assignments:
                 used.update(referenced_symbols(assignment.value))
                 used.update(referenced_symbols(assignment.target))
+        else:
+            raise TypeError(f"Unknown execution step: {type(step).__name__}")
     return tuple(symbol for symbol in function.symbols if symbol in used and not symbol.parameter)
 
 

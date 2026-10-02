@@ -229,7 +229,6 @@ def test_real_literal_precision_is_preserved(tmp_path: Path) -> None:
             "do i=1,n,0\n a(i)=1.0_knd\nenddo",
             "stride must not be zero",
         ),
-        ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "if(n>0) a(1)=1.0_knd", "If_Stmt"),
         ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "a(1)=sin(1.0_knd)", "unsupported intrinsic"),
         ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "a(1)=2.0_knd**3", "unsupported expression"),
         ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "a(1)=2_knd", "integer literal kinds"),
