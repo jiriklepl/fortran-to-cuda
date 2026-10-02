@@ -6,6 +6,7 @@ import islpy as isl
 import pytest
 
 from compiler.analysis import build_execution_plan, ordered_conflicts
+from compiler.frontend import lower_file
 from compiler.ir import (
     ArrayAccess,
     Assignment,
@@ -127,14 +128,14 @@ def test_inner_dimension_dependence_is_rejected():
         build_execution_plan(function_with_body((outer,), (arr, n, j, i), (arr, n)))
 
 
-def test_indirect_access_and_nonrectangular_bound_are_rejected():
+def test_unknown_indirect_write_and_undefined_bound_are_rejected():
     def body(arr, i, temp):
         return [Assignment(ArrayAccess(arr, (ArrayAccess(arr, (Reference(i),)),)), integer(2), LOCATION)]
 
-    with pytest.raises(CompilationError, match="non-affine"):
+    with pytest.raises(CompilationError, match="loop-carried conflict"):
         build_execution_plan(one_loop(body))
     i = Symbol(2, "i", ScalarType.INTEGER)
-    with pytest.raises(CompilationError, match="invariant affine integer"):
+    with pytest.raises(CompilationError, match="read before definition"):
         build_execution_plan(one_loop(lambda arr, i, temp: [], upper=Reference(i)))
 
 
@@ -215,8 +216,14 @@ def test_inner_bounds_cannot_change_even_with_a_prior_host_definition(bound_sour
         body.insert(0, Assignment(Reference(limit), integer(1), LOCATION))
     inner = Loop(i, integer(1), Reference(symbol), Block(tuple(body)), LOCATION)
     outer = Loop(j, integer(1), integer(3), Block((inner,)), LOCATION)
-    with pytest.raises(CompilationError, match="invariant rectangular bounds"):
-        build_execution_plan(function_with_body((host, outer), (arr, i, j, limit), (arr,)))
+    function = function_with_body((host, outer), (arr, i, j, limit), (arr,))
+    if bound_source == "outer_iterator":
+        region = build_execution_plan(function).regions[0]
+        assert len(region.loops) == 1
+        assert region.body.statements == (inner,)
+    else:
+        with pytest.raises(CompilationError, match="per-iteration definition"):
+            build_execution_plan(function)
 
 
 def test_nonaffine_host_integer_is_a_frozen_invariant_parameter():
@@ -231,3 +238,140 @@ def test_nonaffine_host_integer_is_a_frozen_invariant_parameter():
     region = build_execution_plan(function).regions[0]
     assert "h0_3" in region.report.domain
     assert limit in region.captured_symbols
+
+
+def parsed_plan(tmp_path, declarations, body, arguments="a,n"):
+    source = tmp_path / "generalized.f90"
+    source.write_text(
+        "! kernels\nmodule generalized\ninteger,parameter :: knd=kind(1.d0)\ncontains\n! kernel\n"
+        f"subroutine entry({arguments})\n{declarations}\n{body}\nend subroutine\nend module\n"
+    )
+    return build_execution_plan(lower_file(source, "entry"))
+
+
+@pytest.mark.parametrize("step", [2, -2, 3, -3])
+def test_exact_constant_stride_can_remove_neighbor_conflict(tmp_path, step):
+    first, last = (1, 9) if step > 0 else (9, 1)
+    plan = parsed_plan(
+        tmp_path,
+        "real(knd),intent(inout)::a(:)\ninteger,intent(in)::n\ninteger::i",
+        f"do i={first},{last},{step}\na(i)=a(i-1)\nenddo",
+    )
+    assert len(plan.regions) == 1
+    assert "mod" in plan.regions[0].report.domain
+
+
+@pytest.mark.parametrize("step", [2, -2, 3, -3])
+def test_real_dependence_follows_signed_stride_order(tmp_path, step):
+    first, last = (1, 9) if step > 0 else (9, 1)
+    with pytest.raises(CompilationError, match="RAW"):
+        parsed_plan(
+            tmp_path,
+            "real(knd),intent(inout)::a(:)\ninteger,intent(in)::n\ninteger::i",
+            f"do i={first},{last},{step}\na(i)=a(i-({step}))\nenddo",
+        )
+
+
+def test_variable_stride_schedule_keeps_both_execution_directions(tmp_path):
+    plan = parsed_plan(
+        tmp_path,
+        "real(knd),intent(inout)::a(:)\ninteger,intent(in)::n,step\ninteger::i",
+        "do i=1,n,step\na(i)=a(i)+1.0_knd\nenddo",
+        "a,n,step",
+    )
+    schedule = plan.regions[0].report.schedule
+    assert "q0" in schedule
+    assert "-q0" in schedule
+
+
+def test_carried_sequential_integer_cannot_be_frozen_to_first_iteration(tmp_path):
+    with pytest.raises(CompilationError, match="WAW"):
+        parsed_plan(
+            tmp_path,
+            "real(knd),intent(inout)::a(:)\ninteger,intent(in)::n\ninteger::i,j,t",
+            "do i=1,n\nt=i\ndo j=1,2\nt=t+1\na(t)=1.0_knd\nenddo\nenddo",
+        )
+
+
+def test_reused_sequential_iterator_keeps_each_lexical_coordinate(tmp_path):
+    plan = parsed_plan(
+        tmp_path,
+        "real(knd),intent(inout)::a(:,:)\ninteger,intent(in)::n\ninteger::i,j",
+        "do i=1,n\na(i,1)=0.0_knd\ndo j=1,3\na(i,j)=a(i,j)+1.0_knd\nenddo\n"
+        "do j=3,1,-1\na(i,j)=a(i,j)+2.0_knd\nenddo\nenddo",
+    )
+    region = plan.regions[0]
+    assert len(region.loops) == 1
+    assert "q1" in region.report.writes
+    assert "q2" in region.report.writes
+
+
+def test_zero_trip_sequential_body_does_not_define_a_private_scalar(tmp_path):
+    with pytest.raises(CompilationError, match="per-iteration definition"):
+        parsed_plan(
+            tmp_path,
+            "real(knd),intent(inout)::a(:,:)\ninteger,intent(in)::n\ninteger::i,j\nreal(knd)::t",
+            "do i=1,n\na(i,1)=0.0_knd\ndo j=2,1\nt=1.0_knd\nenddo\na(i,1)=t\nenddo",
+        )
+
+
+def test_square_certificate_collects_invariant_operand_parameters(tmp_path):
+    plan = parsed_plan(
+        tmp_path,
+        "real(knd),intent(inout)::a(:)\ninteger,intent(in)::n,shift\ninteger::i,t",
+        "do i=1-shift,n-shift\nt=i+shift\na(t*t)=a(t*t)+1.0_knd\nenddo",
+        "a,n,shift",
+    )
+    assert len(plan.regions) == 1
+    assert "p2" in plan.regions[0].report.domain
+
+
+def test_readonly_indirect_gather_can_be_parallel(tmp_path):
+    plan = parsed_plan(
+        tmp_path,
+        "real(knd),intent(out)::a(:)\nreal(knd),intent(in)::src(:)\ninteger,intent(in)::indices(:),n\ninteger::i",
+        "do i=1,n\na(i)=src(indices(i))\nenddo",
+        "a,src,indices,n",
+    )
+    assert len(plan.regions) == 1
+
+
+def test_size_bounds_stay_rectangular_when_array_data_is_written(tmp_path):
+    plan = parsed_plan(
+        tmp_path,
+        "real(knd),intent(inout)::a(:,:)\ninteger,intent(in)::n\ninteger::i,j",
+        "do j=1,size(a,2)\ndo i=1,size(a,1)\na(i,j)=1.0_knd\nenddo\nenddo",
+    )
+    assert len(plan.regions[0].loops) == 2
+
+
+def test_constant_integer_stride_expression_keeps_exact_congruence(tmp_path):
+    plan = parsed_plan(
+        tmp_path,
+        "real(knd),intent(inout)::a(:)\ninteger,intent(in)::n\ninteger::i",
+        "do i=1,9,4/2\na(i)=a(i-1)\nenddo",
+    )
+    assert not plan.regions[0].report.conservative
+
+
+def test_structured_conflicts_match_bruteforce_lexical_execution(tmp_path):
+    region = parsed_plan(
+        tmp_path,
+        "real(knd),intent(inout)::a(:,:)\ninteger,intent(in)::n\ninteger::i,j",
+        "do i=1,3\na(i,1)=a(i,1)+1.0_knd\ndo j=3,1,-1\na(i,j)=a(i,j)+2.0_knd\nenddo\na(i,2)=a(i,1)\nenddo",
+    ).regions[0]
+    instances = []
+    for i in range(1, 4):
+        instances.append((f"S0[{i}]", {(i, 1)}, {(i, 1)}))
+        instances.extend((f"S1[{i},{j}]", {(i, j)}, {(i, j)}) for j in (3, 2, 1))
+        instances.append((f"S2[{i}]", {(i, 1)}, {(i, 2)}))
+    for kind, source, sink in (("raw", 2, 1), ("war", 1, 2), ("waw", 2, 2)):
+        clauses = [
+            f"{earlier[0]} -> {later[0]}"
+            for index, earlier in enumerate(instances)
+            for later in instances[index + 1 :]
+            if earlier[source] & later[sink]
+        ]
+        expected = isl.UnionMap.read_from_str(isl.DEFAULT_CONTEXT, "{ " + "; ".join(clauses) + " }")
+        actual = isl.UnionMap.read_from_str(isl.DEFAULT_CONTEXT, getattr(region.report, kind))
+        assert actual.is_equal(expected), kind

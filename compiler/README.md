@@ -15,9 +15,11 @@ flowchart LR
     E --> B[Fortran bridge / shared ABI]
 ```
 
-Each source nest remains a separate region. Scalar host blocks and regions retain
-source order. There is no fusion, tiling, automatic scheduling, persistent device
-storage, legacy pipeline switch, or sequential fallback for rejected regions.
+Each source outer loop remains a separate region. Host assignments and regions
+retain source order. A rectangular perfect prefix maps to parallel iterations;
+its remaining ordered body can contain assignments and sequential inner loops.
+Fusion, tiling, automatic scheduling, persistent device storage, and sequential
+fallback for rejected regions are unsupported.
 See [CODE_MAP.md](CODE_MAP.md) for the implementation and extension points.
 
 ## Quick start
@@ -32,8 +34,8 @@ python -m compiler --input fortran-stencils/elmm_cdu.f90 --kernel CDU --output-d
 Runtime dependencies include `fparser` and **`islpy==2026.2.2`**. Generated C++ uses
 C++17; add `-fopenmp` to enable its verified OpenMP loops. Compile without that
 flag for serial execution of the same generated implementation. CUDA uses one
-kernel per accepted source nest, 256 threads per block, and maps the innermost
-index first. Empty domains skip the launch. CDU, CDV, and CDW each produce four
+kernel per accepted source outer loop, 256 threads per block, and maps the
+innermost parallel index first. Empty domains skip the launch. CDU, CDV, and CDW each produce four
 CUDA kernels.
 
 ## CLI and outputs
@@ -63,8 +65,12 @@ files are written; an unsupported or unsafe input leaves existing outputs intact
 
 CUDA allocates device arrays, uploads `intent(in)` and `intent(inout)` data,
 executes ordered launches, downloads outputs, and frees device arrays on each
-wrapper call. `USE_PINNED_MEMORY` retains the existing optional pinned-memory
-mode. Unwritten `intent(inout)` cells are preserved. Unwritten portions of
+wrapper call. `USE_PINNED_MEMORY` enables optional pinned-memory support. Host
+array reads and writes between launches synchronize affected arrays:
+a read sees previous device updates, and a partial host write preserves other
+device-produced cells before uploading the changed array. Array-valued launch
+bounds and strides also see previous device writes. These extra transfers are
+included in timing hooks. Unwritten `intent(inout)` cells are preserved. Unwritten portions of
 `intent(out)` arrays have no promised values.
 
 ## Supported Fortran subset
@@ -93,32 +99,48 @@ contains
 end module example
 ```
 
-- Default `integer` and `real(knd)` scalars; scalar dummy arguments require
-  `intent(in)`.
-- Rank 1–3 `real(knd)` dummy arrays with assumed shape `(:)`, `(:,:)`, or
-  `(:,:,:)`, and explicit `intent(in/out/inout)`. `contiguous` is accepted.
-- Perfect rectangular loop nests of depth 1–3, with omitted or explicit literal
-  `+1` stride and straight-line innermost assignments.
-- Scalar host assignments before, between, or after nests, and proven private
-  per-iteration temporaries. Every private read must follow a definition in that
-  iteration; its value must be unused after the region.
-- Grouped arithmetic `+`, `-`, `*`, `/`, unary signs, integer/real literals, and
-  `SIZE(array, literal_dimension)`. Default real literals retain their single
-  precision; `D` exponent and `_knd` literals use binary64.
-- Affine bounds/subscripts built from constants, invariant integers, array
-  extents, and constant coefficients; only subscripts may use loop indices.
-  A host-computed integer such as `limit = n / 2` can be captured as an invariant
-  parameter. Direct non-affine bounds or per-iteration non-affine indices reject.
-- Positional calls with whole-variable arguments to annotated helpers. Inlining
-  creates fresh local identities per call and resolves formal arguments to the
-  caller's existing storage. Fortran names are case-insensitive.
+- Default `integer`, default `real` (binary32), and `real(knd)` (binary64)
+  scalars and assumed-shape dummy arrays. Array rank and loop nesting depth
+  follow native Fortran language/compiler limits.
+- Explicit `intent(in/out/inout)` arrays. Omitted array intent is conservatively
+  treated as `inout`; omitted scalar intent is treated as read-only input. Scalar
+  argument writes remain unsupported. `contiguous` and `target` are accepted;
+  pointers remain unsupported.
+- Counted `do` loops with positive or negative integer strides, including
+  invariant runtime stride expressions. Constant zero strides reject; a runtime
+  zero stride diagnoses at loop entry. Empty domains do not launch.
+- Perfect and imperfect nests. The analyzer maps a rectangular perfect prefix;
+  assignments and remaining inner loops execute in their original order within
+  each parallel iteration. Bounds may depend on outer indices in retained loops.
+  Source order is retained rather than splitting or fusing imperfect nests.
+- Host scalar and array element assignments before, between, or after nests.
+  Private temporaries must be defined before each read in the mapped iteration
+  and unused after the region. Retained sequential loops may carry a scalar
+  initialized within that iteration; their final induction values are available
+  within the iteration too.
+- Grouped arithmetic `+`, `-`, `*`, `/`, unary signs, integer/real literals,
+  `SIZE(array, literal_dimension)`, and `SIZE(array)` total element counts.
+  Default real literals retain single precision; `D` exponent and `_knd`
+  literals use binary64.
+- Affine access relations and constant-stride congruences are modeled exactly.
+  Invariant non-affine bounds are captured as symbolic parameters. Unknown
+  subscript coordinates are conservatively unconstrained, allowing read-only
+  indirect gathers and writes whose other coordinates already distinguish
+  parallel iterations. Identical squared affine subscripts, such as `a(i*i)`,
+  receive a simple injectivity proof when every access shares that expression
+  and its operand is proven nonnegative or nonpositive throughout the region.
+- Positional whole-variable calls to annotated helpers. Inlining creates fresh
+  locals per call and preserves actual storage identities and case-insensitive
+  Fortran name resolution.
 
-Branches, reductions, carried scalars, scalar live-outs, final induction values,
-non-unit strides, nonrectangular or changing bounds, indirect indexing, local
-arrays, writable scalar arguments, recursion, slices/expression call arguments,
-other intrinsics/operators, explicit lower array bounds, and unsupported
-specification statements reject with a source location. Arrays can be accessed
-only inside loop regions; host blocks contain scalar computations.
+Branches, local arrays, writable scalar arguments, recursion, slices/expression
+call arguments, other intrinsics/operators, explicit lower array bounds, and
+unsupported specification statements reject with a source location.
+Reductions or scalar values carried across mapped iterations, scalar live-outs,
+and final mapped induction values are unsupported. There is no serial-only
+fallback. General nonlinear or indirect writes are accepted only when the
+conservative relations prove mapped iterations independent; no runtime alias or
+index-uniqueness checks are introduced.
 
 ## Legality and caller contract
 
@@ -126,12 +148,18 @@ For each region the analyzer constructs statement iteration domains,
 multidimensional read/write access maps, and the original lexical schedule. It
 composes access maps to find ordered read-after-write (RAW), write-after-read
 (WAR), and write-after-write (WAW) conflicts. Every conflicting pair must have
-identical **complete iteration coordinates**, including all dimensions mapped to
-CUDA threads. Ordered same-cell updates within one iteration are accepted;
-neighbor-dependent in-place updates and inner-loop recurrences reject.
+identical **mapped iteration coordinates**, including every dimension assigned
+to CUDA threads. Ordered same-cell updates and recurrences inside retained
+sequential loops are accepted within one mapped iteration. Conflicts between
+mapped iterations reject. A perfect rectangular nest maps all its dimensions;
+an inner recurrence in such a mapped nest rejects.
 
 A dependence error includes source/call provenance, affected accesses, the
-symbolic conflict relation, and a concrete conflicting-iteration witness.
+symbolic conflict relation, and a conflicting-iteration witness. If unknown
+indices or variable-stride congruences widen the model, the diagnostic labels
+its relation and witness conservative: it shows why independence could not be
+proved, rather than promising a collision for every caller's runtime data.
+`--verbose` also displays exact/conservative modeling and retained loop counts.
 Independent regions execute in original order, honoring cross-region dependencies.
 
 Distinct array arguments must not overlap whenever either is written. The
@@ -157,8 +185,11 @@ Tests cover lowering, source ordering, inline aliases, scalar lifetimes, ISL
 relations against brute-force ordered accesses, rejection without publication,
 and deterministic generation. Native tests compile and compare original Fortran,
 generated serial C++, OpenMP, and CUDA using deterministic nonuniform inputs and
-absolute tolerance `1e-10`. They cover fill/scale, non-cubic/singleton/empty
-domains, sentinel halos, and CDU/CDV/CDW. Native compiler absence skips the
+absolute tolerance `1e-10` for real values and exact comparison for integers.
+Coverage includes fill/scale, non-cubic/singleton/empty domains, sentinel halos,
+CDU/CDV/CDW, signed/runtime strides, rank-5 integer arrays, rank-15 bridge
+compilation, imperfect nests, fresh host/device values, indirect gathers,
+squared indices, and default-real arithmetic. Native compiler absence skips the
 corresponding capability; CUDA compilation requires `nvcc`, and execution also
 requires a usable device. Once those capabilities are available, build or runtime
 failures fail the tests. All builds and outputs use temporary directories.

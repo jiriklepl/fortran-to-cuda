@@ -9,7 +9,7 @@ from enum import Enum
 class ScalarType(Enum):
     INTEGER = "integer"
     REAL = "real"
-    REAL32 = "real32_literal"
+    REAL32 = "real32"
 
 
 @dataclass(frozen=True)
@@ -44,7 +44,7 @@ class Symbol:
         # Leave room for extent suffixes in the Fortran C interface (63
         # characters maximum). The identity prefix prevents truncation collisions.
         prefix = f"fort_v{self.id}_"
-        return prefix + self.name.lower()[: 58 - len(prefix)]
+        return prefix + self.name.lower()[: 57 - len(prefix)]
 
 
 @dataclass(frozen=True)
@@ -105,7 +105,7 @@ class Loop:
     upper: Expr
     body: Block
     location: SourceLocation
-    step: int = 1
+    step: Expr | int = 1
 
 
 Statement = Assignment | Loop
@@ -145,7 +145,13 @@ def statement_reads(statement: Statement) -> frozenset[Symbol]:
             for index in statement.target.indices:
                 result |= referenced_symbols(index)
         return result
-    return referenced_symbols(statement.lower) | referenced_symbols(statement.upper) | block_reads(statement.body)
+    step_reads = referenced_symbols(statement.step) if not isinstance(statement.step, int) else frozenset()
+    return (
+        referenced_symbols(statement.lower)
+        | referenced_symbols(statement.upper)
+        | step_reads
+        | block_reads(statement.body)
+    )
 
 
 def block_reads(block: Block) -> frozenset[Symbol]:
@@ -185,7 +191,8 @@ def format_ir(function: FunctionIR) -> str:
             if isinstance(statement, Assignment):
                 yield f"{prefix}{expression(statement.target)} = {expression(statement.value)}"
             else:
-                yield f"{prefix}do {statement.iterator.cpp_name} = {expression(statement.lower)}, {expression(statement.upper)}"
+                step = str(statement.step) if isinstance(statement.step, int) else expression(statement.step)
+                yield f"{prefix}do {statement.iterator.cpp_name} = {expression(statement.lower)}, {expression(statement.upper)}, {step}"
                 yield from block(statement.body, depth + 1)
                 yield prefix + "end do"
 

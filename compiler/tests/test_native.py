@@ -34,9 +34,13 @@ class Case:
     halo: int = 0
     driver: Path | None = None
     keyword_arguments: tuple[str, ...] = ()
+    expected_count: int | None = None
+    integer_output: bool = False
 
     @property
     def count(self) -> int:
+        if self.expected_count is not None:
+            return self.expected_count
         return math.prod(n + 2 * self.halo for n in self.shape)
 
 
@@ -67,6 +71,68 @@ CASES = [
         FIXTURES / "native_long_names.f90",
         "native_long_names_module",
         keyword_arguments=(LONG_ARRAY, LONG_VALUE, "nx", "ny", "nz"),
+    ),
+    Case("imperfect", "native_imperfect", FIXTURES / "native_imperfect.f90", "native_imperfect_module"),
+    Case("host_coherence", "native_host_coherence", FIXTURES / "native_host_coherence.f90", "native_host_module"),
+    *[
+        Case(
+            name,
+            "native_strides",
+            FIXTURES / "native_strides.f90",
+            "native_strides_module",
+            bounds,
+            driver=FIXTURES / "native_strides_driver.f90",
+            expected_count=30,
+        )
+        for name, bounds in (
+            ("stride_positive", (2, 8, 2)),
+            ("stride_negative", (8, 2, -2)),
+            ("stride_positive_singleton", (3, 3, 2)),
+            ("stride_negative_singleton", (4, 4, -3)),
+            ("stride_positive_empty", (8, 2, 2)),
+            ("stride_negative_empty", (2, 8, -2)),
+        )
+    ],
+    Case(
+        "integer_rank5",
+        "native_integer_rank5",
+        FIXTURES / "native_integer_rank5.f90",
+        "native_integer_module",
+        driver=FIXTURES / "native_integer_rank5_driver.f90",
+        expected_count=24,
+        integer_output=True,
+    ),
+    Case(
+        "nonaffine",
+        "native_nonaffine",
+        FIXTURES / "native_nonaffine.f90",
+        "native_nonaffine_module",
+        driver=FIXTURES / "native_nonaffine_driver.f90",
+        expected_count=27,
+    ),
+    Case(
+        "square",
+        "native_square",
+        FIXTURES / "native_square.f90",
+        "native_square_module",
+        driver=FIXTURES / "native_square_driver.f90",
+        expected_count=16,
+    ),
+    Case(
+        "device_bounds",
+        "native_device_bounds",
+        FIXTURES / "native_device_bounds.f90",
+        "native_device_bounds_module",
+        driver=FIXTURES / "native_device_bounds_driver.f90",
+        expected_count=13,
+    ),
+    Case(
+        "single_precision",
+        "native_single_precision",
+        FIXTURES / "native_single_precision.f90",
+        "native_single_module",
+        driver=FIXTURES / "native_single_precision_driver.f90",
+        expected_count=9,
     ),
     *[
         Case(
@@ -197,22 +263,23 @@ def _fortran_objects(generated: Generated, directory: Path, *, reference: bool =
     return objects
 
 
-def _values(executable: Path, expected_count: int) -> list[float]:
+def _values(executable: Path, case: Case) -> list[float | int]:
     result = _run([executable], executable.parent)
-    values = [float(token) for token in result.stdout.split()]
-    assert len(values) == expected_count, result.stdout
+    convert = int if case.integer_output else float
+    values = [convert(token) for token in result.stdout.split()]
+    assert len(values) == case.count, result.stdout
     assert all(math.isfinite(value) for value in values), result.stdout
     return values
 
 
 @pytest.fixture(scope="module")
-def reference(generated: Generated) -> list[float]:
+def reference(generated: Generated) -> list[float | int]:
     directory = generated.directory.parent / "reference"
     directory.mkdir()
     objects = _fortran_objects(generated, directory, reference=True)
     executable = directory / "reference"
     _run([_tool("gfortran"), *objects, "-o", executable], directory)
-    return _values(executable, generated.case.count)
+    return _values(executable, generated.case)
 
 
 def test_generation_is_deterministic(generated: Generated, tmp_path: Path) -> None:
@@ -228,14 +295,15 @@ def test_generation_is_deterministic(generated: Generated, tmp_path: Path) -> No
 
 
 @pytest.mark.parametrize("existing_outputs", [False, True], ids=["new-directory", "existing-outputs"])
-def test_rejected_program_preserves_outputs(tmp_path: Path, *, existing_outputs: bool) -> None:
+@pytest.mark.parametrize("kernel", ["native_recurrence", "native_indirect_conflict", "native_square_collision"])
+def test_rejected_program_preserves_outputs(tmp_path: Path, kernel: str, *, existing_outputs: bool) -> None:
     output = tmp_path / "output"
     expected = {filename: f"original {filename}\n" for filename in OUTPUT_FILES} if existing_outputs else {}
     if existing_outputs:
         output.mkdir()
         for filename, contents in expected.items():
             (output / filename).write_text(contents)
-    source = FIXTURES / "native_recurrence.f90"
+    source = FIXTURES / f"{kernel}.f90"
     result = subprocess.run(
         [
             sys.executable,
@@ -244,7 +312,7 @@ def test_rejected_program_preserves_outputs(tmp_path: Path, *, existing_outputs:
             "--input",
             str(source),
             "--kernel",
-            "native_recurrence",
+            kernel,
             "--output-dir",
             str(output),
         ],
@@ -255,7 +323,7 @@ def test_rejected_program_preserves_outputs(tmp_path: Path, *, existing_outputs:
         timeout=30,
     )
     assert result.returncode != 0, result.stdout
-    assert re.search(r"native_recurrence\.f90:\d+", result.stderr), result.stderr
+    assert re.search(rf"{kernel}\.f90:\d+", result.stderr), result.stderr
     assert "arr" in result.stderr, result.stderr
     actual = {path.name: path.read_text() for path in output.iterdir()} if output.exists() else {}
     assert actual == expected
@@ -263,7 +331,9 @@ def test_rejected_program_preserves_outputs(tmp_path: Path, *, existing_outputs:
 
 @pytest.mark.native
 @pytest.mark.parametrize("openmp", [False, True], ids=["serial", "openmp"])
-def test_cpp_matches_fortran(generated: Generated, reference: list[float], tmp_path: Path, *, openmp: bool) -> None:
+def test_cpp_matches_fortran(
+    generated: Generated, reference: list[float | int], tmp_path: Path, *, openmp: bool
+) -> None:
     compiler = _tool("g++")
     objects = _fortran_objects(generated, tmp_path)
     cpp_object = tmp_path / "generated.o"
@@ -286,7 +356,11 @@ def test_cpp_matches_fortran(generated: Generated, reference: list[float], tmp_p
     )
     executable = tmp_path / "generated"
     _run([_tool("gfortran"), *objects, cpp_object, "-lstdc++", *flags, "-o", executable], tmp_path)
-    assert _values(executable, generated.case.count) == pytest.approx(reference, rel=0, abs=1e-10)
+    actual = _values(executable, generated.case)
+    if generated.case.integer_output:
+        assert actual == reference
+    else:
+        assert actual == pytest.approx(reference, rel=0, abs=1e-10)
 
 
 @pytest.fixture(scope="module")
@@ -354,8 +428,14 @@ int main() {
 @pytest.mark.native
 @pytest.mark.cuda
 @pytest.mark.usefixtures("cuda_device")
-def test_cuda_matches_fortran(generated: Generated, reference: list[float], cuda_object: Path, tmp_path: Path) -> None:
+def test_cuda_matches_fortran(
+    generated: Generated, reference: list[float | int], cuda_object: Path, tmp_path: Path
+) -> None:
     objects = _fortran_objects(generated, tmp_path)
     executable = tmp_path / "generated"
     _run([_tool("nvcc"), *objects, cuda_object, "-lgfortran", "-o", executable], tmp_path)
-    assert _values(executable, generated.case.count) == pytest.approx(reference, rel=0, abs=1e-10)
+    actual = _values(executable, generated.case)
+    if generated.case.integer_output:
+        assert actual == reference
+    else:
+        assert actual == pytest.approx(reference, rel=0, abs=1e-10)

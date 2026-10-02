@@ -41,6 +41,7 @@ class _Declaration:
     intent: str | None
     location: SourceLocation
     spelling: str
+    inferred_intent: bool = False
 
 
 @dataclass(frozen=True)
@@ -156,10 +157,12 @@ class _Lowerer:
     def declaration(self, node: Any, arguments: set[str]) -> list[_Declaration]:
         type_node, attributes, entities = node.items
         if type(type_node).__name__ != "Intrinsic_Type_Spec":
-            raise self.error("only INTEGER and REAL(knd) declarations are supported", node)
+            raise self.error("only INTEGER, REAL, and REAL(knd) declarations are supported", node)
         type_name, selector = type_node.items
         if str(type_name).upper() == "INTEGER" and selector is None:
             dtype = ScalarType.INTEGER
+        elif str(type_name).upper() == "REAL" and selector is None:
+            dtype = ScalarType.REAL32
         elif (
             str(type_name).upper() == "REAL"
             and selector is not None
@@ -168,7 +171,7 @@ class _Lowerer:
         ):
             dtype = ScalarType.REAL
         else:
-            raise self.error("only default INTEGER and REAL(knd) declarations are supported", node)
+            raise self.error("only default INTEGER, REAL, and REAL(knd) declarations are supported", node)
         intent: str | None = None
         dimensions = None
         contiguous = False
@@ -182,6 +185,10 @@ class _Lowerer:
                 dimensions = attribute.items[1]
             elif kind == "Attr_Spec" and str(attribute).upper() == "CONTIGUOUS":
                 contiguous = True
+            elif kind == "Attr_Spec" and str(attribute).upper() == "TARGET":
+                # Identity remains the Symbol itself. Pointer association is not
+                # supported, so TARGET does not change the computation model.
+                continue
             else:
                 raise self.error(f"unsupported declaration attribute {attribute}", node)
         result: list[_Declaration] = []
@@ -197,27 +204,37 @@ class _Lowerer:
             shape = entity_dimensions if entity_dimensions is not None else dimensions
             rank = 0
             if shape is not None:
-                if (
-                    type(shape).__name__ != "Assumed_Shape_Spec_List"
-                    or any(value.items != (None, None) for value in shape.items)
-                    or not 1 <= len(shape.items) <= 3
+                if type(shape).__name__ != "Assumed_Shape_Spec_List" or any(
+                    value.items != (None, None) for value in shape.items
                 ):
-                    raise self.error("arrays must have rank 1-3 with assumed shape ':' in every dimension", node)
+                    raise self.error("arrays must have assumed shape ':' in every dimension", node)
                 rank = len(shape.items)
-                if dtype != ScalarType.REAL:
-                    raise self.error("only REAL(knd) arrays are supported", node)
                 if name not in arguments:
                     raise self.error(f"local arrays are unsupported: {name}", node)
             elif contiguous:
                 raise self.error("CONTIGUOUS requires an array", node)
+            entity_intent = intent
             if name in arguments:
-                if intent not in {"in", "out", "inout"}:
-                    raise self.error(f"dummy argument {name} requires INTENT(IN), INTENT(OUT), or INTENT(INOUT)", node)
-                if rank == 0 and intent != "in":
+                # Unspecified array intent conservatively preserves both the
+                # input and output storage. Scalar dummies remain value inputs;
+                # any attempted write is diagnosed during lowering.
+                if entity_intent is None:
+                    entity_intent = "inout" if rank else "in"
+                if rank == 0 and entity_intent != "in":
                     raise self.error(f"writable scalar dummy arguments are unsupported: {name}", node)
             elif intent is not None:
                 raise self.error(f"INTENT is only valid for dummy arguments: {name}", node)
-            result.append(_Declaration(name, dtype, rank, intent, self.location(node), str(name_node)))
+            result.append(
+                _Declaration(
+                    name,
+                    dtype,
+                    rank,
+                    entity_intent,
+                    self.location(node),
+                    str(name_node),
+                    name in arguments and intent is None,
+                )
+            )
         return result
 
     def new_symbol(self, declaration: _Declaration, parameter: bool = False) -> Symbol:
@@ -287,7 +304,7 @@ class _Lowerer:
                 header = loop_nodes[0]
                 location = self.location(header, provenance)
                 if type(header).__name__ != "Nonlabel_Do_Stmt":
-                    raise CompilationError("only nonlabel unit-stride DO loops are supported", location)
+                    raise CompilationError("only nonlabel counted DO loops are supported", location)
                 control = header.items[1]
                 if (
                     control is None
@@ -295,7 +312,7 @@ class _Lowerer:
                     or control.items[1] is None
                     or any(value is not None for value in control.items[2:])
                 ):
-                    raise CompilationError("only counted unit-stride DO loops are supported", location)
+                    raise CompilationError("only counted DO loops are supported", location)
                 iterator_node, ranges = control.items[1]
                 iterator = self.lookup(iterator_node, bindings, location)
                 if iterator.rank or iterator.dtype != ScalarType.INTEGER:
@@ -304,12 +321,16 @@ class _Lowerer:
                     raise CompilationError("loop iterators must be writable local INTEGER scalars", location)
                 if iterator in active_iterators:
                     raise CompilationError("nested loops cannot reuse an active iterator", location)
+                step: Expr | int = 1
                 if len(ranges) == 3:
                     step = self.expression(ranges[2], bindings, location)
-                    if isinstance(step, Unary) and step.operator == "+":
-                        step = step.operand
-                    if not isinstance(step, Literal) or step.dtype != ScalarType.INTEGER or int(step.value) != 1:
-                        raise CompilationError("only unit stride (+1) DO loops are supported", location)
+                    if self.dtype(step) != ScalarType.INTEGER:
+                        raise CompilationError("loop strides must be INTEGER expressions", location)
+                    constant = step
+                    while isinstance(constant, Unary):
+                        constant = constant.operand
+                    if isinstance(constant, Literal) and int(constant.value) == 0:
+                        raise CompilationError("loop stride must not be zero", location)
                 lower = self.expression(ranges[0], bindings, location)
                 upper = self.expression(ranges[1], bindings, location)
                 if self.dtype(lower) != ScalarType.INTEGER or self.dtype(upper) != ScalarType.INTEGER:
@@ -323,7 +344,7 @@ class _Lowerer:
                     provenance,
                     active_iterators | {iterator},
                 )
-                statements.append(Loop(iterator, lower, upper, body, location))
+                statements.append(Loop(iterator, lower, upper, body, location, step))
             elif kind == "Call_Stmt":
                 name_node, argument_list = node.items
                 if type(name_node).__name__ != "Name":
@@ -353,8 +374,10 @@ class _Lowerer:
                             f"type or rank mismatch for argument {formal} of {callee.name}", location
                         )
                     actual_declaration = declarations[str(actual_node).lower()]
-                    if expected.intent in {"out", "inout"} and (
-                        actual.intent == "in" or actual_declaration.intent == "in" or actual in active_iterators
+                    if (
+                        expected.intent in {"out", "inout"}
+                        and not expected.inferred_intent
+                        and (actual.intent == "in" or actual_declaration.intent == "in" or actual in active_iterators)
                     ):
                         raise CompilationError(
                             f"writable argument {formal} of {callee.name} aliases a read-only variable", location
@@ -409,12 +432,21 @@ class _Lowerer:
             name, argument_list = node.items
             if str(name).upper() != "SIZE":
                 raise CompilationError(
-                    f"unsupported intrinsic {name}; only SIZE(array, literal_dimension) is supported", location
+                    f"unsupported intrinsic {name}; only SIZE(array[, literal_dimension]) is supported", location
                 )
             args = argument_list.items if argument_list is not None else ()
-            if len(args) != 2 or type(args[0]).__name__ != "Name" or type(args[1]).__name__ != "Int_Literal_Constant":
-                raise CompilationError("SIZE requires a whole array and a literal dimension", location)
+            if len(args) not in {1, 2} or type(args[0]).__name__ != "Name":
+                raise CompilationError("SIZE requires a whole array and an optional literal dimension", location)
             symbol = self.lookup(args[0], bindings, location)
+            if not symbol.rank:
+                raise CompilationError("SIZE requires an array", location)
+            if len(args) == 1:
+                total: Expr = Size(symbol, 1)
+                for dimension in range(2, symbol.rank + 1):
+                    total = Binary("*", total, Size(symbol, dimension))
+                return total
+            if type(args[1]).__name__ != "Int_Literal_Constant":
+                raise CompilationError("SIZE requires a whole array and an optional literal dimension", location)
             if args[1].items[1] is not None:
                 raise CompilationError("SIZE dimensions require default INTEGER literals without a kind", location)
             dimension = int(args[1].items[0])

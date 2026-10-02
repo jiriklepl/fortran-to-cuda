@@ -14,13 +14,13 @@ OUTPUTS = ("generated_code.cu", "generated_cpp_impl.cpp", "generated_interface.f
     ("body", "reason"),
     [
         ("if(n>0) a(1)=1.0_knd", "If_Stmt"),
-        ("do i=1,n,2\n a(i)=1.0_knd\nenddo", "unit stride"),
+        ("do i=1,n,0\n a(i)=1.0_knd\nenddo", "zero"),
         ("do i=2,n\n a(i)=a(i-1)\nenddo", "RAW"),
         ("do i=1,n\n a(1)=1.0_knd\nenddo", "WAW"),
         ("s=0.0_knd\ndo i=1,n\n s=s+a(i)\nenddo", "per-iteration definition"),
         ("do i=1,n\n s=a(i)\nenddo\nt=s", "live after"),
         ("do i=1,n\n a(i)=1.0_knd\nenddo\nt=i", "live after"),
-        ("do j=1,n\n do i=1,j\n a(i)=1.0_knd\n enddo\nenddo", "rectangular bounds"),
+        ("do j=1,n\n do i=1,j\n a(i)=1.0_knd\n enddo\nenddo", "WAW"),
     ],
 )
 def test_rejection_keeps_existing_output_files(tmp_path, body, reason):
