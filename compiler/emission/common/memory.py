@@ -32,6 +32,10 @@ def render_memory(
     lines: list[str] = []
     for operation in operations:
         kind = operation.kind
+        if operation.acquisition_policy not in (None, "dedicated", "pooled"):
+            raise ValueError(f"Unknown memory acquisition policy: {operation.acquisition_policy!r}")
+        if kind != "acquire" and operation.acquisition_policy is not None:
+            raise ValueError(f"Memory operation {kind} cannot contain an acquisition policy")
         if kind == "sync":
             lines.append("storage::synchronize();")
         elif kind == "branch":
@@ -51,10 +55,16 @@ def render_memory(
             for symbol in operation.symbols:
                 buffer = buffer_name(symbol)
                 if kind == "acquire":
+                    policy = (
+                        f", storage::AllocationPolicy::{operation.acquisition_policy}"
+                        if operation.acquisition_policy is not None
+                        else ""
+                    )
                     lines.append(
-                        f"{buffer_slot(symbol)}.emplace(std::initializer_list<std::size_t>{array_dimensions(symbol, stored=True)});"
+                        f"{buffer_slot(symbol)}.emplace(std::initializer_list<std::size_t>{array_dimensions(symbol, stored=True)}{policy});"
                     )
                 elif kind == "release":
+                    lines.append(f"{buffer}.release_completed();")
                     lines.append(f"{buffer_slot(symbol)}.reset();")
                 elif kind in {"upload", "download"}:
                     direction = "device" if kind == "upload" else "host"

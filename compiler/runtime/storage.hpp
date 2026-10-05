@@ -7,6 +7,8 @@
 #include <optional>
 #include <unordered_map>
 
+#include "allocation.hpp"
+
 namespace generated_kernels::storage {
 
 inline void trace(const char *operation, std::size_t bytes = 0) {
@@ -16,9 +18,12 @@ inline void trace(const char *operation, std::size_t bytes = 0) {
     }();
     if (!enabled)
         return;
+    static std::mutex trace_mutex;
+    std::lock_guard<std::mutex> lock(trace_mutex);
     std::cerr << "FORT_RUNTIME " << operation;
     if (std::strcmp(operation, "alloc") == 0 || std::strcmp(operation, "upload") == 0 ||
-        std::strcmp(operation, "download") == 0)
+        std::strcmp(operation, "download") == 0 || std::strcmp(operation, "pool_create") == 0 ||
+        std::strcmp(operation, "pool_alloc") == 0)
         std::cerr << " bytes=" << bytes;
     std::cerr << '\n';
 }
@@ -71,36 +76,30 @@ template <typename T> class Buffer {
     std::unique_ptr<T[]> host_;
     bool host_current_ = false;
 #ifdef __CUDACC__
+    std::optional<allocation_detail::DeviceAllocation> allocation_;
     T *device_ = nullptr;
     bool device_current_ = false;
 #endif
   public:
-    explicit Buffer(std::initializer_list<std::size_t> dimensions)
+    explicit Buffer(std::initializer_list<std::size_t> dimensions,
+                    AllocationPolicy policy = AllocationPolicy::dedicated)
         : dimensions_(dimensions), count_(product(dimensions)), bytes_(0) {
         if (count_ > std::numeric_limits<std::size_t>::max() / sizeof(T))
             fail("array byte size overflow");
         bytes_ = count_ * sizeof(T);
 #ifdef __CUDACC__
-        timing::measure_alloc([&]() {
-            if (bytes_) {
-                CUCH(cudaMalloc(reinterpret_cast<void **>(&device_), bytes_));
-                trace("alloc", bytes_);
-            }
-        });
+        allocation_.emplace(bytes_, policy);
+        device_ = static_cast<T *>(allocation_->get());
 #else
         host_.reset(new T[count_]);
 #endif
     }
     Buffer(const Buffer &) = delete;
     Buffer &operator=(const Buffer &) = delete;
-    ~Buffer() {
+    void release_completed() {
 #ifdef __CUDACC__
-        timing::measure_free([&]() {
-            if (device_) {
-                CUCH(cudaFree(device_));
-                trace("free");
-            }
-        });
+        allocation_->release_completed();
+        device_ = nullptr;
 #endif
     }
     std::size_t extent(std::size_t axis) const { return dimensions_.at(axis); }

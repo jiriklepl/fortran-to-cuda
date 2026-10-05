@@ -8,7 +8,8 @@ from compiler.emission.common.c_family import cpp_type, indent, render_assignmen
 from compiler.emission.common.loops import sequential_block
 from compiler.emission.common.memory import render_memory
 from compiler.emission.common.sessions import (
-    execution_name,
+    execution_definition,
+    lifecycle_definition,
     lifecycle_name,
     session_definitions,
     workspace_state_name,
@@ -36,9 +37,17 @@ def generate_cuda(
     common_header: str,
     *,
     memory: MemoryPlan | None = None,
+    ordinary_memory: MemoryPlan | None = None,
 ) -> str:
-    memory = memory or plan_memory(plan, function.parameters)
-    validate_memory(memory, function.parameters)
+    if memory is None:
+        memory = plan_memory(plan, function.parameters, acquisition_policy="dedicated")
+        if ordinary_memory is None:
+            ordinary_memory = plan_memory(plan, function.parameters, acquisition_policy="pooled")
+    elif ordinary_memory is None:
+        # A caller-supplied legacy plan remains authoritative for both APIs.
+        ordinary_memory = memory
+    validate_memory(memory, function.parameters, allow_pooled=False)
+    validate_memory(ordinary_memory, function.parameters)
     arrays = tuple(symbol for symbol in function.parameters if symbol.rank)
     scalars = tuple(symbol for symbol in function.parameters if not symbol.rank)
     lines = [
@@ -56,12 +65,26 @@ def generate_cuda(
     ]
     for region in plan.regions:
         lines.extend(generate_kernel(region))
-    run = [
-        "timing::record_run();",
-        *[f"{cpp_type(symbol)} {symbol.cpp_name};" for symbol in host_symbols(function, plan)],
-    ]
-    run.extend(render_memory(memory.run, device=True, execute=_execute))
-    lines.extend(session_definitions(function, run_body=run, device=True, memory=memory))
+
+    def run_body(operations):
+        return [
+            "timing::record_run();",
+            *[f"{cpp_type(symbol)} {symbol.cpp_name};" for symbol in host_symbols(function, plan)],
+            *render_memory(operations, device=True, execute=_execute),
+        ]
+
+    lines.extend(session_definitions(function, run_body=run_body(memory.run), device=True, memory=memory))
+    ordinary_helpers = {}
+    for phase in ("create", "run", "retrieve", "destroy"):
+        operations = getattr(ordinary_memory, phase)
+        if operations == getattr(memory, phase):
+            ordinary_helpers[phase] = lifecycle_name(function, phase)
+            continue
+        name = ordinary_helpers[phase] = lifecycle_name(function, "ordinary_" + phase)
+        if phase == "run":
+            lines.extend(execution_definition(function, run_body(operations), device=True, name=name))
+        else:
+            lines.extend(lifecycle_definition(function, phase, operations, device=True, name=name))
     lines.extend(
         [
             'extern "C" void cpp_start_hot() { reset_timing_vectors(); }',
@@ -80,10 +103,10 @@ def generate_cuda(
     dimensions = ", ".join(a.name for a in abi_arguments(arrays) if a.dimension is not None)
     lines.append(f"    {workspace_state_name(function)} fort_internal_state{{{dimensions}}};")
     array_arguments = ", ".join(["fort_internal_state", *[argument.name for argument in abi_arguments(arrays)]])
-    lines.append(f"    {lifecycle_name(function, 'create')}({array_arguments});")
+    lines.append(f"    {ordinary_helpers['create']}({array_arguments});")
     arguments = ", ".join(["fort_internal_state", *[symbol.cpp_name for symbol in scalars]])
-    lines.append(f"    {execution_name(function)}({arguments});")
-    lines.append(f"    {lifecycle_name(function, 'retrieve')}({array_arguments});")
-    lines.append(f"    {lifecycle_name(function, 'destroy')}(fort_internal_state);")
+    lines.append(f"    {ordinary_helpers['run']}({arguments});")
+    lines.append(f"    {ordinary_helpers['retrieve']}({array_arguments});")
+    lines.append(f"    {ordinary_helpers['destroy']}(fort_internal_state);")
     lines.extend(["}", "}", ""])
     return "\n".join(lines)

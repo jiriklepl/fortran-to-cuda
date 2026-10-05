@@ -21,6 +21,7 @@ class SessionNames:
     update_device: str
     update_host: str
     destroy: str
+    trim_cache: str
 
 
 def session_names(function: FunctionIR) -> SessionNames:
@@ -28,7 +29,7 @@ def session_names(function: FunctionIR) -> SessionNames:
     occupied.update(symbol.cpp_name.lower() for symbol in function.parameters)
     occupied.update((function.name.lower(), function.module.lower(), "start_hot", "finish_hot", "knd"))
     names = []
-    for suffix in ("workspace", "create", "run", "update_device", "update_host", "destroy"):
+    for suffix in ("workspace", "create", "run", "update_device", "update_host", "destroy", "trim_cache"):
         original = f"{function.name.lower()}_{suffix}"
         name = original
         salt = 0
@@ -68,9 +69,54 @@ def execution_name(function: FunctionIR) -> str:
     return lifecycle_name(function, "run")
 
 
+def lifecycle_definition(
+    function: FunctionIR,
+    phase: str,
+    operations: tuple[MemoryOperation, ...],
+    *,
+    device: bool,
+    name: str | None = None,
+) -> list[str]:
+    """Render one planned lifecycle phase for sessions or ordinary calls."""
+    arrays = tuple(symbol for symbol in function.parameters if symbol.rank)
+    arguments = [f"{workspace_state_name(function)}& fort_internal_state"]
+    if phase != "destroy":
+        arguments.extend(cpp_declaration(argument) for argument in abi_arguments(arrays))
+    return [
+        *_signature(name or lifecycle_name(function, phase), arguments, linkage="static"),
+        *indent(render_memory(operations, device=device)),
+        "}",
+        "",
+    ]
+
+
+def execution_definition(
+    function: FunctionIR, run_body: list[str], *, device: bool, name: str | None = None
+) -> list[str]:
+    """Expose owned storage and scalar arguments to a planned execution body."""
+    arrays = tuple(symbol for symbol in function.parameters if symbol.rank)
+    scalars = tuple(symbol for symbol in function.parameters if not symbol.rank)
+    lines = _signature(
+        name or execution_name(function),
+        [
+            f"{workspace_state_name(function)}& fort_internal_state",
+            *[cpp_declaration(AbiArgument(s)) for s in scalars],
+        ],
+        linkage="static",
+    )
+    for symbol in arrays:
+        lines.append(f"    {cpp_type(symbol)}* {symbol.cpp_name} = nullptr;")
+        if device:
+            lines.append(f"    {cpp_type(symbol)}* {symbol.cpp_name}_device = nullptr;")
+        for axis in range(1, symbol.rank + 1):
+            name = dimension_name(symbol, axis)
+            lines.append(f"    const std::size_t {name} = fort_internal_state.{name};")
+    return [*lines, *indent(run_body), "}", ""]
+
+
 def session_definitions(function: FunctionIR, *, run_body: list[str], device: bool, memory: MemoryPlan) -> list[str]:
     """Render state helpers and exported sessions after target kernel definitions."""
-    validate_memory(memory, function.parameters)
+    validate_memory(memory, function.parameters, allow_pooled=False)
     names = session_names(function)
     arrays = tuple(symbol for symbol in function.parameters if symbol.rank)
     scalars = tuple(symbol for symbol in function.parameters if not symbol.rank)
@@ -85,30 +131,9 @@ def session_definitions(function: FunctionIR, *, run_body: list[str], device: bo
     ctor_init = ", ".join(f"{argument.name}({argument.name})" for argument in dimensions)
     lines.append(f"    {state_type}({ctor_args})" + (f" : {ctor_init}" if dimensions else "") + " {}")
     lines.extend(["};", f"static storage::Registry<{state_type}> {registry};", ""])
-    state_argument = f"{state_type}& fort_internal_state"
     for phase, operations in (("create", memory.create), ("retrieve", memory.retrieve), ("destroy", memory.destroy)):
-        arguments = [state_argument]
-        if phase != "destroy":
-            arguments.extend(cpp_declaration(argument) for argument in array_abi)
-        lines.extend(_signature(lifecycle_name(function, phase), arguments, linkage="static"))
-        lines.extend(indent(render_memory(operations, device=device)))
-        lines.extend(["}", ""])
-    lines.extend(
-        _signature(
-            execution_name(function),
-            [state_argument, *[cpp_declaration(AbiArgument(s)) for s in scalars]],
-            linkage="static",
-        )
-    )
-    for symbol in arrays:
-        lines.append(f"    {cpp_type(symbol)}* {symbol.cpp_name} = nullptr;")
-        if device:
-            lines.append(f"    {cpp_type(symbol)}* {symbol.cpp_name}_device = nullptr;")
-        for axis in range(1, symbol.rank + 1):
-            name = dimension_name(symbol, axis)
-            lines.append(f"    const std::size_t {name} = fort_internal_state.{name};")
-    lines.extend(indent(run_body))
-    lines.extend(["}", ""])
+        lines.extend(lifecycle_definition(function, phase, operations, device=device))
+    lines.extend(execution_definition(function, run_body, device=device))
     lines.extend(
         _signature(
             "cpp_" + names.create,
@@ -163,4 +188,6 @@ def session_definitions(function: FunctionIR, *, run_body: list[str], device: bo
             "",
         ]
     )
+    lines.extend(_signature("cpp_" + names.trim_cache, [], profiled=device))
+    lines.extend(["    storage::trim_cache();", "}", ""])
     return lines

@@ -37,9 +37,10 @@ def generate_sources(
     if any(character in common_header for character in ('"', "\n", "\r")):
         raise CompilationError("Common header filename cannot contain quotes or newlines")
     abi = abi_arguments(function.parameters)
-    memory = plan_memory(plan, function.parameters)
+    memory = plan_memory(plan, function.parameters, acquisition_policy="dedicated")
+    ordinary_memory = plan_memory(plan, function.parameters, acquisition_policy="pooled")
     return GeneratedSources(
-        cuda=generate_cuda(function, plan, abi, common_header, memory=memory),
+        cuda=generate_cuda(function, plan, abi, common_header, memory=memory, ordinary_memory=ordinary_memory),
         cpp=generate_cpp(function, plan, abi, common_header) + append_cpu_sessions(function, plan, memory=memory),
         fortran=generate_fortran(function, abi),
     )
