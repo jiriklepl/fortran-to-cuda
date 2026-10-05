@@ -19,7 +19,7 @@ from compiler.ir import (
     statement_reads,
 )
 from compiler.ir.integers import constant_integer
-from compiler.ir.intrinsics import intrinsic_type
+from compiler.ir.intrinsics import intrinsic_kind, intrinsic_type
 
 from .effects import header_reads, loop_step
 
@@ -48,7 +48,10 @@ def _expression_type(expression, location):
         return ScalarType.INTEGER
     if isinstance(expression, IntrinsicCall):
         dtype = intrinsic_type(
-            expression.name, tuple(_expression_type(arg, location) for arg in expression.arguments), location
+            expression.name,
+            tuple(_expression_type(arg, location) for arg in expression.arguments),
+            location,
+            kind=intrinsic_kind(expression.name, expression.arguments, location),
         )
         if expression.dtype is not dtype:
             raise CompilationError("intrinsic result type does not match its signature", location)
