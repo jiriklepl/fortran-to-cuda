@@ -1,12 +1,12 @@
 # Fortran-to-CUDA/C++ compiler
 
-The compiler lowers annotated Fortran into immutable computation IR, validates
+The compiler lowers selected Fortran procedures into immutable computation IR, validates
 types and definite definitions, proves loop independence with `islpy`, and emits C++, CUDA,
 and a Fortran bridge from checked execution, scheduling, addressing, and memory plans.
 
 ```mermaid
 flowchart LR
-    F[Annotated Fortran] --> P[fparser frontend]
+    F[Fortran procedures] --> P[fparser frontend]
     P --> I[Typed computation IR]
     I --> A[Scalar lifetime and ISL conflicts]
     A --> T[Checked scalar motion and fusion]
@@ -86,6 +86,29 @@ python -m pip install -r requirements.txt
 python -m compiler --input fortran-stencils/elmm_cdu.f90 --kernel CDU --output-dir out --verbose
 ```
 
+`! kernels` and `! kernel` markers are optional. Select a module subroutine with
+`--kernel NAME`, or `--kernel MODULE::NAME` when several modules contain the same
+name. Reachable helpers in the same module are discovered and inlined without
+markers; unrelated unsupported routines remain untouched. The input must still
+parse as Fortran 2008. Use `--require-markers` for the previous strict selection
+contract, including markers on every reachable helper.
+
+Inspect candidates without generating files:
+
+```bash
+python -m compiler --input ordinary.f90 --list-candidates --json
+```
+
+The list reports every module subroutine, its marker status, and either successful
+generation eligibility or a rejection reason with source location. It runs the
+same semantic, dependence, scheduling, and emission checks as normal compilation,
+under the selected options. A rejected procedure is not a promise of automatic
+host fallback; the application integration must retain its native implementation.
+The Python `discover_file(path)` API reports the narrower frontend result in
+`ProcedureCandidate.lowerable`; callers must still run `prepare_function` and
+`generate_sources`. `lower_file(path, entry, require_markers=False)` preserves
+explicit entry selection and supports the same module qualification.
+
 Runtime dependencies include `fparser` and **`islpy==2026.2.2`**. Generated C++ uses
 C++17; add `-fopenmp` to enable its verified OpenMP loops. Compile without that
 flag for serial execution of the same generated implementation. CUDA uses one
@@ -102,8 +125,11 @@ python -m compiler --input FILE --kernel NAME [options]
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `--input`, `-i` | required | Annotated Fortran source file |
-| `--kernel`, `-k` | required | Entry subroutine, matched case-insensitively |
+| `--input`, `-i` | required | Fortran source file |
+| `--kernel`, `-k` | required except when listing | Entry subroutine or `module::name`, matched case-insensitively |
+| `--require-markers` | off | Require legacy file and routine markers |
+| `--list-candidates` | off | Report each module procedure's generation eligibility; write no files |
+| `--json` | off | Machine-readable candidate report; requires `--list-candidates` |
 | `--output-dir`, `-o` | current directory | Destination directory |
 | `--cuda-output` | `generated_code.cu` | CUDA kernels and host C wrapper |
 | `--cpp-output` | `generated_cpp_impl.cpp` | C++ implementation with OpenMP annotations |
@@ -225,8 +251,8 @@ allocations, transfers, launches, and releases to stderr for validation.
 
 ## Supported Fortran subset
 
-The first line must be `! kernels`. Each reachable subroutine must be annotated
-with `! kernel` in the same module:
+Module subroutines are selectable without annotations. Legacy markers remain
+accepted, and `--require-markers` makes them mandatory:
 
 ```fortran
 ! kernels
@@ -283,7 +309,7 @@ end module example
   parallel iterations. Identical squared affine subscripts, such as `a(i*i)`,
   receive a simple injectivity proof when every access shares that expression
   and its operand is proven nonnegative or nonpositive throughout the region.
-- Positional whole-variable calls to annotated helpers. Inlining creates fresh
+- Positional whole-variable calls to same-module helpers. Inlining creates fresh
   locals per call and preserves actual storage identities and case-insensitive
   Fortran name resolution.
 

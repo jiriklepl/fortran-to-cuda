@@ -336,14 +336,14 @@ def test_unsupported_called_declaration_has_call_provenance(tmp_path: Path) -> N
     assert "entry at" in str(failure.value)
 
 
-def test_unknown_unannotated_call_is_diagnosed(tmp_path: Path) -> None:
+def test_strict_mode_rejects_unannotated_call(tmp_path: Path) -> None:
     path = source_file(
         tmp_path,
         "subroutine helper\nend subroutine\n"
         + one_routine("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "call helper"),
     )
     with pytest.raises(CompilationError, match="unannotated or unknown"):
-        lower_file(path, "entry")
+        lower_file(path, "entry", require_markers=True)
 
 
 def test_annotation_contract(tmp_path: Path) -> None:
@@ -351,10 +351,10 @@ def test_annotation_contract(tmp_path: Path) -> None:
         tmp_path, one_routine("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", ""), annotated=False
     )
     with pytest.raises(CompilationError, match="begin with"):
-        lower_file(path, "entry")
+        lower_file(path, "entry", require_markers=True)
     path = source_file(tmp_path, "subroutine entry\nend subroutine entry")
     with pytest.raises(CompilationError, match="not found"):
-        lower_file(path, "entry")
+        lower_file(path, "entry", require_markers=True)
 
 
 @pytest.mark.parametrize("component", ["u", "v", "w"])
