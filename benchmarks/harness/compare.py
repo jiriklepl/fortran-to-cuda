@@ -40,10 +40,15 @@ class Variant:
     source: Path
     backend: str = "gnu"
     implementation: Path | None = None
+    kernels_per_call: int | None = None
 
     @property
     def accelerator(self) -> bool:
         return self.backend in {"openacc", "cuda"}
+
+    @property
+    def supports_resident(self) -> bool:
+        return self.backend == "openacc" or self.implementation is not None
 
 
 def tool(name: str) -> str:
@@ -55,7 +60,13 @@ def tool(name: str) -> str:
 
 def nvhpc_default() -> str:
     return shutil.which("nvfortran") or next(
-        (str(p) for p in sorted(Path("/opt/nvidia/hpc_sdk").glob("*/**/compilers/bin/nvfortran"), reverse=True)),
+        (
+            str(p)
+            for p in sorted(
+                Path("/opt/nvidia/hpc_sdk").glob("*/**/compilers/bin/nvfortran"),
+                reverse=True,
+            )
+        ),
         "nvfortran",
     )
 
@@ -69,6 +80,20 @@ def gpu_trace(stderr: str) -> dict[str, int]:
         "kernel_launches": kernels,
         "upload_bytes": sum(int(size) for size in re.findall(r"^upload CUDA data .*\bbytes=(\d+)", stderr, re.M)),
         "download_bytes": sum(int(size) for size in re.findall(r"^download CUDA data .*\bbytes=(\d+)", stderr, re.M)),
+    }
+
+
+def cuda_trace(stderr: str) -> dict[str, int]:
+    """Read successful local-runtime operations, never infer GPU work from availability."""
+    kernels = len(re.findall(r"^FORT_RUNTIME kernel\b", stderr, re.M))
+    if not kernels:
+        raise ValueError("Local CUDA implementation emitted no GPU kernel execution trace")
+    return {
+        "kernel_launches": kernels,
+        "allocations": len(re.findall(r"^FORT_RUNTIME alloc\b", stderr, re.M)),
+        "frees": len(re.findall(r"^FORT_RUNTIME free\b", stderr, re.M)),
+        "upload_bytes": sum(int(size) for size in re.findall(r"^FORT_RUNTIME upload bytes=(\d+)", stderr, re.M)),
+        "download_bytes": sum(int(size) for size in re.findall(r"^FORT_RUNTIME download bytes=(\d+)", stderr, re.M)),
     }
 
 
@@ -92,6 +117,13 @@ class Comparison:
             "source_sha256": {
                 c: hashlib.sha256((CASES / c / "Fortran" / SOURCES[c]).read_bytes()).hexdigest() for c in args.cases
             },
+            "compiler_sha256": {
+                str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in sorted((ROOT / "compiler").rglob("*"))
+                if path.is_file()
+                and path.suffix in {".py", ".hpp", ".cuh"}
+                and not {"tests", "debugging"}.intersection(path.relative_to(ROOT / "compiler").parts)
+            },
             "adapters": [],
             "correctness": [],
             "compilation": [],
@@ -101,7 +133,7 @@ class Comparison:
                 "native_optimization": "-O3; default FMA; no fast-math or LTO flags",
                 "timing": "synchronous wall time; deterministic inputs; consumed checksum",
                 "drop_in": "each call includes device data setup and output return",
-                "resident_batch": "two caller data directives; timer includes one upload/download round",
+                "resident_batch": "OpenACC data region or local session; timer includes setup, final retrieval and destruction",
                 "iterations": args.iterations,
                 "warmup": args.warmup,
                 "rounds": args.rounds,
@@ -115,15 +147,29 @@ class Comparison:
 
     def run(self, command, cwd: Path, *, trace: bool = False) -> str:
         command = list(map(str, command))
-        env = {**os.environ, "OMP_NUM_THREADS": "1", "OMP_DYNAMIC": "FALSE", "ACC_DEVICE_TYPE": "nvidia"}
+        env = {
+            **os.environ,
+            "OMP_NUM_THREADS": "1",
+            "OMP_DYNAMIC": "FALSE",
+            "ACC_DEVICE_TYPE": "nvidia",
+        }
         # Notifications are recorded only in validation runs, never timed runs.
         env.pop("NVCOMPILER_ACC_NOTIFY", None)
         env.pop("NVCOMPILER_ACC_TIME", None)
+        env.pop("FORT_RUNTIME_TRACE", None)
         if trace:
             env["NVCOMPILER_ACC_NOTIFY"] = "3"
+            env["FORT_RUNTIME_TRACE"] = "1"
         record = {"command": command, "cwd": str(cwd), "accelerator_trace": trace}
         self.commands.append(record)
-        result = subprocess.run(command, cwd=cwd, env=env, capture_output=True, text=True, timeout=self.args.timeout)
+        result = subprocess.run(
+            command,
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=self.args.timeout,
+        )
         record.update(returncode=result.returncode, stdout=result.stdout, stderr=result.stderr)
         if result.returncode:
             raise RuntimeError(f"Command failed ({result.returncode}): {' '.join(command)}\n{result.stderr}")
@@ -133,14 +179,34 @@ class Comparison:
         if variant.backend in {"nvfortran", "openacc"}:
             flags = ["-O3", "-cpp", "-module", str(directory), "-I", str(directory)]
             if variant.backend == "openacc":
-                flags += ["-acc=gpu", f"-gpu=cc{self.args.compute_capability}", "-Minfo=accel"]
+                flags += [
+                    "-acc=gpu",
+                    f"-gpu=cc{self.args.compute_capability}",
+                    "-Minfo=accel",
+                ]
             return self.tools["acc_fc"], flags
-        flags = ["-O3", "-cpp", "-ffree-line-length-none", "-J", str(directory), "-I", str(directory)]
+        flags = [
+            "-O3",
+            "-cpp",
+            "-ffree-line-length-none",
+            "-J",
+            str(directory),
+            "-I",
+            str(directory),
+        ]
         if checking:
             flags.append("-fcheck=bounds")
         return self.tools["fc"], flags
 
-    def build(self, case: str, variant: Variant, shape: tuple[int, int, int], *, timing=False, resident=False) -> Path:
+    def build(
+        self,
+        case: str,
+        variant: Variant,
+        shape: tuple[int, int, int],
+        *,
+        timing=False,
+        resident=False,
+    ) -> Path:
         # Modules depend on the implementation, not on the driver's grid. Reuse
         # them across grids while keeping correctness/timing instrumentation apart.
         kind = "timing" if timing else "correctness"
@@ -153,13 +219,27 @@ class Comparison:
             if variant.implementation:
                 obj = directory / "implementation.o"
                 if variant.backend == "cuda":
-                    command = [self.tools["nvcc"], "-O3", "-std=c++17", f"-arch=sm_{self.args.compute_capability}"]
+                    command = [
+                        self.tools["nvcc"],
+                        "-O3",
+                        "-std=c++17",
+                        f"-arch=sm_{self.args.compute_capability}",
+                    ]
                     if "cuda_host_cxx" in self.tools:
                         command += ["-ccbin", self.tools["cuda_host_cxx"]]
                 else:
                     command = [self.tools["cxx"], "-O3", "-std=c++17"]
                 self.run(
-                    [*command, "-I", variant.implementation.parent, "-c", variant.implementation, "-o", obj], directory
+                    [
+                        *command,
+                        "-I",
+                        variant.implementation.parent,
+                        "-c",
+                        variant.implementation,
+                        "-o",
+                        obj,
+                    ],
+                    directory,
                 )
                 objects.append(obj)
             obj = directory / "module.o"
@@ -170,9 +250,16 @@ class Comparison:
         driver_dir.mkdir()
         driver = driver_dir / "driver.f90"
         driver.write_text(
-            timing_driver(case, shape, self.args.iterations, self.args.warmup, resident=resident)
+            timing_driver(
+                case,
+                shape,
+                self.args.iterations,
+                self.args.warmup,
+                resident=resident,
+                session=variant.implementation is not None,
+            )
             if timing
-            else correctness_driver(case, resident=resident)
+            else correctness_driver(case, resident=resident, session=variant.implementation is not None)
         )
         definitions = [f"-DVAR_N{axis}={size}" for axis, size in zip("XYZ", shape, strict=True)]
         driver_obj = driver_dir / "driver.o"
@@ -194,16 +281,50 @@ class Comparison:
         directory.mkdir()
         source = CASES / case / "Fortran" / SOURCES[case]
         variants = [Variant("Fortran-GNU", source)]
-        local = directory / "local"
-        self.run([sys.executable, "-m", "compiler", "--input", source, "--kernel", case, "--output-dir", local], ROOT)
-        variants.append(
-            Variant("Local-C++", local / "generated_interface.f90", implementation=local / "generated_cpp_impl.cpp")
-        )
+        for level in (1, 0):
+            local = directory / f"local-opt{level}"
+            self.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "compiler",
+                    "--input",
+                    source,
+                    "--kernel",
+                    case,
+                    "--output-dir",
+                    local,
+                    "--opt-level",
+                    str(level),
+                ],
+                ROOT,
+            )
+            suffix = "" if level else "-unoptimized"
+            variants.append(
+                Variant(
+                    "Local-C++" + suffix,
+                    local / "generated_interface.f90",
+                    implementation=local / "generated_cpp_impl.cpp",
+                )
+            )
+            if self.args.gpu != "off":
+                variants.append(
+                    Variant(
+                        "Local-CUDA" + suffix,
+                        local / "generated_interface.f90",
+                        "cuda",
+                        local / "generated_code.cu",
+                        1 if level else 4,
+                    )
+                )
         if self.args.gpu != "off":
             variants += [
                 Variant("Fortran-NVHPC", source, "nvfortran"),
-                Variant("Handwritten-OpenACC", CASES / case / "Fortran-ACC" / SOURCES[case], "openacc"),
-                Variant("Local-CUDA", local / "generated_interface.f90", "cuda", local / "generated_code.cu"),
+                Variant(
+                    "Handwritten-OpenACC",
+                    CASES / case / "Fortran-ACC" / SOURCES[case],
+                    "openacc",
+                ),
             ]
         for name in self.args.tools:
             python = tool(getattr(self.args, f"{name}_python"))
@@ -242,7 +363,7 @@ class Comparison:
         for shape in self.args.grids:
             reference = None
             for variant in variants:
-                for resident in [False, True] if variant.backend == "openacc" and self.args.resident else [False]:
+                for resident in [False, True] if variant.supports_resident and self.args.resident else [False]:
                     if variant.accelerator and self.args.gpu == "compile":
                         if shape != self.args.grids[0]:
                             continue
@@ -259,9 +380,26 @@ class Comparison:
                         continue
                     binary = self.build(case, variant, shape, resident=resident)
                     actual = values(
-                        self.run([binary], binary.parent, trace=variant.backend == "openacc"), math.prod(shape)
+                        self.run([binary], binary.parent, trace=variant.accelerator),
+                        math.prod(shape),
                     )
-                    trace = gpu_trace(self.commands[-1]["stderr"]) if variant.backend == "openacc" else None
+                    trace = None
+                    if variant.backend == "openacc":
+                        trace = gpu_trace(self.commands[-1]["stderr"])
+                    elif variant.backend == "cuda":
+                        trace = cuda_trace(self.commands[-1]["stderr"])
+                        calls = 2 if resident else 1
+                        expected = {
+                            "kernel_launches": calls * variant.kernels_per_call,
+                            "allocations": 4,
+                            "frees": 4,
+                            "upload_bytes": 3 * 8 * math.prod(size + 2 for size in shape),
+                            "download_bytes": 8 * math.prod(size + 2 for size in shape),
+                        }
+                        if trace != expected:
+                            raise ValueError(
+                                f"Unexpected local CUDA operations: {case}/{variant.name}: {trace} != {expected}"
+                            )
                     if reference is None:
                         reference = actual
                     difference = compare_values(reference, actual)
@@ -289,7 +427,7 @@ class Comparison:
             for variant in variants:
                 if variant.accelerator and self.args.gpu != "run":
                     continue
-                for resident in [False, True] if variant.backend == "openacc" and self.args.resident else [False]:
+                for resident in [False, True] if variant.supports_resident and self.args.resident else [False]:
                     binary = self.build(case, variant, shape, timing=True, resident=resident)
                     samples, checksums = [], []
                     for _ in range(self.args.rounds):
@@ -356,20 +494,33 @@ class Comparison:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--tools", nargs="+", choices=["loki", "psyclone"], default=["loki", "psyclone"])
+    parser.add_argument(
+        "--tools",
+        nargs="*",
+        choices=["loki", "psyclone"],
+        default=["loki", "psyclone"],
+        help="External adapters to compare; pass --tools without names for local implementations only.",
+    )
     parser.add_argument("--loki-python", default="python")
     parser.add_argument("--psyclone-python", default="python")
     parser.add_argument("--cases", nargs="+", choices=list(SOURCES), default=list(SOURCES))
-    parser.add_argument("--grids", nargs="+", type=grid, default=[(5, 4, 3), (1, 1, 1), (16, 16, 16), (259, 7, 5)])
+    parser.add_argument(
+        "--grids",
+        nargs="+",
+        type=grid,
+        default=[(5, 4, 3), (1, 1, 1), (16, 16, 16), (259, 7, 5)],
+    )
     parser.add_argument("--timing-grids", nargs="*", type=grid, default=[])
     parser.add_argument("--gpu", choices=["off", "compile", "run"], default="off")
     parser.add_argument(
         "--resident",
         action="store_true",
-        help="also test two caller directives keeping arrays resident across a timed batch",
+        help="also test OpenACC data regions and local sessions keeping arrays resident across a timed batch",
     )
     parser.add_argument(
-        "--include-unfused", action="store_true", help="also measure straightforward four-pass OpenACC transformations"
+        "--include-unfused",
+        action="store_true",
+        help="also measure straightforward four-pass OpenACC transformations",
     )
     parser.add_argument("--fc", default="gfortran")
     parser.add_argument("--cxx", default="g++")

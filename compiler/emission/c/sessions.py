@@ -10,7 +10,7 @@ from compiler.memory import MemoryPlan, validate_memory
 
 
 def append_cpu_sessions(function: FunctionIR, plan: ExecutionPlan, *, memory: MemoryPlan) -> str:
-    validate_memory(memory, function.parameters)
+    validate_memory(memory, function.parameters, allow_pooled=False)
     run = [f"{cpp_type(symbol)} {symbol.cpp_name};" for symbol in host_symbols(function, plan)]
     run.extend(render_memory(memory.run, device=False, execute=lambda step: cpp_plan_lines(ExecutionPlan((step,)))))
     return "\n".join(

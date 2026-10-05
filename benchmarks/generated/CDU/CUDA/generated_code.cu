@@ -1,494 +1,415 @@
 #include <cuda_runtime.h>
 #include <cstddef>
-#include <iostream>
-
-#ifdef USE_PINNED_MEMORY
-#include <unordered_set>
-#endif
-
-#define MEASURE_CUDA_EXECUTION_TIME
+#include <cstdio>
+#include <cstdlib>
+#include <utility>
 #include "common_functions.cuh"
 
-using namespace generated_kernels::indexing;
-using namespace generated_kernels::timing;
-
-#ifdef USE_PINNED_MEMORY
-std::unordered_set<void*> pinned_ptrs;
-#endif
-
 namespace generated_kernels {
+using namespace indexing;
+using namespace timing;
 
-__global__ 
-void kernel_group_1_device(
-    int unz,
-    int unx,
-    double zero,
-    double* __restrict__ u2, size_t u2_dim1, size_t u2_dim2, size_t u2_dim3,
-    int uny,
-    int k_from, int k_to,
-    int j_from, int j_to,
-    int i_from, int i_to,
-    size_t total_elements
+__global__ void kernel_region_0_device(
+    double* __restrict__ fort_v0_u2,
+    std::size_t fort_v0_u2_dim1,
+    std::size_t fort_v0_u2_dim2,
+    std::size_t fort_v0_u2_dim3,
+    const double* __restrict__ fort_v1_u,
+    std::size_t fort_v1_u_dim1,
+    std::size_t fort_v1_u_dim2,
+    std::size_t fort_v1_u_dim3,
+    const double* __restrict__ fort_v2_v,
+    std::size_t fort_v2_v_dim1,
+    std::size_t fort_v2_v_dim2,
+    std::size_t fort_v2_v_dim3,
+    const double* __restrict__ fort_v3_w,
+    std::size_t fort_v3_w_dim1,
+    std::size_t fort_v3_w_dim2,
+    std::size_t fort_v3_w_dim3,
+    int fort_v7_unx,
+    int fort_v8_uny,
+    int fort_v9_unz,
+    double fort_v10_zero,
+    double fort_v11_half,
+    double fort_v15_ax,
+    double fort_v16_ay,
+    double fort_v17_az,
+    double fort_v21_ax,
+    double fort_v22_ay,
+    double fort_v23_az,
+    int fort_internal_lower0,
+    int fort_internal_stride0,
+    std::size_t fort_internal_extent0,
+    int fort_internal_lower1,
+    int fort_internal_stride1,
+    std::size_t fort_internal_extent1,
+    int fort_internal_lower2,
+    int fort_internal_stride2,
+    std::size_t fort_internal_extent2,
+    std::size_t fort_internal_total
 ) {
-    // 1D Thread Index
-    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    // Ensure we don't go out of bounds
-    if (idx >= total_elements) {
-        return;
+    const std::size_t fort_internal_grid_stride = static_cast<std::size_t>(gridDim.x) * blockDim.x;
+    std::size_t fort_internal_point = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+    while (fort_internal_point < fort_internal_total) {
+        std::size_t fort_internal_index = fort_internal_point;
+        const std::size_t fort_internal_ordinal2 = fort_internal_index % fort_internal_extent2;
+        fort_internal_index /= fort_internal_extent2;
+        const std::size_t fort_internal_ordinal1 = fort_internal_index % fort_internal_extent1;
+        fort_internal_index /= fort_internal_extent1;
+        const std::size_t fort_internal_ordinal0 = fort_internal_index % fort_internal_extent0;
+        fort_internal_index /= fort_internal_extent0;
+        const int fort_v14_k = static_cast<int>(static_cast<long long>(fort_internal_lower0) + static_cast<long long>(fort_internal_ordinal0) * fort_internal_stride0);
+        const int fort_v13_j = static_cast<int>(static_cast<long long>(fort_internal_lower1) + static_cast<long long>(fort_internal_ordinal1) * fort_internal_stride1);
+        const int fort_v12_i = static_cast<int>(static_cast<long long>(fort_internal_lower2) + static_cast<long long>(fort_internal_ordinal2) * fort_internal_stride2);
+        double fort_v24_vadv;
+        double fort_v25_wadv;
+        fort_v0_u2[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v0_u2_dim1, fort_v0_u2_dim2, fort_v0_u2_dim3)] = fort_v10_zero;
+        fort_v0_u2[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v0_u2_dim1, fort_v0_u2_dim2, fort_v0_u2_dim3)] = (-(((((fort_v15_ax * (fort_v1_u[F_IDX((fort_v12_i + 1), fort_v13_j, fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)] + fort_v1_u[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)])) * (fort_v1_u[F_IDX((fort_v12_i + 1), fort_v13_j, fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)] + fort_v1_u[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)])) - ((fort_v15_ax * (fort_v1_u[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)] + fort_v1_u[F_IDX((fort_v12_i - 1), fort_v13_j, fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)])) * (fort_v1_u[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)] + fort_v1_u[F_IDX((fort_v12_i - 1), fort_v13_j, fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)]))) + (((fort_v16_ay * (fort_v1_u[F_IDX(fort_v12_i, (fort_v13_j + 1), fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)] + fort_v1_u[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)])) * (fort_v2_v[F_IDX((fort_v12_i + 1), fort_v13_j, fort_v14_k, fort_v2_v_dim1, fort_v2_v_dim2, fort_v2_v_dim3)] + fort_v2_v[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v2_v_dim1, fort_v2_v_dim2, fort_v2_v_dim3)])) - ((fort_v16_ay * (fort_v1_u[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)] + fort_v1_u[F_IDX(fort_v12_i, (fort_v13_j - 1), fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)])) * (fort_v2_v[F_IDX((fort_v12_i + 1), (fort_v13_j - 1), fort_v14_k, fort_v2_v_dim1, fort_v2_v_dim2, fort_v2_v_dim3)] + fort_v2_v[F_IDX(fort_v12_i, (fort_v13_j - 1), fort_v14_k, fort_v2_v_dim1, fort_v2_v_dim2, fort_v2_v_dim3)])))) + (((fort_v17_az * (fort_v1_u[F_IDX(fort_v12_i, fort_v13_j, (fort_v14_k + 1), fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)] + fort_v1_u[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)])) * (fort_v3_w[F_IDX((fort_v12_i + 1), fort_v13_j, fort_v14_k, fort_v3_w_dim1, fort_v3_w_dim2, fort_v3_w_dim3)] + fort_v3_w[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v3_w_dim1, fort_v3_w_dim2, fort_v3_w_dim3)])) - ((fort_v17_az * (fort_v1_u[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)] + fort_v1_u[F_IDX(fort_v12_i, fort_v13_j, (fort_v14_k - 1), fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)])) * (fort_v3_w[F_IDX((fort_v12_i + 1), fort_v13_j, (fort_v14_k - 1), fort_v3_w_dim1, fort_v3_w_dim2, fort_v3_w_dim3)] + fort_v3_w[F_IDX(fort_v12_i, fort_v13_j, (fort_v14_k - 1), fort_v3_w_dim1, fort_v3_w_dim2, fort_v3_w_dim3)])))));
+        fort_v24_vadv = (((fort_v2_v[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v2_v_dim1, fort_v2_v_dim2, fort_v2_v_dim3)] + fort_v2_v[F_IDX((fort_v12_i + 1), fort_v13_j, fort_v14_k, fort_v2_v_dim1, fort_v2_v_dim2, fort_v2_v_dim3)]) + fort_v2_v[F_IDX(fort_v12_i, (fort_v13_j - 1), fort_v14_k, fort_v2_v_dim1, fort_v2_v_dim2, fort_v2_v_dim3)]) + fort_v2_v[F_IDX((fort_v12_i + 1), (fort_v13_j - 1), fort_v14_k, fort_v2_v_dim1, fort_v2_v_dim2, fort_v2_v_dim3)]);
+        fort_v25_wadv = (((fort_v3_w[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v3_w_dim1, fort_v3_w_dim2, fort_v3_w_dim3)] + fort_v3_w[F_IDX((fort_v12_i + 1), fort_v13_j, fort_v14_k, fort_v3_w_dim1, fort_v3_w_dim2, fort_v3_w_dim3)]) + fort_v3_w[F_IDX(fort_v12_i, fort_v13_j, (fort_v14_k - 1), fort_v3_w_dim1, fort_v3_w_dim2, fort_v3_w_dim3)]) + fort_v3_w[F_IDX((fort_v12_i + 1), fort_v13_j, (fort_v14_k - 1), fort_v3_w_dim1, fort_v3_w_dim2, fort_v3_w_dim3)]);
+        fort_v0_u2[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v0_u2_dim1, fort_v0_u2_dim2, fort_v0_u2_dim3)] = (fort_v0_u2[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v0_u2_dim1, fort_v0_u2_dim2, fort_v0_u2_dim3)] - ((((fort_v21_ax * (fort_v1_u[F_IDX((fort_v12_i + 1), fort_v13_j, fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)] - fort_v1_u[F_IDX((fort_v12_i - 1), fort_v13_j, fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)])) * fort_v1_u[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)]) + ((fort_v22_ay * (fort_v1_u[F_IDX(fort_v12_i, (fort_v13_j + 1), fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)] - fort_v1_u[F_IDX(fort_v12_i, (fort_v13_j - 1), fort_v14_k, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)])) * fort_v24_vadv)) + ((fort_v23_az * (fort_v1_u[F_IDX(fort_v12_i, fort_v13_j, (fort_v14_k + 1), fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)] - fort_v1_u[F_IDX(fort_v12_i, fort_v13_j, (fort_v14_k - 1), fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3)])) * fort_v25_wadv)));
+        fort_v0_u2[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v0_u2_dim1, fort_v0_u2_dim2, fort_v0_u2_dim3)] = (fort_v0_u2[F_IDX(fort_v12_i, fort_v13_j, fort_v14_k, fort_v0_u2_dim1, fort_v0_u2_dim2, fort_v0_u2_dim3)] * fort_v11_half);
+        if (fort_internal_total - fort_internal_point <= fort_internal_grid_stride) break;
+        fort_internal_point += fort_internal_grid_stride;
     }
-
-    // Declarations of local variables used in the kernel body
-    int i;
-    int j;
-    int k;
-
-    // Map the 1D index back to column-major multi-dimensional coordinates
-    constexpr int k_step = 1;
-        constexpr int j_step = 1;
-        constexpr int i_step = 1;
-    size_t current_idx = idx;
-    
-    // Calculate index for 'i' dimension
-    int num_i = ((i_to - i_from + i_step) / i_step);
-    int local_i = current_idx % num_i;
-    i = i_from + local_i * i_step;
-    current_idx /= num_i;
-    
-    // Calculate index for 'j' dimension
-    int num_j = ((j_to - j_from + j_step) / j_step);
-    int local_j = current_idx % num_j;
-    j = j_from + local_j * j_step;
-    current_idx /= num_j;
-    
-    // Calculate index for 'k' dimension
-    int num_k = ((k_to - k_from + k_step) / k_step);
-    int local_k = current_idx;
-    k = k_from + local_k * k_step;
-
-    // Perform the calculation
-    u2[F_IDX(i, j, k, u2_dim1, u2_dim2, u2_dim3)] = zero;
-    
 }
 
-__global__ 
-void kernel_group_3_device(
-    int unz,
-    double az,
-    double* __restrict__ w, size_t w_dim1, size_t w_dim2, size_t w_dim3,
-    double ax,
-    int unx,
-    double* __restrict__ v, size_t v_dim1, size_t v_dim2, size_t v_dim3,
-    double* __restrict__ u, size_t u_dim1, size_t u_dim2, size_t u_dim3,
-    double* __restrict__ u2, size_t u2_dim1, size_t u2_dim2, size_t u2_dim3,
-    double ay,
-    int uny,
-    int k_from, int k_to,
-    int j_from, int j_to,
-    int i_from, int i_to,
-    size_t total_elements
+struct fort_internal_cdu_workspace_state {
+    storage::Buffer<double> fort_v0_u2;
+    storage::Buffer<double> fort_v1_u;
+    storage::Buffer<double> fort_v2_v;
+    storage::Buffer<double> fort_v3_w;
+    fort_internal_cdu_workspace_state(std::size_t fort_v0_u2_dim1, std::size_t fort_v0_u2_dim2, std::size_t fort_v0_u2_dim3, std::size_t fort_v1_u_dim1, std::size_t fort_v1_u_dim2, std::size_t fort_v1_u_dim3, std::size_t fort_v2_v_dim1, std::size_t fort_v2_v_dim2, std::size_t fort_v2_v_dim3, std::size_t fort_v3_w_dim1, std::size_t fort_v3_w_dim2, std::size_t fort_v3_w_dim3) : fort_v0_u2({fort_v0_u2_dim1, fort_v0_u2_dim2, fort_v0_u2_dim3}), fort_v1_u({fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3}), fort_v2_v({fort_v2_v_dim1, fort_v2_v_dim2, fort_v2_v_dim3}), fort_v3_w({fort_v3_w_dim1, fort_v3_w_dim2, fort_v3_w_dim3}) {}
+};
+static storage::Registry<fort_internal_cdu_workspace_state> fort_internal_cdu_workspace_registry;
+
+extern "C" std::int64_t cpp_cdu_create(
+    double* __restrict__ fort_v0_u2,
+    std::size_t fort_v0_u2_dim1,
+    std::size_t fort_v0_u2_dim2,
+    std::size_t fort_v0_u2_dim3,
+    const double* __restrict__ fort_v1_u,
+    std::size_t fort_v1_u_dim1,
+    std::size_t fort_v1_u_dim2,
+    std::size_t fort_v1_u_dim3,
+    const double* __restrict__ fort_v2_v,
+    std::size_t fort_v2_v_dim1,
+    std::size_t fort_v2_v_dim2,
+    std::size_t fort_v2_v_dim3,
+    const double* __restrict__ fort_v3_w,
+    std::size_t fort_v3_w_dim1,
+    std::size_t fort_v3_w_dim2,
+    std::size_t fort_v3_w_dim3
 ) {
-    // 1D Thread Index
-    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    // Ensure we don't go out of bounds
-    if (idx >= total_elements) {
-        return;
-    }
-
-    // Declarations of local variables used in the kernel body
-    int i;
-    int j;
-    int k;
-
-    // Map the 1D index back to column-major multi-dimensional coordinates
-    constexpr int k_step = 1;
-        constexpr int j_step = 1;
-        constexpr int i_step = 1;
-    size_t current_idx = idx;
-    
-    // Calculate index for 'i' dimension
-    int num_i = ((i_to - i_from + i_step) / i_step);
-    int local_i = current_idx % num_i;
-    i = i_from + local_i * i_step;
-    current_idx /= num_i;
-    
-    // Calculate index for 'j' dimension
-    int num_j = ((j_to - j_from + j_step) / j_step);
-    int local_j = current_idx % num_j;
-    j = j_from + local_j * j_step;
-    current_idx /= num_j;
-    
-    // Calculate index for 'k' dimension
-    int num_k = ((k_to - k_from + k_step) / k_step);
-    int local_k = current_idx;
-    k = k_from + local_k * k_step;
-
-    // Perform the calculation
-    u2[F_IDX(i, j, k, u2_dim1, u2_dim2, u2_dim3)] = (-(((((((ax * ((u[F_IDX((i + 1), j, k, u_dim1, u_dim2, u_dim3)] + u[F_IDX(i, j, k, u_dim1, u_dim2, u_dim3)]))) * ((u[F_IDX((i + 1), j, k, u_dim1, u_dim2, u_dim3)] + u[F_IDX(i, j, k, u_dim1, u_dim2, u_dim3)]))) - ((ax * ((u[F_IDX(i, j, k, u_dim1, u_dim2, u_dim3)] + u[F_IDX((i - 1), j, k, u_dim1, u_dim2, u_dim3)]))) * ((u[F_IDX(i, j, k, u_dim1, u_dim2, u_dim3)] + u[F_IDX((i - 1), j, k, u_dim1, u_dim2, u_dim3)]))))) + ((((ay * ((u[F_IDX(i, (j + 1), k, u_dim1, u_dim2, u_dim3)] + u[F_IDX(i, j, k, u_dim1, u_dim2, u_dim3)]))) * ((v[F_IDX((i + 1), j, k, v_dim1, v_dim2, v_dim3)] + v[F_IDX(i, j, k, v_dim1, v_dim2, v_dim3)]))) - ((ay * ((u[F_IDX(i, j, k, u_dim1, u_dim2, u_dim3)] + u[F_IDX(i, (j - 1), k, u_dim1, u_dim2, u_dim3)]))) * ((v[F_IDX((i + 1), (j - 1), k, v_dim1, v_dim2, v_dim3)] + v[F_IDX(i, (j - 1), k, v_dim1, v_dim2, v_dim3)])))))) + ((((az * ((u[F_IDX(i, j, (k + 1), u_dim1, u_dim2, u_dim3)] + u[F_IDX(i, j, k, u_dim1, u_dim2, u_dim3)]))) * ((w[F_IDX((i + 1), j, k, w_dim1, w_dim2, w_dim3)] + w[F_IDX(i, j, k, w_dim1, w_dim2, w_dim3)]))) - ((az * ((u[F_IDX(i, j, k, u_dim1, u_dim2, u_dim3)] + u[F_IDX(i, j, (k - 1), u_dim1, u_dim2, u_dim3)]))) * ((w[F_IDX((i + 1), j, (k - 1), w_dim1, w_dim2, w_dim3)] + w[F_IDX(i, j, (k - 1), w_dim1, w_dim2, w_dim3)]))))))));
-    
+    const auto fort_internal_token = fort_internal_cdu_workspace_registry.create(fort_v0_u2_dim1, fort_v0_u2_dim2, fort_v0_u2_dim3, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3, fort_v2_v_dim1, fort_v2_v_dim2, fort_v2_v_dim3, fort_v3_w_dim1, fort_v3_w_dim2, fort_v3_w_dim3);
+    auto& fort_internal_state = fort_internal_cdu_workspace_registry.get(fort_internal_token);
+    fort_internal_state.fort_v1_u.update_device(fort_v1_u, {fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3});
+    fort_internal_state.fort_v2_v.update_device(fort_v2_v, {fort_v2_v_dim1, fort_v2_v_dim2, fort_v2_v_dim3});
+    fort_internal_state.fort_v3_w.update_device(fort_v3_w, {fort_v3_w_dim1, fort_v3_w_dim2, fort_v3_w_dim3});
+    return fort_internal_token;
 }
 
-__global__ 
-void kernel_group_5_device(
-    double az,
-    int unz,
-    double ax,
-    double* __restrict__ w, size_t w_dim1, size_t w_dim2, size_t w_dim3,
-    int unx,
-    double* __restrict__ v, size_t v_dim1, size_t v_dim2, size_t v_dim3,
-    double* __restrict__ u, size_t u_dim1, size_t u_dim2, size_t u_dim3,
-    double ay,
-    double* __restrict__ u2, size_t u2_dim1, size_t u2_dim2, size_t u2_dim3,
-    int uny,
-    int k_from, int k_to,
-    int j_from, int j_to,
-    int i_from, int i_to,
-    size_t total_elements
+extern "C" void cpp_cdu_run(
+    std::int64_t fort_internal_token,
+    double fort_v4_dxmin,
+    double fort_v5_dymin,
+    double fort_v6_dzmin,
+    int fort_v7_unx,
+    int fort_v8_uny,
+    int fort_v9_unz
 ) {
-    // 1D Thread Index
-    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    // Ensure we don't go out of bounds
-    if (idx >= total_elements) {
-        return;
-    }
-
-    // Declarations of local variables used in the kernel body
-    int i;
-    int j;
-    int k;
-    double vadv;
-    double wadv;
-
-    // Map the 1D index back to column-major multi-dimensional coordinates
-    constexpr int k_step = 1;
-        constexpr int j_step = 1;
-        constexpr int i_step = 1;
-    size_t current_idx = idx;
-    
-    // Calculate index for 'i' dimension
-    int num_i = ((i_to - i_from + i_step) / i_step);
-    int local_i = current_idx % num_i;
-    i = i_from + local_i * i_step;
-    current_idx /= num_i;
-    
-    // Calculate index for 'j' dimension
-    int num_j = ((j_to - j_from + j_step) / j_step);
-    int local_j = current_idx % num_j;
-    j = j_from + local_j * j_step;
-    current_idx /= num_j;
-    
-    // Calculate index for 'k' dimension
-    int num_k = ((k_to - k_from + k_step) / k_step);
-    int local_k = current_idx;
-    k = k_from + local_k * k_step;
-
-    // Perform the calculation
-    vadv = ((((v[F_IDX(i, j, k, v_dim1, v_dim2, v_dim3)] + v[F_IDX((i + 1), j, k, v_dim1, v_dim2, v_dim3)]) + v[F_IDX(i, (j - 1), k, v_dim1, v_dim2, v_dim3)]) + v[F_IDX((i + 1), (j - 1), k, v_dim1, v_dim2, v_dim3)]));
-    wadv = ((((w[F_IDX(i, j, k, w_dim1, w_dim2, w_dim3)] + w[F_IDX((i + 1), j, k, w_dim1, w_dim2, w_dim3)]) + w[F_IDX(i, j, (k - 1), w_dim1, w_dim2, w_dim3)]) + w[F_IDX((i + 1), j, (k - 1), w_dim1, w_dim2, w_dim3)]));
-    u2[F_IDX(i, j, k, u2_dim1, u2_dim2, u2_dim3)] = (u2[F_IDX(i, j, k, u2_dim1, u2_dim2, u2_dim3)] - (((((ax * ((u[F_IDX((i + 1), j, k, u_dim1, u_dim2, u_dim3)] - u[F_IDX((i - 1), j, k, u_dim1, u_dim2, u_dim3)]))) * u[F_IDX(i, j, k, u_dim1, u_dim2, u_dim3)]) + ((ay * ((u[F_IDX(i, (j + 1), k, u_dim1, u_dim2, u_dim3)] - u[F_IDX(i, (j - 1), k, u_dim1, u_dim2, u_dim3)]))) * vadv)) + ((az * ((u[F_IDX(i, j, (k + 1), u_dim1, u_dim2, u_dim3)] - u[F_IDX(i, j, (k - 1), u_dim1, u_dim2, u_dim3)]))) * wadv))));
-    
+    auto& fort_internal_state = fort_internal_cdu_workspace_registry.get(fort_internal_token);
+    double* fort_v0_u2 = nullptr;
+    double* fort_v0_u2_device = nullptr;
+    const std::size_t fort_v0_u2_dim1 = fort_internal_state.fort_v0_u2.extent(0);
+    const std::size_t fort_v0_u2_dim2 = fort_internal_state.fort_v0_u2.extent(1);
+    const std::size_t fort_v0_u2_dim3 = fort_internal_state.fort_v0_u2.extent(2);
+    double* fort_v1_u = nullptr;
+    double* fort_v1_u_device = nullptr;
+    const std::size_t fort_v1_u_dim1 = fort_internal_state.fort_v1_u.extent(0);
+    const std::size_t fort_v1_u_dim2 = fort_internal_state.fort_v1_u.extent(1);
+    const std::size_t fort_v1_u_dim3 = fort_internal_state.fort_v1_u.extent(2);
+    double* fort_v2_v = nullptr;
+    double* fort_v2_v_device = nullptr;
+    const std::size_t fort_v2_v_dim1 = fort_internal_state.fort_v2_v.extent(0);
+    const std::size_t fort_v2_v_dim2 = fort_internal_state.fort_v2_v.extent(1);
+    const std::size_t fort_v2_v_dim3 = fort_internal_state.fort_v2_v.extent(2);
+    double* fort_v3_w = nullptr;
+    double* fort_v3_w_device = nullptr;
+    const std::size_t fort_v3_w_dim1 = fort_internal_state.fort_v3_w.extent(0);
+    const std::size_t fort_v3_w_dim2 = fort_internal_state.fort_v3_w.extent(1);
+    const std::size_t fort_v3_w_dim3 = fort_internal_state.fort_v3_w.extent(2);
+    double fort_v10_zero;
+    double fort_v11_half;
+    double fort_v15_ax;
+    double fort_v16_ay;
+    double fort_v17_az;
+    double fort_v21_ax;
+    double fort_v22_ay;
+    double fort_v23_az;
+    measure_kernel_executions([&]() {
+        fort_v10_zero = 0.0;
+        fort_v11_half = 0.5;
+        fort_v15_ax = (0.25 / fort_v4_dxmin);
+        fort_v16_ay = (0.25 / fort_v5_dymin);
+        fort_v17_az = (0.25 / fort_v6_dzmin);
+        fort_v21_ax = (0.5 / fort_v4_dxmin);
+        fort_v22_ay = (0.125 / fort_v5_dymin);
+        fort_v23_az = (0.125 / fort_v6_dzmin);
+        fort_v0_u2_device = fort_internal_state.fort_v0_u2.device_data();
+        fort_v1_u_device = fort_internal_state.fort_v1_u.device_data();
+        fort_v2_v_device = fort_internal_state.fort_v2_v.device_data();
+        fort_v3_w_device = fort_internal_state.fort_v3_w.device_data();
+        {
+            // Scheduled parallel region 0.
+            const int fort_internal_lower0 = 2;
+            const int fort_internal_upper0 = (fort_v9_unz + 1);
+            const int fort_internal_stride0 = 1;
+            if (fort_internal_stride0 == 0) {
+                std::cerr << "/home/jirka/research/fortran-abomination/benchmarks/cases/CDU/Fortran/cdu.f90:18 (inlined through CDU at /home/jirka/research/fortran-abomination/benchmarks/cases/CDU/Fortran/cdu.f90:116 -> set): DO stride must be nonzero" << std::endl;
+                std::abort();
+            }
+            const std::size_t fort_internal_extent0 = fort_internal_stride0 > 0 && fort_internal_upper0 >= fort_internal_lower0
+                ? static_cast<std::size_t>((static_cast<long long>(fort_internal_upper0) - fort_internal_lower0) / fort_internal_stride0 + 1)
+                : fort_internal_stride0 < 0 && fort_internal_lower0 >= fort_internal_upper0
+                    ? static_cast<std::size_t>((static_cast<long long>(fort_internal_lower0) - fort_internal_upper0)
+                        / -static_cast<long long>(fort_internal_stride0) + 1) : 0;
+            const int fort_internal_lower1 = (fort_internal_extent0 > 0) ? (2) : 0;
+            const int fort_internal_upper1 = (fort_internal_extent0 > 0) ? ((fort_v8_uny + 1)) : 0;
+            const int fort_internal_stride1 = (fort_internal_extent0 > 0) ? (1) : 0;
+            if ((fort_internal_extent0 > 0) && fort_internal_stride1 == 0) {
+                std::cerr << "/home/jirka/research/fortran-abomination/benchmarks/cases/CDU/Fortran/cdu.f90:19 (inlined through CDU at /home/jirka/research/fortran-abomination/benchmarks/cases/CDU/Fortran/cdu.f90:116 -> set): DO stride must be nonzero" << std::endl;
+                std::abort();
+            }
+            const std::size_t fort_internal_extent1 = fort_internal_stride1 > 0 && fort_internal_upper1 >= fort_internal_lower1
+                ? static_cast<std::size_t>((static_cast<long long>(fort_internal_upper1) - fort_internal_lower1) / fort_internal_stride1 + 1)
+                : fort_internal_stride1 < 0 && fort_internal_lower1 >= fort_internal_upper1
+                    ? static_cast<std::size_t>((static_cast<long long>(fort_internal_lower1) - fort_internal_upper1)
+                        / -static_cast<long long>(fort_internal_stride1) + 1) : 0;
+            const int fort_internal_lower2 = (fort_internal_extent0 > 0 && fort_internal_extent1 > 0) ? (2) : 0;
+            const int fort_internal_upper2 = (fort_internal_extent0 > 0 && fort_internal_extent1 > 0) ? ((fort_v7_unx + 1)) : 0;
+            const int fort_internal_stride2 = (fort_internal_extent0 > 0 && fort_internal_extent1 > 0) ? (1) : 0;
+            if ((fort_internal_extent0 > 0 && fort_internal_extent1 > 0) && fort_internal_stride2 == 0) {
+                std::cerr << "/home/jirka/research/fortran-abomination/benchmarks/cases/CDU/Fortran/cdu.f90:20 (inlined through CDU at /home/jirka/research/fortran-abomination/benchmarks/cases/CDU/Fortran/cdu.f90:116 -> set): DO stride must be nonzero" << std::endl;
+                std::abort();
+            }
+            const std::size_t fort_internal_extent2 = fort_internal_stride2 > 0 && fort_internal_upper2 >= fort_internal_lower2
+                ? static_cast<std::size_t>((static_cast<long long>(fort_internal_upper2) - fort_internal_lower2) / fort_internal_stride2 + 1)
+                : fort_internal_stride2 < 0 && fort_internal_lower2 >= fort_internal_upper2
+                    ? static_cast<std::size_t>((static_cast<long long>(fort_internal_lower2) - fort_internal_upper2)
+                        / -static_cast<long long>(fort_internal_stride2) + 1) : 0;
+            std::size_t fort_internal_total = 0;
+            if ((fort_internal_extent2) != 0 && (fort_internal_extent1) != 0 && (fort_internal_extent0) != 0) {
+                fort_internal_total = 1;
+                if (fort_internal_total > static_cast<std::size_t>(-1) / (fort_internal_extent2)) {
+                    std::cerr << "Iteration size product overflows size_t" << std::endl;
+                    std::abort();
+                }
+                fort_internal_total *= (fort_internal_extent2);
+                if (fort_internal_total > static_cast<std::size_t>(-1) / (fort_internal_extent1)) {
+                    std::cerr << "Iteration size product overflows size_t" << std::endl;
+                    std::abort();
+                }
+                fort_internal_total *= (fort_internal_extent1);
+                if (fort_internal_total > static_cast<std::size_t>(-1) / (fort_internal_extent0)) {
+                    std::cerr << "Iteration size product overflows size_t" << std::endl;
+                    std::abort();
+                }
+                fort_internal_total *= (fort_internal_extent0);
+            }
+            if (fort_internal_total > 0) {
+                constexpr unsigned int fort_internal_threads = 256;
+                const std::size_t fort_internal_needed_blocks = (fort_internal_total - 1) / fort_internal_threads + 1;
+                const unsigned int fort_internal_blocks = static_cast<unsigned int>(
+                    fort_internal_needed_blocks > 65535 ? 65535 : fort_internal_needed_blocks);
+                kernel_region_0_device<<<fort_internal_blocks, fort_internal_threads>>>(
+                    fort_v0_u2_device,
+                    fort_v0_u2_dim1,
+                    fort_v0_u2_dim2,
+                    fort_v0_u2_dim3,
+                    fort_v1_u_device,
+                    fort_v1_u_dim1,
+                    fort_v1_u_dim2,
+                    fort_v1_u_dim3,
+                    fort_v2_v_device,
+                    fort_v2_v_dim1,
+                    fort_v2_v_dim2,
+                    fort_v2_v_dim3,
+                    fort_v3_w_device,
+                    fort_v3_w_dim1,
+                    fort_v3_w_dim2,
+                    fort_v3_w_dim3,
+                    fort_v7_unx,
+                    fort_v8_uny,
+                    fort_v9_unz,
+                    fort_v10_zero,
+                    fort_v11_half,
+                    fort_v15_ax,
+                    fort_v16_ay,
+                    fort_v17_az,
+                    fort_v21_ax,
+                    fort_v22_ay,
+                    fort_v23_az,
+                    fort_internal_lower0,
+                    fort_internal_stride0,
+                    fort_internal_extent0,
+                    fort_internal_lower1,
+                    fort_internal_stride1,
+                    fort_internal_extent1,
+                    fort_internal_lower2,
+                    fort_internal_stride2,
+                    fort_internal_extent2,
+                    fort_internal_total
+                );
+                CUCH(cudaGetLastError());
+                storage::trace("kernel");
+            }
+        }
+        fort_internal_state.fort_v0_u2.device_written();
+    });
 }
 
-__global__ 
-void kernel_group_6_device(
-    double half,
-    int unz,
-    int unx,
-    double* __restrict__ u2, size_t u2_dim1, size_t u2_dim2, size_t u2_dim3,
-    int uny,
-    int k_from, int k_to,
-    int j_from, int j_to,
-    int i_from, int i_to,
-    size_t total_elements
+extern "C" void cpp_cdu_workspace_validate(
+    std::int64_t fort_internal_token
 ) {
-    // 1D Thread Index
-    size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    // Ensure we don't go out of bounds
-    if (idx >= total_elements) {
-        return;
-    }
-
-    // Declarations of local variables used in the kernel body
-    int i;
-    int j;
-    int k;
-
-    // Map the 1D index back to column-major multi-dimensional coordinates
-    constexpr int k_step = 1;
-        constexpr int j_step = 1;
-        constexpr int i_step = 1;
-    size_t current_idx = idx;
-    
-    // Calculate index for 'i' dimension
-    int num_i = ((i_to - i_from + i_step) / i_step);
-    int local_i = current_idx % num_i;
-    i = i_from + local_i * i_step;
-    current_idx /= num_i;
-    
-    // Calculate index for 'j' dimension
-    int num_j = ((j_to - j_from + j_step) / j_step);
-    int local_j = current_idx % num_j;
-    j = j_from + local_j * j_step;
-    current_idx /= num_j;
-    
-    // Calculate index for 'k' dimension
-    int num_k = ((k_to - k_from + k_step) / k_step);
-    int local_k = current_idx;
-    k = k_from + local_k * k_step;
-
-    // Perform the calculation
-    u2[F_IDX(i, j, k, u2_dim1, u2_dim2, u2_dim3)] = (u2[F_IDX(i, j, k, u2_dim1, u2_dim2, u2_dim3)] * half);
-    
+    fort_internal_cdu_workspace_registry.get(fort_internal_token);
+    storage::synchronize();
 }
 
+extern "C" void cpp_cdu_update_device_0(
+    std::int64_t fort_internal_token,
+    const double* fort_v0_u2,
+    std::size_t fort_v0_u2_dim1,
+    std::size_t fort_v0_u2_dim2,
+    std::size_t fort_v0_u2_dim3
+) {
+    auto& fort_internal_state = fort_internal_cdu_workspace_registry.get(fort_internal_token);
+    fort_internal_state.fort_v0_u2.update_device(fort_v0_u2, {fort_v0_u2_dim1, fort_v0_u2_dim2, fort_v0_u2_dim3});
+    storage::synchronize();
+}
 
-// The wrapper function called by Fortran
-extern "C" {
-    void cpp_start_hot() {
-        reset_timing_vectors();
-    }
+extern "C" void cpp_cdu_update_device_1(
+    std::int64_t fort_internal_token,
+    const double* fort_v1_u,
+    std::size_t fort_v1_u_dim1,
+    std::size_t fort_v1_u_dim2,
+    std::size_t fort_v1_u_dim3
+) {
+    auto& fort_internal_state = fort_internal_cdu_workspace_registry.get(fort_internal_token);
+    fort_internal_state.fort_v1_u.update_device(fort_v1_u, {fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3});
+    storage::synchronize();
+}
 
-    void cpp_finish_hot() {
-        print_timing_summary();
-    }
+extern "C" void cpp_cdu_update_device_2(
+    std::int64_t fort_internal_token,
+    const double* fort_v2_v,
+    std::size_t fort_v2_v_dim1,
+    std::size_t fort_v2_v_dim2,
+    std::size_t fort_v2_v_dim3
+) {
+    auto& fort_internal_state = fort_internal_cdu_workspace_registry.get(fort_internal_token);
+    fort_internal_state.fort_v2_v.update_device(fort_v2_v, {fort_v2_v_dim1, fort_v2_v_dim2, fort_v2_v_dim3});
+    storage::synchronize();
+}
 
-    void cpp_CDU(
-        double* __restrict__ u, size_t u_dim1, size_t u_dim2, size_t u_dim3,
-        double* __restrict__ u2, size_t u2_dim1, size_t u2_dim2, size_t u2_dim3,
-        int unx,
-        int uny,
-        int unz,
-        double* __restrict__ v, size_t v_dim1, size_t v_dim2, size_t v_dim3,
-        double* __restrict__ w, size_t w_dim1, size_t w_dim2, size_t w_dim3,
-        double dxmin,
-        double dymin,
-        double dzmin
-    ) {
-        #ifdef USE_PINNED_MEMORY
+extern "C" void cpp_cdu_update_device_3(
+    std::int64_t fort_internal_token,
+    const double* fort_v3_w,
+    std::size_t fort_v3_w_dim1,
+    std::size_t fort_v3_w_dim2,
+    std::size_t fort_v3_w_dim3
+) {
+    auto& fort_internal_state = fort_internal_cdu_workspace_registry.get(fort_internal_token);
+    fort_internal_state.fort_v3_w.update_device(fort_v3_w, {fort_v3_w_dim1, fort_v3_w_dim2, fort_v3_w_dim3});
+    storage::synchronize();
+}
 
-        if (pinned_ptrs.find(w) == pinned_ptrs.end()) {
-            CUCH(cudaHostRegister(w, (sizeof(double) * w_dim1 * w_dim2 * w_dim3), cudaHostRegisterPortable));
-            pinned_ptrs.insert(w);
-        }
-        if (pinned_ptrs.find(u2) == pinned_ptrs.end()) {
-            CUCH(cudaHostRegister(u2, (sizeof(double) * u2_dim1 * u2_dim2 * u2_dim3), cudaHostRegisterPortable));
-            pinned_ptrs.insert(u2);
-        }
-        if (pinned_ptrs.find(u) == pinned_ptrs.end()) {
-            CUCH(cudaHostRegister(u, (sizeof(double) * u_dim1 * u_dim2 * u_dim3), cudaHostRegisterPortable));
-            pinned_ptrs.insert(u);
-        }
-        if (pinned_ptrs.find(v) == pinned_ptrs.end()) {
-            CUCH(cudaHostRegister(v, (sizeof(double) * v_dim1 * v_dim2 * v_dim3), cudaHostRegisterPortable));
-            pinned_ptrs.insert(v);
-        }
+extern "C" void cpp_cdu_update_host_0(
+    std::int64_t fort_internal_token,
+    double* fort_v0_u2,
+    std::size_t fort_v0_u2_dim1,
+    std::size_t fort_v0_u2_dim2,
+    std::size_t fort_v0_u2_dim3
+) {
+    auto& fort_internal_state = fort_internal_cdu_workspace_registry.get(fort_internal_token);
+    fort_internal_state.fort_v0_u2.update_host(fort_v0_u2, {fort_v0_u2_dim1, fort_v0_u2_dim2, fort_v0_u2_dim3});
+    storage::synchronize();
+}
 
-        #endif // USE_PINNED_MEMORY
+extern "C" void cpp_cdu_update_host_1(
+    std::int64_t fort_internal_token,
+    double* fort_v1_u,
+    std::size_t fort_v1_u_dim1,
+    std::size_t fort_v1_u_dim2,
+    std::size_t fort_v1_u_dim3
+) {
+    auto& fort_internal_state = fort_internal_cdu_workspace_registry.get(fort_internal_token);
+    fort_internal_state.fort_v1_u.update_host(fort_v1_u, {fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3});
+    storage::synchronize();
+}
 
-        // 1. Allocate memory on the GPU (Device)
-        double* w_device;
-        double* u2_device;
-        double* u_device;
-        double* v_device;
+extern "C" void cpp_cdu_update_host_2(
+    std::int64_t fort_internal_token,
+    double* fort_v2_v,
+    std::size_t fort_v2_v_dim1,
+    std::size_t fort_v2_v_dim2,
+    std::size_t fort_v2_v_dim3
+) {
+    auto& fort_internal_state = fort_internal_cdu_workspace_registry.get(fort_internal_token);
+    fort_internal_state.fort_v2_v.update_host(fort_v2_v, {fort_v2_v_dim1, fort_v2_v_dim2, fort_v2_v_dim3});
+    storage::synchronize();
+}
 
-        measure_alloc([&]() {
-        CUCH(cudaMalloc(&w_device, (sizeof(double) * w_dim1 * w_dim2 * w_dim3)));
-        CUCH(cudaMalloc(&u2_device, (sizeof(double) * u2_dim1 * u2_dim2 * u2_dim3)));
-        CUCH(cudaMalloc(&u_device, (sizeof(double) * u_dim1 * u_dim2 * u_dim3)));
-        CUCH(cudaMalloc(&v_device, (sizeof(double) * v_dim1 * v_dim2 * v_dim3)));
-        });
+extern "C" void cpp_cdu_update_host_3(
+    std::int64_t fort_internal_token,
+    double* fort_v3_w,
+    std::size_t fort_v3_w_dim1,
+    std::size_t fort_v3_w_dim2,
+    std::size_t fort_v3_w_dim3
+) {
+    auto& fort_internal_state = fort_internal_cdu_workspace_registry.get(fort_internal_token);
+    fort_internal_state.fort_v3_w.update_host(fort_v3_w, {fort_v3_w_dim1, fort_v3_w_dim2, fort_v3_w_dim3});
+    storage::synchronize();
+}
 
-        size_t total_h2d_bytes = (sizeof(double) * w_dim1 * w_dim2 * w_dim3) + (sizeof(double) * u2_dim1 * u2_dim2 * u2_dim3) + (sizeof(double) * u_dim1 * u_dim2 * u_dim3) + (sizeof(double) * v_dim1 * v_dim2 * v_dim3);
+extern "C" void cpp_cdu_destroy(
+    std::int64_t fort_internal_token
+) {
+    fort_internal_cdu_workspace_registry.destroy(fort_internal_token);
+}
 
-        // 2. Copy inputs from Host (CPU) to Device (GPU)
-        measure_h2d(total_h2d_bytes, [&]() {
-        CUCH(cudaMemcpy(w_device, w, (sizeof(double) * w_dim1 * w_dim2 * w_dim3), cudaMemcpyHostToDevice));
-        CUCH(cudaMemcpy(u_device, u, (sizeof(double) * u_dim1 * u_dim2 * u_dim3), cudaMemcpyHostToDevice));
-        CUCH(cudaMemcpy(v_device, v, (sizeof(double) * v_dim1 * v_dim2 * v_dim3), cudaMemcpyHostToDevice));
-        });
+extern "C" void cpp_start_hot() { reset_timing_vectors(); }
+extern "C" void cpp_finish_hot() { print_timing_summary(); }
 
-        // Declare local variables
-        double ax;
-        double zero;
-        double ay;
-        double half;
-        double az;
-
-        // 3. Launch the CUDA Kernels
-        measure_kernel_executions([&]() {
-        zero = 0.0;
-        half = 0.5;
-        {
-            // 3.1 Define execution configuration
-        
-            // Define the primary iteration space size for the kernel grid
-            size_t total_elements = (((unz + 1) - 2 + 1) * ((uny + 1) - 2 + 1) * ((unx + 1) - 2 + 1));
-        
-            int threadsPerBlock = 256;
-            int blocksPerGrid = (total_elements + threadsPerBlock - 1) / threadsPerBlock;
-            
-            int k_from = 2;
-            int k_to = (unz + 1);
-            
-            int j_from = 2;
-            int j_to = (uny + 1);
-            
-            int i_from = 2;
-            int i_to = (unx + 1);
-        
-            // 4. Launch the CUDA kernel
-            kernel_group_1_device<<<blocksPerGrid, threadsPerBlock>>>(
-                unz,
-                unx,
-                zero,
-                u2_device, u2_dim1, u2_dim2, u2_dim3,
-                uny,
-                k_from, k_to,
-                j_from, j_to,
-                i_from, i_to,
-                total_elements
-            );
-        
-            CUCH(cudaGetLastError());
-        }
-        ax = (0.25 / dxmin);
-        ay = (0.25 / dymin);
-        az = (0.25 / dzmin);
-        {
-            // 3.3 Define execution configuration
-        
-            // Define the primary iteration space size for the kernel grid
-            size_t total_elements = (((unz + 1) - 2 + 1) * ((uny + 1) - 2 + 1) * ((unx + 1) - 2 + 1));
-        
-            int threadsPerBlock = 256;
-            int blocksPerGrid = (total_elements + threadsPerBlock - 1) / threadsPerBlock;
-            
-            int k_from = 2;
-            int k_to = (unz + 1);
-            
-            int j_from = 2;
-            int j_to = (uny + 1);
-            
-            int i_from = 2;
-            int i_to = (unx + 1);
-        
-            // 4. Launch the CUDA kernel
-            kernel_group_3_device<<<blocksPerGrid, threadsPerBlock>>>(
-                unz,
-                az,
-                w_device, w_dim1, w_dim2, w_dim3,
-                ax,
-                unx,
-                v_device, v_dim1, v_dim2, v_dim3,
-                u_device, u_dim1, u_dim2, u_dim3,
-                u2_device, u2_dim1, u2_dim2, u2_dim3,
-                ay,
-                uny,
-                k_from, k_to,
-                j_from, j_to,
-                i_from, i_to,
-                total_elements
-            );
-        
-            CUCH(cudaGetLastError());
-        }
-        ax = (0.5 / dxmin);
-        ay = (0.125 / dymin);
-        az = (0.125 / dzmin);
-        {
-            // 3.5 Define execution configuration
-        
-            // Define the primary iteration space size for the kernel grid
-            size_t total_elements = (((unz + 1) - 2 + 1) * ((uny + 1) - 2 + 1) * ((unx + 1) - 2 + 1));
-        
-            int threadsPerBlock = 256;
-            int blocksPerGrid = (total_elements + threadsPerBlock - 1) / threadsPerBlock;
-            
-            int k_from = 2;
-            int k_to = (unz + 1);
-            
-            int j_from = 2;
-            int j_to = (uny + 1);
-            
-            int i_from = 2;
-            int i_to = (unx + 1);
-        
-            // 4. Launch the CUDA kernel
-            kernel_group_5_device<<<blocksPerGrid, threadsPerBlock>>>(
-                az,
-                unz,
-                ax,
-                w_device, w_dim1, w_dim2, w_dim3,
-                unx,
-                v_device, v_dim1, v_dim2, v_dim3,
-                u_device, u_dim1, u_dim2, u_dim3,
-                ay,
-                u2_device, u2_dim1, u2_dim2, u2_dim3,
-                uny,
-                k_from, k_to,
-                j_from, j_to,
-                i_from, i_to,
-                total_elements
-            );
-        
-            CUCH(cudaGetLastError());
-        }
-        {
-            // 3.6 Define execution configuration
-        
-            // Define the primary iteration space size for the kernel grid
-            size_t total_elements = (((unz + 1) - 2 + 1) * ((uny + 1) - 2 + 1) * ((unx + 1) - 2 + 1));
-        
-            int threadsPerBlock = 256;
-            int blocksPerGrid = (total_elements + threadsPerBlock - 1) / threadsPerBlock;
-            
-            int k_from = 2;
-            int k_to = (unz + 1);
-            
-            int j_from = 2;
-            int j_to = (uny + 1);
-            
-            int i_from = 2;
-            int i_to = (unx + 1);
-        
-            // 4. Launch the CUDA kernel
-            kernel_group_6_device<<<blocksPerGrid, threadsPerBlock>>>(
-                half,
-                unz,
-                unx,
-                u2_device, u2_dim1, u2_dim2, u2_dim3,
-                uny,
-                k_from, k_to,
-                j_from, j_to,
-                i_from, i_to,
-                total_elements
-            );
-        
-            CUCH(cudaGetLastError());
-        }
-        });
-
-        // Wait for GPU to finish
-        CUCH(cudaDeviceSynchronize());
-
-        size_t total_d2h_bytes = (sizeof(double) * u2_dim1 * u2_dim2 * u2_dim3);
-
-        // 5. Copy results back from Device (GPU) to Host (CPU)
-        measure_d2h(total_d2h_bytes, [&]() {
-        CUCH(cudaMemcpy(u2, u2_device, (sizeof(double) * u2_dim1 * u2_dim2 * u2_dim3), cudaMemcpyDeviceToHost));
-        });
-
-
-        // 6. Free the GPU memory
-        measure_free([&]() {
-        CUCH(cudaFree(w_device));
-        CUCH(cudaFree(u2_device));
-        CUCH(cudaFree(u_device));
-        CUCH(cudaFree(v_device));
-        });
-    }
+extern "C" void cpp_CDU(
+    double* __restrict__ fort_v0_u2,
+    std::size_t fort_v0_u2_dim1,
+    std::size_t fort_v0_u2_dim2,
+    std::size_t fort_v0_u2_dim3,
+    const double* __restrict__ fort_v1_u,
+    std::size_t fort_v1_u_dim1,
+    std::size_t fort_v1_u_dim2,
+    std::size_t fort_v1_u_dim3,
+    const double* __restrict__ fort_v2_v,
+    std::size_t fort_v2_v_dim1,
+    std::size_t fort_v2_v_dim2,
+    std::size_t fort_v2_v_dim3,
+    const double* __restrict__ fort_v3_w,
+    std::size_t fort_v3_w_dim1,
+    std::size_t fort_v3_w_dim2,
+    std::size_t fort_v3_w_dim3,
+    double fort_v4_dxmin,
+    double fort_v5_dymin,
+    double fort_v6_dzmin,
+    int fort_v7_unx,
+    int fort_v8_uny,
+    int fort_v9_unz
+) {
+    const auto fort_internal_token = cpp_cdu_create(fort_v0_u2, fort_v0_u2_dim1, fort_v0_u2_dim2, fort_v0_u2_dim3, fort_v1_u, fort_v1_u_dim1, fort_v1_u_dim2, fort_v1_u_dim3, fort_v2_v, fort_v2_v_dim1, fort_v2_v_dim2, fort_v2_v_dim3, fort_v3_w, fort_v3_w_dim1, fort_v3_w_dim2, fort_v3_w_dim3);
+    cpp_cdu_run(fort_internal_token, fort_v4_dxmin, fort_v5_dymin, fort_v6_dzmin, fort_v7_unx, fort_v8_uny, fort_v9_unz);
+    storage::synchronize();
+    auto& fort_internal_state = fort_internal_cdu_workspace_registry.get(fort_internal_token);
+    fort_internal_state.fort_v0_u2.update_host(fort_v0_u2, {fort_v0_u2_dim1, fort_v0_u2_dim2, fort_v0_u2_dim3});
+    cpp_cdu_destroy(fort_internal_token);
 }
 }

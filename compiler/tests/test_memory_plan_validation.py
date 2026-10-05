@@ -80,6 +80,47 @@ def test_sync_can_be_inserted_in_every_phase_without_symbols():
     assert format_memory(memory).count("sync") == 6
 
 
+@pytest.mark.parametrize("policy", [None, "dedicated", "pooled"])
+@pytest.mark.parametrize("parameters", [PARAMETERS, (SCALAR,)])
+def test_allocation_policy_is_explicit_and_does_not_change_transfer_or_execution_plans(policy, parameters):
+    memory = plan_memory(EMPTY, parameters, acquisition_policy=policy)
+    original = plan_memory(EMPTY, parameters)
+    assert memory.create[0].acquisition_policy == policy
+    assert memory.create[1:] == original.create[1:]
+    assert (memory.run, memory.retrieve, memory.destroy) == (original.run, original.retrieve, original.destroy)
+    assert f"acquire [{policy or 'dedicated'}]" in format_memory(memory)
+    validate_memory(memory, parameters)
+
+
+@pytest.mark.parametrize("policy", ["cache", "", 1, [], object()])
+def test_unknown_allocation_policy_is_rejected_including_scalar_only_plans(policy):
+    with pytest.raises(ValueError, match="Unknown memory acquisition policy"):
+        plan_memory(EMPTY, (SCALAR,), acquisition_policy=policy)
+
+
+@pytest.mark.parametrize("phase", ["create", "run", "retrieve", "destroy"])
+def test_allocation_policy_is_only_valid_on_acquisitions(phase):
+    memory = base_plan()
+    operations = (*getattr(memory, phase), MemoryOperation("sync", acquisition_policy="dedicated"))
+    with pytest.raises(ValueError, match="cannot contain an acquisition policy"):
+        validate_memory(replace(memory, **{phase: operations}), PARAMETERS)
+
+
+def test_allocation_policy_is_keyword_only_and_preserves_existing_operation_arguments():
+    with pytest.raises(TypeError):
+        MemoryOperation("acquire", ARRAYS, None, (), (), "pooled")
+
+
+@pytest.mark.parametrize("policy", [None, "dedicated", "pooled"])
+def test_session_validation_requires_dedicated_allocations(policy):
+    memory = plan_memory(EMPTY, PARAMETERS, acquisition_policy=policy)
+    if policy == "pooled":
+        with pytest.raises(ValueError, match="Explicit sessions require dedicated allocations"):
+            validate_memory(memory, PARAMETERS, allow_pooled=False)
+    else:
+        validate_memory(memory, PARAMETERS, allow_pooled=False)
+
+
 @pytest.mark.parametrize(
     ("phase", "operations", "message"),
     [

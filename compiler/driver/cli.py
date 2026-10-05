@@ -137,8 +137,10 @@ def main() -> None:
         print(format_ir(function))
         print("\nExecution plan and dependence checks:")
         print(format_plan(plan))
-        print("\nMemory operations:")
+        print("\nMemory operations (explicit sessions):")
         print(format_memory(plan_memory(plan, function.parameters)))
+        print("\nMemory operations (ordinary CUDA calls):")
+        print(format_memory(plan_memory(plan, function.parameters, acquisition_policy="pooled")))
 
     # Publish only after every stage has validated and generated successfully.
     output_dir = Path(args.output_dir).resolve()

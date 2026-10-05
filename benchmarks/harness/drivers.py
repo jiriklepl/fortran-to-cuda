@@ -19,6 +19,7 @@ def timing_driver(
     warmup: int,
     *,
     resident: bool = False,
+    session: bool = False,
 ) -> str:
     """Time either individual calls or a batch with one data transfer round.
 
@@ -74,6 +75,22 @@ end program comparison_timing
 """
     if not resident:
         return source
+    if session:
+        source = _replace_once(
+            source,
+            "  implicit none",
+            f"  implicit none\n  type({case}_workspace) :: workspace",
+        )
+        source = _replace_once(
+            source,
+            f"  do iteration = 1, niter\n    call {case}(result,u,v,w,dxmin,dymin,dzmin,nx,ny,nz)\n  end do",
+            f"  call {case}_create(workspace,result,u,v,w)\n"
+            "  do iteration = 1, niter\n"
+            f"    call {case}_run(workspace,dxmin,dymin,dzmin,nx,ny,nz)\n  end do\n"
+            f"  call {case}_update_host(workspace,{OUTPUT_ARRAYS[case]}=result)\n"
+            f"  call {case}_destroy(workspace)",
+        )
+        return source
     source = _replace_once(
         source,
         "  call system_clock(begin_count,rate)",
@@ -86,7 +103,7 @@ end program comparison_timing
     )
 
 
-def correctness_driver(case: str, *, resident: bool = False) -> str:
+def correctness_driver(case: str, *, resident: bool = False, session: bool = False) -> str:
     """Preserve canonical validation inputs and check repeated resident calls.
 
     Every benchmark resets its interior output within each call. Two calls
@@ -101,6 +118,21 @@ def correctness_driver(case: str, *, resident: bool = False) -> str:
     if not resident:
         return source
     call = f"    call {case}({output}, U, V, W, dxmin, dymin, dzmin, NX, NY, NZ)"
+    if session:
+        source = _replace_once(
+            source,
+            "    implicit none",
+            f"    implicit none\n    type({case}_workspace) :: workspace",
+        )
+        return _replace_once(
+            source,
+            call,
+            f"    call {case}_create(workspace, {output}, U, V, W)\n"
+            f"    call {case}_run(workspace, dxmin, dymin, dzmin, NX, NY, NZ)\n"
+            f"    call {case}_run(workspace, dxmin, dymin, dzmin, NX, NY, NZ)\n"
+            f"    call {case}_update_host(workspace, {output}={output})\n"
+            f"    call {case}_destroy(workspace)",
+        )
     return _replace_once(
         source,
         call,

@@ -135,7 +135,9 @@ The ordinary CUDA wrapper creates private owned state, uploads `intent(in)` and
 `intent(inout)` data, executes the memory plan, downloads outputs, and releases the
 state on each call. Ordinary calls do not use the session token registry, so
 independent concurrent callers have independent storage. Ordinary calls remain
-synchronous and host-visible. `USE_PINNED_MEMORY`
+synchronous and host-visible. On supported CUDA devices, a private memory pool
+reuses device allocation backing across calls; each call still transfers fresh
+inputs and outputs. `USE_PINNED_MEMORY`
 enables optional pinned-memory support. Host array reads and writes between launches synchronize affected arrays:
 a read sees previous device updates, and a partial host write preserves other
 device-produced cells before uploading the changed array. Array-valued launch
@@ -145,7 +147,7 @@ included in timing hooks. Unwritten `intent(inout)` cells are preserved. Unwritt
 
 ## Memory planning and runtime
 
-`compiler.memory.plan_memory(plan, parameters)` derives immutable acquisition,
+`compiler.memory.plan_memory(plan, parameters, *, acquisition_policy=None)` derives immutable acquisition,
 caller uploads/downloads, host/device access, execution, write-invalidation, synchronization, and release
 operations from an execution plan. It preserves conditional branches, counts
 predicate and array-valued launch-bound reads, and requests current contents before
@@ -156,12 +158,19 @@ Explicit uploads/downloads always transfer the selected caller arrays. Before
 emission, `validate_memory` checks operation payloads, phase placement, array
 ownership, and complete acquisition, input upload, output retrieval, and release.
 Unsupported operations fail instead of being silently skipped.
+Acquisition policy is `dedicated` or `pooled`; omitted metadata preserves dedicated
+allocation. Default generation supplies dedicated session plans and pooled ordinary
+CUDA plans. Explicit `generate_cuda(..., memory=...)` plans remain authoritative
+for both APIs unless `ordinary_memory=` supplies a separate ordinary lifecycle.
+Helpers are shared only when their operation sequences match.
 
 `runtime/storage.hpp` provides owned fixed-shape CPU/CUDA buffers, lazy CUDA host
 mirrors, selective updates, checked extent/byte products, scoped pinned-memory
 registration, and a registry that diagnoses invalid or stale tokens. Buffers retain
-no caller pointers. `runtime/timing.hpp` contains opt-in profiling. Both units are
-assembled into the existing support header and tested with instrumented CUDA calls.
+no caller pointers. `runtime/allocation.hpp` owns dedicated and pooled CUDA
+allocations separately from coherence state; `runtime/timing.hpp` contains opt-in
+profiling. These units are assembled into the existing support header and tested
+with instrumented CUDA calls.
 
 Emission renders every lifecycle operation, including synchronization without an
 array payload. State starts with empty buffer slots and fixed extent metadata;
@@ -172,8 +181,49 @@ Host statements, branches, fallback regions, and array-valued launch bounds shar
 the coherence path. CPU sessions consume the same memory operations with both
 address spaces mapped to owned host buffers; ordinary C++ calls use direct lowering.
 Verbose output displays the
-memory operations; `FORT_RUNTIME_TRACE=1` logs actual GPU allocations, transfers,
-kernel launches, and frees.
+memory operations for both lifecycles; `FORT_RUNTIME_TRACE=1` logs successful GPU
+allocation requests, transfers, kernel launches, and releases, with additional
+events identifying pool operations. Allocation-request counts do not measure
+physical backing allocations: native pool requests still occur on warm calls.
+
+### Ordinary CUDA allocation reuse
+
+Ordinary CUDA calls acquire exclusive allocations from a lazily created private
+pool for the calling thread's current device. Generated entries share the pool,
+but each call constructs fresh buffer state, shapes, and coherence flags. Host
+mirrors and caller pointers are never cached. Explicit workspaces retain dedicated
+allocations. Neither the application's current/default pool nor CPU allocation
+behavior is changed.
+
+`FORT_CUDA_POOL_BYTES` sets the pool release threshold in unsigned decimal bytes;
+the default is `268435456` (256 MiB) per device. The setting is read once on first
+pool use. `0` disables reuse and restores ordinary `cudaMalloc`/`cudaFree` behavior,
+allowing comparisons with the same generated binary. Invalid or overflowing values
+are diagnosed. The threshold is a retention target, not a hard memory limit;
+newly freed memory can remain above it until another synchronization. Pooling is
+independent of optimization level, schedules, and indexing mode. Toolkits before
+CUDA 11.2, incompatible drivers, and devices without pool support use dedicated
+allocation; other CUDA failures are not hidden by fallback.
+
+Allocation uses `cudaMallocFromPoolAsync` on the existing default stream. Planned
+destruction synchronizes before `cudaFree`, so completed storage can be reused
+without adding a final asynchronous-free barrier. Exceptional pooled-buffer
+cleanup synchronizes before freeing. Zero-sized buffers do not initialize a pool.
+
+Each generated module also exports `<entry>_trim_cache()` (with the same collision
+and length handling as workspace names). After joining ordinary callers, call it
+to destroy this runtime's private pool on the current device. The next ordinary
+call recreates the pool. It diagnoses outstanding pooled leases and is a no-op
+for CPU implementations and absent pools. Sessions remain valid and no outputs
+are retrieved. Release the cache before device reset, external context teardown,
+or unloading generated code; the runtime performs no CUDA work in static
+destructors. Pools otherwise remain available until process termination.
+
+Profiling includes allocation/release requests and lazy pool setup under the
+existing timing labels. `start_hot` and `finish_hot` do not clear the cache.
+Measure cold and warm calls separately; use pool backing statistics or an
+instrumented allocator to verify reuse, and wall-clock timings to measure its
+effect. Unprofiled calls create no profiling events or profiling barriers.
 
 ## Persistent workspaces
 
@@ -463,6 +513,11 @@ selective updates, multiple workspaces, aliases, and lifecycle errors. Generated
 CUDA sessions are also executed with a simulated runtime to check exact transfer
 counts without a GPU. Resident fallback and logical arguments are compared with
 original Fortran across serial C++, OpenMP, and simulated CUDA.
+Pool tests distinguish allocation requests from backing reuse, exercise concurrent
+callers on multiple simulated devices, and check fallback, cleanup failures,
+retention settings, and unchanged transfers. Native pool tests compile both CUDA
+default-stream modes; when hardware is available they check retained backing and
+cache release/reset, and record cold/warm timings without performance thresholds.
 Native compiler absence skips the corresponding capability;
 CUDA compilation requires `nvcc`, and execution also requires a usable device. Once
 those capabilities are available, build or runtime failures fail the tests. All builds and outputs use temporary directories.

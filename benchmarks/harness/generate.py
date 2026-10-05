@@ -52,7 +52,6 @@ def generate_case(case: str, verbose: bool) -> bool:
             case,
             "--output-dir",
             str(tmp_dir),
-            "--no-common-header",
         ]
         if verbose:
             cmd.append("--verbose")
@@ -71,12 +70,20 @@ def generate_case(case: str, verbose: bool) -> bool:
 
         for f in (cu_file, cpp_file, iface_file):
             if not f.exists():
-                print(f"[{case}] ERROR: expected output not found: {f.name}", file=sys.stderr)
+                print(
+                    f"[{case}] ERROR: expected output not found: {f.name}",
+                    file=sys.stderr,
+                )
                 return False
 
         cpp_with_omp = cpp_file.read_text()
         cpp_without_omp = _strip_omp(cpp_with_omp)
         iface_text = iface_file.read_text()
+        # Generated runtimes evolve with the emitters; publish the matching
+        # shared support header alongside regenerated benchmark sources.
+        (ROOT / "benchmarks" / "common" / "common_functions.cuh").write_text(
+            (tmp_dir / "common_functions.cuh").read_text()
+        )
 
         for variant, filename, source in (
             ("CUDA", "generated_code.cu", cu_file.read_text()),

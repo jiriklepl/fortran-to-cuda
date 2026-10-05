@@ -142,8 +142,9 @@ def test_workspace_invalid_uses_are_diagnosed(request, workspace, mode, message)
 
 def _simulate_cuda(source):
     source = source.replace("#include <cuda_runtime.h>", '#include "cuda_runtime.h"')
+    expected_launches = source.count("<<<")
     source, launches = re.subn(r"(kernel_region_\d+_device)<<<([^>]+)>>>\(", r"fort_test_launch(\1, \2, ", source)
-    assert launches == source.count("__global__ void")
+    assert launches == expected_launches
     return source
 
 
