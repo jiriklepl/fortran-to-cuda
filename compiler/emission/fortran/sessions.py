@@ -24,6 +24,7 @@ def fortran_sessions(
     create = unique("fort_internal_create")
     run = unique("fort_internal_run")
     destroy = unique("fort_internal_destroy")
+    trim_cache = unique("fort_internal_trim_cache")
     validate = unique("fort_internal_validate")
     declarations = [
         *(f"  public :: {name}" for name in names.__dict__.values()),
@@ -71,6 +72,8 @@ def fortran_sessions(
         interfaces.extend(
             [f"      integer({kinds.token}), value, intent(in) :: {token}", f"    end subroutine {local}"]
         )
+    interface(trim_cache, "cpp_" + names.trim_cache, [])
+    interfaces.append(f"    end subroutine {trim_cache}")
     update_names = {}
     for direction in ("device", "host"):
         for symbol in arrays:
@@ -150,4 +153,6 @@ def fortran_sessions(
     procedure(names.destroy, [], "inout")
     bodies.extend([f"    call {destroy}({work}%token)", f"    {work}%token = 0"])
     end(names.destroy)
+    bodies.extend([f"  subroutine {names.trim_cache}()", f"    call {trim_cache}()"])
+    end(names.trim_cache)
     return declarations, interfaces, bodies

@@ -6,7 +6,7 @@ are conditional transfers: runtime ownership state decides whether a copy is nee
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from compiler.ir import (
@@ -44,6 +44,7 @@ class MemoryOperation:
     step: HostBlock | ParallelRegion | SequentialRegion | ConditionalRegion | None = None
     then_ops: tuple[MemoryOperation, ...] = ()
     else_ops: tuple[MemoryOperation, ...] = ()
+    acquisition_policy: Literal["dedicated", "pooled"] | None = field(default=None, kw_only=True)
 
 
 @dataclass(frozen=True)
@@ -54,7 +55,12 @@ class MemoryPlan:
     destroy: tuple[MemoryOperation, ...]
 
 
-def plan_memory(plan: ExecutionPlan, parameters: tuple[Symbol, ...]) -> MemoryPlan:
+def plan_memory(
+    plan: ExecutionPlan,
+    parameters: tuple[Symbol, ...],
+    *,
+    acquisition_policy: Literal["dedicated", "pooled"] | None = None,
+) -> MemoryPlan:
     arrays = tuple(symbol for symbol in parameters if symbol.rank)
 
     def ordered(symbols):
@@ -97,7 +103,7 @@ def plan_memory(plan: ExecutionPlan, parameters: tuple[Symbol, ...]) -> MemoryPl
 
     memory = MemoryPlan(
         create=(
-            MemoryOperation("acquire", arrays),
+            MemoryOperation("acquire", arrays, acquisition_policy=acquisition_policy),
             MemoryOperation("upload", ordered(s for s in arrays if s.intent != "out")),
         ),
         run=operations(plan),
@@ -130,7 +136,7 @@ def _execution_arrays(step) -> set[Symbol]:
     return {symbol for symbol in used if symbol.rank}
 
 
-def validate_memory(memory: MemoryPlan, parameters: tuple[Symbol, ...]) -> None:
+def validate_memory(memory: MemoryPlan, parameters: tuple[Symbol, ...], *, allow_pooled: bool = True) -> None:
     """Reject malformed internal plans before emission or partial publication.
 
     This checks ownership and lifecycle structure; runtime coherence still decides
@@ -167,6 +173,12 @@ def validate_memory(memory: MemoryPlan, parameters: tuple[Symbol, ...]) -> None:
             kind = operation.kind
             if not isinstance(kind, str) or kind not in {*phases, "sync"}:
                 raise ValueError(f"Unknown memory operation: {kind!r}")
+            if operation.acquisition_policy not in (None, "dedicated", "pooled"):
+                raise ValueError(f"Unknown memory acquisition policy: {operation.acquisition_policy!r}")
+            if kind != "acquire" and operation.acquisition_policy is not None:
+                raise ValueError(f"Memory operation {kind} cannot contain an acquisition policy")
+            if not allow_pooled and operation.acquisition_policy == "pooled":
+                raise ValueError("Explicit sessions require dedicated allocations")
             if kind != "sync" and phases[kind] != phase:
                 raise ValueError(f"Memory operation {kind} is invalid in {phase}")
             if not isinstance(operation.symbols, tuple) or any(
@@ -249,7 +261,8 @@ def format_memory(memory: MemoryPlan) -> str:
                 detail = "host statements"
             elif isinstance(operation.step, ConditionalRegion):
                 detail = str(operation.step.location)
-            lines.append("  " * depth + operation.kind + (f": {detail}" if detail else ""))
+            policy = f" [{operation.acquisition_policy or 'dedicated'}]" if operation.kind == "acquire" else ""
+            lines.append("  " * depth + operation.kind + policy + (f": {detail}" if detail else ""))
             if operation.kind == "branch":
                 lines.append("  " * (depth + 1) + "then:")
                 describe(operation.then_ops, depth + 2)
