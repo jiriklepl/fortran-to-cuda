@@ -91,13 +91,24 @@ def constant_integer(expression: Expr, location: SourceLocation | None = None) -
         if isinstance(node, IntrinsicCall):
             arguments = [visit(argument)[1] for argument in node.arguments]
             integer = node.dtype is ScalarType.INTEGER
+            name = node.name.lower()
+            if integer and name in {"mod", "modulo"} and len(arguments) == 2 and arguments[1] == 0:
+                raise CompilationError("default INTEGER division by zero", location)
             if not integer or any(value is None for value in arguments):
                 return integer, None
-            name = node.name.lower()
             if name == "abs" and len(arguments) == 1:
                 value = abs(arguments[0])
             elif name in {"min", "max"} and len(arguments) >= 2:
                 value = (min if name == "min" else max)(arguments)
+            elif name in {"mod", "modulo"} and len(arguments) == 2:
+                a, p = arguments
+                value = a % p if name == "modulo" else (abs(a) % abs(p)) * (-1 if a < 0 else 1)
+            elif name == "sign" and len(arguments) == 2:
+                value = abs(arguments[0]) * (-1 if arguments[1] < 0 else 1)
+            elif name == "dim" and len(arguments) == 2:
+                value = max(arguments[0] - arguments[1], 0)
+            elif name == "int" and len(arguments) in {1, 2}:
+                value = arguments[0]
             else:
                 return integer, None
             return True, _checked(value, location)

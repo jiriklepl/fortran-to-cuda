@@ -20,6 +20,7 @@ from compiler.ir import (
     Unary,
 )
 from compiler.ir.integers import INTEGER_MAX, INTEGER_MIN, integer_literal
+from compiler.ir.intrinsics import REAL_MATH
 
 if TYPE_CHECKING:
     from compiler.ir import RegionAddressing
@@ -97,18 +98,25 @@ def render_expression(expression: Expr, *, addressing: RegionAddressing | None =
     if isinstance(expression, IntrinsicCall):
         intrinsic = expression.name.lower()
         arguments = [render_expression(arg, addressing=addressing) for arg in expression.arguments]
-        if intrinsic in {"min", "max"}:
-            name = "minimum" if intrinsic == "min" else "maximum"
+        if intrinsic in {"real", "int", "dble"}:
+            target = {ScalarType.REAL32: "float", ScalarType.REAL: "double", ScalarType.INTEGER: "int"}[
+                expression.dtype
+            ]
+            return f"static_cast<{target}>({arguments[0]})"
+        if intrinsic in {"min", "max", "mod", "modulo", "sign", "dim", "merge", "nint", "floor", "ceiling"}:
+            name = {"min": "minimum", "max": "maximum"}.get(intrinsic, intrinsic)
+            if intrinsic in {"nint", "floor", "ceiling"}:
+                arguments = arguments[:1]
             return f"::generated_kernels::numeric::{name}({', '.join(arguments)})"
-        name = {
-            "abs": "abs"
-            if expression.dtype is ScalarType.INTEGER
-            else "fabsf"
-            if expression.dtype is ScalarType.REAL32
-            else "fabs",
-            "sqrt": "sqrtf" if expression.dtype is ScalarType.REAL32 else "sqrt",
-        }[intrinsic]
-        return f"::{name}({arguments[0]})"
+        if intrinsic == "abs":
+            name = "abs" if expression.dtype is ScalarType.INTEGER else "fabs"
+        elif intrinsic in REAL_MATH or intrinsic == "atan2":
+            name = intrinsic
+        else:
+            raise CompilationError(f"unsupported emission intrinsic: {intrinsic}")
+        if expression.dtype is ScalarType.REAL32:
+            name += "f"
+        return f"::{name}({', '.join(arguments)})"
     if isinstance(expression, Unary):
         operator = "!" if expression.operator == ".not." else expression.operator
         return f"({operator}{render_expression(expression.operand, addressing=addressing)})"

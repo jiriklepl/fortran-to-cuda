@@ -117,6 +117,15 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--fallback {error,host}` | `error` | Reject unproved regions or run them sequentially on the host |
 | `--verbose`, `-v` | off | Normalized IR, applied/skipped transformations, schedules, indexing decisions and reasons, region boundaries, scalar privacy, ISL relations, legality results, and memory operations |
 
+REAL precision is resolved from declarations rather than the spelling of a kind
+name. The target kind model supports `REAL(4)`, `REAL(8)`, default `REAL`,
+`DOUBLE PRECISION`, INTEGER parameter aliases and arithmetic, and `KIND` of
+numeric or logical literals.
+Intrinsic `iso_fortran_env` (`real32`, `real64`) and `iso_c_binding` (`c_float`,
+`c_double`) kind imports are recognized, including `ONLY` renames. Unknown or
+unsupported kinds are rejected. Local INTEGER kind parameters are allowed, but
+general constant folding and external module resolution remain unsupported.
+
 The ABI preserves the original dummy argument order, public names, and
 `cpp_<procedure>` C symbol. Array extents follow their array pointer in dimension
 order. The generated bridge keeps `knd` mapped to binary64 and retains
@@ -240,7 +249,7 @@ contains
 end module example
 ```
 
-- Default `integer` (signed 32-bit), default `real` (binary32), and `real(knd)` (binary64)
+- Default `integer` (signed 32-bit), default `real` (binary32), and resolved REAL kinds 4 and 8
   scalars and assumed-shape dummy arrays. Array rank and loop nesting depth
   follow native Fortran language/compiler limits.
   Integer literal tokens must fit before applying unary signs: `-2147483648`
@@ -264,9 +273,9 @@ end module example
   initialized within that iteration; their final induction values are available
   within the iteration too.
 - Grouped arithmetic `+`, `-`, `*`, `/`, unary signs, integer/real literals,
-  `SIZE(array, literal_dimension)`, and `SIZE(array)` total element counts.
-  Default real literals retain single precision; `D` exponent and `_knd`
-  literals use binary64.
+  `SIZE(array, dimension)`, and `SIZE(array)` total element counts.
+  Default real literals retain single precision; `D` exponent literals use
+  binary64. Explicit kind suffixes use their declared numeric precision.
 - Affine access relations and constant-stride congruences are modeled exactly.
   Invariant non-affine bounds are captured as symbolic parameters. Unknown
   subscript coordinates are conservatively unconstrained, allowing read-only
@@ -296,10 +305,34 @@ device predicates participate in conservative dependence analysis. CUDA preserve
 host/device coherence when entering and leaving host branches. Logical scalar
 arguments are explicitly converted to `logical(c_bool)` by the Fortran bridge.
 
-Scalar `ABS`, `MIN`, `MAX`, and `SQRT` preserve supported numeric kinds and
-arithmetic grouping. `MIN`/`MAX` require at least two arguments of the same type;
-`SQRT` requires a real argument. Numeric helpers emit and evaluate each argument
-once. Logical arrays and other intrinsics remain unsupported.
+The following intrinsics support scalar expressions in both C++ and CUDA:
+
+- Numeric functions: `ABS`, `MIN`, `MAX`, `SQRT`, `EXP`, `LOG`, `LOG10`, `SIN`,
+  `COS`, `TAN`, `ASIN`, `ACOS`, `ATAN`, `ATAN2`, `SINH`, `COSH`, `TANH`, `MOD`,
+  `MODULO`, `SIGN`, and `DIM`.
+- Conversions and rounding: `REAL`, `INT`, `NINT`, `FLOOR`, `CEILING`, and `DBLE`.
+  `REAL` defaults to binary32 and accepts constant `KIND=4` or `KIND=8`; `DBLE`
+  returns binary64. Integer results use the default signed 32-bit kind, including
+  explicit `KIND=4`. `INT` truncates toward zero; `NINT` rounds ties away from zero.
+- Type/model inquiries: `KIND`, `EPSILON`, `TINY`, and `HUGE`. These use the
+  declared type of a scalar or whole array without reading its value. `HUGE`
+  supports INTEGER and REAL; `EPSILON` and `TINY` require REAL.
+- Array inquiries: `SIZE`, `LBOUND`, and `UBOUND` on whole assumed-shape dummy
+  arrays, with constant or runtime INTEGER `DIM` and optional `KIND=4`. `SIZE`
+  without `DIM` returns the total element count. `LBOUND` and `UBOUND` require
+  `DIM` because array-valued results are unsupported. Dummy lower bounds are 1,
+  and upper bounds are their extents, including 0 for an empty dimension. Runtime
+  dimensions must lie within the array rank.
+- Selection: `MERGE` with matching numeric or logical scalar sources and a
+  logical mask.
+
+Positional and standard keyword arguments are accepted. Numeric functions preserve
+supported argument kinds and arithmetic grouping; `MIN`/`MAX` require at least
+two arguments, and multi-argument numeric functions require matching types and
+kinds. Transcendental functions require REAL arguments. `MOD` follows the dividend's
+sign and `MODULO` follows the divisor's sign. Numeric runtime helpers evaluate each
+argument once. Logical arrays, array-valued elemental calls, other result kinds,
+and unlisted intrinsics remain unsupported.
 
 Semantic validation and definite definitions live in `analysis/semantics.py`;
 structural effects live in `analysis/effects.py`; `analysis/planning.py` builds
