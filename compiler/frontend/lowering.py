@@ -68,6 +68,22 @@ class _Routine:
     kinds: _KindScope
 
 
+@dataclass(frozen=True)
+class ProcedureCandidate:
+    """A module procedure and its frontend result, before dependence checks."""
+
+    module: str
+    name: str
+    location: SourceLocation
+    annotated: bool
+    lowerable: bool
+    reason: str | None = None
+
+    @property
+    def qualified_name(self) -> str:
+        return f"{self.module}::{self.name}"
+
+
 class _KindScope:
     """Resolve declared INTEGER constants lazily under the supported ABI model.
 
@@ -170,12 +186,14 @@ class _KindScope:
 
 
 class _Lowerer:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, *, require_markers: bool = False):
         self.path = str(path)
         self.symbols: list[Symbol] = []
         self.routines: dict[tuple[str, str], _Routine] = {}
         self.routine_nodes: dict[tuple[str, str], tuple[str, Any]] = {}
         self.module_kinds: dict[str, _KindScope] = {}
+        self.annotated: set[tuple[str, str]] = set()
+        self.require_markers = require_markers
         self.active_kinds = _KindScope()
 
     def location(self, node: Any, stack: tuple[str, ...] = ()) -> SourceLocation:
@@ -210,17 +228,20 @@ class _Lowerer:
                 for subroutine in part.content:
                     if type(subroutine).__name__ != "Subroutine_Subprogram":
                         continue
-                    if not any(
+                    annotated = any(
                         type(child).__name__ == "Comment" and str(child).strip().lower() == "! kernel"
                         for child in subroutine.content
-                    ):
+                    )
+                    if self.require_markers and not annotated:
                         continue
                     statement = next(child for child in subroutine.content if type(child).__name__ == "Subroutine_Stmt")
                     name = str(statement.items[1])
                     key = (module_name.lower(), name.lower())
                     if key in self.routine_nodes:
-                        raise self.error(f"duplicate annotated subroutine {name}", statement)
+                        raise self.error(f"duplicate subroutine {name}", statement)
                     self.routine_nodes[key] = (module_name, subroutine)
+                    if annotated:
+                        self.annotated.add(key)
 
     def resolve_routine(self, key: tuple[str, str], provenance: tuple[str, ...] = ()) -> _Routine:
         if key not in self.routines:
@@ -535,10 +556,11 @@ class _Lowerer:
             elif kind == "Call_Stmt":
                 name_node, argument_list = node.items
                 if type(name_node).__name__ != "Name":
-                    raise CompilationError("only direct calls to annotated kernel subroutines are supported", location)
+                    raise CompilationError("only direct calls to module subroutines are supported", location)
                 key = (routine.module.lower(), str(name_node).lower())
                 if key not in self.routine_nodes:
-                    raise CompilationError(f"call to unannotated or unknown kernel {name_node}", location)
+                    reason = "unannotated or unknown" if self.require_markers else "unknown or external"
+                    raise CompilationError(f"call to {reason} kernel {name_node}", location)
                 call_provenance = (*provenance, f"{routine.name} at {self.path}:{location.line} -> {name_node}")
                 callee = self.resolve_routine(key, call_provenance)
                 if callee.name.lower() in ancestors:
@@ -801,23 +823,74 @@ class _Lowerer:
         return ScalarType.INTEGER
 
 
-def lower_file(path: str | Path, entry_name: str) -> FunctionIR:
-    """Parse an annotated file and inline its selected kernel into typed IR."""
+def _parse_file(path: Path, *, require_markers: bool) -> Any:
     path = Path(path)
     try:
-        with path.open(encoding="utf-8") as source:
-            if source.readline().strip().lower() != "! kernels":
-                raise CompilationError("kernel files must begin with '! kernels'", SourceLocation(str(path)))
+        if require_markers:
+            with path.open(encoding="utf-8") as source:
+                if source.readline().strip().lower() != "! kernels":
+                    raise CompilationError("kernel files must begin with '! kernels'", SourceLocation(str(path)))
         reader = FortranFileReader(str(path), ignore_comments=False)
-        tree = ParserFactory().create(std="f2008")(reader)
+        return ParserFactory().create(std="f2008")(reader)
     except OSError as error:
         raise CompilationError(f"cannot read source: {error}", SourceLocation(str(path))) from error
     except FortranSyntaxError as error:
         raise CompilationError(f"invalid Fortran syntax: {error}", SourceLocation(str(path))) from error
-    lowerer = _Lowerer(path)
+
+
+def lower_file(path: str | Path, entry_name: str, *, require_markers: bool = False) -> FunctionIR:
+    """Lower an entry and its reachable same-module helpers into typed IR.
+
+    Markers are optional unless ``require_markers`` is selected. The entry can
+    be qualified as ``module::procedure`` to disambiguate a multi-module file.
+    Unreachable procedures are parsed but their unsupported semantics are ignored.
+    """
+    path = Path(path)
+    tree = _parse_file(path, require_markers=require_markers)
+    lowerer = _Lowerer(path, require_markers=require_markers)
     lowerer.discover(tree)
-    matches = [key for key in lowerer.routine_nodes if key[1] == entry_name.lower()]
+    requested = entry_name.lower().split("::")
+    matches = [
+        key
+        for key in lowerer.routine_nodes
+        if (list(key) == requested if len(requested) > 1 else key[1] == requested[0])
+    ]
     if len(matches) != 1:
         reason = "not found" if not matches else "ambiguous across modules"
-        raise CompilationError(f"annotated entry kernel {entry_name!r} is {reason}", SourceLocation(str(path)))
+        qualifier = "annotated " if require_markers else ""
+        raise CompilationError(f"{qualifier}entry kernel {entry_name!r} is {reason}", SourceLocation(str(path)))
     return lowerer.lower(lowerer.resolve_routine(matches[0]))
+
+
+def discover_file(path: str | Path, *, require_markers: bool = False) -> tuple[ProcedureCandidate, ...]:
+    """Inspect every module subroutine, reporting frontend rejections separately.
+
+    ``lowerable`` only covers parsing, types, and supported constructs. It does
+    not promise dependence legality or successful generation; callers must run
+    the normal compiler pipeline before selecting a candidate for replacement.
+    """
+    path = Path(path)
+    tree = _parse_file(path, require_markers=require_markers)
+    index = _Lowerer(path, require_markers=require_markers)
+    index.discover(tree)
+    candidates = []
+    for key, (module, node) in index.routine_nodes.items():
+        statement = next(child for child in node.content if type(child).__name__ == "Subroutine_Stmt")
+        reason = None
+        try:
+            lowerer = _Lowerer(path, require_markers=require_markers)
+            lowerer.discover(tree)
+            lowerer.lower(lowerer.resolve_routine(key))
+        except CompilationError as error:
+            reason = str(error)
+        candidates.append(
+            ProcedureCandidate(
+                module,
+                str(statement.items[1]),
+                index.location(statement),
+                key in index.annotated,
+                reason is None,
+                reason,
+            )
+        )
+    return tuple(candidates)

@@ -1,13 +1,14 @@
 """Command-line orchestration and output publication."""
 
 import argparse
+import json
 from pathlib import Path
 
 from compiler.analysis import format_plan
 from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
 from compiler.emission import generate_sources, read_common_header
-from compiler.frontend import lower_file
+from compiler.frontend import discover_file, lower_file
 from compiler.ir import CompilationError, format_ir
 from compiler.memory import format_memory, plan_memory
 
@@ -37,10 +38,20 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--kernel",
         "-k",
-        required=True,
         metavar="NAME",
-        help="Entry kernel function name (case-insensitive).",
+        help="Entry subroutine name or module::name (case-insensitive); required unless listing candidates.",
     )
+    parser.add_argument(
+        "--require-markers",
+        action="store_true",
+        help="Require the legacy '! kernels' file and '! kernel' routine markers.",
+    )
+    parser.add_argument(
+        "--list-candidates",
+        action="store_true",
+        help="Check every module subroutine and report generation eligibility without writing outputs.",
+    )
+    parser.add_argument("--json", action="store_true", help="Print --list-candidates results as JSON.")
     parser.add_argument(
         "--output-dir",
         "-o",
@@ -107,7 +118,43 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print normalized IR, transformations, schedules, addressing proofs, ordered regions, legality, and memory operations.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.list_candidates and not args.kernel:
+        parser.error("--kernel is required unless --list-candidates is used")
+    if args.json and not args.list_candidates:
+        parser.error("--json requires --list-candidates")
+    return args
+
+
+def _list_candidates(source_file: Path, args: argparse.Namespace, options: CompilerOptions) -> None:
+    records = []
+    for candidate in discover_file(source_file, require_markers=args.require_markers):
+        reason = candidate.reason
+        if candidate.lowerable:
+            try:
+                function = lower_file(source_file, candidate.qualified_name, require_markers=args.require_markers)
+                function, plan = prepare_function(function, options=options)
+                generate_sources(function, plan, common_header=args.common_header)
+            except CompilationError as error:
+                reason = str(error)
+        records.append(
+            {
+                "module": candidate.module,
+                "name": candidate.name,
+                "qualified_name": candidate.qualified_name,
+                "path": candidate.location.path,
+                "line": candidate.location.line,
+                "annotated": candidate.annotated,
+                "supported": reason is None,
+                "reason": reason,
+            }
+        )
+    if args.json:
+        print(json.dumps(records, indent=2))
+    else:
+        for record in records:
+            status = "supported" if record["supported"] else f"rejected: {record['reason']}"
+            print(f"{record['qualified_name']}: {status}")
 
 
 def main() -> None:
@@ -125,7 +172,10 @@ def main() -> None:
             fallback=args.fallback,
             indexing=args.indexing,
         )
-        function = lower_file(source_file, args.kernel)
+        if args.list_candidates:
+            _list_candidates(source_file, args, options)
+            return
+        function = lower_file(source_file, args.kernel, require_markers=args.require_markers)
         function, plan = prepare_function(function, options=options)
         sources = generate_sources(function, plan, common_header=args.common_header)
         common_header = read_common_header()
