@@ -38,6 +38,7 @@ def generate_cuda(
     *,
     memory: MemoryPlan | None = None,
     ordinary_memory: MemoryPlan | None = None,
+    offload=None,
 ) -> str:
     if memory is None:
         memory = plan_memory(plan, function.parameters, acquisition_policy="dedicated")
@@ -56,6 +57,8 @@ def generate_cuda(
         "#include <cstdio>",
         "#include <cstdlib>",
         "#include <utility>",
+        "#include <climits>",
+        *(["#define FORT_OFFLOAD_ENABLED 1"] if offload is not None else []),
         f'#include "{common_header}"',
         "",
         "namespace generated_kernels {",
@@ -65,6 +68,18 @@ def generate_cuda(
     ]
     for region in plan.regions:
         lines.extend(generate_kernel(region))
+    if offload is not None:
+        lines.append(offload.helpers)
+        signature = ", ".join(cpp_declaration(a) if a.symbol.rank else
+                              f"const {cpp_type(a.symbol)} &{a.name}" for a in abi)
+        decision = ["offload::DecisionRange decision_range;", *offload.decision_body]
+        if offload.report["collective_entry"]:
+            decision = ["int result = 0;", "#pragma omp barrier", "#pragma omp single copyprivate(result)", "{",
+                        "    result = [&]() {",
+                        *indent([line.replace("offload::decision_trace(", "offload::decision_trace_single(") for line in decision], 2),
+                        "    }();", "}", "return result;"]
+        lines += [f'extern "C" int cpp_{offload.query_name}({signature}) {{',
+                  *indent(decision), "}"]
 
     def run_body(operations):
         return [
@@ -99,6 +114,10 @@ def generate_cuda(
         )
     )
     lines.append(") {")
+    if offload is not None:
+        lines.extend(indent(offload.body))
+        lines.extend(["}", "}", ""])
+        return "\n".join(lines)
     lines.append("    timing::ProfiledCallGuard fort_internal_profile;")
     dimensions = ", ".join(a.name for a in abi_arguments(arrays) if a.dimension is not None)
     lines.append(f"    {workspace_state_name(function)} fort_internal_state{{{dimensions}}};")

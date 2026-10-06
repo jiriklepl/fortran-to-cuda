@@ -12,6 +12,7 @@ from compiler.emission import generate_sources, read_common_header
 from compiler.frontend import discover_file, lower_file
 from compiler.ir import CompilationError, format_ir
 from compiler.memory import format_memory, plan_memory
+from compiler.offload.config import OffloadConfig
 
 
 def _tile_sizes(value: str) -> tuple[int, ...]:
@@ -121,10 +122,34 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print normalized IR, transformations, schedules, addressing proofs, ordered regions, legality, and memory operations.",
     )
+    parser.add_argument("--gpu-policy", choices=("always", "sections", "auto", "chunked", "hybrid"),
+                        default="always", help="Opt-in ordinary-call transfer/execution policy.")
+    parser.add_argument("--calibration-profile", metavar="FILE", help="Explicit offline hardware calibration JSON.")
+    parser.add_argument("--host-threads", type=int, default=4, help="Total host-thread budget, including GPU coordination.")
+    parser.add_argument("--gpu-collective", action="store_true",
+                        help="Opt-in entry is called by every thread of one existing OpenMP team.")
     args = parser.parse_args()
     if not args.list_candidates and not args.kernel:
         parser.error("--kernel is required unless --list-candidates is used")
     return args
+
+
+def _offload_config(args):
+    profile, reason = None, None
+    if args.calibration_profile:
+        from compiler.offload.profile import compiler_identity, load_profile
+        try:
+            profile = load_profile(args.calibration_profile, cpu_threads=args.host_threads)
+            compiler_identity(profile)
+        except (OSError, ValueError) as error:
+            profile = None
+            reason = str(error)
+    elif args.gpu_policy in {"auto", "hybrid"}:
+        reason = "no calibration profile supplied; automatic policy retains native execution"
+    try:
+        return OffloadConfig(args.gpu_policy, profile, args.host_threads, args.gpu_collective, reason)
+    except ValueError as error:
+        raise CompilationError(str(error)) from error
 
 
 def _list_candidates(source_file: Path, args: argparse.Namespace, options: CompilerOptions) -> None:
@@ -135,7 +160,7 @@ def _list_candidates(source_file: Path, args: argparse.Namespace, options: Compi
             try:
                 function = lower_file(source_file, candidate.qualified_name, require_markers=args.require_markers)
                 function, plan = prepare_function(function, options=options)
-                generate_sources(function, plan, common_header=args.common_header)
+                generate_sources(function, plan, common_header=args.common_header, offload_config=_offload_config(args))
             except CompilationError as error:
                 reason = str(error)
         records.append(
@@ -171,13 +196,14 @@ def main() -> None:
             tile_sizes=args.tile_sizes,
             fallback=args.fallback,
             indexing=args.indexing,
+            gpu_policy=args.gpu_policy,
         )
         if args.list_candidates:
             _list_candidates(source_file, args, options)
             return
         function = lower_file(source_file, args.kernel, require_markers=args.require_markers)
         function, plan = prepare_function(function, options=options)
-        sources = generate_sources(function, plan, common_header=args.common_header)
+        sources = generate_sources(function, plan, common_header=args.common_header, offload_config=_offload_config(args))
         common_header = read_common_header()
     except CompilationError as error:
         if args.json and not args.list_candidates:
@@ -219,8 +245,12 @@ def main() -> None:
                     "reason": None,
                     "parallel_regions": len(plan.regions),
                     "execution_plan": format_plan(plan),
-                    "memory_plan": format_memory(plan_memory(plan, function.parameters, acquisition_policy="pooled")),
+                    "memory_plan": (format_memory(plan_memory(plan, function.parameters, acquisition_policy="pooled"))
+                                    if sources.offload is None else
+                                    "Ordinary-call policy " + sources.offload["policy"] +
+                                    "; runtime footprints and choices are described by offload.analysis and FORT_OFFLOAD_TRACE."),
                     "outputs": list(outputs),
+                    **({"offload": sources.offload} if sources.offload is not None else {}),
                 },
                 indent=2,
             )
