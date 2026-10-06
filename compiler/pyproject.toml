@@ -9,7 +9,7 @@ dev = [
     "fparser>=0.2.0,<0.3",
     "islpy==2026.2.2",
     "pytest>=8.3,<10",
-    "ruff==0.16.4",
+    "ruff==0.16.10",
 ]
 
 [tool.pytest.ini_options]

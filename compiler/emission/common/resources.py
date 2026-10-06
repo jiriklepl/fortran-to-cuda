@@ -13,4 +13,7 @@ def read_common_header() -> str:
     units = "\n".join(
         [runtime.joinpath(name).read_text(encoding="utf-8") for name in ("numeric.hpp", "timing.hpp")] + [storage]
     )
+    experimental = [runtime.joinpath(name).read_text(encoding="utf-8")
+                    for name in ("offload.hpp", "hybrid.hpp") if runtime.joinpath(name).is_file()]
+    units += "\n#ifdef FORT_OFFLOAD_ENABLED\n" + "\n".join(experimental) + "\n#endif\n"
     return base.replace("// FORT_RUNTIME_UNITS", units)

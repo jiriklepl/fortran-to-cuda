@@ -165,7 +165,90 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--indexing {source,auto}` | `auto` at level 1, `source` at level 0 | Select source INTEGER addressing or statically proved wide subscripts independently of fusion and scheduling |
 | `--tile-sizes N[,N...]` | untiled | Positive tile sizes in scheduled fastest-to-slowest order; omitted axes use 1 |
 | `--fallback {error,host}` | `error` | Reject unproved regions or run them sequentially on the host |
+| `--gpu-policy {always,sections,auto,chunked,hybrid}` | `always` | Select the ordinary-call transfer and execution prototype |
+| `--calibration-profile FILE` | none | Explicit reusable hardware calibration for automatic decisions |
+| `--host-threads N` | `4` | Total host thread budget, including hybrid GPU coordination |
+| `--gpu-collective` | off | Require every thread of one existing OpenMP team to call the entry |
 | `--verbose`, `-v` | off | Normalized IR, applied/skipped transformations, schedules, indexing decisions and reasons, region boundaries, scalar privacy, ISL relations, legality results, and memory operations |
+
+### Opt-in CPU/GPU policies
+
+`always` keeps the existing whole-array implementation. The alternatives apply
+to ordinary calls; explicit-session coherence is unchanged. `sections` copies
+physical rectangular read/write footprints synchronously, preserving separate
+opposite faces and values in partially written outputs. Unknown sections use
+whole-array transfers. Device storage retains the original logical layout.
+
+`auto` compares native units with GPU intervals of up to four adjacent units
+and the complete legal group. It retains units before optional fusion, respects
+control and synchronization boundaries, and requires a modeled 20% advantage
+for GPU work. Dependent intervals execute in order, with host-visible outputs
+at interval boundaries. Missing, uncertain, overflowing, or incompatible cost
+estimates select native execution.
+Conditional work whose count is only an upper bound currently selects native
+execution as well; the compiler does not assume that every branch runs.
+Entries mixing empty and active units also retain the original native block:
+an empty unit can protect an undefined inner bound from the numerical value ABI.
+Scalar inputs used only inside conditional branches or potentially empty retained
+loops also keep the entry native, as do entirely unused scalar parameters. This
+conservative rule applies to the forced `sections` and `chunked` controls too:
+their numerical value ABI would otherwise read inputs that native execution can
+leave untouched. Conditional holes using constants, indices, or scalar inputs
+already required unconditionally remain supported.
+GPU intervals execute on the device checked during selection, restoring the
+executing host thread's previous device afterward.
+
+These prototypes currently retain unfused source units. The default whole-array
+path retains normal compiler fusion, so comparisons can differ in kernel count
+as well as transferred bytes.
+
+`chunked` provides an asynchronous GPU-only control. `hybrid` additionally
+selects a CPU/GPU split from fixed candidates using the same calibration. Only
+entries with proven independent slabs across all grouped kernels qualify;
+immutable input halos are allowed. Two pinned/device slots and non-default
+streams keep upload, computation, and download ordered per slot. The initial
+total pinned-memory budget is 64 MiB. Hybrid reserves one host thread to manage
+GPU work, while remaining workers process disjoint CPU slabs. All work and
+copyback complete before return. Cross-entry residency and dependent chunk
+pipelines remain outside these prototypes.
+The two slots are reused between batches within a call. Compact slabs retain
+their complete nonslab dimensions; uploads preserve untouched halo elements
+that share those slabs. Synchronous section transfers can omit uploads of
+rectangles proved to be completely overwritten.
+
+Create calibration independently of any application:
+
+```bash
+python -m compiler.offload.calibrate --output hardware.json \
+  --threads 4 --precision 64 --cuda-host-cxx g++-14
+python -m compiler --input ordinary.f90 --kernel advance --output-dir out \
+  --gpu-policy auto --calibration-profile hardware.json --host-threads 4 --json
+```
+
+Calibration records launch, transfer, and packing costs, CPU/GPU compute and
+memory rates, and CPU worker rates with the coordination thread reserved.
+Runtime compatibility requires the calibrated CPU model, GPU UUID/compute
+capability, GCC and NVCC version triples, CUDA runtime/driver versions, precision,
+and thread budget. Unrecognized toolchain identity disables automatic selection.
+No application profile or online timing tunes decisions.
+Throughput is an approximation measured with the recorded calibration build
+flags (`-O3` and host `-fopenmp`, matching the supplied benchmark workers).
+Different application flags and instruction mixes can change realized
+rates; retain the recorded flags and validate complete application time before
+promoting a policy.
+
+Non-default JSON includes an `offload` contract with analysis availability,
+physical footprints, work and launch estimates, eligible intervals/strategies,
+and a `native_fallback_query` name. Integrations import that generated Fortran
+logical function and pass the original arguments only after allocation checks
+and collective synchronization. A false result executes the original native
+block and is a successful policy decision. The compiler owns placement and
+scheduling; callers need not inspect compiler IR or CUDA text. Query scalar
+arguments use references so guarded inner bounds are read only when needed.
+Callers with protected inputs must honor a false query and execute their original
+native block rather than call the numerical entry directly.
+`FORT_OFFLOAD_TRACE=1` records placement decisions separately from CUDA activity;
+disable tracing and phase profiling for timing and overlap measurements.
 
 REAL precision is resolved from declarations rather than the spelling of a kind
 name. The target kind model supports `REAL(4)`, `REAL(8)`, default `REAL`,

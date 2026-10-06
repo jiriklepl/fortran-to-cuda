@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from compiler.emission.c.generator import generate_cpp
 from compiler.emission.c.sessions import append_cpu_sessions
 from compiler.emission.common.abi import abi_arguments
+from compiler.emission.common.c_family import cpp_type
 from compiler.emission.cuda.generator import generate_cuda
 from compiler.emission.fortran.generator import generate_fortran
 from compiler.ir import CompilationError, FunctionIR, SourceLocation
@@ -22,10 +23,11 @@ class GeneratedSources:
     cuda: str
     cpp: str
     fortran: str
+    offload: dict | None = None
 
 
 def generate_sources(
-    function: FunctionIR, plan: ExecutionPlan, *, common_header: str = "common_functions.cuh"
+    function: FunctionIR, plan: ExecutionPlan, *, common_header: str = "common_functions.cuh", offload_config=None
 ) -> GeneratedSources:
     """Generate all output text from one ABI before the caller publishes files."""
     if function.name.lower() in {"start_hot", "finish_hot", "knd"}:
@@ -39,8 +41,20 @@ def generate_sources(
     abi = abi_arguments(function.parameters)
     memory = plan_memory(plan, function.parameters, acquisition_policy="dedicated")
     ordinary_memory = plan_memory(plan, function.parameters, acquisition_policy="pooled")
+    offload = None
+    if offload_config is not None and offload_config.policy != "always":
+        from compiler.emission.cuda.offload import generate_offload
+        offload = generate_offload(function, plan, offload_config)
+    cpp = generate_cpp(function, plan, abi, common_header) + append_cpu_sessions(function, plan, memory=memory)
+    if offload is not None:
+        from compiler.emission.c.declarations import cpp_declaration
+        signature = ", ".join(cpp_declaration(a) if a.symbol.rank else
+                              f"const {cpp_type(a.symbol)} &{a.name}" for a in abi)
+        cpp += f'\nextern "C" int cpp_{offload.query_name}({signature}) {{ return 0; }}\n'
     return GeneratedSources(
-        cuda=generate_cuda(function, plan, abi, common_header, memory=memory, ordinary_memory=ordinary_memory),
-        cpp=generate_cpp(function, plan, abi, common_header) + append_cpu_sessions(function, plan, memory=memory),
-        fortran=generate_fortran(function, abi),
+        cuda=generate_cuda(function, plan, abi, common_header, memory=memory, ordinary_memory=ordinary_memory,
+                           offload=offload),
+        cpp=cpp,
+        fortran=generate_fortran(function, abi, offload=offload),
+        offload=None if offload is None else offload.report,
     )

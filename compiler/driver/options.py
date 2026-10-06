@@ -12,6 +12,7 @@ class CompilerOptions:
     tile_sizes: tuple[int, ...] = ()
     fallback: str = "error"
     indexing: str | None = None
+    gpu_policy: str = "always"
 
     def __post_init__(self) -> None:
         if self.opt_level not in (0, 1):
@@ -24,6 +25,8 @@ class CompilerOptions:
             raise CompilationError("fallback must be error or host")
         if self.indexing not in (None, "source", "auto"):
             raise CompilationError("indexing must be source or auto")
+        if self.gpu_policy not in {"always", "sections", "auto", "chunked", "hybrid"}:
+            raise CompilationError("GPU policy must be always, sections, auto, chunked, or hybrid")
 
     @property
     def resolved_schedule(self) -> str:
