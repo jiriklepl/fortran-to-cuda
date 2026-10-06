@@ -109,6 +109,30 @@ The Python `discover_file(path)` API reports the narrower frontend result in
 `generate_sources`. `lower_file(path, entry, require_markers=False)` preserves
 explicit entry selection and supports the same module qualification.
 
+Normal generation also accepts `--json`:
+
+```bash
+python -m compiler --input ordinary.f90 --kernel advance --fallback error \
+  --output-dir out --json
+```
+
+Its stdout is one object with `kernel`, `supported`, `reason`, and `outputs`.
+Successful generation additionally reports `parallel_regions` (including kernels
+in conditional branches), `execution_plan`, and the ordinary pooled-call
+`memory_plan`. The last two fields reuse the existing human-readable plan reports;
+they are explanatory text, not serialized compiler IR. `outputs` lists the files
+published in the output directory. Compilation rejection returns
+`supported: false`, a diagnostic `reason`, an empty output list, and a nonzero exit
+status; existing output files remain unchanged. With both `--verbose` and `--json`,
+verbose diagnostics go to stderr so stdout remains valid JSON. Candidate-list
+JSON retains its existing array format.
+
+`supported` describes successful generation under the requested fallback policy.
+Integrations that require GPU work should select `--fallback error` and require
+`parallel_regions` greater than zero. The compiler proves each parallel region
+separately and preserves dependence order between kernels; callers should not
+require independent accesses across the entire entry.
+
 Runtime dependencies include `fparser` and **`islpy==2026.2.2`**. Generated C++ uses
 C++17; add `-fopenmp` to enable its verified OpenMP loops. Compile without that
 flag for serial execution of the same generated implementation. CUDA uses one
@@ -129,7 +153,7 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--kernel`, `-k` | required except when listing | Entry subroutine or `module::name`, matched case-insensitively |
 | `--require-markers` | off | Require legacy file and routine markers |
 | `--list-candidates` | off | Report each module procedure's generation eligibility; write no files |
-| `--json` | off | Machine-readable candidate report; requires `--list-candidates` |
+| `--json` | off | Machine-readable candidate list or generation result; verbose diagnostics use stderr |
 | `--output-dir`, `-o` | current directory | Destination directory |
 | `--cuda-output` | `generated_code.cu` | CUDA kernels and host C wrapper |
 | `--cpp-output` | `generated_cpp_impl.cpp` | C++ implementation with OpenMP annotations |
