@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from compiler.analysis import format_plan
@@ -51,7 +52,9 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Check every module subroutine and report generation eligibility without writing outputs.",
     )
-    parser.add_argument("--json", action="store_true", help="Print --list-candidates results as JSON.")
+    parser.add_argument(
+        "--json", action="store_true", help="Print candidate eligibility or generation results as JSON."
+    )
     parser.add_argument(
         "--output-dir",
         "-o",
@@ -121,8 +124,6 @@ def _parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if not args.list_candidates and not args.kernel:
         parser.error("--kernel is required unless --list-candidates is used")
-    if args.json and not args.list_candidates:
-        parser.error("--json requires --list-candidates")
     return args
 
 
@@ -161,10 +162,9 @@ def main() -> None:
     args = _parse_args()
 
     source_file = Path(args.input).resolve()
-    if not source_file.exists():
-        raise SystemExit(f"error: input file not found: {source_file}")
-
     try:
+        if not source_file.exists():
+            raise CompilationError(f"input file not found: {source_file}")
         options = CompilerOptions(
             opt_level=args.opt_level,
             schedule=args.schedule,
@@ -180,17 +180,22 @@ def main() -> None:
         sources = generate_sources(function, plan, common_header=args.common_header)
         common_header = read_common_header()
     except CompilationError as error:
+        if args.json and not args.list_candidates:
+            print(
+                json.dumps({"kernel": args.kernel, "supported": False, "reason": str(error), "outputs": []}, indent=2)
+            )
         raise SystemExit(f"error: {error}") from None
 
     if args.verbose:
-        print("Normalized IR:")
-        print(format_ir(function))
-        print("\nExecution plan and dependence checks:")
-        print(format_plan(plan))
-        print("\nMemory operations (explicit sessions):")
-        print(format_memory(plan_memory(plan, function.parameters)))
-        print("\nMemory operations (ordinary CUDA calls):")
-        print(format_memory(plan_memory(plan, function.parameters, acquisition_policy="pooled")))
+        stream = sys.stderr if args.json else sys.stdout
+        print("Normalized IR:", file=stream)
+        print(format_ir(function), file=stream)
+        print("\nExecution plan and dependence checks:", file=stream)
+        print(format_plan(plan), file=stream)
+        print("\nMemory operations (explicit sessions):", file=stream)
+        print(format_memory(plan_memory(plan, function.parameters)), file=stream)
+        print("\nMemory operations (ordinary CUDA calls):", file=stream)
+        print(format_memory(plan_memory(plan, function.parameters, acquisition_policy="pooled")), file=stream)
 
     # Publish only after every stage has validated and generated successfully.
     output_dir = Path(args.output_dir).resolve()
@@ -205,9 +210,25 @@ def main() -> None:
     for filename, code in outputs.items():
         (output_dir / filename).write_text(code, encoding="utf-8")
 
-    print(f"Generated files in {output_dir}/")
-    for filename in outputs:
-        print(f"  {filename}")
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "kernel": args.kernel,
+                    "supported": True,
+                    "reason": None,
+                    "parallel_regions": len(plan.regions),
+                    "execution_plan": format_plan(plan),
+                    "memory_plan": format_memory(plan_memory(plan, function.parameters, acquisition_policy="pooled")),
+                    "outputs": list(outputs),
+                },
+                indent=2,
+            )
+        )
+    else:
+        print(f"Generated files in {output_dir}/")
+        for filename in outputs:
+            print(f"  {filename}")
 
 
 if __name__ == "__main__":
