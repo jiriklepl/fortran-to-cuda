@@ -189,5 +189,8 @@ def session_definitions(function: FunctionIR, *, run_body: list[str], device: bo
         ]
     )
     lines.extend(_signature("cpp_" + names.trim_cache, [], profiled=device))
-    lines.extend(["    storage::trim_cache();", "}", ""])
+    lines.append("    storage::trim_cache();")
+    if device:
+        lines.extend(["#ifdef FORT_OFFLOAD_ENABLED", "    hybrid::trim_cache();", "#endif"])
+    lines.extend(["}", ""])
     return lines

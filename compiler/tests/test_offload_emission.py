@@ -55,7 +55,7 @@ int main() {
     Array a{nullptr,8,10*20*30*8,{10,20,30}};
     bool valid=true;
     assert(box_bytes(a,faces[0],valid)+box_bytes(a,faces[1],valid)==2*20*30*8);
-    assert(copy_operations(a,{{1,1,1},{8,18,28}},valid)==28);
+    assert(copy_operations(a,{{1,1,1},{8,18,28}},valid)==1);
     std::size_t result=0;
     assert(!mul(std::numeric_limits<std::size_t>::max(),2,result));
     index(1.0e50L,valid); assert(!valid);

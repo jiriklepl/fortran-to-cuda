@@ -23,7 +23,7 @@ inline void trace(const char *operation, std::size_t bytes = 0) {
     std::cerr << "FORT_RUNTIME " << operation;
     if (std::strcmp(operation, "alloc") == 0 || std::strcmp(operation, "upload") == 0 ||
         std::strcmp(operation, "download") == 0 || std::strcmp(operation, "pool_create") == 0 ||
-        std::strcmp(operation, "pool_alloc") == 0)
+        std::strcmp(operation, "pool_alloc") == 0 || std::strcmp(operation, "scratch_reuse") == 0)
         std::cerr << " bytes=" << bytes;
     std::cerr << '\n';
 }

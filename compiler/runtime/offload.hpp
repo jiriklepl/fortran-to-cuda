@@ -195,7 +195,9 @@ inline void append_box(std::vector<Box> &boxes, const Box &box) {
 }
 inline std::size_t box_bytes(const Array &a, const Box &b, bool &valid) {
     std::size_t result = a.element_bytes;
-    if (b.lower.size() != a.dimensions.size()) { valid = false; return 0; }
+    if (b.lower.size() != a.dimensions.size() || b.upper.size() != a.dimensions.size()) {
+        valid = false; return 0;
+    }
     for (std::size_t axis = 0; axis < b.lower.size(); ++axis) {
         if (b.lower[axis] > b.upper[axis] || b.upper[axis] >= a.dimensions[axis] ||
             !mul(result, b.upper[axis] - b.lower[axis] + 1, result)) { valid = false; return 0; }
@@ -215,11 +217,13 @@ inline double cpu_seconds(const Unit &unit, const Profile &p) {
     return std::max(unit.flops / p.cpu_flops, unit.memory_bytes / p.cpu_bandwidth);
 }
 inline std::size_t copy_operations(const Array &a, const Box &b, bool &valid) {
+    box_bytes(a, b, valid);
+    if (!valid) return 0;
     const auto rank = a.dimensions.size();
-    if (rank <= 2 || (rank == 3 &&
-        ((b.lower[1] == 0 && b.upper[1] + 1 == a.dimensions[1]) || b.lower[1] == b.upper[1]))) return 1;
+    // One pitched 3D copy covers the first three physical axes. Higher ranks
+    // require one such copy per remaining coordinate, matching copy_box.
     std::size_t result = 1;
-    for (std::size_t k = 2; k < rank; ++k)
+    for (std::size_t k = 3; k < rank; ++k)
         if (!mul(result, b.upper[k] - b.lower[k] + 1, result)) { valid = false; return 0; }
     return result;
 }
@@ -379,7 +383,7 @@ inline void copy_box(const Array &a, const Box &box, void *device, bool upload) 
     auto copy = [&](std::size_t at, std::size_t height, std::size_t pitch) {
         void *to = upload ? static_cast<void *>(gpu + at) : static_cast<void *>(host + at);
         const void *from = upload ? static_cast<void *>(host + at) : static_cast<void *>(gpu + at);
-        if (height == 1) CUCH(cudaMemcpy(to, from, width, direction));
+        if (height == 1 || pitch == width) CUCH(cudaMemcpy(to, from, width * height, direction));
         else CUCH(cudaMemcpy2D(to, pitch, from, pitch, width, height, direction));
     };
     if (rank == 1) copy(offset, 1, 0);
@@ -389,13 +393,22 @@ inline void copy_box(const Array &a, const Box &box, void *device, bool upload) 
     else if (rank == 3 && box.lower[1] == box.upper[1])
         copy(offset, box.upper[2] - box.lower[2] + 1, strides[2]);
     else {
-        // Copy a rectangle per higher-dimensional plane, retaining layout.
+        // Keep the full physical row and slice pitches. Offsetting the pointer
+        // alone must not turn an interior section into a compact allocation.
         std::vector<std::size_t> indices = box.lower;
         for (;;) {
             std::size_t at = box.lower[0] * a.element_bytes;
             for (std::size_t k = 1; k < rank; ++k) at += indices[k] * strides[k];
-            copy(at, box.upper[1] - box.lower[1] + 1, strides[1]);
-            std::size_t k = 2;
+            cudaMemcpy3DParms parameters{};
+            parameters.srcPtr = make_cudaPitchedPtr(upload ? host + at : gpu + at,
+                                                     strides[1], strides[1], a.dimensions[1]);
+            parameters.dstPtr = make_cudaPitchedPtr(upload ? gpu + at : host + at,
+                                                     strides[1], strides[1], a.dimensions[1]);
+            parameters.extent = make_cudaExtent(width, box.upper[1] - box.lower[1] + 1,
+                                                box.upper[2] - box.lower[2] + 1);
+            parameters.kind = direction;
+            CUCH(cudaMemcpy3D(&parameters));
+            std::size_t k = 3;
             while (k < rank && ++indices[k] > box.upper[k]) { indices[k] = box.lower[k]; ++k; }
             if (k == rank) break;
         }
