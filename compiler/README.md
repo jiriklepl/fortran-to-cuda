@@ -178,6 +178,10 @@ to ordinary calls; explicit-session coherence is unchanged. `sections` copies
 physical rectangular read/write footprints synchronously, preserving separate
 opposite faces and values in partially written outputs. Unknown sections use
 whole-array transfers. Device storage retains the original logical layout.
+Contiguous sections use flat copies; pitched rectangles use 2D or 3D copies.
+An interior 3D rectangle takes one runtime copy call instead of one per plane;
+higher ranks use one 3D copy per remaining coordinate. Transfer estimates count
+these same calls. Disjoint faces stay separate and copyback never fills gaps.
 
 `auto` compares native units with GPU intervals of up to four adjacent units
 and the complete legal group. It retains units before optional fusion, respects
@@ -211,7 +215,15 @@ total pinned-memory budget is 64 MiB. Hybrid reserves one host thread to manage
 GPU work, while remaining workers process disjoint CPU slabs. All work and
 copyback complete before return. Cross-entry residency and dependent chunk
 pipelines remain outside these prototypes.
-The two slots are reused between batches within a call. Compact slabs retain
+The runtime retains one completed pair of slots, streams, and events between
+calls, reusing sufficient capacity on the same device. Inputs are packed and
+uploaded afresh on every call, including after host edits, shape changes, or
+reallocation. This is scratch reuse, not cross-entry data residency. Concurrent
+calls lease separate pairs; active and idle pinned capacity together remain
+within 64 MiB. An incompatible idle pair is evicted before allocating or waiting
+for budget. Allocation failure before execution selects native work once.
+`FORT_RUNTIME_TRACE=1` reports `scratch_reuse` and its retained capacity.
+Compact slabs retain
 their complete nonslab dimensions; uploads preserve untouched halo elements
 that share those slabs. Synchronous section transfers can omit uploads of
 rectangles proved to be completely overwritten.
@@ -354,8 +366,9 @@ cleanup synchronizes before freeing. Zero-sized buffers do not initialize a pool
 
 Each generated module also exports `<entry>_trim_cache()` (with the same collision
 and length handling as workspace names). After joining ordinary callers, call it
-to destroy this runtime's private pool on the current device. The next ordinary
-call recreates the pool. It diagnoses outstanding pooled leases and is a no-op
+to destroy this runtime's private pool and release any idle chunked/hybrid
+scratch slots on the current device. The next ordinary call recreates resources
+as needed. It diagnoses outstanding pooled leases and is a no-op
 for CPU implementations and absent pools. Sessions remain valid and no outputs
 are retrieved. Release the cache before device reset, external context teardown,
 or unloading generated code; the runtime performs no CUDA work in static

@@ -257,14 +257,16 @@ def test_packed_two_slot_windows_match_fortran_with_halos_and_slot_reuse(tmp_pat
     b_shape = "ny,nx" if reverse_permuted else "nx,ny"
     b_index = "j,i" if reverse_permuted else "i,j"
     (tmp_path / "driver.f90").write_text(f"""program compare
-use hybrid_case,only:candidate=>advance
+use hybrid_case,only:candidate=>advance,advance_trim_cache
 use reference_case,only:reference=>advance
 implicit none
-integer,parameter::nx=513,ny=1026
+integer,parameter::nx=513
 real(8),allocatable::a(:,:),b(:,:),expected(:,:)
-integer::i,j,rep
-allocate(a(nx,ny),b({b_shape}),expected(nx,ny))
-do rep=1,2
+integer::i,j,rep,ny
+do rep=1,3
+ ny=1026
+ if(rep==3) ny=513
+ allocate(a(nx,ny),b({b_shape}),expected(nx,ny))
  do j=1,ny
   do i=1,nx
    b({b_index})=real(i+100*j+rep,8)
@@ -278,7 +280,9 @@ do rep=1,2
  call candidate(a,b,nx,ny,0.25_8*rep)
  {parallel_end}
  if(any(a/=expected)) error stop 'hybrid mismatch or halo corruption'
+ deallocate(a,b,expected)
 end do
+call advance_trim_cache()
 print *, 'HYBRID_NATIVE_PASS'
 end program
 """)
@@ -331,4 +335,6 @@ end program
         assert result.returncode == 0, log
         assert "HYBRID_NATIVE_PASS" in log
         assert log.count("FORT_RUNTIME kernel") > 4  # Both slots are reused.
-        assert log.count("FORT_RUNTIME alloc bytes=") == 4  # Two slots per synchronous call.
+        assert log.count("FORT_RUNTIME alloc bytes=") == 2  # Retained across reallocation and shape changes.
+        assert log.count("FORT_RUNTIME scratch_reuse bytes=") == 2
+        assert log.count("FORT_RUNTIME free") == 2  # Explicit public cache teardown.

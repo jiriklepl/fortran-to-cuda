@@ -46,7 +46,8 @@ end module
         assert "&check" not in body
     else:
         assert body.index("cudaGetDevice(&check.device)") < body.index("#pragma omp parallel num_threads(2)")
-        assert "_team(" in body and ", &check);" in body
+        assert "_team(" in body
+        assert ", &check);" in body
 
 
 @pytest.mark.native
@@ -89,6 +90,14 @@ int cudaDriverGetVersion(int *version) { *version = 13000; return cudaSuccess; }
 int cudaMemcpy(void *, const void *, std::size_t, int) { return cudaSuccess; }
 int cudaMemcpy2D(void *, std::size_t, const void *, std::size_t,
                  std::size_t, std::size_t, int) { return cudaSuccess; }
+struct cudaPitchedPtr { void *ptr; std::size_t pitch, xsize, ysize; };
+struct cudaExtent { std::size_t width, height, depth; };
+struct cudaMemcpy3DParms { cudaPitchedPtr srcPtr{}, dstPtr{}; cudaExtent extent{}; int kind; };
+cudaPitchedPtr make_cudaPitchedPtr(void *ptr, std::size_t pitch, std::size_t x, std::size_t y) {
+    return {ptr, pitch, x, y};
+}
+cudaExtent make_cudaExtent(std::size_t x, std::size_t y, std::size_t z) { return {x,y,z}; }
+int cudaMemcpy3D(const cudaMemcpy3DParms *) { return cudaSuccess; }
 #define CUCH(call) do { if ((call) != cudaSuccess) std::abort(); } while (0)
 namespace generated_kernels::storage {
 enum class AllocationPolicy { pooled };
