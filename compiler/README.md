@@ -182,6 +182,13 @@ Contiguous sections use flat copies; pitched rectangles use 2D or 3D copies.
 An interior 3D rectangle takes one runtime copy call instead of one per plane;
 higher ranks use one 3D copy per remaining coordinate. Transfer estimates count
 these same calls. Disjoint faces stay separate and copyback never fills gaps.
+Overlapping sections are reduced to an exact disjoint union when worthwhile,
+with at most 32 rectangles and 1,024 intersection checks per array/direction.
+The same rectangles feed execution, cost estimates, and transfer traces.
+Without calibration, deduplication must reduce bytes without adding copy calls.
+With calibration, extra calls are allowed only when saved transfer time exceeds
+their latency cost. Ties, uncertain arithmetic, and excessive fragmentation
+retain the original rectangles; no bounding volume replaces holes or faces.
 
 `auto` compares native units with GPU intervals of up to four adjacent units
 and the complete legal group. It retains units before optional fusion, respects

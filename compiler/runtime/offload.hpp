@@ -9,6 +9,7 @@
 #include <fstream>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 #if defined(__CUDACC__) && __has_include(<nvtx3/nvToolsExt.h>)
 #include <nvtx3/nvToolsExt.h>
@@ -204,18 +205,6 @@ inline std::size_t box_bytes(const Array &a, const Box &b, bool &valid) {
     }
     return result;
 }
-inline std::vector<Footprint> interval(const Data &data, std::size_t begin, std::size_t end) {
-    std::vector<Footprint> result(data.arrays.size());
-    for (std::size_t u = begin; u < end; ++u)
-        for (std::size_t a = 0; a < result.size(); ++a) {
-            for (const auto &box : data.units[u].arrays[a].upload) append_box(result[a].upload, box);
-            for (const auto &box : data.units[u].arrays[a].download) append_box(result[a].download, box);
-        }
-    return result;
-}
-inline double cpu_seconds(const Unit &unit, const Profile &p) {
-    return std::max(unit.flops / p.cpu_flops, unit.memory_bytes / p.cpu_bandwidth);
-}
 inline std::size_t copy_operations(const Array &a, const Box &b, bool &valid) {
     box_bytes(a, b, valid);
     if (!valid) return 0;
@@ -227,6 +216,114 @@ inline std::size_t copy_operations(const Array &a, const Box &b, bool &valid) {
         if (!mul(result, b.upper[k] - b.lower[k] + 1, result)) { valid = false; return 0; }
     return result;
 }
+// Exact unions are optional: bound planning work and retain the original
+// rectangles if fragmentation is not worthwhile or arithmetic is uncertain.
+inline constexpr std::size_t section_union_limit = 32;
+inline bool overlaps(const Box &a, const Box &b) {
+    for (std::size_t k = 0; k < a.lower.size(); ++k)
+        if (a.lower[k] > b.upper[k] || b.lower[k] > a.upper[k]) return false;
+    return true;
+}
+inline bool disjoint_union(const std::vector<Box> &input, std::vector<Box> &output) {
+    if (input.size() > section_union_limit) return false;
+    const auto rank = input.empty() ? 0 : input.front().lower.size();
+    for (const auto &box : input) {
+        if (!rank || box.lower.size() != rank || box.upper.size() != rank) return false;
+        for (std::size_t axis = 0; axis < rank; ++axis)
+            if (box.lower[axis] > box.upper[axis]) return false;
+    }
+    std::vector<Box> result;
+    std::size_t work = 0;
+    for (const auto &box : input) {
+        std::vector<Box> pending{box};
+        for (const auto &old : result) {
+            std::vector<Box> next;
+            for (const auto &piece : pending) {
+                if (++work > section_union_limit * section_union_limit) return false;
+                if (!overlaps(piece, old)) next.push_back(piece);
+                else {
+                    auto middle = piece;
+                    // Peel slow axes first to preserve wide contiguous rows.
+                    for (std::size_t axis = rank; axis-- > 0;) {
+                        const auto lo = std::max(piece.lower[axis], old.lower[axis]);
+                        const auto hi = std::min(piece.upper[axis], old.upper[axis]);
+                        if (middle.lower[axis] < lo) {
+                            auto slab = middle; slab.upper[axis] = lo - 1;
+                            next.push_back(std::move(slab)); middle.lower[axis] = lo;
+                        }
+                        if (middle.upper[axis] > hi) {
+                            auto slab = middle; slab.lower[axis] = hi + 1;
+                            next.push_back(std::move(slab)); middle.upper[axis] = hi;
+                        }
+                        if (next.size() > section_union_limit) return false;
+                    }
+                }
+                if (next.size() > section_union_limit) return false;
+            }
+            pending = std::move(next);
+            if (pending.empty()) break;
+        }
+        for (const auto &piece : pending) {
+            append_box(result, piece);
+            if (result.size() > section_union_limit) return false;
+        }
+    }
+    output = std::move(result);
+    return true;
+}
+inline bool transfer_metrics(const Array &array, const std::vector<Box> &boxes,
+                             std::size_t &bytes, std::size_t &copies) {
+    bool valid = true;
+    std::size_t total_bytes = 0, total_copies = 0;
+    for (const auto &box : boxes) {
+        const auto size = box_bytes(array, box, valid);
+        const auto count = copy_operations(array, box, valid);
+        if (!valid || !add(total_bytes, size, total_bytes) ||
+            !add(total_copies, count, total_copies)) return false;
+    }
+    bytes = total_bytes; copies = total_copies;
+    return true;
+}
+inline bool deduplicate_boxes(const Array &array, std::vector<Box> &boxes,
+                              double latency = -1, double bandwidth = 0) {
+    if (boxes.size() < 2 || boxes.size() > section_union_limit) return false;
+    std::size_t old_bytes = 0, old_copies = 0, new_bytes = 0, new_copies = 0;
+    if (!transfer_metrics(array, boxes, old_bytes, old_copies)) return false;
+    bool overlap = false;
+    for (std::size_t i = 0; i < boxes.size() && !overlap; ++i)
+        for (std::size_t j = 0; j < i; ++j)
+            if (overlaps(boxes[i], boxes[j])) { overlap = true; break; }
+    if (!overlap) return false;
+    std::vector<Box> candidate;
+    if (!disjoint_union(boxes, candidate) ||
+        !transfer_metrics(array, candidate, new_bytes, new_copies) ||
+        new_bytes >= old_bytes) return false;
+    if (new_copies > old_copies &&
+        (!(latency >= 0) || !(bandwidth > 0) || !std::isfinite(latency) || !std::isfinite(bandwidth) ||
+         static_cast<double>(old_bytes - new_bytes) / bandwidth <=
+             static_cast<double>(new_copies - old_copies) * latency)) return false;
+    boxes = std::move(candidate);
+    return true;
+}
+inline std::vector<Footprint> interval(const Data &data, std::size_t begin, std::size_t end,
+                                       const Profile &profile = Profile{}) {
+    std::vector<Footprint> result(data.arrays.size());
+    for (std::size_t u = begin; u < end; ++u)
+        for (std::size_t a = 0; a < result.size(); ++a) {
+            for (const auto &box : data.units[u].arrays[a].upload) append_box(result[a].upload, box);
+            for (const auto &box : data.units[u].arrays[a].download) append_box(result[a].download, box);
+        }
+    for (std::size_t a = 0; a < result.size(); ++a) {
+        deduplicate_boxes(data.arrays[a], result[a].upload,
+                          profile.valid ? profile.h2d_latency : -1, profile.h2d_bandwidth);
+        deduplicate_boxes(data.arrays[a], result[a].download,
+                          profile.valid ? profile.d2h_latency : -1, profile.d2h_bandwidth);
+    }
+    return result;
+}
+inline double cpu_seconds(const Unit &unit, const Profile &p) {
+    return std::max(unit.flops / p.cpu_flops, unit.memory_bytes / p.cpu_bandwidth);
+}
 inline double gpu_seconds(const Data &data, std::size_t begin, std::size_t end, const Profile &p) {
     bool valid = true;
     double flops = 0, memory = 0, result = 0;
@@ -234,7 +331,7 @@ inline double gpu_seconds(const Data &data, std::size_t begin, std::size_t end, 
         flops += data.units[u].flops; memory += data.units[u].memory_bytes;
         if (data.units[u].iterations) result += p.launch_seconds;
     }
-    auto footprints = interval(data, begin, end);
+    auto footprints = interval(data, begin, end, p);
     for (std::size_t a = 0; a < data.arrays.size(); ++a) {
         for (const auto &b : footprints[a].upload)
             result += p.h2d_latency * copy_operations(data.arrays[a], b, valid) + box_bytes(data.arrays[a], b, valid) / p.h2d_bandwidth;
@@ -324,7 +421,7 @@ inline void plan_trace(const char *entry, const Data &data, const Profile &p, co
             if (choice.gpu && data.units[u].iterations) ++launches;
         }
         if (choice.gpu) {
-            auto footprints = interval(data, choice.begin, choice.end);
+            auto footprints = interval(data, choice.begin, choice.end, p);
             for (std::size_t a=0; a<data.arrays.size(); ++a) {
                 for (const auto &b : footprints[a].upload) {
                     const auto bytes = box_bytes(data.arrays[a], b, valid);

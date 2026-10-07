@@ -172,7 +172,7 @@ def generate_offload(function, plan, config):
     arrays = [s for s in function.parameters if s.rank]
     lines += [f"static void {name}_gpu({signature}, const offload::Data& d, std::size_t begin, std::size_t end) {{",
               "    offload::DeviceScope device_scope(d.device);",
-              "    const auto footprints = offload::interval(d, begin, end);",
+              f"    const auto footprints = offload::interval(d, begin, end, {name}_profile);",
               "    std::vector<std::unique_ptr<offload::Allocation>> buffers(d.arrays.size());"]
     for i, symbol in enumerate(arrays):
         lines += [f"    if (!footprints[{i}].upload.empty() || !footprints[{i}].download.empty())",
