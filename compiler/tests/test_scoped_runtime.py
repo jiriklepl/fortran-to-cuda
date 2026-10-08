@@ -67,15 +67,21 @@ class Scope:
     def check(self, status):
         assert status == 0, self.lib.fort_scope_error().decode()
 
-    def register(self, values, shape, *, identity=1, generation=1, initialized=True, lower=None):
+    def register(self, values, shape, *, identity=1, generation=1, initialized=True, lower=None, defined=None):
         shape_values = (SIZE * len(shape))(*shape)
         bounds = (c.c_int64 * len(shape))(*(lower or [0] * len(shape)))
         layout = Layout(len(shape), 2, 8, c.cast(values, c.c_void_p) if values is not None else None,
                         shape_values, bounds, generation)
         buffer = TOKEN()
         self.references.extend([values, shape_values, bounds, layout])
-        status = self.lib.fort_scope_register(self.handle, identity, generation, c.byref(layout),
-                                              initialized, c.byref(buffer))
+        if defined is None:
+            status = self.lib.fort_scope_register(self.handle, identity, generation, c.byref(layout),
+                                                  initialized, c.byref(buffer))
+        else:
+            effects = access(read=defined)
+            self.references.append(effects)
+            status = self.lib.fort_scope_register_sections(self.handle, identity, generation, c.byref(layout),
+                                                           effects.reads, effects.read_count, c.byref(buffer))
         return status, buffer
 
     def gpu(self, buffer, effects):
@@ -116,7 +122,11 @@ def runtime(tmp_path_factory):
     lib.fort_scope_error.restype = c.c_char_p
     signatures = {
         "create": [c.c_int, c.POINTER(TOKEN)],
+        "serial_caller": [],
         "register": [TOKEN, TOKEN, TOKEN, c.POINTER(Layout), c.c_int, c.POINTER(TOKEN)],
+        "register_sections": [TOKEN, TOKEN, TOKEN, c.POINTER(Layout), c.POINTER(Section), SIZE, c.POINTER(TOKEN)],
+        "forget_definition": [TOKEN, TOKEN],
+        "set_device_budget": [TOKEN, SIZE],
         "layout_get": [TOKEN, TOKEN, c.POINTER(Layout)],
         "device_begin": [TOKEN, TOKEN, c.POINTER(Access), c.POINTER(c.c_void_p)],
         "host_begin": [TOKEN, TOKEN, c.POINTER(Access)],
@@ -127,6 +137,11 @@ def runtime(tmp_path_factory):
     for name, signature in signatures.items():
         getattr(lib, "fort_scope_" + name).argtypes = signature
     return lib
+
+
+@pytest.mark.native
+def test_source_caller_without_openmp_support_selects_native(runtime):
+    assert runtime.fort_scope_serial_caller() == 0
 
 
 @pytest.mark.native
@@ -405,3 +420,115 @@ end program
     assert result.returncode == 0, result.stderr
     result = subprocess.run([str(tmp_path / "caller")], capture_output=True, text=True, timeout=20)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+
+@pytest.mark.native
+def test_partial_initialization_never_copies_or_reads_undefined_halos(runtime):
+    scope = Scope(runtime)
+    host = (c.c_double * 8)(101, 102, 103, 104, 105, 106, 107, 108)
+    defined = [([2], [6])]
+    status, buffer = scope.register(host, [8], defined=defined, lower=[-2])
+    scope.check(status)
+    pointer = scope.gpu(buffer, access(read=defined, write=defined))
+    for i in range(2, 6):
+        pointer[i] += 10
+    scope.gpu_end(buffer)
+    assert scope.stats().upload_bytes == 4*8
+    unknown = access(read=[([0], [1])])
+    assert runtime.fort_scope_host_begin(scope.handle, buffer, c.byref(unknown)) == 7
+    # Re-registering cannot turn undefined sections into current host data.
+    status, duplicate = scope.register(host, [8], lower=[-2], initialized=True)
+    scope.check(status)
+    assert duplicate.value == buffer.value
+    assert runtime.fort_scope_host_begin(scope.handle, buffer, c.byref(unknown)) == 7
+    scope.close()
+    assert list(host) == [101, 102, 113, 114, 115, 116, 107, 108]
+
+
+@pytest.mark.native
+def test_definition_change_discards_device_values_and_reuses_allocation(runtime):
+    scope = Scope(runtime)
+    host = (c.c_double * 8)(*range(8))
+    status, buffer = scope.register(host, [8])
+    scope.check(status)
+    device = scope.gpu(buffer, access(flags=6))
+    for i in range(8):
+        device[i] = 1000+i
+    scope.gpu_end(buffer)
+    scope.check(runtime.fort_scope_forget_definition(scope.handle, buffer))
+    assert scope.stats().downloads == 0
+    assert runtime.fort_scope_host_begin(scope.handle, buffer, c.byref(access(flags=1))) == 7
+    middle = [([2], [6])]
+    device = scope.gpu(buffer, access(write=middle, overwrite=middle))
+    for i in range(2, 6):
+        device[i] = 2000+i
+    scope.gpu_end(buffer)
+    assert scope.stats().allocations == 1
+    scope.close()
+    assert list(host) == [0, 1, 2002, 2003, 2004, 2005, 6, 7]
+
+
+@pytest.mark.native
+def test_definition_change_cannot_cancel_a_prepared_operation(runtime):
+    scope = Scope(runtime)
+    host = (c.c_double * 8)(*range(8))
+    status, buffer = scope.register(host, [8])
+    scope.check(status)
+    scope.cpu_begin(buffer, access(flags=3))
+    assert runtime.fort_scope_forget_definition(scope.handle, buffer) == 8
+    scope.cpu_end(buffer)
+    scope.close()
+
+
+@pytest.mark.native
+def test_invalid_partial_initialization_is_rejected_before_registration(runtime):
+    scope = Scope(runtime)
+    host = (c.c_double * 8)(*range(8))
+    status, _ = scope.register(host, [8], defined=[([0], [9])])
+    assert status == 1
+    status, buffer = scope.register(host, [8], defined=[])
+    scope.check(status)
+    assert runtime.fort_scope_host_begin(scope.handle, buffer, c.byref(access(flags=1))) == 7
+    scope.close()
+
+
+
+@pytest.mark.native
+def test_declared_device_budget_prevents_allocation_and_keeps_native_continuation(runtime):
+    scope = Scope(runtime)
+    host, other = (c.c_double * 8)(*range(8)), (c.c_double * 8)()
+    status, first = scope.register(host, [8])
+    scope.check(status)
+    status, second = scope.register(other, [8], identity=2, initialized=False)
+    scope.check(status)
+    scope.check(runtime.fort_scope_set_device_budget(scope.handle,64))
+    device=scope.gpu(first,access(flags=3))
+    for i in range(8):
+        device[i]+=100
+    scope.gpu_end(first)
+    assert runtime.fort_scope_set_device_budget(scope.handle,128)==8
+    assert runtime.fort_scope_device_begin(scope.handle,second,c.byref(access(flags=6)),c.byref(c.c_void_p()))==4
+    assert scope.stats().allocated_bytes==64
+    scope.cpu_begin(first,access(flags=1))
+    scope.cpu_end(first)
+    scope.cpu_begin(second,access(flags=6))
+    for i in range(8):
+        other[i]=host[i]*2
+    scope.cpu_end(second)
+    scope.close()
+    assert list(other)==[2*(i+100) for i in range(8)]
+
+
+@pytest.mark.native
+def test_zero_device_budget_never_initializes_cuda(runtime):
+    scope=Scope(runtime)
+    host=(c.c_double * 8)(*range(8))
+    status,buffer=scope.register(host,[8])
+    scope.check(status)
+    scope.check(runtime.fort_scope_set_device_budget(scope.handle,0))
+    assert runtime.fort_scope_device_begin(scope.handle,buffer,c.byref(access(flags=1)),c.byref(c.c_void_p()))==4
+    assert scope.stats().allocations==0
+    scope.cpu_begin(buffer,access(flags=1))
+    scope.cpu_end(buffer)
+    scope.close()

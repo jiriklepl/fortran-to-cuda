@@ -64,6 +64,9 @@ class Scope:
     wildcards: list[str] = field(default_factory=list)
     generics: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
     unresolved_imports: list[str] = field(default_factory=list)
+    issues: list[str] = field(default_factory=list)
+    default_public: bool = True
+    access: dict[str, bool] = field(default_factory=dict)
 
 
 @dataclass
@@ -97,7 +100,7 @@ class SourceEffects:
                     raise CompilationError(f"duplicate source module {module}")
                 self.modules[module] = Scope(module, filename, node)
         for scope in self.modules.values():
-            self._specification(scope)
+            scope.issues = self._specification(scope)
         for scope in self.modules.values():
             for node in _children(_part(scope.node, "Module_Subprogram_Part")):
                 if _kind(node) != "Subroutine_Subprogram":
@@ -108,7 +111,7 @@ class SourceEffects:
                     raise CompilationError(f"duplicate source procedure {qualified}")
                 child = Scope(scope.module, scope.path, node, scope)
                 arguments = tuple(str(a).lower() for a in _children(stmt.items[2]))
-                issues = self._specification(child, arguments, qualified)
+                issues = scope.issues + self._specification(child, arguments, qualified)
                 if _part(node, "Internal_Subprogram_Part") is not None:
                     issues.append("internal procedures need an explicit effect closure")
                 self.routines[qualified] = Routine(child, arguments, _part(node, "Execution_Part"), qualified, issues)
@@ -135,7 +138,7 @@ class SourceEffects:
                              if b.dtype == "integer" and "parameter" in b.attributes]
         for local, module, remote in imported:
             target = self.modules.get(module)
-            if target is None:
+            if target is None or not self._exported(target,remote):
                 continue
             binding = target.bindings.get(remote)
             if binding is None or binding.dtype != "integer" or "parameter" not in binding.attributes:
@@ -181,6 +184,13 @@ class SourceEffects:
                     scope.generics[generic] = members
                 else:
                     issues.append("non-module generic interface is unavailable")
+            elif name == "Access_Stmt":
+                mode, names = node.items
+                public = str(mode).lower() == "public"
+                if names is None:
+                    scope.default_public = public
+                else:
+                    scope.access.update((str(item).lower(),public) for item in names.items)
             elif name == "Type_Declaration_Stmt":
                 dtype, attrs, entities = node.items
                 if _kind(dtype) == "Intrinsic_Type_Spec":
@@ -219,6 +229,17 @@ class SourceEffects:
                 issues.append(f"specification effect unavailable: {name}")
         return issues
 
+    def _exported(self, scope, name):
+        name = str(name).lower()
+        if name in scope.access:
+            return scope.access[name]
+        binding = scope.bindings.get(name)
+        if binding and "private" in binding.attributes:
+            return False
+        if binding and "public" in binding.attributes:
+            return True
+        return scope.default_public
+
     def _binding(self, scope, name, visited=frozenset()):
         name = str(name).lower()
         key = (scope.module, id(scope), name)
@@ -230,6 +251,8 @@ class SourceEffects:
         if name in scope.imports:
             module, remote = scope.imports[name]
             if module in self.modules:
+                if not self._exported(self.modules[module], remote):
+                    return None
                 binding = self._binding(self.modules[module], remote, visited | {key})
                 if binding:
                     found.append(binding)
@@ -238,6 +261,8 @@ class SourceEffects:
         else:
             for module in scope.wildcards:
                 if module in self.modules:
+                    if not self._exported(self.modules[module], name):
+                        continue
                     binding = self._binding(self.modules[module], name, visited | {key})
                     if binding:
                         found.append(binding)
@@ -260,6 +285,8 @@ class SourceEffects:
         if name in scope.imports:
             module, remote = scope.imports[name]
             if module in self.modules:
+                if not self._exported(self.modules[module],remote):
+                    return []
                 return self._candidates(self.modules[module], remote, visited | {key})
             return [module + "::" + remote]
         own = scope.module + "::" + name
@@ -269,6 +296,8 @@ class SourceEffects:
         for module in scope.wildcards:
             if module not in self.modules:
                 return []
+            if not self._exported(self.modules[module],name):
+                continue
             found += self._candidates(self.modules[module], name, visited | {key})
         if found:
             return sorted(set(found))
@@ -304,6 +333,96 @@ class SourceEffects:
                     width = None
             return dtype, width, 0
         return None
+
+    def whole_overwrites(self, routine):
+        """Prove complete assignments, including unit-stride full-array sweeps.
+
+        This is a must-write proof, separate from the conservative may-write
+        envelope. Uncertain bounds, conditional holes, extra loop iterators and
+        early exits supply no proof. SIZE-based sweeps require dummy lower bound
+        one; LBOUND/UBOUND sweeps also support negative declared lower bounds.
+        """
+        scope = routine.scope
+
+        def normalized(node):
+            return str(node).lower().replace(" ", "")
+
+        def inquiry(node, name, binding, axis):
+            if _kind(node) != "Intrinsic_Function_Reference" or str(node.items[0]).lower() != name:
+                return False
+            arguments = _children(node.items[1])
+            if len(arguments) != 2 or _kind(arguments[0]) != "Name":
+                return False
+            array = self._binding(scope, arguments[0])
+            return array is not None and array.root == binding.root and normalized(arguments[1]) == str(axis)
+
+        def sweep(control, binding, axis):
+            lower, upper, *steps = control
+            if steps and steps[0] is not None and normalized(steps[0]) != "1":
+                return False
+            declared = binding.lower_bounds[axis-1].replace(" ", "").lower()
+            lo = inquiry(lower, "lbound", binding, axis) or normalized(lower) == declared
+            hi = inquiry(upper, "ubound", binding, axis) or (
+                declared == "1" and inquiry(upper, "size", binding, axis))
+            return lo and hi
+
+        def full_target(target, loops):
+            if _kind(target) == "Name" and not loops:
+                binding = self._binding(scope, target)
+                return binding if binding and binding.rank else None
+            if _kind(target) != "Part_Ref":
+                return None
+            binding = self._binding(scope, target.items[0])
+            indices = tuple(_children(target.items[1]))
+            if not binding or not binding.rank or len(indices) != binding.rank:
+                return None
+            used = set()
+            for axis, index in enumerate(indices, 1):
+                if _kind(index) == "Subscript_Triplet" and all(v is None for v in index.items):
+                    continue
+                if _kind(index) != "Name":
+                    return None
+                iterator = normalized(index)
+                if iterator in used or iterator not in loops or not sweep(loops[iterator], binding, axis):
+                    return None
+                used.add(iterator)
+            return binding if used == set(loops) else None
+
+        def prove(nodes, loops=None):
+            loops = {} if loops is None else loops
+            nodes = [node for node in nodes if _kind(node) != "Comment"]
+            # A RETURN/EXIT/call could skip a candidate assignment or mutate its
+            # sweep bounds. Restrict this proof to complete assignment-only nests.
+            if any(_kind(n) not in {"Assignment_Stmt", "Block_Nonlabel_Do_Construct", "Continue_Stmt"}
+                   for n in nodes):
+                return set()
+            found = set()
+            for node in nodes:
+                if _kind(node) == "Assignment_Stmt":
+                    target = full_target(node.items[0], loops)
+                    if target:
+                        found.add(target.root)
+                elif _kind(node) == "Block_Nonlabel_Do_Construct":
+                    children = node.content
+                    control = next((c for c in _children(children[0]) if _kind(c) == "Loop_Control"), None)
+                    if control is None or control.items[1] is None:
+                        continue
+                    iterator, bounds = control.items[1]
+                    iterator = normalized(iterator)
+                    if iterator in loops:
+                        continue
+                    # Any assignment to an active iterator or its bound storage
+                    # defeats a static coverage proof.
+                    writes = [n.items[0] for n in walk(node) if _kind(n) == "Assignment_Stmt"]
+                    bound_names = {str(n).lower() for b in bounds if b is not None
+                                   for n in walk(b) if _kind(n) == "Name"}
+                    if any(_kind(w) == "Name" and str(w).lower() in bound_names | {iterator}
+                           for w in writes):
+                        continue
+                    found.update(prove(children[1:-1], {**loops, iterator: bounds}))
+            return found
+
+        return sorted(prove(_children(routine.execution)))
 
     def summarize(self, requested, active=()):
         if requested in self.summaries:
@@ -535,6 +654,7 @@ class SourceEffects:
         statements(_children(routine.execution))
         summary["reasons"] = list(dict.fromkeys(reasons))
         summary["complete"] = not reasons
+        summary["guaranteed_whole_overwrites"] = self.whole_overwrites(routine) if summary["complete"] else []
         directives = [str(node) for node in walk(routine.scope.node)
                       if _kind(node) == "Comment" and str(node).lstrip().lower().startswith("!$omp")]
         summary["openmp_directives"] = directives

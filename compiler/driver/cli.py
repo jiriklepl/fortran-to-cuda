@@ -57,6 +57,10 @@ def _parse_args() -> argparse.Namespace:
                         help="Emit the versioned common memory runtime and build manifest; no input required.")
     parser.add_argument("--analyze-effects", action="store_true",
                         help="Report bounded native procedure effects separately from GPU eligibility; write no outputs.")
+    parser.add_argument("--form-scopes", action="store_true",
+                        help="Emit compiler-approved shared source scopes and a versioned build/edit manifest.")
+    parser.add_argument("--scope-facts", metavar="FILE",
+                        help="Versioned stable capture/definition and caller participation facts for source scopes.")
     parser.add_argument("--source-file", action="append", default=[], metavar="FILE",
                         help="Additional source available to native effect analysis; repeat for independent modules.")
     parser.add_argument("--effect-contracts", metavar="FILE",
@@ -139,10 +143,17 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--gpu-collective", action="store_true",
                         help="Opt-in entry is called by every thread of one existing OpenMP team.")
     args = parser.parse_args()
-    if args.analyze_effects and (args.list_candidates or args.emit_scoped_runtime):
+    if args.analyze_effects and (args.list_candidates or args.emit_scoped_runtime or args.form_scopes):
         parser.error("--analyze-effects cannot be combined with candidate listing or runtime export")
-    if (args.source_file or args.effect_contracts) and not args.analyze_effects:
-        parser.error("--source-file and --effect-contracts require --analyze-effects")
+    if (args.source_file or args.effect_contracts) and not (args.analyze_effects or args.form_scopes):
+        parser.error("--source-file and --effect-contracts require --analyze-effects or --form-scopes")
+    if args.scope_facts and not args.form_scopes:
+        parser.error("--scope-facts requires --form-scopes")
+    if args.form_scopes:
+        if args.list_candidates or args.emit_scoped_runtime:
+            parser.error("--form-scopes cannot be combined with candidate listing or runtime export")
+        if not args.scope_facts or args.memory_model != "scoped":
+            parser.error("--form-scopes requires --scope-facts and --memory-model scoped")
     if args.emit_scoped_runtime:
         if args.input or args.kernel or args.list_candidates:
             parser.error("--emit-scoped-runtime cannot be combined with input, kernel, or candidate listing")
@@ -221,7 +232,7 @@ def main() -> None:
     try:
         if not source_file.exists():
             raise CompilationError(f"input file not found: {source_file}")
-        if args.analyze_effects:
+        if args.analyze_effects or args.form_scopes:
             contracts = None
             if args.effect_contracts:
                 try:
@@ -231,10 +242,11 @@ def main() -> None:
                     contracts = document["procedures"]
                 except (OSError, ValueError) as error:
                     raise CompilationError(f"invalid effect contracts: {error}") from error
-            effects = analyze_source_effects([source_file, *args.source_file], args.kernel, contracts=contracts)
-            report = {"kernel": args.kernel, "supported": True, "reason": None, "outputs": [], "effects": effects}
-            print(json.dumps(report, indent=2) if args.json else json.dumps(effects, indent=2))
-            return
+            if args.analyze_effects:
+                effects = analyze_source_effects([source_file, *args.source_file], args.kernel, contracts=contracts)
+                report = {"kernel": args.kernel, "supported": True, "reason": None, "outputs": [], "effects": effects}
+                print(json.dumps(report, indent=2) if args.json else json.dumps(effects, indent=2))
+                return
         options = CompilerOptions(
             opt_level=args.opt_level,
             schedule=args.schedule,
@@ -244,6 +256,23 @@ def main() -> None:
             gpu_policy=args.gpu_policy,
             memory_model=args.memory_model,
         )
+        if args.form_scopes:
+            from compiler.scopes.source import form_source_scopes
+            try:
+                facts = json.loads(Path(args.scope_facts).read_text())
+            except (OSError, ValueError) as error:
+                raise CompilationError(f"invalid scope facts: {error}") from error
+            outputs, manifest = form_source_scopes([source_file,*args.source_file], args.kernel,
+                                                   facts=facts, options=options, config=_offload_config(args),
+                                                   contracts=contracts)
+            output_dir = Path(args.output_dir).resolve()
+            for name,content in outputs.items():
+                target = output_dir / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content, encoding="utf-8")
+            print(json.dumps({"kernel":args.kernel,"supported":True,"reason":None,
+                              "outputs":list(outputs),"scopes":manifest},indent=2))
+            return
         if args.list_candidates:
             _list_candidates(source_file, args, options)
             return

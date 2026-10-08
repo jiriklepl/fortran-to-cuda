@@ -36,6 +36,9 @@ module fort_scoped_memory
   end type
 
   public :: fort_scope_abi_version, fort_scope_error, fort_scope_create, fort_scope_register
+  public :: fort_scope_register_sections, fort_scope_forget_definition
+  public :: fort_scope_set_device_budget
+  public :: fort_scope_serial_caller
   public :: fort_scope_layout_get, fort_scope_host_begin, fort_scope_host_end
   public :: fort_scope_device_begin, fort_scope_device_end, fort_scope_cancel_access
   public :: fort_scope_gpu_enter, fort_scope_gpu_leave, fort_scope_note_launch, fort_scope_wait
@@ -43,6 +46,10 @@ module fort_scoped_memory
   public :: fort_scope_stats_get, fort_scope_unregister, fort_scope_close, fort_scope_abandon
 
   interface
+    function fort_scope_serial_caller() bind(C) result(serial)
+      import c_int
+      integer(c_int) :: serial
+    end function
     function fort_scope_abi_version() bind(C) result(version)
       import c_int32_t
       integer(c_int32_t) :: version
@@ -57,12 +64,33 @@ module fort_scoped_memory
       integer(c_int64_t), intent(out) :: context
       integer(c_int) :: status
     end function
+    function fort_scope_set_device_budget(context, bytes) bind(C) result(status)
+      import c_int, c_int64_t, c_size_t
+      integer(c_int64_t), value :: context
+      integer(c_size_t), value :: bytes
+      integer(c_int) :: status
+    end function
     function fort_scope_register(context, identity, generation, layout, host_initialized, buffer) bind(C) result(status)
       import c_int, c_int64_t, fort_scope_layout
       integer(c_int64_t), value :: context, identity, generation
       type(fort_scope_layout), intent(in) :: layout
       integer(c_int), value :: host_initialized
       integer(c_int64_t), intent(out) :: buffer
+      integer(c_int) :: status
+    end function
+    function fort_scope_register_sections(context, identity, generation, layout, initialized, count, buffer) &
+        bind(C) result(status)
+      import c_int, c_int64_t, c_size_t, c_ptr, fort_scope_layout
+      integer(c_int64_t), value :: context, identity, generation
+      type(fort_scope_layout), intent(in) :: layout
+      type(c_ptr), value :: initialized
+      integer(c_size_t), value :: count
+      integer(c_int64_t), intent(out) :: buffer
+      integer(c_int) :: status
+    end function
+    function fort_scope_forget_definition(context, buffer) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: context, buffer
       integer(c_int) :: status
     end function
     function fort_scope_layout_get(context, buffer, layout) bind(C) result(status)
