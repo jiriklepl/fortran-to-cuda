@@ -12,6 +12,7 @@ import json
 from dataclasses import dataclass
 from hashlib import sha256
 
+from fparser.two import Fortran2003 as F
 from fparser.two.utils import walk
 
 from compiler.driver.pipeline import prepare_function
@@ -21,7 +22,8 @@ from compiler.emission.fortran.formatting import _fortran_line, _fortran_list
 from compiler.frontend import lower_file
 from compiler.frontend.source_effects import SourceEffects, _children, _kind, _part
 from compiler.ir import CompilationError, SourceLocation
-from compiler.scopes.numerical import load_numerical_sources
+from compiler.ir.integers import integer_literal
+from compiler.scopes.numerical import load_numerical_sources, resource_binding
 
 DTYPES = {
     ("real", 8): ("real(c_double)", "FORT_SCOPE_REAL64", 8),
@@ -515,6 +517,19 @@ class ScopeBuilder:
                 # Lower-bound parameters depend on a descriptor, not its payload.
                 if parameter and parameter.lower_bound_dimension is not None:
                     return None
+                if parameter and not parameter.rank:
+                    binding = resource_binding(self.analysis, routine, root)
+                    if (routine.scope.bindings.get(binding.name) is binding and
+                            binding.root == routine.qualified + "::" + binding.name and
+                            "parameter" in binding.attributes):
+                        if binding.signature() != ("integer", 4, 0) or binding.attributes != {"parameter"}:
+                            raise CompilationError("planning local PARAMETER requires a scalar default INTEGER: " + root)
+                        location = SourceLocation(str(routine.scope.path))
+                        value = routine.scope.kinds.integer(F.Name(binding.name), location)
+                        integer_literal(str(value), location)
+                        # Its declaration and actual remain inside the original
+                        # leaf clones; the owner need not capture this constant.
+                        return None
                 return mapping.get(root, root)
 
             payload = {resource(name) for name in planning["payload_arrays"]} - {None}
@@ -786,11 +801,11 @@ class ScopeBuilder:
                     raise CompilationError("planning payload arrays change inside the complete source scope")
                 if controls & changed_scalars:
                     raise CompilationError("planning scalar inputs change inside the complete source scope")
-                for root in controls:
+                for root in sorted(controls):
                     binding = self.analysis._binding(routine.scope, self.visible(routine, root))
                     if binding.attributes & {"volatile", "asynchronous", "optional", "pointer", "allocatable"}:
                         raise CompilationError("planning control scalar association or participation is uncertain: " + root)
-                if any(root not in arrays or self.capture(arrays[root])["initialized"] != "whole" for root in payload):
+                if any(root not in arrays or self.capture(arrays[root])["initialized"] != "whole" for root in sorted(payload)):
                     raise CompilationError("planning payload arrays require whole initialized host storage")
                 planning_available, planning_reason = True, None
             except CompilationError as error:

@@ -551,6 +551,14 @@ so an empty assumed-shape dimension correctly has `LBOUND=1` even when its
 declared bound is negative. The public manifest records the normalized source
 identities/hashes, which are checked again before artifacts are published.
 
+Automatic scope planning recognizes leaf-local scalar default `INTEGER PARAMETER`
+inputs in these packages after resolving their original lexical binding and
+initializer with checked signed 32-bit arithmetic. Their declarations and scalar
+actuals stay in the leaf query and execution clones; the outer owner does not
+need to capture them. Unresolved or unsupported constants retain the whole native
+span. A same-name mutable resource in another leaf still requires its own planning
+proof.
+
 Configured builds may also supply `--analysis-sources configured.json` with
 `--analyze-effects` or `--form-scopes`. It keeps preprocessed analysis text separate
 from original edit targets. The document has `schema_version: 1`, matching

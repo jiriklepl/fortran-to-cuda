@@ -12,11 +12,12 @@ from compiler.driver.options import CompilerOptions
 from compiler.emission.common.resources import read_scoped_runtime
 from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import form_source_scopes
+from compiler.tests.test_numerical_sources import NORMALIZED, ORIGINAL, package
 from compiler.tests.test_offload_profile import scoped_profile
 from compiler.tests.test_source_scopes import ALLOCATABLE_PROGRAM, FACT, PROGRAM, WRAPPER_PROGRAM
 
 
-def generate(tmp_path, monkeypatch, source=PROGRAM, *, captures=None):
+def generate(tmp_path, monkeypatch, source=PROGRAM, *, captures=None, numerical_sources=None):
     # Synthetic costs exercise source proof/generation only, never performance.
     monkeypatch.setattr("compiler.emission.cuda.scoped.compiler_identity", lambda profile: {})
     path = tmp_path / "original.f90"
@@ -32,8 +33,140 @@ def generate(tmp_path, monkeypatch, source=PROGRAM, *, captures=None):
                                        "argument::out": {**FACT, "initialized": "none"}}}
     outputs, report = form_source_scopes([path], "step", facts=facts,
                                          options=CompilerOptions(fallback="host", gpu_policy="auto", memory_model="scoped"),
-                                         config=OffloadConfig("auto", profile))
+                                         config=OffloadConfig("auto", profile), numerical_sources=numerical_sources)
     return outputs, report
+
+
+def packaged_control(tmp_path, monkeypatch, *, name="query_start", declaration=None, dependency=False,
+                     guarded=False, mutable_consumer=False):
+    declaration = declaration or f"integer,parameter::{name}=-1"
+    original = ORIGINAL.replace("integer::i\n!$omp", "integer::i\n" + declaration + "\n!$omp", 1)
+    original = original.replace("do i=-1,n-4", f"do i={name},n-4", 1)
+    if dependency:
+        original = original.replace("real(8) :: gain=2", "integer,parameter::origin=3\nreal(8) :: gain=2")
+        original = original.replace("subroutine producer(a,b,n)\n", "subroutine producer(a,b,n)\nuse settings,only:seed=>origin\n")
+    normalized = NORMALIZED.replace("weights,alb,blb,wlb)", f"weights,alb,blb,wlb,{name})")
+    normalized = normalized.replace("integer,intent(in)::n,alb,blb,wlb", f"integer,intent(in)::n,alb,blb,wlb,{name}")
+    normalized = normalized.replace("do i=-1,n-4", f"do i={name},n-4")
+    if guarded:
+        span = "call producer(a,b,n)\ncall transform(b)\ncall consumer(b,out,n)"
+        original = original.replace(span, "if(n>0) then\n" + span + "\nendif")
+        original = original.replace("!$omp parallel do private(i)\ndo i=" + name + ",n-4",
+                                    f"if({name}<0) then\n!$omp parallel do private(i)\ndo i={name},n-4", 1)
+        original = original.replace("enddo\n!$omp end parallel do", "enddo\n!$omp end parallel do\nendif", 1)
+        normalized = normalized.replace("do i=" + name + ",n-4", f"if({name}<0) then\ndo i={name},n-4", 1)
+        normalized = normalized.replace("enddo\nend subroutine", "enddo\nendif\nend subroutine", 1)
+    if mutable_consumer:
+        original = original.replace("integer::i\ndo i=2,n-1", f"integer::i\ninteger::{name}\n{name}=2\ndo i={name},n-1")
+        consumer = f"""subroutine consumer(b,out,n,{name})
+real(8),intent(in)::b(:)
+real(8),intent(inout)::out(:)
+integer,intent(in)::n,{name}
+integer::i
+do i={name},n-1
+out(i)=b(i)
+enddo
+end subroutine
+"""
+        normalized = normalized.replace("end module", consumer + "end module")
+    _source, _numerical, document = package(tmp_path, original=original, normalized=normalized)
+    document["entries"][0]["parameters"].append({"name": name, "resource": "original::producer::" + name})
+    if mutable_consumer:
+        document["entries"].append({**document["entries"][0], "procedure": "original::consumer",
+                                   "entry": "extracted::consumer", "parameters": [
+                                       {"name": "b", "resource": "argument::b", "physical_origin": [0]},
+                                       {"name": "out", "resource": "argument::out", "physical_origin": [0]},
+                                       {"name": "n", "resource": "argument::n"},
+                                       {"name": name, "resource": "original::consumer::" + name}]})
+    captures = {root: FACT for root in ("argument::a", "argument::b", "argument::out", "settings::weights")}
+    return generate(tmp_path, monkeypatch, original, captures=captures, numerical_sources=document)
+
+
+@pytest.mark.parametrize(("name", "declaration", "dependency"), [
+    ("query_start", "integer,parameter::query_start=-1", False),
+    ("lane_lower", "integer,parameter::lane_lower=seed-4", True),
+    ("slice_begin", "integer,parameter::base=3,slice_begin=base-4", False),
+])
+def test_normalized_local_integer_constants_remain_in_leaf_queries(tmp_path, monkeypatch, name, declaration, dependency):
+    outputs, report = packaged_control(tmp_path, monkeypatch, name=name, declaration=declaration, dependency=dependency)
+    assert report["automatic_estimate_available"], report["boundaries"]
+    scope, = report["scopes"]
+    assert scope["estimate_available"], scope["planning_reason"]
+    assert all(parameter["resource"] != "original::producer::" + name for parameter in scope["parameters"])
+    text = next(value for path, value in outputs.items() if path.startswith("sources/"))
+    queries = [value.split("end subroutine", 1)[0] for value in text.split("subroutine fort_scope_query_")[1:]]
+    query = next(value for value in queries if "fort_status = fort_plan(" in value and name in value)
+    clone = next(value.split("end subroutine", 1)[0] for value in text.split("subroutine fort_scope_clone_")[1:]
+                 if "fort_status = fort_run(" in value and name in value)
+    for operation, value in (("fort_plan", query), ("fort_run", clone)):
+        assert "PARAMETER" in value
+        assert name in value
+        call = value.split("fort_status = " + operation + "(", 1)[1]
+        assert name in call
+        if dependency:
+            assert "seed => origin" in value
+
+
+@pytest.mark.parametrize(("declaration", "reason"), [
+    ("integer,parameter::query_start=2147483648", "default INTEGER literal is out of range"),
+    ("integer,parameter::query_start=2147483647+1", "default INTEGER constant expression overflows"),
+    ("integer,parameter::query_start=missing", "unresolved INTEGER kind parameter missing"),
+    ("integer,parameter::base=query_start,query_start=base", "cyclic kind parameter query_start"),
+    ("integer,parameter::query_start=abs(-1)", "unsupported INTEGER kind constant ABS(- 1)"),
+    ("integer(kind=4),parameter::query_start=-1", "unresolved INTEGER kind parameter query_start"),
+])
+def test_unproved_normalized_local_constants_keep_whole_native_span(tmp_path, monkeypatch, declaration, reason):
+    outputs, report = packaged_control(tmp_path, monkeypatch, declaration=declaration)
+    scope, = report["scopes"]
+    assert not scope["estimate_available"]
+    assert reason in scope["planning_reason"]
+    text = next(value for name, value in outputs.items() if name.startswith("sources/"))
+    owner = text.split("subroutine fort_scope_owner_", 1)[1].split("end subroutine", 1)[0]
+    assert "fort_scope_create" not in owner
+    assert "fort_scope_query_" not in text
+    assert "call producer(" in owner
+    assert "call consumer(" in owner
+
+
+def test_same_name_mutable_leaf_resource_is_not_discharged_as_another_leaf_constant(tmp_path, monkeypatch):
+    outputs, report = packaged_control(tmp_path, monkeypatch, mutable_consumer=True)
+    scope, = report["scopes"]
+    assert not scope["estimate_available"]
+    assert "hidden resource is unavailable at owning scope: original::consumer::query_start" in scope["planning_reason"]
+    text = next(value for name, value in outputs.items() if name.startswith("sources/"))
+    assert "fort_scope_query_" not in text
+
+
+def test_local_constant_proof_keeps_outer_and_numerical_guards(tmp_path, monkeypatch):
+    outputs, report = packaged_control(tmp_path, monkeypatch, guarded=True)
+    assert report["automatic_estimate_available"], report["boundaries"]
+    text = next(value for name, value in outputs.items() if name.startswith("sources/"))
+    assert "if(n>0) then\ncall fort_scope_owner_" in text
+    assert "if(query_start<0) then" in text
+    assert any("query_start" in value and "if (" in value for name, value in outputs.items() if name.endswith(".cu"))
+
+
+@pytest.mark.parametrize("guarded", [False, True])
+def test_normalized_local_parameter_queries_compile_as_fortran(tmp_path, monkeypatch, guarded):
+    fortran = shutil.which("gfortran-15") or shutil.which("gfortran")
+    if not fortran:
+        pytest.skip("Fortran compiler unavailable")
+    outputs, report = packaged_control(tmp_path, monkeypatch, name="lane_lower",
+                                       declaration="integer,parameter::lane_lower=seed-4", dependency=True, guarded=guarded)
+    assert report["automatic_estimate_available"]
+    build = tmp_path / "build"
+    for name, value in outputs.items():
+        path = build / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(value)
+    for role in ("common_runtime", "shared_entry", "original_source"):
+        for item in report["build_sources"]:
+            if item["role"] == role and item["language"] == "fortran":
+                path = build / item["path"]
+                result = subprocess.run([fortran, "-std=f2018", "-fopenmp", "-c", str(path),
+                                         "-o", str(path.with_suffix(".o"))], cwd=build,
+                                        capture_output=True, text=True, timeout=60)
+                assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_complete_scope_uses_public_queries_and_protected_native_fallback(tmp_path, monkeypatch):
