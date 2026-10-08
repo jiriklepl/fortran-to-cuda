@@ -137,6 +137,20 @@ def test_scopes_preserve_outer_guard_and_native_unknown_boundary(tmp_path):
     assert "endif\ncall unavailable(out)" in replacement
 
 
+def test_exhausted_earlier_branch_cannot_hide_later_scope_resources(tmp_path):
+    large = ("subroutine excessive(a)\nreal(8),intent(inout)::a(:)\n"
+             + "a=a+1\n"*140 + "end subroutine\n")
+    source = PROGRAM.replace("end module", large + "end module").replace(
+        "call producer(a,b,n)", "if(n<0) call excessive(b)\ncall producer(a,b,n)")
+    _, _, manifest = generate(tmp_path, source)
+    assert manifest["scope_count"] == 1, manifest["boundaries"]
+    scope, = manifest["scopes"]
+    assert scope["calls"] == ["original::producer", "original::transform", "original::consumer"]
+    assert {r["resource"] for r in scope["resources"]} == {"argument::a", "argument::b", "argument::out"}
+    assert scope["effect_closure"]["operations"] <= 256
+    assert not manifest["native_effects"]["complete"]
+
+
 def test_missing_capture_proof_keeps_original_source(tmp_path):
     facts = {"schema_version":1,"participation":"serial","captures":{}}
     original,output,manifest = generate(tmp_path,facts=facts)

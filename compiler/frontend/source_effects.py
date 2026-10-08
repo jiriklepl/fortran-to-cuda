@@ -79,12 +79,19 @@ class Routine:
     issues: list[str]
 
 
+@dataclass
+class _Closure:
+    summaries: dict = field(default_factory=dict)
+    operations: int = 0
+
+
 class SourceEffects:
     def __init__(self, paths, *, contracts=None, depth=8, procedures=64, operations=256, analysis_sources=None):
         if min(depth, procedures, operations) < 1:
             raise CompilationError("source effect budgets must be positive")
         self.depth_limit, self.procedure_limit, self.operation_limit = depth, procedures, operations
         self.modules, self.routines, self.summaries = {}, {}, {}
+        self._closures = {}
         self.inputs = SourceInputs(paths,analysis_sources)
         self.sources, self.operation_count = dict(self.inputs.sources), 0
         self.kind_expressions = []
@@ -437,22 +444,42 @@ class SourceEffects:
 
         return sorted(prove(_children(routine.execution)))
 
-    def summarize(self, requested, active=()):
-        if requested in self.summaries:
-            return self.summaries[requested]
+    def summarize(self, requested, active=(), *, _closure=None):
+        # Each requested proof owns its budget. Unrelated extraction offers and
+        # rejected branches cannot exhaust it or leave apparently complete,
+        # empty summaries behind. Cache a closure only in its original context.
+        if _closure is None:
+            closure = self._closures.get(requested)
+            if closure is None:
+                closure = _Closure()
+                self.summarize(requested, active, _closure=closure)
+                if len(self._closures) < self.procedure_limit:
+                    self._closures[requested] = closure
+            self.operation_count = closure.operations
+            self.summaries.update(closure.summaries)
+            return closure.summaries[requested]
         if requested not in self.routines:
             raise CompilationError(f"source procedure unavailable: {requested}")
-        if requested in active or len(active) >= self.depth_limit or len(self.summaries) >= self.procedure_limit:
+        if requested in active or len(active) >= self.depth_limit:
             return {"procedure": requested, "complete": False, "cloneable": False, "operations": [],
                     "reasons": ["recursive call or bounded source closure exhausted"]}
+        if requested in _closure.summaries:
+            cached = _closure.summaries[requested]
+            if len(active) + cached["closure_depth"] <= self.depth_limit:
+                return cached
+            return {"procedure": requested, "complete": False, "cloneable": False, "operations": [],
+                    "reasons": ["bounded source closure depth exhausted"]}
+        if len(_closure.summaries) >= self.procedure_limit:
+            return {"procedure": requested, "complete": False, "cloneable": False, "operations": [],
+                    "reasons": ["bounded source closure procedure budget exhausted"]}
         routine = self.routines[requested]
         reasons = list(routine.issues)
         operations = []
         summary = {"procedure": requested, "complete": False, "cloneable": False,
                    "arguments": [routine.scope.bindings[a].public() for a in routine.arguments
                                  if a in routine.scope.bindings], "operations": operations, "reasons": reasons,
-                   "definition_diagnostics": []}
-        self.summaries[requested] = summary
+                   "definition_diagnostics": [], "closure_depth": 1}
+        _closure.summaries[requested] = summary
         undeclared = set(routine.arguments) - routine.scope.bindings.keys()
         if undeclared:
             reasons.append("undeclared dummy arguments: " + ", ".join(sorted(undeclared)))
@@ -462,8 +489,8 @@ class SourceEffects:
                                          if b.intent == "out" and b.name in routine.arguments]
 
         def emit(operation):
-            self.operation_count += 1
-            if self.operation_count > self.operation_limit:
+            _closure.operations += 1
+            if _closure.operations > self.operation_limit:
                 if "source operation budget exhausted" not in reasons:
                     reasons.append("source operation budget exhausted")
                 return False
@@ -559,7 +586,8 @@ class SourceEffects:
                     binding = self._actual_binding(routine.scope, actual)
                     if binding:
                         mapping[f"argument::{formal}"] = binding.root
-                child = self.summarize(chosen, active + (requested,))
+                child = self.summarize(chosen, active + (requested,), _closure=_closure)
+                summary["closure_depth"] = max(summary["closure_depth"], 1 + child.get("closure_depth", 1))
                 if not child["complete"]:
                     reasons.append(f"callee effects incomplete: {chosen}")
                 summary["definition_diagnostics"].extend(child.get("definition_diagnostics",[]))
@@ -601,7 +629,9 @@ class SourceEffects:
 
         def statements(nodes, guard=()):
             for node in nodes:
-                if self.operation_count > self.operation_limit:
+                if _closure.operations > self.operation_limit:
+                    if "source operation budget exhausted" not in reasons:
+                        reasons.append("source operation budget exhausted")
                     return
                 kind = _kind(node)
                 if kind == "Assignment_Stmt":
@@ -693,18 +723,32 @@ class SourceEffects:
         summary["section_precision"] = "whole-resource conservative effects; physical refinement pending"
         return summary
 
+    def summarize_span(self, procedures):
+        """Prove a candidate span with one budget for its distinct closure."""
+        closure = _Closure()
+        for procedure in procedures:
+            summary = self.summarize(procedure, _closure=closure)
+            if not summary["complete"]:
+                raise CompilationError("span effect closure incomplete: " + "; ".join(summary["reasons"]))
+        return {"procedures": len(closure.summaries), "operations": closure.operations,
+                "depth": max((s["closure_depth"] for s in closure.summaries.values()), default=0)}
+
     def report(self, entry):
         entry = entry.lower()
         matches = [p for p in self.routines if p == entry or ("::" not in entry and p.split("::")[-1] == entry)]
         if len(matches) != 1:
             raise CompilationError(f"native effect entry {entry!r} is unavailable or ambiguous")
         summary = self.summarize(matches[0])
+        closure = self._closures.get(matches[0])
+        if closure is None:
+            closure = _Closure()
+            summary = self.summarize(matches[0], _closure=closure)
         self.inputs.verify()
         return {"schema_version": 1, "entry": matches[0], "complete": summary["complete"],
-                "sources": self.sources, "procedures": list(self.summaries.values()),
+                "sources": self.sources, "procedures": list(closure.summaries.values()),
                 "analysis_sources": self.inputs.public(),
                 "budgets": {"depth": self.depth_limit, "procedures": self.procedure_limit,
-                            "operations": self.operation_limit}, "summarized_operations": self.operation_count,
+                            "operations": self.operation_limit}, "summarized_operations": closure.operations,
                 "automatic_scope_available": False, "effect_coordinate_system": "logical source evidence; whole-resource effects"}
 
 

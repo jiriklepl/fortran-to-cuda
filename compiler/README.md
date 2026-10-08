@@ -561,6 +561,13 @@ python -m compiler --input input.f90 --kernel application::advance \
 ```
 
 Provide source after preprocessing with the application's actual configuration.
+Effect budgets apply independently to each requested proof; unrelated candidate
+procedures and rejected branches do not consume a later proof's budget. A formed
+source span additionally checks the combined distinct call closure against the
+same limits and publishes its procedure, operation, and depth counts. Cached
+effects cannot bypass a deeper call path's depth limit. Effect reports contain
+only the requested closure.
+
 The compiler resolves bounded direct module calls and unambiguous generic
 overloads by type/kind/rank. The public report contains source hashes, formal/root
 mappings, original guards, descriptor reads, memory reads/writes, procedure-entry
