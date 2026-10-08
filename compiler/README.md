@@ -437,6 +437,16 @@ handles registered by their caller. Existing ordinary and owned-session outputs
 are preserved. Shared entries currently require a serial coordinator and read-only
 scalar parameters. Native and forced GPU execution are available; shared automatic
 mode chooses native because scope-wide coherent estimates are not yet connected.
+Shared numerical entry ABI version 2 accepts scalar pointers through its C
+interface, with matching Fortran reference arguments. Binding those references
+does not read their values. A scalar used only behind a conditional or possibly
+empty retained loop keeps that worker native, preserving the original protection
+before CUDA would capture its value. Other safe workers in the same entry can
+still execute on the GPU. Public `region_execution` metadata explains each such
+choice; the common memory runtime remains ABI version 1.
+Protected CPU reads retain their original guards under host optimization. If a
+physical section offset also uses a protected scalar, its native access uses
+conservative whole-resource effects without evaluating that offset early.
 
 Explicit entries and the initial source scopes below remain opt-in. Coherent
 placement and complete application integration remain required work in
@@ -484,6 +494,11 @@ with runtime access through the registered address explicit.
 An adapter verifies these artifacts, applies replacements to an application copy,
 and links the common runtime once. It does not inspect compiler IR or CUDA text.
 No accepted scopes is a successful unchanged/native result.
+The independent pipeline exposes this path through opt-in
+`--memory-model scoped`, an explicit scope entry/source selection, and a capture
+facts file. It exports configured and normalized source packages and consumes
+these public build roles; it does not infer initialization from argument intents.
+See [the pipeline interface](../elmm-pipeline/README.md) for its options.
 
 Independent source extractors may add `--numerical-sources package.json` to offer
 normalized numerical leaves without selecting scopes or execution policies. The
@@ -553,12 +568,16 @@ reads after partial or conditional writes; that analysis remains required.
 Initial support is serial, contiguous whole-array bindings, numerical leaves,
 call-only wrapper clones, registered hidden module arrays (including visible
 reexports), and conservative whole-resource native effects.
-Allocatable captures, array-valued actuals,
+Allocatable captures, array-valued actuals and scalar array-element actuals,
 general opaque-call hooks, physical native-section refinement, and collective
 offload require further integration. `auto` selects the original native span
 without creating a context while coherent scope estimates are unavailable;
 passing a calibration profile does not yet enable these estimates. This prototype
 has correctness evidence, but has not established complete ELMM speedups.
+Indexed actuals remain source boundaries because their array coherence and private
+capture mapping must be established before evaluation. Completed GPU scopes restore
+host-visible values before these original calls. Whole scalar variables and literal
+actuals remain supported.
 
 ### Native source effects
 

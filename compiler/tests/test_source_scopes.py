@@ -197,6 +197,47 @@ def test_writable_alias_is_a_boundary_including_inside_wrappers(tmp_path):
     assert not any("original::producer" in scope["gpu_leaves"] for scope in manifest["scopes"])
 
 
+@pytest.mark.parametrize("actual", ["b(1)", "b(n)", "b(1)+1.d0", "b(1:n)"])
+def test_indexed_actual_keeps_its_source_position_between_shared_scopes(tmp_path, actual):
+    helper = ("subroutine inspect_scalar(value,total)\n"
+              "real(8),intent(in)::value\nreal(8),intent(out)::total\n"
+              "total=value\nend subroutine\n")
+    if ":" in actual:
+        helper = helper.replace("::value\n", "::value(:)\n").replace("total=value", "total=sum(value)")
+    source = PROGRAM.replace("end module", helper + "end module")
+    source = source.replace("subroutine step(a,b,out,n)\n", "subroutine step(a,b,out,n)\nreal(8)::total\n")
+    source = source.replace("call consumer(a,b,out,n)",
+                            f"call inspect_scalar({actual},total)\ncall consumer(a,b,out,n)\ncall transform(out)")
+    original, output, manifest = generate(tmp_path, source)
+    assert manifest["scope_count"] == 2
+    boundary, = manifest["boundaries"]
+    prefix = "array-element/section actual requires in-place mapping and coherence: "
+    assert boundary["reason"].startswith(prefix)
+    assert boundary["reason"][len(prefix):].lower().replace(" ", "") == actual
+    assert [scope["calls"] for scope in manifest["scopes"]] == [
+        ["original::producer", "original::transform"], ["original::consumer", "original::transform"]]
+    replacement = (output / manifest["sources"][str(original)]["replacement"]).read_text()
+    # The original indexed expression remains between completed owners, where
+    # scope close has restored GPU writes before its ordinary native evaluation.
+    step = replacement.split("subroutine step(a,b,out,n)", 1)[1].split("end subroutine", 1)[0]
+    assert step.count("call fort_scope_owner_") == 2
+    assert f"\ncall inspect_scalar({actual},total)\ncall fort_scope_owner_" in step
+
+
+@pytest.mark.parametrize("actual", ["3.d0", "factor"])
+def test_whole_scalar_and_literal_actuals_remain_supported(tmp_path, actual):
+    source = PROGRAM.replace("subroutine transform(b)\nreal(8),intent(inout)::b(:)\nb=3*b",
+                             "subroutine transform(b,value)\nreal(8),intent(inout)::b(:)\n"
+                             "real(8),intent(in)::value\nb=value*b")
+    source = source.replace("subroutine step(a,b,out,n)\n", "subroutine step(a,b,out,n)\nreal(8)::factor\n")
+    source = source.replace("call producer(a,b,n)", "factor=3.d0\ncall producer(a,b,n)")
+    source = source.replace("call transform(b)", f"call transform(b,{actual})")
+    _, _, manifest = generate(tmp_path, source)
+    assert manifest["scope_count"] == 1
+    assert not manifest["boundaries"]
+    assert manifest["native_effects"]["complete"]
+
+
 def test_capture_sections_and_budget_are_public_and_checked(tmp_path):
     facts={"schema_version":1,"participation":"serial","device_budget_bytes":400,
            "captures":{"argument::a":{**FACT,"initialized":"sections",
@@ -218,6 +259,45 @@ MIRROR_PROGRAM=MIRROR_PROGRAM.replace("call producer(a,b,n)\ncall transform(b)",
 MIRROR_PROGRAM=MIRROR_PROGRAM.replace("subroutine step(a,b,out,n)\n", "subroutine step(a,b,out,n)\nreal(8)::total\n")
 MIRROR_DRIVER=DRIVER.replace("6*a(i)+3*real(i+3,8)","2*a(i)+real(i+3,8)")
 MIRROR_DRIVER=MIRROR_DRIVER.replace("7*a(i)+3*real(i+3,8)","3*a(i)+real(i+3,8)")
+
+ELEMENT_PROGRAM=PROGRAM.split("subroutine step", 1)[0].replace(
+    "implicit none", "implicit none\nreal(8)::field(16)", 1) + """subroutine inspect_scalar(value,total)
+real(8),intent(in)::value
+real(8),intent(out)::total
+total=value
+end subroutine
+subroutine step(a,out,total)
+real(8),intent(in)::a(:)
+real(8),intent(out)::out(:),total
+call producer(a,field,16)
+call transform(field)
+call inspect_scalar(field(1),total)
+call consumer(a,field,out,16)
+call transform(out)
+end subroutine
+end module
+"""
+ELEMENT_DRIVER="""program caller
+use original,only:step,field
+real(8)::a(16),output(16),total
+integer::repeat,i
+do repeat=1,2
+ do i=1,16
+  a(i)=real(i,8)*0.25d0+repeat
+ enddo
+ field=-99
+ output=-99
+ total=-99
+ call step(a,output,total)
+ if (total/=6*a(1)+3) error stop 'scalar actual observed stale GPU field'
+ do i=1,16
+  if (field(i)/=6*a(i)+3*real(i,8)) error stop 'module field disagreement'
+  if (output(i)/=21*a(i)+9*real(i,8)) error stop 'post-boundary field disagreement'
+ enddo
+enddo
+print *, 'FIELDS_OK'
+end program
+"""
 
 WRAPPER_PROGRAM=PROGRAM.replace("subroutine step(a,b,out,n)","subroutine wrapper(a,b,out,n)")
 WRAPPER_PROGRAM=WRAPPER_PROGRAM.replace("end module", """subroutine step(a,b,out,n)
@@ -301,16 +381,19 @@ def compiled(tmp_path_factory):
                   "captures":{"argument::a":FACT,"argument::b":{**FACT,"initialized":"none"},
                               "argument::out":{**FACT,"initialized":"none"}}}
     contiguous = PROGRAM.replace("real(8),intent", "real(8),contiguous,intent")
+    element_facts={"schema_version":1,"participation":"serial","captures":{
+        "argument::a":FACT,"original::field":FACT,"argument::out":{**FACT,"initialized":"none"}}}
     cases=[("sections","sections",PROGRAM,DRIVER,None), ("auto","auto",PROGRAM,DRIVER,None),
            ("contiguous","sections",contiguous,DRIVER,None),
            ("budget","sections",PROGRAM,DRIVER,budget_facts),
            ("mirror","sections",MIRROR_PROGRAM,MIRROR_DRIVER,None),
            ("wrapper","sections",WRAPPER_PROGRAM,DRIVER,None),
-           ("partial","sections",PARTIAL_PROGRAM,PARTIAL_DRIVER,partial_facts)]
+           ("partial","sections",PARTIAL_PROGRAM,PARTIAL_DRIVER,partial_facts),
+           ("indexed","sections",ELEMENT_PROGRAM,ELEMENT_DRIVER,element_facts)]
     for label,mode,program,driver_source,facts in cases:
         case=directory/label
         original,output,manifest=generate(case,program,mode=mode,facts=facts,checkout=checkout)
-        assert manifest["scope_count"] == 1
+        assert manifest["scope_count"] == (2 if label == "indexed" else 1)
         objects=[]
         # Build common interface first, then generated interfaces, then the
         # original modules with approved replacements. No IR/CUDA introspection.
@@ -387,6 +470,17 @@ def test_compiler_formed_scope_shares_input_across_native_transform(compiled):
     assert sum(line.startswith("FORT_SCOPED upload ") for line in lines)==8
     assert sum(line.startswith("FORT_SCOPED download ") for line in lines)==8
     assert sum(line.startswith("FORT_SCOPED launch ") for line in lines)==8
+    assert "FIELDS_OK" in result.stdout
+
+
+@pytest.mark.cuda
+def test_scalar_element_boundary_observes_gpu_produced_module_field(compiled):
+    target,output=compiled["indexed"]
+    result=run([str(target)],cwd=output,
+               env={**os.environ,"FORT_RUNTIME_TRACE":"1","OMP_NUM_THREADS":"4"})
+    if "FORT_SCOPED launch" not in result.stderr:
+        pytest.skip("CUDA device unavailable")
+    assert sum(line.startswith("FORT_SCOPED launch ") for line in result.stderr.splitlines()) == 4
     assert "FIELDS_OK" in result.stdout
 
 
