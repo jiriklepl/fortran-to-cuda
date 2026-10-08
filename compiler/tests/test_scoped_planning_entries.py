@@ -105,16 +105,22 @@ end module
     assert "d.valid && unit.units[0].iterations" in text
 
 
-@pytest.mark.parametrize(("replacement", "reason"), [
-    (("limit=configuration(1)", "limit=int(scale)"), "numerical scalar setup"),
-    (("a(i+1)=b(i+1)*coefficient+real(i,8)", "if(b(i+1)>0) a(i+1)=b(i+1)"), "unknown or conditional"),
+@pytest.mark.parametrize(("replacement", "reason", "query_available"), [
+    (("limit=configuration(1)", "limit=int(scale)"), "numerical scalar setup", False),
+    (("a(i+1)=b(i+1)*coefficient+real(i,8)", "if(b(i+1)>0) a(i+1)=b(i+1)"), "unknown or conditional", True),
 ])
-def test_unavailable_query_explains_native_choice_without_executing_source(tmp_path, replacement, reason):
+def test_unavailable_estimates_keep_safe_effect_queries_separate(tmp_path, replacement, reason, query_available):
     emitted = emit(tmp_path, SOURCE.replace(*replacement))
     assert not emitted.report["planning"]["available"]
     assert reason in emitted.report["planning"]["reason"]
+    assert emitted.report["planning"]["query_available"] == query_available
     assert "FORT_SCOPE_BOUNDARY" in query_text(emitted)
-    assert "FORT_SCOPE_PLAN_WORKER" not in query_text(emitted)
+    if query_available:
+        assert "FORT_SCOPE_PLAN_WORKER" in query_text(emitted)
+        assert "0.0, 0.0, false" in query_text(emitted)
+        assert "if(b(i+1)>0)" not in query_text(emitted)
+    else:
+        assert "FORT_SCOPE_PLAN_WORKER" not in query_text(emitted)
 
 
 def test_missing_or_old_runtime_calibration_cannot_select_gpu(tmp_path):

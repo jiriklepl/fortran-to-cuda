@@ -71,6 +71,7 @@ module fort_scoped_memory
 
   public :: fort_scope_plan_host_current
   public :: fort_scope_plan_reset, fort_scope_plan_add, fort_scope_plan_select, fort_scope_plan_next
+  public :: fort_scope_plan_validate
 
   interface
 
@@ -93,6 +94,11 @@ module fort_scoped_memory
       integer(c_size_t), value :: count
       real(c_double), value :: flops, memory_bytes
       integer(c_int), value :: gpu_available
+      integer(c_int) :: status
+    end function
+    function fort_scope_plan_validate(context) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: context
       integer(c_int) :: status
     end function
     function fort_scope_plan_select(context, costs, compatible, decision) bind(C) result(status)

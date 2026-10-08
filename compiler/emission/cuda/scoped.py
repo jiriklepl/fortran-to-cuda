@@ -109,7 +109,9 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
                   for e in (*box.lower, *box.upper))
         for r in plan.regions
     }
-    planning_reason = prep.analysis.reason
+    query_available = prep.analysis.available
+    query_reason = prep.analysis.reason
+    planning_reason = query_reason
     if prep.analysis.available and any(u.work_per_iteration is None or u.work_is_upper_bound for u in units.values()):
         planning_reason = "work estimate is unknown or conditional"
     planning_available = prep.analysis.available and planning_reason is None
@@ -368,7 +370,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
     query_captures = {}
     query_arguments = {}
     query_helpers = []
-    if planning_available:
+    if query_available:
         for unit in units.values():
             control_symbols = set()
             for loop in unit.region.loops:
@@ -404,8 +406,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
         # numerical assignments. INTEGER/LOGICAL values form a checked slice.
         lines += query_helpers
     lines += [f'extern "C" int {plan_name}({", ".join(planning_signature)}) {{']
-    if not planning_available:
-        lines += [f"    return fort_scope_report_error(FORT_SCOPE_BOUNDARY, {json.dumps(planning_reason)});"]
+    if not query_available:
+        lines += [f"    return fort_scope_report_error(FORT_SCOPE_BOUNDARY, {json.dumps(query_reason)});"]
     else:
         query_setup = []
         for symbol in scalars:
@@ -452,11 +454,14 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
                                "    if (d.valid && branch) {", *indent(project(step.then_plan), 2),
                                "    } else if (d.valid) {", *indent(project(step.else_plan), 2), "    }", "}"]
                 elif isinstance(step, ParallelRegion):
+                    known_work = units[step.id].work_per_iteration is not None and not units[step.id].work_is_upper_bound
+                    flops = "unit.units[0].flops" if known_work else "0.0"
+                    memory_bytes = "unit.units[0].memory_bytes" if known_work else "0.0"
                     result += ["if (d.valid) {",
                                f"    auto unit = plan_unit_{step.id}({query_arguments[step.id]});",
                                "    FORT_SHARED_CHECK(fort_query_status);", "    d.valid = unit.valid;", "    if (d.valid && unit.units[0].iterations) {",
                                *indent(descriptors(units[step.id], planning=True), 2),
-                               f"        FORT_SHARED_CHECK(fort_access.record(FORT_SCOPE_PLAN_WORKER, {unit_ids[step.id]}ULL, unit.units[0].flops, unit.units[0].memory_bytes, {'true' if not protected[step.id] else 'false'}));",
+                               f"        FORT_SHARED_CHECK(fort_access.record(FORT_SCOPE_PLAN_WORKER, {unit_ids[step.id]}ULL, {flops}, {memory_bytes}, {'true' if known_work and not protected[step.id] else 'false'}));",
                                "    }", "}"]
                 else:
                     raise TypeError(step)
@@ -475,7 +480,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
                   "h2d_bandwidth": rates["h2d_pageable"]["bandwidth_bytes_per_second"],
                   "d2h_latency": rates["d2h_pageable"]["latency_seconds"],
                   "d2h_bandwidth": rates["d2h_pageable"]["bandwidth_bytes_per_second"], **costs}
-        cost_lines += ["costs.valid = 1;", f"costs.max_allocation_bytes = {config.profile['scoped']['max_allocation_bytes']}ULL;"]
+        cost_lines += [f"costs.valid = {int(planning_available)};", f"costs.max_allocation_bytes = {config.profile['scoped']['max_allocation_bytes']}ULL;"]
         cost_lines += [f"costs.{field} = {float(value)!r};" for field, value in fields.items()]
     lines += [f'extern "C" int {choose_name}(fort_scope_t fort_context, fort_scope_plan_decision *decision) {{',
               '    if (!decision) return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "null planning decision");',
@@ -518,6 +523,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
         "automatic_reason": planning_reason or profile_reason,
         "automatic_scope_available": planning_available, "host_threads": config.host_threads,
         "planning": {"abi_version": 1, "available": planning_available, "reason": planning_reason,
+                     "query_available": query_available, "query_reason": query_reason,
                      "entry": plan_name, "fortran_procedure": "plan", "selector": choose_name,
                      "fortran_selector": "choose", "argument_order": ["context", *[s.name for s in arrays], *[s.name for s in query_scalars]],
                      "scalar_inputs": [s.name for s in scalars if s in prep.query_scalars],

@@ -150,6 +150,7 @@ static void measure_planning(fort_scope_t context, fort_buffer_t buffer) {
                     SCOPE(fort_scope_plan_add(context, kind, uint64_t(unit + 1), &binding, 1,
                                              1e9, 1e8, kind == FORT_SCOPE_PLAN_WORKER));
                 }
+                SCOPE(fort_scope_plan_validate(context));
                 SCOPE(fort_scope_plan_select(context, &costs, -1, &decision));
                 if (!decision.simulated_operations || (work && work != decision.simulated_operations)) {
                     std::cerr << "planner must report a stable positive simulation work count\n";

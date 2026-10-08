@@ -378,6 +378,19 @@ template<class F> int with(fort_scope_t handle, F &&f, bool preserve_preview = f
 }
 
 namespace {
+fort_scoped::planning::Inputs definition_inputs(Context &c) {
+    require(c.plan.size() <= fort_scoped::planning::detail::operation_limit &&
+            c.buffers.size() <= fort_scoped::planning::detail::operation_limit,
+            FORT_SCOPE_BOUNDARY, "planning_record_budget_exceeded");
+    fort_scoped::planning::Inputs input;
+    input.operations = c.plan;
+    for (const auto &entry : c.buffers) {
+        const auto &b = *entry.second;
+        require(!b.prepared, FORT_SCOPE_STATE, "definition validation during a prepared buffer access");
+        input.resources.push_back({b.handle, b.element_bytes, b.bytes, b.extents, b.initialized, {}, {}, false});
+    }
+    return input;
+}
 fort_scoped::planning::Inputs planning_inputs(Context &c) {
     fort_scoped::planning::Inputs input;
     input.operations = c.plan;
@@ -447,6 +460,30 @@ void decision_trace(const fort_scope_plan_decision &d, const std::string &reason
               << " peak_device_bytes=" << d.peak_device_bytes
               << " estimated_seconds=" << d.estimated_seconds << " native_seconds=" << d.native_seconds
               << " reason=" << (reason.empty() ? "calibrated_selection" : reason) << '\n';
+}
+void definition_validation_trace(Context &context, fort_scope_t handle,
+                                 const fort_scoped::planning::DefinitionValidation &proof) noexcept {
+    const char *enabled = std::getenv("FORT_RUNTIME_TRACE");
+    if (!enabled || std::strcmp(enabled, "1")) return;
+    try {
+        std::ostringstream out;
+        out << "{\"schema_version\":1,\"context\":" << handle
+            << ",\"event\":\"definition_validation\",\"status\":" << proof.status
+            << ",\"reason\":" << std::quoted(proof.reason)
+            << ",\"evidence\":\"ordered_definition_preflight\",\"mutates_live_state\":false";
+        if (proof.operation < context.plan.size()) {
+            out << ",\"operation\":" << proof.operation << ",\"unit\":" << context.plan[proof.operation].unit;
+            const auto found = context.buffers.find(proof.buffer);
+            if (found != context.buffers.end()) {
+                const auto &b = *found->second;
+                out << ",\"resource\":" << b.handle << ",\"identity\":" << b.identity
+                    << ",\"generation\":" << b.generation;
+            }
+        }
+        out << '}';
+        std::lock_guard<std::mutex> lock(trace_mutex);
+        std::cerr << "FORT_SCOPED evidence " << out.str() << '\n';
+    } catch (...) { /* Optional diagnostics must not change the proof result. */ }
 }
 struct EvidenceOutput {
     Context &context;
@@ -589,6 +626,42 @@ extern "C" int fort_scope_plan_add(fort_scope_t h, uint32_t kind, uint64_t unit,
         require(c.plan.size() < 256, FORT_SCOPE_BOUNDARY, "planning record budget exceeded");
         require(kind != FORT_SCOPE_PLAN_WORKER || unit, FORT_SCOPE_ARGUMENT, "worker planning unit requires an identity");
         c.plan.push_back({kind, unit, planning_bindings(c, bindings, count), flops, memory_bytes, gpu_available != 0});
+    });
+}
+extern "C" int fort_scope_plan_validate(fort_scope_t h) {
+    return with(h, [&](Context &c) {
+        fort_scoped::planning::DefinitionValidation proof;
+        try {
+            require(c.plan_recording && !c.plan_installed, FORT_SCOPE_STATE,
+                    "definition validation requires a complete recorded query");
+            require(!c.pending, FORT_SCOPE_STATE, "definition validation requires completed earlier execution");
+            proof = fort_scoped::planning::validate_definitions(definition_inputs(c));
+        } catch (const Error &error) {
+            proof.status = error.status; proof.reason = error.what();
+            definition_validation_trace(c, h, proof); throw;
+        } catch (const std::bad_alloc &) {
+            proof.status = FORT_SCOPE_RESOURCE; proof.reason = "planning_resource_failure";
+            definition_validation_trace(c, h, proof); throw;
+        } catch (const Fragmented &) {
+            proof.status = FORT_SCOPE_BOUNDARY; proof.reason = "region_fragmentation_unavailable";
+            definition_validation_trace(c, h, proof); throw;
+        } catch (...) {
+            proof.status = FORT_SCOPE_STATE; proof.reason = "planning_state_unavailable";
+            definition_validation_trace(c, h, proof); throw;
+        }
+        definition_validation_trace(c, h, proof);
+        if (proof.status != FORT_SCOPE_OK) {
+            std::ostringstream message;
+            message << "definition preflight: " << proof.reason;
+            if (proof.operation < c.plan.size()) {
+                message << " operation=" << proof.operation << " unit=" << c.plan[proof.operation].unit;
+                if (proof.buffer) {
+                    const auto &b = buffer(c, proof.buffer);
+                    message << " resource=" << b.identity << " generation=" << b.generation;
+                }
+            }
+            throw Error(proof.status, message.str().c_str());
+        }
     });
 }
 extern "C" int fort_scope_plan_select(fort_scope_t h, const fort_scope_plan_costs *costs,

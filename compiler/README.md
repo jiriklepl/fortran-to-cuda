@@ -441,6 +441,12 @@ available. Planning ABI version 1 exports side-effect-free `plan` queries and a
 `choose` selector. Queries record physical effects and checked control values;
 mode 2 consumes the resulting worker decisions in source order. Unknown work,
 unsafe preparation, or absent/incompatible calibration selects native execution.
+Effect-query availability is published separately from cost-estimate availability.
+The common runtime's `fort_scope_plan_validate` checks ordered initialization and
+preservation requirements without calibration, CUDA initialization, or changes to
+live coverage. Source owners invoke it before numerical work for both `sections`
+and `auto`; an unavailable or failed preflight retains the original native span.
+Query inputs must remain safe and unchanged throughout the complete scope.
 Shared numerical entry ABI version 2 accepts scalar pointers through its C
 interface, with matching Fortran reference arguments. Binding those references
 does not read their values. A scalar used only behind a conditional or possibly
@@ -483,6 +489,23 @@ aliases, and unsupported mappings are boundaries. Source guards remain outside
 their original call spans. Active OpenMP teams select the original native span
 before descriptors are inspected; a runtime without OpenMP support also selects
 native execution because caller participation is unknown.
+
+Straight-line native assignment leaves can publish checked rectangular reads,
+writes, and complete overwrites, including separate opposite faces. Queries and
+execution hooks use the same physical mapping from the original dummy lower
+bounds to full registered storage; staging layouts never change source indices.
+The bounded subset admits whole axes, literal points and unit-stride ranges, and
+checked same-array dimension inquiries. Dynamic specifications, uncertain
+inquiry/function effects, unsupported bounds and aliased mappings retain
+conservative whole-resource effects. A write-only partial native `INTENT(OUT)`
+can discard old definitions and define its exact written sections; native reads
+of that output or nested definition changes remain boundaries. The complete
+ordered preflight rejects any undefined read or preservation requirement before
+numerical execution, rather than discovering it after a preceding GPU write.
+Native OpenMP helpers, including hidden callees, require proved completion.
+Serial scopes admit bounded, matched plain `do` or `parallel do` directives,
+whose work completes before the original helper returns. Other directives remain
+boundaries; memory effects alone cannot show that asynchronous work is finished.
 
 The public `scopes` JSON and saved `scope-manifest.json` identify approved source
 replacements, original hashes, artifact hashes, runtime identity, and build roles.
@@ -585,8 +608,8 @@ need no payload transfer, array-element bounds require native coherence, and
 unknown specification functions are source boundaries. An array payload
 read before any source write in an `INTENT(OUT)` leaf prevents captured scope
 execution, including through its caller closure. Original native calls remain
-available. This diagnostic does not establish a complete definition proof for
-reads after partial or conditional writes; that analysis remains required.
+available. Ordered physical-section preflight separately validates read and
+preservation requirements for the complete supported span.
 Native helpers with `INTENT(OUT)` arrays remain scope boundaries when their
 whole-resource effects require preserving undefined holes or reading values
 defined inside the helper. Complete write-only overwrites remain supported.
@@ -595,11 +618,12 @@ Numerical workers retain their separate physical access and definition handling.
 
 Initial support is serial, contiguous whole-array bindings, numerical leaves,
 call-only wrapper clones, registered hidden module arrays (including visible
-reexports), and conservative whole-resource native effects.
+reexports), bounded physical native sections, and conservative whole-resource
+effects when refinement is unavailable.
 Allocatable callee formals and scalar captures, direct hidden allocatable effects,
 array-valued actuals and scalar array-element actuals,
 explicit dummy extents without a proved whole-storage shape mapping,
-general opaque-call hooks, physical native-section refinement, and collective
+general opaque-call hooks, more general native-section refinement, and collective
 offload require further integration. Automatic source scopes require an explicit
 profile with costs calibrated for the exact common runtime:
 

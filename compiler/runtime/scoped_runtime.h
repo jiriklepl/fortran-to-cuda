@@ -86,6 +86,12 @@ int fort_scope_plan_reset(fort_scope_t context);
 int fort_scope_plan_add(fort_scope_t context, uint32_t kind, uint64_t unit,
                         const fort_scope_plan_binding *bindings, size_t count,
                         double flops, double memory_bytes, int gpu_available);
+/* Validate a complete, successfully recorded query's ordered definitions.
+ * No calibration, estimates, CUDA, transfers, or live coverage changes. Keeps
+ * recording open for selection or further queries. Undefined requirements
+ * return UNINITIALIZED; bounded metadata failures return BOUNDARY, with an
+ * explanation from fort_scope_error. Call before executing source work. */
+int fort_scope_plan_validate(fort_scope_t context);
 /* compatible=0 never chooses GPU. Numerical clients validate calibration
  * identity against their compiled toolchain and current hardware. It may be
  * checked after compatible=-1 previews a potential GPU advantage without
