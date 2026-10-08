@@ -54,12 +54,57 @@ typedef struct fort_scope_stats {
     uint64_t launches, waits, reconciliations;
 } fort_scope_stats;
 
+/* Optional planning API v1. Queries record effects without executing source
+ * work or changing coherence. Coordinates and access descriptors match the
+ * execution API. Selection compares complete ordered schedules and exports. */
+#define FORT_SCOPE_PLANNING_ABI_VERSION 1
+enum fort_scope_plan_kind { FORT_SCOPE_PLAN_NATIVE = 0, FORT_SCOPE_PLAN_WORKER = 1,
+                           FORT_SCOPE_PLAN_FORGET = 2 };
+typedef struct fort_scope_plan_binding {
+    fort_buffer_t buffer;
+    fort_scope_access access;
+} fort_scope_plan_binding;
+typedef struct fort_scope_plan_costs {
+    uint32_t version, valid;
+    size_t max_allocation_bytes;
+    double cpu_flops, cpu_bandwidth, gpu_flops, gpu_bandwidth;
+    double h2d_latency, h2d_bandwidth, d2h_latency, d2h_bandwidth;
+    double create_seconds, register_seconds, host_access_seconds, device_access_seconds;
+    double gpu_setup_seconds, cold_driver_startup_seconds, allocation_seconds, release_seconds;
+    double wait_seconds, launch_enqueue_seconds, planning_operation_seconds;
+} fort_scope_plan_costs;
+typedef struct fort_scope_plan_decision {
+    uint32_t available, gpu_units, cpu_units, candidates;
+    uint64_t simulated_operations, upload_bytes, download_bytes, uploads, downloads;
+    uint64_t launches, waits, allocations, peak_device_bytes;
+    double estimated_seconds, native_seconds;
+} fort_scope_plan_decision;
+/* Pure check for INTEGER payloads used by planning controls. No transfers or
+ * definition changes; the complete payload must already be host current. */
+int fort_scope_plan_host_current(fort_scope_t context, fort_buffer_t buffer);
+int fort_scope_plan_reset(fort_scope_t context);
+int fort_scope_plan_add(fort_scope_t context, uint32_t kind, uint64_t unit,
+                        const fort_scope_plan_binding *bindings, size_t count,
+                        double flops, double memory_bytes, int gpu_available);
+/* compatible=0 never chooses GPU. Numerical clients validate calibration
+ * identity against their compiled toolchain and current hardware. It may be
+ * checked after compatible=-1 previews a potential GPU advantage without
+ * installing a schedule. compatible=1 installs the verified choice. */
+int fort_scope_plan_select(fort_scope_t context, const fort_scope_plan_costs *costs,
+                           int compatible, fort_scope_plan_decision *decision);
+/* Consume only active numerical workers, in recorded source order. A sequence
+ * mismatch diagnoses an error; it never replays completed source work. */
+int fort_scope_plan_next(fort_scope_t context, uint64_t unit,
+                         const fort_scope_plan_binding *bindings, size_t count, int *gpu);
+
 uint32_t fort_scope_abi_version(void);
 const char *fort_scope_error(void);
 int fort_scope_create(int device, fort_scope_t *context);
 /* No CUDA initialization or descriptor access. Source scopes retain native
  * collective execution in active teams or if runtime OpenMP support is absent. */
 int fort_scope_serial_caller(void);
+/* Read the context ordinal without initializing or selecting a CUDA device. */
+int fort_scope_device_get(fort_scope_t context, int *device);
 /* Configure before CUDA initialization. Budget counts live payload bytes of
  * full-layout allocations, independently of the sections transferred. */
 int fort_scope_set_device_budget(fort_scope_t context, size_t bytes);

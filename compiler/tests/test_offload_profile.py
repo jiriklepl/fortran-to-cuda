@@ -1,6 +1,7 @@
 """Offline calibration uses measured costs and fails closed on bad profiles."""
 import json
 from copy import deepcopy
+from types import SimpleNamespace
 
 import pytest
 
@@ -8,15 +9,19 @@ from compiler.offload.calibrate import (
     CalibrationError,
     fit_transfer,
     parse_measurements,
+    parse_scoped_measurements,
     profile_from_measurements,
+    profile_with_scoped_measurements,
 )
 from compiler.offload.profile import (
     LATENCY_RATES,
+    SCOPED_COST_NAMES,
     THROUGHPUT_RATES,
     WORKER_RATES,
     ProfileError,
     compiler_identity,
     load_profile,
+    scoped_costs,
     validate_profile,
 )
 
@@ -177,3 +182,181 @@ def test_nonphysical_transfer_fit_fails():
         fit_transfer(records)
     with pytest.raises(CalibrationError, match="distinct"):
         fit_transfer(records[:2])
+
+
+RUNTIME_ID = "1234abcd" * 8
+
+
+def scoped_observations():
+    records = [deepcopy(observations()[0])]
+    special = {"allocation_seconds", "release_seconds", "planning_operation_seconds", "cold_driver_startup_seconds"}
+    for name in SCOPED_COST_NAMES:
+        if name not in special:
+            records.append({"kind": "scoped_cost", "name": name, "seconds": [2e-6, 2e-6, 1, 2e-6, 2e-6]})
+    for name in ("allocation_seconds", "release_seconds"):
+        for index, size in enumerate((4096, 65536, 1048576, 67108864), 1):
+            records.append({"kind": "scoped_allocation", "name": name, "bytes": size, "seconds": [index * 1e-5] * 5})
+    for work, cost in ((4, 1e-6), (32, 2e-6)):
+        records.append({"kind": "scoped_planning", "work": work, "seconds": [work * cost] * 5})
+    return records
+
+
+def scoped_profile():
+    return profile_with_scoped_measurements(profile(), scoped_observations(), runtime_id=RUNTIME_ID,
+                                             cold_startup_seconds=[0.1, 0.1, 10, 0.1, 0.1])
+
+
+def test_scoped_extension_uses_real_measurements_and_separate_cold_setup():
+    records = scoped_observations()
+    assert parse_scoped_measurements("\n".join(json.dumps(record) for record in records)) == records
+    result = scoped_profile()
+    costs = scoped_costs(result, RUNTIME_ID)
+    assert costs["cold_driver_startup_seconds"] == pytest.approx(0.1)
+    assert costs["gpu_setup_seconds"] == pytest.approx(2e-6)
+    assert costs["launch_enqueue_seconds"] == pytest.approx(2e-6)
+    assert costs["launch_enqueue_seconds"] != result["rates"]["launch_latency_seconds"]
+    assert costs["allocation_seconds"] == pytest.approx(4e-5)
+    assert costs["release_seconds"] == pytest.approx(4e-5)
+    assert costs["planning_operation_seconds"] == pytest.approx(2e-6)
+    assert result["scoped"]["max_allocation_bytes"] == 67108864
+    assert result["scoped"]["measurements"] == records
+    assert result["measurements"] == profile()["measurements"]
+
+
+def test_old_profile_stays_valid_but_cannot_enable_scoped_automatic():
+    base = profile()
+    validate_profile(base)
+    assert "scoped" not in base
+    with pytest.raises(ProfileError, match="no scoped runtime calibration"):
+        validate_profile(base, scoped_runtime_id=RUNTIME_ID)
+    with pytest.raises(ProfileError, match="runtime_id mismatch"):
+        validate_profile(scoped_profile(), scoped_runtime_id="abcd1234" * 8)
+
+
+@pytest.mark.parametrize("value", [None, True, 0, -1, float("nan"), float("inf"), "1"])
+@pytest.mark.parametrize("cost", SCOPED_COST_NAMES)
+def test_every_scoped_cost_must_be_measured_positive_finite(cost, value):
+    result = scoped_profile()
+    result["scoped"]["costs"][cost] = value
+    with pytest.raises(ProfileError, match="scoped.costs"):
+        validate_profile(result)
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("schema_version", True), ("schema_version", 2), ("runtime_id", ""),
+    ("runtime_id", RUNTIME_ID.upper()), ("max_allocation_bytes", True),
+    ("max_allocation_bytes", 0), ("max_allocation_bytes", 2**64),
+    ("max_allocation_bytes", 1.5), ("costs", None),
+])
+def test_scoped_identity_schema_and_allocation_bound_are_validated(field, value):
+    result = scoped_profile()
+    result["scoped"][field] = value
+    with pytest.raises(ProfileError, match="scoped"):
+        validate_profile(result)
+
+
+def test_missing_or_duplicate_scoped_measurements_do_not_supply_defaults():
+    records = scoped_observations()
+    candidates = [records[1:], records + [deepcopy(records[0])],
+                  [record for record in records if record.get("name") != "wait_seconds"],
+                  records + [deepcopy(records[1])],
+                  records + [deepcopy(next(record for record in records if record["kind"] == "scoped_allocation"))],
+                  [record for record in records if record["kind"] != "scoped_planning"],
+                  [record for record in records if record.get("bytes") != 67108864 or record.get("name") != "release_seconds"]]
+    wrong_team, wrong_device = deepcopy(records), deepcopy(records)
+    wrong_team[0]["cpu_threads"] = 1
+    wrong_device[0]["gpu_uuid"] = "GPU-other"
+    candidates += [wrong_team, wrong_device]
+    for candidate in candidates:
+        with pytest.raises(CalibrationError):
+            profile_with_scoped_measurements(profile(), candidate, runtime_id=RUNTIME_ID,
+                                               cold_startup_seconds=[0.1] * 5)
+
+
+@pytest.mark.parametrize("value", [0, True, 1.5, "1", None, -1])
+def test_planner_cost_requires_actual_integer_work_count(value):
+    records = scoped_observations()
+    records[-1]["work"] = value
+    with pytest.raises(CalibrationError, match="planning work"):
+        profile_with_scoped_measurements(profile(), records, runtime_id=RUNTIME_ID,
+                                           cold_startup_seconds=[0.1] * 5)
+
+
+def test_fresh_process_startup_samples_cannot_be_guessed_or_incomplete():
+    for values in ([0.1], [0.1, 0, 0.1], [0.1, True, 0.1]):
+        with pytest.raises(CalibrationError):
+            profile_with_scoped_measurements(profile(), scoped_observations(), runtime_id=RUNTIME_ID,
+                                               cold_startup_seconds=values)
+
+
+@pytest.mark.parametrize("text", ["", "not json", "[]", '{"kind":"other"}',
+                                   '{"kind":"scoped_cost","name":"wait_seconds","seconds":[0,1,1]}'])
+def test_scoped_native_protocol_rejects_unmeasured_or_bad_records(text):
+    with pytest.raises(CalibrationError):
+        parse_scoped_measurements(text)
+
+
+def test_scoped_cost_cli_is_explicit_and_preserves_default(monkeypatch, tmp_path):
+    from compiler.offload import calibrate as module
+    calls = []
+    monkeypatch.setattr(module, "calibrate", lambda args: calls.append(args))
+    assert module.main(["--output", str(tmp_path / "ordinary.json")]) == 0
+    assert calls[-1].scoped_costs is False
+    assert module.main(["--output", str(tmp_path / "scoped.json"), "--scoped-costs"]) == 0
+    assert calls[-1].scoped_costs is True
+
+
+def test_default_calibration_never_builds_or_measures_common_runtime(monkeypatch, tmp_path):
+    from compiler.offload import calibrate as module
+    commands = []
+    monkeypatch.setattr(module, "_tool", lambda path, candidates: candidates[0])
+
+    def run(argv, directory, log, *, timeout):
+        commands.append(argv)
+        if "--version" in argv:
+            return "NVCC V13.4.92" if argv[0] == "nvcc" else "GCC 14.4.0"
+        if argv[0].endswith("/calibration"):
+            return "\n".join(json.dumps(record) for record in observations())
+        return ""
+
+    monkeypatch.setattr(module, "_run", run)
+    monkeypatch.setattr(module, "_calibrate_scoped", lambda *args: pytest.fail("ordinary calibration used scoped runtime"))
+    destination = tmp_path / "ordinary.json"
+    assert module.main(["--output", str(destination)]) == 0
+    result = json.loads(destination.read_text())
+    assert "scoped" not in result
+    assert len(commands) == 4
+    assert result["calibration"]["application_profiled"] is False
+    assert all("scoped" not in str(value) for command in commands for value in command)
+
+
+def test_scoped_runner_uses_published_runtime_and_fresh_processes(monkeypatch, tmp_path):
+    from compiler.offload import calibrate as module
+    commands = []
+    monkeypatch.setenv("FORT_RUNTIME_TRACE", "1")
+    monkeypatch.setenv("CUDA_LAUNCH_BLOCKING", "1")
+    monkeypatch.setenv("FORT_SCOPE_TEST_FAIL_ALLOC", "1")
+
+    def run(argv, directory, log, *, timeout, env=None):
+        commands.append(argv)
+        if argv[0] == "nvcc":
+            return ""
+        assert env is not None
+        assert "FORT_RUNTIME_TRACE" not in env
+        assert "CUDA_LAUNCH_BLOCKING" not in env
+        assert "FORT_SCOPE_TEST_FAIL_ALLOC" not in env
+        if "--cold-startup" in argv:
+            return json.dumps({"kind": "cold_driver_startup", "seconds": 0.05})
+        return "\n".join(json.dumps(record) for record in scoped_observations())
+
+    monkeypatch.setattr(module, "_run", run)
+    args = SimpleNamespace(arch="sm_86", precision=64, threads=4, max_mib=64, device=0)
+    result = module._calibrate_scoped(profile(), args, tmp_path, "nvcc", "g++-14")
+    manifest = result["scoped"]["calibration"]["runtime"]
+    assert result["scoped"]["runtime_id"] == manifest["runtime_id"]
+    sources, _ = module.read_scoped_runtime()
+    for name, content in sources.items():
+        assert (tmp_path / "scoped" / name).read_text() == content
+    assert len(commands) == 7
+    assert sum("--cold-startup" in command for command in commands) == 5
+    assert result["scoped"]["costs"]["cold_driver_startup_seconds"] == 0.05

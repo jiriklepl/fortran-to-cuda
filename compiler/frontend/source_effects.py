@@ -640,7 +640,7 @@ class SourceEffects:
                         continue
                     if {"pointer", "allocatable"} & binding.attributes:
                         reasons.append(f"contract resource requires capture/lifetime proof: {binding.root}")
-                    contracted.append({**item, "resource": binding.root})
+                    contracted.append({**item, "resource": binding.root, "rank": binding.rank})
                 emit({"kind": "native_contract", "procedure": chosen, "identity": contract["identity"],
                       "contract_sha256": sha256(json.dumps(contract, sort_keys=True).encode()).hexdigest(),
                       "effects": contracted, "guard": guard})
@@ -713,6 +713,23 @@ class SourceEffects:
                 else:
                     reasons.append(f"native ordering/effects unavailable: {kind}")
                     emit({"kind": "boundary", "source": str(node), "guard": guard, "reason": reasons[-1]})
+
+        # Specification bounds execute on procedure entry too. Descriptor
+        # inquiries remain metadata; indexed payloads need native coherence,
+        # and unresolved specification functions make this closure incomplete.
+        for declaration in _children(_part(routine.scope.node, "Specification_Part")):
+            if _kind(declaration) != "Type_Declaration_Stmt":
+                continue
+            dtype, attributes, entities = declaration.items
+            dimension = next((a.items[1] for a in _children(attributes)
+                              if _kind(a) == "Dimension_Attr_Spec"), None)
+            for entity in _children(entities):
+                shape = entity.items[1] if entity.items[1] is not None else dimension
+                for axis in _children(shape):
+                    for bound in axis.items:
+                        expression(bound, ())
+            if _kind(dtype) == "Intrinsic_Type_Spec" and str(dtype.items[0]).lower() == "character":
+                expression(dtype.items[1], ())
 
         statements(_children(routine.execution))
         if not any(operation["kind"] in {"call","native_contract"} for operation in operations):

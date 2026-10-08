@@ -20,7 +20,7 @@ from compiler.emission.common.resources import read_scoped_runtime
 from compiler.emission.fortran.formatting import _fortran_line, _fortran_list
 from compiler.frontend import lower_file
 from compiler.frontend.source_effects import SourceEffects, _children, _kind, _part
-from compiler.ir import CompilationError
+from compiler.ir import CompilationError, SourceLocation
 from compiler.scopes.numerical import load_numerical_sources
 
 DTYPES = {
@@ -88,6 +88,7 @@ class ScopeBuilder:
         if type(self.device_budget) is not int or not 0 <= self.device_budget < 2**63:
             raise CompilationError("scope device budget must be a nonnegative signed-64-bit byte count")
         self.outputs, self.edits, self.clones, self.generated = {}, {}, {}, {}
+        self.queries = {}
         self.numerical_reasons = {}
         self.boundaries, self.scopes = [], []
         self.runtime_outputs, self.runtime = read_scoped_runtime()
@@ -128,6 +129,18 @@ class ScopeBuilder:
         callee = self.analysis.routines.get(procedure)
         if callee is None:
             raise CompilationError("opaque source-scope hooks require a source binding interface")
+        for declaration in _children(_part(callee.scope.node, "Specification_Part")):
+            if _kind(declaration) != "Type_Declaration_Stmt":
+                continue
+            _, attributes, entities = declaration.items
+            dimension = next((a.items[1] for a in _children(attributes)
+                              if _kind(a) == "Dimension_Attr_Spec"), None)
+            for entity in _children(entities):
+                if str(entity.items[0]).lower() not in callee.arguments:
+                    continue
+                shape = entity.items[1] if entity.items[1] is not None else dimension
+                if any(_kind(axis) != "Assumed_Shape_Spec" for axis in _children(shape)):
+                    raise CompilationError("explicit dummy extents require a proven whole-storage shape mapping")
         for formal, actual in zip(callee.arguments, actuals, strict=True):
             binding = self.analysis._actual_binding(routine.scope, actual)
             if binding:
@@ -253,6 +266,8 @@ class ScopeBuilder:
                     overwrites.update(child_overwrites)
             elif kind == "native_contract":
                 for effect in operation["effects"]:
+                    if not effect.get("rank", 1):
+                        continue
                     root = mapped(effect["resource"])
                     effects.setdefault(root, set()).add("read" if effect["kind"] == "read" else "write")
                     if effect["kind"] == "overwrite" and not operation["guard"]:
@@ -437,6 +452,219 @@ class ScopeBuilder:
         self.append_procedure(routine.scope.parent, name, text)
         return name, array_roots
 
+    def scalar_writes(self, procedure, mapping=None):
+        """Map scalar effects through the same bounded source closure."""
+        mapping = {} if mapping is None else mapping
+        routine = self.analysis.routines[procedure]
+        result = {mapping.get(binding.root, binding.root) for binding in routine.scope.bindings.values()
+                  if not binding.rank and binding.intent == "out" and binding.name in routine.arguments}
+        for operation in self.analysis.summarize(procedure)["operations"]:
+            if operation["kind"] in {"write", "overwrite"} and not operation["rank"]:
+                result.add(mapping.get(operation["resource"], operation["resource"]))
+            elif operation["kind"] == "call":
+                child = {formal: mapping.get(actual, actual)
+                         for formal, actual in operation["resource_mapping"].items()}
+                result.update(self.scalar_writes(operation["procedure"], child))
+            elif operation["kind"] == "native_contract":
+                result.update(mapping.get(effect["resource"], effect["resource"])
+                              for effect in operation["effects"]
+                              if not effect.get("rank", 1) and effect["kind"] in {"write", "overwrite"})
+        return result
+
+    def check_query_specification(self, routine):
+        """Do not execute dynamic specification expressions ahead of source work."""
+        for node in _children(_part(routine.scope.node, "Specification_Part")):
+            if _kind(node) != "Type_Declaration_Stmt":
+                continue
+            dtype, attributes, entities = node.items
+            if _kind(dtype) != "Intrinsic_Type_Spec" or str(dtype.items[0]).lower() not in {
+                "real", "integer", "logical", "double precision"
+            }:
+                raise CompilationError("planning query requires numeric declarations without dynamic type parameters")
+            dimension = next((a.items[1] for a in _children(attributes)
+                              if _kind(a) == "Dimension_Attr_Spec"), None)
+            for entity in _children(entities):
+                shape = entity.items[1] if entity.items[1] is not None else dimension
+                for axis in _children(shape):
+                    for bound in axis.items:
+                        if bound is None:
+                            continue
+                        try:
+                            routine.scope.kinds.integer(bound, SourceLocation(str(routine.scope.path)))
+                        except CompilationError as error:
+                            raise CompilationError("planning query requires static or assumed-shape declarations; "
+                                                   "dynamic specification bound: " + str(bound)) from error
+
+    def planning_inputs(self, procedure, mapping=None):
+        """Read public numerical metadata; never infer costs from generated code."""
+        mapping = {} if mapping is None else mapping
+        routine = self.analysis.routines[procedure]
+        self.check_query_specification(routine)
+        numeric = self.numerical(procedure)
+        if numeric:
+            public = numeric.scoped
+            planning = public["planning"]
+            if not planning["available"] or not planning["profile_available"]:
+                raise CompilationError(planning["reason"] or planning["profile_reason"])
+            package = self.packages.get(procedure)
+            parameters = {p.name: p for p in package.parameters} if package else {}
+
+            def resource(name):
+                parameter = parameters.get(name.lower())
+                root = parameter.resource if parameter else "argument::" + name.lower()
+                # Lower-bound parameters depend on a descriptor, not its payload.
+                if parameter and parameter.lower_bound_dimension is not None:
+                    return None
+                return mapping.get(root, root)
+
+            payload = {resource(name) for name in planning["payload_arrays"]} - {None}
+            scalars = {resource(name) for name in planning["scalar_inputs"]} - {None}
+            return payload, scalars
+        payload, scalars = set(), set()
+        for node in _children(routine.execution):
+            if _kind(node) == "Comment":
+                continue
+            call = self.resolve(routine, node)
+            leaves, _ = self.closure(call.procedure)
+            if not leaves:
+                continue
+            child = {formal: mapping.get(binding.root, binding.root) for formal, binding in call.bindings.items()}
+            callee = self.analysis.routines[call.procedure]
+            for formal in callee.arguments:
+                child.setdefault("argument::" + formal, None)  # Literal actuals carry no mutable resource.
+            own_payload, own_scalars = self.planning_inputs(call.procedure, child)
+            payload.update(own_payload)
+            scalars.update(own_scalars)
+        return payload, scalars
+
+    def native_plan(self, call, actions, definitions, overwrites, handles):
+        """Record fixed host effects at their source positions without calling them."""
+        outer = set(self.analysis.summarize(call.procedure)["definition_changes"])
+        if (definitions - outer) & handles.keys():
+            raise CompilationError("nested native definition changes require original-position planning hooks")
+        lines = []
+        for root in sorted(definitions & handles.keys()):
+            lines += ["fort_bindings(1) = fort_scope_plan_binding()",
+                      f"fort_bindings(1)%buffer = {handles[root]}",
+                      "fort_status = fort_scope_plan_add(fort_context, FORT_SCOPE_PLAN_FORGET, 0_c_int64_t, &",
+                      "    c_loc(fort_bindings), 1_c_size_t, 0.0_c_double, 0.0_c_double, 0_c_int)",
+                      "if (fort_status /= FORT_SCOPE_OK) return"]
+        merged = {}
+        for root, kinds in sorted(actions.items()):
+            if root not in handles:
+                raise CompilationError("native planning needs unavailable buffer mapping: " + root)
+            handle = handles[root]
+            old, overwrite = merged.get(handle, (set(), False))
+            merged[handle] = (old | kinds, overwrite or root in overwrites)
+        for i, (handle, (kinds, overwrite)) in enumerate(merged.items(), 1):
+            flags = (["FORT_SCOPE_READ_ALL"] if "read" in kinds else [])
+            flags += (["FORT_SCOPE_WRITE_ALL"] if "write" in kinds else [])
+            flags += (["FORT_SCOPE_OVERWRITE_ALL"] if overwrite else [])
+            lines += [f"fort_bindings({i}) = fort_scope_plan_binding()",
+                      f"fort_bindings({i})%buffer = {handle}",
+                      f"fort_bindings({i})%access%flags = " + " + ".join(flags)]
+        lines += ["fort_status = fort_scope_plan_add(fort_context, FORT_SCOPE_PLAN_NATIVE, 0_c_int64_t, &",
+                  f"    {'c_loc(fort_bindings)' if merged else 'c_null_ptr'}, {len(merged)}_c_size_t, &",
+                  "    0.0_c_double, 0.0_c_double, 0_c_int)",
+                  "if (fort_status /= FORT_SCOPE_OK) return"]
+        return lines
+
+    def query_clone(self, procedure):
+        """Project call-only wrappers into side-effect-free planning queries."""
+        if procedure in self.queries:
+            return self.queries[procedure]
+        routine = self.analysis.routines[procedure]
+        numeric = self.numerical(procedure)
+        array_names = [a for a in routine.arguments if routine.scope.bindings[a].rank]
+        effects, _, _ = self.native_effects(procedure)
+        roots = ["argument::" + a for a in array_names]
+        roots += sorted(set(effects) - set(roots))
+        handles = {root: "fort_handle_" + str(i) for i, root in enumerate(roots)}
+        name = _name("fort_scope_query_", procedure)
+        self.queries[procedure] = (name, roots)
+        header = _fortran_list("subroutine " + name + "(",
+                               ["fort_context", *routine.arguments, *handles.values(), "fort_status"], ")", 0)
+        uses = ["use iso_c_binding", "use fort_scoped_memory"]
+        spec = []
+        for node in _children(_part(routine.scope.node, "Specification_Part")):
+            if _kind(node) != "Type_Declaration_Stmt":
+                spec.append(str(node))
+                continue
+            dtype, attributes, entities = node.items
+            attrs = [str(a) for a in _children(attributes)]
+            arguments = [e for e in _children(entities) if str(e.items[0]).lower() in routine.arguments]
+            others = [e for e in _children(entities) if e not in arguments]
+            for declarations, qualifiers in ((arguments, [*[a for a in attrs if not a.upper().startswith("INTENT") and a.upper() != "VALUE"],
+                                                        "INTENT(IN)"]), (others, attrs)):
+                if declarations:
+                    spec += _fortran_list(str(dtype) + (", " + ", ".join(qualifiers) if qualifiers else "") + " ::",
+                                          list(map(str, declarations)), "", 0)
+        if numeric and procedure in self.packages:
+            spec = [line for node in spec for line in node.splitlines()
+                    if not line.lstrip().lower().startswith("!$omp")]
+        body = ["fort_status = FORT_SCOPE_OK"]
+        # Normalized entries do not own original INTENT(OUT) source events.
+        if not numeric or procedure in self.packages:
+            for array in array_names:
+                if routine.scope.bindings[array].intent == "out":
+                    root = "argument::" + array
+                    body += ["fort_bindings(1) = fort_scope_plan_binding()",
+                             f"fort_bindings(1)%buffer = {handles[root]}",
+                             "fort_status = fort_scope_plan_add(fort_context, FORT_SCOPE_PLAN_FORGET, 0_c_int64_t, &",
+                             "    c_loc(fort_bindings), 1_c_size_t, 0.0_c_double, 0.0_c_double, 0_c_int)",
+                             "if (fort_status /= FORT_SCOPE_OK) return"]
+        if numeric:
+            public, _ = self.entry_artifacts(procedure)
+            uses.append(f"use {public['fortran_module']}, only: fort_plan => {public['planning']['fortran_procedure']}")
+            package = self.packages.get(procedure)
+            if package:
+                parameters = {p.name: p for p in package.parameters}
+                arrays = [handles[parameters[p["name"].lower()].resource] for p in public["array_parameters"]]
+                scalars = []
+                for parameter in public["scalar_parameters"]:
+                    if parameter["name"] not in public["planning"]["scalar_inputs"]:
+                        continue
+                    binding = parameters[parameter["name"].lower()]
+                    visible = self.visible(routine, binding.resource)
+                    if binding.lower_bound_dimension is not None:
+                        scalars.append(f"lbound({visible}, {binding.lower_bound_dimension})")
+                    elif parameter["dtype"] == "logical":
+                        scalars.append(f"logical({visible}, kind=c_bool)")
+                    else:
+                        scalars.append(visible)
+            else:
+                arrays = [handles["argument::" + p["name"].lower()] for p in public["array_parameters"]]
+                scalars = [p["name"] for p in public["scalar_parameters"]
+                           if p["name"] in public["planning"]["scalar_inputs"]]
+            body += _fortran_list("fort_status = fort_plan(", ["fort_context", *arrays, *scalars], ")", 0)
+        else:
+            for node in _children(routine.execution):
+                if _kind(node) == "Comment":
+                    continue
+                call = self.resolve(routine, node)
+                leaves, _ = self.closure(call.procedure)
+                root_handles = {formal: handles[b.root] for formal, b in call.bindings.items() if b.rank}
+                root_handles.update({root: handle for root, handle in handles.items() if not root.startswith("argument::")})
+                if leaves:
+                    child, child_roots = self.query_clone(call.procedure)
+                    module = self.analysis.routines[call.procedure].scope.module
+                    if module != routine.scope.module:
+                        uses.append(f"use {module}, only: {child}")
+                    body += _call(child, ["fort_context", *map(str, call.actuals),
+                                          *[root_handles[root] for root in child_roots], "fort_status"])
+                    body += ["if (fort_status /= FORT_SCOPE_OK) return"]
+                else:
+                    actions, definitions, overwrites = self.native_effects(call.procedure)
+                    body += self.native_plan(call, actions, definitions, overwrites, root_handles)
+        extra = ["integer(c_int64_t), intent(in) :: fort_context",
+                 *_fortran_list("integer(c_int64_t), intent(in) ::", list(handles.values()), "", 0),
+                 "integer(c_int), intent(out) :: fort_status",
+                 f"type(fort_scope_plan_binding), target :: fort_bindings({max(1, len(roots))})"]
+        self.append_procedure(routine.scope.parent, name,
+                              "\n".join([*header, *dict.fromkeys(uses), *spec, *extra, *body,
+                                         "end subroutine " + name, ""]))
+        return name, roots
+
     def native_call(self, call, actions, definitions, overwrites, handles, *, actuals=None):
         lines = []
         # Only outer dummy definition changes can be performed before the call.
@@ -507,6 +735,35 @@ class ScopeBuilder:
                     if binding.dtype not in {"real", "integer", "logical"} or binding.kind not in {4, 8}:
                         raise CompilationError("unsupported scalar source capture")
                     scalars[binding.root] = binding
+        planning_available = False
+        planning_reason = "scoped automatic selection was not requested"
+        if self.config.policy == "auto":
+            try:
+                payload, controls, changed_scalars = set(), set(), set()
+                for call in calls:
+                    mapping = {formal: binding.root for formal, binding in call.bindings.items()}
+                    callee = self.analysis.routines[call.procedure]
+                    for formal in callee.arguments:
+                        mapping.setdefault("argument::" + formal, None)
+                    child_leaves, _ = self.closure(call.procedure)
+                    if child_leaves:
+                        own_payload, own_controls = self.planning_inputs(call.procedure, mapping)
+                        payload.update(own_payload)
+                        controls.update(own_controls)
+                    changed_scalars.update(self.scalar_writes(call.procedure, mapping))
+                if payload & written:
+                    raise CompilationError("planning payload arrays change inside the complete source scope")
+                if controls & changed_scalars:
+                    raise CompilationError("planning scalar inputs change inside the complete source scope")
+                for root in controls:
+                    binding = self.analysis._binding(routine.scope, self.visible(routine, root))
+                    if binding.attributes & {"volatile", "asynchronous", "optional", "pointer", "allocatable"}:
+                        raise CompilationError("planning control scalar association or participation is uncertain: " + root)
+                if any(root not in arrays or self.capture(arrays[root])["initialized"] != "whole" for root in payload):
+                    raise CompilationError("planning payload arrays require whole initialized host storage")
+                planning_available, planning_reason = True, None
+            except CompilationError as error:
+                planning_reason = str(error)
         names = [self.visible(routine, root) for root in (*arrays, *scalars)]
         if any(n.startswith("fort_") for n in names):
             raise CompilationError("capture names conflict with the initial scope owner namespace")
@@ -562,15 +819,17 @@ class ScopeBuilder:
                  "integer(c_int) :: fort_status, fort_cleanup",
                  "type(c_ptr) :: fort_host_pointer",
                  f"integer(c_int), parameter :: fort_mode = {1 if self.config.policy == 'sections' else 2}",
-                 "type(fort_scope_access) :: fort_access"]
+                 "type(fort_scope_access) :: fort_access",
+                 "type(fort_scope_plan_decision) :: fort_decision",
+                 f"type(fort_scope_plan_binding), target :: fort_bindings({max(1, len(arrays))})"]
         # Explicit initialization on a local declaration implies SAVE. Assign at
         # entry instead: no scope-local context or state persists across calls.
         spec = [s.replace("fort_context = 0", "fort_context") for s in spec]
         original = [line for call in calls for line in _call(str(call.node.items[0]), actuals(call, shared=False))]
         native = [*original, "return"]
         body = ["fort_context = 0"]
-        if self.config.policy == "auto":
-            body += ["! Coherent estimates are unavailable: successful whole-span native selection.", *native]
+        if self.config.policy == "auto" and not planning_available:
+            body += ["! Whole-span native selection: " + planning_reason, *native]
         else:
             body += ["if (fort_scope_serial_caller() == 0) then", *native, "endif",
                      *_fortran_list("if (any([", [".not. is_contiguous(" + n + ")"
@@ -618,6 +877,37 @@ class ScopeBuilder:
                      "fort_cleanup = fort_scope_close(fort_context)",
                      "if (fort_cleanup /= FORT_SCOPE_OK) error stop 'shared scope preflight cleanup failed'",
                      "endif", *native, "endif"]
+            if self.config.policy == "auto":
+                selector = self.numerical(sorted(leaves)[0]).scoped
+                imports.append(f"use {selector['fortran_module']}, only: fort_choose => {selector['planning']['fortran_selector']}")
+                body += ["fort_status = fort_scope_plan_reset(fort_context)"]
+                for call in calls:
+                    child_leaves, _ = self.closure(call.procedure)
+                    mapping = {formal: binding.root for formal, binding in call.bindings.items()}
+                    native_handles = {formal: handles[root] for formal, root in mapping.items() if root in handles}
+                    native_handles.update({root: handle for root, handle in handles.items() if not root.startswith("argument::")})
+                    body += ["if (fort_status == FORT_SCOPE_OK) then"]
+                    if child_leaves:
+                        query, query_roots = self.query_clone(call.procedure)
+                        module = self.analysis.routines[call.procedure].scope.module
+                        if module != routine.scope.module:
+                            imports.append(f"use {module}, only: {query}")
+                        body += _call(query, ["fort_context", *actuals(call),
+                                              *[native_handles[root] for root in query_roots], "fort_status"])
+                    else:
+                        # This owner may fall back; RETURN in query glue belongs
+                        # to the query helper rather than the executing owner.
+                        query_lines = self.native_plan(call, *self.native_effects(call.procedure), native_handles)
+                        block = _name("fort_record_", str(_span(call.node)))
+                        body += [block + ": block", *[line.replace("if (fort_status /= FORT_SCOPE_OK) return",
+                                                                  "if (fort_status /= FORT_SCOPE_OK) exit " + block)
+                                                    for line in query_lines], "end block " + block]
+                    body += ["endif"]
+                body += ["if (fort_status == FORT_SCOPE_OK) fort_status = fort_choose(fort_context, fort_decision)",
+                         "if (fort_status /= FORT_SCOPE_OK .or. fort_decision%gpu_units == 0) then",
+                         "fort_cleanup = fort_scope_close(fort_context)",
+                         "if (fort_cleanup /= FORT_SCOPE_OK) error stop 'shared scope planning cleanup failed'",
+                         *native, "endif"]
             for call in calls:
                 child_leaves, _ = self.closure(call.procedure)
                 if child_leaves:
@@ -647,18 +937,23 @@ class ScopeBuilder:
                                for root, visible in zip(parameters, names, strict=True)],
                 "calls": [c.procedure for c in calls], "gpu_leaves": sorted(leaves),
                 "resources": [{"resource": root, "visible": self.visible(routine,root),
+                               "registration_identity": i+1, "allocation_generation": 1,
                                "initialized": self.capture(binding)["initialized"],
                                "initialized_sections": self.capture(binding).get("sections",[])}
-                              for root,binding in arrays.items()],
-                "estimate_available": False,
+                              for i,(root,binding) in enumerate(arrays.items())],
+                "estimate_available": planning_available,
+                "planning_reason": planning_reason,
+                "cost_estimates": "modeled numerical work and runtime costs; fixed native helper compute is a common excluded term",
+                "native_estimate": "original compute baseline; estimated_seconds for zero-GPU decisions conservatively includes coherent CPU-worker hooks",
                 "placement": "forced scoped GPU with native helpers" if self.config.policy == "sections" else
-                             "native; coherent scope estimates unavailable",
+                             "calibrated coherent source scope" if planning_available else
+                             "native; " + planning_reason,
                 "mode": self.config.policy, "participation": "serial"}
 
     def build_span(self, nodes):
         if len(nodes) < 2:
             return
-        before = (dict(self.outputs), {p:list(edits) for p,edits in self.edits.items()}, dict(self.clones))
+        before = (dict(self.outputs), {p:list(edits) for p,edits in self.edits.items()}, dict(self.clones), dict(self.queries))
         try:
             calls = [self.resolve(self.entry,node) for node in nodes]
             budget = self.analysis.summarize_span(c.procedure for c in calls)
@@ -672,7 +967,7 @@ class ScopeBuilder:
             scope["effect_closure"] = budget
             self.scopes.append(scope)
         except CompilationError as error:
-            self.outputs, self.edits, self.clones = before
+            self.outputs, self.edits, self.clones, self.queries = before
             self.boundaries.append({"first_line":_span(nodes[0])[0], "last_line":_span(nodes[-1])[1],
                                     "reason":str(error)})
 
@@ -747,7 +1042,7 @@ class ScopeBuilder:
             "scopes":self.scopes, "boundaries":self.boundaries, "source_edits":patches,
             "sources":provenance, "runtime":self.runtime if self.scopes else None,
             "native_effects":self.analysis.report(self.entry.qualified),
-            "automatic_estimate_available":False,
+            "automatic_estimate_available":any(scope["estimate_available"] for scope in self.scopes),
             "capture_facts_sha256":sha256(json.dumps(self.facts,sort_keys=True).encode()).hexdigest(),
             "source_inputs":self.analysis.sources,
             "analysis_sources":self.analysis.inputs.public(),

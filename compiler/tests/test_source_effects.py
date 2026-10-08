@@ -497,3 +497,69 @@ end module
 """)
     assert analyze_source_effects([application,storage],"advance")["complete"]
     assert not analyze_source_effects([application,storage],"illegal_access")["complete"]
+
+
+def test_specification_payload_reads_require_native_coherence(tmp_path):
+    path = write(tmp_path, "spec.f90", """module specifications
+contains
+subroutine consume(bounds,value)
+integer,intent(in)::bounds(:)
+real(8),intent(out)::value
+real(8)::scratch(bounds(1))
+value=1.d0
+end subroutine
+subroutine descriptor(a,value)
+real(8),intent(in)::a(:)
+real(8),intent(out)::value
+real(8)::scratch(size(a))
+value=2.d0
+end subroutine
+end module
+""")
+    analysis = SourceEffects([path])
+    payload = analysis.summarize("specifications::consume")
+    assert payload["complete"]
+    assert any(op["kind"] == "read" and op["resource"] == "argument::bounds" for op in payload["operations"])
+    descriptor = analysis.summarize("specifications::descriptor")
+    assert descriptor["complete"]
+    assert any(op["kind"] == "descriptor_read" and op["resource"] == "argument::a"
+               for op in descriptor["operations"])
+    assert not any(op["kind"] == "read" and op["resource"] == "argument::a" for op in descriptor["operations"])
+
+
+def test_unknown_specification_function_is_a_source_boundary(tmp_path):
+    path = write(tmp_path, "spec.f90", """module specifications
+contains
+subroutine consume(a,n,value)
+real(8),intent(in)::a(:)
+integer,intent(in)::n
+real(8),intent(out)::value
+real(8)::scratch(user_bound(n))
+value=1.d0
+end subroutine
+end module
+""")
+    result = SourceEffects([path]).summarize("specifications::consume")
+    assert not result["complete"]
+    assert any("unknown function" in reason and "user_bound" in reason.lower() for reason in result["reasons"])
+
+
+def test_opaque_contract_preserves_scalar_effect_rank(tmp_path):
+    path = write(tmp_path, "scalar_contract.f90", """module caller
+use opaque_library,only:adjust
+contains
+subroutine advance(n)
+integer,intent(inout)::n
+call adjust(n)
+end subroutine
+end module
+""")
+    contract = {"identity": "opaque-ABI1", "lifetime": "stable", "escapes": False, "ordering": "serial",
+                "complete": True, "descriptor_changes": False,
+                "effects": [{"kind": "write", "argument": 0, "section": "whole"}]}
+    result = SourceEffects([path], contracts={"opaque_library::adjust": contract}).summarize("caller::advance")
+    assert result["complete"]
+    operation, = result["operations"]
+    effect, = operation["effects"]
+    assert effect["resource"] == "argument::n"
+    assert effect["rank"] == 0

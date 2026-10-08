@@ -393,6 +393,7 @@ python -m compiler --emit-scoped-runtime --json --output-dir out/scoped
 ```
 
 The output contains `scoped_runtime.h`, `scoped_entry.hpp`, `section_copy.hpp`,
+`scoped_regions.hpp`, `scoped_planning.hpp`,
 `scoped_runtime.cu`, `fort_scoped_memory.f90`, and `scoped-runtime.json`. Compile and link the CUDA
 runtime once per executable with host OpenMP support (`-Xcompiler=-fopenmp`) and compile the common Fortran interface before its
 users. The manifest identifies the ABI, source hashes, source languages, and
@@ -435,8 +436,11 @@ JSON, including argument order, array types, execution modes, and runtime build
 artifacts. Independently generated entries link one common runtime and borrow
 handles registered by their caller. Existing ordinary and owned-session outputs
 are preserved. Shared entries currently require a serial coordinator and read-only
-scalar parameters. Native and forced GPU execution are available; shared automatic
-mode chooses native because scope-wide coherent estimates are not yet connected.
+scalar parameters. Native, forced GPU, and calibrated automatic execution are
+available. Planning ABI version 1 exports side-effect-free `plan` queries and a
+`choose` selector. Queries record physical effects and checked control values;
+mode 2 consumes the resulting worker decisions in source order. Unknown work,
+unsafe preparation, or absent/incompatible calibration selects native execution.
 Shared numerical entry ABI version 2 accepts scalar pointers through its C
 interface, with matching Fortran reference arguments. Binding those references
 does not read their values. A scalar used only behind a conditional or possibly
@@ -448,8 +452,8 @@ Protected CPU reads retain their original guards under host optimization. If a
 physical section offset also uses a protected scalar, its native access uses
 conservative whole-resource effects without evaluating that offset early.
 
-Explicit entries and the initial source scopes below remain opt-in. Coherent
-placement and complete application integration remain required work in
+Explicit entries and the initial source scopes below remain opt-in. Complete
+application evaluation and remaining lifetime/effect integration are tracked in
 [the memory-model plan](MEMORY_MODEL_PLAN.md).
 
 ### Compiler-owned source scopes
@@ -559,7 +563,9 @@ The manifest publishes these facts for independent adapters to validate again
 before applying changes. Public precision constants can resolve through multiple
 module reexports; private constants remain unavailable outside their module.
 
-Native effect summaries also report `definition_diagnostics`. An array payload
+Native effect summaries also report `definition_diagnostics`. Specification expressions are analyzed at procedure entry: descriptor inquiries
+need no payload transfer, array-element bounds require native coherence, and
+unknown specification functions are source boundaries. An array payload
 read before any source write in an `INTENT(OUT)` leaf prevents captured scope
 execution, including through its caller closure. Original native calls remain
 available. This diagnostic does not establish a complete definition proof for
@@ -569,11 +575,51 @@ Initial support is serial, contiguous whole-array bindings, numerical leaves,
 call-only wrapper clones, registered hidden module arrays (including visible
 reexports), and conservative whole-resource native effects.
 Allocatable captures, array-valued actuals and scalar array-element actuals,
+explicit dummy extents without a proved whole-storage shape mapping,
 general opaque-call hooks, physical native-section refinement, and collective
-offload require further integration. `auto` selects the original native span
-without creating a context while coherent scope estimates are unavailable;
-passing a calibration profile does not yet enable these estimates. This prototype
-has correctness evidence, but has not established complete ELMM speedups.
+offload require further integration. Automatic source scopes require an explicit
+profile with costs calibrated for the exact common runtime:
+
+```bash
+python -m compiler.offload.calibrate --output hardware.json --threads 4 \
+  --precision 64 --cuda-host-cxx g++-14 --scoped-costs
+python -m compiler --input application.f90 --kernel application::advance \
+  --form-scopes --scope-facts captures.json --memory-model scoped --gpu-policy auto \
+  --calibration-profile hardware.json --host-threads 4 --json --output-dir out/scopes
+```
+
+The optional calibration block preserves ordinary profiles and measures cold
+startup separately from the warm GPU context lifecycle (setup and teardown), allocation/release, access hooks, launch
+queueing, waits, and bounded planner work. It covers a recorded allocation-size
+range and rejects larger GPU alternatives. Queries preserve source definition
+positions and require immutable control scalars/payload arrays across the complete
+scope. Dynamic specification expressions retain original native execution.
+Missing calibration or unsafe queries select the original span before creating a
+context. A valid zero-GPU decision closes untouched metadata before native work.
+Host CPU, compiler, precision, and thread-budget compatibility are checked without
+CUDA initialization; GPU identity is checked only for a candidate requiring it.
+
+The compiler considers native workers, GPU intervals of up to four adjacent units,
+and complete legal worker blocks. A bounded 16-state frontier retains distinct
+coherence states; at most 128 complete alternatives are compared. The same region
+algebra and physical copy plan drive execution and simulation, including retained
+full-array allocation peaks, CPU mirror reads/writes, waits, and final publication.
+Each GPU interval requires an estimated 20% advantage. A proven startup lower bound
+avoids searching GPU schedules when even their unavoidable fixed cost exceeds
+all modeled native work. No online timing or application-specific recipes are used.
+
+`FORT_RUNTIME_TRACE=1` publishes decisions, modeled bytes, launches, waits, and
+planning work. Its versioned `FORT_SCOPED evidence` JSON records show current and
+required physical rectangles, preservation reads, planned copies, final exports,
+and the selected intervals' cost gates. The public scope manifest maps registration
+identities to source resources. Evidence is bounded to 4,096 detail records, with
+explicit truncation; tracing adds no CUDA work or synchronization. Keep tracing
+off during performance measurements and compare modeled copies with actual events.
+Fixed native helper computation is an equally omitted common term,
+so estimates are not absolute application wall time. Zero-GPU estimates
+conservatively include coherent CPU-worker hooks, whereas source fallback runs
+original native procedures. This prototype has correctness evidence, but has not
+established complete ELMM speedups; planner overhead remains part of evaluation.
 Indexed actuals remain source boundaries because their array coherence and private
 capture mapping must be established before evaluation. Completed GPU scopes restore
 host-visible values before these original calls. Whole scalar variables and literal
