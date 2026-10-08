@@ -476,9 +476,50 @@ An adapter verifies these artifacts, applies replacements to an application copy
 and links the common runtime once. It does not inspect compiler IR or CUDA text.
 No accepted scopes is a successful unchanged/native result.
 
+Independent source extractors may add `--numerical-sources package.json` to offer
+normalized numerical leaves without selecting scopes or execution policies. The
+compiler validates the package against the original sources and lowers each
+offered leaf through its ordinary numerical frontend. This allows capture-safe
+OpenMP removal and coordinate normalization performed by an independent adapter.
+The original procedure remains the native fallback, and its `INTENT(OUT)`
+definition events remain at the original call position.
+
+The package contains `schema_version: 1`, `source_inputs` (the same original
+path/hash mapping as the capture document), and an `entries` list. Each entry
+provides the original qualified `procedure` and `source_sha256`, the absolute
+normalized source `path`, its `sha256` and qualified `entry`, and these facts:
+`normalization: "whole_storage_rebased_v1"`,
+`participation: "serial_coordinator"`, `capture_safe: true`, and
+`preserves_source_order: true`. These are extractor assertions of equivalence and
+capture safety; hashes bind them to source contents, rather than proving a
+transformation equivalent by themselves.
+
+Each entry's `parameters` maps normalized arguments in signature order to original
+canonical resources. For example:
+
+```json
+[
+  {"name": "a", "resource": "argument::a", "physical_origin": [0]},
+  {"name": "weights", "resource": "settings::weights", "physical_origin": [0]},
+  {"name": "coefficient", "resource": "settings::coefficient"},
+  {"name": "a_lower", "resource": "argument::a", "lower_bound_dimension": 1}
+]
+```
+
+Array arguments use the complete physical storage with normalized lower bound 1;
+their origins contain one zero per dimension. Types, kinds, ranks, resource
+identity, write access intents and parameter order are checked. Arrays use access
+intent `in` or `inout`; external scalars are read-only. Lower-bound parameters are
+INTEGER(4), with original declared bounds initially required to be statically
+representable in that ABI. Their values are queried inside the original helper,
+so an empty assumed-shape dimension correctly has `LBOUND=1` even when its
+declared bound is negative. The public manifest records the normalized source
+identities/hashes, which are checked again before artifacts are published.
+
 Initial support is serial, contiguous whole-array bindings, numerical leaves,
-call-only wrapper clones, and conservative whole-resource native effects.
-Allocatable captures, array-valued actuals, hidden array mappings in clones,
+call-only wrapper clones, registered hidden module arrays (including visible
+reexports), and conservative whole-resource native effects.
+Allocatable captures, array-valued actuals,
 general opaque-call hooks, physical native-section refinement, and collective
 offload require further integration. `auto` selects the original native span
 without creating a context while coherent scope estimates are unavailable;

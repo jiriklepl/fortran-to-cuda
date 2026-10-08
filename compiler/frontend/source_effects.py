@@ -624,7 +624,7 @@ class SourceEffects:
                         else:
                             current.append(item)
                 elif kind in {"Block_Nonlabel_Do_Construct", "Block_Label_Do_Construct"}:
-                    children = node.content
+                    children = [child for child in node.content if _kind(child) != "Comment"]
                     header = children[0]
                     # Retain loop execution protection as evidence; it is not a
                     # predicate that an adapter may evaluate outside the loop.
