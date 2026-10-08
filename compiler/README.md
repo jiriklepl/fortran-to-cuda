@@ -472,6 +472,15 @@ native execution because caller participation is unknown.
 
 The public `scopes` JSON and saved `scope-manifest.json` identify approved source
 replacements, original hashes, artifact hashes, runtime identity, and build roles.
+Each scope publishes its synthetic owner parameters with canonical resources and
+original actual names. Capture dummies use private generated names so original
+USE associations and re-exported module fields retain their source bindings.
+After the caller and contiguity checks, contiguous pointer views bind the original
+storage. Context-aware helper calls use those views so `CONTIGUOUS` dummies do not
+introduce array temporaries that diverge from the registered host buffers. Native
+whole-span fallback retains the original arguments and their normal semantics.
+Context-aware clone array dummies also declare `TARGET`, making their association
+with runtime access through the registered address explicit.
 An adapter verifies these artifacts, applies replacements to an application copy,
 and links the common runtime once. It does not inspect compiler IR or CUDA text.
 No accepted scopes is a successful unchanged/native result.

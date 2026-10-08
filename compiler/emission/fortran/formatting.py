@@ -7,10 +7,11 @@ def _fortran_list(prefix: str, values: list[str], suffix: str, indentation: int)
         return [" " * indentation + prefix + suffix]
     lines = [" " * indentation + prefix + " &"]
     lines.extend(
-        " " * (indentation + 4) + value + (", &" if index < len(values) - 1 else " &")
+        " " * (indentation + 4) + value + (", &" if index < len(values) - 1 else " &" if suffix else "")
         for index, value in enumerate(values)
     )
-    lines.append(" " * indentation + suffix)
+    if suffix:
+        lines.append(" " * indentation + suffix)
     return lines
 
 

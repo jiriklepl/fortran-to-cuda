@@ -300,7 +300,9 @@ def compiled(tmp_path_factory):
     budget_facts={"schema_version":1,"participation":"serial","device_budget_bytes":400,
                   "captures":{"argument::a":FACT,"argument::b":{**FACT,"initialized":"none"},
                               "argument::out":{**FACT,"initialized":"none"}}}
+    contiguous = PROGRAM.replace("real(8),intent", "real(8),contiguous,intent")
     cases=[("sections","sections",PROGRAM,DRIVER,None), ("auto","auto",PROGRAM,DRIVER,None),
+           ("contiguous","sections",contiguous,DRIVER,None),
            ("budget","sections",PROGRAM,DRIVER,budget_facts),
            ("mirror","sections",MIRROR_PROGRAM,MIRROR_DRIVER,None),
            ("wrapper","sections",WRAPPER_PROGRAM,DRIVER,None),
@@ -391,6 +393,7 @@ def test_compiler_formed_scope_shares_input_across_native_transform(compiled):
 @pytest.mark.cuda
 @pytest.mark.parametrize(("case","uploads","downloads","launches"),[
     ("mirror",4,8,8), ("wrapper",12,12,16), ("partial",1,2,2), ("budget",8,6,6),
+    ("contiguous",8,8,8),
 ])
 def test_source_scope_mirrors_clones_partial_fields_and_native_continuation(compiled,case,uploads,downloads,launches):
     target,output=compiled[case]

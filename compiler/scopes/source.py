@@ -351,7 +351,25 @@ class ScopeBuilder:
         header = _fortran_list("subroutine " + name + "(",
                                ["fort_context", "fort_mode", *routine.arguments, *handles.values()], ")", 0)
         uses = ["use iso_c_binding", "use fort_scoped_memory"]
-        spec = [str(n) for n in _children(_part(routine.scope.node, "Specification_Part"))]
+        spec = []
+        for node in _children(_part(routine.scope.node, "Specification_Part")):
+            if _kind(node) != "Type_Declaration_Stmt":
+                spec.append(str(node))
+                continue
+            dtype, attributes, entities = node.items
+            attrs = [str(a) for a in _children(attributes)]
+            captured = [e for e in _children(entities) if str(e.items[0]).lower() in array_names]
+            others = [e for e in _children(entities) if e not in captured]
+            if not captured or "TARGET" in attrs:
+                spec.append(str(node))
+                continue
+            # Coherence hooks can modify borrowed storage through its registered
+            # address while these dummies are live. TARGET makes that association
+            # explicit instead of relying on an optimizer's alias assumptions.
+            for declarations, qualifiers in ((captured, [*attrs, "TARGET"]), (others, attrs)):
+                if declarations:
+                    spec += _fortran_list(str(dtype) + (", " + ", ".join(qualifiers) if qualifiers else "") + " ::",
+                                          list(map(str, declarations)), "", 0)
         if numeric and procedure in self.packages:
             # fparser can place comments in an Implicit_Part as well as directly
             # in the specification. The extraction contract covers all removed
@@ -408,14 +426,14 @@ class ScopeBuilder:
         # USE statements precede the original specification, including IMPLICIT.
         extra = ["integer(c_int64_t), intent(in) :: fort_context",
                  "integer(c_int), intent(in) :: fort_mode",
-                 "integer(c_int64_t), intent(in) :: " + ", ".join(handles.values()),
+                 *_fortran_list("integer(c_int64_t), intent(in) ::", list(handles.values()), "", 0),
                  "integer(c_int) :: fort_status", "type(fort_scope_access) :: fort_access"]
         text = "\n".join([*header, *dict.fromkeys(uses), *spec, *extra, *body,
                           "end subroutine " + name, ""])
         self.append_procedure(routine.scope.parent, name, text)
         return name, array_roots
 
-    def native_call(self, call, actions, definitions, overwrites, handles):
+    def native_call(self, call, actions, definitions, overwrites, handles, *, actuals=None):
         lines = []
         # Only outer dummy definition changes can be performed before the call.
         # A nested INTENT(OUT) event must stay at its original source position.
@@ -445,7 +463,7 @@ class ScopeBuilder:
             lines += ["fort_access = fort_scope_access()",
                       "fort_access%flags = " + " + ".join(flags)]
             lines += _checked(f"fort_scope_host_begin(fort_context, {handle}, fort_access)")
-        lines += _call(str(call.node.items[0]), map(str,call.actuals))
+        lines += _call(str(call.node.items[0]), map(str,call.actuals) if actuals is None else actuals)
         for handle in accesses:
             lines += _checked(f"fort_scope_host_end(fort_context, {handle})")
         return lines
@@ -488,13 +506,29 @@ class ScopeBuilder:
         names = [self.visible(routine, root) for root in (*arrays, *scalars)]
         if any(n.startswith("fort_") for n in names):
             raise CompilationError("capture names conflict with the initial scope owner namespace")
-        header = _fortran_list("subroutine " + name + "(", names, ")", 0)
+        # Captured module fields can be re-exported by the original USE list.
+        # A dummy with the same spelling conflicts with use association, even
+        # when it would legally shadow host association. Keep synthetic formals
+        # private to this owner and map whole-variable actuals by root identity.
+        parameters = {root: _name("fort_capture_", digest) + "_" + str(i)
+                      for i, root in enumerate((*arrays, *scalars))}
+        formal_names = list(parameters.values())
+        views = {root: parameters[root] + "_view" if root in arrays else parameters[root]
+                 for root in parameters}
+
+        def actuals(call, *, shared=True):
+            bindings = views if shared else parameters
+            return [bindings[binding.root] if
+                    (binding := self.analysis._actual_binding(routine.scope, actual))
+                    and binding.root in parameters else str(actual) for actual in call.actuals]
+
+        header = _fortran_list("subroutine " + name + "(", formal_names, ")", 0)
         imports = [str(n) for n in _children(_part(routine.scope.node, "Specification_Part"))
                    if _kind(n) == "Use_Stmt"]
         spec = []
         handles, layouts, flags = {}, {}, {}
         for i, (root, binding) in enumerate(arrays.items()):
-            visible = self.visible(routine, root)
+            visible = parameters[root]
             dtype, enum, width = DTYPES[binding.signature()[:2]]
             handles[root] = "fort_handle_" + str(i)
             layouts[root] = "fort_layout_" + str(i)
@@ -503,6 +537,7 @@ class ScopeBuilder:
                 raise CompilationError("scope writes an INTENT(IN) capture")
             intent = "inout" if root in written else "in"
             spec += [*_fortran_line(f"{dtype}, target, intent({intent}) :: {visible}({','.join(':' for _ in range(binding.rank))})", 0),
+                     *_fortran_line(f"{dtype}, pointer, contiguous :: {views[root]}({','.join(':' for _ in range(binding.rank))})", 0),
                      f"integer(c_size_t), target :: fort_extents_{i}({binding.rank})",
                      f"integer(c_int64_t), target :: fort_lowers_{i}({binding.rank})",
                      f"type(fort_scope_layout) :: {layouts[root]}"]
@@ -517,9 +552,9 @@ class ScopeBuilder:
                 raise CompilationError("unsupported scalar capture width")
             dtype = "logical" if binding.signature()[:2] == ("logical",4) else DTYPES[binding.signature()[:2]][0]
             intent = "in" if binding.intent == "in" else "inout"
-            spec += [f"{dtype}, intent({intent}) :: {self.visible(routine, root)}"]
+            spec += [f"{dtype}, intent({intent}) :: {parameters[root]}"]
         spec += ["integer(c_int64_t) :: fort_context = 0",
-                 "integer(c_int64_t) :: " + ", ".join(handles.values()),
+                 *_fortran_list("integer(c_int64_t) ::", list(handles.values()), "", 0),
                  "integer(c_int) :: fort_status, fort_cleanup",
                  "type(c_ptr) :: fort_host_pointer",
                  f"integer(c_int), parameter :: fort_mode = {1 if self.config.policy == 'sections' else 2}",
@@ -527,20 +562,27 @@ class ScopeBuilder:
         # Explicit initialization on a local declaration implies SAVE. Assign at
         # entry instead: no scope-local context or state persists across calls.
         spec = [s.replace("fort_context = 0", "fort_context") for s in spec]
-        original = [line for call in calls for line in _call(str(call.node.items[0]), map(str,call.actuals))]
+        original = [line for call in calls for line in _call(str(call.node.items[0]), actuals(call, shared=False))]
         native = [*original, "return"]
         body = ["fort_context = 0"]
         if self.config.policy == "auto":
             body += ["! Coherent estimates are unavailable: successful whole-span native selection.", *native]
         else:
-            condition = " .or. ".join(".not. is_contiguous(" + n + ")" for n in names[:len(arrays)])
             body += ["if (fort_scope_serial_caller() == 0) then", *native, "endif",
-                     "if (" + condition + ") then", *native, "endif",
-                     "fort_status = fort_scope_create(0_c_int, fort_context)"]
+                     *_fortran_list("if (any([", [".not. is_contiguous(" + n + ")"
+                                                 for n in formal_names[:len(arrays)]], "])) then", 0),
+                     *native, "endif"]
+            # Associate only after the original storage passed its checks. These
+            # contiguous pointers are simply contiguous actuals, so subsequent
+            # CONTIGUOUS helper dummies cannot acquire copy-in/out temporaries
+            # that differ from the registered host storage. Empty views retain
+            # their descriptors without accessing or manufacturing a payload.
+            body += [f"{views[root]} => {parameters[root]}" for root in arrays]
+            body += ["fort_status = fort_scope_create(0_c_int, fort_context)"]
             body += ["if (fort_status == FORT_SCOPE_OK) &",
                      f"  fort_status = fort_scope_set_device_budget(fort_context, {self.device_budget}_c_size_t)"]
             for i, (root, binding) in enumerate(arrays.items()):
-                visible = self.visible(routine, root)
+                visible = parameters[root]
                 _, enum, width = DTYPES[binding.signature()[:2]]
                 body += ["if (fort_status == FORT_SCOPE_OK) then"]
                 body += _fortran_list(f"fort_extents_{i} = [",
@@ -579,7 +621,7 @@ class ScopeBuilder:
                     module = self.analysis.routines[call.procedure].scope.module
                     if module != routine.scope.module:
                         imports.append(f"use {module}, only: {clone}")
-                    body += _call(clone, ["fort_context", "fort_mode", *map(str,call.actuals),
+                    body += _call(clone, ["fort_context", "fort_mode", *actuals(call),
                                          *[handles[call.bindings[root].root if root.startswith("argument::") else root]
                                            for root in arrays_]])
                 else:
@@ -588,7 +630,8 @@ class ScopeBuilder:
                     native_handles = {formal: handles[root] for formal, root in mapping.items() if root in handles}
                     # Hidden visible roots retain their canonical identity.
                     native_handles.update({root: handle for root,handle in handles.items() if not root.startswith("argument::")})
-                    body += self.native_call(call, actions, definitions, overwrites, native_handles)
+                    body += self.native_call(call, actions, definitions, overwrites, native_handles,
+                                             actuals=actuals(call))
             body += _checked("fort_scope_close(fort_context)")
         text = "\n".join([*header, "use iso_c_binding", "use fort_scoped_memory",
                           *dict.fromkeys(imports), "implicit none", *spec, *body, "end subroutine " + name, ""])
@@ -596,6 +639,8 @@ class ScopeBuilder:
         first, last = _span(calls[0].node)[0], _span(calls[-1].node)[1]
         self.add_edit(routine.scope.path, first, last, "\n".join(_call(name,names)) + "\n")
         return {"owner": name, "path": str(routine.scope.path), "first_line": first, "last_line": last,
+                "parameters": [{"name": parameters[root], "resource": root, "actual": visible}
+                               for root, visible in zip(parameters, names, strict=True)],
                 "calls": [c.procedure for c in calls], "gpu_leaves": sorted(leaves),
                 "resources": [{"resource": root, "visible": self.visible(routine,root),
                                "initialized": self.capture(binding)["initialized"],
