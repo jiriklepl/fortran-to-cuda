@@ -57,8 +57,23 @@ typedef struct fort_scope_stats {
 uint32_t fort_scope_abi_version(void);
 const char *fort_scope_error(void);
 int fort_scope_create(int device, fort_scope_t *context);
+/* No CUDA initialization or descriptor access. Source scopes retain native
+ * collective execution in active teams or if runtime OpenMP support is absent. */
+int fort_scope_serial_caller(void);
+/* Configure before CUDA initialization. Budget counts live payload bytes of
+ * full-layout allocations, independently of the sections transferred. */
+int fort_scope_set_device_budget(fort_scope_t context, size_t bytes);
 int fort_scope_register(fort_scope_t context, uint64_t identity, uint64_t generation,
                         const fort_scope_layout *layout, int host_initialized, fort_buffer_t *buffer);
+/* Register only source-proven initialized host sections. Re-registering an
+ * existing identity never resets its definition or coherence state. */
+int fort_scope_register_sections(fort_scope_t context, uint64_t identity, uint64_t generation,
+                                const fort_scope_layout *layout, const fort_scope_section *initialized,
+                                size_t initialized_count, fort_buffer_t *buffer);
+/* A source definition event, such as entry to a plain numeric INTENT(OUT)
+ * dummy. Discard old values without publishing them; retain the allocation.
+ * No buffer access may be prepared, and earlier context work completes first. */
+int fort_scope_forget_definition(fort_scope_t context, fort_buffer_t buffer);
 int fort_scope_layout_get(fort_scope_t context, fort_buffer_t buffer, fort_scope_layout *layout);
 int fort_scope_host_begin(fort_scope_t context, fort_buffer_t buffer, const fort_scope_access *access);
 int fort_scope_host_end(fort_scope_t context, fort_buffer_t buffer);

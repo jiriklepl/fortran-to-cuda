@@ -49,6 +49,7 @@ compiler/
 ├── scheduling/              Locality ordering and explicit spatial tile plans
 ├── addressing/              Static integer ranges and proved subscript widths
 ├── memory/                  Explicit acquisition, coherence, and lifecycle plans
+├── scopes/                  Bounded source scopes, native hooks, original-module clones
 ├── runtime/                 Numeric helpers, profiling, owned buffers, token registry
 ├── emission/
 │   ├── driver.py            Generate all sources from one shared ABI
@@ -169,6 +170,8 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--calibration-profile FILE` | none | Explicit reusable hardware calibration for automatic decisions |
 | `--memory-model {call,scoped}` | `call` | Shared-buffer numerical entry prototype with `scoped`; requires sections/auto |
 | `--analyze-effects` | off | Bounded native source effects without requiring GPU lowering; writes no artifacts |
+| `--form-scopes` | off | Emit bounded serial source scopes, original-module helpers, and public source/build manifests |
+| `--scope-facts FILE` | none | Source-hash-bound capture, initialization, and caller facts; requires `--form-scopes` |
 | `--source-file FILE` | none | Additional effect-analysis source; repeat for separate modules |
 | `--effect-contracts FILE` | none | Versioned explicit contracts for opaque native calls; requires effect analysis |
 | `--host-threads N` | `4` | Total host thread budget, including hybrid GPU coordination |
@@ -335,6 +338,13 @@ included in timing hooks. Unwritten `intent(inout)` cells are preserved. Unwritt
 
 ## Memory planning and runtime
 
+The [shared ownership and coherent memory scope plan](MEMORY_MODEL_PLAN.md)
+extends call-local transfers to shared buffers and section coherence across GPU
+entries and native CPU operations. It records current limitations, public
+interfaces, staged delivery, and complete-application validation gates. The
+common runtime foundation is available; automatic source scopes and their
+application evaluation are still in progress.
+
 `compiler.memory.plan_memory(plan, parameters, *, acquisition_policy=None)` derives immutable acquisition,
 caller uploads/downloads, host/device access, execution, write-invalidation, synchronization, and release
 operations from an execution plan. It preserves conditional branches, counts
@@ -384,7 +394,7 @@ python -m compiler --emit-scoped-runtime --json --output-dir out/scoped
 
 The output contains `scoped_runtime.h`, `scoped_entry.hpp`, `section_copy.hpp`,
 `scoped_runtime.cu`, `fort_scoped_memory.f90`, and `scoped-runtime.json`. Compile and link the CUDA
-runtime once per executable and compile the common Fortran interface before its
+runtime once per executable with host OpenMP support (`-Xcompiler=-fopenmp`) and compile the common Fortran interface before its
 users. The manifest identifies the ABI, source hashes, source languages, and
 build ordering. No input procedure is required for this operation.
 
@@ -395,6 +405,14 @@ close. Registrations use explicit identities and allocation generations, validat
 layouts, and reject independently registered overlapping storage. Sections use
 zero-based physical coordinates with exclusive upper bounds. Access descriptors
 separate reads, possible writes, and proven overwrites.
+
+`fort_scope_register_sections` accepts partially initialized host coverage.
+`fort_scope_forget_definition` discards old defined/current coverage while
+retaining the device allocation, preserving procedure-entry `INTENT(OUT)` events.
+Neither re-registering a pointer nor keeping its allocation defines its contents.
+`fort_scope_set_device_budget` limits live full-layout device payload bytes; set
+it before CUDA initialization. Resource exhaustion before an operation starts
+permits native continuation, including after earlier completed operations.
 
 CPU reads retain device validity. CPU writes invalidate only affected sections;
 GPU writes similarly invalidate host sections. On excess fragmentation, the
@@ -420,6 +438,53 @@ are preserved. Shared entries currently require a serial coordinator and read-on
 scalar parameters. Native and forced GPU execution are available; shared automatic
 mode chooses native because scope-wide coherent estimates are not yet connected.
 
+Explicit entries and the initial source scopes below remain opt-in. Coherent
+placement and complete application integration remain required work in
+[the memory-model plan](MEMORY_MODEL_PLAN.md).
+
+### Compiler-owned source scopes
+
+```bash
+python -m compiler --input application.f90 --kernel application::advance \
+  --source-file helpers.f90 --form-scopes --scope-facts captures.json \
+  --memory-model scoped --gpu-policy sections --json --output-dir out/scopes
+```
+
+The capture document has `schema_version: 1`, `participation: "serial"`, and
+`sources` mapping every supplied absolute source path to its SHA-256 hash.
+`captures` maps canonical identities such as `argument::a` or `module::field`
+to `storage: "stable"`, `escapes: false`, `allocation_changes: false`, and
+`initialized: "whole"`, `"none"`, or `"sections"`. Partial initialization adds
+`sections`, a bounded list of `lower`/exclusive `upper` physical coordinates.
+These are storage and source-definition assertions; they do not specify GPU
+leaves or transfer recipes. An optional `device_budget_bytes` defaults to 256 MiB.
+
+The compiler selects consecutive call spans, generates source helpers in their
+original modules, and passes explicit context/root handles down call-only helper
+paths. Original native procedures remain available. Native operations execute
+behind compiler-generated access hooks; numerical leaves retain physical section
+transfers and borrow the same registered buffers. CPU reads retain a current GPU
+mirror. Unknown calls, recursion, lifetime changes, uncertain effects, writable
+aliases, and unsupported mappings are boundaries. Source guards remain outside
+their original call spans. Active OpenMP teams select the original native span
+before descriptors are inspected; a runtime without OpenMP support also selects
+native execution because caller participation is unknown.
+
+The public `scopes` JSON and saved `scope-manifest.json` identify approved source
+replacements, original hashes, artifact hashes, runtime identity, and build roles.
+An adapter verifies these artifacts, applies replacements to an application copy,
+and links the common runtime once. It does not inspect compiler IR or CUDA text.
+No accepted scopes is a successful unchanged/native result.
+
+Initial support is serial, contiguous whole-array bindings, numerical leaves,
+call-only wrapper clones, and conservative whole-resource native effects.
+Allocatable captures, array-valued actuals, hidden array mappings in clones,
+general opaque-call hooks, physical native-section refinement, and collective
+offload require further integration. `auto` selects the original native span
+without creating a context while coherent scope estimates are unavailable;
+passing a calibration profile does not yet enable these estimates. This prototype
+has correctness evidence, but has not established complete ELMM speedups.
+
 ### Native source effects
 
 Analyze native routines that do not satisfy numerical GPU lowering:
@@ -434,7 +499,10 @@ The compiler resolves bounded direct module calls and unambiguous generic
 overloads by type/kind/rank. The public report contains source hashes, formal/root
 mappings, original guards, descriptor reads, memory reads/writes, procedure-entry
 definition changes, persistent state, OpenMP directives, and boundary reasons.
-Array effects are currently conservative whole-resource effects; retained source
+Array effects are currently conservative whole-resource effects, with a separate
+must-write proof for whole-array assignments and complete unit-stride sweeps.
+Conditional holes, strided writes, uncertain bounds, and early exits supply no
+whole-array overwrite proof. Retained source
 subscripts are evidence, not physical transfer coordinates. Unknown effects,
 storage lifetime, recursion, or analysis-budget exhaustion make the corresponding
 summary incomplete. Mutable saved state and OpenMP directives prevent cloning.
@@ -449,7 +517,7 @@ The compiler records a contract hash and rejects malformed contracts. A contract
 is an explicit assertion about the complete native call, not inferred from INTENT.
 
 Effect completeness is separate from scope legality and GPU eligibility. The
-analysis does not rewrite calls or evaluate guards/bounds. Future compiler scope
+analysis does not rewrite calls or evaluate guards/bounds. Compiler source scope
 generation consumes these facts; adapters must not turn source strings into
 coherence hooks or placement decisions themselves.
 

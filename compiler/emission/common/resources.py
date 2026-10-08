@@ -40,7 +40,7 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
         "link_once": True,
         "headers": ["scoped_runtime.h", "scoped_entry.hpp", "section_copy.hpp"],
         "sources": [
-            {"path": "scoped_runtime.cu", "language": "cuda", "standard": "c++17"},
+            {"path": "scoped_runtime.cu", "language": "cuda", "standard": "c++17", "host_openmp": True},
             {"path": "fort_scoped_memory.f90", "language": "fortran", "module": "fort_scoped_memory"},
         ],
         "source_sha256": hashes,
@@ -52,5 +52,6 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
         "concurrent_access": "separate contexts with nonconflicting host storage",
         "rectangle_limit": 32,
         "intersection_limit": 1024,
+        "capabilities": ["section_coherence", "partial_host_initialization", "source_definition_changes", "device_memory_budget"],
     }
     return outputs, manifest

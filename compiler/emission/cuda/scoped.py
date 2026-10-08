@@ -120,6 +120,9 @@ def generate_scoped(function, plan, config, common_header):
                   f"    {cpp_type(a)} *{a.cpp_name}_device = nullptr;"]
         lines += [f"    const std::size_t {dimension_name(a,k+1)} = {field}.extents[{k}];" for k in range(a.rank)]
     lines += [f"    {cpp_type(s)} {s.cpp_name};" for s in host_symbols(function, plan)]
+    for s in arrays:
+        if s.intent == "out":
+            lines += [f"    FORT_SHARED_CHECK(fort_scope_forget_definition(fort_context, {s.cpp_name}_handle));"]
     # Until scope-wide calibrated placement is connected, automatic mode remains
     # a successful coherent native choice. Explicit mode 1 exercises GPU workers.
     lines += ["    const bool fort_gpu_requested = fort_mode == 1;",
@@ -264,6 +267,7 @@ def generate_scoped(function, plan, config, common_header):
         "automatic_estimate_available": False,
         "automatic_reason": "scope-wide coherent placement is not yet connected; automatic mode selects native",
         "automatic_scope_available": False, "host_threads": config.host_threads,
+        "definition_changes": [s.name for s in arrays if s.intent == "out"],
         "resource_failure": "continue native at current worker before execution; never replay completed work",
         "transfer_volume": "missing physical read/preservation sections from shared runtime state",
         "parallel_regions": len(plan.regions), "source": function.source,

@@ -287,3 +287,114 @@ end module
     assert not report["complete"]
     assert any("unresolved function effects" in reason
                for reason in records(report)["inspectors::inspect"]["reasons"])
+
+
+
+@pytest.mark.parametrize(("body","expected"), [
+    ("a=3", True),
+    ("a(:,:,:)=3", True),
+    ("do k=1,size(a,3)\na(:,:,k)=3\nenddo", True),
+    ("do k=1,size(a,3)-1\na(:,:,k)=3\nenddo", False),
+    ("do k=1,size(a,3),2\na(:,:,k)=3\nenddo", False),
+    ("do k=1,size(a,3)\nif(k>2) a(:,:,k)=3\nenddo", False),
+    ("a(:,:,1)=3", False),
+])
+def test_must_write_coverage_does_not_confuse_faces_holes_or_strides(tmp_path,body,expected):
+    path=write(tmp_path,"fill.f90",f"""module utilities
+contains
+subroutine fill(a)
+real(8),intent(out)::a(:,:,:)
+integer::k
+{body}
+end subroutine
+end module
+""")
+    summary=records(analyze_source_effects([path],"fill"))["utilities::fill"]
+    assert ("argument::a" in summary["guaranteed_whole_overwrites"]) == expected
+
+
+def test_negative_bounds_need_full_logical_sweep_not_size_starting_at_one(tmp_path):
+    for index,bounds in enumerate(["lbound(a,3),ubound(a,3)","1,size(a,3)"]):
+        path=write(tmp_path,f"fill{index}.f90",f"""module utilities
+contains
+subroutine fill(a)
+real(8),intent(out)::a(-2:,-2:,-2:)
+integer::k
+do k={bounds}
+a(:,:,k)=3
+enddo
+end subroutine
+end module
+""")
+        summary=records(analyze_source_effects([path],"fill"))["utilities::fill"]
+        assert ("argument::a" in summary["guaranteed_whole_overwrites"]) == (index==0)
+
+
+def test_unsupported_module_storage_is_not_hidden_by_a_clean_routine(tmp_path):
+    path=write(tmp_path,"shared.f90","""module shared
+real(8)::a(8)
+common /storage/ a
+contains
+subroutine advance()
+a=1
+end subroutine
+end module
+""")
+    report=analyze_source_effects([path],"advance")
+    assert not report["complete"]
+    assert any("specification effect unavailable" in reason
+               for reason in records(report)["shared::advance"]["reasons"])
+
+
+def test_private_implementation_is_resolved_only_through_public_generic(tmp_path):
+    utilities=write(tmp_path,"utilities.f90","""module utilities
+private
+public :: fill
+interface fill
+module procedure fill_real
+end interface
+contains
+subroutine fill_real(a)
+real(8),intent(out)::a(:)
+a=3
+end subroutine
+end module
+""")
+    application=write(tmp_path,"application.f90","""module application
+use utilities
+contains
+subroutine advance(a)
+real(8),intent(out)::a(:)
+call fill(a)
+end subroutine
+subroutine illegal_access(a)
+real(8),intent(out)::a(:)
+call fill_real(a)
+end subroutine
+end module
+""")
+    report=analyze_source_effects([application,utilities],"advance")
+    assert report["complete"]
+    assert "utilities::fill_real" in records(report)
+    assert not analyze_source_effects([application,utilities],"illegal_access")["complete"]
+
+
+def test_private_module_storage_cannot_be_used_through_wildcard_import(tmp_path):
+    storage=write(tmp_path,"storage.f90","""module storage
+real(8),private :: hidden(8)
+real(8),public :: visible(8)
+end module
+""")
+    application=write(tmp_path,"application.f90","""module application
+use storage
+contains
+subroutine advance()
+visible=3
+end subroutine
+subroutine illegal_access()
+hidden=3
+end subroutine
+end module
+""")
+    assert analyze_source_effects([application,storage],"advance")["complete"]
+    assert not analyze_source_effects([application,storage],"illegal_access")["complete"]

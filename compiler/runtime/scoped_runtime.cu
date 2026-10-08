@@ -14,6 +14,9 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 #ifndef FORT_SCOPE_CPU_TEST
 #include <cuda_runtime.h>
 #endif
@@ -124,6 +127,7 @@ struct Context {
     explicit Context(int ordinal) : device(ordinal) {}
     int device;
     bool ready = false, pending = false, poisoned = false, closed = false;
+    size_t device_budget = std::numeric_limits<size_t>::max();
     std::mutex mutex;
     std::unordered_map<fort_buffer_t, std::unique_ptr<Buffer>> buffers;
     std::unordered_map<uint64_t, fort_buffer_t> identities;
@@ -220,6 +224,9 @@ void initialize(Context &c) {
 }
 void allocate(Context &c, Buffer &b) {
     if (b.device || !b.bytes) return;
+    require(c.stats.allocated_bytes <= c.device_budget &&
+            b.bytes <= c.device_budget-c.stats.allocated_bytes,
+            FORT_SCOPE_RESOURCE, "full-layout device allocation exceeds the declared scope budget");
 #ifdef FORT_SCOPE_TEST_FAULTS
     const char *fail_after = std::getenv("FORT_SCOPE_TEST_FAIL_ALLOC_AFTER");
     require(!fail_after || c.stats.allocations < std::strtoull(fail_after, nullptr, 10),
@@ -441,8 +448,24 @@ extern "C" int fort_scope_create(int device, fort_scope_t *out) {
         contexts.emplace(handle, std::move(c)); *out = handle;
     });
 }
-extern "C" int fort_scope_register(fort_scope_t h, uint64_t identity, uint64_t generation,
-                                   const fort_scope_layout *layout, int initialized, fort_buffer_t *out) {
+extern "C" int fort_scope_serial_caller(void) {
+#ifdef _OPENMP
+    return !omp_in_parallel();
+#else
+    // Without OpenMP support this runtime cannot determine whether its host
+    // is in a team. Unknown participation retains the original native span.
+    return 0;
+#endif
+}
+extern "C" int fort_scope_set_device_budget(fort_scope_t h, size_t bytes) {
+    return with(h, [&](Context &c) {
+        require(!c.ready, FORT_SCOPE_STATE, "device budget must be set before CUDA initialization");
+        c.device_budget = bytes;
+    });
+}
+static int register_buffer(fort_scope_t h, uint64_t identity, uint64_t generation,
+                           const fort_scope_layout *layout, bool full_initialized,
+                           const fort_scope_section *defined, size_t defined_count, fort_buffer_t *out) {
     return with(h, [&](Context &c) {
         require(layout && out && identity && generation && layout->rank && layout->extents && layout->lower_bounds &&
                 layout->element_bytes && layout->type <= FORT_SCOPE_LOGICAL, FORT_SCOPE_ARGUMENT, "invalid buffer registration");
@@ -459,6 +482,9 @@ extern "C" int fort_scope_register(fort_scope_t h, uint64_t identity, uint64_t g
         for (size_t extent : b->extents) { b->strides.push_back(stride); stride = multiply(stride, extent); }
         b->bytes = stride;
         require(!b->bytes || b->host, FORT_SCOPE_ARGUMENT, "nonempty buffer has no host storage");
+        // Validate before the identity lookup too: a duplicate is not an excuse
+        // to accept malformed coordinates. Existing freshness remains intact.
+        const auto initial = sections(*b, defined, defined_count, full_initialized);
         const auto existing = c.identities.find(identity);
         if (existing != c.identities.end()) {
             auto &old = buffer(c, existing->second);
@@ -475,13 +501,33 @@ extern "C" int fort_scope_register(fort_scope_t h, uint64_t identity, uint64_t g
             require(!b->bytes || !old.bytes || first+b->bytes <= other || other+old.bytes <= first,
                     FORT_SCOPE_ALIAS, "overlapping registrations require one canonical buffer");
         }
-        if (initialized && !empty(b->full())) b->initialized = b->host_current = {b->full()};
+        b->initialized = b->host_current = initial;
         b->handle = token();
         const auto handle = b->handle;
         c.buffers.emplace(handle, std::move(b));
         try { c.identities.emplace(identity, handle); }
         catch (...) { c.buffers.erase(handle); throw; }
         *out = handle;
+    });
+}
+extern "C" int fort_scope_register(fort_scope_t h, uint64_t identity, uint64_t generation,
+                                   const fort_scope_layout *layout, int initialized, fort_buffer_t *out) {
+    if (initialized != 0 && initialized != 1)
+        return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "host initialization flag must be zero or one");
+    return register_buffer(h, identity, generation, layout, initialized != 0, nullptr, 0, out);
+}
+extern "C" int fort_scope_register_sections(fort_scope_t h, uint64_t identity, uint64_t generation,
+                                            const fort_scope_layout *layout, const fort_scope_section *defined,
+                                            size_t count, fort_buffer_t *out) {
+    return register_buffer(h, identity, generation, layout, false, defined, count, out);
+}
+extern "C" int fort_scope_forget_definition(fort_scope_t h, fort_buffer_t handle) {
+    return with(h, [&](Context &c) {
+        auto &b = buffer(c, handle);
+        require(!b.prepared, FORT_SCOPE_STATE, "definition change during a prepared buffer access");
+        wait(c);
+        b.initialized.clear(); b.host_current.clear(); b.device_current.clear();
+        trace("forget_definition", &b);
     });
 }
 extern "C" int fort_scope_layout_get(fort_scope_t h, fort_buffer_t b, fort_scope_layout *out) {
