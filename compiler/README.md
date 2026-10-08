@@ -516,6 +516,31 @@ so an empty assumed-shape dimension correctly has `LBOUND=1` even when its
 declared bound is negative. The public manifest records the normalized source
 identities/hashes, which are checked again before artifacts are published.
 
+Configured builds may also supply `--analysis-sources configured.json` with
+`--analyze-effects` or `--form-scopes`. It keeps preprocessed analysis text separate
+from original edit targets. The document has `schema_version: 1`, matching
+`source_inputs`, `preserves_source_order: true`, a `configuration` object recording
+the preprocessing/build configuration, and `dependencies` mapping absolute include
+paths to hashes. Every original input has one `entries` record containing `source`
+(the original absolute path), `path` (prepared absolute path), `sha256`, and
+`line_map`. The map has one entry per prepared line: an original 1-based line
+number or `null` for included/unmapped text. The extractor asserts preprocessing
+equivalence; the application must be built with that recorded configuration.
+
+The compiler checks source/include/prepared hashes and line-map order, analyzes
+the configured declarations and active code, and emits edits against original
+lines. Inactive branches and includes stay in the original source. Unmapped
+statements and preprocessor control between sibling calls are edit boundaries.
+The manifest publishes these facts for independent adapters to validate again
+before applying changes. Public precision constants can resolve through multiple
+module reexports; private constants remain unavailable outside their module.
+
+Native effect summaries also report `definition_diagnostics`. An array payload
+read before any source write in an `INTENT(OUT)` leaf prevents captured scope
+execution, including through its caller closure. Original native calls remain
+available. This diagnostic does not establish a complete definition proof for
+reads after partial or conditional writes; that analysis remains required.
+
 Initial support is serial, contiguous whole-array bindings, numerical leaves,
 call-only wrapper clones, registered hidden module arrays (including visible
 reexports), and conservative whole-resource native effects.
