@@ -190,6 +190,59 @@ def test_automatic_unknown_cost_selects_original_native_span(tmp_path):
     assert "fort_status = fort_scope_create" not in owner
 
 
+@pytest.mark.parametrize("mode", ["sections", "auto"])
+@pytest.mark.parametrize("body", ["b(2:size(b)-1)=4.d0", "b=4.d0\nb=b+1.d0"])
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_native_out_partial_writes_and_later_reads_keep_original_source(tmp_path, mode, body, wrapped):
+    source = (WRAPPER_PROGRAM if wrapped else PROGRAM).replace(
+        "real(8),intent(inout)::b(:)\nb=3*b", "real(8),intent(out)::b(:)\n" + body)
+    # Only the defined interior is consumed after the partial native OUT write.
+    source = source.replace("do i=1,n\nout(i)=a(i)+b(i)", "do i=2,n-1\nout(i)=a(i)+b(i)")
+    original, output, manifest = generate(tmp_path, source, mode=mode)
+    assert manifest["scope_count"] == 0
+    assert not manifest["source_edits"]
+    assert not (output / "entries").exists()
+    assert original.read_text() == source
+    assert any("native INTENT(OUT) effects require original-position definition hooks: original::transform argument::b"
+               in boundary["reason"] for boundary in manifest["boundaries"])
+
+
+@pytest.mark.parametrize("mode", ["sections", "auto"])
+def test_native_out_whole_write_without_reads_remains_supported(tmp_path, mode):
+    source = PROGRAM.replace("real(8),intent(inout)::b(:)\nb=3*b", "real(8),intent(out)::b(:)\nb=4.d0")
+    _, _, manifest = generate(tmp_path, source, mode=mode)
+    assert manifest["scope_count"] == 1, manifest["boundaries"]
+    scope, = manifest["scopes"]
+    assert scope["gpu_leaves"] == ["original::consumer", "original::producer"]
+    assert scope["calls"] == ["original::producer", "original::transform", "original::consumer"]
+
+
+@pytest.mark.parametrize("mode", ["sections", "auto"])
+def test_numerical_out_partial_write_workers_remain_supported(tmp_path, mode):
+    source = PARTIAL_PROGRAM.replace("intent(inout)::b", "intent(out)::b").replace(
+        "intent(inout)::out", "intent(out)::out")
+    _, _, manifest = generate(tmp_path, source, mode=mode)
+    assert manifest["scope_count"] == 1, manifest["boundaries"]
+    assert manifest["scopes"][0]["gpu_leaves"] == ["original::consumer", "original::producer"]
+
+
+@pytest.mark.parametrize("mode", ["sections", "auto"])
+@pytest.mark.parametrize("order", [("whole_out", "partial_out"), ("partial_out", "whole_out")])
+def test_native_nested_out_changes_cannot_reuse_an_earlier_overwrite_proof(tmp_path, mode, order):
+    source = PROGRAM.replace("real(8),intent(inout)::b(:)\nb=3*b",
+                             "real(8),intent(out)::b(:)\n" + "\n".join("call " + name + "(b)" for name in order))
+    source = source.replace("do i=1,n\nout(i)=a(i)+b(i)", "do i=2,n-1\nout(i)=a(i)+b(i)")
+    helpers = ("subroutine whole_out(b)\nreal(8),intent(out)::b(:)\nb=4.d0\nend subroutine\n"
+               "subroutine partial_out(b)\nreal(8),intent(out)::b(:)\nb(2:size(b)-1)=5.d0\nend subroutine\n")
+    source = source.replace("end module", helpers + "end module")
+    original, _, manifest = generate(tmp_path, source, mode=mode)
+    assert not manifest["source_edits"]
+    assert not manifest["automatic_scope_available"]
+    assert original.read_text() == source
+    assert any("nested native definition changes require original-position hooks" in item["reason"]
+               for item in manifest["boundaries"])
+
+
 def test_writable_alias_is_a_boundary_including_inside_wrappers(tmp_path):
     source=PROGRAM.replace("call producer(a,b,n)","call producer(b,b,n)")
     _,_,manifest=generate(tmp_path,source)

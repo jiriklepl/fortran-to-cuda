@@ -665,7 +665,35 @@ class ScopeBuilder:
                                          "end subroutine " + name, ""]))
         return name, roots
 
+    def check_native_definitions(self, call, actions, definitions, overwrites):
+        # These effects surround one original native call. They cannot prepare
+        # a read of values defined later inside that call, or preserve undefined
+        # holes in a conservative whole-resource write. Numerical workers have
+        # their own physical effects and original-position definition events.
+        for operation in self.analysis.summarize(call.procedure)["operations"]:
+            if operation["kind"] == "call":
+                child_definitions = self.native_effects(operation["procedure"])[1]
+                mapping = operation["resource_mapping"]
+                if any(mapping.get(root, root) in actions for root in child_definitions):
+                    raise CompilationError("nested native definition changes require original-position hooks")
+        for root in sorted(definitions & actions.keys()):
+            kinds = actions[root]
+            if "read" in kinds or ("write" in kinds and root not in overwrites):
+                raise CompilationError("native INTENT(OUT) effects require original-position definition hooks: "
+                                       + call.procedure + " " + root)
+
+    def check_native_calls(self, call):
+        leaves, _ = self.closure(call.procedure)
+        if not leaves:
+            self.check_native_definitions(call, *self.native_effects(call.procedure))
+        elif not self.numerical(call.procedure):
+            routine = self.analysis.routines[call.procedure]
+            for node in _children(routine.execution):
+                if _kind(node) == "Call_Stmt":
+                    self.check_native_calls(self.resolve(routine, node))
+
     def native_call(self, call, actions, definitions, overwrites, handles, *, actuals=None):
+        self.check_native_definitions(call, actions, definitions, overwrites)
         lines = []
         # Only outer dummy definition changes can be performed before the call.
         # A nested INTENT(OUT) event must stay at its original source position.
@@ -715,6 +743,7 @@ class ScopeBuilder:
         name = _name("fort_scope_owner_", digest)
         arrays, scalars, written = {}, {}, set()
         for call in calls:
+            self.check_native_calls(call)
             actions, definitions, overwrites = self.roots_for(call)
             written.update(root for root,kinds in actions.items() if "write" in kinds)
             _, formal_definitions, _ = self.native_effects(call.procedure)

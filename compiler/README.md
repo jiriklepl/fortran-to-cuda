@@ -570,6 +570,11 @@ read before any source write in an `INTENT(OUT)` leaf prevents captured scope
 execution, including through its caller closure. Original native calls remain
 available. This diagnostic does not establish a complete definition proof for
 reads after partial or conditional writes; that analysis remains required.
+Native helpers with `INTENT(OUT)` arrays remain scope boundaries when their
+whole-resource effects require preserving undefined holes or reading values
+defined inside the helper. Complete write-only overwrites remain supported.
+Nested native procedure-entry definition changes also remain boundaries.
+Numerical workers retain their separate physical access and definition handling.
 
 Initial support is serial, contiguous whole-array bindings, numerical leaves,
 call-only wrapper clones, registered hidden module arrays (including visible
