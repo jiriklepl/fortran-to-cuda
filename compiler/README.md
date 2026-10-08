@@ -502,6 +502,8 @@ the owning context closes before return or later reallocation. The guard forces
 the intrinsic in its own block; conflicting captured/call names remain boundaries.
 Context-aware clone array dummies also declare `TARGET`, making their association
 with runtime access through the registered address explicit.
+Native fallbacks after this storage proof also use the contiguous views, avoiding
+whole-array temporaries when the original helper or wrapper declares `CONTIGUOUS`.
 An adapter verifies these artifacts, applies replacements to an application copy,
 and links the common runtime once. It does not inspect compiler IR or CUDA text.
 No accepted scopes is a successful unchanged/native result.

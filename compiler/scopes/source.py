@@ -894,6 +894,10 @@ class ScopeBuilder:
             # that differ from the registered host storage. Empty views retain
             # their descriptors without accessing or manufacturing a payload.
             body += [f"{views[root]} => {parameters[root]}" for root in arrays]
+            # These views have now proved the same contiguous original storage.
+            # Use them on later native fallbacks too, so CONTIGUOUS callees do
+            # not acquire whole-array temporaries from synthetic owner dummies.
+            native = [line for call in calls for line in _call(str(call.node.items[0]), actuals(call))] + ["return"]
             body += ["fort_status = fort_scope_create(0_c_int, fort_context)"]
             body += ["if (fort_status == FORT_SCOPE_OK) &",
                      f"  fort_status = fort_scope_set_device_budget(fort_context, {self.device_budget}_c_size_t)"]

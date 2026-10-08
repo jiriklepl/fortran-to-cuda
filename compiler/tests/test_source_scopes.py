@@ -510,6 +510,113 @@ call wrapper(a,b,out,n)
 end subroutine
 end module""")
 
+CONTIGUOUS_WRAPPER_PROGRAM = WRAPPER_PROGRAM.replace("real(8),intent", "real(8),contiguous,intent")
+
+
+def test_postproof_native_fallback_preserves_contiguous_views(tmp_path, monkeypatch):
+    from compiler.tests.test_scoped_planning_sources import generate as planning_generate
+
+    outputs, report = planning_generate(tmp_path, monkeypatch, CONTIGUOUS_WRAPPER_PROGRAM)
+    assert report["automatic_estimate_available"]
+    scope, = report["scopes"]
+    text = next(value for name, value in outputs.items() if name.startswith("sources/"))
+    owner = text.split("subroutine " + scope["owner"] + "(", 1)[1].split("end subroutine", 1)[0]
+    preproof = owner.split("_view =>", 1)[0]
+    fallback = owner.split("fort_decision%gpu_units == 0) then", 1)[1].split("endif", 1)[0]
+    arrays = [parameter["name"] for parameter in scope["parameters"] if parameter["resource"] != "argument::n"]
+    for parameter in arrays:
+        assert parameter in preproof
+        assert parameter + "_view" in fallback
+    assert "call wrapper(" in preproof
+    assert "call wrapper(" in fallback
+
+
+def compile_contiguous_native_fallback(directory, *, checkout, profile, source=None, shared_objects=None):
+    """Small public-interface fixture; reusable CUDA objects need byte proof."""
+    directory.mkdir(parents=True, exist_ok=True)
+    original = source or directory / "original.f90"
+    if source is None:
+        original.write_text(CONTIGUOUS_WRAPPER_PROGRAM)
+    captures = {"schema_version": 1, "participation": "serial",
+                "sources": {str(original): sha256(original.read_bytes()).hexdigest()},
+                "captures": {"argument::a": FACT, "argument::b": {**FACT, "initialized": "none"},
+                             "argument::out": {**FACT, "initialized": "none"}}}
+    facts = directory / "captures.json"
+    facts.write_text(json.dumps(captures))
+    output = directory / "output"
+    response = run([sys.executable, "-m", "compiler", "--input", str(original), "--kernel", "step",
+                    "--form-scopes", "--scope-facts", str(facts), "--memory-model", "scoped", "--gpu-policy", "auto",
+                    "--calibration-profile", str(profile), "--json", "--output-dir", str(output)], cwd=checkout,
+                   env={**os.environ, "PYTHONPATH": str(checkout), "PYTHONHASHSEED": "0", "OMP_NUM_THREADS": "4"})
+    manifest = json.loads(response.stdout)["scopes"]
+    assert manifest["automatic_estimate_available"], manifest["boundaries"]
+    fortran = shutil.which("gfortran-15") or shutil.which("gfortran")
+    host = shutil.which("g++-14") or shutil.which("g++")
+    nvcc = shutil.which("nvcc")
+    assert fortran, "CUDA/Fortran fixture requires installed Fortran toolchain"
+    assert host, "CUDA/Fortran fixture requires installed C++ toolchain"
+    assert nvcc, "CUDA/Fortran fixture requires installed CUDA toolchain"
+    objects, reusable = [], {}
+    for role in ("common_runtime", "shared_entry", "original_source"):
+        for item in manifest["build_sources"]:
+            if item["role"] != role:
+                continue
+            target = output / (item["path"].replace("/", "_") + ".o")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            digest = manifest["artifacts_sha256"][item["path"]]
+            old = (shared_objects or {}).get(item["path"]) if item["language"] == "cuda" else None
+            if old:
+                assert old["sha256"] == digest, "CUDA object reuse requires byte-identical source: " + item["path"]
+                target = Path(old["object"])
+            else:
+                command = ([nvcc, "-std=c++17", "-ccbin", host, "-arch=sm_86", "-Xcompiler=-fopenmp", "-I", str(output)]
+                           if item["language"] == "cuda" else [fortran, "-std=f2018", "-fopenmp", "-fcheck=all,array-temps"])
+                run([*command, "-c", str(output / item["path"]), "-o", str(target)], cwd=output)
+            objects.append(str(target))
+            if item["language"] == "cuda":
+                reusable[item["path"]] = {"sha256": digest, "object": str(target)}
+    driver = output / "caller.f90"
+    driver.write_text(DRIVER)
+    target = output / "caller"
+    run([fortran, "-std=f2018", "-fopenmp", "-fcheck=all,array-temps", str(driver), *objects,
+         "-L/usr/local/cuda/lib64", "-Wl,-rpath,/usr/local/cuda/lib64", "-lcudart", "-lstdc++", "-o", str(target)], cwd=output)
+    native = output / "native"
+    run([fortran, "-std=f2018", "-fopenmp", "-fcheck=all,array-temps", str(original), str(driver),
+         "-o", str(native)], cwd=output)
+    reference = run([str(native)], cwd=output, env={**os.environ, "OMP_NUM_THREADS": "4"})
+    assert "FIELDS_OK" in reference.stdout
+    assert "array temporary" not in reference.stderr.lower()
+    return target, output, manifest, reusable
+
+
+@pytest.fixture(scope="module")
+def contiguous_native_fallback(tmp_path_factory):
+    profile = os.environ.get("FORT_TEST_SCOPED_PROFILE")
+    if not profile:
+        pytest.skip("matching explicit offline scoped calibration profile required")
+    if not all(shutil.which(tool) for tool in ("nvcc", "gfortran-15", "g++-14")):
+        pytest.skip("CUDA/Fortran toolchain unavailable")
+    return compile_contiguous_native_fallback(tmp_path_factory.mktemp("contiguous_native_fallback"),
+                                              checkout=ROOT, profile=Path(profile).resolve())
+
+
+@pytest.mark.native
+def test_calibrated_all_native_wrappers_do_not_create_array_temporaries(contiguous_native_fallback):
+    target, output, _manifest, _reusable = contiguous_native_fallback
+    result = run([str(target)], cwd=output,
+                 env={**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "FORT_RUNTIME_TRACE": "1"})
+    assert "FIELDS_OK" in result.stdout
+    assert "array temporary" not in result.stderr.lower()
+    decisions = [json.loads(line.removeprefix("FORT_SCOPED evidence ")) for line in result.stderr.splitlines()
+                 if line.startswith("FORT_SCOPED evidence ")]
+    decisions = [entry for entry in decisions if entry["event"] == "decision"]
+    assert decisions
+    assert all(entry["available"] == 1 for entry in decisions)
+    assert all(entry["gpu_units"] == 0 for entry in decisions)
+    assert "FORT_SCOPED launch" not in result.stderr
+    assert "FORT_SCOPED upload" not in result.stderr
+    assert "FORT_SCOPED download" not in result.stderr
+
 _before_step, _step = PROGRAM.split("subroutine step(", 1)
 ALLOCATABLE_PROGRAM = _before_step + "subroutine step(" + _step.replace(
     "real(8),intent(in)::a(:)", "real(8),allocatable,intent(in)::a(:)", 1).replace(
