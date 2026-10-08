@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from compiler.frontend import analyze_source_effects, lower_file
+from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 
 
@@ -170,6 +171,77 @@ end module
     for limits in ({"depth": 1}, {"procedures": 1}, {"operations": 1}):
         assert not analyze_source_effects([path], "advance", **limits)["complete"]
     assert not analyze_source_effects([path], "recursive_step")["complete"]
+
+
+def test_effect_budgets_are_per_proof_and_do_not_poison_later_candidates(tmp_path):
+    path = write(tmp_path, "independent.f90", """module independent
+contains
+subroutine first(a)
+real(8),intent(inout)::a(:)
+a=a+1
+end subroutine
+subroutine second(a)
+real(8),intent(inout)::a(:)
+a=a+2
+end subroutine
+subroutine excessive(a)
+real(8),intent(inout)::a(:)
+a=a+1
+a=a+2
+a=a+3
+end subroutine
+subroutine joined(a)
+real(8),intent(inout)::a(:)
+call first(a)
+call second(a)
+end subroutine
+end module
+""")
+    analysis = SourceEffects([path], operations=3)
+    assert not analysis.summarize("independent::excessive")["complete"]
+    for name in ["first", "second"]:
+        report = analysis.report("independent::" + name)
+        assert report["complete"]
+        assert report["summarized_operations"] == 2
+        assert set(records(report)) == {"independent::" + name}
+        assert {op["kind"] for op in records(report)["independent::" + name]["operations"]} == {"read", "overwrite"}
+    assert not analysis.summarize("independent::joined")["complete"]
+    assert analysis.summarize("independent::first")["complete"]
+    with pytest.raises(CompilationError, match="budget exhausted"):
+        analysis.summarize_span(["independent::first", "independent::second"])
+    assert analysis.summarize_span(["independent::first", "independent::first"])["operations"] == 2
+
+
+def test_cached_child_cannot_bypass_deeper_call_or_procedure_budgets(tmp_path):
+    path = write(tmp_path, "depths.f90", """module depths
+contains
+subroutine root(a)
+real(8),intent(inout)::a(:)
+call middle(a)
+call longer(a)
+end subroutine
+subroutine longer(a)
+real(8),intent(inout)::a(:)
+call middle(a)
+end subroutine
+subroutine middle(a)
+real(8),intent(inout)::a(:)
+call leaf(a)
+end subroutine
+subroutine leaf(a)
+real(8),intent(inout)::a(:)
+a=a+1
+end subroutine
+end module
+""")
+    analysis = SourceEffects([path], depth=3)
+    assert analysis.report("middle")["complete"]
+    assert not analysis.report("root")["complete"]
+    assert analysis.report("longer")["complete"]
+    analysis = SourceEffects([path], procedures=2)
+    assert analysis.report("middle")["complete"]
+    assert not analysis.report("root")["complete"]
+    assert analysis.report("leaf")["complete"]
 
 
 def test_opaque_contract_has_explicit_effects_and_identity(tmp_path):

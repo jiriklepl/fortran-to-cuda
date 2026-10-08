@@ -612,13 +612,16 @@ class ScopeBuilder:
         before = (dict(self.outputs), {p:list(edits) for p,edits in self.edits.items()}, dict(self.clones))
         try:
             calls = [self.resolve(self.entry,node) for node in nodes]
+            budget = self.analysis.summarize_span(c.procedure for c in calls)
             leaves = set()
             for call in calls:
                 own, _ = self.closure(call.procedure)
                 leaves.update(own)
             if not leaves:
                 return
-            self.scopes.append(self.owner(calls,leaves))
+            scope = self.owner(calls,leaves)
+            scope["effect_closure"] = budget
+            self.scopes.append(scope)
         except CompilationError as error:
             self.outputs, self.edits, self.clones = before
             self.boundaries.append({"first_line":_span(nodes[0])[0], "last_line":_span(nodes[-1])[1],
