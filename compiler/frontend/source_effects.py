@@ -15,7 +15,8 @@ from pathlib import Path
 
 from fparser.two.utils import walk
 
-from compiler.frontend.lowering import _KindScope, _parse_file
+from compiler.frontend.lowering import _KindScope
+from compiler.frontend.source_inputs import SourceInputs
 from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
@@ -79,19 +80,19 @@ class Routine:
 
 
 class SourceEffects:
-    def __init__(self, paths, *, contracts=None, depth=8, procedures=64, operations=256):
+    def __init__(self, paths, *, contracts=None, depth=8, procedures=64, operations=256, analysis_sources=None):
         if min(depth, procedures, operations) < 1:
             raise CompilationError("source effect budgets must be positive")
         self.depth_limit, self.procedure_limit, self.operation_limit = depth, procedures, operations
         self.modules, self.routines, self.summaries = {}, {}, {}
-        self.sources, self.operation_count = {}, 0
+        self.inputs = SourceInputs(paths,analysis_sources)
+        self.sources, self.operation_count = dict(self.inputs.sources), 0
         self.kind_expressions = []
         self.contracts = contracts or {}
         if not isinstance(self.contracts, dict):
             raise CompilationError("effect contracts must be an object")
-        for filename in dict.fromkeys(Path(p).resolve() for p in paths):
-            tree = _parse_file(filename, require_markers=False)
-            self.sources[str(filename)] = sha256(filename.read_bytes()).hexdigest()
+        for filename in self.inputs.paths:
+            tree = self.inputs.parse(filename)
             for node in walk(tree):
                 if _kind(node) != "Module":
                     continue
@@ -129,23 +130,35 @@ class SourceEffects:
             return
         active = active | {id(scope)}
         imported = []
+
+        def exports(module, visited=frozenset()):
+            target = self.modules.get(module)
+            if target is None or module in visited:
+                return set()
+            names = set(target.bindings) | set(target.imports)
+            for parent in target.wildcards:
+                names.update(exports(parent, visited | {module}))
+            return {name for name in names if self._exported(target, name)}
+
         for local, (module, remote) in scope.imports.items():
             imported.append((local, module, remote))
         for module in scope.wildcards:
             target = self.modules.get(module)
             if target:
-                imported += [(name, module, name) for name, b in target.bindings.items()
-                             if b.dtype == "integer" and "parameter" in b.attributes]
+                imported += [(name, module, name) for name in sorted(exports(module))]
         for local, module, remote in imported:
             target = self.modules.get(module)
             if target is None or not self._exported(target,remote):
                 continue
-            binding = target.bindings.get(remote)
-            if binding is None or binding.dtype != "integer" or "parameter" not in binding.attributes:
+            binding = self._binding(target, remote)
+            if binding is None or binding.dtype != "integer" or binding.rank or "parameter" not in binding.attributes:
                 continue
-            self._import_kinds(target, active)
+            owner = self.modules.get(binding.root.split("::",1)[0])
+            if owner is None:
+                continue
+            self._import_kinds(owner, active)
             try:
-                value = target.kinds.integer(remote, SourceLocation(str(target.path)))
+                value = owner.kinds.integer(binding.name, SourceLocation(str(owner.path)))
             except CompilationError:
                 continue
             if local not in scope.bindings:
@@ -437,7 +450,8 @@ class SourceEffects:
         operations = []
         summary = {"procedure": requested, "complete": False, "cloneable": False,
                    "arguments": [routine.scope.bindings[a].public() for a in routine.arguments
-                                 if a in routine.scope.bindings], "operations": operations, "reasons": reasons}
+                                 if a in routine.scope.bindings], "operations": operations, "reasons": reasons,
+                   "definition_diagnostics": []}
         self.summaries[requested] = summary
         undeclared = set(routine.arguments) - routine.scope.bindings.keys()
         if undeclared:
@@ -548,6 +562,7 @@ class SourceEffects:
                 child = self.summarize(chosen, active + (requested,))
                 if not child["complete"]:
                     reasons.append(f"callee effects incomplete: {chosen}")
+                summary["definition_diagnostics"].extend(child.get("definition_diagnostics",[]))
                 emit({"kind": "call", "procedure": chosen, "actual_arguments": [str(a) for a in actuals],
                       "resource_mapping": mapping, "guard": guard, "complete": child["complete"]})
             else:
@@ -652,6 +667,22 @@ class SourceEffects:
                     emit({"kind": "boundary", "source": str(node), "guard": guard, "reason": reasons[-1]})
 
         statements(_children(routine.execution))
+        if not any(operation["kind"] in {"call","native_contract"} for operation in operations):
+            # A leaf read before any payload write cannot consume values supplied
+            # by its caller through INTENT(OUT). Do not hide this event by changing
+            # the normalized access intent. This is an initial diagnostic, not a
+            # complete proof for reads after partial or conditional writes.
+            written = set()
+            for operation in operations:
+                root = operation.get("resource")
+                if (operation["kind"] == "read" and operation["rank"]
+                        and root in summary["definition_changes"] and root not in written):
+                    diagnostic = {"procedure":requested,"resource":root,"source_access":operation["source_access"],
+                                  "reason":"INTENT(OUT) payload read before any source write"}
+                    if diagnostic not in summary["definition_diagnostics"]:
+                        summary["definition_diagnostics"].append(diagnostic)
+                elif operation["kind"] in {"write","overwrite"}:
+                    written.add(root)
         summary["reasons"] = list(dict.fromkeys(reasons))
         summary["complete"] = not reasons
         summary["guaranteed_whole_overwrites"] = self.whole_overwrites(routine) if summary["complete"] else []
@@ -668,8 +699,10 @@ class SourceEffects:
         if len(matches) != 1:
             raise CompilationError(f"native effect entry {entry!r} is unavailable or ambiguous")
         summary = self.summarize(matches[0])
+        self.inputs.verify()
         return {"schema_version": 1, "entry": matches[0], "complete": summary["complete"],
                 "sources": self.sources, "procedures": list(self.summaries.values()),
+                "analysis_sources": self.inputs.public(),
                 "budgets": {"depth": self.depth_limit, "procedures": self.procedure_limit,
                             "operations": self.operation_limit}, "summarized_operations": self.operation_count,
                 "automatic_scope_available": False, "effect_coordinate_system": "logical source evidence; whole-resource effects"}

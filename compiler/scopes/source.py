@@ -11,7 +11,6 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from hashlib import sha256
-from pathlib import Path
 
 from fparser.two.utils import walk
 
@@ -49,7 +48,10 @@ def _span(node):
     item = getattr(node, "item", None)
     if item is None:
         raise CompilationError("source scope requires exact statement spans")
-    return item.span
+    span = getattr(item, "fort_original_span", item.span)
+    if span is None:
+        raise CompilationError("source scope statement lacks an original edit span")
+    return span
 
 
 @dataclass
@@ -62,7 +64,8 @@ class Call:
 
 
 class ScopeBuilder:
-    def __init__(self, paths, entry, *, facts, options, config, contracts=None, numerical_sources=None):
+    def __init__(self, paths, entry, *, facts, options, config, contracts=None, numerical_sources=None,
+                 analysis_sources=None):
         if not isinstance(facts, dict) or facts.get("schema_version") != 1:
             raise CompilationError("scope capture facts require schema_version 1")
         if facts.get("participation") != "serial":
@@ -71,7 +74,7 @@ class ScopeBuilder:
             raise CompilationError("scope captures must be keyed by canonical source resource")
         if config.policy not in {"sections", "auto"} or config.collective:
             raise CompilationError("source scopes require sections/auto and a serial coordinator")
-        self.analysis = SourceEffects(paths, contracts=contracts)
+        self.analysis = SourceEffects(paths, contracts=contracts, analysis_sources=analysis_sources)
         if facts.get("sources") != self.analysis.sources:
             raise CompilationError("scope capture facts do not match the supplied source hashes")
         names = [name for name in self.analysis.routines
@@ -128,6 +131,9 @@ class ScopeBuilder:
         summary = self.analysis.summarize(procedure)
         if not summary["complete"]:
             raise CompilationError("native effects incomplete: " + "; ".join(summary["reasons"]))
+        if summary.get("definition_diagnostics"):
+            diagnostic = summary["definition_diagnostics"][0]
+            raise CompilationError(diagnostic["reason"]+": "+diagnostic["procedure"]+" "+diagnostic["resource"])
         effects, definitions, _ = self.native_effects(procedure)
         aliases = {}
         for formal, binding in bindings.items():
@@ -158,7 +164,9 @@ class ScopeBuilder:
         reason = ("source effect closure is incomplete" if not summary["complete"] else
                   "numerical leaves require explicit source call-position workers" if not leaf else
                   "persistent state or OpenMP participation requires original native execution")
-        if (summary["cloneable"] or package and not summary["persistent_state"]) and summary["complete"] and leaf:
+        if summary.get("definition_diagnostics"):
+            reason = summary["definition_diagnostics"][0]["reason"]
+        elif (summary["cloneable"] or package and not summary["persistent_state"]) and summary["complete"] and leaf:
             try:
                 if any(b.dtype == "logical" and b.kind != 1 for b in routine.scope.bindings.values()
                        if b.name in routine.arguments):
@@ -172,7 +180,7 @@ class ScopeBuilder:
                     effects, _, _ = self.native_effects(procedure)
                     if any(not root.startswith("argument::") for root in effects):
                         raise CompilationError("hidden numerical arrays require a normalized source package")
-                    function = lower_file(routine.scope.path, procedure)
+                    function = lower_file(self.analysis.inputs.path(routine.scope.path), procedure)
                 function, plan = prepare_function(function, options=self.options)
                 if plan.regions:
                     sources = generate_sources(function, plan, offload_config=self.config, memory_model="scoped")
@@ -622,8 +630,20 @@ class ScopeBuilder:
             if _kind(node) == "Comment" and not str(node).lower().lstrip().startswith("!$omp"):
                 continue
             if _kind(node) == "Call_Stmt":
-                first,last = _span(node)
-                text = self.entry.scope.path.read_text().splitlines()[first-1:last]
+                try:
+                    first,last = _span(node)
+                except CompilationError as error:
+                    self.build_span(run)
+                    run = []
+                    self.boundaries.append({"analysis_first_line":node.item.span[0],"reason":str(error)})
+                    continue
+                original = self.entry.scope.path.read_text().splitlines()
+                text = original[first-1:last]
+                if run and any(line.lstrip().startswith("#") for line in original[_span(run[-1])[1]:first-1]):
+                    self.build_span(run)
+                    run = []
+                    self.boundaries.append({"first_line":first,"last_line":last,
+                                            "reason":"preprocessor control boundary between source calls"})
                 if len(run) < 32 and text and text[0].lstrip().lower().startswith("call ") and all(";" not in line for line in text):
                     try:
                         self.resolve(self.entry,node)
@@ -642,8 +662,7 @@ class ScopeBuilder:
 
     def run(self):
         self.scan(_children(self.entry.execution))
-        if any(sha256(Path(path).read_bytes()).hexdigest() != digest for path,digest in self.analysis.sources.items()):
-            raise CompilationError("source changed while compiler scope artifacts were being prepared")
+        self.analysis.inputs.verify()
         if any(sha256(package.path.read_bytes()).hexdigest() != package.digest for package in self.packages.values()):
             raise CompilationError("normalized source changed while scope artifacts were being prepared")
         provenance = {}
@@ -679,6 +698,7 @@ class ScopeBuilder:
             "automatic_estimate_available":False,
             "capture_facts_sha256":sha256(json.dumps(self.facts,sort_keys=True).encode()).hexdigest(),
             "source_inputs":self.analysis.sources,
+            "analysis_sources":self.analysis.inputs.public(),
             "numerical_sources":[{"procedure":p.procedure,"path":str(p.path),"entry":p.entry,"sha256":p.digest}
                                  for p in sorted(self.packages.values(), key=lambda p:p.procedure)],
             "numerical_decisions":[{"procedure":procedure,"supported":bool(self.generated[procedure]),
@@ -698,6 +718,7 @@ class ScopeBuilder:
         return self.outputs, report
 
 
-def form_source_scopes(paths, entry, *, facts, options, config, contracts=None, numerical_sources=None):
+def form_source_scopes(paths, entry, *, facts, options, config, contracts=None, numerical_sources=None,
+                       analysis_sources=None):
     return ScopeBuilder(paths,entry,facts=facts,options=options,config=config,contracts=contracts,
-                        numerical_sources=numerical_sources).run()
+                        numerical_sources=numerical_sources, analysis_sources=analysis_sources).run()

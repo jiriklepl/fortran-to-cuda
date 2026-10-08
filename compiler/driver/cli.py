@@ -63,6 +63,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Versioned stable capture/definition and caller participation facts for source scopes.")
     parser.add_argument("--numerical-sources", metavar="FILE",
                         help="Hash-bound normalized leaf source and original resource mappings for source scopes.")
+    parser.add_argument("--analysis-sources", metavar="FILE",
+                        help="Hash-bound configured source/include text and original edit spans for effect/scope analysis.")
     parser.add_argument("--source-file", action="append", default=[], metavar="FILE",
                         help="Additional source available to native effect analysis; repeat for independent modules.")
     parser.add_argument("--effect-contracts", metavar="FILE",
@@ -153,6 +155,8 @@ def _parse_args() -> argparse.Namespace:
         parser.error("--scope-facts requires --form-scopes")
     if args.numerical_sources and not args.form_scopes:
         parser.error("--numerical-sources requires --form-scopes")
+    if args.analysis_sources and not (args.form_scopes or args.analyze_effects):
+        parser.error("--analysis-sources requires --form-scopes or --analyze-effects")
     if args.form_scopes:
         if args.list_candidates or args.emit_scoped_runtime:
             parser.error("--form-scopes cannot be combined with candidate listing or runtime export")
@@ -238,6 +242,12 @@ def main() -> None:
             raise CompilationError(f"input file not found: {source_file}")
         if args.analyze_effects or args.form_scopes:
             contracts = None
+            analysis_sources = None
+            if args.analysis_sources:
+                try:
+                    analysis_sources = json.loads(Path(args.analysis_sources).read_text())
+                except (OSError, ValueError) as error:
+                    raise CompilationError(f"invalid configured analysis sources: {error}") from error
             if args.effect_contracts:
                 try:
                     document = json.loads(Path(args.effect_contracts).read_text())
@@ -247,7 +257,8 @@ def main() -> None:
                 except (OSError, ValueError) as error:
                     raise CompilationError(f"invalid effect contracts: {error}") from error
             if args.analyze_effects:
-                effects = analyze_source_effects([source_file, *args.source_file], args.kernel, contracts=contracts)
+                effects = analyze_source_effects([source_file, *args.source_file], args.kernel, contracts=contracts,
+                                                 analysis_sources=analysis_sources)
                 report = {"kernel": args.kernel, "supported": True, "reason": None, "outputs": [], "effects": effects}
                 print(json.dumps(report, indent=2) if args.json else json.dumps(effects, indent=2))
                 return
@@ -274,7 +285,8 @@ def main() -> None:
                     raise CompilationError(f"invalid numerical source package: {error}") from error
             outputs, manifest = form_source_scopes([source_file,*args.source_file], args.kernel,
                                                    facts=facts, options=options, config=_offload_config(args),
-                                                   contracts=contracts, numerical_sources=numerical_sources)
+                                                   contracts=contracts, numerical_sources=numerical_sources,
+                                                   analysis_sources=analysis_sources)
             output_dir = Path(args.output_dir).resolve()
             for name,content in outputs.items():
                 target = output_dir / name
