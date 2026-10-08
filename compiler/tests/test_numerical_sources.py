@@ -53,6 +53,7 @@ out(i)=b(i)
 enddo
 end subroutine
 subroutine step(a,b,out,n)
+use relay
 real(8),intent(in)::a(:)
 real(8),intent(inout)::b(:),out(:)
 integer,intent(in)::n
@@ -155,8 +156,17 @@ def test_package_rebases_original_bounds_and_resolves_reexported_roots(tmp_path)
     assert "lbound(b, 1)" in text
     assert "lbound(weights, 1)" in text
     assert "!$OMP PARALLEL DO" not in text[text.index("subroutine fort_scope_clone_"):]
+    assert "INTENT(INOUT), TARGET" in text[text.index("subroutine fort_scope_clone_"):]
     assert "!$omp parallel do private(i)" in text # original fallback retained
     assert manifest["numerical_sources"][0]["procedure"]=="original::producer"
+    scope, = manifest["scopes"]
+    hidden = next(p for p in scope["parameters"] if p["resource"] == "settings::weights")
+    assert hidden["actual"] == "weights"
+    assert hidden["name"] != "weights"
+    owner = text[text.index("subroutine " + scope["owner"]):]
+    assert "USE relay" in owner
+    assert f"intent(in) :: {hidden['name']}(:)" in owner
+    assert f"{hidden['name']}_view => {hidden['name']}" in owner
 
 
 @pytest.mark.parametrize(("field","value","reason"),[
