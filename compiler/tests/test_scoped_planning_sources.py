@@ -142,3 +142,16 @@ def test_explicit_dummy_shape_cannot_silently_use_larger_capture_extent(tmp_path
     _, report = generate(tmp_path, monkeypatch, source)
     assert any("whole-storage shape mapping" in item["reason"] for item in report["boundaries"])
     assert all("original::producer" not in scope["gpu_leaves"] for scope in report["scopes"])
+
+
+def test_calibrated_auto_keeps_native_out_partial_definition_outside_scopes(tmp_path, monkeypatch):
+    source = PROGRAM.replace("real(8),intent(inout)::b(:)\nb=3*b",
+                             "real(8),intent(out)::b(:)\nb(2:size(b)-1)=4.d0")
+    source = source.replace("do i=1,n\nout(i)=a(i)+b(i)", "do i=2,n-1\nout(i)=a(i)+b(i)")
+    outputs, report = generate(tmp_path, monkeypatch, source)
+    assert not report["automatic_scope_available"]
+    assert not report["automatic_estimate_available"]
+    assert not report["source_edits"]
+    assert not any(name.startswith("sources/") or name.startswith("entries/") for name in outputs)
+    assert any("native INTENT(OUT) effects require original-position definition hooks" in item["reason"]
+               for item in report["boundaries"])
