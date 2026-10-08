@@ -61,6 +61,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Emit compiler-approved shared source scopes and a versioned build/edit manifest.")
     parser.add_argument("--scope-facts", metavar="FILE",
                         help="Versioned stable capture/definition and caller participation facts for source scopes.")
+    parser.add_argument("--numerical-sources", metavar="FILE",
+                        help="Hash-bound normalized leaf source and original resource mappings for source scopes.")
     parser.add_argument("--source-file", action="append", default=[], metavar="FILE",
                         help="Additional source available to native effect analysis; repeat for independent modules.")
     parser.add_argument("--effect-contracts", metavar="FILE",
@@ -149,6 +151,8 @@ def _parse_args() -> argparse.Namespace:
         parser.error("--source-file and --effect-contracts require --analyze-effects or --form-scopes")
     if args.scope_facts and not args.form_scopes:
         parser.error("--scope-facts requires --form-scopes")
+    if args.numerical_sources and not args.form_scopes:
+        parser.error("--numerical-sources requires --form-scopes")
     if args.form_scopes:
         if args.list_candidates or args.emit_scoped_runtime:
             parser.error("--form-scopes cannot be combined with candidate listing or runtime export")
@@ -262,9 +266,15 @@ def main() -> None:
                 facts = json.loads(Path(args.scope_facts).read_text())
             except (OSError, ValueError) as error:
                 raise CompilationError(f"invalid scope facts: {error}") from error
+            numerical_sources = None
+            if args.numerical_sources:
+                try:
+                    numerical_sources = json.loads(Path(args.numerical_sources).read_text())
+                except (OSError, ValueError) as error:
+                    raise CompilationError(f"invalid numerical source package: {error}") from error
             outputs, manifest = form_source_scopes([source_file,*args.source_file], args.kernel,
                                                    facts=facts, options=options, config=_offload_config(args),
-                                                   contracts=contracts)
+                                                   contracts=contracts, numerical_sources=numerical_sources)
             output_dir = Path(args.output_dir).resolve()
             for name,content in outputs.items():
                 target = output_dir / name

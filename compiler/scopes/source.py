@@ -22,6 +22,7 @@ from compiler.emission.fortran.formatting import _fortran_line, _fortran_list
 from compiler.frontend import lower_file
 from compiler.frontend.source_effects import SourceEffects, _children, _kind, _part
 from compiler.ir import CompilationError
+from compiler.scopes.numerical import load_numerical_sources
 
 DTYPES = {
     ("real", 8): ("real(c_double)", "FORT_SCOPE_REAL64", 8),
@@ -61,7 +62,7 @@ class Call:
 
 
 class ScopeBuilder:
-    def __init__(self, paths, entry, *, facts, options, config, contracts=None):
+    def __init__(self, paths, entry, *, facts, options, config, contracts=None, numerical_sources=None):
         if not isinstance(facts, dict) or facts.get("schema_version") != 1:
             raise CompilationError("scope capture facts require schema_version 1")
         if facts.get("participation") != "serial":
@@ -78,11 +79,13 @@ class ScopeBuilder:
         if len(names) != 1:
             raise CompilationError("source scope entry is unavailable or ambiguous")
         self.entry = self.analysis.routines[names[0]]
+        self.packages = load_numerical_sources(numerical_sources, self.analysis)
         self.facts, self.options, self.config = facts, options, config
         self.device_budget = facts.get("device_budget_bytes", 256*1024*1024)
         if type(self.device_budget) is not int or not 0 <= self.device_budget < 2**63:
             raise CompilationError("scope device budget must be a nonnegative signed-64-bit byte count")
         self.outputs, self.edits, self.clones, self.generated = {}, {}, {}, {}
+        self.numerical_reasons = {}
         self.boundaries, self.scopes = [], []
         self.runtime_outputs, self.runtime = read_scoped_runtime()
         self.visiting = set()
@@ -130,10 +133,15 @@ class ScopeBuilder:
         for formal, binding in bindings.items():
             if binding.rank:
                 aliases.setdefault(binding.root, []).append(formal)
+        for root in effects:
+            if not root.startswith("argument::"):
+                aliases.setdefault(root, []).append(root)
         if any(len(formals) > 1 and any("write" in effects.get(formal, set()) or
                                         formal in definitions for formal in formals)
                for formals in aliases.values()):
             raise CompilationError("writable source call arguments alias")
+        if any(len(formals) > 1 for formals in aliases.values()) and self.numerical(procedure):
+            raise CompilationError("numerical source aliases require merged entry access descriptors")
         return Call(node, procedure, actuals, bindings, summary)
 
     def numerical(self, procedure):
@@ -146,20 +154,38 @@ class ScopeBuilder:
         # Numerical helper inlining currently discards those source events;
         # wrappers therefore get explicit context/handle clones instead.
         leaf = not any(_kind(node) == "Call_Stmt" for node in walk(routine.execution))
-        if summary["cloneable"] and leaf:
+        package = self.packages.get(procedure)
+        reason = ("source effect closure is incomplete" if not summary["complete"] else
+                  "numerical leaves require explicit source call-position workers" if not leaf else
+                  "persistent state or OpenMP participation requires original native execution")
+        if (summary["cloneable"] or package and not summary["persistent_state"]) and summary["complete"] and leaf:
             try:
                 if any(b.dtype == "logical" and b.kind != 1 for b in routine.scope.bindings.values()
                        if b.name in routine.arguments):
                     raise CompilationError("source LOGICAL conversion requires guarded ABI handling")
-                function = lower_file(routine.scope.path, procedure)
+                if package:
+                    effects, _, _ = self.native_effects(procedure)
+                    if not set(effects).issubset(package.arrays):
+                        raise CompilationError("numerical source package omits original array effects")
+                    function = lower_file(package.path, package.entry)
+                else:
+                    effects, _, _ = self.native_effects(procedure)
+                    if any(not root.startswith("argument::") for root in effects):
+                        raise CompilationError("hidden numerical arrays require a normalized source package")
+                    function = lower_file(routine.scope.path, procedure)
                 function, plan = prepare_function(function, options=self.options)
                 if plan.regions:
                     sources = generate_sources(function, plan, offload_config=self.config, memory_model="scoped")
                     if sources.scoped:
                         result = sources
-            except CompilationError:
-                pass  # Supported native effects do not imply GPU eligibility.
+                    else:
+                        reason = "numerical source has no supported shared entry"
+                else:
+                    reason = "numerical source has no parallel region"
+            except CompilationError as error:
+                reason = str(error) # Supported native effects do not imply GPU eligibility.
         self.generated[procedure] = result
+        self.numerical_reasons[procedure] = None if result else reason
         return result
 
     def closure(self, procedure, active=()):
@@ -227,14 +253,24 @@ class ScopeBuilder:
 
     def visible(self, routine, root):
         candidates = set(routine.scope.bindings)
+        visited = set()
+
+        def imported(module):
+            target = self.analysis.modules.get(module)
+            if target is None or module in visited:
+                return
+            visited.add(module)
+            candidates.update(target.bindings)
+            candidates.update(target.imports)
+            for name in target.wildcards:
+                imported(name)
+
         current = routine.scope
         while current:
             candidates.update(current.bindings)
             candidates.update(current.imports)
             for module in current.wildcards:
-                target = self.analysis.modules.get(module)
-                if target:
-                    candidates.update(target.bindings)
+                imported(module)
             current = current.parent
         found = [name for name in sorted(candidates)
                  if (binding := self.analysis._binding(routine.scope, name)) and binding.root == root]
@@ -293,43 +329,63 @@ class ScopeBuilder:
         if any(name.startswith("fort_") for name in routine.scope.bindings):
             raise CompilationError("source names conflict with the initial scope helper namespace")
         summary = self.analysis.summarize(procedure)
-        if not summary["cloneable"]:
+        numeric = self.numerical(procedure)
+        if not summary["cloneable"] and not (numeric and procedure in self.packages):
             raise CompilationError("scope helper cannot be cloned: " + procedure)
         _, wrappers = self.closure(procedure)
-        numeric = self.numerical(procedure)
         array_names = [a for a in routine.arguments if routine.scope.bindings[a].rank]
-        # Hidden arrays need explicit extra mappings. Initial clones reject them;
-        # native calls may still access a visible root behind their outer hooks.
         effects, _, _ = self.native_effects(procedure)
-        if any(root not in {"argument::" + a for a in array_names} for root in effects):
-            raise CompilationError("cloned helper needs hidden array mappings")
+        array_roots = ["argument::" + a for a in array_names]
+        array_roots += sorted(set(effects) - set(array_roots))
         name = _name("fort_scope_clone_", procedure)
-        handles = {a: "fort_handle_" + str(i) for i, a in enumerate(array_names)}
-        self.clones[procedure] = (name, array_names)
+        handles = {root: "fort_handle_" + str(i) for i, root in enumerate(array_roots)}
+        self.clones[procedure] = (name, array_roots)
         header = _fortran_list("subroutine " + name + "(",
                                ["fort_context", "fort_mode", *routine.arguments, *handles.values()], ")", 0)
         uses = ["use iso_c_binding", "use fort_scoped_memory"]
         spec = [str(n) for n in _children(_part(routine.scope.node, "Specification_Part"))]
+        if numeric and procedure in self.packages:
+            # fparser can place comments in an Implicit_Part as well as directly
+            # in the specification. The extraction contract covers all removed
+            # directives; retain the original declarations and ordinary comments.
+            spec = [line for node in spec for line in node.splitlines()
+                    if not line.lstrip().lower().startswith("!$omp")]
         body = []
         if numeric:
             public, _ = self.entry_artifacts(procedure)
             uses += [f"use {public['fortran_module']}, only: fort_run => {public['fortran_procedure']}"]
-            arrays = [handles[p["name"].lower()] for p in public["array_parameters"]]
-            scalars = [p["name"] for p in public["scalar_parameters"]]
+            package = self.packages.get(procedure)
+            if package:
+                bindings = {p.name:p for p in package.parameters}
+                arrays = [handles[bindings[p["name"].lower()].resource] for p in public["array_parameters"]]
+                scalars = []
+                for parameter in public["scalar_parameters"]:
+                    binding = bindings[parameter["name"].lower()]
+                    visible = self.visible(routine, binding.resource)
+                    scalars.append(f"lbound({visible}, {binding.lower_bound_dimension})"
+                                   if binding.lower_bound_dimension is not None else visible)
+                # Normalized access intents do not replace source definitions.
+                for array in array_names:
+                    if routine.scope.bindings[array].intent == "out":
+                        body += _checked(f"fort_scope_forget_definition(fort_context, {handles['argument::'+array]})")
+            else:
+                arrays = [handles["argument::"+p["name"].lower()] for p in public["array_parameters"]]
+                scalars = [p["name"] for p in public["scalar_parameters"]]
             body += _fortran_list("fort_status = fort_run(",
                                    ["fort_context", "fort_mode", *arrays, *scalars], ")", 0)
             body += ["if (fort_status /= FORT_SCOPE_OK) error stop 'shared numerical entry failed'"]
         else:
             for array in array_names:
                 if routine.scope.bindings[array].intent == "out":
-                    body += _checked(f"fort_scope_forget_definition(fort_context, {handles[array]})")
+                    body += _checked(f"fort_scope_forget_definition(fort_context, {handles['argument::'+array]})")
             for node in _children(routine.execution):
                 if _kind(node) == "Comment":
                     body.append(str(node))
                     continue
                 call = self.resolve(routine, node)
                 leaves, child_wrappers = self.closure(call.procedure)
-                root_handles = {formal: handles[b.name] for formal, b in call.bindings.items() if b.rank}
+                root_handles = {formal: handles[b.root] for formal, b in call.bindings.items() if b.rank}
+                root_handles.update({root:handle for root,handle in handles.items() if not root.startswith("argument::")})
                 if leaves:
                     child_name, child_arrays = self.clone(call.procedure)
                     module = self.analysis.routines[call.procedure].scope.module
@@ -337,7 +393,7 @@ class ScopeBuilder:
                         uses.append(f"use {module}, only: {child_name}")
                     body += _call(child_name, ["fort_context", "fort_mode",
                                               *map(str, call.actuals),
-                                              *[root_handles["argument::" + a] for a in child_arrays]])
+                                              *[root_handles[root] for root in child_arrays]])
                 else:
                     actions, definitions, overwrites = self.native_effects(call.procedure)
                     body += self.native_call(call, actions, definitions, overwrites, root_handles)
@@ -349,7 +405,7 @@ class ScopeBuilder:
         text = "\n".join([*header, *dict.fromkeys(uses), *spec, *extra, *body,
                           "end subroutine " + name, ""])
         self.append_procedure(routine.scope.parent, name, text)
-        return name, array_names
+        return name, array_roots
 
     def native_call(self, call, actions, definitions, overwrites, handles):
         lines = []
@@ -516,7 +572,8 @@ class ScopeBuilder:
                     if module != routine.scope.module:
                         imports.append(f"use {module}, only: {clone}")
                     body += _call(clone, ["fort_context", "fort_mode", *map(str,call.actuals),
-                                         *[handles[call.bindings["argument::" + a].root] for a in arrays_]])
+                                         *[handles[call.bindings[root].root if root.startswith("argument::") else root]
+                                           for root in arrays_]])
                 else:
                     mapping = {formal: binding.root for formal, binding in call.bindings.items()}
                     actions, definitions, overwrites = self.native_effects(call.procedure)
@@ -587,6 +644,8 @@ class ScopeBuilder:
         self.scan(_children(self.entry.execution))
         if any(sha256(Path(path).read_bytes()).hexdigest() != digest for path,digest in self.analysis.sources.items()):
             raise CompilationError("source changed while compiler scope artifacts were being prepared")
+        if any(sha256(package.path.read_bytes()).hexdigest() != package.digest for package in self.packages.values()):
+            raise CompilationError("normalized source changed while scope artifacts were being prepared")
         provenance = {}
         patches = []
         for path, edits in self.edits.items():
@@ -620,6 +679,11 @@ class ScopeBuilder:
             "automatic_estimate_available":False,
             "capture_facts_sha256":sha256(json.dumps(self.facts,sort_keys=True).encode()).hexdigest(),
             "source_inputs":self.analysis.sources,
+            "numerical_sources":[{"procedure":p.procedure,"path":str(p.path),"entry":p.entry,"sha256":p.digest}
+                                 for p in sorted(self.packages.values(), key=lambda p:p.procedure)],
+            "numerical_decisions":[{"procedure":procedure,"supported":bool(self.generated[procedure]),
+                                    "reason":self.numerical_reasons[procedure]}
+                                   for procedure in sorted(self.generated)],
             "artifacts_sha256":{name:sha256(content.encode()).hexdigest() for name,content in self.outputs.items()},
             "device_budget_bytes":self.device_budget,
             "limits":{"calls_per_span":32, "closure_depth":8, "physical_native_sections":"whole resources"},
@@ -634,5 +698,6 @@ class ScopeBuilder:
         return self.outputs, report
 
 
-def form_source_scopes(paths, entry, *, facts, options, config, contracts=None):
-    return ScopeBuilder(paths,entry,facts=facts,options=options,config=config,contracts=contracts).run()
+def form_source_scopes(paths, entry, *, facts, options, config, contracts=None, numerical_sources=None):
+    return ScopeBuilder(paths,entry,facts=facts,options=options,config=config,contracts=contracts,
+                        numerical_sources=numerical_sources).run()
