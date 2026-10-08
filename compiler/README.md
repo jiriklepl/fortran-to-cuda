@@ -493,6 +493,13 @@ After the caller and contiguity checks, contiguous pointer views bind the origin
 storage. Context-aware helper calls use those views so `CONTIGUOUS` dummies do not
 introduce array temporaries that diverge from the registered host buffers. Native
 whole-span fallback retains the original arguments and their normal semantics.
+Stable allocatable owning arrays can be borrowed through ordinary assumed-shape
+helpers. A guard at the original caller checks serial participation, then
+`ALLOCATED`, before associating synthetic owner arguments or querying their
+descriptors. Unallocated and collective paths retain the exact original span;
+original outer guards stay in place. Empty allocated arrays remain valid, and
+the owning context closes before return or later reallocation. The guard forces
+the intrinsic in its own block; conflicting captured/call names remain boundaries.
 Context-aware clone array dummies also declare `TARGET`, making their association
 with runtime access through the registered address explicit.
 An adapter verifies these artifacts, applies replacements to an application copy,
@@ -579,7 +586,8 @@ Numerical workers retain their separate physical access and definition handling.
 Initial support is serial, contiguous whole-array bindings, numerical leaves,
 call-only wrapper clones, registered hidden module arrays (including visible
 reexports), and conservative whole-resource native effects.
-Allocatable captures, array-valued actuals and scalar array-element actuals,
+Allocatable callee formals and scalar captures, direct hidden allocatable effects,
+array-valued actuals and scalar array-element actuals,
 explicit dummy extents without a proved whole-storage shape mapping,
 general opaque-call hooks, physical native-section refinement, and collective
 offload require further integration. Automatic source scopes require an explicit

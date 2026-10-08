@@ -129,6 +129,8 @@ class ScopeBuilder:
         callee = self.analysis.routines.get(procedure)
         if callee is None:
             raise CompilationError("opaque source-scope hooks require a source binding interface")
+        if any("allocatable" in callee.scope.bindings[argument].attributes for argument in callee.arguments):
+            raise CompilationError("allocatable callee formals require original descriptor and allocation semantics")
         for declaration in _children(_part(callee.scope.node, "Specification_Part")):
             if _kind(declaration) != "Type_Declaration_Stmt":
                 continue
@@ -329,8 +331,6 @@ class ScopeBuilder:
                         or any(type(v) is not int or not 0 <= v < 2**63 for v in [*lower,*upper])
                         or any(lo > hi for lo,hi in zip(lower,upper,strict=True))):
                     raise CompilationError("invalid initialized physical capture section")
-        if "allocatable" in binding.attributes:
-            raise CompilationError("allocatable source captures require lifetime proof integration")
         return fact
 
     def add_edit(self, path, first, last, replacement):
@@ -761,6 +761,8 @@ class ScopeBuilder:
             for actual in call.actuals:
                 binding = self.analysis._actual_binding(routine.scope, actual)
                 if binding and not binding.rank:
+                    if "allocatable" in binding.attributes:
+                        raise CompilationError("allocatable scalar captures require original descriptor semantics")
                     if binding.dtype not in {"real", "integer", "logical"} or binding.kind not in {4, 8}:
                         raise CompilationError("unsupported scalar source capture")
                     scalars[binding.root] = binding
@@ -796,6 +798,13 @@ class ScopeBuilder:
         names = [self.visible(routine, root) for root in (*arrays, *scalars)]
         if any(n.startswith("fort_") for n in names):
             raise CompilationError("capture names conflict with the initial scope owner namespace")
+        allocated_roots = [root for root, binding in arrays.items() if "allocatable" in binding.attributes]
+        serial = _name("fort_scope_serial_", digest)
+        if allocated_roots and ("allocated" in names or
+                                any(str(call.node.items[0]).lower() == "allocated" for call in calls)):
+            raise CompilationError("allocation guard intrinsic conflicts with an original capture or call: allocated")
+        if allocated_roots and any(str(call.node.items[0]).lower() == serial for call in calls):
+            raise CompilationError("allocation guard coordinator conflicts with an original call: " + serial)
         # Captured module fields can be re-exported by the original USE list.
         # A dummy with the same spelling conflicts with use association, even
         # when it would legally shadow host association. Keep synthetic formals
@@ -960,7 +969,22 @@ class ScopeBuilder:
                           *dict.fromkeys(imports), "implicit none", *spec, *body, "end subroutine " + name, ""])
         self.append_procedure(routine.scope.parent, name, text)
         first, last = _span(calls[0].node)[0], _span(calls[-1].node)[1]
-        self.add_edit(routine.scope.path, first, last, "\n".join(_call(name,names)) + "\n")
+        replacement = "\n".join(_call(name,names)) + "\n"
+        if allocated_roots:
+            # Passing an unallocated actual to this ordinary assumed-shape
+            # owner is already too early. Inspect only allocation state here,
+            # at the original caller, after proving serial participation.
+            original = "".join(routine.scope.path.read_text().splitlines(keepends=True)[first-1:last])
+            if not original.endswith("\n"):
+                original += "\n"
+            conditions = ["allocated(" + self.visible(routine, root) + ")" for root in allocated_roots]
+            guard = ["if ( &", *[condition + " .and. &" for condition in conditions[:-1]],
+                     conditions[-1] + " &", ") then"]
+            replacement = ("block\nuse fort_scoped_memory, only: " + serial + " => fort_scope_serial_caller\n"
+                           "intrinsic :: allocated\nif (" + serial + "() == 0) then\n" + original + "else\n"
+                           + "\n".join(guard) + "\n" + replacement + "else\n" + original
+                           + "endif\nendif\nend block\n")
+        self.add_edit(routine.scope.path, first, last, replacement)
         return {"owner": name, "path": str(routine.scope.path), "first_line": first, "last_line": last,
                 "parameters": [{"name": parameters[root], "resource": root, "actual": visible}
                                for root, visible in zip(parameters, names, strict=True)],
@@ -977,6 +1001,9 @@ class ScopeBuilder:
                 "placement": "forced scoped GPU with native helpers" if self.config.policy == "sections" else
                              "calibrated coherent source scope" if planning_available else
                              "native; " + planning_reason,
+                **({"allocation_preflight": {"resources": allocated_roots, "position": "original caller before owner association",
+                                               "participation": "serial before allocation inquiries",
+                                               "fallback": "unchanged original source span"}} if allocated_roots else {}),
                 "mode": self.config.policy, "participation": "serial"}
 
     def build_span(self, nodes):
