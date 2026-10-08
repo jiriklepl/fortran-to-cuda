@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from compiler.emission.c.generator import generate_cpp
@@ -24,10 +24,13 @@ class GeneratedSources:
     cpp: str
     fortran: str
     offload: dict | None = None
+    artifacts: dict[str, str] = field(default_factory=dict)
+    scoped: dict | None = None
 
 
 def generate_sources(
-    function: FunctionIR, plan: ExecutionPlan, *, common_header: str = "common_functions.cuh", offload_config=None
+    function: FunctionIR, plan: ExecutionPlan, *, common_header: str = "common_functions.cuh", offload_config=None,
+    memory_model: str = "call",
 ) -> GeneratedSources:
     """Generate all output text from one ABI before the caller publishes files."""
     if function.name.lower() in {"start_hot", "finish_hot", "knd"}:
@@ -38,6 +41,22 @@ def generate_sources(
         )
     if any(character in common_header for character in ('"', "\n", "\r")):
         raise CompilationError("Common header filename cannot contain quotes or newlines")
+    if memory_model not in {"call", "scoped"}:
+        raise CompilationError("memory model must be call or scoped")
+    artifacts, scoped = {}, None
+    if memory_model == "scoped":
+        import json
+
+        from compiler.emission.common.resources import read_scoped_runtime
+        from compiler.emission.cuda.scoped import generate_scoped
+
+        if offload_config is None or offload_config.policy not in {"sections", "auto"}:
+            raise CompilationError("scoped memory requires an explicit sections or auto policy")
+        shared = generate_scoped(function, plan, offload_config, common_header)
+        artifacts, runtime = read_scoped_runtime()
+        artifacts.update({"shared_entry.cu": shared.cuda, "shared_interface.f90": shared.fortran,
+                          "scoped-runtime.json": json.dumps(runtime, indent=2) + "\n"})
+        scoped = {**shared.report, "runtime": runtime}
     abi = abi_arguments(function.parameters)
     memory = plan_memory(plan, function.parameters, acquisition_policy="dedicated")
     ordinary_memory = plan_memory(plan, function.parameters, acquisition_policy="pooled")
@@ -57,4 +76,6 @@ def generate_sources(
         cpp=cpp,
         fortran=generate_fortran(function, abi, offload=offload),
         offload=None if offload is None else offload.report,
+        artifacts=artifacts,
+        scoped=scoped,
     )

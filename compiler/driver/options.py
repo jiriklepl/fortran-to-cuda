@@ -13,6 +13,7 @@ class CompilerOptions:
     fallback: str = "error"
     indexing: str | None = None
     gpu_policy: str = "always"
+    memory_model: str = "call"
 
     def __post_init__(self) -> None:
         if self.opt_level not in (0, 1):
@@ -27,6 +28,10 @@ class CompilerOptions:
             raise CompilationError("indexing must be source or auto")
         if self.gpu_policy not in {"always", "sections", "auto", "chunked", "hybrid"}:
             raise CompilationError("GPU policy must be always, sections, auto, chunked, or hybrid")
+        if self.memory_model not in {"call", "scoped"}:
+            raise CompilationError("memory model must be call or scoped")
+        if self.memory_model == "scoped" and self.gpu_policy not in {"sections", "auto"}:
+            raise CompilationError("scoped memory currently requires sections or auto GPU policy")
 
     @property
     def resolved_schedule(self) -> str:

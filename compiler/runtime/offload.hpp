@@ -1,12 +1,14 @@
 // Ordinary-call section transfers and bounded, calibrated CPU/GPU selection.
 #ifndef FORT_RUNTIME_OFFLOAD_HPP
 #define FORT_RUNTIME_OFFLOAD_HPP
+#include "section_copy.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <initializer_list>
 #include <limits>
 #include <string>
 #include <utility>
@@ -119,6 +121,37 @@ inline bool add(std::size_t a, std::size_t b, std::size_t &result) {
     if (a > std::numeric_limits<std::size_t>::max() - b) return false;
     result = a + b; return true;
 }
+
+// Total default-INTEGER arithmetic for the side-effect-free decision slice.
+inline int query_integer(long long value, bool &valid) {
+    if (value < std::numeric_limits<int>::min() || value > std::numeric_limits<int>::max()) {
+        valid = false; return 0;
+    }
+    return static_cast<int>(value);
+}
+inline int query_size(std::size_t value, bool &valid) {
+    if (value > static_cast<std::size_t>(std::numeric_limits<int>::max())) { valid=false; return 0; }
+    return static_cast<int>(value);
+}
+inline int query_divide(int a, int b, bool &valid) {
+    if (!b) { valid=false; return 0; }
+    return query_integer(static_cast<long long>(a)/b, valid);
+}
+inline int query_load(const int *array, std::initializer_list<std::size_t> dimensions,
+                      std::initializer_list<int> indices, bool &valid) {
+    if (!valid) return 0;
+    if (!array || dimensions.size()!=indices.size()) { valid=false; return 0; }
+    std::size_t offset=0, pitch=1;
+    auto index=indices.begin();
+    for (const auto extent:dimensions) {
+        const int coordinate=*index++;
+        std::size_t term=0;
+        if (coordinate<1 || static_cast<std::size_t>(coordinate)>extent ||
+            !mul(pitch,static_cast<std::size_t>(coordinate-1),term) || !add(offset,term,offset) ||
+            !mul(pitch,extent,pitch)) { valid=false; return 0; }
+    }
+    return array[offset];
+}
 inline long long index(long double value, bool &valid) {
     if (!std::isfinite(value) || value < static_cast<long double>(std::numeric_limits<long long>::min()) ||
         value > static_cast<long double>(std::numeric_limits<long long>::max()) || std::trunc(value) != value) {
@@ -140,6 +173,7 @@ struct Unit {
     std::vector<Footprint> arrays;
     std::size_t iterations = 0;
     double flops = 0, memory_bytes = 0;
+    std::size_t source_region = 0;
 };
 struct Choice { std::size_t begin, end; bool gpu; };
 struct Plan {
@@ -156,6 +190,8 @@ struct Data {
     std::vector<Array> arrays;
     std::vector<Unit> units;
     Plan plan;
+    // Structured preflight proves the value ABI safe on its selected path.
+    bool guarded_inputs_checked = false;
 };
 inline Plan native_plan(const Data &data) {
     Plan result;
@@ -208,13 +244,11 @@ inline std::size_t box_bytes(const Array &a, const Box &b, bool &valid) {
 inline std::size_t copy_operations(const Array &a, const Box &b, bool &valid) {
     box_bytes(a, b, valid);
     if (!valid) return 0;
-    const auto rank = a.dimensions.size();
-    // One pitched 3D copy covers the first three physical axes. Higher ranks
-    // require one such copy per remaining coordinate, matching copy_box.
-    std::size_t result = 1;
-    for (std::size_t k = 3; k < rank; ++k)
-        if (!mul(result, b.upper[k] - b.lower[k] + 1, result)) { valid = false; return 0; }
-    return result;
+    auto upper = b.upper;
+    for (auto &value : upper) ++value; // box_bytes checked value < extent.
+    const fort_physical::CopyPlan plan(a.element_bytes, a.dimensions, b.lower, upper);
+    valid = valid && plan.valid;
+    return valid ? plan.copies : 0;
 }
 // Exact unions are optional: bound planning work and retain the original
 // rectangles if fragmentation is not worthwhile or arithmetic is uncertain.
@@ -372,7 +406,7 @@ inline Plan select(const Data &data, const Profile &p, bool automatic) {
         empty |= unit.iterations == 0;
         active |= unit.iterations != 0;
     }
-    if (empty && active) return native_plan(data);
+    if (empty && active && !data.guarded_inputs_checked) return native_plan(data);
     if (automatic && !p.valid) return native_plan(data);
     if (!automatic) {
         if (active) result.choices.push_back({0, count, true});
@@ -411,6 +445,12 @@ inline void decision_trace(const char *entry, const char *mode, std::size_t gpu_
 inline void plan_trace(const char *entry, const Data &data, const Profile &p, const Plan &plan) {
     const char *enabled = std::getenv("FORT_OFFLOAD_TRACE");
     if (!enabled || !std::strcmp(enabled, "0")) return;
+    if (data.guarded_inputs_checked) {
+        std::fprintf(stderr, "FORT_OFFLOAD_ACTIVE entry=%s regions=", entry);
+        for (std::size_t i=0; i<data.units.size(); ++i)
+            std::fprintf(stderr, "%s%zu", i ? "," : "", data.units[i].source_region);
+        std::fprintf(stderr, "\n");
+    }
     for (const auto &choice : plan.choices) {
         std::size_t upload=0, download=0, launches=0;
         bool valid=true;
@@ -464,52 +504,30 @@ inline void copy_box(const Array &a, const Box &box, void *device, bool upload) 
     bool valid = true;
     const auto bytes = box_bytes(a, box, valid);
     if (!valid) storage::fail("invalid ordinary-call transfer footprint");
-    const auto rank = a.dimensions.size();
-    if (!bytes || !rank) return;
-    std::size_t stride = a.element_bytes, offset = 0;
-    std::vector<std::size_t> strides(rank);
-    for (std::size_t k = 0; k < rank; ++k) {
-        strides[k] = stride;
-        offset += box.lower[k] * stride;
-        stride *= a.dimensions[k]; // shape products were checked before dispatch
-    }
+    if (!bytes) return;
+    auto upper = box.upper;
+    for (auto &value : upper) ++value;
+    const fort_physical::CopyPlan plan(a.element_bytes, a.dimensions, box.lower, upper);
+    if (!plan.valid) storage::fail("invalid physical transfer layout");
     auto *host = static_cast<char *>(a.host);
     auto *gpu = static_cast<char *>(device);
     const auto direction = upload ? cudaMemcpyHostToDevice : cudaMemcpyDeviceToHost;
-    const auto width = (box.upper[0] - box.lower[0] + 1) * a.element_bytes;
-    auto copy = [&](std::size_t at, std::size_t height, std::size_t pitch) {
-        void *to = upload ? static_cast<void *>(gpu + at) : static_cast<void *>(host + at);
-        const void *from = upload ? static_cast<void *>(host + at) : static_cast<void *>(gpu + at);
-        if (height == 1 || pitch == width) CUCH(cudaMemcpy(to, from, width * height, direction));
-        else CUCH(cudaMemcpy2D(to, pitch, from, pitch, width, height, direction));
-    };
-    if (rank == 1) copy(offset, 1, 0);
-    else if (rank == 2) copy(offset, box.upper[1] - box.lower[1] + 1, strides[1]);
-    else if (rank == 3 && box.lower[1] == 0 && box.upper[1] + 1 == a.dimensions[1])
-        copy(offset, a.dimensions[1] * (box.upper[2] - box.lower[2] + 1), strides[1]);
-    else if (rank == 3 && box.lower[1] == box.upper[1])
-        copy(offset, box.upper[2] - box.lower[2] + 1, strides[2]);
-    else {
-        // Keep the full physical row and slice pitches. Offsetting the pointer
-        // alone must not turn an interior section into a compact allocation.
-        std::vector<std::size_t> indices = box.lower;
-        for (;;) {
-            std::size_t at = box.lower[0] * a.element_bytes;
-            for (std::size_t k = 1; k < rank; ++k) at += indices[k] * strides[k];
+    plan.visit([&](const fort_physical::CopyOperation &op) {
+        void *to = upload ? static_cast<void *>(gpu+op.offset) : static_cast<void *>(host+op.offset);
+        const void *from = upload ? static_cast<void *>(host+op.offset) : static_cast<void *>(gpu+op.offset);
+        if (op.depth == 1) {
+            if (op.height == 1 || op.pitch == op.width) CUCH(cudaMemcpy(to, from, op.width*op.height, direction));
+            else CUCH(cudaMemcpy2D(to, op.pitch, from, op.pitch, op.width, op.height, direction));
+        } else {
             cudaMemcpy3DParms parameters{};
-            parameters.srcPtr = make_cudaPitchedPtr(upload ? host + at : gpu + at,
-                                                     strides[1], strides[1], a.dimensions[1]);
-            parameters.dstPtr = make_cudaPitchedPtr(upload ? gpu + at : host + at,
-                                                     strides[1], strides[1], a.dimensions[1]);
-            parameters.extent = make_cudaExtent(width, box.upper[1] - box.lower[1] + 1,
-                                                box.upper[2] - box.lower[2] + 1);
+            parameters.srcPtr = make_cudaPitchedPtr(const_cast<void *>(from), op.pitch, op.pitch, op.physical_height);
+            parameters.dstPtr = make_cudaPitchedPtr(to, op.pitch, op.pitch, op.physical_height);
+            parameters.extent = make_cudaExtent(op.width, op.height, op.depth);
             parameters.kind = direction;
             CUCH(cudaMemcpy3D(&parameters));
-            std::size_t k = 3;
-            while (k < rank && ++indices[k] > box.upper[k]) { indices[k] = box.lower[k]; ++k; }
-            if (k == rank) break;
         }
-    }
+        return true;
+    });
     storage::trace(upload ? "upload" : "download", bytes);
 }
 #endif
