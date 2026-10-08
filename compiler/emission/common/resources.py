@@ -28,6 +28,8 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
         "scoped_runtime.h": runtime.joinpath("scoped_runtime.h").read_text(encoding="utf-8"),
         "scoped_entry.hpp": runtime.joinpath("scoped_entry.hpp").read_text(encoding="utf-8"),
         "section_copy.hpp": runtime.joinpath("section_copy.hpp").read_text(encoding="utf-8"),
+        "scoped_regions.hpp": runtime.joinpath("scoped_regions.hpp").read_text(encoding="utf-8"),
+        "scoped_planning.hpp": runtime.joinpath("scoped_planning.hpp").read_text(encoding="utf-8"),
         "scoped_runtime.cu": runtime.joinpath("scoped_runtime.cu").read_text(encoding="utf-8"),
         "fort_scoped_memory.f90": runtime.joinpath("scoped_memory.f90").read_text(encoding="utf-8"),
     }
@@ -38,7 +40,8 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
         "abi_version": 1,
         "runtime_id": identity,
         "link_once": True,
-        "headers": ["scoped_runtime.h", "scoped_entry.hpp", "section_copy.hpp"],
+        "headers": ["scoped_runtime.h", "scoped_entry.hpp", "section_copy.hpp", "scoped_regions.hpp", "scoped_planning.hpp"],
+        "planning_abi_version": 1,
         "sources": [
             {"path": "scoped_runtime.cu", "language": "cuda", "standard": "c++17", "host_openmp": True},
             {"path": "fort_scoped_memory.f90", "language": "fortran", "module": "fort_scoped_memory"},
@@ -52,6 +55,6 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
         "concurrent_access": "separate contexts with nonconflicting host storage",
         "rectangle_limit": 32,
         "intersection_limit": 1024,
-        "capabilities": ["section_coherence", "partial_host_initialization", "source_definition_changes", "device_memory_budget"],
+        "capabilities": ["section_coherence", "partial_host_initialization", "source_definition_changes", "device_memory_budget", "coherent_runtime_placement"],
     }
     return outputs, manifest

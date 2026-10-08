@@ -2,17 +2,23 @@
  * -DFORT_SCOPE_CPU_TEST for the isolated coherence reference backend. */
 #include "scoped_runtime.h"
 #include "section_copy.hpp"
+#include "scoped_regions.hpp"
+#include "scoped_planning.hpp"
 #include <algorithm>
+#include <array>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <iomanip>
 #include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #ifdef _OPENMP
 #include <omp.h>
@@ -22,12 +28,11 @@
 #endif
 
 namespace {
-constexpr size_t rectangle_limit = 32, intersection_limit = 1024;
+using namespace fort_scoped::coherence;
 struct Error : std::runtime_error {
     int status;
     Error(int status_, const char *message) : std::runtime_error(message), status(status_) {}
 };
-struct Fragmented {};
 thread_local char last_error[512]{}; // Diagnostic only; never an implicit context.
 void diagnostic(const char *message) noexcept {
     std::strncpy(last_error, message, sizeof(last_error)-1);
@@ -40,77 +45,6 @@ size_t multiply(size_t a, size_t b) {
     require(!b || a <= std::numeric_limits<size_t>::max() / b, FORT_SCOPE_ARGUMENT, "array byte extent overflow");
     return a * b;
 }
-struct Box { std::vector<size_t> lo, hi; };
-using Region = std::vector<Box>;
-struct Budget {
-    size_t checks = 0;
-    void check() { if (++checks > intersection_limit) throw Fragmented{}; }
-};
-bool empty(const Box &b) {
-    for (size_t k=0; k<b.lo.size(); ++k) if (b.lo[k] == b.hi[k]) return true;
-    return false;
-}
-bool contains(const Box &a, const Box &b) {
-    for (size_t k=0; k<a.lo.size(); ++k) if (a.lo[k] > b.lo[k] || a.hi[k] < b.hi[k]) return false;
-    return true;
-}
-std::optional<Box> intersection(const Box &a, const Box &b, Budget &budget) {
-    budget.check();
-    Box result = a;
-    for (size_t k=0; k<a.lo.size(); ++k) {
-        result.lo[k] = std::max(a.lo[k], b.lo[k]);
-        result.hi[k] = std::min(a.hi[k], b.hi[k]);
-        if (result.lo[k] >= result.hi[k]) return {};
-    }
-    return result;
-}
-void append(Region &region, Box box) {
-    if (empty(box)) return;
-    if (region.size() == rectangle_limit) throw Fragmented{};
-    region.push_back(std::move(box));
-}
-Region subtract(const Box &box, const Box &cut, Budget &budget) {
-    auto common = intersection(box, cut, budget);
-    if (!common) return {box};
-    Region result;
-    Box middle = box;
-    for (size_t k=0; k<box.lo.size(); ++k) {
-        if (middle.lo[k] < common->lo[k]) {
-            Box part = middle; part.hi[k] = common->lo[k]; append(result, std::move(part));
-            middle.lo[k] = common->lo[k];
-        }
-        if (common->hi[k] < middle.hi[k]) {
-            Box part = middle; part.lo[k] = common->hi[k]; append(result, std::move(part));
-            middle.hi[k] = common->hi[k];
-        }
-    }
-    return result;
-}
-Region difference(const Region &a, const Region &b, Budget &budget) {
-    Region result;
-    for (const auto &box : a) {
-        Region pending{box};
-        for (const auto &cut : b) {
-            Region next;
-            for (const auto &part : pending)
-                for (auto &piece : subtract(part, cut, budget)) append(next, std::move(piece));
-            pending = std::move(next);
-            if (pending.empty()) break;
-        }
-        for (auto &part : pending) append(result, std::move(part));
-    }
-    return result;
-}
-Region unite(Region a, const Region &b, Budget &budget) {
-    for (const auto &box : b) {
-        if (std::any_of(a.begin(), a.end(), [&](const Box &old) { return contains(old, box); })) continue;
-        a.erase(std::remove_if(a.begin(), a.end(), [&](const Box &old) { return contains(box, old); }), a.end());
-        for (auto &piece : difference({box}, a, budget)) append(a, std::move(piece));
-    }
-    return a;
-}
-struct Effects { Region reads, writes, overwrites; };
-struct Prepared { bool device; Region initialized, current, opposite; };
 struct Buffer {
     fort_buffer_t handle;
     uint64_t identity, generation;
@@ -132,12 +66,21 @@ struct Context {
     std::unordered_map<fort_buffer_t, std::unique_ptr<Buffer>> buffers;
     std::unordered_map<uint64_t, fort_buffer_t> identities;
     fort_scope_stats stats{};
+    std::vector<fort_scoped::planning::Operation> plan;
+    std::vector<bool> schedule;
+    size_t worker_cursor = 0;
+    bool plan_recording = false, plan_installed = false;
+    std::optional<fort_scoped::planning::Result> preview;
+    std::array<unsigned char, sizeof(fort_scope_plan_costs)> preview_costs{};
 #ifndef FORT_SCOPE_CPU_TEST
     cudaStream_t stream = nullptr;
     cudaMemPool_t pool = nullptr;
 #endif
 };
+std::mutex driver_mutex;
+std::unordered_set<int> initialized_devices;
 std::mutex registry_mutex;
+std::mutex trace_mutex;
 std::unordered_map<fort_scope_t, std::shared_ptr<Context>> contexts;
 uint64_t next_token = 1;
 uint64_t token() {
@@ -159,8 +102,7 @@ Buffer &buffer(Context &c, fort_buffer_t handle) {
 void trace(const char *operation, const Buffer *b = nullptr, size_t bytes = 0) {
     const char *enabled = std::getenv("FORT_RUNTIME_TRACE");
     if (!enabled || std::strcmp(enabled, "1")) return;
-    static std::mutex mutex;
-    std::lock_guard<std::mutex> lock(mutex);
+    std::lock_guard<std::mutex> lock(trace_mutex);
     std::cerr << "FORT_SCOPED " << operation;
     if (b) std::cerr << " buffer=" << b->identity << " generation=" << b->generation;
     std::cerr << " bytes=" << bytes << '\n';
@@ -220,6 +162,7 @@ void initialize(Context &c) {
 #endif
 #endif
     c.ready = true;
+    { std::lock_guard<std::mutex> lock(driver_mutex); initialized_devices.insert(c.device); }
     trace("initialize");
 }
 void allocate(Context &c, Buffer &b) {
@@ -362,13 +305,6 @@ void ensure(Context &c, Buffer &b, const Region &requested, bool device) {
                 "access reads an uninitialized section");
     }
 }
-Prepared prepare(Buffer &b, const Effects &e, bool device) {
-    Budget budget;
-    auto initialized = unite(b.initialized, e.writes, budget);
-    auto current = unite(device ? b.device_current : b.host_current, e.writes, budget);
-    auto opposite = difference(device ? b.host_current : b.device_current, e.writes, budget);
-    return {device, std::move(initialized), std::move(current), std::move(opposite)};
-}
 void begin(Context &c, Buffer &b, const fort_scope_access *access, bool device) {
     require(!b.prepared, FORT_SCOPE_STATE, "buffer access already prepared");
     const auto e = effects(b, access);
@@ -426,15 +362,289 @@ template<class F> int protect(F &&f) noexcept {
     catch (const std::exception &error) { diagnostic(error.what()); return FORT_SCOPE_STATE; }
     catch (...) { diagnostic("unknown scope runtime failure"); return FORT_SCOPE_STATE; }
 }
-template<class F> int with(fort_scope_t handle, F &&f) noexcept {
+template<class F> int with(fort_scope_t handle, F &&f, bool preserve_preview = false) noexcept {
     return protect([&]() {
         const auto c = lookup(handle);
         std::lock_guard<std::mutex> lock(c->mutex);
         require(!c->closed, FORT_SCOPE_STALE, "invalid or stale scope handle");
         require(!c->poisoned, FORT_SCOPE_EXECUTION, "scope has an execution failure; unsafe replay prohibited");
+        // The preview is reusable only across a hardware compatibility probe.
+        // Every intervening context API invalidates it conservatively, even a
+        // read-only stats query. Selection itself holds this same context lock.
+        if (!preserve_preview) c->preview.reset();
         f(*c);
     });
 }
+}
+
+namespace {
+fort_scoped::planning::Inputs planning_inputs(Context &c) {
+    fort_scoped::planning::Inputs input;
+    input.operations = c.plan;
+    input.query_construction_operations = 1 + c.plan.size();
+    input.device_budget = c.device_budget;
+    input.device_ready = c.ready;
+    input.pending = c.pending;
+#ifdef FORT_SCOPE_CPU_TEST
+    input.asynchronous_release = false;
+#else
+#if CUDART_VERSION >= 11020
+    // New scopes use the stream-ordered pool on supported devices. Charging
+    // its extra completion wait is conservative if the runtime uses cudaFree.
+    input.asynchronous_release = !c.ready || c.pool != nullptr;
+#else
+    input.asynchronous_release = false;
+#endif
+#endif
+    { std::lock_guard<std::mutex> lock(driver_mutex);
+      input.driver_initialized = initialized_devices.count(c.device) != 0; }
+    for (const auto &entry : c.buffers) {
+        const auto &b = *entry.second;
+        require(!b.prepared, FORT_SCOPE_STATE, "planning during a prepared buffer access");
+        input.resources.push_back({b.handle, b.element_bytes, b.bytes, b.extents,
+                                   b.initialized, b.host_current, b.device_current, b.device != nullptr});
+    }
+    return input;
+}
+std::vector<fort_scoped::planning::Binding> planning_bindings(
+        Context &c, const fort_scope_plan_binding *bindings, size_t count) {
+    require(count <= 256 && (!count || bindings), FORT_SCOPE_ARGUMENT, "invalid planning binding list");
+    std::vector<fort_scoped::planning::Binding> result;
+    for (size_t i=0; i<count; ++i) {
+        require(std::none_of(result.begin(), result.end(), [&](const auto &old) {
+            return old.buffer == bindings[i].buffer;
+        }), FORT_SCOPE_ALIAS, "planning bindings must use canonical unique buffers");
+        auto &b = buffer(c, bindings[i].buffer);
+        require(!b.prepared, FORT_SCOPE_STATE, "planning during a prepared buffer access");
+        result.push_back({b.handle, effects(b, &bindings[i].access)});
+    }
+    return result;
+}
+bool same_region(const Region &a, const Region &b) {
+    if (a.size() != b.size()) return false;
+    for (size_t k=0; k<a.size(); ++k) if (a[k].lo != b[k].lo || a[k].hi != b[k].hi) return false;
+    return true;
+}
+bool same_bindings(const std::vector<fort_scoped::planning::Binding> &a,
+                   const std::vector<fort_scoped::planning::Binding> &b) {
+    if (a.size() != b.size()) return false;
+    for (size_t k=0; k<a.size(); ++k) {
+        if (a[k].buffer != b[k].buffer || !same_region(a[k].effects.reads, b[k].effects.reads) ||
+            !same_region(a[k].effects.writes, b[k].effects.writes) ||
+            !same_region(a[k].effects.overwrites, b[k].effects.overwrites)) return false;
+    }
+    return true;
+}
+void decision_trace(const fort_scope_plan_decision &d, const std::string &reason) {
+    const char *enabled = std::getenv("FORT_RUNTIME_TRACE");
+    if (!enabled || std::strcmp(enabled, "1")) return;
+    std::lock_guard<std::mutex> lock(trace_mutex);
+    std::cerr << "FORT_SCOPED decision available=" << d.available << " gpu_units=" << d.gpu_units
+              << " cpu_units=" << d.cpu_units << " candidates=" << d.candidates
+              << " simulated_operations=" << d.simulated_operations
+              << " upload_bytes=" << d.upload_bytes << " download_bytes=" << d.download_bytes
+              << " launches=" << d.launches << " waits=" << d.waits
+              << " peak_device_bytes=" << d.peak_device_bytes
+              << " estimated_seconds=" << d.estimated_seconds << " native_seconds=" << d.native_seconds
+              << " reason=" << (reason.empty() ? "calibrated_selection" : reason) << '\n';
+}
+struct EvidenceOutput {
+    Context &context;
+    fort_scope_t handle;
+    size_t rows = 0;
+    bool truncated = false;
+};
+void json_coordinates(std::ostream &out, const std::vector<size_t> &values) {
+    out << '[';
+    for (size_t k=0; k<values.size(); ++k) { if (k) out << ','; out << values[k]; }
+    out << ']';
+}
+void json_rectangle(std::ostream &out, const Box &box) {
+    out << "{\"lower\":"; json_coordinates(out, box.lo);
+    out << ",\"upper\":"; json_coordinates(out, box.hi); out << '}';
+}
+void json_region(std::ostream &out, const Region &region) {
+    out << '[';
+    for (size_t k=0; k<region.size(); ++k) { if (k) out << ','; json_rectangle(out, region[k]); }
+    out << ']';
+}
+void evidence_row(void *opaque, const fort_scoped::planning::EvidenceEvent &event) {
+    auto &output = *static_cast<EvidenceOutput *>(opaque);
+    // A trace can be incomplete, but may never retain an unbounded event graph.
+    if (output.rows >= 4096) { output.truncated = true; return; }
+    std::ostringstream out;
+    out << std::setprecision(17) << "{\"schema_version\":1,\"context\":" << output.handle
+        << ",\"sequence\":" << output.rows++ << ",\"event\":\"" << event.event << '"';
+    if (event.phase) out << ",\"phase\":\"" << event.phase << '"';
+    if (event.resource) {
+        const auto &resource = *event.resource;
+        const auto &registered = buffer(output.context, resource.handle);
+        out << ",\"resource\":" << resource.handle << ",\"identity\":" << registered.identity
+            << ",\"generation\":" << registered.generation << ",\"element_bytes\":" << resource.element_bytes
+            << ",\"allocation_bytes\":" << resource.bytes << ",\"allocated\":" << (resource.allocated ? "true" : "false")
+            << ",\"extents\":"; json_coordinates(out, resource.extents);
+        out << ",\"initialized\":"; json_region(out, resource.initialized);
+        out << ",\"host_current\":"; json_region(out, resource.host_current);
+        out << ",\"device_current\":"; json_region(out, resource.device_current);
+    }
+    if (event.operation) {
+        const auto &operation = *event.operation;
+        out << ",\"kind\":" << operation.kind << ",\"unit\":" << operation.unit
+            << ",\"gpu\":" << (event.gpu ? "true" : "false")
+            << ",\"gpu_supported\":" << (operation.gpu_available ? "true" : "false")
+            << ",\"flops\":" << operation.flops << ",\"memory_bytes\":" << operation.memory_bytes;
+    }
+    if (event.binding) {
+        out << ",\"reads\":"; json_region(out, event.binding->effects.reads);
+        out << ",\"writes\":"; json_region(out, event.binding->effects.writes);
+        out << ",\"overwrites\":"; json_region(out, event.binding->effects.overwrites);
+    }
+    if (event.preservation_reads) {
+        out << ",\"preservation_reads\":"; json_region(out, *event.preservation_reads);
+    }
+    if (event.rectangle) {
+        out << ",\"unit\":" << event.unit << ",\"direction\":\"" << (event.upload ? "h2d" : "d2h")
+            << "\",\"rectangle\":"; json_rectangle(out, *event.rectangle);
+        out << ",\"bytes\":" << event.bytes << ",\"copy_calls\":" << event.copies;
+    }
+    if (!std::strcmp(event.event, "gate")) {
+        out << ",\"first_worker\":" << event.first << ",\"last_worker_exclusive\":" << event.last
+            << ",\"estimated_seconds\":" << event.seconds << ",\"counterfactual_seconds\":" << event.counterfactual_seconds
+            << ",\"required_saving_seconds\":" << event.required_saving
+            << ",\"accepted\":" << (event.accepted ? "true" : "false");
+    }
+    out << '}';
+    std::lock_guard<std::mutex> lock(trace_mutex);
+    std::cerr << "FORT_SCOPED evidence " << out.str() << '\n';
+}
+void planning_evidence(Context &context, fort_scope_t handle, const fort_scope_plan_costs &costs,
+                       const fort_scoped::planning::Result &result) noexcept {
+    const char *enabled = std::getenv("FORT_RUNTIME_TRACE");
+    if (!enabled || std::strcmp(enabled, "1")) return;
+    EvidenceOutput output{context, handle};
+    bool complete = false;
+    try {
+        {
+            std::lock_guard<std::mutex> lock(trace_mutex);
+            std::cerr << std::setprecision(17) << "FORT_SCOPED evidence {\"schema_version\":1,\"context\":" << handle
+                  << ",\"event\":\"decision\",\"device\":" << context.device
+                  << ",\"available\":" << result.decision.available << ",\"gpu_units\":" << result.decision.gpu_units
+                  << ",\"cpu_units\":" << result.decision.cpu_units << ",\"reason\":\"" << result.reason
+                  << "\",\"native_common_compute_excluded\":" << (result.native_common_compute_excluded ? "true" : "false")
+                  << ",\"estimated_seconds\":" << result.decision.estimated_seconds
+                  << ",\"native_seconds\":" << result.decision.native_seconds
+                  << ",\"peak_device_bytes\":" << result.decision.peak_device_bytes
+                  << ",\"upload_bytes\":" << result.decision.upload_bytes
+                  << ",\"download_bytes\":" << result.decision.download_bytes
+                  << ",\"launches\":" << result.decision.launches
+                  << ",\"simulated_operations\":" << result.decision.simulated_operations
+                  << ",\"evidence\":\"modeled_final_schedule\",\"section_coordinates\":\"zero_based_exclusive\"}\n";
+        }
+        const fort_scoped::planning::EvidenceSink sink{&output, evidence_row};
+        auto input = planning_inputs(context);
+        input.driver_initialized = result.driver_initialized;
+        fort_scoped::planning::evidence(input, costs, result, sink);
+        complete = !output.truncated;
+    } catch (...) {
+        // Diagnostics never convert a valid numerical decision into failure.
+    }
+    try {
+        std::lock_guard<std::mutex> lock(trace_mutex);
+        std::cerr << "FORT_SCOPED evidence {\"schema_version\":1,\"context\":" << handle
+                  << ",\"event\":\"end\",\"rows\":" << output.rows
+                  << ",\"complete\":" << (complete ? "true" : "false")
+                  << ",\"truncated\":" << (output.truncated ? "true" : "false") << "}\n";
+    } catch (...) {}
+}
+}
+extern "C" int fort_scope_plan_host_current(fort_scope_t h, fort_buffer_t handle) {
+    return with(h, [&](Context &c) {
+        const auto &b = buffer(c, handle);
+        require(!b.prepared, FORT_SCOPE_STATE, "planning payload has an unfinished access");
+        Budget budget;
+        const Region full = empty(b.full()) ? Region{} : Region{b.full()};
+        require(difference(full, b.initialized, budget).empty() &&
+                difference(full, b.host_current, budget).empty(), FORT_SCOPE_BOUNDARY,
+                "planning payload must already be fully initialized and host current");
+    });
+}
+extern "C" int fort_scope_plan_reset(fort_scope_t h) {
+    return with(h, [&](Context &c) {
+        require(!c.pending, FORT_SCOPE_STATE, "planning requires completed earlier execution");
+        for (const auto &entry : c.buffers)
+            require(!entry.second->prepared, FORT_SCOPE_STATE, "planning during a prepared buffer access");
+        require(!c.plan_installed || c.worker_cursor == c.schedule.size(), FORT_SCOPE_STATE,
+                "cannot discard an unfinished execution schedule");
+        c.plan.clear(); c.schedule.clear(); c.worker_cursor = 0;
+        c.plan_installed = false; c.plan_recording = true;
+    });
+}
+extern "C" int fort_scope_plan_add(fort_scope_t h, uint32_t kind, uint64_t unit,
+                                   const fort_scope_plan_binding *bindings, size_t count,
+                                   double flops, double memory_bytes, int gpu_available) {
+    return with(h, [&](Context &c) {
+        require(c.plan_recording && !c.plan_installed, FORT_SCOPE_STATE, "reset the planning query before recording");
+        require(kind <= FORT_SCOPE_PLAN_FORGET && (gpu_available == 0 || gpu_available == 1),
+                FORT_SCOPE_ARGUMENT, "invalid planning operation kind or availability");
+        require(c.plan.size() < 256, FORT_SCOPE_BOUNDARY, "planning record budget exceeded");
+        require(kind != FORT_SCOPE_PLAN_WORKER || unit, FORT_SCOPE_ARGUMENT, "worker planning unit requires an identity");
+        c.plan.push_back({kind, unit, planning_bindings(c, bindings, count), flops, memory_bytes, gpu_available != 0});
+    });
+}
+extern "C" int fort_scope_plan_select(fort_scope_t h, const fort_scope_plan_costs *costs,
+                                      int compatible, fort_scope_plan_decision *out) {
+    return with(h, [&](Context &c) {
+        require(costs && out && compatible >= -1 && compatible <= 1, FORT_SCOPE_ARGUMENT, "invalid planning selection arguments");
+        require(c.plan_recording && !c.plan_installed, FORT_SCOPE_STATE, "planning selection requires a completed query");
+        auto result = c.preview && !std::memcmp(c.preview_costs.data(), costs, sizeof(*costs))
+            ? *c.preview : fort_scoped::planning::select(planning_inputs(c), *costs);
+        if (compatible == -1) {
+            c.preview = result;
+            std::memcpy(c.preview_costs.data(), costs, sizeof(*costs));
+        }
+        if (compatible == 0) {
+            result.decision.available = 0;
+            result.decision.gpu_units = 0;
+            result.decision.cpu_units = static_cast<uint32_t>(result.gpu_workers.size());
+            result.decision.upload_bytes = result.decision.download_bytes = 0;
+            result.decision.uploads = result.decision.downloads = 0;
+            result.decision.launches = result.decision.waits = result.decision.allocations = 0;
+            result.decision.peak_device_bytes = c.stats.allocated_bytes;
+            result.decision.estimated_seconds = result.decision.native_seconds;
+            std::fill(result.gpu_workers.begin(), result.gpu_workers.end(), false);
+            result.reason = "hardware_or_calibration_incompatible";
+        }
+        *out = result.decision;
+        if (compatible != -1) {
+            planning_evidence(c, h, *costs, result);
+            c.schedule = std::move(result.gpu_workers);
+            c.worker_cursor = 0;
+            // A successful whole-native choice leaves original source fallback
+            // free to close this untouched metadata-only context.
+            c.plan_installed = result.decision.available && result.decision.gpu_units;
+            if (!c.plan_installed) c.schedule.clear();
+            c.plan_recording = false;
+            decision_trace(*out, result.reason);
+        }
+    }, true);
+}
+extern "C" int fort_scope_plan_next(fort_scope_t h, uint64_t unit,
+                                    const fort_scope_plan_binding *bindings, size_t count, int *gpu) {
+    return with(h, [&](Context &c) {
+        require(gpu, FORT_SCOPE_ARGUMENT, "missing execution choice output");
+        *gpu = 0;
+        if (!c.plan_installed) return;
+        require(c.worker_cursor < c.schedule.size(), FORT_SCOPE_STATE, "execution has more workers than its planned query");
+        size_t worker = 0;
+        const fort_scoped::planning::Operation *expected = nullptr;
+        for (const auto &op : c.plan) if (op.kind == FORT_SCOPE_PLAN_WORKER) {
+            if (worker++ == c.worker_cursor) { expected = &op; break; }
+        }
+        require(expected && expected->unit == unit &&
+                same_bindings(expected->bindings, planning_bindings(c, bindings, count)),
+                FORT_SCOPE_STATE, "execution worker order or physical effects changed after planning");
+        *gpu = c.schedule[c.worker_cursor++] ? 1 : 0;
+    });
 }
 
 extern "C" uint32_t fort_scope_abi_version() { return FORT_SCOPE_ABI_VERSION; }
@@ -456,6 +666,12 @@ extern "C" int fort_scope_serial_caller(void) {
     // is in a team. Unknown participation retains the original native span.
     return 0;
 #endif
+}
+extern "C" int fort_scope_device_get(fort_scope_t h, int *out) {
+    return with(h, [&](Context &c) {
+        require(out, FORT_SCOPE_ARGUMENT, "missing context device output");
+        *out = c.device;
+    });
 }
 extern "C" int fort_scope_set_device_budget(fort_scope_t h, size_t bytes) {
     return with(h, [&](Context &c) {
@@ -575,6 +791,7 @@ extern "C" int fort_scope_gpu_leave(fort_scope_t h, int previous) {
         std::lock_guard<std::mutex> lock(owner->mutex);
         require(!owner->closed, FORT_SCOPE_STALE, "invalid or stale scope handle");
         auto &c = *owner;
+        c.preview.reset();
 #ifndef FORT_SCOPE_CPU_TEST
         cuda_check(c, cudaSetDevice(previous));
 #else
@@ -614,6 +831,8 @@ extern "C" int fort_scope_unregister(fort_scope_t h, fort_buffer_t handle) {
 }
 extern "C" int fort_scope_close(fort_scope_t h) {
     const auto status = with(h, [&](Context &c) {
+        require(!c.plan_installed || c.worker_cursor == c.schedule.size(), FORT_SCOPE_STATE,
+                "scope closed before its scheduled workers completed");
         for (auto &entry : c.buffers) publish(c, *entry.second);
         for (auto &entry : c.buffers) release(c, *entry.second);
         wait(c);

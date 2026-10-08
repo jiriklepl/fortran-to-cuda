@@ -2,8 +2,9 @@
 
 All durations are seconds, transfer rates are payload bytes/second, memory
 throughput counts bytes read plus written, and compute throughput counts
-floating operations (one multiply-add is two). Profiles are keyed by schema,
-hardware, toolchains, precision and CPU thread budget, never compiler sources.
+floating operations (one multiply-add is two). Base costs are keyed by schema,
+hardware, toolchains, precision and CPU thread budget. Optional scoped costs
+also identify the common runtime whose management operations were measured.
 """
 from __future__ import annotations
 
@@ -27,6 +28,11 @@ WORKER_RATES = ("cpu_worker_flops_per_second", "cpu_worker_memory_bytes_per_seco
 LATENCY_RATES = ("launch_latency_seconds", "pump_latency_seconds")
 HARDWARE_FIELDS = ("cpu_name", "gpu_uuid", "gpu_name", "compute_capability")
 TOOLCHAIN_FIELDS = ("nvcc_version", "host_cxx_version", "cuda_runtime_version", "driver_version")
+SCOPED_COST_NAMES = (
+    "create_seconds", "register_seconds", "host_access_seconds", "device_access_seconds",
+    "gpu_setup_seconds", "cold_driver_startup_seconds", "allocation_seconds", "release_seconds",
+    "wait_seconds", "launch_enqueue_seconds", "planning_operation_seconds",
+)
 
 
 class ProfileError(ValueError):
@@ -70,6 +76,7 @@ def validate_profile(
     cpu_threads: int | None = None,
     hardware: dict | None = None,
     toolchain: dict | None = None,
+    scoped_runtime_id: str | None = None,
 ) -> dict:
     """Validate costs and optionally require the caller's known identity.
 
@@ -126,7 +133,39 @@ def validate_profile(
             raise ProfileError(f"missing rates.{name}")
         _number(transfer.get("latency_seconds"), f"rates.{name}.latency_seconds", zero=True)
         _number(transfer.get("bandwidth_bytes_per_second"), f"rates.{name}.bandwidth_bytes_per_second")
+    if "scoped" in profile:
+        scoped = profile["scoped"]
+        if not isinstance(scoped, dict) or type(scoped.get("schema_version")) is not int or scoped["schema_version"] != 1:
+            raise ProfileError("scoped costs require schema_version 1")
+        runtime_id = scoped.get("runtime_id")
+        if not isinstance(runtime_id, str) or not re.fullmatch(r"[0-9a-f]{64}", runtime_id):
+            raise ProfileError("scoped.runtime_id must be a lowercase SHA-256 identity")
+        bound = scoped.get("max_allocation_bytes")
+        if type(bound) is not int or not 0 < bound < 2**64:
+            raise ProfileError("scoped.max_allocation_bytes must be a positive 64-bit byte count")
+        costs = scoped.get("costs")
+        if not isinstance(costs, dict):
+            raise ProfileError("missing scoped costs")
+        for name in SCOPED_COST_NAMES:
+            _number(costs.get(name), f"scoped.costs.{name}")
+    if scoped_runtime_id is not None:
+        scoped_costs(profile, scoped_runtime_id)
     return profile
+
+
+def scoped_costs(profile: dict, runtime_id: str) -> dict:
+    """Require costs measured for this common runtime, without guessed defaults.
+
+    Ordinary profiles remain valid without this optional extension. Callers
+    requesting scoped automatic execution must explicitly check the runtime
+    identity after validating the base hardware profile.
+    """
+    scoped = profile.get("scoped")
+    if not isinstance(scoped, dict):
+        raise ProfileError("hardware profile has no scoped runtime calibration")
+    if scoped.get("runtime_id") != runtime_id:
+        raise ProfileError("hardware profile scoped runtime_id mismatch")
+    return scoped["costs"]
 
 
 def load_profile(path: str | Path, **expected: Any) -> dict:

@@ -45,6 +45,19 @@ public:
         bindings_[size_++].effects = access;
         return FORT_SCOPE_OK;
     }
+    int record(uint32_t kind, uint64_t unit, double flops, double memory_bytes, int gpu_available) const {
+        std::array<fort_scope_plan_binding, Capacity> values{};
+        for (size_t i=0; i<size_; ++i) values[i] = {bindings_[i].handle, bindings_[i].effects};
+        return fort_scope_plan_add(context_, kind, unit, values.data(), size_, flops, memory_bytes, gpu_available);
+    }
+    int decision(uint64_t unit, bool &gpu) const {
+        std::array<fort_scope_plan_binding, Capacity> values{};
+        for (size_t i=0; i<size_; ++i) values[i] = {bindings_[i].handle, bindings_[i].effects};
+        int selected = 0;
+        const int status = fort_scope_plan_next(context_, unit, values.data(), size_, &selected);
+        gpu = selected != 0;
+        return status;
+    }
     int begin(bool device) {
         device_ = device;
         for (size_t i=0; i<size_; ++i) {

@@ -162,12 +162,13 @@ def generated(tmp_path_factory):
         target = output / "shared.o"
         _run([nvcc, "-O2", "-std=c++17", "-ccbin", host, "-arch=sm_86", "-Xcompiler=-fPIC,-fopenmp",
               "-c", str(output / "shared_entry.cu"), "-o", str(target)], directory=directory)
+        if name == "producer":
+            _run([fortran, "-c", "-std=f2018", str(output / "fort_scoped_memory.f90"), "-o", "memory-interface.o"],
+                 directory=directory)
         _run([fortran, "-c", "-std=f2018", str(output / "shared_interface.f90"), "-o", str(output / "interface.o")],
              directory=directory)
         objects.append(str(target))
     runtime = directory / "producer"
-    _run([fortran, "-c", "-std=f2018", str(runtime / "fort_scoped_memory.f90"), "-o", "memory-interface.o"],
-         directory=directory)
     target = directory / "runtime.o"
     _run([nvcc, "-std=c++17", "-ccbin", host, "-arch=sm_86", "-Xcompiler=-fPIC,-fopenmp",
           "-DFORT_SCOPE_TEST_FAULTS", "-c", str(runtime / "scoped_runtime.cu"), "-o", str(target)], directory=directory)
@@ -229,6 +230,51 @@ def invoke(scope, reports, entry, buffers, scalars, mode):
 def require_gpu(lib):
     if not lib.gpu_count():
         pytest.skip("CUDA device unavailable")
+
+
+@pytest.mark.cuda
+def test_installed_plan_executes_independent_gpu_entries_with_shared_contents(generated):
+    from compiler.tests.test_scoped_planning_runtime import Costs, Decision, costs
+
+    _, lib, reports, _ = generated
+    require_gpu(lib)
+    scope = Scope(lib)
+    n = c.c_int(16)
+    a = (c.c_double * 16)(*[i*0.25+1 for i in range(16)])
+    b, out = (c.c_double * 16)(*([-99]*16)), (c.c_double * 16)(*([-99]*16))
+    handles = []
+    for i, values in enumerate((a, b, out)):
+        status, handle = scope.register(values, [16], identity=i+1, initialized=i == 0, lower=[-2])
+        scope.check(status)
+        handles.append(handle)
+    lib.fort_scope_plan_reset.argtypes = [TOKEN]
+    lib.fort_scope_plan_select.argtypes = [TOKEN, c.POINTER(Costs), c.c_int, c.POINTER(Decision)]
+    scope.check(lib.fort_scope_plan_reset(scope.handle))
+    for entry, bindings in (("producer", handles[:2]), ("consumer", handles)):
+        public = reports[entry]["scoped"]["planning"]
+        query = getattr(lib, public["entry"])
+        query.argtypes = [TOKEN, *[TOKEN for _ in bindings], c.POINTER(c.c_int)]
+        scope.check(query(scope.handle, *bindings, c.byref(n)))
+    assert list(b) == list(out) == [-99]*16
+    assert scope.stats().allocations == scope.stats().launches == 0
+    # Deterministic synthetic costs force the GPU branch for correctness only;
+    # they are never used as calibration or performance evidence.
+    calibration, decision = costs(), Decision()
+    scope.check(lib.fort_scope_plan_select(scope.handle, c.byref(calibration), 1, c.byref(decision)))
+    assert decision.available
+    assert (decision.gpu_units, decision.cpu_units) == (2, 0)
+    invoke(scope, reports, "producer", handles[:2], [n], 2)
+    invoke(scope, reports, "consumer", handles, [n], 2)
+    assert (scope.stats().uploads, scope.stats().downloads) == (1, 0)
+    for handle in handles[1:]:
+        scope.cpu_begin(handle, access(flags=1))
+        scope.cpu_end(handle)
+    stats = scope.stats()
+    for field in ("upload_bytes", "download_bytes", "uploads", "downloads", "launches", "allocations", "peak_device_bytes"):
+        assert getattr(stats, field) == getattr(decision, field), field
+    scope.close()
+    assert list(b) == [2*a[i]+i-2 for i in range(16)]
+    assert list(out) == [3*a[i]+i-2 for i in range(16)]
 
 
 @pytest.mark.cuda

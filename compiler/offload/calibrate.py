@@ -2,6 +2,10 @@
 
 Usage: python -m compiler.offload.calibrate --output profile.json --threads 4
        --precision 64 --cuda-host-cxx /usr/bin/g++-14
+
+Add --scoped-costs to measure the common runtime's management and planning
+operations. Base profiles stay usable for ordinary policies without this
+extension; scoped automatic execution requires matching runtime calibration.
 """
 from __future__ import annotations
 
@@ -20,9 +24,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from compiler.emission.common.resources import read_scoped_runtime
+
 from .profile import (
     LATENCY_RATES,
     SCHEMA_VERSION,
+    SCOPED_COST_NAMES,
     THROUGHPUT_RATES,
     TRANSFER_KINDS,
     WORKER_RATES,
@@ -173,6 +180,116 @@ def profile_from_measurements(
         raise CalibrationError(str(error)) from error
 
 
+def parse_scoped_measurements(text: str) -> list[dict]:
+    """Parse the opt-in common-runtime benchmark independently of base costs."""
+    records = []
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except ValueError as error:
+            raise CalibrationError("scoped benchmark emitted a non-JSON measurement") from error
+        if not isinstance(record, dict) or record.get("kind") not in {
+            "device", "scoped_cost", "scoped_allocation", "scoped_planning",
+        }:
+            raise CalibrationError("scoped benchmark emitted an unknown measurement kind")
+        if record["kind"] != "device":
+            _median(record)
+        records.append(record)
+    if not records:
+        raise CalibrationError("scoped benchmark emitted no measurements")
+    return records
+
+
+def profile_with_scoped_measurements(
+    profile: dict, records: list[dict], *, runtime_id: str, cold_startup_seconds: list[float],
+) -> dict:
+    """Attach explicit common-runtime costs, preserving every raw observation.
+
+    Allocation/release constants use the slowest measured median across byte
+    sizes and are applicable only within the published maximum byte count.
+    Planning costs divide complete candidate simulation time by its reported
+    work count; they do not substitute an unrelated host loop throughput.
+    """
+    devices = [record for record in records if record["kind"] == "device"]
+    if len(devices) != 1:
+        raise CalibrationError("exactly one scoped device identity record is required")
+    device = devices[0]
+    for name in ("gpu_uuid", "gpu_name", "compute_capability"):
+        if device.get(name) != profile["hardware"][name]:
+            raise CalibrationError(f"scoped benchmark hardware {name} mismatch")
+    for name in ("cuda_runtime_version", "driver_version"):
+        if device.get(name) != profile["toolchain"][name]:
+            raise CalibrationError(f"scoped benchmark toolchain {name} mismatch")
+    if device.get("cpu_threads") != profile["cpu_threads"]:
+        raise CalibrationError("scoped benchmark thread budget mismatch")
+    if len(cold_startup_seconds) < 3:
+        raise CalibrationError("cold driver startup requires at least three fresh process samples")
+    cold = [_positive(value, "cold driver startup") for value in cold_startup_seconds]
+    costs = {"cold_driver_startup_seconds": statistics.median(cold)}
+    allocations: dict[str, list[tuple[int, float]]] = {"allocation_seconds": [], "release_seconds": []}
+    planning = []
+    for record in records:
+        kind, name = record["kind"], record.get("name")
+        if kind == "device":
+            continue
+        if kind == "scoped_planning":
+            work = record.get("work")
+            if type(work) is not int or work <= 0:
+                raise CalibrationError("scoped planning work must be a positive integer")
+            planning.append(_median(record) / work)
+        elif kind == "scoped_allocation":
+            size = record.get("bytes")
+            if name not in allocations or type(size) is not int or size <= 0:
+                raise CalibrationError("invalid scoped allocation measurement")
+            if size in {prior[0] for prior in allocations[name]}:
+                raise CalibrationError("duplicate scoped allocation byte count")
+            allocations[name].append((size, _median(record)))
+        elif kind == "scoped_cost":
+            if name not in SCOPED_COST_NAMES or name in costs or name in allocations or name == "planning_operation_seconds":
+                raise CalibrationError(f"unknown or duplicate scoped cost measurement: {name}")
+            costs[name] = _median(record)
+        else:
+            raise CalibrationError("unknown scoped measurement")
+    allocation_sizes = {size for size, _ in allocations["allocation_seconds"]}
+    release_sizes = {size for size, _ in allocations["release_seconds"]}
+    if len(allocation_sizes) < 3 or allocation_sizes != release_sizes:
+        raise CalibrationError("scoped allocation and release require three matching distinct byte sizes")
+    if not planning:
+        raise CalibrationError("missing scoped candidate planning measurements")
+    for name, measurements in allocations.items():
+        costs[name] = max(duration for _, duration in measurements)
+    costs["planning_operation_seconds"] = max(planning)
+    result = dict(profile)
+    result["scoped"] = {
+        "schema_version": 1, "runtime_id": runtime_id,
+        "max_allocation_bytes": max(allocation_sizes), "costs": costs,
+        "measurements": records,
+        "cold_driver_startup_samples_seconds": cold,
+        "measurement_method": {
+            "samples": "median of five warmed observations; maximum median across allocation sizes and planning cases",
+            "cold_driver_startup": "CUDA set-device and primary-context initialization in five fresh processes; no OS cold-state claim",
+            "gpu_setup": "complete warm GPU scope lifecycle: create, first enter/leave, and close including mandatory stream/pool destruction",
+            "create": "scope metadata creation; cleanup excluded",
+            "register": "three-dimensional whole-root registration with negative lower bounds; unregister excluded",
+            "host_access": "read access begin/end to an already-current host rectangle; no transfer",
+            "device_access": "access begin/end to an already-allocated device rectangle; no transfer or wait",
+            "allocation": "first device begin/end and completion wait on undefined storage; includes access bookkeeping",
+            "release": "unregister of allocated undefined storage and completion wait; includes unregister bookkeeping",
+            "wait": "common-runtime completion wait after an empty kernel; enqueue excluded",
+            "launch_enqueue": "empty kernel enqueue, CUDA error check, and runtime launch notification; final wait excluded",
+            "planning": "actual bounded common-runtime candidate simulation; 1/4/16 mixed units with full, opposite-face, and eight-rectangle effects; complete duration divided by reported work count",
+            "accounting": "management costs are conservative complete-call costs; allocation/release can include bookkeeping charged elsewhere",
+            "application_profiled": False,
+        },
+    }
+    try:
+        return validate_profile(result, scoped_runtime_id=runtime_id)
+    except ProfileError as error:
+        raise CalibrationError(str(error)) from error
+
+
 def cpu_identity() -> str:
     try:
         for line in Path("/proc/cpuinfo").read_text().splitlines():
@@ -183,9 +300,9 @@ def cpu_identity() -> str:
     return platform.processor() or platform.machine()
 
 
-def _run(argv: list[str], directory: Path, log: Path, *, timeout: int) -> str:
+def _run(argv: list[str], directory: Path, log: Path, *, timeout: int, env: dict | None = None) -> str:
     try:
-        result = subprocess.run(argv, cwd=directory, capture_output=True, text=True, check=False, timeout=timeout)
+        result = subprocess.run(argv, cwd=directory, capture_output=True, text=True, check=False, timeout=timeout, env=env)
     except (OSError, subprocess.TimeoutExpired) as error:
         raise CalibrationError(f"cannot execute calibration command: {error}") from error
     log.write_text(result.stdout + result.stderr)
@@ -205,6 +322,52 @@ def _tool(path: str | None, candidates: tuple[str, ...]) -> str:
         if resolved:
             return str(Path(resolved).resolve())
     raise CalibrationError("no executable found among: " + ", ".join(candidates))
+
+
+def _calibrate_scoped(profile: dict, args: argparse.Namespace, directory: Path, nvcc: str, host: str) -> dict:
+    scoped_directory = directory / "scoped"
+    scoped_directory.mkdir(exist_ok=True)
+    sources, manifest = read_scoped_runtime()
+    for name, content in sources.items():
+        (scoped_directory / name).write_text(content)
+    source = Path(__file__).with_name("scoped_calibration.cu")
+    binary = scoped_directory / "scoped-calibration"
+    command = [nvcc, "-O3", "-std=c++17", "-arch=" + args.arch, "-ccbin", host,
+               "-Xcompiler=-fopenmp", "-DCALIBRATION_PRECISION=" + str(args.precision),
+               "-I" + str(scoped_directory), str(source), str(scoped_directory / "scoped_runtime.cu"),
+               "-o", str(binary)]
+    print("Building opt-in common-runtime calibration...", file=sys.stderr, flush=True)
+    _run(command, scoped_directory, scoped_directory / "build.log", timeout=180)
+    environment = dict(os.environ)
+    for name in list(environment):
+        if name in {"FORT_RUNTIME_TRACE", "FORT_PHASE_TIMING", "CUDA_LAUNCH_BLOCKING"} or name.startswith("FORT_SCOPE_TEST_"):
+            environment.pop(name)
+    cold_commands, cold_samples = [], []
+    for sample in range(5):
+        command_cold = [str(binary), "--cold-startup", str(args.device)]
+        text = _run(command_cold, scoped_directory, scoped_directory / f"cold-startup-{sample}.json",
+                    timeout=60, env=environment)
+        try:
+            record = json.loads(text)
+            if not isinstance(record, dict) or record.get("kind") != "cold_driver_startup":
+                raise ValueError("unknown cold startup measurement")
+            cold_samples.append(_positive(record.get("seconds"), "cold driver startup"))
+        except (ValueError, TypeError) as error:
+            raise CalibrationError(f"invalid cold startup measurement: {error}") from error
+        cold_commands.append(command_cold)
+    run_command = [str(binary), str(args.threads), str(args.max_mib), str(args.device)]
+    print("Measuring common-runtime management and candidate planning costs...", file=sys.stderr, flush=True)
+    observations = _run(run_command, scoped_directory, scoped_directory / "measurements.jsonl", timeout=180,
+                        env=environment)
+    result = profile_with_scoped_measurements(profile, parse_scoped_measurements(observations),
+                                              runtime_id=manifest["runtime_id"], cold_startup_seconds=cold_samples)
+    result["scoped"]["calibration"] = {
+        "build_command": command, "run_command": run_command,
+        "cold_startup_commands": cold_commands, "runtime": manifest,
+        "benchmark_source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+        "artifacts": str(scoped_directory), "application_profiled": False,
+    }
+    return result
 
 
 def calibrate(args: argparse.Namespace) -> dict:
@@ -233,6 +396,8 @@ def calibrate(args: argparse.Namespace) -> dict:
                               "benchmark_source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
                               "max_transfer_bytes": args.max_mib * 1024 * 1024,
                               "artifacts": str(directory), "application_profiled": False}
+    if getattr(args, "scoped_costs", False):
+        profile = _calibrate_scoped(profile, args, directory, nvcc, host)
     with tempfile.NamedTemporaryFile(mode="w", dir=output.parent, prefix=output.name + ".", delete=False) as stream:
         temporary = Path(stream.name)
         try:
@@ -257,6 +422,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cuda-host-cxx", "--host-cxx", dest="cuda_host_cxx", default=None)
     parser.add_argument("--arch", default="native", help="NVCC architecture, normally native for offline calibration")
     parser.add_argument("--build-dir", help="optional directory retaining native benchmark and raw measurements")
+    parser.add_argument("--scoped-costs", action="store_true",
+                        help="also measure common-runtime management, allocation, and bounded candidate planning costs")
     args = parser.parse_args(argv)
     if args.threads < 1 or args.device < 0 or not 8 <= args.max_mib <= 1024:
         parser.error("threads must be positive, device nonnegative, and max-mib between 8 and 1024")

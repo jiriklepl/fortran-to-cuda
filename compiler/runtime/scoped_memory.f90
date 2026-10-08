@@ -11,6 +11,9 @@ module fort_scoped_memory
   integer(c_int32_t), parameter, public :: FORT_SCOPE_INTEGER32=3, FORT_SCOPE_LOGICAL=4
   integer(c_int), parameter, public :: FORT_SCOPE_NATIVE=0, FORT_SCOPE_GPU=1, FORT_SCOPE_AUTO=2
 
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_PLANNING_ABI_VERSION=1
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_PLAN_NATIVE=0, FORT_SCOPE_PLAN_WORKER=1, FORT_SCOPE_PLAN_FORGET=2
+
   type, bind(C), public :: fort_scope_section
     type(c_ptr) :: lower=c_null_ptr, upper=c_null_ptr
   end type
@@ -35,9 +38,30 @@ module fort_scoped_memory
     integer(c_int64_t) :: launches=0, waits=0, reconciliations=0
   end type
 
+  type, bind(C), public :: fort_scope_plan_binding
+    integer(c_int64_t) :: buffer=0
+    type(fort_scope_access) :: access
+  end type
+  type, bind(C), public :: fort_scope_plan_costs
+    integer(c_int32_t) :: version=0, valid=0
+    integer(c_size_t) :: max_allocation_bytes=0
+    real(c_double) :: cpu_flops=0, cpu_bandwidth=0, gpu_flops=0, gpu_bandwidth=0
+    real(c_double) :: h2d_latency=0, h2d_bandwidth=0, d2h_latency=0, d2h_bandwidth=0
+    real(c_double) :: create_seconds=0, register_seconds=0, host_access_seconds=0, device_access_seconds=0
+    real(c_double) :: gpu_setup_seconds=0, cold_driver_startup_seconds=0, allocation_seconds=0, release_seconds=0
+    real(c_double) :: wait_seconds=0, launch_enqueue_seconds=0, planning_operation_seconds=0
+  end type
+  type, bind(C), public :: fort_scope_plan_decision
+    integer(c_int32_t) :: available=0, gpu_units=0, cpu_units=0, candidates=0
+    integer(c_int64_t) :: simulated_operations=0, upload_bytes=0, download_bytes=0, uploads=0, downloads=0
+    integer(c_int64_t) :: launches=0, waits=0, allocations=0, peak_device_bytes=0
+    real(c_double) :: estimated_seconds=0, native_seconds=0
+  end type
+
   public :: fort_scope_abi_version, fort_scope_error, fort_scope_create, fort_scope_register
   public :: fort_scope_register_sections, fort_scope_forget_definition
   public :: fort_scope_set_device_budget
+  public :: fort_scope_device_get
   public :: fort_scope_serial_caller
   public :: fort_scope_layout_get, fort_scope_host_begin, fort_scope_host_end
   public :: fort_scope_device_begin, fort_scope_device_end, fort_scope_cancel_access
@@ -45,7 +69,54 @@ module fort_scoped_memory
   public :: fort_scope_execution_error, fort_scope_report_error
   public :: fort_scope_stats_get, fort_scope_unregister, fort_scope_close, fort_scope_abandon
 
+  public :: fort_scope_plan_host_current
+  public :: fort_scope_plan_reset, fort_scope_plan_add, fort_scope_plan_select, fort_scope_plan_next
+
   interface
+
+    function fort_scope_plan_host_current(context, buffer) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: context, buffer
+      integer(c_int) :: status
+    end function
+    function fort_scope_plan_reset(context) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: context
+      integer(c_int) :: status
+    end function
+    function fort_scope_plan_add(context, kind, unit, bindings, count, flops, memory_bytes, gpu_available) &
+        bind(C) result(status)
+      import c_int, c_int32_t, c_int64_t, c_size_t, c_double, c_ptr
+      integer(c_int64_t), value :: context, unit
+      integer(c_int32_t), value :: kind
+      type(c_ptr), value :: bindings
+      integer(c_size_t), value :: count
+      real(c_double), value :: flops, memory_bytes
+      integer(c_int), value :: gpu_available
+      integer(c_int) :: status
+    end function
+    function fort_scope_plan_select(context, costs, compatible, decision) bind(C) result(status)
+      import c_int, c_int64_t, fort_scope_plan_costs, fort_scope_plan_decision
+      integer(c_int64_t), value :: context
+      type(fort_scope_plan_costs), intent(in) :: costs
+      integer(c_int), value :: compatible
+      type(fort_scope_plan_decision), intent(out) :: decision
+      integer(c_int) :: status
+    end function
+    function fort_scope_plan_next(context, unit, bindings, count, gpu) bind(C) result(status)
+      import c_int, c_int64_t, c_size_t, c_ptr
+      integer(c_int64_t), value :: context, unit
+      type(c_ptr), value :: bindings
+      integer(c_size_t), value :: count
+      integer(c_int), intent(out) :: gpu
+      integer(c_int) :: status
+    end function
+    function fort_scope_device_get(context, device) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: context
+      integer(c_int), intent(out) :: device
+      integer(c_int) :: status
+    end function
     function fort_scope_serial_caller() bind(C) result(serial)
       import c_int
       integer(c_int) :: serial

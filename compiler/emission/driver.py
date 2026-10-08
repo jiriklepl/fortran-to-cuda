@@ -52,8 +52,8 @@ def generate_sources(
 
         if offload_config is None or offload_config.policy not in {"sections", "auto"}:
             raise CompilationError("scoped memory requires an explicit sections or auto policy")
-        shared = generate_scoped(function, plan, offload_config, common_header)
         artifacts, runtime = read_scoped_runtime()
+        shared = generate_scoped(function, plan, offload_config, common_header, runtime_id=runtime["runtime_id"])
         artifacts.update({"shared_entry.cu": shared.cuda, "shared_interface.f90": shared.fortran,
                           "scoped-runtime.json": json.dumps(runtime, indent=2) + "\n"})
         scoped = {**shared.report, "runtime": runtime}
