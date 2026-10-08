@@ -24,7 +24,7 @@ from compiler.ir import (
     referenced_symbols,
     walk_expr,
 )
-from compiler.offload.analysis import Unit, _unit_footprints
+from compiler.offload.analysis import Unit, _protected_scalar_inputs, _unit_footprints
 from compiler.offload.codegen import query_expression
 
 
@@ -42,6 +42,8 @@ TYPES = {
     ScalarType.LOGICAL: ("FORT_SCOPE_LOGICAL", "logical(c_bool)"),
 }
 
+ENTRY_ABI_VERSION = 2
+
 
 def generate_scoped(function, plan, config, common_header):
     arrays = tuple(s for s in function.parameters if s.rank)
@@ -50,15 +52,13 @@ def generate_scoped(function, plan, config, common_header):
         raise CompilationError("shared numerical entries require read-only scalar parameters")
     if config.collective:
         raise CompilationError("shared numerical entry requires a serial coordinator; collective scope hooks are pending")
-    digest = sha256(f"{function.module.lower()}::{function.name.lower()}:{plan!r}".encode()).hexdigest()[:12]
+    digest = sha256(f"entry-abi:{ENTRY_ABI_VERSION}:{function.module.lower()}::{function.name.lower()}:{plan!r}".encode()).hexdigest()[:12]
     name = "fort_shared_" + digest
     c_name = "cpp_" + name
-    scalar_signature = [f"const {cpp_type(s)} &{s.cpp_name}" for s in scalars]
+    scalar_signature = [f"const {cpp_type(s)} *fort_scalar_{s.cpp_name}" for s in scalars]
     signature = ["fort_scope_t fort_context", "int fort_mode",
                  *[f"fort_buffer_t {s.cpp_name}_handle" for s in arrays], *scalar_signature]
     abi = abi_arguments(function.parameters)
-    worker_signature = ", ".join(cpp_declaration(a) if a.symbol.rank else
-                                  f"const {cpp_type(a.symbol)} &{a.name}" for a in abi)
     worker_arguments = ", ".join(a.name for a in abi)
     capacity = max(len(arrays), 1)
     lines = ['#include <cuda_runtime.h>', '#include <omp.h>', '#define FORT_OFFLOAD_ENABLED 1',
@@ -79,6 +79,14 @@ def generate_scoped(function, plan, config, common_header):
     collect(plan)
     units = {r.id: _unit_footprints(Unit(i, r, (), None), frozenset(invariants))
              for i, r in enumerate(plan.regions)}
+    protected = {r.id: _protected_scalar_inputs(r, frozenset(function.parameters))[0]
+                 for r in plan.regions}
+    protected_footprints = {
+        r.id: any(referenced_symbols(e) & protected[r.id]
+                  for fp in units[r.id].footprints for box in (*fp.reads, *fp.writes)
+                  for e in (*box.lower, *box.upper))
+        for r in plan.regions
+    }
     captures = {}
     locals_ = host_symbols(function, plan)
     for region in plan.regions:
@@ -88,6 +96,13 @@ def generate_scoped(function, plan, config, common_header):
                 used.update(referenced_symbols(expression))
         captures[region.id] = tuple(s for s in locals_ if s in used)
         extra_signature = "".join(f", const {cpp_type(s)} &{s.cpp_name}" for s in captures[region.id])
+        # An ordinary nonvolatile reference allows the host optimizer to hoist
+        # a guarded invariant load. Protected inputs need observable reads at
+        # their original use sites, including in outlined OpenMP workers.
+        worker_signature = ", ".join(
+            cpp_declaration(a) if a.symbol.rank else
+            f"const {'volatile ' if a.symbol in protected[region.id] else ''}{cpp_type(a.symbol)} &{a.name}"
+            for a in abi)
         lines.extend(generate_kernel(region))
         lines.extend(_cpu_worker(units[region.id], worker_signature + extra_signature, f"cpu_{region.id}"))
     lines += [f'extern "C" int {c_name}({", ".join(signature)}) {{',
@@ -95,6 +110,10 @@ def generate_scoped(function, plan, config, common_header):
               '        return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "incompatible shared runtime ABI");',
               "    if (fort_mode < 0 || fort_mode > 2)",
               '        return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "unknown shared execution mode");']
+    for s in scalars:
+        lines += [f"    if (!fort_scalar_{s.cpp_name})",
+                  '        return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "null shared scalar argument");',
+                  f"    const {cpp_type(s)} &{s.cpp_name} = *fort_scalar_{s.cpp_name};"]
     writes = set()
 
     def written(current):
@@ -168,6 +187,14 @@ def generate_scoped(function, plan, config, common_header):
             s = fp.symbol
             prefix = "fort_effect_" + s.cpp_name
             result += [f"fort_scope_access {prefix}{{}};"]
+            if protected_footprints[unit.region.id]:
+                # Evaluating a section's affine offset can itself read the
+                # protected scalar. Conservative native effects need no such
+                # evaluation; preserve the payload and its original IF guard.
+                flags = (1 if fp.reads or fp.full_read else 0) | (2 if fp.writes or fp.full_write else 0)
+                result += [f"{prefix}.flags = {flags};",
+                           f"FORT_SHARED_CHECK(fort_access.add({s.cpp_name}_handle, {prefix}));"]
+                continue
             for label, boxes, full, flag in (("read", fp.reads, fp.full_read, "FORT_SCOPE_READ_ALL"),
                                             ("write", fp.writes, fp.full_write, "FORT_SCOPE_WRITE_ALL")):
                 if full:
@@ -219,7 +246,15 @@ def generate_scoped(function, plan, config, common_header):
             elif isinstance(step, ParallelRegion):
                 unit = units[step.id]
                 result += ["{", *indent(bounds(step)), "    if (fort_internal_total) {"]
-                body = [*descriptors(unit), "bool fort_gpu = fort_gpu_requested;",
+                # A CUDA launch captures scalar values before its kernel body.
+                # References preserve CPU guards, but cannot make that capture
+                # lazy. Keep only the affected worker native; subsequent safe
+                # workers can still use the same coherent device allocations.
+                gpu_choice = "false" if protected[step.id] else "fort_gpu_requested"
+                body = [*descriptors(unit), f"bool fort_gpu = {gpu_choice};"]
+                if protected[step.id]:
+                    body += [f'if (fort_gpu_requested) offload::decision_trace("{function.name}", "native-scoped-protected-scalar", 0, 1);']
+                body += [
                         "int fort_status = fort_access.begin(fort_gpu);",
                         "if (fort_gpu && (fort_status == FORT_SCOPE_RESOURCE || fort_status == FORT_SCOPE_BOUNDARY)) {",
                         f'    offload::decision_trace("{function.name}", fort_status == FORT_SCOPE_RESOURCE ? "native-scoped-resource" : "native-scoped-boundary", 0, 1);',
@@ -257,7 +292,8 @@ def generate_scoped(function, plan, config, common_header):
     fortran += [f"      {TYPES[s.dtype][1]}, intent(in) :: {s.cpp_name}" for s in scalars]
     fortran += ["    end function", "  end interface", f"end module {name}", ""]
     report = {
-        "schema_version": 1, "abi_version": 1, "entry": c_name, "fortran_module": name, "fortran_procedure": "run",
+        "schema_version": 1, "abi_version": 1, "entry_abi_version": ENTRY_ABI_VERSION,
+        "entry": c_name, "fortran_module": name, "fortran_procedure": "run",
         "cuda_source": "shared_entry.cu", "fortran_source": "shared_interface.f90",
         "array_parameters": [{"name": s.name, "rank": s.rank, "dtype": s.dtype.value,
                               "written": s in writes} for s in arrays],
@@ -271,5 +307,10 @@ def generate_scoped(function, plan, config, common_header):
         "resource_failure": "continue native at current worker before execution; never replay completed work",
         "transfer_volume": "missing physical read/preservation sections from shared runtime state",
         "parallel_regions": len(plan.regions), "source": function.source,
+        "region_execution": [{"region": r.id, "gpu_available": not protected[r.id],
+                              "protected_scalars": [s.name for s in sorted(protected[r.id], key=lambda s: s.id)],
+                              "native_footprints": "whole-resource" if protected_footprints[r.id] else "physical-sections",
+                              "reason": "CUDA value capture would evaluate a protected scalar" if protected[r.id] else None}
+                             for r in plan.regions],
     }
     return ScopedEmission("\n".join(lines), "\n".join(fortran), report)

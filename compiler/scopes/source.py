@@ -100,6 +100,10 @@ class ScopeBuilder:
         actuals = tuple(_children(args))
         if any(_kind(a) == "Actual_Arg_Spec" for a in actuals):
             raise CompilationError("keyword call mappings are not yet supported in source scopes")
+        for actual in actuals:
+            reason = self.analysis._actual_mapping_boundary(routine.scope, actual)
+            if reason:
+                raise CompilationError(reason)
         candidates = self.analysis._candidates(routine.scope, target)
         matches = []
         for candidate in candidates:

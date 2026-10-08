@@ -113,6 +113,33 @@ end module
     assert not any(op["kind"] == "overwrite" and op["resource"] == "argument::a" for op in operations)
 
 
+def test_scalar_element_actual_has_no_whole_storage_effect_proof(tmp_path):
+    path = write(tmp_path, "element.f90", """module elements
+real(8)::field(8)
+contains
+subroutine replace(value)
+real(8),intent(inout)::value
+value=value+1.d0
+end subroutine
+subroutine wrapper()
+call replace(field(1))
+end subroutine
+subroutine step()
+call wrapper()
+end subroutine
+end module
+""")
+    report = analyze_source_effects([path], "elements::step")
+    assert not report["complete"]
+    wrapper = records(report)["elements::wrapper"]
+    assert not wrapper["complete"]
+    assert not wrapper["cloneable"]
+    boundary, = wrapper["operations"]
+    assert boundary["kind"] == "boundary"
+    assert boundary["reason"].endswith("field(1)")
+    assert "in-place mapping and coherence" in boundary["reason"]
+
+
 @pytest.mark.parametrize("statement", ["call unknown(a)", "allocate(a(3))", "a=>b", "print *, a"])
 def test_unknown_effects_and_lifetime_close_the_scope(tmp_path, statement):
     path = write(tmp_path, "unknown.f90", f"""module unsupported

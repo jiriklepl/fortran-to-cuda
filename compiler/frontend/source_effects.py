@@ -328,6 +328,18 @@ class SourceEffects:
             return self._binding(scope, node)
         return None
 
+    def _actual_mapping_boundary(self, scope, node):
+        # An element actual is scalar at the callee, but reads/writes storage
+        # belonging to its array root at the caller. It needs coherence before
+        # evaluating its address/value and an expression mapping when owner
+        # captures acquire private names. Whole-variable mappings do neither.
+        for part in walk(node):
+            if _kind(part) == "Part_Ref":
+                binding = self._binding(scope, part.items[0])
+                if binding and binding.rank:
+                    return "array-element/section actual requires in-place mapping and coherence: " + str(node)
+        return None
+
     def _unknown_exports(self, scope):
         # An unavailable wildcard USE can supply a procedure with the same
         # spelling as an intrinsic. A known local argument says nothing about
@@ -555,6 +567,12 @@ class SourceEffects:
             actuals = tuple(_children(actuals))
             if any(_kind(a) == "Actual_Arg_Spec" for a in actuals):
                 reasons.append(f"keyword call binding requires explicit resolution: {target}")
+                return
+            actual_boundary = next((reason for actual in actuals
+                                    if (reason := self._actual_mapping_boundary(routine.scope, actual))), None)
+            if actual_boundary:
+                reasons.append(actual_boundary)
+                emit({"kind": "boundary", "call": str(node), "guard": guard, "reason": actual_boundary})
                 return
             candidates = self._candidates(routine.scope, target)
             matches = []

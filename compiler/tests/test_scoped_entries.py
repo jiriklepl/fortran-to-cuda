@@ -74,6 +74,57 @@ enddo
 end subroutine
 end module
 ''',
+    "guarded_value": '''module source_guarded_value
+contains
+subroutine guarded_value(a,n,flag,protected)
+real(8),intent(inout)::a(:)
+integer,intent(in)::n
+logical,intent(in)::flag
+real(8),intent(in)::protected
+integer::i
+do i=1,n
+  if(flag) a(i)=protected
+enddo
+do i=1,n
+  a(i)=a(i)+1
+enddo
+end subroutine
+end module
+''',
+    "guarded_index": '''module source_guarded_index
+contains
+subroutine guarded_index(a,n,flag,protected)
+real(8),intent(inout)::a(:)
+integer,intent(in)::n,protected
+logical,intent(in)::flag
+integer::i
+do i=1,n
+  if(flag) a(i+protected)=1
+enddo
+do i=1,n
+  a(i)=a(i)+1
+enddo
+end subroutine
+end module
+''',
+    "guarded_host": '''module source_guarded_host
+contains
+subroutine guarded_host(a,n,flag,protected)
+real(8),intent(inout)::a(:)
+integer,intent(in)::n,protected
+logical,intent(in)::flag
+integer::i
+if(flag) then
+  do i=1,protected
+    a(i)=1
+  enddo
+endif
+do i=1,n
+  a(i)=a(i)+1
+enddo
+end subroutine
+end module
+''',
 }
 
 
@@ -105,10 +156,11 @@ def generated(tmp_path_factory):
                                  "--json", "--output-dir", str(output)], directory=directory, env=env).stdout)
         reports[name] = report
         assert report["scoped"]["abi_version"] == 1
+        assert report["scoped"]["entry_abi_version"] == 2
         assert report["scoped"]["runtime"]["link_once"] is True
         assert report["scoped"]["runtime"]["runtime_id"] == reports["producer"]["scoped"]["runtime"]["runtime_id"]
         target = output / "shared.o"
-        _run([nvcc, "-std=c++17", "-ccbin", host, "-arch=sm_86", "-Xcompiler=-fPIC,-fopenmp",
+        _run([nvcc, "-O2", "-std=c++17", "-ccbin", host, "-arch=sm_86", "-Xcompiler=-fPIC,-fopenmp",
               "-c", str(output / "shared_entry.cu"), "-o", str(target)], directory=directory)
         _run([fortran, "-c", "-std=f2018", str(output / "shared_interface.f90"), "-o", str(output / "interface.o")],
              directory=directory)
@@ -355,6 +407,54 @@ for mode in [0,1,2]:
 ''')
     _run([sys.executable, str(script)], directory=ROOT,
          env={**os.environ, "CUDA_VISIBLE_DEVICES": "", "PYTHONPATH": str(ROOT)})
+
+
+@pytest.mark.cuda
+@pytest.mark.parametrize("mode", [0, 1, 2])
+@pytest.mark.parametrize("entry", ["guarded_value", "guarded_index", "guarded_host"])
+def test_active_worker_keeps_conditional_scalar_protected(generated, mode, entry):
+    directory, lib, reports, _ = generated
+    if mode == 1:
+        require_gpu(lib)
+    public = reports[entry]["scoped"]
+    assert [r["gpu_available"] for r in public["region_execution"]] == [entry == "guarded_host", True]
+    assert public["region_execution"][0]["protected_scalars"] == ([] if entry == "guarded_host" else ["protected"])
+    assert public["region_execution"][0]["native_footprints"] == (
+        "whole-resource" if entry == "guarded_index" else "physical-sections")
+    # The first mapped domain is active, unlike the zero-trip bound test above.
+    # A value ABI would fault even though its original IF is false. The second
+    # worker proves that protecting this input does not disable the whole entry.
+    scalar_type = "c_double" if entry == "guarded_value" else "c_int"
+    script = directory / f"protected-{entry}-{mode}.py"
+    script.write_text(f'''import ctypes as c
+from compiler.tests.test_scoped_runtime import Scope, TOKEN, Layout
+lib=c.CDLL({str(directory / 'generated.so')!r})
+lib.fort_scope_error.restype=c.c_char_p
+lib.fort_scope_create.argtypes=[c.c_int,c.POINTER(TOKEN)]
+lib.fort_scope_register.argtypes=[TOKEN,TOKEN,TOKEN,c.POINTER(Layout),c.c_int,c.POINTER(TOKEN)]
+lib.fort_scope_close.argtypes=[TOKEN]
+lib.fort_scope_stats_get.argtypes=[TOKEN,c.c_void_p]
+function=getattr(lib,{public['entry']!r})
+function.argtypes=[TOKEN,c.c_int,TOKEN,c.POINTER(c.c_int),c.POINTER(c.c_bool),c.POINTER(c.{scalar_type})]
+libc=c.CDLL(None)
+libc.mmap.restype=c.c_void_p
+libc.mmap.argtypes=[c.c_void_p,c.c_size_t,c.c_int,c.c_int,c.c_int,c.c_long]
+libc.munmap.argtypes=[c.c_void_p,c.c_size_t]
+pointer=libc.mmap(None,4096,0,0x22,-1,0)
+assert pointer and pointer!=c.c_void_p(-1).value
+scope=Scope(lib)
+array=(c.c_double*16)(*[7]*16)
+status,buffer=scope.register(array,[16])
+scope.check(status)
+n,flag=c.c_int(16),c.c_bool(False)
+scope.check(function(scope.handle,{mode},buffer,c.byref(n),c.byref(flag),c.cast(pointer,c.POINTER(c.{scalar_type}))))
+assert scope.stats().launches=={int(mode == 1)}
+scope.close()
+assert list(array)==[8]*16
+assert libc.munmap(pointer,4096)==0
+''')
+    _run([sys.executable, str(script)], directory=ROOT,
+         env={**os.environ, "PYTHONPATH": str(ROOT)})
 
 
 @pytest.mark.cuda
