@@ -144,21 +144,32 @@ def generate_kernel(region: ParallelRegion) -> list[str]:
     return lines
 
 
-def generate_launch(region: ParallelRegion) -> list[str]:
+def launch_bounds(region: ParallelRegion) -> list[str]:
+    """Capture protected bounds and checked work dimensions in source order."""
     schedule = region_schedule(region)
-    lines = ["{", f"    // Scheduled parallel region {region.id}."]
-    lines.extend(indent(mapped_snapshots(region)))
+    lines = mapped_snapshots(region)
     if schedule.tile_sizes:
-        lines.extend(indent(tile_counts(region)))
+        lines.extend(tile_counts(region))
         total_factors = tuple(f"fort_internal_tiles{axis}" for axis in schedule.axis_order)
         volume_factors = tuple(
             f"(fort_internal_extent{axis} < {size}ULL ? fort_internal_extent{axis} : {size}ULL)"
             for axis, size in enumerate(schedule.tile_sizes)
         )
-        lines.extend(indent(checked_product("fort_internal_tile_volume", volume_factors)))
+        lines.extend(checked_product("fort_internal_tile_volume", volume_factors))
     else:
         total_factors = tuple(f"fort_internal_extent{axis}" for axis in schedule.axis_order)
-    lines.extend(indent(checked_product("fort_internal_total", total_factors)))
+    lines.extend(checked_product("fort_internal_total", total_factors))
+    return lines
+
+
+def generate_launch(
+    region: ParallelRegion, *, stream: str | None = None, profile: bool = True,
+    prepared_bounds: bool = False, error_check: str | None = None, launch_record: str | None = None,
+) -> list[str]:
+    schedule = region_schedule(region)
+    lines = ["{", f"    // Scheduled parallel region {region.id}."]
+    if not prepared_bounds:
+        lines.extend(indent(launch_bounds(region)))
     blocks = "fort_internal_total" if schedule.tile_sizes else "(fort_internal_total - 1) / fort_internal_threads + 1"
     lines.extend(
         [
@@ -185,19 +196,18 @@ def generate_launch(region: ParallelRegion) -> list[str]:
     arguments.append("fort_internal_total")
     if schedule.tile_sizes:
         arguments.append("fort_internal_tile_volume")
-    lines.append("        timing::measure_kernel_executions([&]() {")
-    lines.append(f"            {kernel_name(region)}<<<fort_internal_blocks, fort_internal_threads>>>(")
+    if profile:
+        lines.append("        timing::measure_kernel_executions([&]() {")
+    configuration = "fort_internal_blocks, fort_internal_threads" + (f", 0, {stream}" if stream else "")
+    lines.append(f"            {kernel_name(region)}<<<{configuration}>>>(")
     lines.extend(
         indent([argument + ("," if index < len(arguments) - 1 else "") for index, argument in enumerate(arguments)], 4)
     )
-    lines.extend(
-        [
-            "            );",
-            "        });",
-            "        CUCH(cudaGetLastError());",
-            '        storage::trace("kernel");',
-            "    }",
-            "}",
-        ]
-    )
+    lines.append("            );")
+    if profile:
+        lines.append("        });")
+    lines.extend([
+        "        " + (error_check or "CUCH(cudaGetLastError());"),
+        "        " + (launch_record or 'storage::trace("kernel");'), "    }", "}",
+    ])
     return lines

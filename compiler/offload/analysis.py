@@ -684,6 +684,8 @@ def _expression_text(expression):
         return expression.value
     if isinstance(expression, Reference):
         return expression.symbol.name
+    if isinstance(expression, ArrayAccess):
+        return f"{expression.symbol.name}({','.join(_expression_text(value) for value in expression.indices)})"
     if isinstance(expression, Size):
         return f"size({expression.symbol.name},{expression.dimension})"
     if isinstance(expression, Unary):

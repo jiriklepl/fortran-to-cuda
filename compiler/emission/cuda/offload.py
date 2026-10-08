@@ -25,6 +25,7 @@ class OffloadEmission:
     query_name: str
     query_scalars: frozenset
     report: dict
+    unused_scalars: frozenset = frozenset()
 
 
 def _precision(function):
@@ -50,7 +51,7 @@ def _cpu_worker(unit, signature, name):
     return [*lines, "    }", "}"]
 
 
-def _metadata(function, analysis, signature, name):
+def _metadata(function, analysis, signature, name, value=_value):
     arrays = [s for s in function.parameters if s.rank]
     array_indices = {s: i for i, s in enumerate(arrays)}
     lines = [f"static offload::Data {name}({signature}) {{", "    offload::Data d;"]
@@ -67,10 +68,10 @@ def _metadata(function, analysis, signature, name):
         lines += ["    {", "        offload::Unit u; u.arrays.resize(d.arrays.size());",
                   "        bool active = d.valid; std::size_t points = 1;"]
         for loop in unit.region.loops:
-            stride = str(loop.step) + ".0L" if isinstance(loop.step, int) else _value(loop.step)
+            stride = str(loop.step) + ".0L" if isinstance(loop.step, int) else value(loop.step)
             lines += ["        if (active) {",
-                      f"            const auto lo = offload::index({_value(loop.lower)}, d.valid);",
-                      f"            const auto hi = offload::index({_value(loop.upper)}, d.valid);",
+                      f"            const auto lo = offload::index({value(loop.lower)}, d.valid);",
+                      f"            const auto hi = offload::index({value(loop.upper)}, d.valid);",
                       f"            const auto step = offload::index({stride}, d.valid);",
                       "            if (lo < INT_MIN || lo > INT_MAX || hi < INT_MIN || hi > INT_MAX ||",
                       "                !step || step < INT_MIN || step > INT_MAX) d.valid = false;",
@@ -99,8 +100,8 @@ def _metadata(function, analysis, signature, name):
                         lines += ["        {", "            offload::Box b;"]
                         for axis, (lo, hi) in enumerate(zip(box.lower, box.upper, strict=True)):
                             lines += ["            {",
-                                      f"                auto lo = offload::index({_value(lo)}, d.valid);",
-                                      f"                auto hi = offload::index({_value(hi)}, d.valid);",
+                                      f"                auto lo = offload::index({value(lo)}, d.valid);",
+                                      f"                auto hi = offload::index({value(hi)}, d.valid);",
                                       f"                if (lo < 1 || hi < lo || static_cast<unsigned long long>(hi) > d.arrays[{idx}].dimensions[{axis}]) d.valid = false;",
                                       "                b.lower.push_back(lo > 0 ? lo-1 : 0); b.upper.push_back(hi > 0 ? hi-1 : 0);", "            }"]
                         lines += [f"            if (d.valid) offload::append_box({target}, b);", "        }"]
@@ -114,6 +115,10 @@ def _metadata(function, analysis, signature, name):
 
 
 def generate_offload(function, plan, config):
+    from compiler.ir import ParallelRegion
+    if config.policy in {"sections", "auto"} and any(not isinstance(s, ParallelRegion) for s in plan.steps):
+        from compiler.emission.cuda.structured import generate_structured
+        return generate_structured(function, plan, config)
     analysis = analyze_offload(function, plan)
     digest = sha256(f"{function.module}::{function.name}".encode()).hexdigest()[:12]
     name = f"fort_offload_{digest}"

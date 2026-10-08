@@ -167,6 +167,10 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--fallback {error,host}` | `error` | Reject unproved regions or run them sequentially on the host |
 | `--gpu-policy {always,sections,auto,chunked,hybrid}` | `always` | Select the ordinary-call transfer and execution prototype |
 | `--calibration-profile FILE` | none | Explicit reusable hardware calibration for automatic decisions |
+| `--memory-model {call,scoped}` | `call` | Shared-buffer numerical entry prototype with `scoped`; requires sections/auto |
+| `--analyze-effects` | off | Bounded native source effects without requiring GPU lowering; writes no artifacts |
+| `--source-file FILE` | none | Additional effect-analysis source; repeat for separate modules |
+| `--effect-contracts FILE` | none | Versioned explicit contracts for opaque native calls; requires effect analysis |
 | `--host-threads N` | `4` | Total host thread budget, including hybrid GPU coordination |
 | `--gpu-collective` | off | Require every thread of one existing OpenMP team to call the entry |
 | `--verbose`, `-v` | off | Normalized IR, applied/skipped transformations, schedules, indexing decisions and reasons, region boundaries, scalar privacy, ISL relations, legality results, and memory operations |
@@ -192,7 +196,7 @@ retain the original rectangles; no bounding volume replaces holes or faces.
 
 `auto` compares native units with GPU intervals of up to four adjacent units
 and the complete legal group. It retains units before optional fusion, respects
-control and synchronization boundaries, and requires a modeled 20% advantage
+source control flow and synchronization boundaries, and requires a modeled 20% advantage
 for GPU work. Dependent intervals execute in order, with host-visible outputs
 at interval boundaries. Missing, uncertain, overflowing, or incompatible cost
 estimates select native execution.
@@ -206,6 +210,29 @@ conservative rule applies to the forced `sections` and `chunked` controls too:
 their numerical value ABI would otherwise read inputs that native execution can
 leave untouched. Conditional holes using constants, indices, or scalar inputs
 already required unconditionally remain supported.
+For `sections` and `auto`, entries with host preparation additionally admit
+local scalar assignments and host branches. Preparation may read scalar inputs,
+descriptors, and arrays proved unchanged throughout the entry. Selected GPU
+intervals retain their storage across these approved host nodes: inputs transfer
+once for the union of active physical sections, and written sections return
+before the following CPU interval. Host statements and branches still execute
+in source order; each worker receives its current local scalar values.
+
+The public query evaluates only the checked INTEGER/LOGICAL slice needed for
+predicates, bounds, and footprints. It checks integer intermediates and immutable
+array indices, preserves nested guards, and never computes numerical REAL setup.
+REAL-dependent decision expressions, host array writes, preparation reading
+arrays written by the entry, and sequential fallback regions remain native.
+LOGICAL query conversion is permitted only for inputs unconditionally readable
+at entry. Structured queries prove that every live by-value scalar is consumed
+on their selected source path before accepting execution; unknown read coverage
+retains the original native call. Completely unused scalars receive typed zeros
+in the generated numerical bridge, preserving its public signature without
+reading the original argument. This structured proof can admit inactive branches
+alongside active kernels without exposing protected bounds. The original flat
+policy guard rules and chunked/hybrid eligibility remain unchanged.
+Public `offload.preparation` reports eligibility and reasons; decision traces
+include `FORT_OFFLOAD_ACTIVE` with the ordered original region identities.
 GPU intervals execute on the device checked during selection, restoring the
 executing host thread's previous device afterward.
 
@@ -346,6 +373,85 @@ memory operations for both lifecycles; `FORT_RUNTIME_TRACE=1` logs successful GP
 allocation requests, transfers, kernel launches, and releases, with additional
 events identifying pool operations. Allocation-request counts do not measure
 physical backing allocations: native pool requests still occur on warm calls.
+
+### Shared memory runtime foundation
+
+Export the independently compiled runtime and its versioned manifest:
+
+```bash
+python -m compiler --emit-scoped-runtime --json --output-dir out/scoped
+```
+
+The output contains `scoped_runtime.h`, `scoped_entry.hpp`, `section_copy.hpp`,
+`scoped_runtime.cu`, `fort_scoped_memory.f90`, and `scoped-runtime.json`. Compile and link the CUDA
+runtime once per executable and compile the common Fortran interface before its
+users. The manifest identifies the ABI, source hashes, source languages, and
+build ordering. No input procedure is required for this operation.
+
+The public C/Fortran API provides explicit contexts, canonical buffer handles,
+host/device access begin/end, completion, and close. Buffers borrow stable
+contiguous host allocations; host storage must remain valid until unregister or
+close. Registrations use explicit identities and allocation generations, validate
+layouts, and reject independently registered overlapping storage. Sections use
+zero-based physical coordinates with exclusive upper bounds. Access descriptors
+separate reads, possible writes, and proven overwrites.
+
+CPU reads retain device validity. CPU writes invalidate only affected sections;
+GPU writes similarly invalidate host sections. On excess fragmentation, the
+runtime reconciles current pieces before coarsening. Excess fragmented partial
+initialization requests a boundary before execution. Contexts initialize CUDA
+lazily, use one non-default stream and private pool where supported, and wait at
+host boundaries. All-native and empty accesses initialize no CUDA resources.
+Execution failures poison the context, preventing unsafe replay; abandoning a
+failed context releases resources without claiming valid host results.
+
+Emit a numerical entry that borrows common buffer handles:
+
+```bash
+python -m compiler --input input.f90 --kernel advance --gpu-policy sections \
+  --memory-model scoped --json --output-dir out/scoped-entry
+```
+
+The additional shared CUDA source and Fortran interface are identified by public
+JSON, including argument order, array types, execution modes, and runtime build
+artifacts. Independently generated entries link one common runtime and borrow
+handles registered by their caller. Existing ordinary and owned-session outputs
+are preserved. Shared entries currently require a serial coordinator and read-only
+scalar parameters. Native and forced GPU execution are available; shared automatic
+mode chooses native because scope-wide coherent estimates are not yet connected.
+
+### Native source effects
+
+Analyze native routines that do not satisfy numerical GPU lowering:
+
+```bash
+python -m compiler --input input.f90 --kernel application::advance \
+  --source-file helpers.f90 --analyze-effects --json
+```
+
+Provide source after preprocessing with the application's actual configuration.
+The compiler resolves bounded direct module calls and unambiguous generic
+overloads by type/kind/rank. The public report contains source hashes, formal/root
+mappings, original guards, descriptor reads, memory reads/writes, procedure-entry
+definition changes, persistent state, OpenMP directives, and boundary reasons.
+Array effects are currently conservative whole-resource effects; retained source
+subscripts are evidence, not physical transfer coordinates. Unknown effects,
+storage lifetime, recursion, or analysis-budget exhaustion make the corresponding
+summary incomplete. Mutable saved state and OpenMP directives prevent cloning.
+
+Optional `--effect-contracts` input has `schema_version: 1` and a `procedures`
+object keyed by a qualified imported call name. Each contract explicitly declares
+an `identity`, `complete: true`, `lifetime: "stable"`, `escapes: false`,
+`descriptor_changes: false`, and `ordering: "serial"`. Its `effects` list contains
+`kind` (`read`, `write`, or `overwrite`) and `section: "whole"`, plus either a
+zero-based `argument` position or a source-available hidden `resource` identity.
+The compiler records a contract hash and rejects malformed contracts. A contract
+is an explicit assertion about the complete native call, not inferred from INTENT.
+
+Effect completeness is separate from scope legality and GPU eligibility. The
+analysis does not rewrite calls or evaluate guards/bounds. Future compiler scope
+generation consumes these facts; adapters must not turn source strings into
+coherence hooks or placement decisions themselves.
 
 ### Ordinary CUDA allocation reuse
 

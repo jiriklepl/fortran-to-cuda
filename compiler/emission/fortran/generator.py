@@ -115,7 +115,14 @@ def generate_fortran(function: FunctionIR, abi: tuple[AbiArgument, ...], *, offl
     lines.append("    intrinsic :: size, int, real, logical")
     for symbol in function.parameters:
         lines.extend(_fortran_line(public_declaration(symbol, symbol.cpp_name), 4))
-    lines.extend(_fortran_list(f"call {c_entry}(", [abi_call(argument, kinds) for argument in abi], ")", 4))
+    numerical_args = []
+    for argument in abi:
+        value = abi_call(argument, kinds)
+        if offload is not None and argument.symbol in offload.unused_scalars:
+            value = value.replace(argument.symbol.cpp_name,
+                                  ".false." if argument.symbol.dtype is ScalarType.LOGICAL else "0")
+        numerical_args.append(value)
+    lines.extend(_fortran_list(f"call {c_entry}(", numerical_args, ")", 4))
     query_bodies = []
     if offload is not None:
         query_bodies += _fortran_list(f"logical function {offload.query_name}(", public_names,
@@ -134,10 +141,11 @@ def generate_fortran(function: FunctionIR, abi: tuple[AbiArgument, ...], *, offl
             value = abi_call(argument, kinds)
             if argument.dimension is None and not argument.symbol.rank:
                 if argument.symbol in offload.query_scalars:
-                    # Supported query inputs are default INTEGER captures.
-                    # Passing their address defers reading protected inner
-                    # bounds until the compiler's outer-domain guard permits it.
-                    value = argument.symbol.cpp_name
+                    # INTEGER addresses defer reads until domain/control guards.
+                    # Preparation only admits LOGICAL conversion when its input
+                    # is unconditionally readable at entry.
+                    value = (abi_call(argument, kinds) if argument.symbol.dtype is ScalarType.LOGICAL
+                             else argument.symbol.cpp_name)
                 else:
                     zero = ".false." if argument.symbol.dtype is ScalarType.LOGICAL else "0"
                     value = value.replace(argument.symbol.cpp_name, zero)

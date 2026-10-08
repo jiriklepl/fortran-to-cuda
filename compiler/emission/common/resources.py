@@ -1,5 +1,6 @@
 """Assemble packaged runtime units into the existing shared-header artifact."""
 
+from hashlib import sha256
 from importlib.resources import files
 
 
@@ -13,7 +14,43 @@ def read_common_header() -> str:
     units = "\n".join(
         [runtime.joinpath(name).read_text(encoding="utf-8") for name in ("numeric.hpp", "timing.hpp")] + [storage]
     )
-    experimental = [runtime.joinpath(name).read_text(encoding="utf-8")
+    section_copy = runtime.joinpath("section_copy.hpp").read_text(encoding="utf-8")
+    experimental = [runtime.joinpath(name).read_text(encoding="utf-8").replace('#include "section_copy.hpp"', section_copy)
                     for name in ("offload.hpp", "hybrid.hpp") if runtime.joinpath(name).is_file()]
     units += "\n#ifdef FORT_OFFLOAD_ENABLED\n" + "\n".join(experimental) + "\n#endif\n"
     return base.replace("// FORT_RUNTIME_UNITS", units)
+
+
+def read_scoped_runtime() -> tuple[dict[str, str], dict]:
+    """Publish the common compiled runtime independently of numerical entries."""
+    runtime = files("compiler.runtime")
+    outputs = {
+        "scoped_runtime.h": runtime.joinpath("scoped_runtime.h").read_text(encoding="utf-8"),
+        "scoped_entry.hpp": runtime.joinpath("scoped_entry.hpp").read_text(encoding="utf-8"),
+        "section_copy.hpp": runtime.joinpath("section_copy.hpp").read_text(encoding="utf-8"),
+        "scoped_runtime.cu": runtime.joinpath("scoped_runtime.cu").read_text(encoding="utf-8"),
+        "fort_scoped_memory.f90": runtime.joinpath("scoped_memory.f90").read_text(encoding="utf-8"),
+    }
+    hashes = {name: sha256(content.encode()).hexdigest() for name, content in outputs.items()}
+    identity = sha256("\n".join(f"{name}:{digest}" for name, digest in sorted(hashes.items())).encode()).hexdigest()
+    manifest = {
+        "schema_version": 1,
+        "abi_version": 1,
+        "runtime_id": identity,
+        "link_once": True,
+        "headers": ["scoped_runtime.h", "scoped_entry.hpp", "section_copy.hpp"],
+        "sources": [
+            {"path": "scoped_runtime.cu", "language": "cuda", "standard": "c++17"},
+            {"path": "fort_scoped_memory.f90", "language": "fortran", "module": "fort_scoped_memory"},
+        ],
+        "source_sha256": hashes,
+        "devices_per_context": 1,
+        "streams_per_context": 1,
+        "stream_ordered": True,
+        "section_coordinates": "zero-based physical offsets, exclusive upper bounds",
+        "host_storage": "borrowed stable contiguous whole arrays",
+        "concurrent_access": "separate contexts with nonconflicting host storage",
+        "rectangle_limit": 32,
+        "intersection_limit": 1024,
+    }
+    return outputs, manifest
