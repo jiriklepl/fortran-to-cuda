@@ -84,7 +84,7 @@ def run(command, *, cwd, env=None, timeout=120):
     return result
 
 
-def generate(directory, source=PROGRAM, *, mode="sections", entry="step", facts=None, checkout=None):
+def generate(directory, source=PROGRAM, *, mode="sections", entry="step", facts=None, checkout=None, profile=None):
     directory.mkdir(parents=True,exist_ok=True)
     original = directory/"original.f90"
     original.write_text(source)
@@ -98,6 +98,7 @@ def generate(directory, source=PROGRAM, *, mode="sections", entry="step", facts=
     output = directory/"output"
     response = run([sys.executable,"-m","compiler","--form-scopes","--scope-facts",str(facts_file),
                     "--input",str(original),"--kernel",entry,"--memory-model","scoped","--gpu-policy",mode,
+                    *( ["--calibration-profile", str(profile)] if profile else []),
                     "--json","--output-dir",str(output)],cwd=ROOT,
                    env={**os.environ,"PYTHONPATH":str(checkout or ROOT)})
     report = json.loads(response.stdout)
@@ -160,6 +161,153 @@ def test_missing_capture_proof_keeps_original_source(tmp_path):
     assert not manifest["source_edits"]
     assert not (output/"entries").exists()
     assert original.read_text() == PROGRAM
+
+
+@pytest.mark.parametrize("mode", ["sections", "auto"])
+def test_allocatable_owning_roots_are_guarded_at_original_caller(tmp_path, mode):
+    original, output, manifest = generate(tmp_path, ALLOCATABLE_PROGRAM, mode=mode)
+    assert manifest["scope_count"] == 1, manifest["boundaries"]
+    scope, = manifest["scopes"]
+    assert scope["allocation_preflight"]["resources"] == ["argument::a", "argument::b", "argument::out"]
+    edit = next(edit for edit in manifest["source_edits"] if edit["first_line"] <= edit["last_line"])
+    guarded = edit["replacement"]
+    assert guarded.startswith("block\nuse fort_scoped_memory, only:")
+    assert "intrinsic :: allocated\n" in guarded
+    assert guarded.index("() == 0) then") < guarded.index("allocated(a)") < guarded.index("call fort_scope_owner_")
+    span = "".join(original.read_text().splitlines(keepends=True)[edit["first_line"]-1:edit["last_line"]])
+    assert guarded.count(span) == 2
+    assert all(inquiry not in guarded for inquiry in ("size(", "lbound(", "is_contiguous(", "c_loc(", "fort_scope_create("))
+    text = (output / manifest["sources"][str(original)]["replacement"]).read_text()
+    assert "if (allocated(a) .and. allocated(b) .and. allocated(out)) then\nblock\n" in text
+    owner = text.split("subroutine fort_scope_owner_", 1)[1].split("end subroutine", 1)[0]
+    assert "allocatable" not in owner.lower()
+    if mode == "sections":
+        assert "if (all(fort_extents_0 > 0)) fort_host_pointer = c_loc(" in owner
+        assert "fort_scope_close(fort_context)" in owner
+
+
+def test_allocatable_owner_guard_forces_intrinsic_when_host_procedure_shadows_it(tmp_path):
+    source = ALLOCATABLE_PROGRAM.replace("end module", """logical function allocated(value)
+real(8),intent(in)::value(:)
+allocated=.false.
+end function
+end module""")
+    _, _, manifest = generate(tmp_path, source)
+    assert manifest["scope_count"] == 1, manifest["boundaries"]
+    edit = next(edit for edit in manifest["source_edits"] if edit["first_line"] <= edit["last_line"])
+    assert "block\n" in edit["replacement"]
+    assert "intrinsic :: allocated\n" in edit["replacement"]
+
+
+def test_allocatable_owner_guard_coordinator_cannot_hide_original_callee(tmp_path):
+    _, _, first = generate(tmp_path / "first", ALLOCATABLE_PROGRAM)
+    edit = next(edit for edit in first["source_edits"] if edit["first_line"] <= edit["last_line"])
+    alias = edit["replacement"].split("only: ", 1)[1].split(" =>", 1)[0]
+    # Procedure/call renaming preserves the owning entry and call-span positions.
+    source = ALLOCATABLE_PROGRAM.replace("producer(", alias + "(")
+    _, _, manifest = generate(tmp_path / "collision", source)
+    assert not manifest["automatic_scope_available"]
+    assert not manifest["source_edits"]
+    assert any("allocation guard coordinator conflicts with an original call: " + alias in item["reason"]
+               for item in manifest["boundaries"])
+
+
+def test_explicit_module_allocatable_roots_use_caller_allocation_guard(tmp_path):
+    before, step = ALLOCATABLE_PROGRAM.split("subroutine step(", 1)
+    before = before.replace("implicit none\ncontains", "implicit none\nreal(8),allocatable::a(:),b(:),out(:)\ncontains")
+    step = step.replace("a,b,out,n)", "n)", 1).replace("real(8),allocatable,intent(in)::a(:)\n", "")
+    step = step.replace("real(8),allocatable,intent(inout)::b(:),out(:)\n", "")
+    source = before + "subroutine step(" + step
+    facts = {"schema_version":1,"participation":"serial","captures":{
+        "original::a":FACT,"original::b":{**FACT,"initialized":"none"},
+        "original::out":{**FACT,"initialized":"none"}}}
+    _, _, manifest = generate(tmp_path, source, facts=facts)
+    assert manifest["scope_count"] == 1, manifest["boundaries"]
+    assert manifest["scopes"][0]["allocation_preflight"]["resources"] == ["original::a", "original::b", "original::out"]
+
+
+def test_allocatable_owner_capture_named_allocated_is_an_explained_boundary(tmp_path):
+    before, step = ALLOCATABLE_PROGRAM.split("subroutine step(", 1)
+    step = step.replace("step(a,b,out,n)", "step(allocated,b,out,n)").replace("::a(:)", "::allocated(:)")
+    step = step.replace("allocated(a)", "allocated(allocated)").replace("producer(a,b,n)", "producer(allocated,b,n)")
+    step = step.replace("consumer(a,b,out,n)", "consumer(allocated,b,out,n)")
+    step = step.replace("if (allocated(allocated) .and. allocated(b) .and. allocated(out)) then", "if(n>0) then")
+    source = before + "subroutine step(" + step.replace("a,b,out,n)", "allocated,b,out,n)", 1)
+    facts = {"schema_version":1,"participation":"serial","captures":{
+        "argument::allocated":FACT,"argument::b":{**FACT,"initialized":"none"},
+        "argument::out":{**FACT,"initialized":"none"}}}
+    _, _, manifest = generate(tmp_path, source, facts=facts)
+    assert not manifest["automatic_scope_available"]
+    assert not manifest["source_edits"]
+    assert any("allocation guard intrinsic conflicts" in item["reason"] for item in manifest["boundaries"])
+
+
+def test_allocatable_owning_root_still_requires_stable_lifetime_facts(tmp_path):
+    facts = {"schema_version":1,"participation":"serial","captures":{
+        "argument::a":{**FACT,"allocation_changes":True},
+        "argument::b":{**FACT,"initialized":"none"},"argument::out":{**FACT,"initialized":"none"}}}
+    _, _, manifest = generate(tmp_path, ALLOCATABLE_PROGRAM, facts=facts)
+    assert not manifest["automatic_scope_available"]
+    assert any("missing stable storage/definition facts: argument::a" in item["reason"]
+               for item in manifest["boundaries"])
+
+
+@pytest.mark.parametrize("intent", ["in", "inout", "out"])
+def test_allocatable_callee_formals_remain_original_native_boundaries(tmp_path, intent):
+    source = ALLOCATABLE_PROGRAM.replace("real(8),intent(out)::b(:)",
+                                         "real(8),allocatable,intent(" + intent + ")::b(:)", 1)
+    source = source.replace("call producer(a,b,n)\ncall transform(b)\ncall consumer(a,b,out,n)",
+                             "call producer(a,b,n)\ncall producer(a,b,n)")
+    original, _, manifest = generate(tmp_path, source)
+    assert not manifest["automatic_scope_available"]
+    assert not manifest["source_edits"]
+    assert original.read_text() == source
+    assert any("allocatable callee formals require original descriptor and allocation semantics" in item["reason"]
+               for item in manifest["boundaries"])
+
+
+def test_unused_allocatable_out_formal_is_not_an_ordinary_borrowed_view(tmp_path):
+    source = ALLOCATABLE_PROGRAM.replace("real(8),intent(out)::b(:)", "real(8),allocatable,intent(out)::b(:)", 1)
+    source = source.replace("integer::i\ndo i=1,n\nb(i)=2*a(i)+real(i,8)\nenddo", "", 1)
+    source = source.replace("call producer(a,b,n)\ncall transform(b)\ncall consumer(a,b,out,n)",
+                             "call producer(a,b,n)\ncall producer(a,b,n)")
+    _, _, manifest = generate(tmp_path, source)
+    assert not manifest["automatic_scope_available"]
+    assert not manifest["source_edits"]
+    assert any("allocatable callee formals require original descriptor and allocation semantics" in item["reason"]
+               for item in manifest["boundaries"])
+
+
+def test_hidden_allocatable_payload_effect_has_no_global_lifetime_waiver(tmp_path):
+    source = PROGRAM.replace("implicit none\ncontains", "implicit none\nreal(8),allocatable::hidden(:)\ncontains")
+    source = source.replace("b=3*b", "b=3*b+hidden")
+    facts = {"schema_version":1,"participation":"serial","captures":{
+        "argument::a":FACT,"argument::b":{**FACT,"initialized":"none"},
+        "argument::out":{**FACT,"initialized":"none"},"original::hidden":FACT}}
+    _, _, manifest = generate(tmp_path, source, facts=facts)
+    assert not manifest["automatic_scope_available"]
+    assert any("storage lifetime requires capture proof: original::hidden" in item["reason"]
+               for item in manifest["boundaries"])
+
+
+@pytest.mark.parametrize("shadowed", [False, True])
+def test_allocatable_owner_and_shadowing_guards_compile_as_fortran(tmp_path, shadowed):
+    fortran = shutil.which("gfortran-15") or shutil.which("gfortran")
+    if not fortran:
+        pytest.skip("Fortran compiler unavailable")
+    source = ALLOCATABLE_PROGRAM
+    if shadowed:
+        source = source.replace("end module", """logical function allocated(value)
+real(8),intent(in)::value(:)
+allocated=.false.
+end function
+end module""")
+    _, output, manifest = generate(tmp_path, source)
+    for role in ("common_runtime", "shared_entry", "original_source"):
+        for item in manifest["build_sources"]:
+            if item["role"] == role and item["language"] == "fortran":
+                run([fortran,"-std=f2018","-fopenmp","-fcheck=all","-c",str(output/item["path"]),
+                     "-o",str((output/item["path"]).with_suffix(".o"))],cwd=output)
 
 
 def test_collective_scope_is_rejected_without_source_changes(tmp_path):
@@ -362,6 +510,17 @@ call wrapper(a,b,out,n)
 end subroutine
 end module""")
 
+_before_step, _step = PROGRAM.split("subroutine step(", 1)
+ALLOCATABLE_PROGRAM = _before_step + "subroutine step(" + _step.replace(
+    "real(8),intent(in)::a(:)", "real(8),allocatable,intent(in)::a(:)", 1).replace(
+    "real(8),intent(out)::b(:),out(:)", "real(8),allocatable,intent(inout)::b(:),out(:)", 1).replace(
+    "call producer(a,b,n)\ncall transform(b)\ncall consumer(a,b,out,n)",
+    "if (allocated(a) .and. allocated(b) .and. allocated(out)) then\n"
+    "call producer(a,b,n)\ncall transform(b)\ncall consumer(a,b,out,n)\nendif")
+
+ALLOCATABLE_DRIVER = DRIVER.replace("do shape=1,2", "n=1\ncall step(a,b,output,n)\ndo shape=0,2").replace(
+    "n=8+8*shape", "n=0\n if(shape>0) n=8+8*shape")
+
 PARTIAL_PROGRAM="""module original
 contains
 subroutine producer(a,b)
@@ -415,6 +574,11 @@ print *, 'FIELDS_OK'
 end program
 """
 
+ALLOCATABLE_TEAM_DRIVER = TEAM_DRIVER.replace("real(8)::a(16),b(16),output(16)",
+                                             "real(8),allocatable::a(:),b(:),output(:)").replace(
+    "a=4\ncall step", "allocate(a(-2:13),b(-2:13),output(-2:13))\na=4\ncall step").replace(
+    "!$omp end parallel", "deallocate(a,b,output)\n!$omp end parallel")
+
 
 @pytest.fixture(scope="module")
 def compiled(tmp_path_factory):
@@ -437,6 +601,8 @@ def compiled(tmp_path_factory):
     element_facts={"schema_version":1,"participation":"serial","captures":{
         "argument::a":FACT,"original::field":FACT,"argument::out":{**FACT,"initialized":"none"}}}
     cases=[("sections","sections",PROGRAM,DRIVER,None), ("auto","auto",PROGRAM,DRIVER,None),
+           ("allocated_sections","sections",ALLOCATABLE_PROGRAM,ALLOCATABLE_DRIVER,None),
+           ("allocated_auto","auto",ALLOCATABLE_PROGRAM,ALLOCATABLE_DRIVER,None),
            ("contiguous","sections",contiguous,DRIVER,None),
            ("budget","sections",PROGRAM,DRIVER,budget_facts),
            ("mirror","sections",MIRROR_PROGRAM,MIRROR_DRIVER,None),
@@ -445,7 +611,9 @@ def compiled(tmp_path_factory):
            ("indexed","sections",ELEMENT_PROGRAM,ELEMENT_DRIVER,element_facts)]
     for label,mode,program,driver_source,facts in cases:
         case=directory/label
-        original,output,manifest=generate(case,program,mode=mode,facts=facts,checkout=checkout)
+        checks = "-fcheck=all,array-temps" if label.startswith("allocated") else "-fcheck=all"
+        profile = os.environ.get("FORT_TEST_SCOPED_PROFILE") if label == "allocated_auto" else None
+        original,output,manifest=generate(case,program,mode=mode,facts=facts,checkout=checkout,profile=profile)
         assert manifest["scope_count"] == (2 if label == "indexed" else 1)
         objects=[]
         # Build common interface first, then generated interfaces, then the
@@ -467,27 +635,27 @@ def compiled(tmp_path_factory):
             objects.append(str(target))
         for item in [s for s in sources if s["role"]=="original_source"]:
             target=(output/item["path"]).with_suffix(".o")
-            run([fortran,"-std=f2018","-fopenmp","-fcheck=all","-c",str(output/item["path"]),
+            run([fortran,"-std=f2018","-fopenmp",checks,"-c",str(output/item["path"]),
                  "-o",str(target)],cwd=output)
             objects.append(str(target))
         driver=output/"caller.f90"
         driver.write_text(driver_source)
         target=output/"caller"
-        run([fortran,"-std=f2018","-fopenmp","-fcheck=all",str(driver),*objects,
+        run([fortran,"-std=f2018","-fopenmp",checks,str(driver),*objects,
              "-L/usr/local/cuda/lib64","-Wl,-rpath,/usr/local/cuda/lib64","-lcudart","-lstdc++",
              "-o",str(target)],cwd=output)
         # Check the original native program too, with all shape/call variations.
         native=output/"native"
-        run([fortran,"-std=f2018","-fopenmp","-fcheck=all",str(original),str(driver),"-o",str(native)],cwd=output)
+        run([fortran,"-std=f2018","-fopenmp",checks,str(original),str(driver),"-o",str(native)],cwd=output)
         run([str(native)],cwd=output,env={**os.environ,"OMP_NUM_THREADS":"4"})
         targets[label]=(target,output)
-        if label=="sections":
-            driver.write_text(TEAM_DRIVER)
+        if label in {"sections", "allocated_sections"}:
+            driver.write_text(ALLOCATABLE_TEAM_DRIVER if label == "allocated_sections" else TEAM_DRIVER)
             team=output/"team-caller"
-            run([fortran,"-std=f2018","-fopenmp","-fcheck=all",str(driver),*objects,
+            run([fortran,"-std=f2018","-fopenmp",checks,str(driver),*objects,
                  "-L/usr/local/cuda/lib64","-Wl,-rpath,/usr/local/cuda/lib64","-lcudart","-lstdc++",
                  "-o",str(team)],cwd=output)
-            targets["team"]=(team,output)
+            targets["allocated_team" if label == "allocated_sections" else "team"]=(team,output)
     return targets
 
 
@@ -503,11 +671,33 @@ def test_compiler_formed_scope_continues_without_cuda(compiled):
 
 @pytest.mark.native
 def test_existing_openmp_team_keeps_original_native_span_before_descriptor_access(compiled):
-    target,output=compiled["team"]
-    result=run([str(target)],cwd=output,
-               env={**os.environ,"FORT_RUNTIME_TRACE":"1","OMP_NUM_THREADS":"4","OMP_DYNAMIC":"FALSE"})
-    assert "FIELDS_OK" in result.stdout
-    assert "FORT_SCOPED" not in result.stderr
+    for case in ("team", "allocated_team"):
+        target,output=compiled[case]
+        result=run([str(target)],cwd=output,
+                   env={**os.environ,"FORT_RUNTIME_TRACE":"1","OMP_NUM_THREADS":"4","OMP_DYNAMIC":"FALSE"})
+        assert "FIELDS_OK" in result.stdout
+        assert "FORT_SCOPED" not in result.stderr
+
+
+@pytest.mark.cuda
+def test_allocatable_roots_preserve_empty_guards_reallocation_and_fields(compiled):
+    for case in ("allocated_sections", "allocated_auto"):
+        target,output=compiled[case]
+        result=run([str(target)],cwd=output,
+                   env={**os.environ,"FORT_RUNTIME_TRACE":"1","OMP_NUM_THREADS":"4"})
+        assert "FIELDS_OK" in result.stdout
+        assert "array temporary" not in result.stderr.lower()
+        if case == "allocated_auto" and os.environ.get("FORT_TEST_SCOPED_PROFILE"):
+            decisions = [line for line in result.stderr.splitlines() if line.startswith("FORT_SCOPED decision ")]
+            assert decisions
+            assert all("available=1" in line for line in decisions)
+        if case == "allocated_sections":
+            if "FORT_SCOPED launch" not in result.stderr:
+                pytest.skip("CUDA device unavailable")
+            lines = result.stderr.splitlines()
+            assert sum(line.startswith("FORT_SCOPED launch ") for line in lines) == 8
+            assert sum(line.startswith("FORT_SCOPED upload ") for line in lines) == 8
+            assert sum(line.startswith("FORT_SCOPED download ") for line in lines) == 8
 
 
 @pytest.mark.cuda

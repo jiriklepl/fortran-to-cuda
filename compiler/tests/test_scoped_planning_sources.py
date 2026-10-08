@@ -13,7 +13,7 @@ from compiler.emission.common.resources import read_scoped_runtime
 from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import form_source_scopes
 from compiler.tests.test_offload_profile import scoped_profile
-from compiler.tests.test_source_scopes import FACT, PROGRAM, WRAPPER_PROGRAM
+from compiler.tests.test_source_scopes import ALLOCATABLE_PROGRAM, FACT, PROGRAM, WRAPPER_PROGRAM
 
 
 def generate(tmp_path, monkeypatch, source=PROGRAM, *, captures=None):
@@ -54,6 +54,21 @@ def test_complete_scope_uses_public_queries_and_protected_native_fallback(tmp_pa
     assert "INTENT(OUT)" not in query
     assert "fort_scope_forget_definition" not in query
     assert "fort_status = fort_plan(" in query
+
+
+def test_allocatable_owning_roots_keep_calibrated_queries_behind_caller_guard(tmp_path, monkeypatch):
+    outputs, report = generate(tmp_path, monkeypatch, ALLOCATABLE_PROGRAM)
+    assert report["automatic_estimate_available"], report["boundaries"]
+    scope, = report["scopes"]
+    assert scope["estimate_available"]
+    assert scope["allocation_preflight"]["position"] == "original caller before owner association"
+    edit = next(edit for edit in report["source_edits"] if edit["first_line"] <= edit["last_line"])
+    assert edit["replacement"].index("allocated(a)") < edit["replacement"].index("call fort_scope_owner_")
+    text = next(value for name, value in outputs.items() if name.startswith("sources/"))
+    owner = text.split("subroutine fort_scope_owner_", 1)[1].split("end subroutine", 1)[0]
+    assert owner.index("if (fort_scope_serial_caller() == 0)") < owner.index("is_contiguous(")
+    assert owner.index("_view => ") < owner.index("fort_scope_plan_reset(fort_context)")
+    assert "fort_status = fort_choose(fort_context, fort_decision)" in owner
 
 
 def test_query_wrappers_preserve_source_definition_positions(tmp_path, monkeypatch):
