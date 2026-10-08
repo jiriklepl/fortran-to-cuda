@@ -55,6 +55,6 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
         "concurrent_access": "separate contexts with nonconflicting host storage",
         "rectangle_limit": 32,
         "intersection_limit": 1024,
-        "capabilities": ["section_coherence", "partial_host_initialization", "source_definition_changes", "device_memory_budget", "coherent_runtime_placement"],
+        "capabilities": ["section_coherence", "partial_host_initialization", "source_definition_changes", "device_memory_budget", "coherent_runtime_placement", "ordered_definition_validation"],
     }
     return outputs, manifest

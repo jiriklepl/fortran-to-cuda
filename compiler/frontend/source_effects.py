@@ -16,6 +16,7 @@ from pathlib import Path
 from fparser.two.utils import walk
 
 from compiler.frontend.lowering import _KindScope
+from compiler.frontend.native_sections import analyze_native_sections
 from compiler.frontend.source_inputs import SourceInputs
 from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
@@ -43,6 +44,7 @@ class Binding:
     intent: str | None = None
     attributes: frozenset[str] = frozenset()
     lower_bounds: tuple[str, ...] = ()
+    lower_bound_nodes: tuple[object | None, ...] = field(default=(), repr=False)
 
     def signature(self):
         return self.dtype, self.kind, self.rank
@@ -91,7 +93,9 @@ class SourceEffects:
             raise CompilationError("source effect budgets must be positive")
         self.depth_limit, self.procedure_limit, self.operation_limit = depth, procedures, operations
         self.modules, self.routines, self.summaries = {}, {}, {}
+        self.functions = set()
         self._closures = {}
+        self._native_sections = {}
         self.inputs = SourceInputs(paths,analysis_sources)
         self.sources, self.operation_count = dict(self.inputs.sources), 0
         self.kind_expressions = []
@@ -111,6 +115,9 @@ class SourceEffects:
             scope.issues = self._specification(scope)
         for scope in self.modules.values():
             for node in _children(_part(scope.node, "Module_Subprogram_Part")):
+                if _kind(node) == "Function_Subprogram":
+                    self.functions.add(scope.module + "::" + str(_part(node, "Function_Stmt").items[1]).lower())
+                    continue
                 if _kind(node) != "Subroutine_Subprogram":
                     continue
                 stmt = _part(node, "Subroutine_Stmt")
@@ -241,7 +248,7 @@ class SourceEffects:
                     root = (f"argument::{variable}" if variable in arguments else
                             f"{qualified}::{variable}" if qualified else f"{scope.module}::{variable}")
                     binding = Binding(variable, root, base, width, len(dimensions), intent,
-                                      frozenset(attributes), lowers)
+                                      frozenset(attributes), lowers, tuple(d.items[0] for d in dimensions))
                     scope.bindings[variable] = binding
                     if _kind(dtype) == "Intrinsic_Type_Spec" and selector is not None:
                         self.kind_expressions.append((binding, scope, selector.items[1]))
@@ -310,7 +317,7 @@ class SourceEffects:
                 return self._candidates(self.modules[module], remote, visited | {key})
             return [module + "::" + remote]
         own = scope.module + "::" + name
-        if scope.parent is None and own in self.routines:
+        if scope.parent is None and (own in self.routines or own in self.functions):
             return [own]
         found = []
         for module in scope.wildcards:
@@ -754,9 +761,120 @@ class SourceEffects:
         directives = [str(node) for node in walk(routine.scope.node)
                       if _kind(node) == "Comment" and str(node).lstrip().lower().startswith("!$omp")]
         summary["openmp_directives"] = directives
+        summary["native_completion"] = self._native_completion(routine, summary, _closure)
         summary["cloneable"] = summary["complete"] and not persistent and not directives
-        summary["section_precision"] = "whole-resource conservative effects; physical refinement pending"
+        sections = self.native_sections(requested)
+        summary["native_sections"] = sections.public()
+        summary["section_precision"] = ("typed bounded native rectangles; checked physical mapping required"
+                                        if sections.available else "whole-resource conservative effects")
         return summary
+
+    def _native_completion(self, routine, summary, closure):
+        """Prove only source-backed synchronous worksharing for serial owners.
+
+        This does not rewrite directives, prove parallel independence, or refine
+        array sections. The original compiler/OpenMP runtime still executes the
+        helper; its implicit completion must precede our host coherence hook.
+        """
+        children = [closure.summaries.get(op["procedure"], {}) for op in summary["operations"]
+                    if op["kind"] == "call"]
+        modules = {routine.scope.module}
+        for operation in summary["operations"]:
+            resources = [operation.get("resource", ""), *operation.get("resource_mapping", {}).values()]
+            resources.extend(effect.get("resource", "") for effect in operation.get("effects", ()))
+            modules.update(resource.split("::", 1)[0] for resource in resources
+                           if resource.split("::", 1)[0] in self.modules)
+        module_directives = [str(node) for module in sorted(modules)
+                             for node in walk(_part(self.modules[module].node, "Specification_Part"))
+                             if _kind(node) == "Comment" and str(node).lstrip().lower().startswith("!$omp")]
+        has_directives = bool(summary["openmp_directives"] or module_directives) or any(
+            child.get("native_completion", {}).get("has_openmp_in_closure", True) for child in children)
+        has_opaque_calls = any(operation["kind"] == "native_contract" for operation in summary["operations"]) or any(
+            child.get("native_completion", {}).get("has_opaque_calls_in_closure", True) for child in children)
+        result = {"available": False, "reason": None, "caller_contract": "serial_source_scope",
+                  "requires_serial_caller": True, "has_openmp_in_closure": has_directives,
+                  "has_opaque_calls_in_closure": has_opaque_calls}
+
+        def boundary(reason):
+            result["reason"] = reason
+            return result
+
+        if not summary["complete"]:
+            return boundary("native source effects are incomplete")
+        if module_directives:
+            return boundary("enclosing module OpenMP ownership is unproven: " + module_directives[0])
+        for child in children:
+            if not child.get("native_completion", {}).get("available", False):
+                return boundary("native callee completion is unproven: " + child.get("procedure", "unknown"))
+
+        nodes = [node for node in walk(routine.scope.node)
+                 if _kind(node) == "Comment" or _kind(node).endswith("_Stmt")]
+        positions = {id(node): index for index, node in enumerate(nodes)}
+        loops = {}
+        for node in walk(routine.execution):
+            if _kind(node) not in {"Block_Nonlabel_Do_Construct", "Block_Label_Do_Construct"}:
+                continue
+            body = [item for item in _children(node) if _kind(item) != "Comment"]
+            if body and _kind(body[-1]) == "End_Do_Stmt":
+                loops[id(body[0])] = body[-1]
+
+        def directive(node):
+            text = str(node).lstrip().lower()
+            return text[5:].split() if _kind(node) == "Comment" and text.startswith("!$omp") else None
+
+        def next_statement(index):
+            while index < len(nodes) and _kind(nodes[index]) == "Comment" and directive(nodes[index]) is None:
+                index += 1
+            return index
+
+        associated = set()
+        index = 0
+        while index < len(nodes):
+            tokens = directive(nodes[index])
+            if tokens is None:
+                index += 1
+                continue
+            if tokens not in (["do"], ["parallel", "do"]):
+                return boundary("unsupported native OpenMP directive: " + str(nodes[index]))
+            header_index = next_statement(index + 1)
+            if header_index == len(nodes) or id(nodes[header_index]) not in loops:
+                return boundary("native OpenMP directive is not associated with a complete DO loop")
+            end_index = positions[id(loops[id(nodes[header_index])])]
+            if any(directive(node) is not None for node in nodes[header_index:end_index + 1]):
+                return boundary("nested native OpenMP directives are unsupported")
+            close_index = next_statement(end_index + 1)
+            if close_index == len(nodes) or directive(nodes[close_index]) != ["end", *tokens]:
+                return boundary("native OpenMP loop requires a matching clause-free end directive")
+            associated.add(str(nodes[header_index]))
+            index = close_index + 1
+
+        # A called helper inside a worksharing loop must not introduce a hidden
+        # parallel/worksharing construct. Opaque serial contracts do not prove
+        # this source-level absence of nested teams.
+        for operation in summary["operations"]:
+            if not associated.intersection(operation.get("guard", ())):
+                continue
+            if operation["kind"] == "native_contract":
+                return boundary("opaque native call inside OpenMP loop has no nested-team proof")
+            if operation["kind"] == "call":
+                child = closure.summaries.get(operation["procedure"], {})
+                if child.get("native_completion", {}).get("has_openmp_in_closure", True):
+                    return boundary("native OpenMP loop calls a helper with OpenMP directives: " + operation["procedure"])
+                if child.get("native_completion", {}).get("has_opaque_calls_in_closure", True):
+                    return boundary("native OpenMP loop calls a helper with opaque nested-team behavior: " + operation["procedure"])
+
+        result["available"] = True
+        result["reason"] = ("matched clause-free OpenMP loops complete for a serial source caller"
+                            if has_directives else "source closure has no OpenMP directives")
+        return result
+
+    def native_sections(self, requested):
+        """Return typed original references without parsing explanatory strings."""
+        if requested not in self.routines:
+            raise CompilationError("source procedure unavailable: " + requested)
+        if requested not in self._native_sections:
+            self._native_sections[requested] = analyze_native_sections(self, self.routines[requested])
+        return self._native_sections[requested]
 
     def summarize_span(self, procedures):
         """Prove a candidate span with one budget for its distinct closure."""

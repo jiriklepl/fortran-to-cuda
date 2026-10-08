@@ -698,6 +698,7 @@ def compiled(tmp_path_factory):
     checkout=directory/"independent-compiler"
     shutil.copytree(ROOT/"compiler",checkout/"compiler",ignore=shutil.ignore_patterns("__pycache__",".*cache"))
     targets={}
+    runtime_objects = {}
     partial_facts={"schema_version":1,"participation":"serial","captures":{
         "argument::a":{**FACT,"initialized":"sections","sections":[{"lower":[2],"upper":[6]}]},
         "argument::b":{**FACT,"initialized":"none"},"argument::out":{**FACT,"initialized":"none"}}}
@@ -728,10 +729,19 @@ def compiled(tmp_path_factory):
         sources=manifest["build_sources"]
         for item in [s for s in sources if s["role"]=="common_runtime"]:
             target=output/Path(item["path"]).with_suffix(".o").name
+            runtime_key = (manifest["runtime"]["runtime_id"], item["path"])
+            if item["language"] == "cuda" and runtime_key in runtime_objects:
+                # Runtime identity binds all published headers and sources;
+                # this suite uses identical CUDA compiler flags for every case.
+                assert sha256((output/item["path"]).read_bytes()).hexdigest() == manifest["artifacts_sha256"][item["path"]]
+                objects.append(runtime_objects[runtime_key])
+                continue
             command=([nvcc,"-std=c++17","-ccbin",host,"-arch=sm_86","-Xcompiler=-fopenmp","-c"]
                      if item["language"]=="cuda" else [fortran,"-std=f2018","-c"])
             run([*command,str(output/item["path"]),"-o",str(target)],cwd=output)
             objects.append(str(target))
+            if item["language"] == "cuda":
+                runtime_objects[runtime_key] = str(target)
         for item in [s for s in sources if s["role"]=="shared_entry"]:
             target=(output/item["path"]).with_suffix(".o")
             if item["language"]=="cuda":

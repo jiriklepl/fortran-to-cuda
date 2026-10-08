@@ -53,6 +53,13 @@ struct Result {
     // Other contexts may initialize CUDA between a preview and its final trace.
     bool driver_initialized = false;
 };
+struct DefinitionValidation {
+    int status = FORT_SCOPE_BOUNDARY;
+    const char *reason = "definition_plan_unavailable";
+    // An operation is identified only after structural metadata validation.
+    size_t operation = std::numeric_limits<size_t>::max();
+    fort_buffer_t buffer = 0;
+};
 
 // Optional, synchronous evidence from one final schedule. Search never installs
 // a sink, and events borrow existing state rather than retaining snapshots.
@@ -101,21 +108,7 @@ inline void validate_region(const Region &region, const Resource &b) {
             require(box.lo[k] <= box.hi[k] && box.hi[k] <= b.extents[k], "invalid_resource_region");
     }
 }
-inline void validate(const Inputs &input, const fort_scope_plan_costs &costs) {
-    require(costs.version == FORT_SCOPE_PLANNING_ABI_VERSION && costs.valid && costs.max_allocation_bytes,
-            "missing_or_incompatible_calibration");
-    const double values[] = {
-        costs.cpu_flops, costs.cpu_bandwidth, costs.gpu_flops, costs.gpu_bandwidth,
-        costs.h2d_bandwidth, costs.d2h_bandwidth,
-        costs.create_seconds, costs.register_seconds, costs.host_access_seconds, costs.device_access_seconds,
-        costs.gpu_setup_seconds, costs.cold_driver_startup_seconds, costs.allocation_seconds,
-        costs.release_seconds, costs.wait_seconds, costs.launch_enqueue_seconds, costs.planning_operation_seconds
-    };
-    for (double value : values) require(std::isfinite(value) && value > 0, "invalid_calibration_cost");
-    // A fitted transfer intercept can legitimately be zero; throughput and
-    // measured lifecycle costs still require strictly positive values.
-    for (double latency : {costs.h2d_latency, costs.d2h_latency})
-        require(std::isfinite(latency) && latency >= 0, "invalid_calibration_cost");
+inline void validate_metadata(const Inputs &input, bool check_work, bool check_coherence) {
     require(input.operations.size() <= operation_limit && input.resources.size() <= operation_limit,
             "planning_record_budget_exceeded");
     std::unordered_map<fort_buffer_t, const Resource *> resources;
@@ -125,23 +118,28 @@ inline void validate(const Inputs &input, const fort_scope_plan_costs &costs) {
         const bool empty = std::find(b.extents.begin(), b.extents.end(), size_t(0)) != b.extents.end();
         size_t bytes = empty ? 0 : b.element_bytes;
         if (!empty) for (size_t extent : b.extents) bytes = product(bytes, extent);
-        require(bytes == b.bytes && (!b.allocated || bytes), "invalid_resource_layout");
-        require(b.device_current.empty() || b.allocated, "invalid_resource_coherence");
-        validate_region(b.initialized, b); validate_region(b.host_current, b); validate_region(b.device_current, b);
-        coherence::Budget budget;
-        require(coherence::difference(b.host_current, b.initialized, budget).empty() &&
-                coherence::difference(b.device_current, b.initialized, budget).empty(), "invalid_resource_coherence");
-        auto current = coherence::unite(b.host_current, b.device_current, budget);
-        require(coherence::difference(b.initialized, current, budget).empty(), "invalid_resource_coherence");
+        require(bytes == b.bytes && (!check_coherence || !b.allocated || bytes), "invalid_resource_layout");
+        if (check_coherence)
+            require(b.device_current.empty() || b.allocated, "invalid_resource_coherence");
+        validate_region(b.initialized, b);
+        if (check_coherence) {
+            validate_region(b.host_current, b); validate_region(b.device_current, b);
+            coherence::Budget budget;
+            require(coherence::difference(b.host_current, b.initialized, budget).empty() &&
+                    coherence::difference(b.device_current, b.initialized, budget).empty(), "invalid_resource_coherence");
+            auto current = coherence::unite(b.host_current, b.device_current, budget);
+            require(coherence::difference(b.initialized, current, budget).empty(), "invalid_resource_coherence");
+        }
     }
     size_t workers = 0;
     for (const auto &op : input.operations) {
         require(op.kind <= FORT_SCOPE_PLAN_FORGET, "unknown_planning_operation");
-        require(std::isfinite(op.flops) && std::isfinite(op.memory_bytes) && op.flops >= 0 && op.memory_bytes >= 0 &&
-                op.flops < double(std::numeric_limits<uint64_t>::max()) &&
-                op.memory_bytes < double(std::numeric_limits<uint64_t>::max()), "unknown_or_overflowed_work");
+        if (check_work)
+            require(std::isfinite(op.flops) && std::isfinite(op.memory_bytes) && op.flops >= 0 && op.memory_bytes >= 0 &&
+                    op.flops < double(std::numeric_limits<uint64_t>::max()) &&
+                    op.memory_bytes < double(std::numeric_limits<uint64_t>::max()), "unknown_or_overflowed_work");
         if (op.kind == FORT_SCOPE_PLAN_WORKER) {
-            require(op.unit && (op.flops > 0 || op.memory_bytes > 0), "unknown_worker_work");
+            require(op.unit && (!check_work || op.flops > 0 || op.memory_bytes > 0), "unknown_worker_work");
             require(++workers <= worker_limit, "planning_worker_budget_exceeded");
         }
         std::vector<fort_buffer_t> bound;
@@ -158,6 +156,23 @@ inline void validate(const Inputs &input, const fort_scope_plan_costs &costs) {
                     "overwrite_exceeds_write_region");
         }
     }
+}
+inline void validate(const Inputs &input, const fort_scope_plan_costs &costs) {
+    require(costs.version == FORT_SCOPE_PLANNING_ABI_VERSION && costs.valid && costs.max_allocation_bytes,
+            "missing_or_incompatible_calibration");
+    const double values[] = {
+        costs.cpu_flops, costs.cpu_bandwidth, costs.gpu_flops, costs.gpu_bandwidth,
+        costs.h2d_bandwidth, costs.d2h_bandwidth,
+        costs.create_seconds, costs.register_seconds, costs.host_access_seconds, costs.device_access_seconds,
+        costs.gpu_setup_seconds, costs.cold_driver_startup_seconds, costs.allocation_seconds,
+        costs.release_seconds, costs.wait_seconds, costs.launch_enqueue_seconds, costs.planning_operation_seconds
+    };
+    for (double value : values) require(std::isfinite(value) && value > 0, "invalid_calibration_cost");
+    // A fitted transfer intercept can legitimately be zero; throughput and
+    // measured lifecycle costs still require strictly positive values.
+    for (double latency : {costs.h2d_latency, costs.d2h_latency})
+        require(std::isfinite(latency) && latency >= 0, "invalid_calibration_cost");
+    validate_metadata(input, true, true);
 }
 struct State {
     std::vector<Resource> resources;
@@ -313,6 +328,55 @@ inline void retain(std::vector<State> &front, State state) {
     if (front.size() > frontier_limit) front.resize(frontier_limit);
 }
 } // namespace detail
+
+// Placement-independent definition proof. No current-copy locations, device
+// budget, estimates, or calibration are consulted. Every operation is checked
+// against its entry state before any of that operation's writes are committed.
+inline DefinitionValidation validate_definitions(const Inputs &input) noexcept {
+    DefinitionValidation result;
+    try {
+        detail::validate_metadata(input, false, false);
+        struct DefinitionState { Region initialized, host_current, device_current; };
+        std::vector<DefinitionState> states;
+        std::unordered_map<fort_buffer_t, size_t> index;
+        for (const auto &resource : input.resources) {
+            index.emplace(resource.handle, states.size());
+            states.push_back({resource.initialized, {}, {}});
+        }
+        for (size_t k=0; k<input.operations.size(); ++k) {
+            result.operation = k; result.buffer = 0;
+            const auto &op = input.operations[k];
+            if (op.kind == FORT_SCOPE_PLAN_FORGET) {
+                for (const auto &binding : op.bindings) states[index.at(binding.buffer)].initialized.clear();
+                continue;
+            }
+            std::vector<coherence::Prepared> prepared;
+            for (const auto &binding : op.bindings) {
+                result.buffer = binding.buffer;
+                auto &state = states[index.at(binding.buffer)];
+                coherence::Budget budget;
+                const auto preservation = coherence::difference(binding.effects.writes, binding.effects.overwrites, budget);
+                const auto required = coherence::unite(binding.effects.reads, preservation, budget);
+                if (!coherence::difference(required, state.initialized, budget).empty()) {
+                    result.status = FORT_SCOPE_UNINITIALIZED;
+                    result.reason = "uninitialized_read";
+                    return result;
+                }
+                // The existing execution transition can now define may-writes:
+                // preservation proved every potentially unwritten hole defined.
+                prepared.push_back(coherence::prepare(state, binding.effects, false));
+            }
+            for (size_t j=0; j<op.bindings.size(); ++j)
+                states[index.at(op.bindings[j].buffer)].initialized = std::move(prepared[j].initialized);
+        }
+        result.status = FORT_SCOPE_OK; result.reason = "definition_plan_valid";
+        result.operation = std::numeric_limits<size_t>::max(); result.buffer = 0;
+    } catch (const detail::Unavailable &error) { result.reason = error.reason; }
+      catch (const coherence::Fragmented &) { result.reason = "region_fragmentation_unavailable"; }
+      catch (const std::bad_alloc &) { result.status = FORT_SCOPE_RESOURCE; result.reason = "planning_resource_failure"; }
+      catch (...) { result.reason = "planning_state_unavailable"; }
+    return result;
+}
 
 inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
     Result result;
