@@ -683,6 +683,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
         "automatic_reason": planning_reason or profile_reason,
         "automatic_scope_available": planning_available, "host_threads": config.host_threads,
         "planning": {"abi_version": 1, "available": planning_available, "reason": planning_reason,
+                     "supported_endpoint_modes": ["complete", "continue"],
+                     "continuation_abi_version": 2, "runtime_report": "fort_scope_plan_report_v2",
                      "query_available": query_available, "query_reason": query_reason,
                      "entry": plan_name, "fortran_procedure": "plan", "selector": choose_name,
                      "fortran_selector": "choose", "argument_order": ["context", *[s.name for s in arrays], *[s.name for s in query_scalars]],

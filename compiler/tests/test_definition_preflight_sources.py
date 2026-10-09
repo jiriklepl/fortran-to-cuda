@@ -42,7 +42,7 @@ def test_forced_sections_validate_complete_query_without_cost_profile(tmp_path):
     assert "fort_choose(" not in owner
 
 
-def test_mutable_future_bounds_keep_native_before_forced_scope_registration(tmp_path):
+def test_mutable_future_bounds_are_validated_after_the_original_adjustment(tmp_path):
     adjust = "subroutine adjust(n)\ninteger,intent(inout)::n\nn=n-1\nend subroutine\n"
     source = PROGRAM.replace("end module", adjust + "end module")
     before, owner = source.split("subroutine step(", 1)
@@ -50,12 +50,16 @@ def test_mutable_future_bounds_keep_native_before_forced_scope_registration(tmp_
     source = source.replace("call transform(b)", "call adjust(n)")
     outputs, report = sections(tmp_path, source)
     scope, = report["scopes"]
-    assert not scope["definition_preflight"]["query_available"]
-    assert "scalar inputs change" in scope["definition_preflight"]["reason"]
+    assert scope["definition_preflight"]["query_available"]
+    assert scope["definition_preflight"]["position"] == "when segment is reached"
+    assert [segment["calls"] for segment in scope["planning_segments"]] == [
+        ["original::producer"], ["original::adjust"], ["original::consumer"]]
     text = next(value for name, value in outputs.items() if name.startswith("sources/"))
     owner = text.split("subroutine fort_scope_owner_", 1)[1].split("end subroutine", 1)[0]
-    assert "fort_scope_create(" not in owner
-    assert "fort_scope_plan_validate(" not in owner
-    assert "call producer(" in owner
-    assert "call adjust(" in owner
-    assert "call consumer(" in owner
+    adjustment = owner.rfind("call adjust(")
+    query = owner.index("fort_scope_query_", adjustment)
+    validation = owner.index("fort_scope_plan_validate(", query)
+    numerical = owner.index("call fort_scope_clone_", validation)
+    assert adjustment >= 0
+    assert adjustment < query < validation < numerical
+    assert "FORT_SCOPE_PLAN_CONTINUE" in owner

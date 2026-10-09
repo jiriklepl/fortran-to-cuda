@@ -71,6 +71,14 @@ struct Context {
     std::vector<bool> schedule;
     size_t worker_cursor = 0;
     bool plan_recording = false, plan_installed = false;
+    uint32_t endpoint_mode = FORT_SCOPE_PLAN_COMPLETE;
+    bool owner_create_accounted = false, owner_estimate_available = true;
+    bool owner_native_common_compute_excluded = false;
+    size_t registrations_incurred = 0;
+    uint64_t owner_segments = 0;
+    double owner_execution_seconds = 0, owner_terminal_seconds = 0;
+    bool segment_cost_pending = false;
+    std::optional<fort_scope_plan_report> last_report;
     uint64_t query_generation = 1, state_generation = 1;
     struct Proof {
         uint64_t query_generation, state_generation;
@@ -384,6 +392,12 @@ void invalidate(Context &c, Change change) noexcept {
     // can never match a surviving old proof or preview.
     generation = generation == std::numeric_limits<uint64_t>::max() ? 1 : generation+1;
 }
+void note_numerical_activity(Context &c) noexcept {
+    // A complete-owner estimate must cover the entire context, including work
+    // performed before its first continuation query or after a completed one.
+    if (c.endpoint_mode != FORT_SCOPE_PLAN_CONTINUE || !c.segment_cost_pending)
+        c.owner_estimate_available = false;
+}
 template<class F> int with(fort_scope_t handle, F &&f, Change change = Change::State) noexcept {
     return protect([&]() {
         const auto c = lookup(handle);
@@ -393,7 +407,12 @@ template<class F> int with(fort_scope_t handle, F &&f, Change change = Change::S
         // Invalidate before a possibly partial mutation, including operations
         // that fail. Read-only metadata probes preserve a context-local proof.
         invalidate(*c, change);
-        f(*c);
+        try { f(*c); }
+        catch (...) {
+            if (c->endpoint_mode == FORT_SCOPE_PLAN_CONTINUE && change != Change::None)
+                c->owner_estimate_available = false;
+            throw;
+        }
     });
 }
 }
@@ -435,6 +454,23 @@ bool driver_initialized(const Context &c) {
     std::lock_guard<std::mutex> lock(driver_mutex);
     return initialized_devices.count(c.device) != 0;
 }
+void complete_segment_estimate(Context &c) noexcept {
+    if (!c.segment_cost_pending || c.pending || c.worker_cursor != c.schedule.size() ||
+        std::any_of(c.buffers.begin(), c.buffers.end(), [](const auto &entry) { return entry.second->prepared.has_value(); })) return;
+    c.segment_cost_pending = false;
+    if (!c.last_report) { c.owner_estimate_available = false; return; }
+    const auto &report = *c.last_report;
+    if (c.owner_segments == std::numeric_limits<uint64_t>::max()) c.owner_estimate_available = false;
+    else ++c.owner_segments;
+    const double execution = c.owner_execution_seconds+report.execution_seconds;
+    if (!report.available || !std::isfinite(execution) || !std::isfinite(execution+report.terminal.seconds))
+        c.owner_estimate_available = false;
+    else {
+        c.owner_execution_seconds = execution;
+        c.owner_terminal_seconds = report.terminal.seconds;
+    }
+    c.owner_native_common_compute_excluded |= report.native_common_compute_excluded;
+}
 const fort_scoped::planning::Inputs &planning_inputs(Context &c, fort_scope_t handle) {
     if (c.planning_snapshot && c.planning_snapshot->query_generation == c.query_generation &&
         c.planning_snapshot->state_generation == c.state_generation) {
@@ -451,6 +487,11 @@ const fort_scoped::planning::Inputs &planning_inputs(Context &c, fort_scope_t ha
             FORT_SCOPE_BOUNDARY, "planning_record_budget_exceeded");
     fort_scoped::planning::Inputs input;
     input.operations = c.plan;
+    input.continuation = c.endpoint_mode == FORT_SCOPE_PLAN_CONTINUE;
+    if (input.continuation) {
+        input.charge_create = !c.owner_create_accounted;
+        input.registrations_incurred = c.registrations_incurred;
+    }
     input.definitions_validated = c.definition_proof &&
         c.definition_proof->query_generation == c.query_generation &&
         c.definition_proof->state_generation == c.state_generation;
@@ -570,6 +611,31 @@ void json_region(std::ostream &out, const Region &region) {
     for (size_t k=0; k<region.size(); ++k) { if (k) out << ','; json_rectangle(out, region[k]); }
     out << ']';
 }
+void json_terminal_cost(std::ostream &out, const fort_scope_terminal_cost &cost) {
+    out << "{\"seconds\":" << cost.seconds << ",\"download_bytes\":" << cost.download_bytes
+        << ",\"downloads\":" << cost.downloads << ",\"waits\":" << cost.waits
+        << ",\"releases\":" << cost.releases << '}';
+}
+void json_continuation(std::ostream &out, const fort_scope_plan_report &report) {
+    out << ",\"continuation\":{\"report_version\":" << report.version
+        << ",\"endpoint_mode\":" << report.endpoint_mode
+        << ",\"available\":" << report.available
+        << ",\"execution_counter_estimates_available\":" << report.available
+        << ",\"execution_seconds\":" << report.execution_seconds
+        << ",\"native_execution_seconds\":" << report.native_execution_seconds
+        << ",\"entry_terminal\":"; json_terminal_cost(out, report.entry_terminal);
+    out << ",\"terminal\":"; json_terminal_cost(out, report.terminal);
+    out << ",\"native_terminal\":"; json_terminal_cost(out, report.native_terminal);
+    out << ",\"terminal_hypothetical\":true,\"ranking_seconds\":" << report.ranking_seconds
+        << ",\"native_ranking_seconds\":" << report.native_ranking_seconds
+        << ",\"owner_available\":" << report.owner_available
+        << ",\"owner_totals_completed_only\":true"
+        << ",\"owner_segments\":" << report.owner_segments
+        << ",\"owner_execution_seconds\":" << report.owner_execution_seconds
+        << ",\"owner_terminal_seconds\":" << report.owner_terminal_seconds
+        << ",\"owner_complete_seconds\":" << report.owner_complete_seconds
+        << ",\"native_common_compute_excluded\":" << report.native_common_compute_excluded << '}';
+}
 void evidence_row(void *opaque, const fort_scoped::planning::EvidenceEvent &event) {
     auto &output = *static_cast<EvidenceOutput *>(opaque);
     // A trace can be incomplete, but may never retain an unbounded event graph.
@@ -642,7 +708,9 @@ void planning_evidence(Context &context, fort_scope_t handle, const fort_scope_p
                   << ",\"simulated_operations\":" << result.decision.simulated_operations
                   << ",\"aggregate_only\":" << (result.native_startup_shortcut ? "true" : "false")
                   << ",\"evidence\":\"" << (result.native_startup_shortcut ? "native_startup_lower_bound" : "modeled_final_schedule")
-                  << "\",\"section_coordinates\":\"zero_based_exclusive\"}\n";
+                  << "\",\"section_coordinates\":\"zero_based_exclusive\"";
+            if (result.report.endpoint_mode == FORT_SCOPE_PLAN_CONTINUE) json_continuation(std::cerr, result.report);
+            std::cerr << "}\n";
         }
         const fort_scoped::planning::EvidenceSink sink{&output, evidence_row};
         auto input = planning_inputs(context, handle);
@@ -672,17 +740,37 @@ extern "C" int fort_scope_plan_host_current(fort_scope_t h, fort_buffer_t handle
                 "planning payload must already be fully initialized and host current");
     }, Change::None);
 }
-extern "C" int fort_scope_plan_reset(fort_scope_t h) {
+extern "C" int fort_scope_plan_reset_mode(fort_scope_t h, uint32_t endpoint_mode) {
     return with(h, [&](Context &c) {
         PlanningTimer timing(c, h, "query_construction");
+        require(endpoint_mode <= FORT_SCOPE_PLAN_CONTINUE, FORT_SCOPE_ARGUMENT, "invalid planning endpoint mode");
         require(!c.pending, FORT_SCOPE_STATE, "planning requires completed earlier execution");
         for (const auto &entry : c.buffers)
             require(!entry.second->prepared, FORT_SCOPE_STATE, "planning during a prepared buffer access");
         require(!c.plan_installed || c.worker_cursor == c.schedule.size(), FORT_SCOPE_STATE,
                 "cannot discard an unfinished execution schedule");
+        complete_segment_estimate(c);
+        if (c.endpoint_mode == FORT_SCOPE_PLAN_CONTINUE && endpoint_mode == FORT_SCOPE_PLAN_COMPLETE)
+            c.owner_estimate_available = false;
         c.plan.clear(); c.schedule.clear(); c.worker_cursor = 0;
         c.plan_installed = false; c.plan_recording = true;
+        c.endpoint_mode = endpoint_mode; c.last_report.reset();
     }, Change::Query);
+}
+extern "C" int fort_scope_plan_reset(fort_scope_t h) {
+    return fort_scope_plan_reset_mode(h, FORT_SCOPE_PLAN_COMPLETE);
+}
+extern "C" int fort_scope_plan_report_v2(fort_scope_t h, fort_scope_plan_report *out) {
+    return with(h, [&](Context &c) {
+        require(out && c.last_report.has_value(), FORT_SCOPE_STATE, "no finalized planning cost report");
+        *out = *c.last_report;
+        out->owner_segments = c.owner_segments;
+        out->owner_available = c.owner_estimate_available && c.owner_segments && !c.segment_cost_pending;
+        out->owner_execution_seconds = c.owner_execution_seconds;
+        out->owner_terminal_seconds = c.owner_terminal_seconds;
+        out->owner_complete_seconds = c.owner_execution_seconds+c.owner_terminal_seconds;
+        out->native_common_compute_excluded |= c.owner_native_common_compute_excluded;
+    }, Change::None);
 }
 extern "C" int fort_scope_plan_add(fort_scope_t h, uint32_t kind, uint64_t unit,
                                    const fort_scope_plan_binding *bindings, size_t count,
@@ -712,24 +800,29 @@ extern "C" int fort_scope_plan_validate(fort_scope_t h) {
                 fort_scoped::planning::validate_definitions(planning_inputs(c, h));
         } catch (const Error &error) {
             c.definition_proof.reset(); c.preview.reset();
+            if (c.endpoint_mode == FORT_SCOPE_PLAN_CONTINUE) c.owner_estimate_available = false;
             proof.status = error.status; proof.reason = error.what();
             definition_validation_trace(c, h, proof, false, timing.seconds()); throw;
         } catch (const std::bad_alloc &) {
             c.definition_proof.reset(); c.preview.reset();
+            if (c.endpoint_mode == FORT_SCOPE_PLAN_CONTINUE) c.owner_estimate_available = false;
             proof.status = FORT_SCOPE_RESOURCE; proof.reason = "planning_resource_failure";
             definition_validation_trace(c, h, proof, false, timing.seconds()); throw;
         } catch (const Fragmented &) {
             c.definition_proof.reset(); c.preview.reset();
+            if (c.endpoint_mode == FORT_SCOPE_PLAN_CONTINUE) c.owner_estimate_available = false;
             proof.status = FORT_SCOPE_BOUNDARY; proof.reason = "region_fragmentation_unavailable";
             definition_validation_trace(c, h, proof, false, timing.seconds()); throw;
         } catch (...) {
             c.definition_proof.reset(); c.preview.reset();
+            if (c.endpoint_mode == FORT_SCOPE_PLAN_CONTINUE) c.owner_estimate_available = false;
             proof.status = FORT_SCOPE_STATE; proof.reason = "planning_state_unavailable";
             definition_validation_trace(c, h, proof, false, timing.seconds()); throw;
         }
         definition_validation_trace(c, h, proof, timing.cache_hit, timing.seconds());
         if (proof.status != FORT_SCOPE_OK) {
             c.definition_proof.reset(); c.preview.reset();
+            if (c.endpoint_mode == FORT_SCOPE_PLAN_CONTINUE) c.owner_estimate_available = false;
             std::ostringstream message;
             message << "definition preflight: " << proof.reason;
             if (proof.operation < c.plan.size()) {
@@ -750,6 +843,18 @@ extern "C" int fort_scope_plan_select(fort_scope_t h, const fort_scope_plan_cost
         PlanningTimer timing(c, h, "selection");
         require(costs && out && compatible >= -1 && compatible <= 1, FORT_SCOPE_ARGUMENT, "invalid planning selection arguments");
         require(c.plan_recording && !c.plan_installed, FORT_SCOPE_STATE, "planning selection requires a completed query");
+        if (c.endpoint_mode == FORT_SCOPE_PLAN_CONTINUE) {
+            require(!c.pending, FORT_SCOPE_STATE, "planning requires completed earlier execution");
+            if (!(c.definition_proof && c.definition_proof->query_generation == c.query_generation &&
+                  c.definition_proof->state_generation == c.state_generation)) {
+                const auto proof = fort_scoped::planning::validate_definitions(planning_inputs(c, h));
+                if (proof.status != FORT_SCOPE_OK) {
+                    c.owner_estimate_available = false;
+                    throw Error(proof.status, proof.reason);
+                }
+                c.definition_proof = Context::Proof{c.query_generation, c.state_generation, proof};
+            }
+        }
         timing.cache_hit = c.preview && c.preview_query_generation == c.query_generation &&
             c.preview_state_generation == c.state_generation &&
             c.preview->driver_initialized == driver_initialized(c) &&
@@ -773,15 +878,29 @@ extern "C" int fort_scope_plan_select(fort_scope_t h, const fort_scope_plan_cost
             result.decision.estimated_seconds = result.decision.native_seconds;
             std::fill(result.gpu_workers.begin(), result.gpu_workers.end(), false);
             result.reason = "hardware_or_calibration_incompatible";
+            result.report.available = 0;
         }
         *out = result.decision;
         if (compatible != -1) {
+            if (c.endpoint_mode == FORT_SCOPE_PLAN_CONTINUE) {
+                c.owner_create_accounted = true; c.registrations_incurred = 0;
+                c.segment_cost_pending = true;
+                if (!result.report.available) c.owner_estimate_available = false;
+            } else c.owner_estimate_available = false; // Legacy native fallback can run outside context hooks.
+            result.report.owner_segments = c.owner_segments;
+            result.report.owner_available = c.owner_estimate_available && c.owner_segments && !c.segment_cost_pending;
+            result.report.owner_execution_seconds = c.owner_execution_seconds;
+            result.report.owner_terminal_seconds = c.owner_terminal_seconds;
+            result.report.owner_complete_seconds = c.owner_execution_seconds+c.owner_terminal_seconds;
+            result.report.native_common_compute_excluded |= c.owner_native_common_compute_excluded;
+            c.last_report = result.report;
             planning_evidence(c, h, *costs, result);
             c.schedule = std::move(result.gpu_workers);
             c.worker_cursor = 0;
             // A successful whole-native choice leaves original source fallback
             // free to close this untouched metadata-only context.
-            c.plan_installed = result.decision.available && result.decision.gpu_units;
+            c.plan_installed = c.endpoint_mode == FORT_SCOPE_PLAN_CONTINUE ||
+                (result.decision.available && result.decision.gpu_units);
             if (!c.plan_installed) c.schedule.clear();
             c.plan_recording = false;
             decision_trace(*out, result.reason);
@@ -878,11 +997,14 @@ static int register_buffer(fort_scope_t h, uint64_t identity, uint64_t generatio
                     FORT_SCOPE_ALIAS, "overlapping registrations require one canonical buffer");
         }
         b->initialized = b->host_current = initial;
+        require(c.registrations_incurred < std::numeric_limits<size_t>::max(),
+                FORT_SCOPE_RESOURCE, "scope registration accounting overflow");
         b->handle = token();
         const auto handle = b->handle;
         c.buffers.emplace(handle, std::move(b));
         try { c.identities.emplace(identity, handle); }
         catch (...) { c.buffers.erase(handle); throw; }
+        ++c.registrations_incurred;
         *out = handle;
     });
 }
@@ -914,7 +1036,10 @@ extern "C" int fort_scope_layout_get(fort_scope_t h, fort_buffer_t b, fort_scope
     }, Change::None);
 }
 extern "C" int fort_scope_host_begin(fort_scope_t h, fort_buffer_t b, const fort_scope_access *a) {
-    return with(h, [&](Context &c) { begin(c, buffer(c,b), a, false); });
+    return with(h, [&](Context &c) {
+        note_numerical_activity(c);
+        begin(c, buffer(c,b), a, false);
+    });
 }
 extern "C" int fort_scope_host_end(fort_scope_t h, fort_buffer_t b) {
     return with(h, [&](Context &c) { end(buffer(c,b), false); });
@@ -922,6 +1047,7 @@ extern "C" int fort_scope_host_end(fort_scope_t h, fort_buffer_t b) {
 extern "C" int fort_scope_device_begin(fort_scope_t h, fort_buffer_t b, const fort_scope_access *a, void **out) {
     return with(h, [&](Context &c) {
         require(out, FORT_SCOPE_ARGUMENT, "missing device pointer output");
+        note_numerical_activity(c);
         auto &value = buffer(c,b); begin(c, value, a, true); *out = value.device;
     });
 }
@@ -934,6 +1060,7 @@ extern "C" int fort_scope_cancel_access(fort_scope_t h, fort_buffer_t b) {
 extern "C" int fort_scope_gpu_enter(fort_scope_t h, int *previous, void **stream) {
     return with(h, [&](Context &c) {
         require(previous && stream, FORT_SCOPE_ARGUMENT, "missing GPU entry outputs");
+        note_numerical_activity(c);
         initialize(c);
 #ifdef FORT_SCOPE_CPU_TEST
         *previous = 0; *stream = nullptr;
@@ -962,6 +1089,7 @@ extern "C" int fort_scope_gpu_leave(fort_scope_t h, int previous) {
 extern "C" int fort_scope_note_launch(fort_scope_t h) {
     return with(h, [&](Context &c) {
         require(c.ready, FORT_SCOPE_STATE, "GPU launch recorded without entering the context device");
+        note_numerical_activity(c);
         ++c.stats.launches; c.pending = true; trace("launch");
     });
 }
@@ -972,6 +1100,7 @@ extern "C" int fort_scope_execution_error(fort_scope_t h, const char *message) {
         require(!c->closed, FORT_SCOPE_STALE, "invalid or stale scope handle");
         const char *reason = c->poisoned && last_error[0] ? last_error : message;
         invalidate(*c, Change::State);
+        c->owner_estimate_available = false;
         c->poisoned = true;
         throw Error(FORT_SCOPE_EXECUTION, reason ? reason : "scoped numerical execution failed");
     });
@@ -980,7 +1109,9 @@ extern "C" int fort_scope_report_error(int status, const char *message) {
     if (status != FORT_SCOPE_OK) diagnostic(message ? message : "scoped entry error");
     return status;
 }
-extern "C" int fort_scope_wait(fort_scope_t h) { return with(h, [&](Context &c) { wait(c); }); }
+extern "C" int fort_scope_wait(fort_scope_t h) {
+    return with(h, [&](Context &c) { wait(c); complete_segment_estimate(c); });
+}
 extern "C" int fort_scope_stats_get(fort_scope_t h, fort_scope_stats *out) {
     return with(h, [&](Context &c) { require(out, FORT_SCOPE_ARGUMENT, "missing stats output"); *out = c.stats; }, Change::None);
 }

@@ -214,7 +214,7 @@ def test_query_wrappers_preserve_source_definition_positions(tmp_path, monkeypat
     assert all("fort_scope_host_begin" not in query.split("end subroutine", 1)[0] for query in queries)
 
 
-def test_changed_control_scalar_keeps_original_whole_span(tmp_path, monkeypatch):
+def test_changed_control_scalar_queries_reached_continuation_segments(tmp_path, monkeypatch):
     adjust = "subroutine adjust(n)\ninteger,intent(inout)::n\nn=n-1\nend subroutine\n"
     source = PROGRAM.replace("end module", adjust + "end module")
     # Replace only owning entry's intent; numerical leaves remain read-only.
@@ -223,12 +223,17 @@ def test_changed_control_scalar_keeps_original_whole_span(tmp_path, monkeypatch)
     source = source.replace("call transform(b)", "call adjust(n)")
     outputs, report = generate(tmp_path, monkeypatch, source)
     scope, = report["scopes"]
-    assert not scope["estimate_available"]
-    assert "scalar inputs change" in scope["planning_reason"]
+    assert scope["estimate_available"], scope["planning_reason"]
+    assert scope["ownership"]["planning_mode"] == "continuation"
+    assert [segment["calls"] for segment in scope["planning_segments"]] == [
+        ["original::producer"], ["original::adjust"], ["original::consumer"]]
     text = next(value for name, value in outputs.items() if name.startswith("sources/"))
     owner = text.split("subroutine fort_scope_owner_", 1)[1].split("end subroutine", 1)[0]
-    assert "fort_scope_create" not in owner
+    assert "fort_scope_create" in owner
+    assert "fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)" in owner
+    assert "gpu_units == 0" not in owner
     assert "call adjust(" in owner
+    assert owner.index("fort_scope_query_", owner.rfind("call adjust(")) > owner.rfind("call adjust(")
 
 
 @pytest.mark.parametrize("initialized", ["whole", "none"])

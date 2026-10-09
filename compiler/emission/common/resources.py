@@ -42,6 +42,15 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
         "link_once": True,
         "headers": ["scoped_runtime.h", "scoped_entry.hpp", "section_copy.hpp", "scoped_regions.hpp", "scoped_planning.hpp"],
         "planning_abi_version": 1,
+        "planning_continuation": {
+            "abi_version": 2,
+            "reset": "fort_scope_plan_reset_mode",
+            "report": "fort_scope_plan_report_v2",
+            "endpoints": {"complete": 0, "continue": 1},
+            "costs": "incremental execution plus change in eventual publication/teardown liability",
+            "terminal_operations": "hypothetical until owner close; excluded from executed segment counters",
+            "native_selection": "execute reached segment with coherence hooks; retain owning context",
+        },
         "sources": [
             {"path": "scoped_runtime.cu", "language": "cuda", "standard": "c++17", "host_openmp": True},
             {"path": "fort_scoped_memory.f90", "language": "fortran", "module": "fort_scoped_memory"},
@@ -55,6 +64,6 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
         "concurrent_access": "separate contexts with nonconflicting host storage",
         "rectangle_limit": 32,
         "intersection_limit": 1024,
-        "capabilities": ["section_coherence", "partial_host_initialization", "source_definition_changes", "device_memory_budget", "coherent_runtime_placement", "ordered_definition_validation"],
+        "capabilities": ["section_coherence", "partial_host_initialization", "source_definition_changes", "device_memory_budget", "coherent_runtime_placement", "ordered_definition_validation", "context_query_reuse", "segment_continuation"],
     }
     return outputs, manifest

@@ -58,6 +58,9 @@ typedef struct fort_scope_stats {
  * work or changing coherence. Coordinates and access descriptors match the
  * execution API. Selection compares complete ordered schedules and exports. */
 #define FORT_SCOPE_PLANNING_ABI_VERSION 1
+/* Additive endpoint/report API; existing planning costs and decisions stay v1. */
+#define FORT_SCOPE_PLANNING_REPORT_VERSION 2
+enum fort_scope_plan_endpoint { FORT_SCOPE_PLAN_COMPLETE = 0, FORT_SCOPE_PLAN_CONTINUE = 1 };
 enum fort_scope_plan_kind { FORT_SCOPE_PLAN_NATIVE = 0, FORT_SCOPE_PLAN_WORKER = 1,
                            FORT_SCOPE_PLAN_FORGET = 2 };
 typedef struct fort_scope_plan_binding {
@@ -79,10 +82,31 @@ typedef struct fort_scope_plan_decision {
     uint64_t launches, waits, allocations, peak_device_bytes;
     double estimated_seconds, native_seconds;
 } fort_scope_plan_decision;
+typedef struct fort_scope_terminal_cost {
+    double seconds;
+    uint64_t download_bytes, downloads, waits, releases;
+} fort_scope_terminal_cost;
+typedef struct fort_scope_plan_report {
+    uint32_t version, endpoint_mode, available, owner_available;
+    double execution_seconds, native_execution_seconds;
+    fort_scope_terminal_cost entry_terminal, terminal, native_terminal;
+    double ranking_seconds, native_ranking_seconds;
+    uint64_t owner_segments;
+    double owner_execution_seconds, owner_terminal_seconds, owner_complete_seconds;
+    uint32_t native_common_compute_excluded;
+} fort_scope_plan_report;
 /* Pure check for INTEGER payloads used by planning controls. No transfers or
  * definition changes; the complete payload must already be host current. */
 int fort_scope_plan_host_current(fort_scope_t context, fort_buffer_t buffer);
 int fort_scope_plan_reset(fort_scope_t context);
+/* CONTINUE retains ownership: select installs ordered CPU choices even when
+ * GPU estimates are unavailable. Complete prior workers and wait before the
+ * next reset. Terminal costs are hypothetical and do not publish or release. */
+int fort_scope_plan_reset_mode(fort_scope_t context, uint32_t endpoint_mode);
+/* Read the last finalized selection's modeled costs without touching storage.
+ * Owner totals sum reached continuation execution plus one projected close;
+ * unavailable/fallback execution invalidates the complete-owner estimate. */
+int fort_scope_plan_report_v2(fort_scope_t context, fort_scope_plan_report *report);
 int fort_scope_plan_add(fort_scope_t context, uint32_t kind, uint64_t unit,
                         const fort_scope_plan_binding *bindings, size_t count,
                         double flops, double memory_bytes, int gpu_available);

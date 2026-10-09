@@ -16,7 +16,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = """module original
 implicit none
-real(8),allocatable::field(:)
+real(8),allocatable,target::field(:)
 contains
 subroutine produce(a,b,n)
 real(8),contiguous,intent(in)::a(:)
