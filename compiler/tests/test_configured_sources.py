@@ -95,6 +95,94 @@ def test_included_statement_does_not_use_prepared_line_for_original_edits(tmp_pa
     assert call.item.fort_original_span is None
 
 
+def test_unmapped_included_scalar_consumer_still_participates_in_liveness(tmp_path):
+    from compiler.driver.options import CompilerOptions
+    from compiler.offload.config import OffloadConfig
+    from compiler.scopes.source import ScopeBuilder
+    from compiler.tests.test_lexical_source_owner import SOURCE
+
+    source = SOURCE.replace('if(escape) then\ncall opaque(b,n)\nendif', '#include "observe.inc"')
+    original = tmp_path/'owner.f90'
+    original.write_text(source)
+    include = tmp_path/'observe.inc'
+    include.write_text('visits=visits+i\n')
+    prepared = tmp_path/'configured.f90'
+    lines, mapping = [], []
+    for number, line in enumerate(source.splitlines(), 1):
+        lines.append(include.read_text().strip() if line.startswith('#include') else line)
+        mapping.append(None if line.startswith('#include') else number)
+    prepared.write_text('\n'.join(lines)+'\n')
+    document = {'schema_version': 1, 'source_inputs': {str(original): sha256(original.read_bytes()).hexdigest()},
+                'preserves_source_order': True, 'configuration': {'defines': []},
+                'dependencies': {str(include): sha256(include.read_bytes()).hexdigest()},
+                'entries': [{'source': str(original), 'path': str(prepared),
+                             'sha256': sha256(prepared.read_bytes()).hexdigest(), 'line_map': mapping}]}
+    facts = {'schema_version': 1, 'participation': 'serial', 'sources': document['source_inputs'],
+             'captures': {'argument::'+name: FACT for name in ('a','b','out')}}
+    builder = ScopeBuilder([original], 'local_owner::step', facts=facts, options=CompilerOptions(),
+                           config=OffloadConfig(policy='sections', scope_execution='reached'),
+                           analysis_sources=document)
+    _, report = builder.run()
+    assert any('scalar is live after' in item['reason'] for item in report['boundaries'])
+    assert all(region['written_resources'] != ['argument::b']
+               for region in report['inline_numerical_regions']['regions'])
+
+
+def configured_native_owner(tmp_path):
+    """An included native correction, bounded by original joined directives."""
+    from compiler.tests.test_lexical_source_owner import SOURCE
+
+    source = SOURCE.replace('if(escape) then\ncall opaque(b,n)\nendif',
+        '!$omp parallel do private(i)\n#include "correction.inc"\n!$omp end parallel do')
+    original = tmp_path/'owner.f90'
+    original.write_text(source)
+    include = tmp_path/'correction.inc'
+    include.write_text('do i=-2,n-3\nb(i)=b(i)+sum(a)\nenddo\n')
+    prepared = tmp_path/'configured.f90'
+    lines, mapping = [], []
+    for number, line in enumerate(source.splitlines(), 1):
+        if line.startswith('#include'):
+            included = include.read_text().splitlines()
+            lines.extend(included)
+            mapping.extend([None]*len(included))
+        else:
+            lines.append(line)
+            mapping.append(number)
+    prepared.write_text('\n'.join(lines)+'\n')
+    document = {'schema_version': 1, 'source_inputs': {str(original): sha256(original.read_bytes()).hexdigest()},
+                'preserves_source_order': True, 'configuration': {'defines': []},
+                'dependencies': {str(include): sha256(include.read_bytes()).hexdigest()},
+                'entries': [{'source': str(original), 'path': str(prepared),
+                             'sha256': sha256(prepared.read_bytes()).hexdigest(), 'line_map': mapping}]}
+    facts = {'schema_version': 1, 'participation': 'serial', 'sources': document['source_inputs'],
+             'captures': {'argument::'+name: FACT for name in ('a','b','out')}}
+    return original, document, facts
+
+
+def test_reached_owner_surrounds_configured_native_group_without_copying_it(tmp_path):
+    from compiler.driver.options import CompilerOptions
+    from compiler.offload.config import OffloadConfig
+    from compiler.scopes.source import ScopeBuilder
+
+    original, document, facts = configured_native_owner(tmp_path)
+    outputs, report = ScopeBuilder([original], 'local_owner::step', facts=facts, options=CompilerOptions(),
+        config=OffloadConfig(policy='sections', scope_execution='reached'), analysis_sources=document).run()
+    assert report['scope_count'] == 1, report['boundaries']
+    owner = report['scopes'][0]
+    assert not owner['boundaries'], owner['boundaries']
+    operations = [operation for segment in owner['planning_segments']
+                  for operation in segment['operations']['native_operations']]
+    preserved = [operation for operation in operations if operation['preserves_original_source']]
+    assert len(preserved) == 1
+    assert preserved[0]['completion']['available']
+    assert not preserved[0]['sections']['available']
+    text = outputs[report['sources'][str(original)]['replacement']]
+    assert text.count('#include "correction.inc"') == 1
+    assert text.count('!$omp parallel do private(i)') == 1
+    assert text.index('fort_native_ready = .false.') < text.index('#include "correction.inc"')
+    assert text.index('#include "correction.inc"') < text.index('if (fort_native_ready) then')
+
+
 def test_dependency_change_and_bad_line_order_are_rejected(tmp_path):
     original,_prepared,document=inputs(tmp_path)
     dependency=tmp_path/"constants.inc"

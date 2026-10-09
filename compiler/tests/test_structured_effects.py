@@ -32,7 +32,7 @@ def test_unknown_else_does_not_poison_reached_then(tmp_path):
     assert {node.kind for node in graph.nodes.values()} >= {"sequence", "branch", "boundary", "entry", "operation"}
     summary = analysis.segment_summary("varied::advance", assignments(analysis))
     assert summary["complete"], summary["reasons"]
-    assert summary["summary_version"] == SOURCE_SUMMARY_VERSION == 5
+    assert summary["summary_version"] == SOURCE_SUMMARY_VERSION == 11
     assert summary["structured_identity"] == graph.identity
     assert summary["includes_entry"] is False
     assert summary["definition_changes"] == []
@@ -50,6 +50,27 @@ def test_entire_oversized_closure_keeps_bounded_reached_segments(tmp_path):
         assert summary["complete"], summary["reasons"]
         assert len(summary["ordered_effects"]) == 2
     assert not analysis.segment_summary("varied::advance", assignments(analysis))["complete"]
+
+
+def test_structural_containers_do_not_spend_the_source_operation_budget(tmp_path):
+    body = 'do i=1,n\nif(flag) then\na(i)=b(i)\nelse\nendif\nenddo\n'
+    _, analysis = source(tmp_path, body*3, operations=12)
+    graph = analysis.structure('varied::advance')
+    assert graph.available, graph.reasons
+    assert graph.version == 3
+    assert graph.operation_count == 9
+    assert graph.operation_limit == 12
+    assert len(graph.nodes) > analysis.operation_limit+2
+    assert len(graph.nodes) <= graph.node_limit
+    for node in assignments(analysis):
+        assert analysis.segment_summary('varied::advance', (node,))['complete']
+
+
+def test_structural_accounting_keeps_the_operation_limit(tmp_path):
+    _, analysis = source(tmp_path, 'a(1)=b(1)\n'*13, operations=12)
+    graph = analysis.structure('varied::advance')
+    assert not graph.available
+    assert any('operation budget exhausted' in reason for reason in graph.reasons)
 
 
 def test_condition_and_loop_header_ids_preserve_original_protected_expressions(tmp_path):

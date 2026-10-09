@@ -8,6 +8,7 @@ not mistaken for physical transfer coordinates. Unknown effects are boundaries.
 from __future__ import annotations
 
 import json
+import re
 from contextlib import suppress
 from copy import copy, deepcopy
 from dataclasses import dataclass, field
@@ -25,7 +26,7 @@ from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
 # Bump when source-effect, call-composition or summary semantics change.
-SOURCE_SUMMARY_VERSION = 5
+SOURCE_SUMMARY_VERSION = 11
 _DEFAULT_SUMMARY_CACHE = SummaryCache()
 
 
@@ -43,6 +44,61 @@ def _children(node):
 
 def _part(node, name):
     return next((child for child in _children(node) if _kind(child) == name), None)
+
+
+def _attach_execution_directives(node):
+    """Recover original executable prefixes that fparser stores in specs.
+
+    Move the existing comment nodes, never manufactured spans or directives.
+    Only a trailing comment suffix beginning a parallel region qualifies;
+    declaration directives and comments separated by declarations stay put.
+    All source identities are captured after this parser normalization.
+    """
+    specification, execution = _part(node, "Specification_Part"), _part(node, "Execution_Part")
+    def detach_prefixes(parent):
+        if not hasattr(parent, 'content'):
+            return
+        children = []
+        for child in parent.content:
+            if _kind(child) in {'Block_Nonlabel_Do_Construct', 'Block_Label_Do_Construct',
+                               'If_Construct', 'Associate_Construct'}:
+                while child.content and _kind(child.content[0]) == 'Comment':
+                    children.append(child.content.pop(0))
+            detach_prefixes(child)
+            children.append(child)
+        parent.content[:] = children
+
+    # A previous team's join must not become part of a following loop merely
+    # because fparser attached its leading comments there. Preserve the actual
+    # comment objects and their order before recording original-source roles.
+    if execution is not None:
+        detach_prefixes(execution)
+    if specification is None or execution is None:
+        return
+    containers, trailing = [], []
+    for child in reversed(specification.content):
+        if _kind(child) == "Comment":
+            containers.append((specification, child))
+            trailing.insert(0, child)
+        elif _kind(child) == "Implicit_Part":
+            for item in reversed(child.content):
+                if _kind(item) != "Comment":
+                    break
+                containers.append((child, item))
+                trailing.insert(0, item)
+            if any(_kind(item) != "Comment" for item in child.content):
+                break
+        else:
+            break
+    directives = [str(item).strip().lower() for item in trailing
+                  if str(item).lstrip().lower().startswith("!$omp")]
+    if not directives or re.match(r"!\$omp\s+parallel(?:\s|$)", directives[0]) is None:
+        return
+    for parent, comment in containers:
+        del parent.content[next(index for index, item in enumerate(parent.content) if item is comment)]
+    specification.content[:] = [child for child in specification.content
+                                 if _kind(child) != "Implicit_Part" or child.content]
+    execution.content[:0] = trailing
 
 
 def _admit_cached_summary(item, routine, limit):
@@ -188,6 +244,7 @@ class Binding:
     lower_bounds: tuple[str, ...] = ()
     lower_bound_nodes: tuple[object | None, ...] = field(default=(), repr=False)
     shape_nodes: tuple[object, ...] = field(default=(), repr=False)
+    declaring_scope: object = field(default=None, repr=False, compare=False)
 
     def signature(self):
         return self.dtype, self.kind, self.rank
@@ -213,6 +270,8 @@ class Scope:
     bindings: dict[str, Binding] = field(default_factory=dict)
     imports: dict[str, tuple[str, str]] = field(default_factory=dict)
     wildcards: list[str] = field(default_factory=list)
+    wildcard_exclusions: dict[str, set[str]] = field(default_factory=dict)
+    ambiguous_imports: set[str] = field(default_factory=set)
     generics: dict[str, list[tuple[str, str]]] = field(default_factory=dict)
     unresolved_imports: list[str] = field(default_factory=list)
     issues: list[str] = field(default_factory=list)
@@ -336,6 +395,7 @@ class SourceEffects:
                                                          getattr(item, "fort_original_span", None))
 
     def _register_routine(self, parent, node, *, source_kind="module"):
+        _attach_execution_directives(node)
         stmt = _part(node, "Subroutine_Stmt")
         owner = getattr(parent, "qualified", parent.module)
         qualified = owner + "::" + str(stmt.items[1]).lower()
@@ -352,6 +412,7 @@ class SourceEffects:
         self._register_internal(child, node)
 
     def _register_function(self, parent, node):
+        _attach_execution_directives(node)
         stmt = _part(node, "Function_Stmt")
         qualified = getattr(parent, "qualified", parent.module) + "::" + str(stmt.items[1]).lower()
         if qualified in self.routines or qualified in self.functions:
@@ -422,10 +483,15 @@ class SourceEffects:
                            "lexical_procedures": dict(routine.scope.procedures),
                            "intrinsic_procedures": dict(routine.scope.intrinsic_procedures),
                            "intrinsic_wildcards": sorted(routine.scope.intrinsic_wildcards),
+                           "imports": routine.scope.imports,
+                           "wildcard_exclusions": {module: sorted(names) for module, names in
+                                                   routine.scope.wildcard_exclusions.items()},
+                           "ambiguous_imports": sorted(routine.scope.ambiguous_imports),
                            "logical_bound_nodes": {name: [str(node) if node is not None else None for node in binding.lower_bound_nodes]
                                                    for name, binding in routine.scope.bindings.items()}})
 
     def _summary_authority(self):
+        from compiler.frontend.structured_effects import STRUCTURED_EFFECT_VERSION
         projections = []
         for name, routine in self.routines.items():
             original = self._source_roles.get(name)
@@ -435,6 +501,8 @@ class SourceEffects:
                 projections.append({"procedure": name, "signature": signature,
                                     "execution": str(routine.execution)})
         return {"summary_version": SOURCE_SUMMARY_VERSION, "sources": self.inputs.identity(),
+                "structured_version": STRUCTURED_EFFECT_VERSION,
+                "native_metadata_version": 1 if getattr(self, '_native_metadata', False) else None,
                 "contracts": self.contracts, "capture_authorizations": self._allocation_authorizations,
                 "stable_module_allocatables": sorted(self.stable_module_allocatables),
                 "budgets": {"depth": self.depth_limit, "procedures": self.procedure_limit,
@@ -589,7 +657,9 @@ class SourceEffects:
             target = self.modules.get(module)
             if target is None or not self._exported(target,remote):
                 continue
-            binding = self._binding(target, remote)
+            # Resolve the complete local import set. Choosing one declaration
+            # here would silently price/lower an ambiguous imported kind.
+            binding = self._binding(scope, local)
             if binding is None or binding.dtype != "integer" or binding.rank or "parameter" not in binding.attributes:
                 continue
             owner = self.modules.get(binding.root.split("::",1)[0])
@@ -628,15 +698,28 @@ class SourceEffects:
                     continue
                 if module in _KindScope.intrinsic_kinds and str(nature).lower() != "non_intrinsic":
                     continue
-                if symbols is None or str(only).upper().replace(" ", "") != ",ONLY:":
-                    scope.wildcards.append(module)
-                    if symbols is not None:
-                        issues.append("USE renaming without ONLY requires complete export resolution")
-                else:
+                unrestricted = symbols is None or str(only).upper().replace(" ", "") != ",ONLY:"
+                renamed = set()
+                if symbols is not None:
                     for item in symbols.items:
                         local, remote = ((str(item.items[1]), str(item.items[2]))
                                          if _kind(item) == "Rename" else (str(item), str(item)))
-                        scope.imports[local.lower()] = module, remote.lower()
+                        local, remote = local.lower(), remote.lower()
+                        if _kind(item) == "Rename":
+                            renamed.add(remote)
+                        previous = scope.imports.get(local)
+                        if previous is not None and previous != (module, remote):
+                            # Do not arbitrarily choose between explicit local
+                            # names. A later canonical-export merge can admit
+                            # aliases that are proven to name the same entity.
+                            scope.ambiguous_imports.add(local)
+                        scope.imports[local] = module, remote
+                if unrestricted:
+                    if module in scope.wildcard_exclusions:
+                        scope.wildcard_exclusions[module].intersection_update(renamed)
+                    else:
+                        scope.wildcards.append(module)
+                        scope.wildcard_exclusions[module] = renamed
                 if module not in self.modules:
                     scope.unresolved_imports.append(module)
             elif name == "Interface_Block":
@@ -650,6 +733,18 @@ class SourceEffects:
                     scope.generics[generic] = members
                 else:
                     issues.append("non-module generic interface is unavailable")
+            elif name == "Procedure_Declaration_Stmt":
+                interface, attributes, entities = node.items
+                if (_kind(interface) == "Name" and attributes is None
+                        and all(_kind(item) == "Name" for item in _children(entities))):
+                    # Merely declaring an ordinary dummy procedure executes
+                    # nothing. An invocation still needs its own resolved
+                    # source target; never infer its effects from this type.
+                    names = {str(item).lower() for item in _children(entities)}
+                    scope.procedure_arguments.update(names.intersection(arguments))
+                    scope.externals.update(names)
+                else:
+                    issues.append("procedure association or initialization requires source proof")
             elif name == "External_Stmt":
                 names = {str(item).lower() for item in _children(node.items[-1])}
                 scope.externals.update(names)
@@ -694,7 +789,7 @@ class SourceEffects:
                     root = (f"argument::{variable}" if variable in arguments else
                             f"{qualified}::{variable}" if qualified else f"{scope.module}::{variable}")
                     binding = Binding(variable, root, base, width, len(dimensions), intent,
-                                      frozenset(attributes), lowers, lower_nodes, dimensions)
+                                      frozenset(attributes), lowers, lower_nodes, dimensions, declaring_scope=scope)
                     scope.bindings[variable] = binding
                     if _kind(dtype) == "Intrinsic_Type_Spec" and selector is not None:
                         self.kind_expressions.append((binding, scope, selector.items[1]))
@@ -715,6 +810,20 @@ class SourceEffects:
             return True
         return scope.default_public
 
+    def use_sources(self, scope, name):
+        """Visible USE candidates, including exclusions on unrestricted renames.
+
+        Repeated unrestricted imports intersect exclusions: another USE can
+        make the original name visible again. Explicit ONLY imports remain
+        available independently of those exclusions.
+        """
+        if name in scope.ambiguous_imports:
+            return None
+        choices = ([scope.imports[name]] if name in scope.imports else [])
+        choices += [(module, name) for module in scope.wildcards
+                    if name not in scope.wildcard_exclusions.get(module, ())]
+        return tuple(dict.fromkeys(choices))
+
     def _binding(self, scope, name, visited=frozenset()):
         if _kind(name) == "Data_Ref":
             from compiler.frontend.component_bindings import resolve_binding
@@ -728,26 +837,20 @@ class SourceEffects:
         if name in scope.intrinsic_procedures or (name.startswith("ieee_") and scope.intrinsic_wildcards):
             return None
         found = []
-        if name in scope.imports:
-            module, remote = scope.imports[name]
+        sources = self.use_sources(scope, name)
+        if sources is None:
+            return None
+        for module, remote in sources:
             if module in self.modules:
                 if not self._exported(self.modules[module], remote):
-                    return None
+                    if name in scope.imports and scope.imports[name] == (module, remote):
+                        return None
+                    continue
                 binding = self._binding(self.modules[module], remote, visited | {key})
                 if binding:
                     found.append(binding)
             else:
                 return None  # A local USE name shadows any parent binding.
-        else:
-            for module in scope.wildcards:
-                if module in self.modules:
-                    if not self._exported(self.modules[module], name):
-                        continue
-                    binding = self._binding(self.modules[module], name, visited | {key})
-                    if binding:
-                        found.append(binding)
-                else:
-                    return None  # Unknown exports might shadow this name.
         roots = {b.root: b for b in found}
         if roots:
             return next(iter(roots.values())) if len(roots) == 1 else None
@@ -771,23 +874,24 @@ class SourceEffects:
             return [external] if external in self.routines or external in self.functions else []
         if name in scope.generics:
             return [m + "::" + p for m, p in scope.generics[name]]
-        if name in scope.imports:
-            module, remote = scope.imports[name]
-            if module in self.modules:
-                if not self._exported(self.modules[module],remote):
-                    return []
-                return self._candidates(self.modules[module], remote, visited | {key})
-            return [module + "::" + remote]
+        sources = self.use_sources(scope, name)
+        if sources is None:
+            return []
         own = scope.module + "::" + name
         if scope.parent is None and scope.module in self.modules and (own in self.routines or own in self.functions):
             return [own]
         found = []
-        for module in scope.wildcards:
+        for module, remote in sources:
             if module not in self.modules:
-                return []
-            if not self._exported(self.modules[module],name):
+                if module in scope.wildcards:
+                    return []
+                found.append(module + "::" + remote)
                 continue
-            found += self._candidates(self.modules[module], name, visited | {key})
+            if not self._exported(self.modules[module],remote):
+                if name in scope.imports and scope.imports[name] == (module, remote):
+                    return []
+                continue
+            found += self._candidates(self.modules[module], remote, visited | {key})
         if found:
             return sorted(set(found))
         if scope.parent is not None:
@@ -1061,7 +1165,7 @@ class SourceEffects:
                 return
             if "parameter" in binding.attributes:
                 return
-            if {"pointer", "allocatable"} & binding.attributes:
+            if action != "descriptor_read" and {"pointer", "allocatable"} & binding.attributes:
                 authorized = binding.root in self.stable_module_allocatables
                 readonly_descriptor = (binding.name in routine.arguments and binding.intent == "in"
                                        and "allocatable" in binding.attributes and "pointer" not in binding.attributes)
@@ -1642,6 +1746,13 @@ class SourceEffects:
             selected = (selected,)
         identities = []
         for item in selected:
+            if _kind(item) == "Comment" and not str(item).lstrip().lower().startswith("!$omp"):
+                # Documentation has no execution identity. It may accompany
+                # an exact original group, but a foreign comment cannot grant
+                # source authority to a projected selection.
+                if not any(item is node for node in walk(self._require_original(requested).execution)):
+                    raise CompilationError("selected comment lacks original source authority")
+                continue
             if isinstance(item, str):
                 if item not in graph.nodes:
                     raise CompilationError("selected structured effect ID lacks original source authority")

@@ -607,7 +607,8 @@ def test_source_bound_authorized_module_array_reads_descriptors_and_section_writ
     report = analysis.report("allocations::inspect")
     assert report["complete"], report
     summary = records(report)["allocations::inspect"]
-    assert summary["capture_lifetime_requirements"] == [{"resource": "allocations::scratch", "authorized": True}]
+    expected = [] if body.startswith("if(") else [{"resource": "allocations::scratch", "authorized": True}]
+    assert summary["capture_lifetime_requirements"] == expected
     assert report["capture_lifetime_authorizations"] == [
         {"resource": "allocations::scratch", "source": str(path), "source_sha256": report["sources"][str(path)]}]
     assert analysis.stable_module_allocatables == frozenset({"allocations::scratch"})
@@ -628,6 +629,15 @@ def test_authorized_target_module_array_keeps_capture_aliasing_as_a_separate_req
     _path, analysis = allocation_effects(tmp_path, declaration="real(8),allocatable,target::scratch(:)")
     analysis.authorize_stable_module_allocatables({"allocations::scratch"})
     assert analysis.summarize("allocations::inspect")["complete"]
+
+
+def test_original_descriptor_guard_does_not_borrow_payload_storage(tmp_path):
+    _, analysis = allocation_effects(tmp_path, 'if(allocated(scratch)) a(1)=1')
+    summary = analysis.summarize('allocations::inspect')
+    assert summary['complete'], summary['reasons']
+    assert not summary['capture_lifetime_requirements']
+    actions = [op['kind'] for op in summary['operations'] if op.get('resource') == 'allocations::scratch']
+    assert actions == ['descriptor_read']
 
 
 def test_authorization_of_one_root_does_not_waive_other_hidden_or_formal_storage(tmp_path):

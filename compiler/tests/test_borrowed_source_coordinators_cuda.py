@@ -40,8 +40,8 @@ end program
 """
 
 
-@pytest.fixture(scope="module")
-def calibrated_child_binary(tmp_path_factory):
+@pytest.fixture(scope="module", params=("bounded", "reached", "reached_rollback"))
+def calibrated_child_binary(tmp_path_factory, request):
     nvcc, host = shutil.which("nvcc"), shutil.which("g++-14") or shutil.which("g++")
     fortran = shutil.which("gfortran-15") or shutil.which("gfortran")
     if not all((nvcc, host, fortran)):
@@ -53,12 +53,18 @@ def calibrated_child_binary(tmp_path_factory):
     profile = directory / "profile.json"
     # Favorable synthetic correctness costs, bound to the actual hardware and
     # tool identities, exercise AUTO; these are never performance evidence.
-    profile.write_text(json.dumps(actual_profile(directory, nvcc, host)))
-    original, output, manifest = generate(directory / "case", source(), mode="auto", profile=profile,
-        checkout=checkout, facts={"schema_version": 1, "participation": "serial",
+    calibration = actual_profile(directory, nvcc, host)
+    profile.write_text(json.dumps(calibration))
+    text = source()
+    if request.param == 'reached_rollback':
+        text = text.replace('call child(a,b,out,n)', 'if(n<0) then\ncall child(a,b,b,n)\nendif\ncall child(a,b,out,n)')
+    execution = 'bounded' if request.param == 'bounded' else 'reached'
+    original, output, manifest = generate(directory / "case", text, mode="auto", profile=profile,
+        checkout=checkout, scope_execution=execution, facts={"schema_version": 1, "participation": "serial",
                                  "captures": {"argument::" + name: FACT for name in ("a", "b", "out")}})
     assert manifest["scopes"][0]["estimate_available"]
-    assert len(manifest["borrowed_source_coordinators"]) == 1
+    assert {item["procedure"] for item in manifest["borrowed_source_coordinators"]} == (
+        {"original::child", "original::transform"} if execution == "reached" else {"original::child"})
     objects = []
     flags = [fortran, "-O3", "-std=f2018", "-fopenmp", "-fcheck=all,array-temps"]
     headers = tuple((name, digest) for name, digest in sorted(manifest["artifacts_sha256"].items())
@@ -70,7 +76,8 @@ def calibrated_child_binary(tmp_path_factory):
             artifact = output / item["path"]
             assert sha256(artifact.read_bytes()).hexdigest() == manifest["artifacts_sha256"][item["path"]]
             target = artifact.with_suffix(".o")
-            compiler = ([nvcc, "-O2", "-std=c++17", "-ccbin", host, "-arch=sm_86", "-Xcompiler=-fopenmp"]
+            compiler = ([nvcc, "-O2", "-std=c++17", "-ccbin", host,
+                         "-arch=sm_" + calibration['hardware']['compute_capability'].replace('.',''), "-Xcompiler=-fopenmp"]
                         if item["language"] == "cuda" else flags)
             run([*compiler, "-I", str(output), "-c", str(artifact), "-o", str(target)], cwd=output)
             objects.append(str(target))

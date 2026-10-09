@@ -11,6 +11,7 @@ class OffloadConfig:
     collective: bool = False
     profile_reason: str | None = None
     scope_transfers: str = "direct"
+    scope_execution: str = "bounded"
 
     def __post_init__(self):
         if self.policy not in {"always", "sections", "auto", "chunked", "hybrid"}:
@@ -19,3 +20,5 @@ class OffloadConfig:
             raise ValueError("Host thread budget must be positive")
         if self.scope_transfers not in {"direct", "pinned", "pipelined", "auto"}:
             raise ValueError("Unknown scope transfer mode")
+        if self.scope_execution not in {"bounded", "reached"}:
+            raise ValueError("Unknown source scope execution mode")

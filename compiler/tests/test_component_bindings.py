@@ -1,6 +1,7 @@
 """Fixed source fields retain their original object and lexical alias owner."""
 
 import pytest
+from copy import copy
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import walk
 
@@ -13,6 +14,38 @@ def analysis(tmp_path, source):
     path = tmp_path / "fields.f90"
     path.write_text(source)
     return SourceEffects([path])
+
+
+def test_native_array_metadata_proofs_do_not_enable_numerical_captures(tmp_path):
+    effects = analysis(tmp_path, '''module objects
+type item
+integer::coordinate
+real(8)::weight
+end type
+type(item),allocatable,target::table(:)
+contains
+subroutine step(a,n)
+integer,intent(in)::n
+real(8),intent(inout)::a(n)
+integer::i
+do i=1,size(table)
+a(table(i)%coordinate)=a(table(i)%coordinate)+table(i)%weight
+enddo
+end subroutine
+end module''')
+    routine = effects.routines['objects::step']
+    node = next(iter(walk(routine.execution, F.Data_Ref)))
+    with pytest.raises(CompilationError, match='scalar variable object'):
+        component_access(effects, routine.scope, node)
+    native = copy(effects)
+    native._native_metadata = True
+    selected = component_access(native, routine.scope, node)
+    assert selected.binding.rank == 0
+    assert selected.root_binding is routine.scope.parent.bindings['table']
+    assert selected.binding.native_metadata_object.rank == 1
+    assert native._summary_authority() != effects._summary_authority()
+    with pytest.raises(CompilationError, match='scalar variable object'):
+        component_access(effects, routine.scope, node)
 
 
 def test_fixed_fields_and_unsupported_siblings_are_separate(tmp_path):
@@ -102,6 +135,45 @@ end module
     routine = effects.routines["consumer::step"]
     with pytest.raises(CompilationError, match="private"):
         component_access(effects, routine.scope, next(iter(walk(routine.execution, F.Data_Ref))))
+
+
+@pytest.mark.parametrize('private', [False, True])
+def test_renamed_object_keeps_its_unimported_type_authority(tmp_path, private):
+    module = tmp_path/'model.f90'
+    module.write_text('''module model
+private
+type original_type
+''' + ('private\n' if private else '') + '''real(8)::rate
+end type
+type(original_type),public::state
+end module
+module relay
+use model,only:forwarded=>state
+end module
+''')
+    caller = tmp_path/'consumer.f90'
+    caller.write_text('''module consumer
+use relay,only:selected=>forwarded
+type original_type
+integer::rate
+end type
+contains
+subroutine step(a)
+real(8)::a
+a=selected%rate
+end subroutine
+end module
+''')
+    effects = SourceEffects([caller, module])
+    routine = effects.routines['consumer::step']
+    selector = next(iter(walk(routine.execution, F.Data_Ref)))
+    if private:
+        with pytest.raises(CompilationError, match='private'):
+            component_access(effects, routine.scope, selector)
+    else:
+        access = component_access(effects, routine.scope, selector)
+        assert access.binding.root == 'model::state%rate'
+        assert access.binding.signature() == ('real', 8, 0)
 
 
 def test_associate_aliases_are_lexical_and_do_not_rebind_outer_names(tmp_path):

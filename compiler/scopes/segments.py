@@ -17,6 +17,7 @@ from fparser.two.utils import Base, walk
 from compiler.frontend.source_effects import Binding, _kind
 from compiler.frontend.component_bindings import references
 from compiler.ir import CompilationError
+from compiler.ir.intrinsics import ARRAY_INQUIRIES, MODEL_INQUIRIES
 
 
 @dataclass
@@ -30,6 +31,8 @@ class Native:
     sections: object = None
     span: tuple = ()
     private_bindings: dict = field(default_factory=dict)
+    host_metadata: dict = field(default_factory=dict)
+    preserve_original: bool = False
 
 
 @dataclass
@@ -132,7 +135,28 @@ def grouped_nodes(nodes):
     while index < len(nodes):
         start = directive(nodes[index])
         if start is not None and re.match(r"parallel(?:\s|$)", start):
-            ending = "end parallel do" if re.match(r"parallel\s+do(?:\s|$)", start) else "end parallel"
+            combined = bool(re.match(r"parallel\s+do(?:\s|$)", start))
+            ending = "end parallel do" if combined else "end parallel"
+            if combined:
+                loop = index + 1
+                while loop < len(nodes) and _kind(nodes[loop]) == "Comment" and directive(nodes[loop]) is None:
+                    loop += 1
+                if loop >= len(nodes) or _kind(nodes[loop]) != "Block_Nonlabel_Do_Construct":
+                    raise CompilationError("combined PARALLEL DO requires its original associated loop")
+                end = loop + 1
+                while end < len(nodes) and _kind(nodes[end]) == "Comment" and directive(nodes[end]) is None:
+                    end += 1
+                if end < len(nodes) and directive(nodes[end]) == ending:
+                    result.append(tuple(nodes[index:end + 1]))
+                    index = end + 1
+                else:
+                    if end < len(nodes) and (directive(nodes[end]) or "").startswith("end parallel"):
+                        raise CompilationError("combined PARALLEL DO has a mismatched original join")
+                    # Fortran's END PARALLEL DO is optional. The complete DO
+                    # itself supplies the join; never absorb following work.
+                    result.append(tuple(nodes[index:loop + 1]))
+                    index = loop + 1
+                continue
             end = index + 1
             while end < len(nodes) and directive(nodes[end]) != ending:
                 end += 1
@@ -156,13 +180,19 @@ def statement_span(node):
     return min(span[0] for span in spans), max(span[1] for span in spans)
 
 
-def fragment(builder, nodes, *, kind="native source", selected=None, private_roots=()):
+def fragment(builder, nodes, *, kind="native source", selected=None, private_roots=(), native_metadata=False):
     """Demand effects from exact original nodes, excluding owner entry events."""
     original = original_roots(builder.inline.original_selection(nodes)) if selected is None else ()
     full_original = original
     analysis = copy.copy(builder.analysis)
-    completion_proof = (analysis.joined_completion(builder.entry.qualified, original)
-                        if kind == "joined native OpenMP" else None)
+    analysis._native_metadata = native_metadata
+    joined = kind == "joined native OpenMP" or (
+        kind == "guarded original numerical fallback"
+        and any(directive(item) is not None for node in original for item in walk(node)))
+    # Bounds and tile guards must retain the completion proof of the exact
+    # original team. The numerical outlining token alone cannot authorize
+    # native effects; issue an independent native joined-group proof here.
+    completion_proof = (analysis.joined_completion(builder.entry.qualified, original) if joined else None)
     if completion_proof is not None:
         private_roots = set(private_roots) | set(completion_proof.private_roots)
     original = tuple(node for node in original if _kind(node) != "Comment")
@@ -171,20 +201,47 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     # neither alter original source authority nor authorize allocation changes.
     analysis._segments = {}
     bindings, private_bindings = {}, {}
-    for node in original if selected is None else nodes:
-        for binding, _ in references(analysis, builder.entry.scope, node):
-            if binding.root in private_roots:
-                private_bindings[binding.root] = binding
+    examined = original if selected is None else nodes
+    descriptor_references = set()
+    for node in examined:
+        for expression in walk(node):
+            if _kind(expression) != "Intrinsic_Function_Reference":
                 continue
-            bindings[binding.root] = binding
-            if binding.rank and "allocatable" in binding.attributes:
-                builder.capture(binding)
-                analysis._stable_module_allocatables = analysis._stable_module_allocatables | {binding.root}
+            name = str(expression.items[0]).lower()
+            scope = analysis.source_scope_for(expression, builder.entry.scope)
+            arguments = getattr(expression.items[1], "items", ())
+            if (name in ARRAY_INQUIRIES | MODEL_INQUIRIES | {"allocated", "present"}
+                    and not analysis._binding(scope, name) and not analysis._candidates(scope, name)
+                    and not analysis._unknown_exports(scope) and arguments):
+                argument = arguments[0]
+                if _kind(argument) == "Actual_Arg_Spec":
+                    argument = argument.items[1]
+                if _kind(argument) == "Name":
+                    descriptor_references.add(id(argument))
+    referenced = [item for node in examined for item in references(analysis, builder.entry.scope, node)]
+    host_metadata = {binding.native_metadata_object.root: binding.native_metadata_object
+                     for binding, _ in referenced if hasattr(binding, 'native_metadata_object')}
+    payload_roots = {binding.root for binding, reference in referenced if id(reference) not in descriptor_references}
+    for binding, _ in referenced:
+        if hasattr(binding, 'native_metadata_object') or binding.root in host_metadata:
+            continue
+        if binding.root in private_roots:
+            private_bindings[binding.root] = binding
+            continue
+        bindings[binding.root] = binding
+        if binding.rank and "allocatable" in binding.attributes and binding.root in payload_roots:
+            builder.capture(binding)
+            analysis._stable_module_allocatables = analysis._stable_module_allocatables | {binding.root}
     if completion_proof is not None:
         # Verified local capture facts participate in graph authority. Issue
         # the token against the same reached proof used for materialization.
         completion_proof = analysis.joined_completion(builder.entry.qualified, full_original)
     summary = analysis.segment_summary(builder.entry.qualified, selection, capture_locals=True)
+    if (not summary["complete"] and completion_proof is not None
+            and builder.config.scope_execution == "reached"
+            and any('budget exhausted' in reason for reason in summary['reasons'])):
+        from compiler.scopes.native_atomic import summarize
+        summary = summarize(analysis, builder.entry.qualified, selection, completion_proof)
     if not summary["complete"]:
         raise CompilationError("structured native effects incomplete: " + "; ".join(summary["reasons"]))
     if any(operation["kind"] == "boundary" or (operation["kind"] == "control"
@@ -211,7 +268,7 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     sections = replace(sections, resources=tuple(item for item in sections.resources
                                                 if item.resource not in private_roots))
     return Native(tuple(nodes), effects, set(summary["guaranteed_whole_overwrites"]) - set(private_roots),
-                  bindings, summary, kind, sections, span, private_bindings)
+                  bindings, summary, kind, sections, span, private_bindings, host_metadata)
 
 
 def condition_fragment(builder, header):
@@ -225,8 +282,12 @@ def condition_fragment(builder, header):
     return result
 
 
-def renamed(builder, node, parameters, *, lexical_scope=None):
+def renamed(builder, node, parameters, *, lexical_scope=None, native_metadata=False):
     """Rewrite resolved variable AST nodes, never string substrings."""
+    if native_metadata:
+        builder = copy.copy(builder)
+        builder.analysis = copy.copy(builder.analysis)
+        builder.analysis._native_metadata = True
     def rename_comment(value):
         def clause(match):
             values = []
@@ -251,6 +312,11 @@ def renamed(builder, node, parameters, *, lexical_scope=None):
         if _kind(value) == "Data_Ref":
             from compiler.frontend.component_bindings import component_access
             access = component_access(builder.analysis, scope, value)
+            if hasattr(access.binding, 'native_metadata_object'):
+                # Only original lexical native blocks admit these objects.
+                # Their fields and coordinates retain their original names;
+                # managed input storage has already been made host-current.
+                return value
             replacement = parameters.get(access.binding.root)
             if replacement is None:
                 replacement = builder.visible(builder.entry, access.binding.root)
@@ -293,18 +359,45 @@ def renamed(builder, node, parameters, *, lexical_scope=None):
 
 
 class StructuredScope:
-    def __init__(self, builder, nodes):
+    def __init__(self, builder, nodes, *, condition_only=False, native_metadata=False, lexical_native=False):
         self.builder, self.nodes = builder, tuple(nodes)
+        self.native_metadata = native_metadata
         self.calls, self.native, self.segments = [], [], []
         self.guarded = {}
         self.operation_count = 0
-        self.tree = self.parse(nodes)
+        if condition_only:
+            if len(nodes) != 1 or _kind(nodes[0]) not in {"If_Then_Stmt", "If_Stmt"}:
+                raise CompilationError("reached condition publication requires one original IF header")
+            condition = condition_fragment(builder, nodes[0])
+            # The original header evaluates its expression once, after this
+            # publication. This native operation only establishes host reads.
+            operation = replace(condition, nodes=())
+            self.native.append(operation)
+            self.operation_count = len(operation.summary["operations"])
+            self.tree = [operation]
+        else:
+            self.tree = self.parse(nodes)
         if len(self.calls) > 32 or self.operation_count > 256:
             raise CompilationError("bounded structured owner exceeds call/operation budget")
         self.first, self.last = statement_span(nodes[0])[0], statement_span(nodes[-1])[1]
         original = builder.entry.scope.path.read_text().splitlines()[self.first - 1:self.last]
         if any(line.lstrip().startswith("#") for line in original):
-            raise CompilationError("preprocessor control boundary inside structured ownership")
+            # Only the original lexical owner can surround a complete native
+            # group without reproducing its preprocessing side effects. Its
+            # mapped outer directives bound the edit; included statements are
+            # analyzed through configured provenance, never edited by prepared
+            # line numbers. Numerical outlining and ordinary workers stay strict.
+            if not (lexical_native and str(builder.entry.scope.path) in builder.analysis.inputs.entries
+                    and len(self.tree) == 1 and isinstance(self.tree[0], Native)
+                    and self.tree[0].kind == "joined native OpenMP"):
+                raise CompilationError("preprocessor control boundary inside structured ownership")
+            operation = self.tree[0]
+            operation.preserve_original = True
+            # The hooks surround one unchanged operation. Keep their storage
+            # obligations conservative; section temporaries must not outlive a
+            # preparation block or assume definitions inside an inactive branch.
+            operation.sections = replace(operation.sections, available=False, resources=(),
+                reason="original configured native group uses whole managed-resource effects")
 
     def parse(self, nodes, depth=0):
         if depth > 8:
@@ -319,7 +412,7 @@ class StructuredScope:
         for node in self.builder.inline.grouped_nodes(nodes):
             if isinstance(node, tuple):
                 flush()
-                operation = fragment(self.builder, node, kind="joined native OpenMP")
+                operation = fragment(self.builder, node, kind="joined native OpenMP", native_metadata=self.native_metadata)
                 self.native.append(operation)
                 self.operation_count += len(operation.summary["operations"])
                 result.append(operation)
@@ -384,7 +477,7 @@ class StructuredScope:
                 result.append(Association(self.parse(node.content[1:-1], depth + 1),
                                           statement_span(node), record.public()))
             elif kind in {"Assignment_Stmt", "Block_Nonlabel_Do_Construct"}:
-                operation = fragment(self.builder, (node,))
+                operation = fragment(self.builder, (node,), native_metadata=self.native_metadata)
                 self.native.append(operation)
                 self.operation_count += len(operation.summary["operations"])
                 result.append(operation)
@@ -475,7 +568,8 @@ class StructuredScope:
             return result
         self.tree = visit(self.tree)
         cleared = {root for call in self.calls for root in self.builder.roots_for(call)[1]}
-        if any(root in cleared for segment in self.segments for root in segment.payload):
+        if (self.builder.config.scope_execution != "reached"
+                and any(root in cleared for segment in self.segments for root in segment.payload)):
             raise CompilationError("planning payload publication requires complete definitions across ownership")
 
     def segment(self, calls, arrays):
@@ -552,6 +646,12 @@ class StructuredScope:
                                    "structured_summary_identity": operation.summary.get("structured_identity"),
                                    "demand_identity": operation.summary.get("demand_identity"),
                                    "selected_original_nodes": operation.summary.get("selected_node_ids", []),
+                                   "atomic_effects": operation.summary.get("native_atomic"),
+                                   "preserves_original_source": operation.preserve_original,
+                                   "host_metadata": {root: {'descriptor': binding.public(),
+                                       'coherence': 'opaque host-only range; registration rejects managed aliases',
+                                       'device_capture': False}
+                                       for root, binding in operation.host_metadata.items()},
                                    "reduction_analysis": self.builder.analysis.reduction_candidates(
                                        self.builder.entry.qualified, operation.summary.get("selected_node_ids", ())),
                                    "planned_effects": True} for index, operation in enumerate(self.native)],
@@ -577,7 +677,7 @@ class StructuredScope:
             (reason for available, reason in statuses if not available), None)
 
     def emit(self, handles, parameters, actuals, imports, *, selector, execution_mode=None, terminal_owner=True,
-             logical_lower_bounds=None, selector_name="fort_choose"):
+             logical_lower_bounds=None, selector_name="fort_choose", preflight_failure=None, surround_native=False):
         from compiler.scopes.source import _call, _checked, _name, _span
         builder = self.builder
 
@@ -650,7 +750,8 @@ class StructuredScope:
                       "    0.0_c_double, 0.0_c_double, 0_c_int)",
                       *(["end block " + block] if accesses is not None else []), *choose(),
                       "if (fort_status /= FORT_SCOPE_OK) then",
-                      *_checked("fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"), "endif"]
+                      *(preflight_failure if preflight_failure is not None else
+                        _checked("fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)")), "endif"]
             return lines
 
         def execute(calls, mode, *, terminal=False):
@@ -658,6 +759,8 @@ class StructuredScope:
 
         def record_segment(item, *, terminal=False):
             if not item.query[0]:
+                if preflight_failure is not None:
+                    return ["! Reached query unavailable: " + item.query[1], *preflight_failure]
                 return ["! Current segment has no safe query: " + item.query[1],
                         *_checked("fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"),
                         *execute(item.calls, "0_c_int", terminal=terminal), *_checked("fort_scope_wait(fort_context)")]
@@ -693,8 +796,10 @@ class StructuredScope:
                 lines += ["endif"]
             lines += choose()
             lines += ["if (fort_status /= FORT_SCOPE_OK) then",
-                      *_checked("fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"),
-                      *execute(item.calls, "0_c_int", terminal=terminal), "else", *execute(item.calls, "fort_mode", terminal=terminal), "endif",
+                      *(preflight_failure if preflight_failure is not None else [
+                        *_checked("fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"),
+                        *execute(item.calls, "0_c_int", terminal=terminal)]),
+                      "else", *execute(item.calls, "fort_mode", terminal=terminal), "endif",
                       *_checked("fort_scope_wait(fort_context)")]
             return lines
 
@@ -758,8 +863,16 @@ class StructuredScope:
                     lines += _checked("fort_scope_wait(fort_context)")
                 else:
                     lines += [*native_plan(item), *native_hooks(item)]
-                    lines += [line for node in item.nodes for line in renamed(builder, node, parameters).splitlines()]
+                    lines += [line for node in item.nodes for line in renamed(builder, node, parameters,
+                              native_metadata=bool(item.host_metadata)).splitlines()]
                     lines += [*native_end(item), *_checked("fort_scope_wait(fort_context)")]
             return lines
 
+        if surround_native:
+            if (len(self.tree) != 1 or not isinstance(self.tree[0], Native)
+                    or not self.tree[0].preserve_original or refined(self.tree[0], query=False) is not None):
+                raise CompilationError("original native hooks require one complete unrefined source operation")
+            operation = self.tree[0]
+            return ([*native_plan(operation), *native_hooks(operation)],
+                    [*native_end(operation), *_checked("fort_scope_wait(fort_context)")])
         return emit(self.tree, terminal=terminal_owner)

@@ -22,9 +22,13 @@ class BorrowedCoordinator:
         self.root = getattr(builder, "_coordinator_root", builder)
         self.routine = builder.analysis.routines[procedure]
         self.procedure = procedure
-        self.summary = builder.analysis.summarize(procedure)
-        if (not self.summary["complete"] or self.routine.source_kind != "module"
-                or self.summary["persistent_state"]):
+        self.reached = builder.config.scope_execution == "reached"
+        graph = builder.analysis.structure(procedure) if self.reached else None
+        self.summary = ({"summary_identity": graph.identity, "proof_role": "structured_execution"}
+                        if graph else builder.analysis.summarize(procedure))
+        persistent = [b.root for b in self.routine.scope.bindings.values() if "save" in b.attributes]
+        if (self.routine.source_kind != "module" or persistent
+                or (not graph.available if graph else not self.summary["complete"])):
             raise CompilationError("borrowed source coordinator requires complete effects and original unsaved storage")
         if any(name.startswith("fort_") for name in self.routine.scope.bindings):
             raise CompilationError("borrowed coordinator conflicts with the generated helper namespace")
@@ -42,6 +46,7 @@ class BorrowedCoordinator:
         self.builder.entry = self.routine
         self.builder._coordinator_root = self.root
         self.builder.inline = InlineRegions(self.builder)
+        self.root.region_owners[procedure] = self.builder.inline
 
         def borrowed_capture(proxy, binding):
             if binding.root.startswith("argument::") and binding.name in self.routine.arguments:
@@ -56,16 +61,43 @@ class BorrowedCoordinator:
         nodes = tuple(_children(self.routine.execution))
         if not nodes:
             raise CompilationError("borrowed coordinator has no reached source operations")
-        # This first coordinator reuses existing numerical callees. Inline
-        # overlays in other procedures need their own dispatch authority and
-        # remain an explicit later extension.
+        if builder.config.scope_execution == "reached":
+            nodes = self.builder.inline.prepare(nodes)
+            self.builder.generated.update(self.builder.inline.generated)
+            self.builder.numerical_ir.update(self.builder.inline.ir)
+            self.builder.numerical_reasons.update({name: None for name in self.builder.inline.regions})
         self.scope = StructuredScope(self.builder, nodes)
         self.leaves = {leaf for call in self.scope.calls
                        for leaf in self.builder.closure(call.procedure, active)[0]}
         if not self.leaves:
             raise CompilationError("borrowed coordinator has no proved numerical callee")
         self.arrays, self.scalars, self.written = {}, {}, set()
-        effects, _definitions, _overwrites = builder.native_effects(procedure)
+        if self.reached:
+            # Resource requirements are a bounded union of proved local
+            # operations and child interfaces, never a flattened execution
+            # closure. Definition events still execute inside their workers.
+            effects = {}
+            self.definitions = {b.root for b in self.routine.scope.bindings.values()
+                                if b.name in self.routine.arguments and b.intent == "out"}
+            self.scalar_changes = {b.root for b in self.routine.scope.bindings.values()
+                                   if not b.rank and b.name in self.routine.arguments and b.intent == "out"}
+            for operation in self.scope.native:
+                for root, actions in operation.effects.items():
+                    effects.setdefault(root, set()).update(actions)
+                self.scalar_changes.update(op["resource"] for op in operation.summary["operations"]
+                                           if op["kind"] in {"write", "overwrite"} and not op["rank"])
+            for call in self.scope.calls:
+                own, definitions, _overwrites = self.builder.roots_for(call)
+                for root, actions in own.items():
+                    effects.setdefault(root, set()).update(actions)
+                self.definitions.update(definitions)
+                self.scalar_changes.update(self.builder.scalar_writes(call.procedure,
+                    {formal: binding.root for formal, binding in call.bindings.items()}))
+            self.scalar_changes = {root for root in self.scalar_changes
+                                   if not root.startswith(procedure + "::")}
+            self.effects = effects
+        else:
+            effects, _definitions, _overwrites = builder.native_effects(procedure)
         for name in self.routine.arguments:
             binding = self.routine.scope.bindings[name]
             if binding.rank:
@@ -78,6 +110,15 @@ class BorrowedCoordinator:
         for binding in self.arrays.values():
             if binding.root.startswith(self.procedure + "::"):
                 raise CompilationError("procedure-local array state requires registration in its original owner")
+        if self.reached:
+            from compiler.scopes.definitions import summarize
+            self.scope.prepare(self.arrays)
+            self.definition_summary = summarize(self.scope, entry_undefined={
+                self.routine.scope.bindings[name].root for name in self.routine.arguments
+                if self.routine.scope.bindings[name].rank and self.routine.scope.bindings[name].intent == "out"})
+            self.required_whole = set(self.definition_summary.required_whole)
+            self.resources = tuple(self.arrays)
+            return
         self.scope.check_conservative_definitions(self.arrays)
         self.scope.prepare(self.arrays)
         # The current public numerical query publishes payload controls as
@@ -88,6 +129,8 @@ class BorrowedCoordinator:
             if not operation.sections.available:
                 self.required_whole.update(set(operation.effects) - operation.overwrites)
         for call in self.scope.calls:
+            if call.region is not None:
+                continue
             child = self.builder.coordinator(call.procedure)
             if child is not None:
                 child.check_aliases(call)
@@ -115,8 +158,10 @@ class BorrowedCoordinator:
         graph = self.builder.analysis.structure(self.procedure)
         scope = self.scope.public()
         return {"procedure": self.procedure, "role": "borrowed_reached_coordinator",
+                "effect_authority": "proved reached operations and reusable child interfaces" if self.reached else "complete source closure",
                 "structured_summary_identity": graph.identity,
                 "summary_identity": self.summary["summary_identity"],
+                "ordered_definitions": self.definition_summary.public() if self.reached else None,
                 "resources": list(self.resources), "gpu_leaves": sorted(self.leaves),
                 "requirements": {"original_numeric_arguments": True, "joined_native_operations": True,
                                  "unique_canonical_resource_mappings": True,

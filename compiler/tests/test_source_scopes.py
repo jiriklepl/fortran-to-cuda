@@ -84,7 +84,8 @@ def run(command, *, cwd, env=None, timeout=120):
     return result
 
 
-def generate(directory, source=PROGRAM, *, mode="sections", entry="step", facts=None, checkout=None, profile=None):
+def generate(directory, source=PROGRAM, *, mode="sections", entry="step", facts=None, checkout=None, profile=None,
+             scope_execution="bounded"):
     directory.mkdir(parents=True,exist_ok=True)
     original = directory/"original.f90"
     original.write_text(source)
@@ -98,6 +99,7 @@ def generate(directory, source=PROGRAM, *, mode="sections", entry="step", facts=
     output = directory/"output"
     response = run([sys.executable,"-m","compiler","--form-scopes","--scope-facts",str(facts_file),
                     "--input",str(original),"--kernel",entry,"--memory-model","scoped","--gpu-policy",mode,
+                    *(["--scope-execution", scope_execution] if scope_execution != "bounded" else []),
                     *( ["--calibration-profile", str(profile)] if profile else []),
                     "--json","--output-dir",str(output)],cwd=checkout or ROOT,
                    env={**os.environ,"PYTHONPATH":str(checkout or ROOT)})

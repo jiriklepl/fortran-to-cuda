@@ -170,6 +170,7 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--calibration-profile FILE` | none | Explicit reusable hardware calibration for automatic decisions |
 | `--memory-model {call,scoped}` | `call` | Shared-buffer numerical entry prototype with `scoped`; requires sections/auto |
 | `--scope-transfers {direct,pinned,pipelined,auto}` | `direct` | Scoped transfer choice, separate from CPU/GPU placement |
+| `--scope-execution {bounded,reached}` | `bounded` | Opt-in reached ownership in original lexical procedures; requires `--form-scopes` |
 | `--analyze-effects` | off | Bounded native source effects without requiring GPU lowering; writes no artifacts |
 | `--form-scopes` | off | Emit bounded serial source scopes, original-module helpers, and public source/build manifests |
 | `--scope-facts FILE` | none | Source-hash-bound capture, initialization, and caller facts; requires `--form-scopes` |
@@ -1006,7 +1007,7 @@ view, rather than the entire caller allocation. These are source facts; physical
 transfer sections still require runtime descriptor checks. Composition expansion
 is bounded by the source operation limit.
 
-Summary version 5 also retains a reusable local source skeleton: ordered
+Summary version 9 retains a reusable local source skeleton: ordered
 sequences, guarded branches, counted loops, direct call references, procedure
 entry events and explicit native boundaries. Callees and unselected branches
 are not eagerly expanded. Reached planning segments materialize their effects
@@ -1018,11 +1019,123 @@ Copied or fabricated syntax cannot establish this authority; source text,
 configuration, contract, capture, descriptor and original span changes invalidate
 the corresponding proof. The graph itself does not grant GPU eligibility.
 
-The current coordinator execution path still requires a complete bounded legacy
-closure for called procedures. A reusable local skeleton can prove a separately
-reached segment, but does not yet admit an oversized child closure, an arbitrary
-internal coordinator, or a complete application stage. Those execution gates
-remain explicit native boundaries.
+The default `bounded` coordinator path requires complete bounded legacy closures
+for called procedures. The experimental `--scope-execution reached` path uses
+reusable child requirements and local source graphs instead. Each original
+procedure supplies its own numerical regions, descriptor bounds and segment
+dispatcher; repeated calls do not duplicate the transitive effect list or consume
+one wrapper variant per source span. The four-variant per-procedure and
+128-variant compilation limits remain unchanged.
+Structured representation version 3 accounts for source operations separately
+from sequence, branch and loop containers. It retains the 256-operation limit
+and a derived structural-node bound; container bookkeeping cannot exhaust the
+work budget by itself. Changed representation identities invalidate dependent
+cached proofs.
+
+Reached ownership starts lazily inside the original serial invocation. Each
+reached operation checks its descriptors before registration or bound queries.
+Conditions and scalar assignments retain their original positions. A supported
+no-argument internal child keeps its original `CONTAINS` scope, declarations and
+saved state, sharing the context and resource handles by host association.
+Internal children with formals can also retain their original descriptor-only
+guards through a conservative native continuation. This path accepts whole
+assumed-shape numeric arguments, read-only allocation descriptors and direct
+source procedure arguments; it creates no numerical child worker. Reaching
+payload work publishes and closes the context first. Repeated calls can use
+different actual arrays because their original associations remain unchanged.
+Serial counted loops with proved scalar/descriptor-only headers keep their
+original bounds, strides and iterator updates. A zero-trip loop does not close
+ownership; publication precedes the first reached payload operation. Bounds
+that read array values or call unproved helpers still require an earlier close.
+Copy-producing, optional or `INTENT(OUT)` associations and unproved entry-time
+specification expressions remain boundaries. Child-local arrays that would
+outlive their procedure also remain boundaries.
+Original complete joined OpenMP operations retain their
+teams and joins; this is not a general mixed-team execution implementation.
+Fortran's optional combined `END PARALLEL DO` and worksharing `END DO` retain
+their implicit joins at the end of the associated original loop. A following
+statement cannot become part of that team through extraction.
+An unchanged joined native operation whose expanded effects exceed the budget
+can compose separately bounded original worksharing units. Their conservative
+access union is bounded too; calls, allocation/definition events and inferred
+whole overwrites are excluded. The original team still executes once, and this
+proof does not authorize an ordered child-call summary or GPU scatter writes.
+For a hash-bound configured source package, a complete native joined group can
+retain its original includes and preprocessor directives. The lexical owner
+inserts coherence hooks around that unchanged group, which appears once in the
+generated source. Unmapped included statements contribute to effects and scalar
+liveness but cannot supply edit coordinates. These groups initially use
+conservative whole-resource hooks and require complete definition coverage.
+
+Original native operations can access fixed scalar numeric fields in arrays of
+derived objects. Those objects use opaque host-only range registrations for
+alias detection; they are never numerical device captures, and no definition
+coverage is claimed for their bytes or padding. Their original allocation
+guards, field expressions and indexed updates stay in place. Overlap with a
+managed numerical resource closes ownership before the native operation.
+Unproved indirect numerical footprints still require conservative whole-array
+coherence and complete definitions. Pointer fields, dynamic fields and indirect
+GPU scatter remain unsupported. This analysis has a separate summary identity
+from numerical eligibility, including when it is used only to check scalar
+liveness after a candidate loop.
+
+An incompletely supported module child can use one additive original-body
+`ENTRY` companion. It shares the context control and canonical resource handles;
+normal callers retain the native ABI and never read absent control arguments.
+The original declarations, body, module state and internal procedures remain
+in their original owner. This path initially requires ordinary assumed-shape
+numeric formals, no saved local storage and one canonical actual mapping per
+owning invocation. Different mappings and uncertain hidden aliases close
+ownership. Child descriptors are registered only at reached uses; an
+`INTENT(OUT)` entry event invalidates existing coverage and cannot initialize a
+new registration from old caller values. Nested companions forward handles for
+their hidden resources without copying persistent objects.
+Caller contiguity guards run before a callee can create an array temporary.
+Original child returns retain the outer context; only an owning return closes
+it. Descriptor-only guards such as `ALLOCATED` remain at their original source
+points and require no payload capture or device transfer.
+
+Reusable child requirements follow definitions in source order. Complete
+original assignments can satisfy a later conservative native read; branch joins
+retain only definitions guaranteed on every path, and nested `INTENT(OUT)`
+events invalidate earlier coverage. Before entering a reached child, its owner
+validates remaining whole-array obligations against current runtime coverage.
+That check does not download data or treat registration facts as current
+freshness. Failed entry validation closes before executing the original child
+once. Public records include the ordered requirements and return guarantees.
+Single-line guards are evaluated once before their action's descriptor queries.
+Array payloads in an original IF header are published immediately before that
+header evaluates its expression once. An array-valued ELSEIF remains a boundary
+until conditional publication under all preceding guards is supported.
+Supported `ASSOCIATE` bodies retain their original selectors and use separate
+reached operations, so a later fallback cannot repeat an earlier GPU prefix.
+
+Full-section initialization and pointwise updates inside independent loops
+(for example `a(:,:,k) = value`) use original logical bounds and checked
+conformance. Shifted or nonpointwise reads that require a snapshot remain native.
+
+A reached unknown call, unsupported operation or return publishes and closes
+the context before the original continuation runs once. It cannot replay an
+earlier GPU prefix; later operations remain native for that invocation. An
+original procedure with statement labels remains native in reached mode;
+unproved branch targets cannot bypass owner setup or enter a generated block. An
+inactive, safely evaluated scalar branch does not close ownership. Array-valued
+conditions require coherent host reads; unproved effects still close ownership.
+Read-only imported `PROTECTED` arrays are borrowed directly without an illegal
+pointer association. Public scope records expose the lexical owner, internal and
+original-body module coordinators, resource mappings,
+planning segments, retained state and precise closure reasons. Reached plans
+carry a separate schema version. Canonical registration identities in each
+owner's versioned `resource_bindings` record map runtime buffer counters to
+source resources without inspecting generated workers. This experimental
+path does not by itself establish whole-stage residency or application speedup.
+
+Source imports resolve `USE` renames with and without `ONLY`, including public
+re-exports and ambiguity checks. Imported objects retain the declaring scope of
+their types even when only the object is imported or its type name is shadowed.
+Private component access still uses the consumer's scope. Original leading executable OpenMP directives
+are associated with their execution tree before source proofs are issued;
+detached child loops still cannot borrow a complete team's authority.
 
 Native section schema 2 refines original assignment and independent Cartesian
 counted-loop accesses into at most 32 physical rectangles. Opposite faces stay
