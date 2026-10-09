@@ -24,6 +24,7 @@ class Parameter:
     resource: str
     rank: int
     lower_bound_dimension: int | None = None
+    runtime_lower_bound: bool = False
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,11 @@ class NumericalSource:
     @property
     def arrays(self):
         return {p.resource for p in self.parameters if p.rank}
+
+    @property
+    def runtime_origins(self):
+        """Original allocation descriptors required even without payload access."""
+        return {p.resource for p in self.parameters if p.runtime_lower_bound}
 
 
 def resource_binding(analysis, routine, resource):
@@ -114,21 +120,29 @@ def load_numerical_sources(document, analysis):
             raise CompilationError("numerical source parameter mapping differs from its signature")
         parameters = []
         access_intents = {}
+        dynamic_bounds = {}
         for formal, mapping in zip(target.arguments, supplied, strict=True):
             if not isinstance(mapping, dict) or mapping.get("name") != formal:
                 raise CompilationError("numerical source mapping must preserve parameter order")
             binding = resource_binding(analysis, routine, mapping.get("resource"))
             expected = target.scope.bindings[formal]
             dimension = mapping.get("lower_bound_dimension")
+            dynamic = binding.root in analysis.stable_module_allocatables
             if dimension is not None:
                 if (type(dimension) is not int or not 1 <= dimension <= binding.rank
                         or expected.signature() != ("integer", 4, 0) or expected.intent != "in"):
                     raise CompilationError("numerical lower-bound parameter has an invalid type/dimension")
-                lower = routine.scope.kinds.integer(F.Level_2_Expr(binding.lower_bounds[dimension-1]),
-                                                    SourceLocation(str(routine.scope.path)))
-                if not -(2**31) <= lower < 2**31:
-                    raise CompilationError("numerical source lower bound exceeds the supported INTEGER ABI")
-                parameters.append(Parameter(formal, binding.root, 0, dimension))
+                if dynamic:
+                    dimensions = dynamic_bounds.setdefault(binding.root, set())
+                    if dimension in dimensions:
+                        raise CompilationError("numerical allocation origins require unique lower-bound dimension mappings")
+                    dimensions.add(dimension)
+                else:
+                    lower = routine.scope.kinds.integer(F.Level_2_Expr(binding.lower_bounds[dimension-1]),
+                                                        SourceLocation(str(routine.scope.path)))
+                    if not -(2**31) <= lower < 2**31:
+                        raise CompilationError("numerical source lower bound exceeds the supported INTEGER ABI")
+                parameters.append(Parameter(formal, binding.root, 0, dimension, dynamic))
                 continue
             if expected.signature() != binding.signature():
                 raise CompilationError("numerical source resource type/kind/rank differs: " + formal)
@@ -141,10 +155,17 @@ def load_numerical_sources(document, analysis):
                     raise CompilationError("numerical source arrays require a whole-storage zero-origin mapping")
                 if binding.intent == "in" and expected.intent != "in":
                     raise CompilationError("numerical source writes an original INTENT(IN) argument")
+                if dynamic:
+                    dynamic_bounds.setdefault(binding.root, set())
             if binding.root in access_intents:
                 raise CompilationError("numerical source maps duplicate resource arguments")
             access_intents[binding.root] = expected.intent
             parameters.append(Parameter(formal, binding.root, binding.rank))
+        for resource, dimensions in dynamic_bounds.items():
+            binding = resource_binding(analysis, routine, resource)
+            if dimensions != set(range(1, binding.rank + 1)):
+                raise CompilationError("numerical allocation origins require every original runtime lower-bound dimension: "
+                                       + resource)
         # Calls with source entry effects must remain separate context-aware
         # workers. Numerical helper inlining cannot silently remove those events.
         if any(_kind(node) == "Call_Stmt" for node in walk(routine.execution)):
