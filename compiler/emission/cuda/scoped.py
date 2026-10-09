@@ -122,11 +122,17 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                   for e in (*box.lower, *box.upper))
         for r in plan.regions
     }
+    if not config.collective:
+        from compiler.offload.numerical_calibration import apply_numerical_costs
+        numerical_analysis = apply_numerical_costs(
+            OffloadAnalysis(prep.analysis.available, prep.analysis.reason, tuple(units.values())), config.profile)
+        units = {unit.region.id: unit for unit in numerical_analysis.units}
     query_available = prep.analysis.available
     query_reason = prep.analysis.reason
     planning_reason = query_reason
     if prep.analysis.available and any(u.work_per_iteration is None or u.work_is_upper_bound for u in units.values()):
-        planning_reason = "work estimate is unknown or conditional"
+        planning_reason = "; ".join(dict.fromkeys(u.work_estimate_reason or "work estimate is unknown or conditional"
+            for u in units.values() if u.work_per_iteration is None or u.work_is_upper_bound))
     planning_available = prep.analysis.available and planning_reason is None
     profile_reason = config.profile_reason
     costs = None
@@ -747,7 +753,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                f"    auto unit = plan_unit_{step.id}({query_arguments[step.id]});",
                                "    FORT_SHARED_CHECK(fort_query_status);", "    d.valid = unit.valid;", "    if (d.valid && unit.units[0].iterations) {",
                                *indent(descriptors(units[step.id], planning=True), 2),
-                               f"        FORT_SHARED_CHECK(fort_access.record(FORT_SCOPE_PLAN_WORKER, {unit_ids[step.id]}ULL, {flops}, {memory_bytes}, {'true' if known_work and not protected[step.id] else 'false'}));",
+                               f"        FORT_SHARED_CHECK(fort_access.record(FORT_SCOPE_PLAN_WORKER, {unit_ids[step.id]}ULL, {flops}, {memory_bytes}, {'true' if known_work and not protected[step.id] else 'false'}, unit.units[0].cpu_numerical_seconds, unit.units[0].gpu_numerical_seconds));",
                                "    }", "}"]
                 else:
                     raise TypeError(step)
@@ -874,7 +880,12 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                      "payload_arrays": [s.name for s in arrays if s in planning_payload_arrays],
                      "layout_arrays": [s.name for s in arrays],
                      "source_effects": False, "preparation": "checked INTEGER/LOGICAL control slice",
-                     "units": [{"region": r.id, "id": unit_ids[r.id], "work_per_iteration": units[r.id].work_per_iteration}
+                     "units": [{"region": r.id, "id": unit_ids[r.id], "work_per_iteration": units[r.id].work_per_iteration,
+                                **({"intrinsic_work_per_iteration": dict(units[r.id].intrinsic_work_per_iteration),
+                                    "cpu_numerical_seconds_per_iteration": units[r.id].cpu_numerical_seconds_per_iteration,
+                                    "gpu_numerical_seconds_per_iteration": units[r.id].gpu_numerical_seconds_per_iteration,
+                                    "work_estimate_reason": units[r.id].work_estimate_reason}
+                                   if units[r.id].intrinsic_work_per_iteration else {})}
                                for r in plan.regions],
                      "profile_available": costs is not None, "profile_reason": profile_reason,
                      "runtime_id": runtime_id},

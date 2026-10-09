@@ -6,7 +6,8 @@ arguments to their actual storage identities before any dependence analysis.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from itertools import product
 from pathlib import Path
 from typing import Any
 
@@ -55,6 +56,9 @@ class _Declaration:
     location: SourceLocation
     spelling: str
     inferred_intent: bool = False
+    bounds: tuple[tuple[int, int], ...] = ()
+    initializer: Any = None
+    constant: bool = False
 
 
 @dataclass(frozen=True)
@@ -66,6 +70,33 @@ class _Routine:
     execution: tuple[Any, ...]
     location: SourceLocation
     kinds: _KindScope
+    key: tuple[str, str]
+    parent: tuple[str, str] | None = None
+    result: str | None = None
+    pure: bool = False
+
+
+@dataclass(frozen=True)
+class _PrivateArray:
+    """A bounded Fortran array represented by independently defined scalars."""
+
+    name: str
+    dtype: ScalarType
+    bounds: tuple[tuple[int, int], ...]
+    elements: tuple[Symbol, ...]
+
+    @property
+    def rank(self):
+        return len(self.bounds)
+
+    def element(self, indices: tuple[int, ...], location: SourceLocation) -> Symbol:
+        offset, pitch = 0, 1
+        for index, (lower, upper) in zip(indices, self.bounds, strict=True):
+            if not lower <= index <= upper:
+                raise CompilationError(f"private array subscript outside bounds of {self.name}", location)
+            offset += (index - lower) * pitch
+            pitch *= max(0, upper - lower + 1)
+        return self.elements[offset]
 
 
 @dataclass(frozen=True)
@@ -195,6 +226,12 @@ class _Lowerer:
         self.annotated: set[tuple[str, str]] = set()
         self.require_markers = require_markers
         self.active_kinds = _KindScope()
+        self.parents: dict[tuple[str, str], tuple[str, str] | None] = {}
+        self.active_frames: list[tuple] = []
+        self.pending: list = []
+        self.inline_calls = 0
+        self.unrolled_values: dict[Symbol, int] = {}
+        self.unrolled_iterations = 0
 
     def location(self, node: Any, stack: tuple[str, ...] = ()) -> SourceLocation:
         for child in walk(node):
@@ -226,28 +263,37 @@ class _Lowerer:
                 if type(part).__name__ != "Module_Subprogram_Part":
                     continue
                 for subroutine in part.content:
-                    if type(subroutine).__name__ != "Subroutine_Subprogram":
+                    if type(subroutine).__name__ not in {"Subroutine_Subprogram", "Function_Subprogram"}:
                         continue
                     annotated = any(
                         type(child).__name__ == "Comment" and str(child).strip().lower() == "! kernel"
                         for child in subroutine.content
                     )
-                    if self.require_markers and not annotated:
-                        continue
-                    statement = next(child for child in subroutine.content if type(child).__name__ == "Subroutine_Stmt")
-                    name = str(statement.items[1])
-                    key = (module_name.lower(), name.lower())
-                    if key in self.routine_nodes:
-                        raise self.error(f"duplicate subroutine {name}", statement)
-                    self.routine_nodes[key] = (module_name, subroutine)
-                    if annotated:
-                        self.annotated.add(key)
+                    if not self.require_markers or annotated:
+                        self.register_routine(subroutine, module_name, None, annotated)
+
+    def register_routine(self, node, module, parent, annotated=False):
+        statement = next(child for child in node.content
+                         if type(child).__name__ in {"Subroutine_Stmt", "Function_Stmt"})
+        name = str(statement.items[1]).lower()
+        key = (module.lower(), (parent[1] + "::" if parent else "") + name)
+        if key in self.routine_nodes:
+            raise self.error(f"duplicate procedure {name}", statement)
+        self.routine_nodes[key] = (module, node)
+        self.parents[key] = parent
+        if annotated:
+            self.annotated.add(key)
+        for part in node.content:
+            if type(part).__name__ == "Internal_Subprogram_Part":
+                for child in part.content:
+                    if type(child).__name__ in {"Subroutine_Subprogram", "Function_Subprogram"}:
+                        self.register_routine(child, module, key)
 
     def resolve_routine(self, key: tuple[str, str], provenance: tuple[str, ...] = ()) -> _Routine:
         if key not in self.routines:
             module, node = self.routine_nodes[key]
             try:
-                self.routines[key] = self.routine(node, module)
+                self.routines[key] = self.routine(node, module, key)
             except CompilationError as error:
                 location = error.location
                 if location is not None:
@@ -255,12 +301,22 @@ class _Lowerer:
                 raise CompilationError(error.message, location) from error
         return self.routines[key]
 
-    def routine(self, node: Any, module: str) -> _Routine:
-        statement = next(child for child in node.content if type(child).__name__ == "Subroutine_Stmt")
+    def routine(self, node: Any, module: str, key: tuple[str, str]) -> _Routine:
+        statement = next(child for child in node.content
+                         if type(child).__name__ in {"Subroutine_Stmt", "Function_Stmt"})
         prefix, name, argument_list, suffix = statement.items
-        if suffix is not None:
+        function = type(statement).__name__ == "Function_Stmt"
+        result_name = None
+        if function:
+            result_name = str(suffix.items[0]).lower() if suffix is not None and suffix.items[0] else str(name).lower()
+            if suffix is not None and suffix.items[1] is not None:
+                raise self.error("BIND function suffixes are unsupported", statement)
+        elif suffix is not None:
             raise self.error("BIND and other subroutine suffixes are unsupported", statement)
-        if prefix is not None and any(str(value).upper() not in {"PURE", "RECURSIVE"} for value in prefix.items):
+        result_type = next((value for value in getattr(prefix, "items", ())
+                            if type(value).__name__ == "Intrinsic_Type_Spec"), None)
+        if prefix is not None and any(str(value).upper() not in {"PURE", "RECURSIVE"}
+                                      and value is not result_type for value in prefix.items):
             raise self.error(f"unsupported subroutine prefix {prefix}", statement)
         arguments = tuple(str(value).lower() for value in argument_list.items) if argument_list is not None else ()
         if len(set(arguments)) != len(arguments):
@@ -268,14 +324,17 @@ class _Lowerer:
         declarations: list[_Declaration] = []
         execution: tuple[Any, ...] = ()
         specification = next((child for child in node.content if type(child).__name__ == "Specification_Part"), None)
-        kinds = _KindScope(specification, self.module_kinds[module.lower()])
+        parent = self.parents[key]
+        parent_kinds = self.resolve_routine(parent).kinds if parent else self.module_kinds[module.lower()]
+        kinds = _KindScope(specification, parent_kinds)
         for child in node.content:
             kind = type(child).__name__
             if kind == "Specification_Part":
                 declarations.extend(self.specification(child, set(arguments), kinds))
             elif kind == "Execution_Part":
                 execution = tuple(child.content)
-            elif kind not in {"Comment", "Subroutine_Stmt", "End_Subroutine_Stmt"}:
+            elif kind not in {"Comment", "Subroutine_Stmt", "End_Subroutine_Stmt", "Function_Stmt",
+                              "End_Function_Stmt", "Internal_Subprogram_Part"}:
                 raise self.error(f"unsupported subroutine construct {kind}", child)
         names = [declaration.name for declaration in declarations]
         if len(set(names)) != len(names):
@@ -285,7 +344,22 @@ class _Lowerer:
             raise self.error(
                 f"dummy arguments require explicit declarations: {', '.join(sorted(undeclared))}", statement
             )
-        return _Routine(str(name), module, arguments, tuple(declarations), execution, self.location(statement), kinds)
+        if result_name is not None and result_name not in names:
+            if result_type is None:
+                raise self.error("function result requires an explicit scalar declaration", statement)
+            type_name, selector = result_type.items
+            if str(type_name).upper() == "REAL":
+                dtype = ScalarType.REAL32 if selector is None else kinds.real_type(selector.items[1], self.location(statement))
+            elif str(type_name).upper() == "DOUBLE PRECISION" and selector is None:
+                dtype = ScalarType.REAL
+            elif str(type_name).upper() in {"INTEGER", "LOGICAL"} and selector is None:
+                dtype = ScalarType.INTEGER if str(type_name).upper() == "INTEGER" else ScalarType.LOGICAL
+            else:
+                raise self.error("unsupported function result type", statement)
+            declarations.append(_Declaration(result_name, dtype, 0, None, self.location(statement), result_name))
+        return _Routine(str(name), module, arguments, tuple(declarations), execution,
+                        self.location(statement), kinds, key, parent, result_name,
+                        any(str(value).upper() == "PURE" for value in getattr(prefix, "items", ())))
 
     def specification(self, node: Any, arguments: set[str], kinds: _KindScope) -> list[_Declaration]:
         declarations: list[_Declaration] = []
@@ -303,7 +377,9 @@ class _Lowerer:
                         raise self.error("dummy arguments cannot be PARAMETER constants", child)
                     continue
                 declarations.extend(self.declaration(child, arguments, kinds))
-            elif kind == "Use_Stmt" and str(child.items[2]).lower() in _KindScope.intrinsic_kinds:
+            elif kind == "Use_Stmt" and str(child.items[2]).lower() in {
+                *_KindScope.intrinsic_kinds, "ieee_arithmetic", "ieee_exceptions"
+            }:
                 if str(child.items[0]).upper() == "NON_INTRINSIC":
                     raise self.error("non-intrinsic module imports are unsupported", child)
             elif kind == "Implicit_Part":
@@ -336,6 +412,7 @@ class _Lowerer:
         intent: str | None = None
         dimensions = None
         contiguous = False
+        parameter = False
         for attribute in attributes.items if attributes is not None else ():
             kind = type(attribute).__name__
             if kind == "Intent_Attr_Spec":
@@ -350,13 +427,15 @@ class _Lowerer:
                 # Identity remains the Symbol itself. Pointer association is not
                 # supported, so TARGET does not change the computation model.
                 continue
+            elif kind == "Attr_Spec" and str(attribute).upper() == "PARAMETER":
+                parameter = True
             else:
                 raise self.error(f"unsupported declaration attribute {attribute}", node)
         result: list[_Declaration] = []
         for entity in entities.items:
             name_node, entity_dimensions, length, initializer = entity.items
             name = str(name_node).lower()
-            if length is not None or initializer is not None:
+            if length is not None or (initializer is not None and not parameter):
                 raise self.error(
                     "initialized variables, PARAMETER declarations, and character lengths are unsupported", node
                 )
@@ -364,15 +443,24 @@ class _Lowerer:
                 raise self.error(f"duplicate array dimensions for {name}", node)
             shape = entity_dimensions if entity_dimensions is not None else dimensions
             rank = 0
+            bounds: tuple[tuple[int, int], ...] = ()
             if shape is not None:
-                if type(shape).__name__ != "Assumed_Shape_Spec_List" or any(
-                    value.items != (None, None) for value in shape.items
-                ):
-                    raise self.error("arrays must have assumed shape ':' in every dimension", node)
                 rank = len(shape.items)
                 if dtype is ScalarType.LOGICAL:
                     raise self.error("LOGICAL arrays are unsupported", node)
-                if name not in arguments:
+                if type(shape).__name__ == "Explicit_Shape_Spec_List":
+                    bounds = tuple((1 if item.items[0] is None else kinds.integer(item.items[0], self.location(node)),
+                                    kinds.integer(item.items[1], self.location(node))) for item in shape.items)
+                    count = 1
+                    for lower, upper in bounds:
+                        count *= max(0, upper - lower + 1)
+                    if count > 256:
+                        raise self.error("private fixed array exceeds the 256-element scalarization budget", node)
+                elif type(shape).__name__ != "Assumed_Shape_Spec_List" or any(
+                    value.items != (None, None) for value in shape.items
+                ):
+                    raise self.error("arrays require assumed shape ':' or bounded constant explicit shape", node)
+                elif name not in arguments:
                     raise self.error(f"local arrays are unsupported: {name}", node)
             elif contiguous:
                 raise self.error("CONTIGUOUS requires an array", node)
@@ -383,10 +471,10 @@ class _Lowerer:
                 # any attempted write is diagnosed during lowering.
                 if entity_intent is None:
                     entity_intent = "inout" if rank else "in"
-                if rank == 0 and entity_intent != "in":
-                    raise self.error(f"writable scalar dummy arguments are unsupported: {name}", node)
             elif intent is not None:
                 raise self.error(f"INTENT is only valid for dummy arguments: {name}", node)
+            if parameter and (name in arguments or initializer is None or rank):
+                raise self.error("only initialized scalar PARAMETER declarations are supported", node)
             result.append(
                 _Declaration(
                     name,
@@ -396,6 +484,9 @@ class _Lowerer:
                     self.location(node),
                     str(name_node),
                     name in arguments and intent is None,
+                    bounds,
+                    initializer.items[1] if initializer else None,
+                    parameter,
                 )
             )
         return result
@@ -408,7 +499,13 @@ class _Lowerer:
         return symbol
 
     def lower(self, routine: _Routine) -> FunctionIR:
+        if routine.result is not None or routine.parent is not None:
+            raise CompilationError("entries must be module subroutines", routine.location)
         declarations = {declaration.name: declaration for declaration in routine.declarations}
+        if any(declarations[name].bounds for name in routine.arguments):
+            raise CompilationError("entry arrays must have assumed shape ':' in every dimension", routine.location)
+        if any(not declarations[name].rank and declarations[name].intent != "in" for name in routine.arguments):
+            raise CompilationError("writable scalar entry dummy arguments are unsupported", routine.location)
         bindings = {name: self.new_symbol(declarations[name], parameter=True) for name in routine.arguments}
         parameters = tuple(bindings[name] for name in routine.arguments)
         body = self.inline(routine, bindings, (), (), frozenset())
@@ -417,27 +514,66 @@ class _Lowerer:
     def inline(
         self,
         routine: _Routine,
-        parameters: dict[str, Symbol],
+        parameters: dict,
         ancestors: tuple[str, ...],
         provenance: tuple[str, ...],
         active_iterators: frozenset[Symbol],
     ) -> Block:
-        key = routine.name.lower()
+        key = "::".join(routine.key)
         if key in ancestors:
             raise CompilationError("recursive kernel calls are unsupported", routine.location)
+        if len(ancestors) >= 8 or self.inline_calls >= 128:
+            raise CompilationError("numerical helper depth/call budget exhausted", routine.location)
+        self.inline_calls += 1
         bindings = dict(parameters)
         declarations = {declaration.name: declaration for declaration in routine.declarations}
+        if routine.parent is not None:
+            host = next((frame for frame in reversed(self.active_frames) if frame[0].key == routine.parent), None)
+            if host is None:
+                raise CompilationError("internal helper requires its lexical host activation", routine.location)
+            bindings = {**host[1], **bindings}
+            declarations = {**{name: replace(value, intent="in") if routine.pure else value
+                                for name, value in host[2].items()}, **declarations}
         for declaration in routine.declarations:
-            if declaration.name not in bindings:
-                bindings[declaration.name] = self.new_symbol(declaration)
+            if declaration.name not in parameters:
+                if declaration.bounds:
+                    count = 1
+                    for lower, upper in declaration.bounds:
+                        count *= max(0, upper - lower + 1)
+                    elements = tuple(self.new_symbol(replace(declaration, spelling=f"{declaration.spelling}_{index}",
+                                                             rank=0, intent=None)) for index in range(count))
+                    bindings[declaration.name] = _PrivateArray(declaration.name, declaration.dtype,
+                                                               declaration.bounds, elements)
+                else:
+                    bindings[declaration.name] = self.new_symbol(declaration)
         previous_kinds = self.active_kinds
         self.active_kinds = routine.kinds
+        frame = (routine, bindings, declarations, (*ancestors, key), provenance, active_iterators)
+        self.active_frames.append(frame)
         try:
-            return self.block(
+            initializers = []
+            for declaration in routine.declarations:
+                if declaration.initializer is not None:
+                    value, prelude = self.evaluated(declaration.initializer, bindings, declaration.location)
+                    initializers.extend(prelude)
+                    initializers.append(Assignment(Reference(bindings[declaration.name]), value, declaration.location))
+            body = self.block(
                 routine.execution, routine, bindings, declarations, (*ancestors, key), provenance, active_iterators
             )
+            return Block(tuple(initializers) + body.statements)
         finally:
+            self.active_frames.pop()
             self.active_kinds = previous_kinds
+
+    def evaluated(self, node, bindings, location):
+        """Keep pure-call work at the exact evaluation point of its expression."""
+        previous = self.pending
+        self.pending = []
+        try:
+            expression = self.expression(node, bindings, location)
+            return expression, tuple(self.pending)
+        finally:
+            self.pending = previous
 
     def block(
         self,
@@ -457,17 +593,19 @@ class _Lowerer:
             location = self.location(node, provenance)
             if kind == "Assignment_Stmt":
                 target_node, _, value_node = node.items
-                target = self.expression(target_node, bindings, location)
+                target, target_prelude = self.evaluated(target_node, bindings, location)
                 if not isinstance(target, (Reference, ArrayAccess)):
                     raise CompilationError("assignment targets must be scalar variables or array elements", location)
-                name = str(target_node if isinstance(target, Reference) else target_node.items[0]).lower()
-                if declarations[name].intent == "in" or target.symbol.intent == "in":
+                name = str(target_node if type(target_node).__name__ == "Name" else target_node.items[0]).lower()
+                if declarations[name].intent == "in" or declarations[name].constant or target.symbol.intent == "in":
                     raise CompilationError(f"cannot write INTENT(IN) variable {name}", location)
                 if target.symbol in active_iterators:
                     raise CompilationError(f"cannot modify active loop iterator {name}", location)
-                value = self.expression(value_node, bindings, location)
+                value, value_prelude = self.evaluated(value_node, bindings, location)
                 if (target.symbol.dtype is ScalarType.LOGICAL) != (self.dtype(value) is ScalarType.LOGICAL):
                     raise CompilationError("assignment requires compatible logical or numeric types", location)
+                statements.extend(target_prelude)
+                statements.extend(value_prelude)
                 statements.append(Assignment(target, value, location))
             elif kind in {"If_Stmt", "If_Construct"}:
 
@@ -477,7 +615,7 @@ class _Lowerer:
                     )
 
                 if kind == "If_Stmt":
-                    condition = self.expression(node.items[0], bindings, location)
+                    condition, prelude = self.evaluated(node.items[0], bindings, location)
                     then_body = lower_branch((node.items[1],))
                     else_body = Block(())
                 else:
@@ -497,15 +635,16 @@ class _Lowerer:
                             else_body = branch_body
                             continue
                         branch_location = self.location(header, provenance)
-                        condition = self.expression(header.items[0], bindings, branch_location)
+                        condition, prelude = self.evaluated(header.items[0], bindings, branch_location)
                         if self.dtype(condition) is not ScalarType.LOGICAL:
                             raise CompilationError("IF condition must be LOGICAL", branch_location)
                         then_body = branch_body
-                        else_body = Block((If(condition, then_body, else_body, branch_location),))
+                        else_body = Block(prelude + (If(condition, then_body, else_body, branch_location),))
                     statements.extend(else_body.statements)
                     continue
                 if self.dtype(condition) is not ScalarType.LOGICAL:
                     raise CompilationError("IF condition must be LOGICAL", location)
+                statements.extend(prelude)
                 statements.append(If(condition, then_body, else_body, location))
             elif kind == "Block_Nonlabel_Do_Construct":
                 loop_nodes = [child for child in node.content if type(child).__name__ != "Comment"]
@@ -531,7 +670,8 @@ class _Lowerer:
                     raise CompilationError("nested loops cannot reuse an active iterator", location)
                 step: Expr | int = 1
                 if len(ranges) == 3:
-                    step = self.expression(ranges[2], bindings, location)
+                    step, prelude = self.evaluated(ranges[2], bindings, location)
+                    statements.extend(prelude)
                     if self.dtype(step) != ScalarType.INTEGER:
                         raise CompilationError("loop strides must be INTEGER expressions", location)
                     constant = step
@@ -539,10 +679,42 @@ class _Lowerer:
                         constant = constant.operand
                     if isinstance(constant, Literal) and int(constant.value) == 0:
                         raise CompilationError("loop stride must not be zero", location)
-                lower = self.expression(ranges[0], bindings, location)
-                upper = self.expression(ranges[1], bindings, location)
+                lower, prelude = self.evaluated(ranges[0], bindings, location)
+                statements.extend(prelude)
+                upper, prelude = self.evaluated(ranges[1], bindings, location)
+                statements.extend(prelude)
                 if self.dtype(lower) != ScalarType.INTEGER or self.dtype(upper) != ScalarType.INTEGER:
                     raise CompilationError("loop bounds must be INTEGER expressions", location)
+                private_index = any(
+                    type(access).__name__ == "Part_Ref"
+                    and isinstance(bindings.get(str(access.items[0]).lower()), _PrivateArray)
+                    and any(type(name).__name__ == "Name" and str(name).lower() == str(iterator_node).lower()
+                            for name in walk(access.items[1]))
+                    for child in loop_nodes[1:-1] for access in walk(child)
+                )
+                if private_index:
+                    start, stop = constant_integer(lower, location), constant_integer(upper, location)
+                    stride = step if isinstance(step, int) else constant_integer(step, location)
+                    if None in (start, stop, stride) or stride == 0:
+                        raise CompilationError("private array indexing loops require bounded constant ranges", location)
+                    trip_count = max(0, (stop-start)//stride+1)
+                    if self.unrolled_iterations + trip_count > 256:
+                        raise CompilationError("private array indexing loop exceeds the 256-iteration unrolling budget", location)
+                    self.unrolled_iterations += trip_count
+                    old_values = dict(self.unrolled_values)
+                    try:
+                        for ordinal in range(trip_count):
+                            value = start + ordinal*stride
+                            statements.append(Assignment(Reference(iterator), Literal(str(value), ScalarType.INTEGER), location))
+                            self.unrolled_values[iterator] = value
+                            statements.extend(self.block(tuple(loop_nodes[1:-1]), routine, bindings, declarations,
+                                                         ancestors, provenance, active_iterators | {iterator}).statements)
+                    finally:
+                        self.unrolled_values = old_values
+                    final = start + trip_count*stride
+                    integer_literal(str(final), location)
+                    statements.append(Assignment(Reference(iterator), Literal(str(final), ScalarType.INTEGER), location))
+                    continue
                 body = self.block(
                     tuple(loop_nodes[1:-1]),
                     routine,
@@ -557,45 +729,123 @@ class _Lowerer:
                 name_node, argument_list = node.items
                 if type(name_node).__name__ != "Name":
                     raise CompilationError("only direct calls to module subroutines are supported", location)
-                key = (routine.module.lower(), str(name_node).lower())
-                if key not in self.routine_nodes:
-                    reason = "unannotated or unknown" if self.require_markers else "unknown or external"
-                    raise CompilationError(f"call to {reason} kernel {name_node}", location)
-                call_provenance = (*provenance, f"{routine.name} at {self.path}:{location.line} -> {name_node}")
-                callee = self.resolve_routine(key, call_provenance)
-                if callee.name.lower() in ancestors:
-                    raise CompilationError(f"recursive kernel call to {callee.name} is unsupported", location)
-                actual_nodes = argument_list.items if argument_list is not None else ()
-                if len(actual_nodes) != len(callee.arguments):
-                    raise CompilationError(f"call to {callee.name} has the wrong number of arguments", location)
-                formal_declarations = {declaration.name: declaration for declaration in callee.declarations}
-                actuals: dict[str, Symbol] = {}
-                for formal, actual_node in zip(callee.arguments, actual_nodes, strict=True):
-                    if type(actual_node).__name__ != "Name":
-                        raise CompilationError(
-                            "call arguments must be positional whole variables; slices and expressions are unsupported",
-                            location,
-                        )
-                    actual = self.lookup(actual_node, bindings, location)
-                    expected = formal_declarations[formal]
-                    if actual.rank != expected.rank or actual.dtype != expected.dtype:
-                        raise CompilationError(
-                            f"type or rank mismatch for argument {formal} of {callee.name}", location
-                        )
-                    actual_declaration = declarations[str(actual_node).lower()]
-                    if (
-                        expected.intent in {"out", "inout"}
-                        and not expected.inferred_intent
-                        and (actual.intent == "in" or actual_declaration.intent == "in" or actual in active_iterators)
-                    ):
-                        raise CompilationError(
-                            f"writable argument {formal} of {callee.name} aliases a read-only variable", location
-                        )
-                    actuals[formal] = actual
-                statements.extend(self.inline(callee, actuals, ancestors, call_provenance, active_iterators).statements)
+                callee = self.call_target(str(name_node), routine, location)
+                if callee.result is not None:
+                    raise CompilationError("function used as a subroutine", location)
+                block, _ = self.call(callee, argument_list, bindings, declarations,
+                                     ancestors, provenance, active_iterators, location)
+                statements.extend(block.statements)
             else:
                 raise CompilationError(f"unsupported execution construct {kind}: {node}", location)
         return Block(tuple(statements))
+
+    def call_key(self, name, routine):
+        scope = routine.key
+        while scope is not None:
+            key = (routine.module.lower(), scope[1] + "::" + name.lower())
+            if key in self.routine_nodes:
+                return key
+            scope = self.parents[scope]
+        key = (routine.module.lower(), name.lower())
+        return key if key in self.routine_nodes else None
+
+    def call_target(self, name, routine, location):
+        provenance = (*location.call_stack, f"{routine.name} at {self.path}:{location.line} -> {name}")
+        key = self.call_key(name, routine)
+        if key is None:
+            reason = "unannotated or unknown" if self.require_markers else "unknown or external"
+            raise CompilationError(f"call to {reason} kernel {name}", location)
+        return self.resolve_routine(key, provenance)
+
+    def call(self, callee, argument_list, bindings, declarations, ancestors,
+             provenance, active_iterators, location):
+        """Inline a source-backed call after binding its actual storage."""
+        key = "::".join(callee.key)
+        if key in ancestors:
+            raise CompilationError(f"recursive kernel call to {callee.name} is unsupported", location)
+        actual_nodes = getattr(argument_list, "items", ())
+        if len(actual_nodes) != len(callee.arguments):
+            raise CompilationError(f"call to {callee.name} has the wrong number of arguments", location)
+        formal_declarations = {declaration.name: declaration for declaration in callee.declarations}
+        actuals, prelude, storage, writable = {}, [], [], set()
+        for formal, actual_node in zip(callee.arguments, actual_nodes, strict=True):
+            expected = formal_declarations[formal]
+            if not expected.rank and expected.intent in {"out", "inout"} and not callee.pure:
+                origin = expected.location
+                origin = SourceLocation(origin.path, origin.line, (*provenance,
+                    f"{self.active_frames[-1][0].name} at {self.path}:{location.line} -> {callee.name}"))
+                raise CompilationError("writable scalar helper arguments require a PURE numerical closure", origin)
+            name = str(actual_node).lower() if type(actual_node).__name__ == "Name" else None
+            actual = bindings.get(name) if name is not None else None
+            if type(actual_node).__name__ == "Actual_Arg_Spec" or (name is None and not callee.pure):
+                raise CompilationError("call arguments must be positional whole variables for non-pure helpers", location)
+            if expected.rank:
+                if actual is None or not actual.rank:
+                    if actual is not None:
+                        raise CompilationError(f"type or rank mismatch for argument {formal} of {callee.name}", location)
+                    raise CompilationError("array call arguments must be positional whole variables", location)
+                if expected.bounds:
+                    if not isinstance(actual, _PrivateArray):
+                        raise CompilationError("explicit-shape numerical helpers require private fixed arrays", location)
+                    expected_extents = tuple(max(0, upper-lower+1) for lower, upper in expected.bounds)
+                    actual_extents = tuple(max(0, upper-lower+1) for lower, upper in actual.bounds)
+                    if expected_extents != actual_extents:
+                        raise CompilationError("private array helper shape mismatch", location)
+                    actual = replace(actual, bounds=expected.bounds)
+                elif isinstance(actual, _PrivateArray):
+                    actual = replace(actual, bounds=tuple((1, max(0, hi-lo+1)) for lo, hi in actual.bounds))
+            elif actual is None or actual.rank:
+                if expected.intent != "in":
+                    raise CompilationError("writable scalar helper arguments require private whole variables", location)
+                value, prefix = self.evaluated(actual_node, bindings, location)
+                prelude.extend(prefix)
+                actual = self.new_symbol(replace(expected, intent=None, rank=0))
+                prelude.append(Assignment(Reference(actual), value, location))
+                if self.dtype(value) is not expected.dtype:
+                    raise CompilationError(f"type or rank mismatch for argument {formal} of {callee.name}", location)
+            if actual.rank != expected.rank or actual.dtype != expected.dtype:
+                raise CompilationError(f"type or rank mismatch for argument {formal} of {callee.name}", location)
+            symbols = set(actual.elements) if isinstance(actual, _PrivateArray) else {actual}
+            modifies = expected.intent in {"out", "inout"} and not expected.inferred_intent
+            if modifies:
+                actual_declaration = declarations.get(name)
+                if ((actual_declaration is not None and (actual_declaration.intent == "in" or actual_declaration.constant))
+                    or any(symbol.intent == "in" or symbol in active_iterators for symbol in symbols)):
+                    raise CompilationError(f"writable argument {formal} of {callee.name} aliases a read-only variable", location)
+                if not expected.rank and (not callee.pure or any(symbol.parameter for symbol in symbols)):
+                    raise CompilationError("writable scalar helper arguments require pure calls and private storage", location)
+                writable.update(symbols)
+            storage.append(symbols)
+            actuals[formal] = actual
+        if callee.pure:
+            for index, symbols in enumerate(storage):
+                if symbols & writable and any(symbols & other for other in storage[index+1:]):
+                    raise CompilationError("pure helper arguments have overlapping writable storage", location)
+        if callee.result is not None:
+            if not callee.pure:
+                raise CompilationError("numerical helper functions must be PURE", location)
+            if any(formal_declarations[name].intent != "in" for name in callee.arguments):
+                raise CompilationError("pure numerical function arguments must have INTENT(IN)", location)
+            declaration = formal_declarations[callee.result]
+            if declaration.rank:
+                raise CompilationError("numerical helper function results must be scalar", location)
+            actuals[callee.result] = self.new_symbol(replace(declaration, intent=None))
+        call_provenance = (*provenance, f"{self.active_frames[-1][0].name} at {self.path}:{location.line} -> {callee.name}")
+        body = self.inline(callee, actuals, ancestors, call_provenance, active_iterators)
+        # INTENT(OUT) kills prior definitions, including values from a previous
+        # invocation/iteration. Require complete private outputs so scalarized
+        # storage cannot accidentally keep an old element alive.
+        output_symbols = set()
+        for formal, actual in actuals.items():
+            if formal_declarations[formal].intent == "out" or formal == callee.result:
+                output_symbols.update(actual.elements if isinstance(actual, _PrivateArray) else
+                                      (actual,) if not actual.rank else ())
+        if output_symbols:
+            from compiler.analysis.semantics import validate_block
+            defined = validate_block(body, set(self.symbols) - output_symbols, active_iterators)
+            if not output_symbols <= defined:
+                raise CompilationError("private INTENT(OUT) helper results require complete ordered definitions", location)
+        return Block(tuple(prelude) + body.statements), actuals.get(callee.result)
 
     @staticmethod
     def lookup(node: Any, bindings: dict[str, Symbol], location: SourceLocation) -> Symbol:
@@ -665,6 +915,11 @@ class _Lowerer:
         if len(args) == 1 or args[1] is None:
             if name != "size":
                 raise CompilationError(f"{name.upper()} requires DIM; array-valued results are unsupported", location)
+            if isinstance(symbol, _PrivateArray):
+                total = 1
+                for lower, upper in symbol.bounds:
+                    total *= max(0, upper-lower+1)
+                return Literal(str(total), ScalarType.INTEGER)
             total: Expr = Size(symbol, 1)
             for dimension in range(2, symbol.rank + 1):
                 total = Binary("*", total, Size(symbol, dimension))
@@ -679,7 +934,16 @@ class _Lowerer:
                 raise CompilationError(
                     f"{name.upper()} dimension {dimension} is outside rank {symbol.rank} of {symbol.name}", location
                 )
+            if isinstance(symbol, _PrivateArray):
+                lower, upper = symbol.bounds[dimension-1]
+                value = lower if name == "lbound" else upper if name == "ubound" else max(0, upper-lower+1)
+                # Fortran bounds inquiries on an empty dimension return 1/0.
+                if upper < lower and name in {"lbound", "ubound"}:
+                    value = 1 if name == "lbound" else 0
+                return Literal(str(value), ScalarType.INTEGER)
             return one if name == "lbound" else Size(symbol, dimension)
+        if isinstance(symbol, _PrivateArray):
+            raise CompilationError("private array inquiries require constant DIM", location)
         # Assumed-shape dummy bounds start at 1. Select runtime dimensions from
         # existing extent nodes so dependence and memory analyses see metadata.
         result: Expr = one if name == "lbound" else Size(symbol, symbol.rank)
@@ -698,6 +962,21 @@ class _Lowerer:
     def intrinsic(self, node: Any, bindings: dict[str, Symbol], location: SourceLocation) -> Expr:
         name_node, argument_list = node.items
         name = str(name_node).lower()
+        if name == "dot_product":
+            args = getattr(argument_list, "items", ())
+            if len(args) != 2:
+                raise CompilationError("DOT_PRODUCT requires two private constant vector sections", location)
+            left, right = (self.private_section(arg, bindings, location) for arg in args)
+            if len(left) != len(right):
+                raise CompilationError("DOT_PRODUCT vector extents differ", location)
+            types = tuple(self.lookup(arg if type(arg).__name__ == "Name" else arg.items[0], bindings, location).dtype
+                          for arg in args)
+            if types[0] is not types[1] or any(symbol.dtype is not types[0] for symbol in (*left, *right)):
+                raise CompilationError("DOT_PRODUCT requires matching numeric kinds", location)
+            result: Expr = Literal("0" if types[0] is ScalarType.INTEGER else "0.0", types[0])
+            for a, b in zip(left, right, strict=True):
+                result = Binary("+", result, Binary("*", Reference(a), Reference(b)))
+            return result
         args = self.intrinsic_arguments(name, argument_list, location)
         if name in ARRAY_INQUIRIES:
             return self.array_inquiry(name, args, bindings, location)
@@ -719,6 +998,36 @@ class _Lowerer:
         )
         return IntrinsicCall(name, arguments, dtype)
 
+    def private_section(self, node, bindings, location):
+        if type(node).__name__ == "Name":
+            array = self.lookup(node, bindings, location)
+            subscripts = (None,) * array.rank
+        elif type(node).__name__ == "Part_Ref":
+            array = self.lookup(node.items[0], bindings, location)
+            subscripts = node.items[1].items
+        else:
+            raise CompilationError("constant sections require private fixed arrays", location)
+        if not isinstance(array, _PrivateArray) or len(subscripts) != array.rank:
+            raise CompilationError("constant sections require private fixed arrays", location)
+        axes, vectors = [], 0
+        for subscript, (lower, upper) in zip(subscripts, array.bounds, strict=True):
+            if subscript is None or type(subscript).__name__ == "Subscript_Triplet":
+                vectors += 1
+                parts = (None, None, None) if subscript is None else subscript.items
+                start, stop, step = (default if part is None else constant_integer(self._expression(part, bindings, location), location)
+                                     for part, default in zip(parts, (lower, upper, 1), strict=True))
+                if None in (start, stop, step) or step == 0:
+                    raise CompilationError("private sections require constant nonzero strides and bounds", location)
+                axes.append(tuple(range(start, stop + (1 if step > 0 else -1), step)))
+            else:
+                value = constant_integer(self._expression(subscript, bindings, location), location)
+                if value is None:
+                    raise CompilationError("private sections require constant subscripts", location)
+                axes.append((value,))
+        if vectors != 1:
+            raise CompilationError("DOT_PRODUCT requires rank-one sections", location)
+        return tuple(array.element(tuple(reversed(indices)), location) for indices in product(*reversed(axes)))
+
     def _expression(self, node: Any, bindings: dict[str, Symbol], location: SourceLocation) -> Expr:
         kind = type(node).__name__
         if kind == "Name":
@@ -727,6 +1036,8 @@ class _Lowerer:
             symbol = self.lookup(node, bindings, location)
             if symbol.rank:
                 raise CompilationError(f"array {symbol.name} must be accessed with {symbol.rank} subscripts", location)
+            if symbol in self.unrolled_values:
+                return Literal(str(self.unrolled_values[symbol]), ScalarType.INTEGER)
             return Reference(symbol)
         if kind == "Logical_Literal_Constant":
             value, literal_kind = node.items
@@ -752,6 +1063,8 @@ class _Lowerer:
         if kind == "Parenthesis":
             return self._expression(node.items[1], bindings, location)
         if kind == "Part_Ref":
+            if str(node.items[0]).lower() not in bindings:
+                return self.function_call(node, bindings, location)
             symbol = self.lookup(node.items[0], bindings, location)
             subscripts = node.items[1].items
             if not symbol.rank or len(subscripts) != symbol.rank:
@@ -759,8 +1072,20 @@ class _Lowerer:
             indices = tuple(self._expression(index, bindings, location) for index in subscripts)
             if any(self.dtype(index) != ScalarType.INTEGER for index in indices):
                 raise CompilationError("array subscripts must be INTEGER expressions", location)
+            if isinstance(symbol, _PrivateArray):
+                constants = tuple(constant_integer(index, location) for index in indices)
+                if any(index is None for index in constants):
+                    raise CompilationError("private fixed array accesses require constant subscripts", location)
+                return Reference(symbol.element(constants, location))
             return ArrayAccess(symbol, indices)
+        if kind == "Function_Reference":
+            return self.function_call(node, bindings, location)
         if kind == "Intrinsic_Function_Reference":
+            name = str(node.items[0]).lower()
+            if name in bindings:
+                raise CompilationError("intrinsic name is shadowed by local storage: " + name, location)
+            if self.call_key(name, self.active_frames[-1][0]) is not None:
+                return self.function_call(node, bindings, location)
             return self.intrinsic(node, bindings, location)
         items = getattr(node, "items", ())
         if len(items) == 2 and str(items[0]).upper() in {"+", "-", ".NOT."}:
@@ -773,6 +1098,17 @@ class _Lowerer:
         if len(items) == 3:
             left_node, operator, right_node = items
             operator = str(operator).lower()
+            if operator == "**":
+                left = self._expression(left_node, bindings, location)
+                exponent = constant_integer(self._expression(right_node, bindings, location), location)
+                if exponent is None or not 0 <= exponent <= 16 or self.dtype(left) is ScalarType.LOGICAL:
+                    raise CompilationError("numerical powers require an INTEGER constant exponent from 0 through 16", location)
+                if exponent == 0:
+                    return Literal("1" if self.dtype(left) is ScalarType.INTEGER else "1.0", self.dtype(left))
+                result = left
+                for _ in range(exponent-1):
+                    result = Binary("*", result, left)
+                return result
             operators = {
                 "+",
                 "-",
@@ -803,6 +1139,16 @@ class _Lowerer:
                     raise CompilationError("invalid operand types for operator " + operator, location)
                 return Binary(operator, left, right)
         raise CompilationError(f"unsupported expression {kind}: {node}", location)
+
+    def function_call(self, node, bindings, location):
+        routine, _, declarations, ancestors, provenance, active_iterators = self.active_frames[-1]
+        callee = self.call_target(str(node.items[0]), routine, location)
+        if callee.result is None:
+            raise CompilationError("subroutine used as a function", location)
+        body, result = self.call(callee, node.items[1], bindings, declarations,
+                                 ancestors, provenance, active_iterators, location)
+        self.pending.extend(body.statements)
+        return Reference(result)
 
     def dtype(self, expression: Expr) -> ScalarType:
         if isinstance(expression, (Literal, IntrinsicCall)):
@@ -880,6 +1226,8 @@ def discover_file(path: str | Path, *, require_markers: bool = False) -> tuple[P
     index.discover(tree)
     candidates = []
     for key, (module, node) in index.routine_nodes.items():
+        if index.parents[key] is not None or type(node).__name__ != "Subroutine_Subprogram":
+            continue
         statement = next(child for child in node.content if type(child).__name__ == "Subroutine_Stmt")
         reason = None
         try:

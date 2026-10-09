@@ -173,6 +173,7 @@ module fort_scoped_memory
   public :: fort_scope_set_transfer_costs_v1, fort_scope_batch_execute_v1, fort_scope_batch_report_get_v1
   public :: fort_scope_device_get
   public :: fort_scope_serial_caller
+  public :: fort_scope_numerical_environment_supported
   public :: fort_scope_layout_get, fort_scope_host_begin, fort_scope_host_end
   public :: fort_scope_device_begin, fort_scope_device_end, fort_scope_cancel_access
   public :: fort_scope_gpu_enter, fort_scope_gpu_leave, fort_scope_note_launch, fort_scope_wait
@@ -335,6 +336,10 @@ module fort_scoped_memory
     function fort_scope_serial_caller() bind(C) result(serial)
       import c_int
       integer(c_int) :: serial
+    end function
+    function fort_scope_numerical_environment_supported() bind(C) result(supported)
+      import c_int
+      integer(c_int) :: supported
     end function
     function fort_scope_abi_version() bind(C) result(version)
       import c_int32_t

@@ -30,6 +30,7 @@ struct Operation {
     std::vector<Binding> bindings;
     double flops = 0, memory_bytes = 0;
     bool gpu_available = false;
+    double cpu_numerical_seconds = 0, gpu_numerical_seconds = 0;
 };
 struct Inputs {
     // Preserve the runtime's publication order: each publication can wait.
@@ -111,7 +112,8 @@ inline void seconds(double &value, double delta) {
     value += delta; require(std::isfinite(value), "arithmetic_overflow");
 }
 inline double compute(const Operation &op, const fort_scope_plan_costs &costs, bool gpu) {
-    return std::max(op.flops/(gpu ? costs.gpu_flops : costs.cpu_flops),
+    return std::max(op.flops/(gpu ? costs.gpu_flops : costs.cpu_flops) +
+                    (gpu ? op.gpu_numerical_seconds : op.cpu_numerical_seconds),
                     op.memory_bytes/(gpu ? costs.gpu_bandwidth : costs.cpu_bandwidth));
 }
 inline bool valid_team_costs(const fort_scope_team_costs &costs) {
@@ -133,7 +135,8 @@ inline double native_compute(const Operation &op, const Inputs &input, const for
     if (!input.team_costs) return compute(op, costs, false);
     if (definition_only(op)) return 0;
     const auto &team = *input.team_costs;
-    return std::max(op.flops/team.native_cpu_flops, op.memory_bytes/team.native_cpu_bandwidth) +
+    return std::max(op.flops/team.native_cpu_flops + op.cpu_numerical_seconds,
+                    op.memory_bytes/team.native_cpu_bandwidth) +
         (op.kind == FORT_SCOPE_PLAN_WORKER ? team.native_worker_seconds : 0);
 }
 inline bool valid_transfer_costs(const fort_scope_batch_costs &costs) {
@@ -193,6 +196,8 @@ inline void validate_metadata(const Inputs &input, bool check_work, bool check_c
         }
         if (check_work)
             require(std::isfinite(op.flops) && std::isfinite(op.memory_bytes) && op.flops >= 0 && op.memory_bytes >= 0 &&
+                    std::isfinite(op.cpu_numerical_seconds) && op.cpu_numerical_seconds >= 0 &&
+                    std::isfinite(op.gpu_numerical_seconds) && op.gpu_numerical_seconds >= 0 &&
                     op.flops < double(std::numeric_limits<uint64_t>::max()) &&
                     op.memory_bytes < double(std::numeric_limits<uint64_t>::max()), "unknown_or_overflowed_work");
         if (op.kind == FORT_SCOPE_PLAN_WORKER) {

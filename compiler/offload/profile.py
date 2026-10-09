@@ -161,6 +161,12 @@ def validate_profile(
             raise ProfileError(f"missing rates.{name}")
         _number(transfer.get("latency_seconds"), f"rates.{name}.latency_seconds", zero=True)
         _number(transfer.get("bandwidth_bytes_per_second"), f"rates.{name}.bandwidth_bytes_per_second")
+    if "numerical" in profile:
+        from .numerical_calibration import NumericalCalibrationError, validate_numerical_profile
+        try:
+            validate_numerical_profile(profile["numerical"], profile)
+        except NumericalCalibrationError as error:
+            raise ProfileError(str(error)) from error
     if "scoped" in profile:
         scoped = profile["scoped"]
         if not isinstance(scoped, dict) or type(scoped.get("schema_version")) is not int or scoped["schema_version"] != 1:

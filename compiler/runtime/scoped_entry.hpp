@@ -52,10 +52,12 @@ public:
         bindings_[size_++].effects = access;
         return FORT_SCOPE_OK;
     }
-    int record(uint32_t kind, uint64_t unit, double flops, double memory_bytes, int gpu_available) const {
+    int record(uint32_t kind, uint64_t unit, double flops, double memory_bytes, int gpu_available,
+               double cpu_numerical_seconds = 0, double gpu_numerical_seconds = 0) const {
         std::array<fort_scope_plan_binding, Capacity> values{};
         for (size_t i=0; i<size_; ++i) values[i] = {bindings_[i].handle, bindings_[i].effects};
-        return fort_scope_plan_add(context_, kind, unit, values.data(), size_, flops, memory_bytes, gpu_available);
+        return fort_scope_plan_add_costs_v2(context_, kind, unit, values.data(), size_, flops, memory_bytes,
+                                           gpu_available, cpu_numerical_seconds, gpu_numerical_seconds);
     }
     int decision(uint64_t unit, bool &gpu) const {
         std::array<fort_scope_plan_binding, Capacity> values{};

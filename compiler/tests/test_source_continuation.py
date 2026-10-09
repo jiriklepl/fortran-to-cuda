@@ -50,7 +50,11 @@ def test_structured_owner_queries_only_reached_segments_and_preserves_bounds(tmp
     captures = {entry["resource"]: entry["name"] for entry in scope["parameters"]}
     assert captures["argument::b"] + "_view(- 2)" in owner
     assert captures["argument::b"] + "_lower(1):" in owner
-    assert "kind=c_int64_t" in text
+    caller = text[text.index("subroutine step"):text.index("end subroutine", text.index("subroutine step"))]
+    kind_import = re.search(r"use iso_c_binding, only: (\w+) => c_int64_t", caller)
+    assert kind_import is not None
+    kind_alias = kind_import.group(1)
+    assert re.search(rf"lbound\(\s*b\s*,\s*1\s*,\s*kind\s*=\s*{re.escape(kind_alias)}\s*\)", caller)
     assert "fort_branch =" in owner
     assert owner.index("fort_branch =") < owner.index("if (fort_branch) then")
     assert all(segment["position"] == "when reached after preceding source operations"
@@ -180,7 +184,11 @@ def test_original_allocation_predicate_is_guarded_before_association(tmp_path):
     assert "ALLOCATED(fort_capture_" not in owner
     assert "fort_branch = .TRUE. .AND." in owner
     guard = text[text.index("subroutine step"):text.index("end subroutine", text.index("subroutine step"))]
-    assert guard.index("allocated(b)") < guard.index("kind=c_int64_t")
+    kind_import = re.search(r"use iso_c_binding, only: (\w+) => c_int64_t", guard)
+    assert kind_import is not None
+    bound = re.search(rf"lbound\(\s*b\s*,\s*1\s*,\s*kind\s*=\s*{re.escape(kind_import.group(1))}\s*\)", guard)
+    assert bound is not None
+    assert guard.index("allocated(b)") < bound.start()
 
 
 @pytest.mark.parametrize("statement", ["deallocate(b)", "return", "exit", "call unknown(b)"])

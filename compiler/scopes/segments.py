@@ -82,7 +82,7 @@ def joined_group_completion(builder, nodes):
     scalar PRIVATE clauses and explicit SHARED names are admitted; tasks,
     detached work and nested teams remain boundaries.
     """
-    if not nodes or directive(nodes[-1]) != "end parallel":
+    if not nodes or directive(nodes[-1]) not in {"end parallel", "end parallel do"}:
         raise CompilationError("native parallel operation requires a joined END PARALLEL")
 
     def clauses(text):
@@ -99,7 +99,7 @@ def joined_group_completion(builder, nodes):
                 if values not in {"1", "2", "3", "4"}:
                     raise CompilationError("unsupported native OpenMP COLLAPSE")
             elif kind == "schedule":
-                if values != "static":
+                if values not in {"static", "runtime"}:
                     raise CompilationError("unsupported native OpenMP SCHEDULE")
             else:
                 for name in values.split(","):
@@ -108,15 +108,31 @@ def joined_group_completion(builder, nodes):
                     binding = builder.analysis._binding(builder.entry.scope, name.strip())
                     if binding is None:
                         raise CompilationError("unresolved native OpenMP clause variable")
-                    if kind == "private" and (binding.rank or "save" in binding.attributes
+                    if kind == "private" and ("save" in binding.attributes
                                               or not binding.root.startswith(builder.entry.qualified + "::")):
-                        raise CompilationError("native PRIVATE requires an original local scalar")
+                        raise CompilationError("native PRIVATE requires original local storage")
+                    if kind == "private" and binding.rank:
+                        from compiler.scopes.regions import _fixed_shape
+                        _fixed_shape(builder.entry, binding)
             remainder = remainder[match.end():].lstrip(", ")
 
     first = directive(nodes[0])
     if first is None or not re.match(r"parallel(?:\s|$)", first):
         raise CompilationError("native operation is not one complete PARALLEL region")
-    clauses(first[len("parallel"):])
+    combined = bool(re.match(r"parallel\s+do(?:\s|$)", first))
+    clauses(first[len("parallel do"):] if combined else first[len("parallel"):])
+    if combined:
+        body = [node for node in nodes[1:-1] if _kind(node) != "Comment"]
+        if (directive(nodes[-1]) != "end parallel do" or len(body) != 1
+                or _kind(body[0]) != "Block_Nonlabel_Do_Construct"):
+            raise CompilationError("combined PARALLEL DO requires one complete associated loop and join")
+        if any(directive(item) is not None for item in walk(body[0])):
+            raise CompilationError("nested OpenMP directives inside a native loop are unsupported")
+        return {"available": True, "reason": "original combined PARALLEL DO joins at END PARALLEL DO",
+                "caller_contract": "serial_source_scope", "requires_serial_caller": True,
+                "has_openmp_in_closure": True, "has_opaque_calls_in_closure": False}
+    if directive(nodes[-1]) != "end parallel":
+        raise CompilationError("native PARALLEL operation requires a matching END PARALLEL")
     index = 1
     while index < len(nodes) - 1:
         node, text = nodes[index], directive(nodes[index])
@@ -170,8 +186,9 @@ def grouped_nodes(nodes):
     while index < len(nodes):
         start = directive(nodes[index])
         if start is not None and re.match(r"parallel(?:\s|$)", start):
+            ending = "end parallel do" if re.match(r"parallel\s+do(?:\s|$)", start) else "end parallel"
             end = index + 1
-            while end < len(nodes) and directive(nodes[end]) != "end parallel":
+            while end < len(nodes) and directive(nodes[end]) != ending:
                 end += 1
             if end == len(nodes):
                 raise CompilationError("native PARALLEL group has no proven join")

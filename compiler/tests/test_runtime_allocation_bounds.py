@@ -81,7 +81,8 @@ def test_source_guard_precedes_descriptor_association_and_runtime(tmp_path, rank
     assert guard["inquiry_kind"] == 8
     assert guard["inquiries"] == ["lbound", "ubound", "size"]
     assert scope["allocation_preflight"]["origin_source"] == "original module allocation descriptor"
-    dispatch = text[text.index("block\nuse fort_scoped_memory, only:"):text.index("end block")]
+    dispatch_start = text.index("use fort_scoped_memory, only:")
+    dispatch = text[dispatch_start:text.index("end block", dispatch_start)]
     assert dispatch.index("allocated(weights)") < dispatch.index("lbound(weights, 1, kind=8)")
     assert dispatch.index("lbound(weights, 1, kind=8)") < dispatch.index("call " + scope["owner"])
     assert "fort_scope_create" not in dispatch

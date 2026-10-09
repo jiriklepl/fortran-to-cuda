@@ -15,6 +15,19 @@ CUDA_CALLABLE T maximum(T value, Rest... remaining) {
     return value;
 }
 
+// A finite leading constant is the unordered/tie result of the supported
+// optimized GNU Fortran scalar MIN/MAX form. Keep this separate from the
+// ordered runtime-argument fold: replacing every call by fmin/fmax changes
+// NaN operand order and signed-zero results for ordinary variable arguments.
+template <typename T>
+CUDA_CALLABLE T minimum_constant_first(T constant, T value) {
+    return value < constant ? value : constant;
+}
+template <typename T>
+CUDA_CALLABLE T maximum_constant_first(T constant, T value) {
+    return value > constant ? value : constant;
+}
+
 // Addressing analysis proves that negation stays representable before using this.
 template <typename T>
 CUDA_CALLABLE T absolute(T value) {

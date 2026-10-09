@@ -269,6 +269,12 @@ int fort_scope_plan_report_v2(fort_scope_t context, fort_scope_plan_report *repo
 int fort_scope_plan_add(fort_scope_t context, uint32_t kind, uint64_t unit,
                         const fort_scope_plan_binding *bindings, size_t count,
                         double flops, double memory_bytes, int gpu_available);
+/* Additional, statically counted numerical costs from compatible offline
+ * primitive calibration. Old callers retain zero additional costs. */
+int fort_scope_plan_add_costs_v2(fort_scope_t context, uint32_t kind, uint64_t unit,
+                        const fort_scope_plan_binding *bindings, size_t count,
+                        double flops, double memory_bytes, int gpu_available,
+                        double cpu_numerical_seconds, double gpu_numerical_seconds);
 /* Validate a complete, successfully recorded query's ordered definitions.
  * No calibration, estimates, CUDA, transfers, or live coverage changes. Keeps
  * recording open for selection or further queries. Undefined requirements
@@ -292,6 +298,8 @@ int fort_scope_create(int device, fort_scope_t *context);
 /* No CUDA initialization or descriptor access. Source scopes retain native
  * collective execution in active teams or if runtime OpenMP support is absent. */
 int fort_scope_serial_caller(void);
+/* Metadata-only check of the ORIGINAL calling thread's IEEE control state. */
+int fort_scope_numerical_environment_supported(void);
 /* Read the context ordinal without initializing or selecting a CUDA device. */
 int fort_scope_device_get(fort_scope_t context, int *device);
 /* Configure before CUDA initialization. Budget counts live payload bytes of

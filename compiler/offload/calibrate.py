@@ -9,6 +9,8 @@ extension; scoped automatic execution requires matching runtime calibration.
 Add --collective-costs to measure the original persistent OpenMP team and its
 generated protocol. It also identifies the actual Fortran compiler and ordered
 semantic flags; defaults are -std=f2018 -O3 -fopenmp.
+Add --numerical-costs for optional transcendental/private-array family costs,
+validated at independent sizes. They do not estimate arbitrary intrinsic mixes.
 """
 from __future__ import annotations
 
@@ -527,6 +529,13 @@ def calibrate(args: argparse.Namespace) -> dict:
             profile = calibrate_collective(profile, args, directory, nvcc, host, run=_run, tool=_tool)
         except ValueError as error:
             raise CalibrationError(str(error)) from error
+    if getattr(args, "numerical_costs", False):
+        from .numerical_calibration import NumericalCalibrationError, calibrate_numerical
+        print("Measuring exact numerical families and independent holdouts...", file=sys.stderr, flush=True)
+        try:
+            profile = calibrate_numerical(profile, args, directory, nvcc, host, run=_run)
+        except NumericalCalibrationError as error:
+            raise CalibrationError(str(error)) from error
     with tempfile.NamedTemporaryFile(mode="w", dir=output.parent, prefix=output.name + ".", delete=False) as stream:
         temporary = Path(stream.name)
         try:
@@ -557,6 +566,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="refresh scoped costs only, preserving base rates after hardware/toolchain verification; requires --scoped-costs")
     parser.add_argument("--collective-costs", action="store_true",
                         help="also measure the actual generated persistent-team protocol; requires --scoped-costs")
+    parser.add_argument("--numerical-costs", action="store_true",
+                        help="also validate exact generic transcendental/private-array costs on independent sizes")
     parser.add_argument("--fortran", help="Fortran compiler for collective calibration (default gfortran-15, gfortran-14 or gfortran)")
     parser.add_argument("--fortran-flag", action="append", default=[],
                         help="repeat to replace Fortran defaults in order; include -fopenmp "

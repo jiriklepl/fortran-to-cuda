@@ -128,9 +128,10 @@ public:
         catch (const coherence::Fragmented &) { return fort_scope_report_error(FORT_SCOPE_BOUNDARY,"view effect rectangle budget exceeded"); }
         catch (const std::bad_alloc &) { return fort_scope_report_error(FORT_SCOPE_RESOURCE,"view metadata allocation failed"); }
     }
-    int record(uint32_t kind,uint64_t unit,double flops,double memory,int gpu) {
+    int record(uint32_t kind,uint64_t unit,double flops,double memory,int gpu,
+               double cpu_numerical_seconds=0,double gpu_numerical_seconds=0) {
         if(const int status=seal()) return status;
-        return batch_.record(kind,unit,flops,memory,gpu);
+        return batch_.record(kind,unit,flops,memory,gpu,cpu_numerical_seconds,gpu_numerical_seconds);
     }
     int decision(uint64_t unit,bool &gpu) { if(const int status=seal()) return status; return batch_.decision(unit,gpu); }
     int begin(bool device) { if(const int status=seal()) return status; return batch_.begin(device); }

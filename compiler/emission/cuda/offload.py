@@ -13,6 +13,7 @@ from compiler.emission.common.symbols import host_symbols, region_body
 from compiler.emission.cuda.kernels import generate_launch
 from compiler.ir import ScalarType, referenced_symbols
 from compiler.offload.analysis import analyze_offload
+from compiler.offload.numerical_calibration import apply_numerical_costs
 from compiler.offload.codegen import profile_expression
 from compiler.offload.codegen import query_expression as _value
 
@@ -104,6 +105,9 @@ def _metadata(function, analysis, signature, name, value=_value, *, host_pointer
                       "        }"]
         lines += ["        u.iterations = active && d.valid ? points : 0;",
                   f"        u.flops = static_cast<double>(u.iterations) * {unit.work_per_iteration or 0};",
+                  *([f"        u.cpu_numerical_seconds = static_cast<double>(u.iterations) * {unit.cpu_numerical_seconds_per_iteration!r};",
+                     f"        u.gpu_numerical_seconds = static_cast<double>(u.iterations) * {unit.gpu_numerical_seconds_per_iteration!r};"]
+                    if unit.cpu_numerical_seconds_per_iteration or unit.gpu_numerical_seconds_per_iteration else []),
                   "        d.units.push_back(u);", "    }"]
     for unit in analysis.units:
         for footprint in unit.footprints:
@@ -141,6 +145,8 @@ def generate_offload(function, plan, config):
         from compiler.emission.cuda.structured import generate_structured
         return generate_structured(function, plan, config)
     analysis = analyze_offload(function, plan)
+    if not config.collective and config.policy in {"sections", "auto"}:
+        analysis = apply_numerical_costs(analysis, config.profile)
     digest = sha256(f"{function.module}::{function.name}".encode()).hexdigest()[:12]
     name = f"fort_offload_{digest}"
     query_name = f"{function.name[:40]}_offload_{digest[:8]}"
