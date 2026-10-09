@@ -435,8 +435,8 @@ The additional shared CUDA source and Fortran interface are identified by public
 JSON, including argument order, array types, execution modes, and runtime build
 artifacts. Independently generated entries link one common runtime and borrow
 handles registered by their caller. Existing ordinary and owned-session outputs
-are preserved. Shared entries currently require a serial coordinator and read-only
-scalar parameters. Native, forced GPU, and calibrated automatic execution are
+are preserved. Shared entries require read-only scalar parameters and default to
+a serial coordinator. Native, forced GPU, and calibrated automatic execution are
 available. Planning ABI version 1 exports side-effect-free `plan` queries and a
 `choose` selector. Queries record physical effects and checked control values;
 mode 2 consumes the resulting worker decisions in source order. Unknown work,
@@ -457,6 +457,19 @@ choice; the common memory runtime remains ABI version 1.
 Protected CPU reads retain their original guards under host optimization. If a
 physical section offset also uses a protected scalar, its native access uses
 conservative whole-resource effects without evaluating that offset early.
+
+Adding `--gpu-collective` emits an additive `run_team` interface in the same
+Fortran module and an additional C entry identified by public `scoped.team` JSON.
+Every member of the fixed host-budget team at OpenMP level one must call it with
+the same context, buffer handles, mode, and immutable scalar bindings. This is an
+explicit caller contract, not permission to rewrite arbitrary call sites. The
+master performs preparation, access hooks and GPU work once; CPU workers use
+the existing thread IDs and team size. Shared preparation and nested branch
+choices are published at matching barriers. The entry returns a uniform status
+after all workers finish; failures after work starts prohibit replay. Existing
+serial entry names and behavior remain unchanged. Serial calibration does not
+calibrate these collective barriers, so automatic team execution currently stays
+native and reports unavailable collective estimates.
 
 Explicit entries and the initial source scopes below remain opt-in. Complete
 application evaluation and remaining lifetime/effect integration are tracked in
@@ -535,6 +548,60 @@ The independent pipeline exposes this path through opt-in
 facts file. It exports configured and normalized source packages and consumes
 these public build roles; it does not infer initialization from argument intents.
 See [the pipeline interface](../elmm-pipeline/README.md) for its options.
+
+### Qualified source callers on existing teams
+
+Source scopes with `--gpu-collective` accept a separate capture schema version 2.
+The `sources` and stable initialization facts retain their original meaning.
+Array captures additionally assert `association: "shared_whole_storage"` and
+`descriptor_uniform: true`; immutable scalar captures assert
+`association: "shared_immutable_control"`. The compiler verifies source-backed
+caller and worksharing roles independently of these assertions.
+
+`participation` is an object with `kind: "omp_full_team"`,
+`dispatch: "qualified_companion"`, the qualified `entry`,
+`expected_omp_level: 1`, the fixed `host_threads`, and `call_sites`.
+Each site supplies its original `source`, `first_line`, `last_line`, the exact
+statement `span_sha256`, enclosing `team_first_line`/`team_last_line`, and
+`uniform_guard: "unconditional"`. Optional source/team hashes and a qualified
+`caller` assertion must agree with the original AST. The compiler resolves
+renames and generic calls, requires an unconditional call in a plain lexical
+parallel region, proves whole shared captures and immutable controls, and rejects
+private/threadprivate captures, writable aliases, nested or partial participation,
+and unsupported clauses. Original configured-source spans remain authoritative.
+
+Initially the owning entry must contain only direct leaf calls and ordinary
+formals; owning allocatable formals remain native so entry-time deallocation and
+descriptor semantics cannot be bypassed, including for unused outputs. Each original
+leaf must contain matched clause-free orphaned `do`/`end do` worksharing, with
+no computation outside those loops, nested worksharing, calls, persistent state,
+external scalar writes, or scalar assignment statements that could carry private
+state between iterations. An optional `native_participation` map can assert an
+original qualified leaf's source/hash, `kind: "existing_team_worksharing"` and
+`completion: "all_participants_before_effect_commit"`; an assertion cannot create
+a role the compiler cannot prove. This proof uses generic source structure.
+
+Only the individually proved caller sites enter an additive owning companion.
+The original entry and every other caller remain unchanged. Uniform level and
+thread-budget checks precede new barriers. Allocation agreement at the original
+caller precedes owner argument association, bounds, addresses and query inputs.
+The companion compares all participants' extents, original lower bounds,
+contiguity and empty-aware addresses, then creates one context and records and
+validates the complete ordered definition query before computation. Descriptor
+metadata has a one-MiB bound; controller failure or failed preflight before work
+retains original execution. Required original native worksharing executes on the
+whole team between coordinator access hooks and a completion barrier. The context
+closes and all participants finish before capture reuse or return.
+
+This source prototype supports forced `sections`; `auto` produces a successful
+unchanged native result until collective synchronization is calibrated. The public
+manifest publishes versioned `participation` proof even when no scopes qualify,
+plus original-source role reasons. The independent adapter transports these
+facts, applies public source edits and build roles, and performs no role inference
+or kernel-text inspection.
+Authority facts whose call or effect closure cannot be verified are rejected;
+direct hidden allocatable accesses still require lifetime integration. Declared
+stable allocation facts alone do not remove that source-effect boundary.
 
 Independent source extractors may add `--numerical-sources package.json` to offer
 normalized numerical leaves without selecting scopes or execution policies. The
@@ -616,15 +683,16 @@ defined inside the helper. Complete write-only overwrites remain supported.
 Nested native procedure-entry definition changes also remain boundaries.
 Numerical workers retain their separate physical access and definition handling.
 
-Initial support is serial, contiguous whole-array bindings, numerical leaves,
+Initial serial support covers contiguous whole-array bindings, numerical leaves,
 call-only wrapper clones, registered hidden module arrays (including visible
 reexports), bounded physical native sections, and conservative whole-resource
 effects when refinement is unavailable.
 Allocatable callee formals and scalar captures, direct hidden allocatable effects,
 array-valued actuals and scalar array-element actuals,
 explicit dummy extents without a proved whole-storage shape mapping,
-general opaque-call hooks, more general native-section refinement, and collective
-offload require further integration. Automatic source scopes require an explicit
+general opaque-call hooks, more general native-section refinement, collective
+call graphs beyond direct worksharing leaves, and calibrated collective placement
+require further integration. Automatic serial source scopes require an explicit
 profile with costs calibrated for the exact common runtime:
 
 ```bash
