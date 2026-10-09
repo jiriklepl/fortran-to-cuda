@@ -10,9 +10,12 @@ class OffloadConfig:
     host_threads: int = 4
     collective: bool = False
     profile_reason: str | None = None
+    scope_transfers: str = "direct"
 
     def __post_init__(self):
         if self.policy not in {"always", "sections", "auto", "chunked", "hybrid"}:
             raise ValueError("Unknown GPU execution policy")
         if type(self.host_threads) is not int or self.host_threads < 1:
             raise ValueError("Host thread budget must be positive")
+        if self.scope_transfers not in {"direct", "pinned", "pipelined", "auto"}:
+            raise ValueError("Unknown scope transfer mode")

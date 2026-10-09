@@ -11,6 +11,42 @@ namespace fort_physical {
 struct CopyOperation {
     std::size_t offset, width, height, depth, pitch, physical_height;
 };
+// Bound compact staging without changing the original allocation's pitches.
+// Each emitted tile has width*height*depth <= capacity.
+template<class Visitor> bool visit_tiles(const CopyOperation &op, std::size_t capacity, Visitor visitor) {
+    if (!capacity || !op.width || !op.height || !op.depth) return false;
+    const std::size_t slice = op.pitch*op.physical_height;
+    if (op.width > capacity) {
+        for (std::size_t z=0; z<op.depth; ++z)
+            for (std::size_t y=0; y<op.height; ++y)
+                for (std::size_t x=0; x<op.width;) {
+                    const auto width = std::min(capacity, op.width-x);
+                    if (!visitor(CopyOperation{op.offset+z*slice+y*op.pitch+x, width, 1, 1,
+                                               op.pitch, op.physical_height})) return false;
+                    x += width;
+                }
+    } else {
+        const auto rows = capacity/op.width;
+        if (op.height <= rows) {
+            const auto planes = rows/op.height;
+            for (std::size_t z=0; z<op.depth;) {
+                const auto depth = std::min(planes, op.depth-z);
+                if (!visitor(CopyOperation{op.offset+z*slice, op.width, op.height, depth,
+                                           op.pitch, op.physical_height})) return false;
+                z += depth;
+            }
+        } else {
+            for (std::size_t z=0; z<op.depth; ++z)
+                for (std::size_t y=0; y<op.height;) {
+                    const auto height = std::min(rows, op.height-y);
+                    if (!visitor(CopyOperation{op.offset+z*slice+y*op.pitch, op.width, height, 1,
+                                               op.pitch, op.physical_height})) return false;
+                    y += height;
+                }
+        }
+    }
+    return true;
+}
 class CopyPlan {
     const std::vector<std::size_t> &lower_, &upper_;
     std::vector<std::size_t> strides_;

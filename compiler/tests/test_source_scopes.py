@@ -99,7 +99,7 @@ def generate(directory, source=PROGRAM, *, mode="sections", entry="step", facts=
     response = run([sys.executable,"-m","compiler","--form-scopes","--scope-facts",str(facts_file),
                     "--input",str(original),"--kernel",entry,"--memory-model","scoped","--gpu-policy",mode,
                     *( ["--calibration-profile", str(profile)] if profile else []),
-                    "--json","--output-dir",str(output)],cwd=ROOT,
+                    "--json","--output-dir",str(output)],cwd=checkout or ROOT,
                    env={**os.environ,"PYTHONPATH":str(checkout or ROOT)})
     report = json.loads(response.stdout)
     assert report["supported"]

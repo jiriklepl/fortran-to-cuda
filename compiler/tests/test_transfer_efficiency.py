@@ -120,6 +120,7 @@ def test_scratch_reuse_growth_device_eviction_failures_and_concurrent_budget(tmp
 #include <atomic>
 #include <cassert>
 #include <chrono>
+#include <cstring>
 #include <cstdlib>
 #include <future>
 #include <mutex>
@@ -130,7 +131,8 @@ def test_scratch_reuse_growth_device_eviction_failures_and_concurrent_budget(tmp
 struct Handle { int device; };
 using cudaStream_t=Handle*;
 using cudaEvent_t=Handle*;
-constexpr int cudaSuccess=0,cudaStreamNonBlocking=1,cudaEventDisableTiming=2;
+using cudaError_t=int;
+constexpr int cudaSuccess=0,cudaErrorMemoryAllocation=1,cudaErrorNotReady=2,cudaStreamNonBlocking=1,cudaEventDisableTiming=2;
 constexpr int cudaMemcpyHostToDevice=1,cudaMemcpyDeviceToHost=2;
 thread_local int current=0;
 std::atomic<int> fail_at{0},allocations{0},handles{0};
@@ -151,6 +153,7 @@ int cudaEventCreateWithFlags(Handle **p,unsigned f) { return cudaStreamCreateWit
 int cudaStreamDestroy(Handle *p) { assert(p->device==current); delete p; --handles; return 0; }
 int cudaEventDestroy(Handle *p) { return cudaStreamDestroy(p); }
 int cudaEventSynchronize(Handle *p) { assert(p->device==current); return 0; }
+int cudaStreamSynchronize(Handle *p) { assert(p->device==current); return 0; }
 int cudaEventRecord(Handle *p,Handle *s) { assert(p->device==current && s->device==current); return 0; }
 int allocate(void **p,size_t bytes,bool host) {
     if(fails()) return 1;
@@ -172,7 +175,11 @@ int cudaFreeHost(void *p) { return cudaFree(p); }
 int cudaMemcpyAsync(void*,const void*,size_t,int,Handle*) { return 0; }
 #define CUCH(call) do { assert((call)==0); } while(0)
 namespace generated_kernels::storage {
-void trace(const char*,size_t=0) {}
+std::atomic<int> trace_allocs{0},trace_frees{0};
+void trace(const char *operation,size_t=0) {
+    if(!std::strcmp(operation,"alloc")) ++trace_allocs;
+    if(!std::strcmp(operation,"free")) ++trace_frees;
+}
 [[noreturn]] void fail(const char*) { std::abort(); }
 }
 namespace generated_kernels::offload {
@@ -188,6 +195,7 @@ int main() {
         allocations=0; fail_at=point;
         assert(!acquire_slots(1024));
         assert(!pinned && !handles && memory.empty() && !budget.reserved);
+        assert(generated_kernels::storage::trace_allocs==generated_kernels::storage::trace_frees);
     }
     fail_at=0; allocations=0;
     auto a=acquire_slots(1024); assert(a && a->ready);
@@ -224,6 +232,7 @@ int main() {
     assert(budget.reserved==2*capacity && peak<=pinned_limit);
     trim_cache();
     assert(!budget.reserved && !pinned && !handles && memory.empty());
+    assert(generated_kernels::storage::trace_allocs==generated_kernels::storage::trace_frees);
 }
 ''')
     checked([cxx, "-std=c++17", "-O2", "-fopenmp", "-pthread", "cache.cpp", "-o", "cache"], tmp_path)

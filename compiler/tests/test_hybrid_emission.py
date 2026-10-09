@@ -117,6 +117,7 @@ using cudaError_t = int;
 using cudaStream_t = int*;
 using cudaEvent_t = int*;
 constexpr int cudaSuccess=0, cudaStreamNonBlocking=1, cudaEventDisableTiming=2;
+constexpr int cudaErrorMemoryAllocation=1, cudaErrorNotReady=2;
 constexpr int cudaMemcpyHostToDevice=1, cudaMemcpyDeviceToHost=2;
 int streams=0, events=0, host_live=0, device_live=0, host_calls=0;
 bool fail_second=true;
@@ -128,6 +129,7 @@ int cudaEventCreateWithFlags(cudaEvent_t* p,unsigned) { *p=new int; ++events; re
 int cudaStreamDestroy(cudaStream_t p) { delete p; --streams; return 0; }
 int cudaEventDestroy(cudaEvent_t p) { delete p; --events; return 0; }
 int cudaEventSynchronize(cudaEvent_t) { return 0; }
+int cudaStreamSynchronize(cudaStream_t) { return 0; }
 int cudaEventRecord(cudaEvent_t,cudaStream_t) { return 0; }
 int cudaMallocHost(void** p,std::size_t bytes) {
     if(++host_calls==2 && fail_second) return 1;

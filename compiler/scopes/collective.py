@@ -285,6 +285,7 @@ class CollectiveScopeBuilder(ScopeBuilder):
         body += ["!$omp master", "fort_state%status = fort_scope_create(0_c_int, fort_state%context)",
                  "if (fort_state%status == FORT_SCOPE_OK) &",
                  f"  fort_state%status = fort_scope_set_device_budget(fort_state%context, {self.device_budget}_c_size_t)"]
+        body += self.owner_transfer_setup(leaves, imports, context="fort_state%context", status="fort_state%status")
         for i, (root, binding) in enumerate(arrays.items(), 1):
             _, enum, width = DTYPES[binding.signature()[:2]]
             visible = views[root]
@@ -409,6 +410,7 @@ class CollectiveScopeBuilder(ScopeBuilder):
                                "allocation_generation": 1, "initialized": self.capture(binding)["initialized"]}
                               for i, (root, binding) in enumerate(arrays.items(), 1)],
                 "placement": "forced shared GPU workers and original existing-team native worksharing",
+                "transfer_configuration": self.numerical(sorted(leaves)[0]).scoped["transfer_configuration"],
                 "metadata_budget_bytes": 1024 * 1024, "host_threads": threads}
 
     @staticmethod

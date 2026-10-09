@@ -142,6 +142,8 @@ def _parse_args() -> argparse.Namespace:
                         default="always", help="Opt-in ordinary-call transfer/execution policy.")
     parser.add_argument("--memory-model", choices=("call", "scoped"), default="call",
                         help="Emit shared-buffer numerical entry interfaces with scoped; requires sections or auto.")
+    parser.add_argument("--scope-transfers", choices=("direct", "pinned", "pipelined", "auto"), default="direct",
+                        help="Scoped transfer mode, independent of GPU placement (default: direct).")
     parser.add_argument("--calibration-profile", metavar="FILE", help="Explicit offline hardware calibration JSON.")
     parser.add_argument("--host-threads", type=int, default=4, help="Total host-thread budget, including GPU coordination.")
     parser.add_argument("--gpu-collective", action="store_true",
@@ -185,7 +187,8 @@ def _offload_config(args):
     elif args.gpu_policy in {"auto", "hybrid"}:
         reason = "no calibration profile supplied; automatic policy retains native execution"
     try:
-        return OffloadConfig(args.gpu_policy, profile, args.host_threads, args.gpu_collective, reason)
+        return OffloadConfig(args.gpu_policy, profile, args.host_threads, args.gpu_collective, reason,
+                             getattr(args, "scope_transfers", "direct"))
     except ValueError as error:
         raise CompilationError(str(error)) from error
 
@@ -270,6 +273,7 @@ def main() -> None:
             indexing=args.indexing,
             gpu_policy=args.gpu_policy,
             memory_model=args.memory_model,
+            scope_transfers=args.scope_transfers,
         )
         if args.form_scopes:
             from compiler.scopes.source import form_source_scopes

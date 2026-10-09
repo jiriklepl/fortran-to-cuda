@@ -57,6 +57,10 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
     digest = sha256(f"entry-abi:{ENTRY_ABI_VERSION}:{function.module.lower()}::{function.name.lower()}:{plan!r}".encode()).hexdigest()[:12]
     name = "fort_shared_" + digest
     c_name = "cpp_" + name
+    configure_name = c_name + "_configure"
+    transfer_modes = {"direct": "FORT_SCOPE_TRANSFERS_DIRECT", "pinned": "FORT_SCOPE_TRANSFERS_PINNED",
+                      "pipelined": "FORT_SCOPE_TRANSFERS_PIPELINED", "auto": "FORT_SCOPE_TRANSFERS_AUTO"}
+    transfer_reason = {"auto": "transfer_estimates_unavailable", "pipelined": "pipelined_not_available"}.get(config.scope_transfers)
     scalar_signature = [f"const {cpp_type(s)} *fort_scalar_{s.cpp_name}" for s in scalars]
     signature = ["fort_scope_t fort_context", "int fort_mode",
                  *[f"fort_buffer_t {s.cpp_name}_handle" for s in arrays], *scalar_signature]
@@ -67,6 +71,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
              f'#include "{common_header}"', '#include "scoped_entry.hpp"',
              '#define FORT_SHARED_CHECK(expr) do { int fort_check_result = (expr); if (fort_check_result) return fort_check_result; } while (false)',
              f"namespace generated_kernels::{name} {{", "using namespace indexing;"]
+    lines += [f'extern "C" int {configure_name}(fort_scope_t fort_context) {{',
+              f"    return fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]});", "}"]
     # A native-only preview must not initialize CUDA, but its CPU estimates
     # still require the calibrated host and compiled toolchain identities.
     lines += ["static bool scoped_host_compatible(const offload::Profile &profile) {",
@@ -132,6 +138,11 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
         # It cannot establish the cost of this existing-team companion.
         costs = None
         profile_reason = "collective synchronization calibration is unavailable"
+    if config.scope_transfers == "pinned":
+        # Pinned bandwidth alone omits staging preparation, packing and changed
+        # copy geometry. Planning v1 has no complete calibrated model for it.
+        costs = None
+        profile_reason = "transfer_estimates_unavailable"
     unit_ids = {r.id: int(sha256(f"{name}:region:{r.id}".encode()).hexdigest()[:16], 16) for r in plan.regions}
     captures = {}
     locals_ = host_symbols(function, plan)
@@ -644,7 +655,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
               f'    offload::decision_trace("{function.name}", decision->gpu_units ? "scoped-scheduled" : "native-scoped-scheduled", decision->gpu_units, decision->cpu_units);',
               "    return FORT_SCOPE_OK;", "}", "}", "#undef FORT_SHARED_CHECK", ""]
     parameters = ["fort_context", "fort_mode", *[s.cpp_name + "_handle" for s in arrays], *[s.cpp_name for s in scalars]]
-    public = "  public :: run, run_team, plan, choose" if config.collective else "  public :: run, plan, choose"
+    public = "  public :: run, run_team, plan, choose, configure" if config.collective else "  public :: run, plan, choose, configure"
     fortran = [f"module {name}", "  use iso_c_binding", "  use fort_scoped_memory, only: fort_scope_plan_decision", "  implicit none", "  private", public, "  interface"]
     fortran += _fortran_list("function run(", parameters, f") bind(C, name='{c_name}') result(fort_status)", 4)
     fortran += ["      import :: c_int, c_int64_t, c_double, c_float, c_bool", "      integer(c_int) :: fort_status",
@@ -669,7 +680,10 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
     fortran += ["    end function", f"    function choose(fort_context, decision) bind(C, name='{choose_name}') result(fort_status)",
                 "      import :: c_int, c_int64_t, fort_scope_plan_decision", "      integer(c_int) :: fort_status",
                 "      integer(c_int64_t), value :: fort_context", "      type(fort_scope_plan_decision), intent(out) :: decision",
-                "    end function", "  end interface", f"end module {name}", ""]
+                "    end function", f"    function configure(fort_context) bind(C, name='{configure_name}') result(fort_status)",
+                "      import :: c_int, c_int64_t", "      integer(c_int) :: fort_status",
+                "      integer(c_int64_t), value :: fort_context", "    end function",
+                "  end interface", f"end module {name}", ""]
     report = {
         "schema_version": 1, "abi_version": 1, "entry_abi_version": ENTRY_ABI_VERSION,
         "entry": c_name, "fortran_module": name, "fortran_procedure": "run",
@@ -679,6 +693,18 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
         "scalar_parameters": [{"name": s.name, "dtype": s.dtype.value, "passing": "reference"} for s in scalars],
         "argument_order": ["context", "mode", *[s.name for s in arrays], *[s.name for s in scalars]],
         "modes": {"native": 0, "gpu": 1, "automatic": 2},
+        "transfer_configuration": {"abi_version": 1, "requested": config.scope_transfers,
+                                   "selected": "pinned" if config.scope_transfers == "pinned" else "direct",
+                                   "reason": transfer_reason, "available_modes": ["direct", "pinned"],
+                                   "entry": configure_name, "fortran_procedure": "configure",
+                                   "argument_order": ["context"],
+                                   "position": "once per owning context before registration and planning",
+                                   "execution": "synchronous", "pinned_budget_bytes": 64 * 1024 * 1024,
+                                   "budget_scope": "process-wide including cached staging",
+                                   "resource_fallback": "direct before this copy is enqueued; numerical work is never replayed",
+                                   "runtime_stats": "fort_scope_transfer_stats_get_v1",
+                                   "placement_estimate_available": bool(planning_available and costs is not None),
+                                   "placement_estimate_reason": planning_reason or profile_reason},
         "automatic_estimate_available": bool(planning_available and costs is not None),
         "automatic_reason": planning_reason or profile_reason,
         "automatic_scope_available": planning_available, "host_threads": config.host_threads,

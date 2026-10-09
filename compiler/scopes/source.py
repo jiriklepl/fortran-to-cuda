@@ -418,6 +418,15 @@ class ScopeBuilder:
             self.outputs[directory + "/scoped_runtime.h"] = self.runtime_outputs["scoped_runtime.h"]
         return sources.scoped, directory
 
+    def owner_transfer_setup(self, leaves, imports, *, context="fort_context", status="fort_status"):
+        """Configure nondefault transfers once, before recording any work."""
+        if self.config.scope_transfers == "direct":
+            return []
+        public, _ = self.entry_artifacts(sorted(leaves)[0])
+        configuration = public["transfer_configuration"]
+        imports.append(f"use {public['fortran_module']}, only: fort_configure => {configuration['fortran_procedure']}")
+        return [f"if ({status} == FORT_SCOPE_OK) &", f"  {status} = fort_configure({context})"]
+
     def clone(self, procedure):
         if procedure in self.clones:
             return self.clones[procedure]
@@ -1124,6 +1133,7 @@ class ScopeBuilder:
             body += ["fort_status = fort_scope_create(0_c_int, fort_context)"]
             body += ["if (fort_status == FORT_SCOPE_OK) &",
                      f"  fort_status = fort_scope_set_device_budget(fort_context, {self.device_budget}_c_size_t)"]
+            body += self.owner_transfer_setup(leaves, imports)
             for i, (root, binding) in enumerate(arrays.items()):
                 visible = parameters[root]
                 _, enum, width = DTYPES[binding.signature()[:2]]
@@ -1227,6 +1237,7 @@ class ScopeBuilder:
                                                **(self.bounds_preflight_public(origin_roots, "original module allocation descriptor")
                                                   if origin_roots else {})}} if allocated_roots else {}),
                 "mode": self.config.policy, "participation": "serial"}
+        scope["transfer_configuration"] = self.numerical(sorted(leaves)[0]).scoped["transfer_configuration"]
         if structure:
             scope.update(structure.public())
             scope["ownership"]["retained_resources"] = list(arrays)

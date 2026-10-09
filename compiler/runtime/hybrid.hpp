@@ -3,6 +3,7 @@
 #pragma once
 
 #ifdef __CUDACC__
+#include "staging.hpp"
 #include <array>
 #include <cmath>
 #include <condition_variable>
@@ -19,7 +20,7 @@
 
 namespace generated_kernels::hybrid {
 
-constexpr std::size_t pinned_limit = 64ULL * 1024 * 1024;
+constexpr std::size_t pinned_limit = fort_staging::pinned_limit;
 
 inline bool tracing() {
     const char *value = std::getenv("FORT_RUNTIME_TRACE");
@@ -219,36 +220,14 @@ Choice select(const std::vector<Array> &arrays, std::size_t total, int lower, in
 
 class Slot {
   public:
-    unsigned char *host = nullptr, *device = nullptr;
-    cudaStream_t stream{};
-    cudaEvent_t complete{};
-    bool pending = false;
+    unsigned char *&host, *&device;
+    cudaStream_t &stream;
+    cudaEvent_t &complete;
+    bool &pending;
     std::vector<Layout> layout;
-    Slot() = default;
-    bool allocate(std::size_t bytes) {
-        if (cudaStreamCreateWithFlags(&stream, cudaStreamNonBlocking) != cudaSuccess ||
-            cudaEventCreateWithFlags(&complete, cudaEventDisableTiming) != cudaSuccess ||
-            cudaMallocHost(reinterpret_cast<void **>(&host), bytes) != cudaSuccess ||
-            cudaMalloc(reinterpret_cast<void **>(&device), bytes) != cudaSuccess) {
-            cudaGetLastError();
-            return false;
-        }
-        storage::trace("alloc", bytes);
-        return true;
-    }
+    explicit Slot(fort_staging::Slot &slot)
+        : host(slot.host), device(slot.device), stream(slot.stream), complete(slot.complete), pending(slot.pending) {}
     Slot(const Slot &) = delete;
-    ~Slot() { release(); }
-    void release() {
-        if (pending) CUCH(cudaEventSynchronize(complete));
-        if (device) { CUCH(cudaFree(device)); storage::trace("free"); }
-        if (host) CUCH(cudaFreeHost(host));
-        if (complete) CUCH(cudaEventDestroy(complete));
-        if (stream) CUCH(cudaStreamDestroy(stream));
-        host = device = nullptr;
-        stream = {};
-        complete = {};
-        pending = false;
-    }
     void finish(const std::vector<Array> &arrays) {
         if (!pending) return;
         CUCH(cudaEventSynchronize(complete));
@@ -268,75 +247,38 @@ class Slot {
         return result;
     }
 };
-
+inline void trace_freed(std::size_t count) { while (count--) storage::trace("free"); }
 struct Slots {
+    std::unique_ptr<fort_staging::Slots> storage;
     Slot slots[2];
     const std::size_t capacity;
-    int device = -1;
-    bool ready;
-    explicit Slots(std::size_t bytes) : capacity(bytes), ready(false) {
-        CUCH(cudaGetDevice(&device));
-        ready = slots[0].allocate(bytes) && slots[1].allocate(bytes);
-    }
+    const int device;
+    const bool ready = true;
+    explicit Slots(std::unique_ptr<fort_staging::Slots> pair)
+        : storage(std::move(pair)), slots{Slot(storage->slots[0]), Slot(storage->slots[1])},
+          capacity(storage->capacity), device(storage->device) {}
     ~Slots() {
-        int previous = -1;
-        CUCH(cudaGetDevice(&previous));
-        if (previous != device) CUCH(cudaSetDevice(device));
-        for (auto &slot : slots) slot.release();
-        if (previous != device) CUCH(cudaSetDevice(previous));
+        std::size_t freed = 0;
+        const auto status = fort_staging::release(std::move(storage), freed);
+        trace_freed(freed);
+        CUCH(status);
     }
 };
-
-// Retain only the most recently released pair. Concurrent entries lease their
-// own pairs, with active AND idle capacity charged to the same global limit.
-// No CUDA work in static destructors; trim_cache is the explicit teardown hook.
-struct Budget {
-    std::mutex mutex;
-    std::condition_variable released;
-    std::size_t reserved = 0;
-    std::unique_ptr<Slots> idle;
-    void evict_idle() { // mutex held; Slots frees on its owning device
-        if (!idle) return;
-        reserved -= 2 * idle->capacity;
-        idle.reset();
-    }
-};
-inline Budget &budget_state() {
-    static auto *state = new Budget;
-    return *state;
-}
+inline fort_staging::Budget &budget_state() { return fort_staging::budget_state(); }
 inline std::unique_ptr<Slots> acquire_slots(std::size_t bytes) {
-    if (!bytes || bytes > pinned_limit / 2) return {};
-    int device = -1;
-    CUCH(cudaGetDevice(&device));
-    auto &state = budget_state();
-    {
-        std::unique_lock<std::mutex> lock(state.mutex);
-        for (;;) {
-            if (state.idle && state.idle->device == device && state.idle->capacity >= bytes) {
-                storage::trace("scratch_reuse", 2 * state.idle->capacity);
-                return std::move(state.idle);
-            }
-            state.evict_idle();
-            if (state.reserved <= pinned_limit - 2 * bytes) break;
-            state.released.wait(lock);
-        }
-        state.reserved += 2 * bytes;
+    auto result = fort_staging::acquire(bytes, fort_staging::Role::Compact, true);
+    trace_freed(result.evicted_devices);
+    for (std::size_t i=0; i<result.allocated_devices; ++i) storage::trace("alloc", bytes);
+    trace_freed(result.freed_devices-result.evicted_devices);
+    if (result.status != cudaSuccess) {
+        const auto pending = cudaGetLastError();
+        if (pending != cudaSuccess && pending != cudaErrorMemoryAllocation) CUCH(pending);
+        if (result.status != cudaErrorMemoryAllocation) CUCH(result.status);
+        return {};
     }
-    // CUDA allocation failure is recoverable only before numerical work starts.
-    std::unique_ptr<Slots> result;
-    try {
-        result = std::make_unique<Slots>(bytes);
-        if (result->ready) return result;
-        result.reset();
-    } catch (...) {
-        { std::lock_guard<std::mutex> lock(state.mutex); state.reserved -= 2 * bytes; }
-        state.released.notify_all();
-        throw;
-    }
-    { std::lock_guard<std::mutex> lock(state.mutex); state.reserved -= 2 * bytes; }
-    state.released.notify_all();
-    return {};
+    if (!result.slots) return {};
+    if (result.reused) storage::trace("scratch_reuse", 2 * result.slots->capacity);
+    return std::make_unique<Slots>(std::move(result.slots));
 }
 inline void release_slots(std::unique_ptr<Slots> slots) {
     if (!slots) return;
@@ -344,24 +286,13 @@ inline void release_slots(std::unique_ptr<Slots> slots) {
         if (slot.pending) storage::fail("cannot cache unfinished hybrid work");
         slot.layout.clear();
     }
-    auto &state = budget_state();
-    {
-        std::lock_guard<std::mutex> lock(state.mutex);
-        state.evict_idle();
-        state.idle = std::move(slots);
-    }
-    state.released.notify_all();
+    slots.reset();
 }
 inline void trim_cache() {
-    auto &state = budget_state();
-    {
-        std::lock_guard<std::mutex> lock(state.mutex);
-        if (!state.idle) return; // An all-native process need not initialize CUDA.
-        int device = -1;
-        CUCH(cudaGetDevice(&device));
-        if (state.idle->device == device) state.evict_idle();
-    }
-    state.released.notify_all();
+    std::size_t freed = 0;
+    const auto status = fort_staging::trim_cache(freed);
+    trace_freed(freed);
+    CUCH(status);
 }
 
 template <class CPU, class GPU> struct Work {

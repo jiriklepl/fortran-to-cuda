@@ -27,6 +27,26 @@ enum fort_scope_access_flags {
     FORT_SCOPE_READ_ALL = 1, FORT_SCOPE_WRITE_ALL = 2, FORT_SCOPE_OVERWRITE_ALL = 4
 };
 enum fort_scope_execution_mode { FORT_SCOPE_NATIVE = 0, FORT_SCOPE_GPU = 1, FORT_SCOPE_AUTO = 2 };
+#define FORT_SCOPE_TRANSFER_ABI_VERSION 1
+enum fort_scope_transfer_mode {
+    FORT_SCOPE_TRANSFERS_DIRECT = 0, FORT_SCOPE_TRANSFERS_PINNED = 1,
+    FORT_SCOPE_TRANSFERS_PIPELINED = 2, FORT_SCOPE_TRANSFERS_AUTO = 3
+};
+enum fort_scope_transfer_fallback {
+    FORT_SCOPE_TRANSFER_NONE = 0, FORT_SCOPE_TRANSFER_ESTIMATES_UNAVAILABLE = 1,
+    FORT_SCOPE_TRANSFER_PIPELINED_UNAVAILABLE = 2, FORT_SCOPE_TRANSFER_BUDGET = 3,
+    FORT_SCOPE_TRANSFER_ALLOCATION = 4
+};
+/* Additive actual-transfer diagnostics. Legacy allocation statistics continue
+ * to count full-layout device payloads only. Timings never select a policy. */
+typedef struct fort_scope_transfer_stats {
+    uint32_t version, requested_mode, effective_mode, fallback_reason;
+    uint64_t fallbacks, pinned_uploads, pinned_downloads, pinned_upload_bytes, pinned_download_bytes;
+    uint64_t packed_bytes, unpacked_bytes, tiles, events, event_waits;
+    uint64_t staging_allocations, staging_reuses, slot_capacity, staging_device_bytes;
+    uint64_t process_reserved_bytes, process_peak_bytes;
+    double packing_seconds, unpacking_seconds, event_wait_seconds;
+} fort_scope_transfer_stats;
 typedef struct fort_scope_section {
     const size_t *lower;
     const size_t *upper;
@@ -138,6 +158,11 @@ int fort_scope_device_get(fort_scope_t context, int *device);
 /* Configure before CUDA initialization. Budget counts live payload bytes of
  * full-layout allocations, independently of the sections transferred. */
 int fort_scope_set_device_budget(fort_scope_t context, size_t bytes);
+/* Metadata-only. Configure before registering/querying numerical work.
+ * PINNED is synchronous; AUTO/PIPELINED currently use DIRECT with an explicit
+ * diagnostic reason. PINNED has no complete calibrated placement costs yet. */
+int fort_scope_set_transfers(fort_scope_t context, uint32_t mode);
+int fort_scope_transfer_stats_get_v1(fort_scope_t context, fort_scope_transfer_stats *stats);
 int fort_scope_register(fort_scope_t context, uint64_t identity, uint64_t generation,
                         const fort_scope_layout *layout, int host_initialized, fort_buffer_t *buffer);
 /* Register only source-proven initialized host sections. Re-registering an
