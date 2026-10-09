@@ -61,6 +61,7 @@ class CollectiveScopeBuilder(ScopeBuilder):
         result, reason = None, role["reason"]
         if role["available"]:
             try:
+                self.check_numerical_capture_origins(procedure)
                 self.check_query_specification(routine)
                 if summary["persistent_state"] or summary.get("definition_diagnostics"):
                     raise CompilationError("numerical leaf has persistent state or unsupported definition effects")

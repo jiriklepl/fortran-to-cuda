@@ -342,8 +342,9 @@ The [shared ownership and coherent memory scope plan](MEMORY_MODEL_PLAN.md)
 extends call-local transfers to shared buffers and section coherence across GPU
 entries and native CPU operations. It records current limitations, public
 interfaces, staged delivery, and complete-application validation gates. The
-common runtime foundation is available; automatic source scopes and their
-application evaluation are still in progress.
+common runtime, bounded source scopes and complete application comparisons are
+available as opt-in features. The plan tracks unsupported boundaries and broader
+integration; the measured ELMM cases do not establish a GPU speedup.
 
 `compiler.memory.plan_memory(plan, parameters, *, acquisition_policy=None)` derives immutable acquisition,
 caller uploads/downloads, host/device access, execution, write-invalidation, synchronization, and release
@@ -540,6 +541,19 @@ Context-aware clone array dummies also declare `TARGET`, making their associatio
 with runtime access through the registered address explicit.
 Native fallbacks after this storage proof also use the contiguous views, avoiding
 whole-array temporaries when the original helper or wrapper declares `CONTIGUOUS`.
+Stable module allocatable arrays can also participate in **original native
+operations** behind conservative whole-resource hooks. Their exact canonical
+roots need source-hash-bound stable, non-escaping capture facts; the compiler
+checks these before effect analysis consumes them. Allocation agreement at the
+original caller still precedes descriptor queries and owner association. The
+unallocated path executes the original source, preserving its guards. Element
+and explicit-section writes retain the original allocation and logical bounds.
+Whole-variable allocatable assignment, explicit allocation changes, allocatable
+formals, uncertain pointer effects, and unknown callees remain boundaries even
+when stable storage is asserted. Standalone effect analysis without capture
+authority remains conservative. Direct numerical accesses to these hidden
+allocatables stay native: their actual allocation lower bounds cannot be inferred from deferred-shape declarations
+or replaced by the current normalized numerical package's declared origins.
 An adapter verifies these artifacts, applies replacements to an application copy,
 and links the common runtime once. It does not inspect compiler IR or CUDA text.
 No accepted scopes is a successful unchanged/native result.
@@ -600,8 +614,9 @@ plus original-source role reasons. The independent adapter transports these
 facts, applies public source edits and build roles, and performs no role inference
 or kernel-text inspection.
 Authority facts whose call or effect closure cannot be verified are rejected;
-direct hidden allocatable accesses still require lifetime integration. Declared
-stable allocation facts alone do not remove that source-effect boundary.
+stable module allocation captures can participate in original native leaves
+under the lifetime and allocation checks above. Direct numerical accesses to
+those hidden allocations remain native until runtime origins are supported.
 
 Independent source extractors may add `--numerical-sources package.json` to offer
 normalized numerical leaves without selecting scopes or execution policies. The
@@ -687,7 +702,8 @@ Initial serial support covers contiguous whole-array bindings, numerical leaves,
 call-only wrapper clones, registered hidden module arrays (including visible
 reexports), bounded physical native sections, and conservative whole-resource
 effects when refinement is unavailable.
-Allocatable callee formals and scalar captures, direct hidden allocatable effects,
+Allocatable callee formals and scalar captures, direct hidden allocatable numerical
+GPU origins,
 array-valued actuals and scalar array-element actuals,
 explicit dummy extents without a proved whole-storage shape mapping,
 general opaque-call hooks, more general native-section refinement, collective

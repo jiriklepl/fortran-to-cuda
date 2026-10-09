@@ -96,6 +96,9 @@ class SourceEffects:
         self.functions = set()
         self._closures = {}
         self._native_sections = {}
+        self._analysis_started = False
+        self._stable_module_allocatables = frozenset()
+        self._allocation_authorizations = {}
         self.inputs = SourceInputs(paths,analysis_sources)
         self.sources, self.operation_count = dict(self.inputs.sources), 0
         self.kind_expressions = []
@@ -138,6 +141,44 @@ class SourceEffects:
             # An unresolved kind cannot select a generic overload.
             with suppress(CompilationError):
                 binding.kind = scope.kinds.integer(selector, SourceLocation(str(scope.path)))
+
+    @property
+    def stable_module_allocatables(self):
+        """Canonical roots with caller-provided, source-bound lifetime proofs."""
+        return self._stable_module_allocatables
+
+    def authorize_stable_module_allocatables(self, roots):
+        """Accept bounded lifetime proofs before any effect or section queries.
+
+        The source-scope caller must first validate its source hashes and stable,
+        nonescaping allocation facts. This authorizes borrowing these module
+        arrays only; it does not prove bounds, definitions, aliasing, completion,
+        participation, or operations which can change allocation or association.
+        Standalone effect analysis remains conservative by default.
+        """
+        if self._analysis_started:
+            raise CompilationError("module allocation lifetime authorization must precede source analysis")
+        if not isinstance(roots, (set, frozenset)) or len(roots) > self.operation_limit:
+            raise CompilationError("module allocation lifetime authorization requires a bounded root set")
+        if any(not isinstance(root, str) for root in roots):
+            raise CompilationError("module allocation lifetime authorization requires canonical source roots")
+        numeric = {("real", 4), ("real", 8), ("integer", 4), ("logical", 1)}
+        forbidden = {"pointer", "optional", "volatile", "asynchronous", "value", "parameter"}
+        authorizations = {}
+        for root in sorted(roots):
+            parts = root.split("::")
+            module = self.modules.get(parts[0]) if len(parts) == 2 and parts[0] != "argument" else None
+            binding = module.bindings.get(parts[1]) if module else None
+            if (binding is None or binding.root != root or binding.rank < 1
+                    or "allocatable" not in binding.attributes or binding.attributes & forbidden
+                    or (binding.dtype, binding.kind) not in numeric):
+                raise CompilationError("stable allocation proof requires a supported canonical module array: " + root)
+            authorizations[root] = {"resource": root, "source": str(module.path),
+                                    "source_sha256": self.sources[str(module.path)]}
+        self.inputs.verify()
+        # Commit only after every root and the original input identities pass.
+        self._stable_module_allocatables = frozenset(roots)
+        self._allocation_authorizations = authorizations
 
     def _import_kinds(self, scope, active=frozenset()):
         if id(scope) in active:
@@ -400,9 +441,12 @@ class SourceEffects:
             if steps and steps[0] is not None and normalized(steps[0]) != "1":
                 return False
             declared = binding.lower_bounds[axis-1].replace(" ", "").lower()
-            lo = inquiry(lower, "lbound", binding, axis) or normalized(lower) == declared
+            # Deferred-shape allocatables retain allocation-time lower bounds.
+            # The declaration's omitted lower origin is not a runtime value.
+            fixed_origin = "allocatable" not in binding.attributes
+            lo = inquiry(lower, "lbound", binding, axis) or (fixed_origin and normalized(lower) == declared)
             hi = inquiry(upper, "ubound", binding, axis) or (
-                declared == "1" and inquiry(upper, "size", binding, axis))
+                fixed_origin and declared == "1" and inquiry(upper, "size", binding, axis))
             return lo and hi
 
         def full_target(target, loops):
@@ -464,6 +508,7 @@ class SourceEffects:
         return sorted(prove(_children(routine.execution)))
 
     def summarize(self, requested, active=(), *, _closure=None):
+        self._analysis_started = True
         # Each requested proof owns its budget. Unrelated extraction offers and
         # rejected branches cannot exhaust it or leave apparently complete,
         # empty summaries behind. Cache a closure only in its original context.
@@ -498,6 +543,8 @@ class SourceEffects:
                    "arguments": [routine.scope.bindings[a].public() for a in routine.arguments
                                  if a in routine.scope.bindings], "operations": operations, "reasons": reasons,
                    "definition_diagnostics": [], "closure_depth": 1}
+        lifetime_requirements = {}
+        summary["capture_lifetime_requirements"] = []
         _closure.summaries[requested] = summary
         undeclared = set(routine.arguments) - routine.scope.bindings.keys()
         if undeclared:
@@ -523,8 +570,15 @@ class SourceEffects:
             if "parameter" in binding.attributes:
                 return
             if {"pointer", "allocatable"} & binding.attributes:
-                # Stable allocatable borrowing needs capture/lifetime proof later.
-                reasons.append(f"storage lifetime requires capture proof: {binding.root}")
+                authorized = binding.root in self.stable_module_allocatables
+                lifetime_requirements[binding.root] = {"resource": binding.root, "authorized": authorized}
+                if not authorized:
+                    reasons.append(f"storage lifetime requires capture proof: {binding.root}")
+                elif action == "overwrite":
+                    # A whole allocatable LHS can allocate/reallocate even
+                    # without an explicit ALLOCATE statement. Element/section
+                    # assignments do not perform that association change.
+                    reasons.append(f"whole allocatable assignment may change storage: {binding.root}")
             external = binding.name in routine.arguments or not binding.root.startswith(requested + "::") or "save" in binding.attributes
             if external:
                 emit({"kind": action, "resource": binding.root, "rank": binding.rank,
@@ -607,6 +661,12 @@ class SourceEffects:
             mapping = {}
             if chosen in self.routines:
                 callee = self.routines[chosen]
+                if any("allocatable" in callee.scope.bindings[formal].attributes for formal in callee.arguments
+                       if formal in callee.scope.bindings):
+                    # OUT deallocates on entry even when the dummy is unused;
+                    # other allocatable dummies need descriptor/association
+                    # effects which this borrowed-storage proof does not model.
+                    reasons.append(f"allocatable callee formals require original descriptor and allocation semantics: {chosen}")
                 for formal, actual in zip(callee.arguments, actuals, strict=True):
                     binding = self._actual_binding(routine.scope, actual)
                     if binding:
@@ -756,6 +816,7 @@ class SourceEffects:
                 elif operation["kind"] in {"write","overwrite"}:
                     written.add(root)
         summary["reasons"] = list(dict.fromkeys(reasons))
+        summary["capture_lifetime_requirements"] = [lifetime_requirements[root] for root in sorted(lifetime_requirements)]
         summary["complete"] = not reasons
         summary["guaranteed_whole_overwrites"] = self.whole_overwrites(routine) if summary["complete"] else []
         directives = [str(node) for node in walk(routine.scope.node)
@@ -870,6 +931,7 @@ class SourceEffects:
 
     def native_sections(self, requested):
         """Return typed original references without parsing explanatory strings."""
+        self._analysis_started = True
         if requested not in self.routines:
             raise CompilationError("source procedure unavailable: " + requested)
         if requested not in self._native_sections:
@@ -900,6 +962,7 @@ class SourceEffects:
         return {"schema_version": 1, "entry": matches[0], "complete": summary["complete"],
                 "sources": self.sources, "procedures": list(closure.summaries.values()),
                 "analysis_sources": self.inputs.public(),
+                "capture_lifetime_authorizations": list(self._allocation_authorizations.values()),
                 "budgets": {"depth": self.depth_limit, "procedures": self.procedure_limit,
                             "operations": self.operation_limit}, "summarized_operations": closure.operations,
                 "automatic_scope_available": False, "effect_coordinate_system": "logical source evidence; whole-resource effects"}

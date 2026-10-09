@@ -85,8 +85,25 @@ class ScopeBuilder:
         if len(names) != 1:
             raise CompilationError("source scope entry is unavailable or ambiguous")
         self.entry = self.analysis.routines[names[0]]
-        self.packages = load_numerical_sources(numerical_sources, self.analysis)
         self.facts, self.options, self.config = facts, options, config
+        # Lifetime assertions authorize only exact defining-module roots. They
+        # cannot bless a formal/local allocation or change a default effect
+        # analysis. Source hashes and capture definitions have already passed
+        # their public checks before any summary or package consumes this proof.
+        stable_module_allocatables = set()
+        for module in self.analysis.modules.values():
+            for binding in module.bindings.values():
+                if (binding.rank and "allocatable" in binding.attributes
+                        and binding.root in facts["captures"]):
+                    try:
+                        self.capture(binding)
+                    except CompilationError:
+                        # An unrelated unsupported assertion cannot enlarge
+                        # authority or prevent otherwise valid native spans.
+                        continue
+                    stable_module_allocatables.add(binding.root)
+        self.analysis.authorize_stable_module_allocatables(stable_module_allocatables)
+        self.packages = load_numerical_sources(numerical_sources, self.analysis)
         self.device_budget = facts.get("device_budget_bytes", 256*1024*1024)
         if type(self.device_budget) is not int or not 0 <= self.device_budget < 2**63:
             raise CompilationError("scope device budget must be a nonnegative signed-64-bit byte count")
@@ -190,6 +207,7 @@ class ScopeBuilder:
             reason = summary["definition_diagnostics"][0]["reason"]
         elif (summary["cloneable"] or package and not summary["persistent_state"]) and summary["complete"] and leaf:
             try:
+                self.check_numerical_capture_origins(procedure)
                 if any(b.dtype == "logical" and b.kind != 1 for b in routine.scope.bindings.values()
                        if b.name in routine.arguments):
                     raise CompilationError("source LOGICAL conversion requires guarded ABI handling")
@@ -217,6 +235,21 @@ class ScopeBuilder:
         self.generated[procedure] = result
         self.numerical_reasons[procedure] = None if result else reason
         return result
+
+    def check_numerical_capture_origins(self, procedure):
+        """Keep dynamic module allocation origins in original native source.
+
+        Deferred-shape module declarations do not describe an allocation's
+        actual lower bounds. Current normalized numerical packages use declared
+        origins; a stable lifetime proof alone cannot make that mapping valid.
+        """
+        summary = self.analysis.summarize(procedure)
+        resources = {operation.get("resource") for operation in summary["operations"]}
+        package = self.packages.get(procedure)
+        if package:
+            resources.update(parameter.resource for parameter in package.parameters)
+        if resources & self.analysis.stable_module_allocatables:
+            raise CompilationError("module allocatable numerical origins require original runtime lower bounds; native execution")
 
     def closure(self, procedure, active=()):
         """Return GPU leaves and cloneable call-only wrappers, or a boundary."""

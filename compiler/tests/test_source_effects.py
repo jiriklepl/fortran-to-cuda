@@ -563,3 +563,230 @@ end module
     effect, = operation["effects"]
     assert effect["resource"] == "argument::n"
     assert effect["rank"] == 0
+
+
+def allocation_effects(tmp_path, body="a(1)=scratch(1)+size(scratch)", *, declaration="real(8),allocatable::scratch(:)",
+                       specification="", helpers="", operations=256):
+    path = write(tmp_path, "allocation_effects.f90", f"""module allocations
+{declaration}
+contains
+subroutine inspect(a)
+real(8),intent(inout)::a(:)
+{specification}
+{body}
+end subroutine
+{helpers}
+end module
+""")
+    return path, SourceEffects([path], operations=operations)
+
+
+def test_module_allocatable_effects_require_explicit_lifetime_authority_by_default(tmp_path):
+    _path, analysis = allocation_effects(tmp_path)
+    report = analysis.report("allocations::inspect")
+    assert not report["complete"]
+    summary = records(report)["allocations::inspect"]
+    assert summary["capture_lifetime_requirements"] == [{"resource": "allocations::scratch", "authorized": False}]
+    assert report["capture_lifetime_authorizations"] == []
+    assert analysis.stable_module_allocatables == frozenset()
+    assert any("storage lifetime requires capture proof" in reason for reason in summary["reasons"])
+
+
+@pytest.mark.parametrize("body", ["a(1)=scratch(1)+size(scratch)",
+                                 "scratch(1)=a(1)", "scratch(:)=a", "a=scratch", "if(allocated(scratch)) a(1)=1"])
+def test_source_bound_authorized_module_array_reads_descriptors_and_section_writes(tmp_path, body):
+    path, analysis = allocation_effects(tmp_path, body)
+    analysis.authorize_stable_module_allocatables(frozenset({"allocations::scratch"}))
+    report = analysis.report("allocations::inspect")
+    assert report["complete"], report
+    summary = records(report)["allocations::inspect"]
+    assert summary["capture_lifetime_requirements"] == [{"resource": "allocations::scratch", "authorized": True}]
+    assert report["capture_lifetime_authorizations"] == [
+        {"resource": "allocations::scratch", "source": str(path), "source_sha256": report["sources"][str(path)]}]
+    assert analysis.stable_module_allocatables == frozenset({"allocations::scratch"})
+    # Lifetime authority does not invent a fixed original lower bound.
+    assert not summary["native_sections"]["available"]
+    assert "lifetime requires capture proof" not in " ".join(summary["reasons"])
+
+
+def test_authorized_target_module_array_keeps_capture_aliasing_as_a_separate_requirement(tmp_path):
+    _path, analysis = allocation_effects(tmp_path, declaration="real(8),allocatable,target::scratch(:)")
+    analysis.authorize_stable_module_allocatables({"allocations::scratch"})
+    assert analysis.summarize("allocations::inspect")["complete"]
+
+
+def test_authorization_of_one_root_does_not_waive_other_hidden_or_formal_storage(tmp_path):
+    _path, analysis = allocation_effects(tmp_path, "a(1)=scratch(1)+other(1)",
+                                        declaration="real(8),allocatable::scratch(:),other(:)")
+    analysis.authorize_stable_module_allocatables({"allocations::scratch"})
+    summary = analysis.summarize("allocations::inspect")
+    assert not summary["complete"]
+    assert summary["capture_lifetime_requirements"] == [
+        {"resource": "allocations::other", "authorized": False}, {"resource": "allocations::scratch", "authorized": True}]
+    assert summary["reasons"] == ["storage lifetime requires capture proof: allocations::other"]
+    path, _analysis = allocation_effects(tmp_path)
+    path.write_text(path.read_text().replace("real(8),intent(inout)::a(:)", "real(8),allocatable,intent(inout)::a(:)"))
+    analysis = SourceEffects([path])
+    analysis.authorize_stable_module_allocatables({"allocations::scratch"})
+    summary = analysis.summarize("allocations::inspect")
+    assert not summary["complete"]
+    assert "storage lifetime requires capture proof: argument::a" in summary["reasons"]
+
+
+def test_imported_alias_authorization_uses_defining_canonical_module_identity(tmp_path):
+    storage = write(tmp_path, "storage.f90", "module storage\nreal(8),allocatable::buffer(:)\nend module\n")
+    caller = write(tmp_path, "borrower.f90", """module borrower
+use storage,only:remote=>buffer
+contains
+subroutine inspect(a)
+real(8),intent(inout)::a(:)
+a(1)=remote(1)
+end subroutine
+end module
+""")
+    analysis = SourceEffects([storage, caller])
+    with pytest.raises(CompilationError, match="canonical module array"):
+        analysis.authorize_stable_module_allocatables({"borrower::remote"})
+    analysis.authorize_stable_module_allocatables({"storage::buffer"})
+    summary = analysis.summarize("borrower::inspect")
+    assert summary["complete"]
+    assert summary["capture_lifetime_requirements"] == [{"resource": "storage::buffer", "authorized": True}]
+
+
+@pytest.mark.parametrize("body", ["scratch=a", "scratch=0.d0", "scratch=scratch+1.d0"])
+def test_authorized_whole_allocatable_assignment_still_rejects_implicit_allocation(tmp_path, body):
+    _path, analysis = allocation_effects(tmp_path, body)
+    analysis.authorize_stable_module_allocatables({"allocations::scratch"})
+    summary = analysis.summarize("allocations::inspect")
+    assert not summary["complete"]
+    assert summary["guaranteed_whole_overwrites"] == []
+    assert "whole allocatable assignment may change storage: allocations::scratch" in summary["reasons"]
+
+
+@pytest.mark.parametrize("body", ["allocate(scratch(8))", "deallocate(scratch)",
+                                 "call move_alloc(scratch,other)", "scratch=>other"])
+def test_authority_does_not_hide_explicit_storage_or_association_changes(tmp_path, body):
+    _path, analysis = allocation_effects(tmp_path, body, declaration="real(8),allocatable::scratch(:),other(:)")
+    analysis.authorize_stable_module_allocatables({"allocations::scratch", "allocations::other"})
+    summary = analysis.summarize("allocations::inspect")
+    assert not summary["complete"]
+    assert summary["reasons"]
+
+
+@pytest.mark.parametrize("intent", ["in", "inout", "out"])
+def test_unused_allocatable_callee_formals_keep_allocation_semantics_visible(tmp_path, intent):
+    helper = f"""subroutine unused(value)
+real(8),allocatable,intent({intent})::value(:)
+end subroutine
+"""
+    _path, analysis = allocation_effects(tmp_path, "call unused(scratch)", helpers=helper)
+    analysis.authorize_stable_module_allocatables({"allocations::scratch"})
+    summary = analysis.summarize("allocations::inspect")
+    assert not summary["complete"]
+    assert any("allocatable callee formals" in reason for reason in summary["reasons"])
+
+
+@pytest.mark.parametrize("declaration", ["real(8),pointer::scratch(:)", "real(8),allocatable::scratch",
+                                       "real(8)::scratch(8)", "real(8),allocatable,volatile::scratch(:)",
+                                       "real(8),allocatable,asynchronous::scratch(:)", "integer(8),allocatable::scratch(:)"])
+def test_lifetime_authority_rejects_unsupported_module_storage(tmp_path, declaration):
+    _path, analysis = allocation_effects(tmp_path, declaration=declaration)
+    with pytest.raises(CompilationError, match="canonical module array"):
+        analysis.authorize_stable_module_allocatables({"allocations::scratch"})
+    assert analysis.stable_module_allocatables == frozenset()
+
+
+@pytest.mark.parametrize("root", ["argument::a", "allocations::inspect::local", "allocations::missing", "ALLOCATIONS::scratch"])
+def test_authorization_cannot_cover_formal_local_missing_or_noncanonical_roots(tmp_path, root):
+    _path, analysis = allocation_effects(tmp_path, specification="real(8),allocatable::local(:)")
+    with pytest.raises(CompilationError, match="canonical module array"):
+        analysis.authorize_stable_module_allocatables({root})
+
+
+def test_module_named_argument_cannot_waive_a_formal_with_the_same_resource_spelling(tmp_path):
+    path = write(tmp_path, "argument.f90", """module argument
+real(8),allocatable::scratch(:)
+contains
+subroutine inspect(scratch)
+real(8),allocatable::scratch(:)
+scratch(1)=1
+end subroutine
+end module
+""")
+    analysis = SourceEffects([path])
+    with pytest.raises(CompilationError, match="canonical module array"):
+        analysis.authorize_stable_module_allocatables({"argument::scratch"})
+
+
+@pytest.mark.parametrize("query", ["summary", "sections", "report"])
+def test_lifetime_authorization_must_precede_every_proof_or_cached_query(tmp_path, query):
+    _path, analysis = allocation_effects(tmp_path)
+    if query == "summary":
+        analysis.summarize("allocations::inspect")
+    elif query == "sections":
+        analysis.native_sections("allocations::inspect")
+    else:
+        analysis.report("allocations::inspect")
+    with pytest.raises(CompilationError, match="precede source analysis"):
+        analysis.authorize_stable_module_allocatables({"allocations::scratch"})
+    assert analysis.stable_module_allocatables == frozenset()
+
+
+def test_lifetime_authorization_is_bounded_and_commits_all_roots_atomically(tmp_path):
+    _path, analysis = allocation_effects(tmp_path, declaration="real(8),allocatable::scratch(:),other(:)", operations=1)
+    with pytest.raises(CompilationError, match="bounded root set"):
+        analysis.authorize_stable_module_allocatables({"allocations::scratch", "allocations::other"})
+    with pytest.raises(CompilationError, match="bounded root set"):
+        analysis.authorize_stable_module_allocatables(["allocations::scratch"])
+    with pytest.raises(CompilationError, match="canonical source roots"):
+        analysis.authorize_stable_module_allocatables({False})
+    assert analysis.stable_module_allocatables == frozenset()
+    analysis.authorize_stable_module_allocatables({"allocations::scratch"})
+    with pytest.raises(CompilationError, match="canonical module array"):
+        analysis.authorize_stable_module_allocatables({"allocations::missing"})
+    assert analysis.stable_module_allocatables == frozenset({"allocations::scratch"})
+
+
+def test_source_mutation_prevents_lifetime_authority_before_any_proof(tmp_path):
+    path, analysis = allocation_effects(tmp_path)
+    path.write_text(path.read_text() + "! changed\n")
+    with pytest.raises(CompilationError, match="source changed"):
+        analysis.authorize_stable_module_allocatables({"allocations::scratch"})
+    assert analysis.stable_module_allocatables == frozenset()
+
+
+def test_lifetime_authority_does_not_waive_opaque_call_or_openmp_ownership(tmp_path):
+    _path, analysis = allocation_effects(tmp_path, "call external(scratch)")
+    analysis.authorize_stable_module_allocatables({"allocations::scratch"})
+    assert not analysis.summarize("allocations::inspect")["complete"]
+    path, _analysis = allocation_effects(tmp_path)
+    path.write_text(path.read_text().replace("contains", "!$omp threadprivate(scratch)\ncontains", 1))
+    analysis = SourceEffects([path])
+    analysis.authorize_stable_module_allocatables({"allocations::scratch"})
+    summary = analysis.summarize("allocations::inspect")
+    assert summary["complete"]
+    assert not summary["native_completion"]["available"]
+
+
+@pytest.mark.parametrize(("lower", "upper", "expected"), [
+    ("1", "ubound(scratch,1)", []),
+    ("1", "size(scratch,1)", []),
+    ("lbound(scratch,1)", "ubound(scratch,1)", ["allocations::scratch"]),
+])
+def test_allocatable_whole_sweep_requires_actual_lower_and_upper_origins(tmp_path, lower, upper, expected):
+    body = f"do i={lower},{upper}\nscratch(i)=1.d0\nenddo"
+    _path, analysis = allocation_effects(tmp_path, body, specification="integer::i")
+    analysis.authorize_stable_module_allocatables({"allocations::scratch"})
+    summary = analysis.summarize("allocations::inspect")
+    assert summary["complete"]
+    # A valid allocation field(0:n) preserves cell0 in the first loop. Using
+    # the declaration's deferred lower bound would suppress a required mirror.
+    assert summary["guaranteed_whole_overwrites"] == expected
+
+
+def test_allocatable_explicit_full_section_is_whole_independently_of_runtime_origin(tmp_path):
+    _path, analysis = allocation_effects(tmp_path, "scratch(:)=1.d0")
+    analysis.authorize_stable_module_allocatables({"allocations::scratch"})
+    summary = analysis.summarize("allocations::inspect")
+    assert summary["complete"]
+    assert summary["guaranteed_whole_overwrites"] == ["allocations::scratch"]
