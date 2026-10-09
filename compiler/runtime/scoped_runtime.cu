@@ -6,6 +6,7 @@
 #include "scoped_planning.hpp"
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -70,7 +71,19 @@ struct Context {
     std::vector<bool> schedule;
     size_t worker_cursor = 0;
     bool plan_recording = false, plan_installed = false;
+    uint64_t query_generation = 1, state_generation = 1;
+    struct Proof {
+        uint64_t query_generation, state_generation;
+        fort_scoped::planning::DefinitionValidation result;
+    };
+    std::optional<Proof> definition_proof;
+    struct QuerySnapshot {
+        uint64_t query_generation, state_generation;
+        fort_scoped::planning::Inputs input;
+    };
+    std::optional<QuerySnapshot> planning_snapshot;
     std::optional<fort_scoped::planning::Result> preview;
+    uint64_t preview_query_generation = 0, preview_state_generation = 0;
     std::array<unsigned char, sizeof(fort_scope_plan_costs)> preview_costs{};
 #ifndef FORT_SCOPE_CPU_TEST
     cudaStream_t stream = nullptr;
@@ -362,38 +375,85 @@ template<class F> int protect(F &&f) noexcept {
     catch (const std::exception &error) { diagnostic(error.what()); return FORT_SCOPE_STATE; }
     catch (...) { diagnostic("unknown scope runtime failure"); return FORT_SCOPE_STATE; }
 }
-template<class F> int with(fort_scope_t handle, F &&f, bool preserve_preview = false) noexcept {
+enum class Change { None, Query, State };
+void invalidate(Context &c, Change change) noexcept {
+    if (change == Change::None) return;
+    c.definition_proof.reset(); c.planning_snapshot.reset(); c.preview.reset();
+    auto &generation = change == Change::Query ? c.query_generation : c.state_generation;
+    // Both cached stamps are discarded before wrapping, so a reused generation
+    // can never match a surviving old proof or preview.
+    generation = generation == std::numeric_limits<uint64_t>::max() ? 1 : generation+1;
+}
+template<class F> int with(fort_scope_t handle, F &&f, Change change = Change::State) noexcept {
     return protect([&]() {
         const auto c = lookup(handle);
         std::lock_guard<std::mutex> lock(c->mutex);
         require(!c->closed, FORT_SCOPE_STALE, "invalid or stale scope handle");
         require(!c->poisoned, FORT_SCOPE_EXECUTION, "scope has an execution failure; unsafe replay prohibited");
-        // The preview is reusable only across a hardware compatibility probe.
-        // Every intervening context API invalidates it conservatively, even a
-        // read-only stats query. Selection itself holds this same context lock.
-        if (!preserve_preview) c->preview.reset();
+        // Invalidate before a possibly partial mutation, including operations
+        // that fail. Read-only metadata probes preserve a context-local proof.
+        invalidate(*c, change);
         f(*c);
     });
 }
 }
 
 namespace {
-fort_scoped::planning::Inputs definition_inputs(Context &c) {
+bool diagnostics_enabled() noexcept {
+    const char *enabled = std::getenv("FORT_RUNTIME_TRACE");
+    return enabled && !std::strcmp(enabled, "1");
+}
+using PlanningClock = std::chrono::steady_clock;
+class PlanningTimer {
+    Context &context;
+    fort_scope_t handle;
+    const char *phase;
+    bool enabled;
+    PlanningClock::time_point started;
+public:
+    bool cache_hit = false;
+    PlanningTimer(Context &c, fort_scope_t h, const char *p)
+        : context(c), handle(h), phase(p), enabled(diagnostics_enabled()),
+          started(enabled ? PlanningClock::now() : PlanningClock::time_point{}) {}
+    double seconds() const noexcept {
+        return enabled ? std::chrono::duration<double>(PlanningClock::now()-started).count() : 0;
+    }
+    ~PlanningTimer() noexcept {
+        if (!enabled) return;
+        const double elapsed = seconds();
+        try {
+            std::lock_guard<std::mutex> lock(trace_mutex);
+            std::cerr << std::setprecision(17) << "FORT_SCOPED planning_timing context=" << handle
+                      << " phase=" << phase << " seconds=" << elapsed
+                      << " cache_hit=" << (cache_hit ? 1 : 0)
+                      << " query_generation=" << context.query_generation
+                      << " state_generation=" << context.state_generation << '\n';
+        } catch (...) {}
+    }
+};
+bool driver_initialized(const Context &c) {
+    std::lock_guard<std::mutex> lock(driver_mutex);
+    return initialized_devices.count(c.device) != 0;
+}
+const fort_scoped::planning::Inputs &planning_inputs(Context &c, fort_scope_t handle) {
+    if (c.planning_snapshot && c.planning_snapshot->query_generation == c.query_generation &&
+        c.planning_snapshot->state_generation == c.state_generation) {
+        auto &input = c.planning_snapshot->input;
+        input.driver_initialized = driver_initialized(c);
+        input.definitions_validated = c.definition_proof &&
+            c.definition_proof->query_generation == c.query_generation &&
+            c.definition_proof->state_generation == c.state_generation;
+        return input;
+    }
+    PlanningTimer timing(c, handle, "query_construction");
     require(c.plan.size() <= fort_scoped::planning::detail::operation_limit &&
             c.buffers.size() <= fort_scoped::planning::detail::operation_limit,
             FORT_SCOPE_BOUNDARY, "planning_record_budget_exceeded");
     fort_scoped::planning::Inputs input;
     input.operations = c.plan;
-    for (const auto &entry : c.buffers) {
-        const auto &b = *entry.second;
-        require(!b.prepared, FORT_SCOPE_STATE, "definition validation during a prepared buffer access");
-        input.resources.push_back({b.handle, b.element_bytes, b.bytes, b.extents, b.initialized, {}, {}, false});
-    }
-    return input;
-}
-fort_scoped::planning::Inputs planning_inputs(Context &c) {
-    fort_scoped::planning::Inputs input;
-    input.operations = c.plan;
+    input.definitions_validated = c.definition_proof &&
+        c.definition_proof->query_generation == c.query_generation &&
+        c.definition_proof->state_generation == c.state_generation;
     input.query_construction_operations = 1 + c.plan.size();
     input.device_budget = c.device_budget;
     input.device_ready = c.ready;
@@ -409,15 +469,15 @@ fort_scoped::planning::Inputs planning_inputs(Context &c) {
     input.asynchronous_release = false;
 #endif
 #endif
-    { std::lock_guard<std::mutex> lock(driver_mutex);
-      input.driver_initialized = initialized_devices.count(c.device) != 0; }
+    input.driver_initialized = driver_initialized(c);
     for (const auto &entry : c.buffers) {
         const auto &b = *entry.second;
         require(!b.prepared, FORT_SCOPE_STATE, "planning during a prepared buffer access");
         input.resources.push_back({b.handle, b.element_bytes, b.bytes, b.extents,
                                    b.initialized, b.host_current, b.device_current, b.device != nullptr});
     }
-    return input;
+    c.planning_snapshot = Context::QuerySnapshot{c.query_generation, c.state_generation, std::move(input)};
+    return c.planning_snapshot->input;
 }
 std::vector<fort_scoped::planning::Binding> planning_bindings(
         Context &c, const fort_scope_plan_binding *bindings, size_t count) {
@@ -462,13 +522,18 @@ void decision_trace(const fort_scope_plan_decision &d, const std::string &reason
               << " reason=" << (reason.empty() ? "calibrated_selection" : reason) << '\n';
 }
 void definition_validation_trace(Context &context, fort_scope_t handle,
-                                 const fort_scoped::planning::DefinitionValidation &proof) noexcept {
+                                 const fort_scoped::planning::DefinitionValidation &proof,
+                                 bool cache_hit, double seconds) noexcept {
     const char *enabled = std::getenv("FORT_RUNTIME_TRACE");
     if (!enabled || std::strcmp(enabled, "1")) return;
     try {
         std::ostringstream out;
-        out << "{\"schema_version\":1,\"context\":" << handle
+        out << std::setprecision(17) << "{\"schema_version\":1,\"context\":" << handle
             << ",\"event\":\"definition_validation\",\"status\":" << proof.status
+            << ",\"cache_hit\":" << (cache_hit ? "true" : "false")
+            << ",\"seconds\":" << seconds
+            << ",\"query_generation\":" << context.query_generation
+            << ",\"state_generation\":" << context.state_generation
             << ",\"reason\":" << std::quoted(proof.reason)
             << ",\"evidence\":\"ordered_definition_preflight\",\"mutates_live_state\":false";
         if (proof.operation < context.plan.size()) {
@@ -575,10 +640,12 @@ void planning_evidence(Context &context, fort_scope_t handle, const fort_scope_p
                   << ",\"download_bytes\":" << result.decision.download_bytes
                   << ",\"launches\":" << result.decision.launches
                   << ",\"simulated_operations\":" << result.decision.simulated_operations
-                  << ",\"evidence\":\"modeled_final_schedule\",\"section_coordinates\":\"zero_based_exclusive\"}\n";
+                  << ",\"aggregate_only\":" << (result.native_startup_shortcut ? "true" : "false")
+                  << ",\"evidence\":\"" << (result.native_startup_shortcut ? "native_startup_lower_bound" : "modeled_final_schedule")
+                  << "\",\"section_coordinates\":\"zero_based_exclusive\"}\n";
         }
         const fort_scoped::planning::EvidenceSink sink{&output, evidence_row};
-        auto input = planning_inputs(context);
+        auto input = planning_inputs(context, handle);
         input.driver_initialized = result.driver_initialized;
         fort_scoped::planning::evidence(input, costs, result, sink);
         complete = !output.truncated;
@@ -603,10 +670,11 @@ extern "C" int fort_scope_plan_host_current(fort_scope_t h, fort_buffer_t handle
         require(difference(full, b.initialized, budget).empty() &&
                 difference(full, b.host_current, budget).empty(), FORT_SCOPE_BOUNDARY,
                 "planning payload must already be fully initialized and host current");
-    });
+    }, Change::None);
 }
 extern "C" int fort_scope_plan_reset(fort_scope_t h) {
     return with(h, [&](Context &c) {
+        PlanningTimer timing(c, h, "query_construction");
         require(!c.pending, FORT_SCOPE_STATE, "planning requires completed earlier execution");
         for (const auto &entry : c.buffers)
             require(!entry.second->prepared, FORT_SCOPE_STATE, "planning during a prepared buffer access");
@@ -614,43 +682,54 @@ extern "C" int fort_scope_plan_reset(fort_scope_t h) {
                 "cannot discard an unfinished execution schedule");
         c.plan.clear(); c.schedule.clear(); c.worker_cursor = 0;
         c.plan_installed = false; c.plan_recording = true;
-    });
+    }, Change::Query);
 }
 extern "C" int fort_scope_plan_add(fort_scope_t h, uint32_t kind, uint64_t unit,
                                    const fort_scope_plan_binding *bindings, size_t count,
                                    double flops, double memory_bytes, int gpu_available) {
     return with(h, [&](Context &c) {
+        PlanningTimer timing(c, h, "query_construction");
         require(c.plan_recording && !c.plan_installed, FORT_SCOPE_STATE, "reset the planning query before recording");
         require(kind <= FORT_SCOPE_PLAN_FORGET && (gpu_available == 0 || gpu_available == 1),
                 FORT_SCOPE_ARGUMENT, "invalid planning operation kind or availability");
         require(c.plan.size() < 256, FORT_SCOPE_BOUNDARY, "planning record budget exceeded");
         require(kind != FORT_SCOPE_PLAN_WORKER || unit, FORT_SCOPE_ARGUMENT, "worker planning unit requires an identity");
         c.plan.push_back({kind, unit, planning_bindings(c, bindings, count), flops, memory_bytes, gpu_available != 0});
-    });
+    }, Change::Query);
 }
 extern "C" int fort_scope_plan_validate(fort_scope_t h) {
     return with(h, [&](Context &c) {
+        PlanningTimer timing(c, h, "validation");
         fort_scoped::planning::DefinitionValidation proof;
         try {
             require(c.plan_recording && !c.plan_installed, FORT_SCOPE_STATE,
                     "definition validation requires a complete recorded query");
             require(!c.pending, FORT_SCOPE_STATE, "definition validation requires completed earlier execution");
-            proof = fort_scoped::planning::validate_definitions(definition_inputs(c));
+            timing.cache_hit = c.definition_proof &&
+                c.definition_proof->query_generation == c.query_generation &&
+                c.definition_proof->state_generation == c.state_generation;
+            proof = timing.cache_hit ? c.definition_proof->result :
+                fort_scoped::planning::validate_definitions(planning_inputs(c, h));
         } catch (const Error &error) {
+            c.definition_proof.reset(); c.preview.reset();
             proof.status = error.status; proof.reason = error.what();
-            definition_validation_trace(c, h, proof); throw;
+            definition_validation_trace(c, h, proof, false, timing.seconds()); throw;
         } catch (const std::bad_alloc &) {
+            c.definition_proof.reset(); c.preview.reset();
             proof.status = FORT_SCOPE_RESOURCE; proof.reason = "planning_resource_failure";
-            definition_validation_trace(c, h, proof); throw;
+            definition_validation_trace(c, h, proof, false, timing.seconds()); throw;
         } catch (const Fragmented &) {
+            c.definition_proof.reset(); c.preview.reset();
             proof.status = FORT_SCOPE_BOUNDARY; proof.reason = "region_fragmentation_unavailable";
-            definition_validation_trace(c, h, proof); throw;
+            definition_validation_trace(c, h, proof, false, timing.seconds()); throw;
         } catch (...) {
+            c.definition_proof.reset(); c.preview.reset();
             proof.status = FORT_SCOPE_STATE; proof.reason = "planning_state_unavailable";
-            definition_validation_trace(c, h, proof); throw;
+            definition_validation_trace(c, h, proof, false, timing.seconds()); throw;
         }
-        definition_validation_trace(c, h, proof);
+        definition_validation_trace(c, h, proof, timing.cache_hit, timing.seconds());
         if (proof.status != FORT_SCOPE_OK) {
+            c.definition_proof.reset(); c.preview.reset();
             std::ostringstream message;
             message << "definition preflight: " << proof.reason;
             if (proof.operation < c.plan.size()) {
@@ -662,17 +741,25 @@ extern "C" int fort_scope_plan_validate(fort_scope_t h) {
             }
             throw Error(proof.status, message.str().c_str());
         }
-    });
+        c.definition_proof = Context::Proof{c.query_generation, c.state_generation, proof};
+    }, Change::None);
 }
 extern "C" int fort_scope_plan_select(fort_scope_t h, const fort_scope_plan_costs *costs,
                                       int compatible, fort_scope_plan_decision *out) {
     return with(h, [&](Context &c) {
+        PlanningTimer timing(c, h, "selection");
         require(costs && out && compatible >= -1 && compatible <= 1, FORT_SCOPE_ARGUMENT, "invalid planning selection arguments");
         require(c.plan_recording && !c.plan_installed, FORT_SCOPE_STATE, "planning selection requires a completed query");
-        auto result = c.preview && !std::memcmp(c.preview_costs.data(), costs, sizeof(*costs))
-            ? *c.preview : fort_scoped::planning::select(planning_inputs(c), *costs);
+        timing.cache_hit = c.preview && c.preview_query_generation == c.query_generation &&
+            c.preview_state_generation == c.state_generation &&
+            c.preview->driver_initialized == driver_initialized(c) &&
+            !std::memcmp(c.preview_costs.data(), costs, sizeof(*costs));
+        auto result = timing.cache_hit
+            ? *c.preview : fort_scoped::planning::select(planning_inputs(c, h), *costs);
         if (compatible == -1) {
             c.preview = result;
+            c.preview_query_generation = c.query_generation;
+            c.preview_state_generation = c.state_generation;
             std::memcpy(c.preview_costs.data(), costs, sizeof(*costs));
         }
         if (compatible == 0) {
@@ -699,7 +786,7 @@ extern "C" int fort_scope_plan_select(fort_scope_t h, const fort_scope_plan_cost
             c.plan_recording = false;
             decision_trace(*out, result.reason);
         }
-    }, true);
+    }, Change::None);
 }
 extern "C" int fort_scope_plan_next(fort_scope_t h, uint64_t unit,
                                     const fort_scope_plan_binding *bindings, size_t count, int *gpu) {
@@ -744,7 +831,7 @@ extern "C" int fort_scope_device_get(fort_scope_t h, int *out) {
     return with(h, [&](Context &c) {
         require(out, FORT_SCOPE_ARGUMENT, "missing context device output");
         *out = c.device;
-    });
+    }, Change::None);
 }
 extern "C" int fort_scope_set_device_budget(fort_scope_t h, size_t bytes) {
     return with(h, [&](Context &c) {
@@ -824,7 +911,7 @@ extern "C" int fort_scope_layout_get(fort_scope_t h, fort_buffer_t b, fort_scope
         require(out, FORT_SCOPE_ARGUMENT, "missing layout output");
         auto &a = buffer(c,b);
         *out = {static_cast<uint32_t>(a.extents.size()), a.type, a.element_bytes, a.host, a.extents.data(), a.lower.data(), a.generation};
-    });
+    }, Change::None);
 }
 extern "C" int fort_scope_host_begin(fort_scope_t h, fort_buffer_t b, const fort_scope_access *a) {
     return with(h, [&](Context &c) { begin(c, buffer(c,b), a, false); });
@@ -864,7 +951,7 @@ extern "C" int fort_scope_gpu_leave(fort_scope_t h, int previous) {
         std::lock_guard<std::mutex> lock(owner->mutex);
         require(!owner->closed, FORT_SCOPE_STALE, "invalid or stale scope handle");
         auto &c = *owner;
-        c.preview.reset();
+        invalidate(c, Change::State);
 #ifndef FORT_SCOPE_CPU_TEST
         cuda_check(c, cudaSetDevice(previous));
 #else
@@ -884,6 +971,7 @@ extern "C" int fort_scope_execution_error(fort_scope_t h, const char *message) {
         std::lock_guard<std::mutex> lock(c->mutex);
         require(!c->closed, FORT_SCOPE_STALE, "invalid or stale scope handle");
         const char *reason = c->poisoned && last_error[0] ? last_error : message;
+        invalidate(*c, Change::State);
         c->poisoned = true;
         throw Error(FORT_SCOPE_EXECUTION, reason ? reason : "scoped numerical execution failed");
     });
@@ -894,7 +982,7 @@ extern "C" int fort_scope_report_error(int status, const char *message) {
 }
 extern "C" int fort_scope_wait(fort_scope_t h) { return with(h, [&](Context &c) { wait(c); }); }
 extern "C" int fort_scope_stats_get(fort_scope_t h, fort_scope_stats *out) {
-    return with(h, [&](Context &c) { require(out, FORT_SCOPE_ARGUMENT, "missing stats output"); *out = c.stats; });
+    return with(h, [&](Context &c) { require(out, FORT_SCOPE_ARGUMENT, "missing stats output"); *out = c.stats; }, Change::None);
 }
 extern "C" int fort_scope_unregister(fort_scope_t h, fort_buffer_t handle) {
     return with(h, [&](Context &c) {

@@ -447,6 +447,17 @@ The common runtime's `fort_scope_plan_validate` checks ordered initialization an
 preservation requirements without calibration, CUDA initialization, or changes to
 live coverage. Source owners invoke it before numerical work for both `sections`
 and `auto`; an unavailable or failed preflight retains the original native span.
+Successful definition proofs and recorded query snapshots are reused only within
+the same context's query and data-state generations. Query changes, registrations,
+coherence/definition changes and execution invalidate them; read-only metadata
+probes preserve them. Preview choices also check current driver state and exact
+calibration costs. No application decision is cached by allocation address.
+For a fresh host-current scope, a proven GPU startup lower bound can select native
+execution after definition preflight without constructing a coherence simulation.
+With `FORT_RUNTIME_TRACE=1`, planning diagnostics report construction, validation
+and selection wall intervals and cache hits. The intervals are inclusive and can
+nest; they must not be added together as independent costs. Startup-shortcut
+evidence is explicitly aggregate-only. Tracing adds no CUDA synchronization.
 Query inputs must remain safe and unchanged throughout the complete scope.
 Shared numerical entry ABI version 2 accepts scalar pointers through its C
 interface, with matching Fortran reference arguments. Binding those references

@@ -95,6 +95,19 @@ int main(int argc, char **argv) {
         c.cold_driver_startup_seconds=2; in.driver_initialized=scenario=="warm";
     } else if (scenario=="startup_small_native") {
         in.operations[0].flops=.001; in.query_construction_operations=7;
+    } else if (scenario=="startup_prevalidated" || scenario=="startup_forget" ||
+               scenario=="startup_undefined" || scenario=="startup_undefined_after_forget") {
+        in.operations[0].flops=.001;
+        if (scenario=="startup_prevalidated") {
+            in.definitions_validated=validate_definitions(in).status==FORT_SCOPE_OK;
+        } else if (scenario=="startup_forget") {
+            in.operations.insert(in.operations.begin(), Operation{FORT_SCOPE_PLAN_FORGET,0,{{1,{}}},0,0,false});
+            in.operations[1].bindings[0].effects={{},full,full};
+        } else if (scenario=="startup_undefined") {
+            in.resources[0].initialized.clear(); in.resources[0].host_current.clear();
+        } else {
+            in.operations.insert(in.operations.begin(), Operation{FORT_SCOPE_PLAN_FORGET,0,{{1,{}}},0,0,false});
+        }
     } else if (scenario=="common_native_compute") {
         in.operations.insert(in.operations.begin(), Operation{FORT_SCOPE_PLAN_NATIVE,0,{},1000000,0,false});
     } else if (scenario=="below_margin" || scenario=="above_margin") {
@@ -161,6 +174,7 @@ int main(int argc, char **argv) {
               << ",\"peak\":" << d.peak_device_bytes << ",\"seconds\":" << d.estimated_seconds
               << ",\"native_seconds\":" << d.native_seconds
               << ",\"native_common_excluded\":" << r.native_common_compute_excluded
+              << ",\"startup_shortcut\":" << r.native_startup_shortcut
               << ",\"metadata_peak\":" << metadata_peak << "}\n";
 }
 '''
@@ -271,12 +285,30 @@ def test_proven_startup_lower_bound_returns_native_before_candidate_search(model
     assert result["available"] == 1
     assert result["choices"] == [0]
     assert result["candidates"] == 1
-    # One numerical operation and one publication simulation, plus seven
+    # One numerical operation and one publication check, plus seven
     # caller-reported reset/record construction operations.
     assert result["operations"] == 9
     assert result["reason"] == "native_gpu_startup_lower_bound"
+    assert result["startup_shortcut"] == 1
     assert result["seconds"] > result["native_seconds"]
     assert model("basic")["choices"] == [1]
+
+
+@pytest.mark.parametrize("scenario", ["startup_prevalidated", "startup_forget"])
+def test_startup_shortcut_reuses_proven_definitions_and_preserves_overwrites(model, scenario):
+    result = model(scenario)
+    assert result["available"] == result["startup_shortcut"] == 1
+    assert result["choices"] == [0]
+    assert result["uploads"] == result["downloads"] == result["allocations"] == result["waits"] == 0
+    assert result["seconds"] > result["native_seconds"]
+
+
+@pytest.mark.parametrize("scenario", ["startup_undefined", "startup_undefined_after_forget"])
+def test_startup_shortcut_cannot_hide_an_undefined_read(model, scenario):
+    result = model(scenario)
+    assert result["available"] == result["startup_shortcut"] == 0
+    assert result["reason"] == "uninitialized_read"
+    assert result["choices"] == [0]
 
 
 def test_gpu_requires_twenty_percent_estimated_advantage(model):
@@ -327,6 +359,7 @@ def test_native_plan_publishes_preexisting_device_current_values(model):
     assert result["download_bytes"] == result["peak"] == 4096
     assert result["downloads"] == 1
     assert result["waits"] == 2
+    assert result["startup_shortcut"] == 0
 
 
 def test_planning_and_query_construction_cost_can_prevent_offload(model):
