@@ -23,12 +23,19 @@ class InlineRegions:
         self.regions, self.nodes, self.generated, self.ir, self.entries = {}, {}, {}, {}, {}
         self.used = set()
         self.bindings = {}
+        self.definition_proofs = {}
         # These identities authorize projections made here, never an arbitrary
         # AST carrying a plausible span or fort_inline_region attribute.
         self.source_selections = {}
         self.facade_proofs = {}
         self.name = "fort_regions_" + sha256(builder.entry.qualified.encode()).hexdigest()[:12]
         self.path = "regions/" + self.name + ".f90"
+
+    def refresh(self, root):
+        """Retain lexical authority while rebinding rolled-back artifact maps."""
+        for name in ("outputs", "edits", "clones", "queries", "generated", "numerical_reasons",
+                     "numerical_ir", "batch_chains", "variants", "view_generated", "view_clones", "view_queries"):
+            setattr(self.builder, name, getattr(root, name))
 
     def _register_projection(self, node, sources):
         from compiler.scopes.segments import statement_span
@@ -107,14 +114,25 @@ class InlineRegions:
         lifetime = {"Return_Stmt", "Exit_Stmt", "Cycle_Stmt", "Allocate_Stmt", "Deallocate_Stmt",
                     "Pointer_Assignment_Stmt", "Nullify_Stmt", "Stop_Stmt", "Error_Stop_Stmt"}
 
-        def context(first, last):
+        def context(sources):
             # Maximal original nodes outside this region retain allocation-site
             # and scalar-liveness authority even when the loop is in a branch.
+            # Prepared coordinates establish order only. Included statements
+            # without editable original spans must still participate in
+            # liveness; they must never disappear from the following context.
+            def prepared_span(node):
+                spans = [item.item.span for item in walk(node) if getattr(item, 'item', None) is not None]
+                if not spans or any(span is None for span in spans):
+                    raise CompilationError('source context has no prepared ordering span')
+                return min(span[0] for span in spans), max(span[1] for span in spans)
+
+            spans = [prepared_span(node) for node in sources]
+            first, last = min(span[0] for span in spans), max(span[1] for span in spans)
             before, after = [], []
 
             def visit(node):
                 try:
-                    low, high = statement_span(node)
+                    low, high = prepared_span(node)
                 except CompilationError:
                     return
                 if high < first:
@@ -165,7 +183,7 @@ class InlineRegions:
                     result.extend(group)
                     continue
                 first, last = statement_span(group[0])[0], statement_span(group[-1])[1]
-                before, after = context(first, last)
+                before, after = context(sources)
                 try:
                     own_operations = sum(_kind(item) in {"Assignment_Stmt", "Block_Nonlabel_Do_Construct", "If_Stmt", "If_Construct"}
                                          for root in group for item in walk(root))
@@ -184,6 +202,20 @@ class InlineRegions:
                     for binding in extraction.bindings:
                         if binding.rank:
                             self.builder.capture(binding)
+                    if hasattr(self.builder, "_coordinator_root"):
+                        # Canonical storage bounds checked by the parent do
+                        # not prove a child's rebased logical INTEGER ABI.
+                        # Inspect that original descriptor only at this reached
+                        # region; failed conversions use its coherent source
+                        # fallback, retaining earlier GPU work.
+                        for intrinsic in ("lbound", "ubound", "size"):
+                            if (self.builder.analysis._binding(self.builder.entry.scope, intrinsic)
+                                    or self.builder.analysis._candidates(self.builder.entry.scope, F.Name(intrinsic))):
+                                raise CompilationError("child region bounds conflict with original " + intrinsic.upper())
+                        guards = tuple(condition for binding in extraction.bindings if binding.rank
+                                       for condition in self.builder.original_bound_conditions(
+                                           self.builder.visible(self.builder.entry, binding.root), binding.rank))
+                        extraction = replace(extraction, runtime_guards=(*guards, *extraction.runtime_guards))
                     source_name = str(self.builder.entry.scope.path) + "#inline:" + extraction.source_identity
                     function, plan = prepare_function(lower_source(extraction.source, extraction.entry, source_name=source_name),
                                                       options=self.builder.options)
@@ -319,6 +351,15 @@ class InlineRegions:
             root = parameter.resource if mapped else "argument::" + parameter.name
             result[root] = {"read", "write"} if parameter.resource in call.region.written_resources else {"read"}
         return result, set(), set()
+
+    def whole_definitions(self, call):
+        """Must-write coverage authenticated against the original region."""
+        if call.procedure not in self.definition_proofs:
+            summary = self.builder.analysis.segment_summary(
+                self.builder.entry.qualified, call.region.nodes, capture_locals=True)
+            self.definition_proofs[call.procedure] = frozenset(
+                summary["guaranteed_whole_overwrites"] if summary["complete"] else ())
+        return set(self.definition_proofs[call.procedure])
 
     def inputs(self, procedure, mapping, *, estimates):
         public = self.generated[procedure].scoped

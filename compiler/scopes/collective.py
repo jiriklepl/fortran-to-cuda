@@ -105,6 +105,8 @@ class CollectiveScopeBuilder(ScopeBuilder):
     def run(self):
         variant_checkpoint = self.variants.checkpoint()
         try:
+            if self.config.scope_execution == "reached":
+                raise CompilationError("reached lexical ownership requires a serial original caller; collective execution remains native")
             if any("allocatable" in self.entry.scope.bindings[formal].attributes
                    for formal in self.entry.arguments):
                 # Even an unused allocatable OUT dummy deallocates its actual

@@ -174,9 +174,8 @@ k=i""")
     ("allocate(work(4))", "unsupported inline numerical statement"),
     ("deallocate(work)", "unsupported inline numerical statement"),
     ("a(i,7)=1\nif(n>0) return", "unsupported inline numerical statement"),
-    ("a=2", "whole-array assignments"),
 ])
-def test_unknown_effects_allocations_exits_and_whole_array_operations_remain_boundaries(tmp_path, statement, reason):
+def test_unknown_effects_allocations_and_exits_remain_boundaries(tmp_path, statement, reason):
     analysis, routine, _ = case(tmp_path, f"do i=-3,n\n{statement}\nenddo",
                                 declarations="real(8),allocatable::work(:)")
     with pytest.raises(CompilationError, match=reason):

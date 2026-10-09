@@ -13,7 +13,7 @@ from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.integers import INTEGER_MIN, INTEGER_MAX
 
-NATIVE_COMPLETION_VERSION = 1
+NATIVE_COMPLETION_VERSION = 2
 
 
 def _kind(node):
@@ -95,7 +95,10 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
     # still retains them and all OpenMP directives remain authoritative.
     nodes = [node for node in normalize(originals)
              if _kind(node) != "Comment" or _directive(node) is not None]
-    if not nodes or _directive(nodes[-1]) not in {"end parallel", "end parallel do"}:
+    first = _directive(nodes[0]) if nodes else None
+    combined = bool(re.match(r"parallel\s+do(?:\s|$)", first or ""))
+    implicit_join = combined and len(nodes) == 2 and _kind(nodes[1]) == "Block_Nonlabel_Do_Construct"
+    if not nodes or (not implicit_join and _directive(nodes[-1]) not in {"end parallel", "end parallel do"}):
         raise CompilationError("native parallel operation requires a joined END PARALLEL")
     for item in originals:
         for node in walk(item):
@@ -196,7 +199,6 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
         if any(_directive(item) is not None for original in body for item in walk(original)):
             raise CompilationError("nested native OpenMP directives inside a worksharing loop are unsupported")
 
-    first = _directive(nodes[0])
     if first is None or not re.match(r"parallel(?:\s|$)", first):
         raise CompilationError("native operation is not one complete PARALLEL region")
     combined = bool(re.match(r"parallel\s+do(?:\s|$)", first))
@@ -237,13 +239,15 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
             index += 1
             while index < len(items) and _kind(items[index]) == "Comment" and _directive(items[index]) is None:
                 index += 1
-            if index >= len(items) or _directive(items[index]) not in {"end do", "end do nowait"}:
-                raise CompilationError("native OpenMP DO requires a matching END DO")
-            index += 1
+            if index < len(items) and _directive(items[index]) in {"end do", "end do nowait"}:
+                index += 1
+            elif index < len(items) and (_directive(items[index]) or "").startswith("end do"):
+                raise CompilationError("native OpenMP DO has an unsupported ending directive")
+            # An omitted END DO has the original implicit worksharing barrier.
 
     if combined:
-        items = [item for item in nodes[1:-1] if _kind(item) != "Comment"]
-        if (_directive(nodes[-1]) != "end parallel do" or len(items) != 1
+        items = [item for item in (nodes[1:] if implicit_join else nodes[1:-1]) if _kind(item) != "Comment"]
+        if ((not implicit_join and _directive(nodes[-1]) != "end parallel do") or len(items) != 1
                 or _kind(items[0]) != "Block_Nonlabel_Do_Construct"):
             raise CompilationError("combined PARALLEL DO requires one complete associated loop and join")
         check_loop(items[0])
@@ -254,6 +258,7 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
     record = {"available": True, "reason": "original complete native PARALLEL region joins before coherence commit",
               "caller_contract": "serial_source_scope", "requires_serial_caller": True,
               "has_openmp_in_closure": True, "has_opaque_calls_in_closure": False,
+              "join": "implicit combined-loop completion" if implicit_join else "explicit original parallel end",
               "retains_original_team_and_directives": True}
     return graph, identities, executable, tuple(sorted(private)), record
 

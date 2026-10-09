@@ -78,6 +78,8 @@ def register_types(analysis, scope, spec):
         attributes, name, parameters = header.items
         name = str(name).lower()
         flags = tuple(str(item).lower() for item in _children(attributes))
+        if "public" in flags or "private" in flags:
+            scope.access.setdefault(name, "public" in flags)
         reason = ("parameterized or extended derived types require a complete field-layout proof"
                   if parameters is not None or any(flag.startswith("extends") for flag in flags) else None)
         members, private = {}, False
@@ -109,23 +111,20 @@ def _schema(analysis, scope, name, visited=frozenset()):
     if local is not None:
         return local
     found = []
-    if name in scope.imports:
-        module, remote = scope.imports[name]
+    sources = analysis.use_sources(scope, name)
+    if sources is None:
+        return None
+    for module, remote in sources:
         owner = analysis.modules.get(module)
-        if owner is None or not analysis._exported(owner, remote):
+        if owner is None:
             return None
+        if not analysis._exported(owner, remote):
+            if name in scope.imports and scope.imports[name] == (module, remote):
+                return None
+            continue
         result = _schema(analysis, owner, remote, visited | {key})
         if result is not None:
             found.append(result)
-    else:
-        for module in scope.wildcards:
-            owner = analysis.modules.get(module)
-            if owner is None:
-                return None
-            if analysis._exported(owner, name):
-                result = _schema(analysis, owner, name, visited | {key})
-                if result is not None:
-                    found.append(result)
     choices = {id(item.node): item for item in found}
     if choices:
         return next(iter(choices.values())) if len(choices) == 1 else None
@@ -205,6 +204,9 @@ def component_access(analysis, scope, node):
     if _kind(node) != "Data_Ref":
         return None
     parts = tuple(node.items)
+    if (getattr(analysis, '_native_metadata', False) and parts and _kind(parts[0]) == 'Part_Ref'):
+        from compiler.frontend.native_metadata import access
+        return access(analysis, scope, node)
     if len(parts) < 2 or _kind(parts[0]) != "Name":
         raise CompilationError("source component needs one scalar variable object: " + str(node))
     root = analysis._binding(scope, parts[0])
@@ -212,7 +214,11 @@ def component_access(analysis, scope, node):
         raise CompilationError("source component object is unresolved: " + str(parts[0]))
     if root.rank or root.attributes & {"pointer", "allocatable", "optional", "volatile", "asynchronous"}:
         raise CompilationError("source component object association or lifetime is uncertain: " + root.root)
-    current, defining_scope, path, indices = root, scope, [], ()
+    # USE may import only the object, with several renamed re-exports. Its
+    # declared type need not be visible (and can be shadowed) at the use site.
+    # Resolve the type in the original declaration's scope, while retaining
+    # the consumer scope for private-component access checks.
+    current, defining_scope, path, indices = root, root.declaring_scope or scope, [], ()
     for index, part in enumerate(parts[1:], 1):
         if current.rank:
             raise CompilationError("array-valued derived component needs an explicit element mapping")

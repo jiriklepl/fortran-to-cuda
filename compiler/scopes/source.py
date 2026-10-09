@@ -137,8 +137,16 @@ class ScopeBuilder:
         self.visiting = set()
         from compiler.scopes.region_dispatch import InlineRegions
         self.inline = InlineRegions(self)
+        # Artifact discovery is shared, but each registry authenticates nodes
+        # against its own original procedure. Child projections must never be
+        # admitted through the caller's lexical scope or source spans.
+        self.region_owners = {self.entry.qualified: self.inline}
         self.coordinators, self.coordinator_reasons = {}, {}
         self.coordinator_visiting = []
+
+    def inline_for(self, procedure):
+        owner = self.region_owners.get(procedure.partition("#region")[0])
+        return owner if owner is not None and procedure in owner.regions else None
 
     def stable_descriptors(self, procedure):
         return {item["resource"] for item in self.analysis.descriptor_stability(procedure)["resources"]
@@ -187,8 +195,9 @@ class ScopeBuilder:
                for mapping in resolved.mappings):
             raise CompilationError("allocatable callee formals require a source-proven stable original descriptor")
         self.check_whole_view_formals(callee)
-        summary = self.analysis.summarize(procedure)
-        if not summary["complete"]:
+        coordinator = self.coordinator(procedure) if self.config.scope_execution == "reached" else None
+        summary = coordinator.summary if coordinator is not None else self.analysis.summarize(procedure)
+        if coordinator is None and not summary["complete"]:
             raise CompilationError("native effects incomplete: " + "; ".join(summary["reasons"]))
         if summary.get("definition_diagnostics"):
             diagnostic = summary["definition_diagnostics"][0]
@@ -281,15 +290,27 @@ class ScopeBuilder:
         return sections.available and all(resource.resource.startswith("argument::") for resource in sections.resources)
 
     def numerical(self, procedure):
+        regional = self.inline_for(procedure)
+        if regional is not None:
+            # A rejected outer candidate rolls back emitted artifacts, not
+            # immutable source proofs discovered in a reusable child.
+            self.generated[procedure] = regional.generated[procedure]
+            self.numerical_ir[procedure] = regional.ir[procedure]
+            self.numerical_reasons[procedure] = None
+            return self.generated[procedure]
         if procedure in self.generated:
             return self.generated[procedure]
         routine = self.analysis.routines[procedure]
+        leaf = not any(_kind(node) == "Call_Stmt" for node in walk(routine.execution))
+        if self.config.scope_execution == "reached" and not leaf:
+            self.generated[procedure] = None
+            self.numerical_reasons[procedure] = "source calls require their reached workers"
+            return None
         summary = self.analysis.summarize(procedure)
         result = None
         # Keep procedure-entry definition events at their original positions.
         # Numerical helper inlining currently discards those source events;
         # wrappers therefore get explicit context/handle clones instead.
-        leaf = not any(_kind(node) == "Call_Stmt" for node in walk(routine.execution))
         package = self.packages.get(procedure)
         reason = ("source effect closure is incomplete" if not summary["complete"] else
                   "numerical leaves require explicit source call-position workers" if not leaf else
@@ -382,19 +403,19 @@ class ScopeBuilder:
 
     def closure(self, procedure, active=()):
         """Return GPU leaves and cloneable call-only wrappers, or a boundary."""
-        if procedure in self.inline.regions:
+        if self.inline_for(procedure) is not None:
             return {procedure}, {procedure}
         if procedure in active or len(active) >= 8:
             raise CompilationError("recursive or over-depth source scope")
         routine = self.analysis.routines[procedure]
-        summary = self.analysis.summarize(procedure)
-        if not summary["complete"]:
-            raise CompilationError("incomplete source effect closure")
         if self.numerical(procedure):
             return {procedure}, {procedure}
         coordinator = self.coordinator(procedure)
         if coordinator is not None:
             return set(coordinator.leaves), {procedure}
+        summary = self.analysis.summarize(procedure)
+        if not summary["complete"]:
+            raise CompilationError("incomplete source effect closure")
         children = [n for n in _children(routine.execution) if _kind(n) != "Comment"]
         if not children or any(_kind(n) != "Call_Stmt" for n in children):
             return set(), set()
@@ -420,7 +441,7 @@ class ScopeBuilder:
             return None
         if procedure in self.coordinators:
             return self.coordinators[procedure]
-        if procedure in self.inline.regions or procedure in self.coordinator_visiting:
+        if self.inline_for(procedure) is not None or procedure in self.coordinator_visiting:
             return None
         if len(self.coordinator_visiting) >= 8 or len(self.coordinators) >= self.analysis.procedure_limit:
             return None
@@ -431,7 +452,8 @@ class ScopeBuilder:
         self.coordinator_visiting.append(procedure)
         try:
             children = [node for node in _children(routine.execution) if _kind(node) != "Comment"]
-            if children and all(_kind(node) == "Call_Stmt" for node in children):
+            if (self.config.scope_execution != "reached" and children
+                    and all(_kind(node) == "Call_Stmt" for node in children)):
                 # Existing straight wrappers retain their shared query unless a
                 # descendant explicitly owns reached source decisions.
                 if not any(self.coordinator(self.execution_source_call(routine, node).procedure)
@@ -452,6 +474,20 @@ class ScopeBuilder:
 
     def native_effects(self, procedure, mapping=None, active=(), *, allow_views=False):
         """Flatten bounded effects with formal-to-root identities, never IR."""
+        if self.config.scope_execution == "reached":
+            # Classification creates the coordinator. Numerical leaf probing
+            # also asks for native effects and must not recursively classify
+            # the same unfinished procedure here.
+            coordinator = self.coordinators.get(procedure)
+            if coordinator is not None:
+                mapping = {} if mapping is None else mapping
+                effects = {}
+                for root, actions in coordinator.effects.items():
+                    mapped = mapping.get(root, root)
+                    if mapped is not None:
+                        effects.setdefault(mapped, set()).update(actions)
+                definitions = {mapping.get(root, root) for root in coordinator.definitions} - {None}
+                return effects, definitions, set()
         if procedure in active:
             raise CompilationError("recursive native effects")
         if self.analysis.routines[procedure].source_kind != "module":
@@ -598,14 +634,22 @@ class ScopeBuilder:
                     raise CompilationError("invalid initialized physical capture section")
         return fact
 
-    def add_edit(self, path, first, last, replacement):
-        self.edits.setdefault(path, []).append((first, last, replacement))
+    def add_edit(self, path, first, last, replacement, *, prepend=False):
+        edits = self.edits.setdefault(path, [])
+        edit = (first, last, replacement)
+        if prepend:
+            if last >= first:
+                raise CompilationError("only source insertions can precede other edits")
+            edits.insert(0, edit)
+        else:
+            edits.append(edit)
 
     def entry_artifacts(self, procedure, *, views=False):
         sources = self.numerical(procedure)
         if sources is None:
             raise CompilationError("requested source leaf has no shared numerical entry")
-        directory = "entries/" + _name("entry_", self.inline.entries.get(procedure, procedure))
+        regional = self.inline_for(procedure)
+        directory = "entries/" + _name("entry_", regional.entries[procedure] if regional else procedure)
         if views:
             if self.config.collective or procedure not in self.numerical_ir:
                 raise CompilationError("borrowed numerical views require a prepared serial source leaf")
@@ -620,7 +664,7 @@ class ScopeBuilder:
             directory += "_views"
         else:
             public, artifacts = sources.scoped, sources.artifacts
-        if procedure not in self.inline.regions:
+        if regional is None:
             self.variants.register(
                 procedure, interface="root_view_v2" if views else "full_root_entry_v1", role="numerical_entry",
                 name=public["fortran_module"] + "::" + public["fortran_procedure"],
@@ -858,9 +902,13 @@ class ScopeBuilder:
 
     def scalar_writes(self, procedure, mapping=None):
         """Map scalar effects through the same bounded source closure."""
-        if procedure in self.inline.regions:
+        if self.inline_for(procedure) is not None:
             return set()  # Extraction proved every loop-written scalar dead/private.
         mapping = {} if mapping is None else mapping
+        if self.config.scope_execution == "reached":
+            coordinator = self.coordinator(procedure)
+            if coordinator is not None:
+                return {mapping.get(root, root) for root in coordinator.scalar_changes} - {None}
         routine = self.analysis.routines[procedure]
         result = {mapping.get(binding.root, binding.root) for binding in routine.scope.bindings.values()
                   if not binding.rank and binding.intent == "out" and binding.name in routine.arguments}
@@ -904,8 +952,9 @@ class ScopeBuilder:
     def planning_inputs(self, procedure, mapping=None, *, require_estimates=True):
         """Read public numerical metadata; never infer costs from generated code."""
         mapping = {} if mapping is None else mapping
-        if procedure in self.inline.regions:
-            return self.inline.inputs(procedure, mapping, estimates=require_estimates)
+        regional = self.inline_for(procedure)
+        if regional is not None:
+            return regional.inputs(procedure, mapping, estimates=require_estimates)
         if self.coordinator(procedure) is not None:
             raise CompilationError("source child coordinator plans only its reached segments")
         routine = self.analysis.routines[procedure]
@@ -1006,6 +1055,8 @@ class ScopeBuilder:
         """Original scalar reads used by reached physical native footprints."""
         if call.region is not None:
             return {}
+        if self.config.scope_execution == "reached" and self.coordinator(call.procedure) is not None:
+            return {}  # Child native bounds are read only in its reached worker.
         sections = self.analysis.native_sections(call.procedure)
         if not sections.available:
             return {}
@@ -1197,12 +1248,17 @@ class ScopeBuilder:
                 raise CompilationError("native INTENT(OUT) effects require original-position definition hooks: "
                                        + call.procedure + " " + root)
 
-    def check_native_calls(self, call):
+    def check_native_calls(self, call, *, reached_definitions=False):
         if call.region is not None:
             return
         coordinator = self.coordinator(call.procedure)
         if coordinator is not None:
-            coordinator.check_actuals(call)
+            if self.config.scope_execution == "reached" and reached_definitions:
+                # Reached owners validate these obligations against current
+                # coverage before entering the child, after earlier producers.
+                coordinator.check_aliases(call)
+            else:
+                coordinator.check_actuals(call)
             return
         leaves, _ = self.closure(call.procedure)
         if not leaves:
@@ -1211,7 +1267,7 @@ class ScopeBuilder:
             routine = self.analysis.routines[call.procedure]
             for node in _children(routine.execution):
                 if _kind(node) == "Call_Stmt":
-                    self.check_native_calls(self.resolve(routine, node))
+                    self.check_native_calls(self.resolve(routine, node), reached_definitions=reached_definitions)
 
     def native_call(self, call, actions, definitions, overwrites, handles, *, actuals=None, view_codes=None):
         self.check_native_definitions(call, actions, definitions, overwrites)
@@ -1272,7 +1328,7 @@ class ScopeBuilder:
         self.add_edit(module.path, _span(end)[0], _span(end)[0]-1, code)
         self.add_edit(module.path, _span(contains)[0], _span(contains)[0]-1, "public :: " + name + "\n")
 
-    def owner_inputs(self, calls):
+    def owner_inputs(self, calls, *, reached_definitions=False):
         """Resolve checked root captures shared by serial and team owners."""
         routine = self.entry
         if any(name.startswith("fort_") for name in routine.scope.bindings):
@@ -1288,7 +1344,7 @@ class ScopeBuilder:
                         scalars[binding.root] = binding
                 written.update(call.region.written_resources)
                 continue
-            self.check_native_calls(call)
+            self.check_native_calls(call, reached_definitions=reached_definitions)
             actions, definitions, overwrites = self.roots_for(call)
             written.update(root for root,kinds in actions.items() if "write" in kinds)
             _, formal_definitions, _ = self.call_effects(call)
@@ -1374,7 +1430,7 @@ class ScopeBuilder:
         visited = set()
 
         def visit(procedure):
-            if procedure in visited or procedure in self.inline.regions or self.numerical(procedure):
+            if procedure in visited or self.inline_for(procedure) is not None or self.numerical(procedure):
                 return
             visited.add(procedure)
             coordinator = self.coordinator(procedure)
@@ -2020,13 +2076,15 @@ class ScopeBuilder:
                 summaries[call.procedure] = operations
                 continue
             summary = call.summary
-            if not summary["complete"]:
+            coordinator = self.coordinator(call.procedure) if self.config.scope_execution == "reached" else None
+            if coordinator is None and not summary["complete"]:
                 raise CompilationError("reached source-call effects incomplete")
             graph = self.analysis.structure(call.procedure)
             if not graph.available:
                 raise CompilationError("bounded source structure unavailable: " + "; ".join(graph.reasons))
             graphs[call.procedure] = graph.identity
-            summaries[call.procedure] = len(summary.get("ordered_effects", summary["operations"]))
+            summaries[call.procedure] = (len(graph.nodes) - 2 if coordinator is not None else
+                                        len(summary.get("ordered_effects", summary["operations"])))
             depth = max(depth, summary.get("closure_depth", 1))
         operations = max(summaries.values(), default=0)
         if operations > self.analysis.operation_limit or len(summaries) > self.analysis.procedure_limit:
@@ -2041,13 +2099,16 @@ class ScopeBuilder:
         return (dict(self.outputs), {path:list(edits) for path,edits in self.edits.items()},
                 dict(self.clones), dict(self.queries), dict(self.generated), dict(self.numerical_reasons),
                 dict(self.numerical_ir), dict(self.batch_chains), self.variants.checkpoint(), dict(self.view_generated),
-                dict(self.view_clones), dict(self.view_queries), set(self.inline.used))
+                dict(self.view_clones), dict(self.view_queries),
+                {procedure: set(registry.used) for procedure, registry in self.region_owners.items()})
 
     def restore_scope_checkpoint(self, checkpoint):
         (self.outputs, self.edits, self.clones, self.queries,
          self.generated, self.numerical_reasons, self.numerical_ir, self.batch_chains, variants, self.view_generated,
-         self.view_clones, self.view_queries, self.inline.used) = checkpoint
+         self.view_clones, self.view_queries, used) = checkpoint
         self.variants.restore(variants)
+        for procedure, registry in self.region_owners.items():
+            registry.used = set(used.get(procedure, ()))
 
     def scan(self, nodes):
         from compiler.scopes.segments import StructuredScope, statement_span
@@ -2159,10 +2220,30 @@ class ScopeBuilder:
             self.boundaries.append({"first_line": first, "last_line": last,
                                    "reason": "external source entry execution requires standalone procedure variants"})
             return self.finish()
+        if self.config.scope_execution == "reached":
+            from compiler.scopes.lexical import check_structured_entry
+            try:
+                check_structured_entry(self.entry)
+            except CompilationError as error:
+                # Do not fall through to outlined scopes: a source label can
+                # enter an outlined statement or bypass its coherence setup.
+                self.boundaries.append({"procedure": self.entry.qualified, "reason": str(error),
+                                        "execution": "unchanged native source"})
+                return self.finish()
         nodes = self.inline.prepare(_children(self.entry.execution)) if not self.config.collective else _children(self.entry.execution)
         self.generated.update(self.inline.generated)
         self.numerical_ir.update(self.inline.ir)
         self.numerical_reasons.update({procedure: None for procedure in self.inline.regions})
+        if self.config.scope_execution == "reached" and not self.config.collective:
+            from compiler.scopes.lexical import LexicalOwner
+            before = self.scope_checkpoint()
+            try:
+                if LexicalOwner(self).run(nodes):
+                    return self.finish()
+            except CompilationError as error:
+                self.restore_scope_checkpoint(before)
+                self.boundaries.append({"reason": "lexical owner unavailable: " + str(error),
+                                        "fallback": "existing bounded source scopes"})
         self.scan(nodes)
         return self.finish()
 
@@ -2171,7 +2252,10 @@ class ScopeBuilder:
         self.analysis.inputs.verify()
         if any(sha256(package.path.read_bytes()).hexdigest() != package.digest for package in self.packages.values()):
             raise CompilationError("normalized source changed while scope artifacts were being prepared")
-        self.inline.finish()
+        for registry in self.region_owners.values():
+            if registry.used:
+                registry.refresh(self)
+                registry.finish()
         provenance = {}
         patches = []
         for path, edits in self.edits.items():
@@ -2198,6 +2282,8 @@ class ScopeBuilder:
             self.outputs["scoped-runtime.json"] = json.dumps(self.runtime,indent=2)+"\n"
         report = {
             "schema_version":1, "entry":self.entry.qualified,
+            "scope_execution": self.config.scope_execution,
+            **({"reached_plan_schema_version": 1} if self.config.scope_execution == "reached" else {}),
             "automatic_scope_available":bool(self.scopes), "scope_count":len(self.scopes),
             "scopes":self.scopes, "boundaries":self.boundaries, "source_edits":patches,
             "sources":provenance, "runtime":self.runtime if self.scopes else None,
@@ -2205,6 +2291,9 @@ class ScopeBuilder:
             "resolved_calls": [self.resolved_calls[key] for key in sorted(self.resolved_calls)],
             "implementation_variants": self.variants.public(),
             "inline_numerical_regions": self.inline.public(),
+            "child_numerical_regions": [{"procedure": procedure, **registry.public()}
+                                        for procedure, registry in self.region_owners.items()
+                                        if procedure != self.entry.qualified and registry.used],
             "automatic_estimate_available":any(scope["estimate_available"] for scope in self.scopes),
             "capture_facts_sha256":sha256(json.dumps(self.facts,sort_keys=True).encode()).hexdigest(),
             "source_inputs":self.analysis.sources,

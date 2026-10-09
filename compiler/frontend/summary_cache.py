@@ -94,11 +94,15 @@ def _payload(payload, requested):
     if type(payload) is dict and set(payload) == {"structure"}:
         structure = payload["structure"]
         if (type(structure) is not dict or structure.get("procedure") != requested
-                or type(structure.get("schema_version")) is not int or structure["schema_version"] != 1
+                or type(structure.get("schema_version")) is not int or structure["schema_version"] != 3
                 or type(structure.get("nodes")) is not list or type(structure.get("available")) is not bool
                 or type(structure.get("structured_identity")) is not str
                 or type(structure.get("analysis_identity")) is not str
                 or type(structure.get("node_limit")) is not int or structure["node_limit"] < 1
+                or type(structure.get("operation_limit")) is not int or structure["operation_limit"] < 1
+                or type(structure.get("operation_count")) is not int
+                or not 0 <= structure["operation_count"] <= structure["operation_limit"]
+                or structure["node_limit"] != 4*structure["operation_limit"]+2
                 or len(structure["nodes"]) > structure["node_limit"]):
             raise ValueError("summary cache requires a bounded structured graph")
         nodes = {}
@@ -109,6 +113,8 @@ def _payload(payload, requested):
                     or type(node.get("guard")) is not list or type(node.get("span")) is not list):
                 raise ValueError("summary cache structured node is invalid")
             nodes[node["id"]] = node
+        if sum(node['kind'] in {'operation', 'call', 'boundary'} for node in nodes.values()) != structure['operation_count']:
+            raise ValueError("summary cache structured operation count is inconsistent")
         if structure.get("root") not in nodes or structure.get("entry") not in nodes:
             raise ValueError("summary cache structured roots are unavailable")
         visiting, visited = set(), set()

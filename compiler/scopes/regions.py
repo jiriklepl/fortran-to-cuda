@@ -103,8 +103,44 @@ def _names(analysis, routine, node):
 
 
 def _scalar_reads(analysis, routine, node):
-    return {root for root in _names(analysis, routine, node)
-            if not _binding(analysis, routine, root).rank}
+    result = {binding.root for binding, _ in references(analysis, routine.scope, node) if not binding.rank}
+    # Passing a lexical procedure to a native call may expose its captures even
+    # though no scalar occurs in the actual argument text.
+    for name in walk(node, F.Name):
+        helper = _helper(analysis, routine, name)
+        if helper is not None:
+            result.update(_host_associated_reads(analysis, routine, helper))
+    return result
+
+
+def _host_associated_reads(analysis, routine, helper, active=frozenset()):
+    """Conservative lexical captures, including callbacks and entry bounds.
+
+    This is liveness only. It neither executes a callee nor grants an effect or
+    numerical proof. Potential hidden writes are conservatively live too.
+    """
+    owner = helper.scope.parent
+    while owner is not None and owner is not routine.scope:
+        owner = owner.parent
+    if owner is None:
+        return set()
+    if helper.qualified in active or len(active) >= analysis.depth_limit:
+        raise CompilationError('inline scalar liveness needs a bounded nonrecursive lexical closure')
+    active = active | {helper.qualified}
+    roots = {binding.root for binding in routine.scope.bindings.values() if not binding.rank}
+    found, children = set(), {}
+    for part in (_part(helper.scope.node, 'Specification_Part'), helper.execution):
+        if part is None:
+            continue
+        found.update(binding.root for binding, _ in references(analysis, helper.scope, part)
+                     if binding.root in roots)
+        for name in walk(part, F.Name):
+            child = _helper(analysis, helper, name)
+            if child is not None:
+                children[child.qualified] = child
+    for child in children.values():
+        found.update(_host_associated_reads(analysis, routine, child, active))
+    return found
 
 
 def _helper(analysis, routine, name):
@@ -422,11 +458,22 @@ def _upward_reads(analysis, routine, nodes):
             if helper is None:
                 reads |= _scalar_reads(analysis, routine, node) - defined
                 continue
+            reads |= _host_associated_reads(analysis, routine, helper) - defined
             outputs = set()
             for formal, actual in zip(helper.arguments, actuals, strict=True):
                 binding = helper.scope.bindings.get(formal)
                 if binding is None:
-                    raise CompilationError("inline numerical helper has an undeclared formal")
+                    # Native continuations can take procedure arguments. This
+                    # is liveness, not a numerical-callee proof: retain every
+                    # possible actual/callback capture and infer no definition.
+                    reads |= _scalar_reads(analysis, routine, actual) - defined
+                    if _kind(actual) != "Name" or _helper(analysis, routine, actual) is None:
+                        # A dynamic callback may capture any original local;
+                        # a later coherent native fallback cannot reconstruct
+                        # a loop iterator discarded by an earlier GPU worker.
+                        reads |= {value.root for value in routine.scope.bindings.values()
+                                  if not value.rank} - defined
+                    continue
                 target = analysis._binding(routine.scope, actual) if _kind(actual) == "Name" else None
                 if binding.intent != "out":
                     reads |= _scalar_reads(analysis, routine, actual) - defined
@@ -459,7 +506,7 @@ def _upward_array_reads(analysis, routine, nodes):
     The numerical frontend separately proves every used output element.
     """
     def reads(node):
-        return {root for root in _names(analysis, routine, node) if _binding(analysis, routine, root).rank}
+        return {binding.root for binding, _ in references(analysis, routine.scope, node) if binding.rank}
     defined, incoming = set(), set()
     for node in nodes:
         kind = _kind(node)
@@ -581,6 +628,24 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
     nodes = source_nodes
     if not nodes:
         raise CompilationError("inline numerical region is empty")
+    selected_span = (min(statement_span(item)[0] for item in nodes),
+                     max(statement_span(item)[1] for item in nodes))
+
+    def complete_original_groups(sequence):
+        for group in grouped_nodes(sequence):
+            if isinstance(group, tuple):
+                first, last = statement_span(group[0])[0], statement_span(group[-1])[1]
+                if (selected_span[0] <= last and first <= selected_span[1]
+                        and not (selected_span[0] <= first and last <= selected_span[1])):
+                    raise CompilationError("inline OpenMP association requires its complete original source region")
+            elif _kind(group) in {"If_Construct", "Associate_Construct"}:
+                first, last = statement_span(group)
+                if selected_span[0] <= last and first <= selected_span[1]:
+                    complete_original_groups(group.content)
+
+    # A detached DO can be a genuine original AST node while still belonging
+    # to a larger team. Source identity alone must not turn it into serial work.
+    complete_original_groups(_children(routine.execution))
     # fparser attaches an associated !$OMP DO prefix to its DO construct.
     # Peel only that original structural prefix; do not authorize a projected
     # routine or arbitrary foreign AST as source-backed numerical work.
@@ -662,7 +727,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
                 and not binding.attributes & {"save", "allocatable", "pointer", "target"}):
             local_arrays.add(binding.root)
         elif binding.rank:
-            if (_kind(target) != "Part_Ref" and not (_kind(target) == "Data_Ref"
+            if (_kind(target) not in {"Name", "Part_Ref"} and not (_kind(target) == "Data_Ref"
                     and component_access(analysis, routine.scope, target).indices)):
                 raise CompilationError("inline whole-array assignments require separate allocation/effect proofs")
             if binding.intent == "in":
@@ -701,6 +766,10 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
                     binding = analysis._binding(source_scope_for(analysis, actual, owner.scope), name) if _kind(name) in {"Name", "Data_Ref"} else None
                     if owner is not routine and binding is owner.scope.bindings.get(str(name).lower()):
                         continue
+                    if (binding is not None and binding.rank and _kind(actual) == "Name"
+                            and binding.root.startswith(routine.qualified + "::")
+                            and binding.attributes & {"save", "allocatable", "pointer", "target"}):
+                        raise CompilationError("inline helper array outputs require private storage in the original owner")
                     # A whole private fixed array is a per-item output, rather
                     # than an external allocation-changing array assignment.
                     if binding is not None and binding.rank and _kind(actual) == "Name" and not binding.root.startswith(routine.qualified + "::"):
@@ -721,7 +790,12 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
             raise CompilationError("inline loop iterators require default INTEGER: " + root)
     if scalar_writes & _upward_reads(analysis, routine, loops):
         raise CompilationError("inline private scalar reads require a definition inside the region")
-    if scalar_writes & _upward_reads(analysis, routine, following):
+    # Following native statements need a read/liveness proof, not numerical
+    # eligibility. Original fixed metadata fields can carry index reads here
+    # without becoming captures or authorizing their own GPU computation.
+    following_analysis = copy.copy(analysis)
+    following_analysis._native_metadata = True
+    if scalar_writes & _upward_reads(following_analysis, routine, following):
         raise CompilationError("inline loop-written scalar is live after the region")
     if joined:
         from compiler.scopes.participation import _threadprivate
@@ -751,7 +825,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
             raise CompilationError("inline private array association is uncertain: " + root)
         if (binding.dtype, binding.kind) not in {("real", 4), ("real", 8), ("integer", 4)}:
             raise CompilationError("unsupported inline private array type: " + root)
-        if root in _upward_array_reads(analysis, routine, following):
+        if root in _upward_array_reads(following_analysis, routine, following):
             raise CompilationError("inline private array is live after the region")
         if joined and root not in explicit_private:
             raise CompilationError("inline OpenMP array writes need proven PRIVATE storage")
@@ -790,6 +864,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
             lowers[name, axis] = lower
 
     helper_names = {name: "fort_helper_" + str(index) for index, name in enumerate(helpers)}
+    section_variables, section_guards = [], []
 
     def transformed(value, owner=routine):
         if isinstance(value, (tuple, list)):
@@ -797,6 +872,11 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
         if not isinstance(value, Base):
             return value
         kind = _kind(value)
+        if kind == "Assignment_Stmt" and owner is routine:
+            from compiler.scopes.section_operations import expand_full_sections
+            expanded = expand_full_sections(analysis, routine, value, section_variables, section_guards)
+            if expanded is not None:
+                return transformed(expanded, owner)
         if kind == "Data_Ref":
             access = component_access(analysis, source_scope_for(analysis, value, owner.scope), value)
             binding = access.binding
@@ -936,6 +1016,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
     runtime_guards = tuple(dict.fromkeys(guard for _, guards, _ in normalized for guard in guards))
     tile_domains = tuple(domain for _, _, domains in normalized for domain in domains)
     body = [str(transformed(loop)) for loop, _, _ in normalized]
+    declarations += ["integer :: " + name for name in section_variables]
+    runtime_guards = tuple(dict.fromkeys((*runtime_guards, *section_guards)))
     helper_sources = []
     for qualified, helper in helpers.items():
         statement = _part(helper.scope.node, "Subroutine_Stmt") or _part(helper.scope.node, "Function_Stmt")

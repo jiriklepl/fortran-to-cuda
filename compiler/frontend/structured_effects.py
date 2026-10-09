@@ -17,7 +17,7 @@ from fparser.two.utils import walk
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.ir import CompilationError
 
-STRUCTURED_EFFECT_VERSION = 1
+STRUCTURED_EFFECT_VERSION = 3
 
 
 def _kind(node):
@@ -83,6 +83,8 @@ class StructuredSummary:
     available: bool
     reasons: tuple[str, ...]
     node_limit: int
+    operation_limit: int
+    operation_count: int
     _originals: dict = field(compare=False, repr=False)
     _ids: dict = field(compare=False, repr=False)
     version: int = STRUCTURED_EFFECT_VERSION
@@ -103,19 +105,28 @@ class StructuredSummary:
                 "structured_identity": self.identity, "analysis_identity": self.authority_identity,
                 "root": self.root_id, "entry": self.entry_id, "available": self.available,
                 "reasons": list(self.reasons), "node_limit": self.node_limit,
+                "operation_limit": self.operation_limit, "operation_count": self.operation_count,
                 "nodes": [node.public() for node in self.nodes.values()]}
 
 
 def build_structure(analysis, routine, authority_identity):
     nodes, originals, ids, reasons = {}, {}, {}, []
-    # Entry/root containers are not source operations. The remaining bounded
-    # graph retains individual call sites, conditions and native operations.
-    limit = analysis.operation_limit + 2
+    # Conditions, headers, directives, calls and ordinary operations consume
+    # the existing operation budget. Sequence/branch/loop containers describe
+    # their structure, not additional work. A branch with an empty ELSE needs
+    # at most four nodes per operation, plus the entry/root containers.
+    limit = 4 * analysis.operation_limit + 2
+    operation_count = 0
 
     def add(path, kind, source=(), guard=(), *, role="statement", aliases=(), **values):
+        nonlocal operation_count
         identity = routine.qualified + "/" + path
         if len(nodes) >= limit:
             raise CompilationError("bounded structured source node budget exhausted")
+        if kind in {"operation", "call", "boundary"}:
+            if operation_count >= analysis.operation_limit:
+                raise CompilationError("bounded structured source operation budget exhausted")
+            operation_count += 1
         source = tuple(source)
         node = EffectNode(identity, kind, tuple(guard),
                           _span(source[0]) if len(source) == 1 else
@@ -173,6 +184,14 @@ def build_structure(analysis, routine, authority_identity):
                 children.append(add(child_path, "branch", (original,), guard,
                                     alternatives=((condition_id, body_id),)))
             elif kind in {"Block_Nonlabel_Do_Construct", "Block_Label_Do_Construct"}:
+                # fparser can attach the preceding team's END DO/PARALLEL
+                # comments to this next loop. They retain distinct original
+                # identities so a complete earlier team can select its join
+                # without selecting or replaying the following loop.
+                directives = tuple(add(child_path + "/directive" + str(index), "operation", (item,), guard,
+                                       evaluation="directive", completion="original joined source group required")
+                                   for index, item in enumerate(original.content)
+                                   if _kind(item) == "Comment" and str(item).lstrip().lower().startswith("!$omp"))
                 body = [item for item in original.content if _kind(item) != "Comment"]
                 if not body:
                     children.append(add(child_path, "boundary", (original,), guard, reason="empty loop syntax"))
@@ -182,7 +201,7 @@ def build_structure(analysis, routine, authority_identity):
                                 role="header", evaluation="loop_header")
                 body_id = sequence(body[1:-1], child_path + "/body", (*guard, str(header)), depth + 1)
                 children.append(add(child_path, "loop", (original,), guard,
-                                    children=(header_id, body_id), control=str(header)))
+                                    children=(*directives, header_id, body_id), control=str(header)))
             elif kind == "Associate_Construct":
                 record = getattr(analysis, "_associate_scopes", {}).get(id(original))
                 if record is None or not record.available:
@@ -238,14 +257,18 @@ def build_structure(analysis, routine, authority_identity):
         reasons.append(str(error))
         # A truncated graph is never advertised as an executable skeleton.
         nodes, originals, ids = {entry_id: nodes[entry_id]}, {entry_id: originals[entry_id]}, {}
+        operation_count = 0
         root_id = add("body", "boundary", _children(routine.execution),
-                      reason="bounded structured source node budget exhausted")
+                      reason=str(error))
     public = {"version": STRUCTURED_EFFECT_VERSION, "procedure": routine.qualified,
               "analysis_identity": authority_identity, "entry": entry_id, "root": root_id,
-              "available": not reasons, "reasons": reasons, "nodes": [node.public() for node in nodes.values()]}
+              "available": not reasons, "reasons": reasons,
+              "operation_limit": analysis.operation_limit, "operation_count": operation_count,
+              "nodes": [node.public() for node in nodes.values()]}
     identity = sha256(_canonical(public).encode()).hexdigest()
     return StructuredSummary(routine.qualified, identity, authority_identity, root_id, entry_id,
                              MappingProxyType(nodes), not reasons, tuple(reasons), limit,
+                             analysis.operation_limit, operation_count,
                              MappingProxyType(originals), MappingProxyType(ids))
 
 

@@ -18,7 +18,7 @@ def fixture(tmp_path, body=None, *, declaration="", opening="parallel private(i)
     path.write_text("module grouped\nimplicit none\ncontains\nsubroutine step(a,b,n,flag)\n"
         "real(8),intent(inout)::a(-2:,:)\nreal(8),intent(in)::b(:,:)\ninteger,intent(in)::n\n"
         "logical,intent(in)::flag\ninteger::i,j\n" + declaration + "\ncontinue\n!$omp " + opening
-        + "\n" + body + "\n!$omp " + ending + "\nend subroutine\nend module\n")
+        + "\n" + body + ("\n!$omp " + ending if ending else "") + "\nend subroutine\nend module\n")
     analysis = SourceEffects([path])
     nodes = tuple(analysis.routines[PROCEDURE].execution.content)
     # CONTINUE separates specification comments from the executable group;
@@ -43,6 +43,24 @@ def test_registered_whole_group_token_refines_faces_and_retains_join(tmp_path):
     assert not analysis.native_sections(PROCEDURE).available
     public["private_resources"].clear()
     assert proof.private_roots
+
+
+def test_optional_combined_end_uses_original_loop_completion(tmp_path):
+    from compiler.scopes.segments import grouped_nodes
+    _, analysis, nodes = fixture(tmp_path, 'do i=1,n\na(-2,i)=b(1,i)\nenddo',
+                                 opening='parallel do private(i)', ending='')
+    group, = grouped_nodes(nodes)
+    assert isinstance(group, tuple)
+    proof = analysis.joined_completion(PROCEDURE, nodes)
+    assert proof.public()['join'] == 'implicit combined-loop completion'
+    assert analysis.native_sections_for_nodes(PROCEDURE, nodes, completion=proof).available
+
+
+def test_optional_worksharing_end_keeps_the_enclosing_join(tmp_path):
+    _, analysis, nodes = fixture(tmp_path, '!$omp do\ndo i=1,n\na(-2,i)=b(1,i)\nenddo')
+    proof = analysis.joined_completion(PROCEDURE, nodes)
+    assert proof.public()['join'] == 'explicit original parallel end'
+    assert analysis.native_sections_for_nodes(PROCEDURE, nodes, completion=proof).available
 
 
 def test_public_or_copied_completion_facts_cannot_authorize_sections(tmp_path):
