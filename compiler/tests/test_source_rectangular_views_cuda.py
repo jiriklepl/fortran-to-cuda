@@ -127,7 +127,7 @@ def rectangular_binaries(tmp_path_factory):
             case = directory / label / mode
             original, output, manifest = generate(case, source, mode=mode, facts=facts, checkout=checkout)
             assert manifest["scope_count"] == 1, manifest["boundaries"]
-            assert manifest["scopes"][0]["borrowed_views"]["abi_version"] == 1
+            assert manifest["scopes"][0]["borrowed_views"]["abi_version"] == 2
             build = case / "build"
             build.mkdir()
             objects = []

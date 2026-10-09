@@ -300,7 +300,7 @@ def _scale(expression: Expr, value: int) -> Expr:
 def _safe_query(expression: Expr, parameters: frozenset[Symbol]) -> bool:
     """Total arithmetic after descriptor guards; emitter checks numeric range.
 
-    Nonconstant division is deliberately excluded. Array accesses, local scalar
+    Division requires a positive INTEGER constant denominator. Array accesses, local scalar
     state, and model inquiries with unevaluated operands are not hoisted.
     """
     if isinstance(expression, Literal):
@@ -314,7 +314,9 @@ def _safe_query(expression: Expr, parameters: frozenset[Symbol]) -> bool:
         return expression.operator in {"+", "-"} and _safe_query(expression.operand, parameters)
     if isinstance(expression, Binary):
         if expression.operator == "/":
-            return _constant(expression) is not None
+            denominator = _constant(expression.right)
+            return (denominator is not None and denominator > 0
+                    and _safe_query(expression.left, parameters))
         return expression.operator in {"+", "-", "*"} and all(
             _safe_query(value, parameters) for value in (expression.left, expression.right)
         )

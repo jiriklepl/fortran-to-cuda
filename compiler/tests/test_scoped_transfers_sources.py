@@ -132,12 +132,13 @@ def test_pinned_automatic_source_keeps_native_when_old_profile_has_only_direct_c
     scope, = report["scopes"]
     assert scope["planning_reason"] == "transfer_estimates_unavailable"
     assert scope["transfer_configuration"]["placement_estimate_reason"] == "transfer_estimates_unavailable"
-    if structured:
-        assert "fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)" in owner
-        assert "fort_configure(fort_context)" in owner
-        assert "fort_decision%gpu_units == 0" not in owner
-        assert any(name.endswith("shared_entry.cu") for name in outputs)
-    else:
-        assert "Whole-span native selection: transfer_estimates_unavailable" in owner
-        assert "fort_scope_create(" not in owner
-        assert "fort_configure(" not in owner
+    preflight = scope["automatic_preflight"]
+    assert preflight["successful"] and preflight["selection"] == "native"
+    assert "transfer_estimates_unavailable" in preflight["reason"]
+    assert preflight["runtime_decision_inputs"] == []
+    assert preflight["contexts_created"] == preflight["registrations"] == preflight["queries_constructed"] == 0
+    assert "Successful static native selection:" in owner
+    assert "fort_scope_create(" not in owner
+    assert "fort_scope_register(" not in owner
+    assert "fort_scope_plan_reset" not in owner
+    assert "fort_configure(" not in owner

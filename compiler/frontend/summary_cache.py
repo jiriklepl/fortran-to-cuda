@@ -1,8 +1,9 @@
-"""Bounded JSON storage for complete source-effect closures.
+"""Bounded JSON storage for source skeletons and complete effect closures.
 
 The caller owns the source, configuration, contract and capture-proof identity,
-and must re-admit its analysis budgets before using a cached closure. This cache
-stores no parser objects and grants no authority to an imported summary.
+and must re-admit its analysis budgets before using a cached closure. Structural
+records are rebound to freshly parsed original nodes and compared in full. This
+cache stores no parser objects and grants no source authority by itself.
 """
 
 from __future__ import annotations
@@ -17,8 +18,8 @@ from hashlib import sha256
 from pathlib import Path
 from threading import RLock
 
-_SCHEMA_VERSION = 1
-_FILE_PREFIX = "fort_source_summary_v1_"
+_SCHEMA_VERSION = 2
+_FILE_PREFIX = "fort_source_summary_v2_"
 _MAX_BYTES = 8 * 1024 * 1024
 _MAX_DEPTH = 128
 _MAX_NODES = 1_000_000
@@ -90,6 +91,52 @@ def _decode(data):
 
 
 def _payload(payload, requested):
+    if type(payload) is dict and set(payload) == {"structure"}:
+        structure = payload["structure"]
+        if (type(structure) is not dict or structure.get("procedure") != requested
+                or type(structure.get("schema_version")) is not int or structure["schema_version"] != 1
+                or type(structure.get("nodes")) is not list or type(structure.get("available")) is not bool
+                or type(structure.get("structured_identity")) is not str
+                or type(structure.get("analysis_identity")) is not str
+                or type(structure.get("node_limit")) is not int or structure["node_limit"] < 1
+                or len(structure["nodes"]) > structure["node_limit"]):
+            raise ValueError("summary cache requires a bounded structured graph")
+        nodes = {}
+        for node in structure["nodes"]:
+            if (type(node) is not dict or type(node.get("id")) is not str or node["id"] in nodes
+                    or node.get("kind") not in {"sequence", "branch", "loop", "associate", "operation", "call", "boundary", "entry"}
+                    or type(node.get("children")) is not list or type(node.get("alternatives")) is not list
+                    or type(node.get("guard")) is not list or type(node.get("span")) is not list):
+                raise ValueError("summary cache structured node is invalid")
+            nodes[node["id"]] = node
+        if structure.get("root") not in nodes or structure.get("entry") not in nodes:
+            raise ValueError("summary cache structured roots are unavailable")
+        visiting, visited = set(), set()
+        def visit(identity):
+            if identity in visiting or identity not in nodes:
+                raise ValueError("summary cache structured graph is cyclic or incomplete")
+            if identity in visited:
+                return
+            visiting.add(identity)
+            node = nodes[identity]
+            targets = list(node["children"])
+            for alternative in node["alternatives"]:
+                if type(alternative) is not dict or set(alternative) != {"condition", "body"}:
+                    raise ValueError("summary cache structured branch is invalid")
+                if alternative["condition"] is not None:
+                    targets.append(alternative["condition"])
+                targets.append(alternative["body"])
+            if any(type(target) is not str for target in targets):
+                raise ValueError("summary cache structured edge is invalid")
+            for target in targets:
+                visit(target)
+            visiting.remove(identity)
+            visited.add(identity)
+        visit(structure["entry"])
+        visit(structure["root"])
+        if len(visited) != len(nodes):
+            raise ValueError("summary cache structured graph has unreachable nodes")
+        return
     if type(payload) is not dict or set(payload) not in ({"summaries", "operations"}, {"summaries", "operations", "order"}):
         raise ValueError("summary cache requires a closure payload")
     summaries, operations = payload["summaries"], payload["operations"]

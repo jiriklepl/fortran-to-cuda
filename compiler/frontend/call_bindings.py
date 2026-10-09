@@ -57,10 +57,11 @@ class SourceSectionBound:
 class SourceSectionAxis:
     lower: SourceSectionBound
     upper: SourceSectionBound
+    scalar: bool = False
 
     def public(self):
-        return {"kind": "unit_stride_range", "lower": self.lower.public(), "upper": self.upper.public(),
-                "stride": 1}
+        return {"kind": "scalar_coordinate" if self.scalar else "unit_stride_range",
+                "lower": self.lower.public(), "upper": self.upper.public(), "stride": 1}
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,10 @@ class RectangularSection:
     resource: str
     axes: tuple[SourceSectionAxis, ...]
     node: object = field(compare=False, repr=False)
+
+    @property
+    def logical_rank(self):
+        return sum(not axis.scalar for axis in self.axes)
 
     @property
     def dependencies(self):
@@ -78,7 +83,9 @@ class RectangularSection:
         return tuple(values[key] for key in sorted(values))
 
     def public(self):
-        return {"resource": self.resource, "rank": len(self.axes), "source_access": str(self.node),
+        return {"resource": self.resource, "rank": len(self.axes), "logical_rank": self.logical_rank,
+                "retained_axes": [axis for axis, item in enumerate(self.axes) if not item.scalar],
+                "source_access": str(self.node),
                 "coordinate_system": "original caller logical indices; physical mapping requires runtime descriptors",
                 "axes": [axis.public() for axis in self.axes],
                 "dependencies": [dependency.public() for dependency in self.dependencies],
@@ -201,7 +208,7 @@ def _bound(analysis, scope, node, binding, dimension, default=None):
         if not 0 <= value < 2 ** (width * 8 - 1):
             raise CompilationError("section INTEGER literal is out of range")
         return SourceSectionBound("literal", str(node), node, value=value)
-    if kind == "Name":
+    if kind in {"Name", "Data_Ref"}:
         scalar = analysis._binding(scope, node)
         if scalar is None or scalar.rank or scalar.dtype != "integer" or scalar.kind not in {4, 8}:
             raise CompilationError("section bound requires a source-backed INTEGER scalar: " + str(node))
@@ -267,21 +274,33 @@ def _actual(analysis, scope, node):
     if binding is not None:
         _check_resource_identity(analysis, binding)
         return binding.signature(), binding, None
-    if _kind(node) == "Part_Ref":
-        binding = analysis._binding(scope, node.items[0])
-        indices = tuple(_children(node.items[1]))
+    if _kind(node) in {"Part_Ref", "Data_Ref"}:
+        if _kind(node) == "Data_Ref":
+            from compiler.frontend.component_bindings import component_access
+            access = component_access(analysis, scope, node)
+            binding, indices = (access.binding, access.indices) if access is not None else (None, ())
+        else:
+            binding = analysis._binding(scope, node.items[0])
+            indices = tuple(_children(node.items[1]))
         if binding is not None and binding.rank:
             _check_resource_identity(analysis, binding)
-            if len(indices) != binding.rank or any(_kind(index) != "Subscript_Triplet" for index in indices):
+            if len(indices) != binding.rank:
                 raise CompilationError("array-element/section actual requires in-place mapping and coherence: " + str(node))
             axes = []
             for dimension, index in enumerate(indices, 1):
+                if _kind(index) != "Subscript_Triplet":
+                    coordinate = _bound(analysis, scope, index, binding, dimension)
+                    axes.append(SourceSectionAxis(coordinate, coordinate, scalar=True))
+                    continue
                 lower, upper, stride = index.items
                 if stride is not None and scope.kinds.integer(stride, SourceLocation(str(scope.path))) != 1:
                     raise CompilationError("source rectangular actual requires unit stride: " + str(node))
                 axes.append(SourceSectionAxis(_bound(analysis, scope, lower, binding, dimension, "lbound"),
                                               _bound(analysis, scope, upper, binding, dimension, "ubound")))
-            return binding.signature(), binding, RectangularSection(binding.root, tuple(axes), node)
+            section = RectangularSection(binding.root, tuple(axes), node)
+            if not section.logical_rank:
+                raise CompilationError("array-element actual requires scalar payload coherence: " + str(node))
+            return (*binding.signature()[:2], section.logical_rank), binding, section
     reason = analysis._actual_mapping_boundary(scope, node)
     if reason:
         raise CompilationError(reason)

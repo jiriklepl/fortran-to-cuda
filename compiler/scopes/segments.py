@@ -9,12 +9,13 @@ from __future__ import annotations
 
 import copy
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import Base, walk
 
 from compiler.frontend.source_effects import Binding, _kind
+from compiler.frontend.component_bindings import references
 from compiler.ir import CompilationError
 
 
@@ -28,6 +29,7 @@ class Native:
     kind: str = "native source"
     sections: object = None
     span: tuple = ()
+    private_bindings: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -44,6 +46,19 @@ class Branch:
     # later ELSEIF expressions are never evaluated before preceding guards.
     alternatives: list
     span: tuple = ()
+
+
+@dataclass
+class Association:
+    body: list
+    span: tuple
+    proof: dict
+
+
+@dataclass
+class Delegated:
+    call: object
+    coordinator: object
 
 
 def fortran_lines(lines):
@@ -75,98 +90,29 @@ def directive(node):
     return text[5:].strip() if _kind(node) == "Comment" and text.startswith("!$omp") else None
 
 
+def original_roots(nodes):
+    """Keep exact recovered constructs once, including attached directives."""
+    descendants = {id(child) for node in nodes for child in walk(node) if child is not node}
+    unique = {id(node): node for node in nodes}
+    return tuple(node for identity, node in unique.items() if identity not in descendants)
+
+
 def joined_group_completion(builder, nodes):
-    """Prove completion of one bounded original PARALLEL region.
+    """Compatibility view of the registered original-source completion proof.
 
-    Its end barrier joins even NOWAIT worksharing loops. Only numeric local
-    scalar PRIVATE clauses and explicit SHARED names are admitted; tasks,
-    detached work and nested teams remain boundaries.
+    Source extraction may carry compiler-owned projections. Only its exact
+    registry can recover originals; manufactured spans or attributes grant no
+    authority. Simple analysis callers must supply the actual original nodes.
     """
-    if not nodes or directive(nodes[-1]) not in {"end parallel", "end parallel do"}:
-        raise CompilationError("native parallel operation requires a joined END PARALLEL")
-
-    def clauses(text):
-        remainder = text.strip()
-        while remainder:
-            match = re.match(r"(private|shared|default|collapse|schedule)\s*\(([^()]*)\)\s*", remainder)
-            if match is None:
-                raise CompilationError("unsupported joined native OpenMP clause: " + remainder)
-            kind, values = match.group(1), match.group(2).strip()
-            if kind == "default":
-                if values not in {"shared", "none"}:
-                    raise CompilationError("unsupported native OpenMP DEFAULT")
-            elif kind == "collapse":
-                if values not in {"1", "2", "3", "4"}:
-                    raise CompilationError("unsupported native OpenMP COLLAPSE")
-            elif kind == "schedule":
-                if values not in {"static", "runtime"}:
-                    raise CompilationError("unsupported native OpenMP SCHEDULE")
-            else:
-                for name in values.split(","):
-                    if not re.fullmatch(r"[a-z][a-z0-9_]*", name.strip()):
-                        raise CompilationError("native OpenMP clause needs resolved variable names")
-                    binding = builder.analysis._binding(builder.entry.scope, name.strip())
-                    if binding is None:
-                        raise CompilationError("unresolved native OpenMP clause variable")
-                    if kind == "private" and ("save" in binding.attributes
-                                              or not binding.root.startswith(builder.entry.qualified + "::")):
-                        raise CompilationError("native PRIVATE requires original local storage")
-                    if kind == "private" and binding.rank:
-                        from compiler.scopes.regions import _fixed_shape
-                        _fixed_shape(builder.entry, binding)
-            remainder = remainder[match.end():].lstrip(", ")
-
-    first = directive(nodes[0])
-    if first is None or not re.match(r"parallel(?:\s|$)", first):
-        raise CompilationError("native operation is not one complete PARALLEL region")
-    combined = bool(re.match(r"parallel\s+do(?:\s|$)", first))
-    clauses(first[len("parallel do"):] if combined else first[len("parallel"):])
-    if combined:
-        body = [node for node in nodes[1:-1] if _kind(node) != "Comment"]
-        if (directive(nodes[-1]) != "end parallel do" or len(body) != 1
-                or _kind(body[0]) != "Block_Nonlabel_Do_Construct"):
-            raise CompilationError("combined PARALLEL DO requires one complete associated loop and join")
-        if any(directive(item) is not None for item in walk(body[0])):
-            raise CompilationError("nested OpenMP directives inside a native loop are unsupported")
-        return {"available": True, "reason": "original combined PARALLEL DO joins at END PARALLEL DO",
-                "caller_contract": "serial_source_scope", "requires_serial_caller": True,
-                "has_openmp_in_closure": True, "has_opaque_calls_in_closure": False}
-    if directive(nodes[-1]) != "end parallel":
-        raise CompilationError("native PARALLEL operation requires a matching END PARALLEL")
-    index = 1
-    while index < len(nodes) - 1:
-        node, text = nodes[index], directive(nodes[index])
-        if text is None:
-            if _kind(node) != "Comment":
-                raise CompilationError("native PARALLEL body requires bounded worksharing DO loops")
-            index += 1
-            continue
-        if not re.match(r"do(?:\s|$)", text):
-            raise CompilationError("unsupported joined native OpenMP directive: " + text)
-        clauses(text[2:])
-        index += 1
-        while index < len(nodes) and _kind(nodes[index]) == "Comment" and directive(nodes[index]) is None:
-            index += 1
-        if index >= len(nodes) or _kind(nodes[index]) != "Block_Nonlabel_Do_Construct":
-            raise CompilationError("native OpenMP DO requires one complete associated loop")
-        if any(directive(item) is not None for item in walk(nodes[index])):
-            raise CompilationError("nested OpenMP directives inside a native loop are unsupported")
-        index += 1
-        while index < len(nodes) and _kind(nodes[index]) == "Comment" and directive(nodes[index]) is None:
-            index += 1
-        if index >= len(nodes) or directive(nodes[index]) not in {"end do", "end do nowait"}:
-            raise CompilationError("native OpenMP DO requires a matching END DO")
-        index += 1
-    return {"available": True, "reason": "original bounded PARALLEL region joins at END PARALLEL",
-            "caller_contract": "serial_source_scope", "requires_serial_caller": True,
-            "has_openmp_in_closure": True, "has_opaque_calls_in_closure": False}
+    originals = original_roots(builder.inline.original_selection(nodes) if hasattr(builder, "inline") else tuple(nodes))
+    return builder.analysis.joined_completion(builder.entry.qualified, originals).public()
 
 
 def grouped_nodes(nodes):
     """Keep whole joined groups as one native scheduling operation."""
     expanded = []
     for node in nodes:
-        if _kind(node) == "Block_Nonlabel_Do_Construct":
+        if _kind(node) in {"Block_Nonlabel_Do_Construct", "If_Construct", "Associate_Construct"}:
             prefix = []
             for item in node.content:
                 if _kind(item) != "Comment":
@@ -210,46 +156,35 @@ def statement_span(node):
     return min(span[0] for span in spans), max(span[1] for span in spans)
 
 
-def fragment(builder, nodes, *, kind="native source"):
-    """Analyze original typed nodes with original bindings and a private cache.
-
-    The fragment is already inside the entry: its old dummy INTENT(OUT) and
-    specification expressions must not execute a second time. The original
-    routine/analysis remain untouched, including source and contract identities.
-    """
+def fragment(builder, nodes, *, kind="native source", selected=None, private_roots=()):
+    """Demand effects from exact original nodes, excluding owner entry events."""
+    original = original_roots(builder.inline.original_selection(nodes)) if selected is None else ()
+    full_original = original
     analysis = copy.copy(builder.analysis)
-    analysis.routines = dict(analysis.routines)
-    analysis.summaries, analysis._closures, analysis._native_sections = {}, {}, {}
-    routine = copy.copy(builder.entry)
-    routine.scope = copy.copy(routine.scope)
-    routine.scope.bindings = {name: copy.copy(binding) for name, binding in routine.scope.bindings.items()}
-    for binding in routine.scope.bindings.values():
-        binding.intent = None
-        if binding.rank and "allocatable" in binding.attributes and any(
-                builder.analysis._binding(builder.entry.scope, name) is not None
-                and builder.analysis._binding(builder.entry.scope, name).root == binding.root
-                for node in nodes for name in walk(node, F.Name)):
-            # Original caller guards + source-bound lifetime facts authorize
-            # borrowing this descriptor within the fragment, not allocation
-            # changes or allocatable child interfaces. Whole allocatable writes
-            # remain boundaries in the existing effect analysis.
-            builder.capture(binding)
-            analysis._stable_module_allocatables = analysis._stable_module_allocatables | {binding.root}
-    if kind == "condition read":
-        probe = "fort_condition_projection"
-        routine.scope.bindings[probe] = Binding(probe, routine.qualified + "::" + probe, "logical", 4, 0)
-    routine.scope.node = copy.copy(routine.scope.node)
-    routine.execution = copy.copy(routine.execution)
-    routine.execution.content = list(nodes)
-    routine.scope.node.content = [routine.execution]
-    # Entry-local resources can also have registered device state from an
-    # earlier call. Treat their fragment accesses as externally visible while
-    # removing procedure-entry definition events from this inner operation.
-    routine.arguments = tuple(name for name, binding in routine.scope.bindings.items()
-                              if "allocatable" not in binding.attributes)
-    routine.issues = []
-    analysis.routines[routine.qualified] = routine
-    summary = analysis.summarize(routine.qualified)
+    completion_proof = (analysis.joined_completion(builder.entry.qualified, original)
+                        if kind == "joined native OpenMP" else None)
+    if completion_proof is not None:
+        private_roots = set(private_roots) | set(completion_proof.private_roots)
+    original = tuple(node for node in original if _kind(node) != "Comment")
+    selection = original if selected is None else selected
+    # Validated capture facts borrow only the reached local descriptor. They
+    # neither alter original source authority nor authorize allocation changes.
+    analysis._segments = {}
+    bindings, private_bindings = {}, {}
+    for node in original if selected is None else nodes:
+        for binding, _ in references(analysis, builder.entry.scope, node):
+            if binding.root in private_roots:
+                private_bindings[binding.root] = binding
+                continue
+            bindings[binding.root] = binding
+            if binding.rank and "allocatable" in binding.attributes:
+                builder.capture(binding)
+                analysis._stable_module_allocatables = analysis._stable_module_allocatables | {binding.root}
+    if completion_proof is not None:
+        # Verified local capture facts participate in graph authority. Issue
+        # the token against the same reached proof used for materialization.
+        completion_proof = analysis.joined_completion(builder.entry.qualified, full_original)
+    summary = analysis.segment_summary(builder.entry.qualified, selection, capture_locals=True)
     if not summary["complete"]:
         raise CompilationError("structured native effects incomplete: " + "; ".join(summary["reasons"]))
     if any(operation["kind"] == "boundary" or (operation["kind"] == "control"
@@ -257,8 +192,8 @@ def fragment(builder, nodes, *, kind="native source"):
            for operation in summary["operations"]):
         raise CompilationError("unsupported exit or lifetime boundary inside structured ownership")
     completion = summary["native_completion"]
-    if kind == "joined native OpenMP":
-        completion = summary["native_completion"] = joined_group_completion(builder, nodes)
+    if completion_proof is not None:
+        completion = summary["native_completion"] = completion_proof.public()
     if not completion["available"]:
         raise CompilationError("structured native completion unproven: " + completion["reason"])
     effects = {}
@@ -266,31 +201,31 @@ def fragment(builder, nodes, *, kind="native source"):
         if operation["kind"] in {"call", "native_contract"}:
             raise CompilationError("inline native calls require a separately mapped source operation")
         if operation["kind"] in {"read", "write", "overwrite"} and operation["rank"]:
+            if operation["resource"] in private_roots:
+                continue
             effects.setdefault(operation["resource"], set()).add(
                 "read" if operation["kind"] == "read" else "write")
-    bindings = {}
-    for node in nodes:
-        for name in walk(node, F.Name):
-            binding = builder.analysis._binding(builder.entry.scope, name)
-            if binding is not None:
-                bindings[binding.root] = binding
     span = (statement_span(nodes[0])[0], statement_span(nodes[-1])[1]) if kind != "condition read" else ()
-    return Native(tuple(nodes), effects, set(summary["guaranteed_whole_overwrites"]), bindings, summary, kind,
-                  analysis.native_sections(routine.qualified), span)
+    sections = analysis.native_sections_for_nodes(builder.entry.qualified, selection, capture_locals=True,
+                                                  completion=completion_proof)
+    sections = replace(sections, resources=tuple(item for item in sections.resources
+                                                if item.resource not in private_roots))
+    return Native(tuple(nodes), effects, set(summary["guaranteed_whole_overwrites"]) - set(private_roots),
+                  bindings, summary, kind, sections, span, private_bindings)
 
 
 def condition_fragment(builder, header):
-    # A typed local assignment projection also allows the ordinary native
-    # section analyzer to prove exact point/rectangular condition reads.
+    # The graph authenticates the original header and expression separately;
+    # no synthetic assignment may establish source authority.
     condition = header.items[0]
-    projection = F.Assignment_Stmt("fort_condition_projection = " + str(condition))
-    result = fragment(builder, (projection,), kind="condition read")
+    identity = builder.analysis.structure(builder.entry.qualified).node_id(header, role="condition")
+    result = fragment(builder, (condition,), kind="condition read", selected=(identity,))
     result.nodes = (condition,)
     result.span = statement_span(header)
     return result
 
 
-def renamed(builder, node, parameters):
+def renamed(builder, node, parameters, *, lexical_scope=None):
     """Rewrite resolved variable AST nodes, never string substrings."""
     def rename_comment(value):
         def clause(match):
@@ -308,10 +243,34 @@ def renamed(builder, node, parameters):
             return type(value)(clone_ast(child) for child in value)
         if not isinstance(value, Base):
             return value
+        scope = builder.analysis.source_scope_for(value, lexical_scope or builder.entry.scope)
+        if _kind(value) == "Actual_Arg_Spec":
+            result = copy.copy(value)
+            result.items = (value.items[0], clone_ast(value.items[1]))
+            return result
+        if _kind(value) == "Data_Ref":
+            from compiler.frontend.component_bindings import component_access
+            access = component_access(builder.analysis, scope, value)
+            replacement = parameters.get(access.binding.root)
+            if replacement is None:
+                replacement = builder.visible(builder.entry, access.binding.root)
+            if access.indices:
+                replacement += "(" + ",".join(str(clone_ast(index)) for index in access.indices) + ")"
+                return F.Data_Ref(replacement) if "%" in replacement else F.Part_Ref(replacement)
+            return F.Data_Ref(replacement) if "%" in replacement else F.Name(replacement)
+        if _kind(value) == "Name":
+            binding = builder.analysis._binding(scope, value)
+            if binding is not None and binding.root in parameters:
+                replacement = parameters[binding.root]
+                return F.Data_Ref(replacement) if "%" in replacement else F.Name(replacement)
+            if binding is not None and hasattr(binding, "associate_selector"):
+                visible = builder.visible(builder.entry, binding.root)
+                return F.Data_Ref(visible) if "%" in visible else F.Name(visible)
+            return value
         if (_kind(value) == "Intrinsic_Function_Reference" and str(value.items[0]).lower() == "allocated"):
             arguments = getattr(value.items[1], "items", ())
             if len(arguments) == 1 and _kind(arguments[0]) == "Name":
-                binding = builder.analysis._binding(builder.entry.scope, arguments[0])
+                binding = builder.analysis._binding(scope, arguments[0])
                 if binding and binding.root in parameters and "allocatable" in binding.attributes:
                     # This helper can only be associated after the original
                     # allocation guard. Unallocated invocations execute the
@@ -330,21 +289,14 @@ def renamed(builder, node, parameters):
         return result
     # Readers/items contain open source handles; only typed syntax needs a
     # private copy. Original provenance references remain read-only.
-    clone = clone_ast(node)
-    keywords = {id(item.items[0]) for item in walk(clone, F.Actual_Arg_Spec)}
-    for name in walk(clone, F.Name):
-        if id(name) in keywords:
-            continue  # Keywords name callee formals, not caller storage.
-        binding = builder.analysis._binding(builder.entry.scope, name)
-        if binding is not None and binding.root in parameters:
-            name.string = parameters[binding.root]
-    return str(clone)
+    return str(clone_ast(node))
 
 
 class StructuredScope:
     def __init__(self, builder, nodes):
         self.builder, self.nodes = builder, tuple(nodes)
         self.calls, self.native, self.segments = [], [], []
+        self.guarded = {}
         self.operation_count = 0
         self.tree = self.parse(nodes)
         if len(self.calls) > 32 or self.operation_count > 256:
@@ -364,7 +316,7 @@ class StructuredScope:
                 result.append(Segment(list(run)))
                 run.clear()
 
-        for node in grouped_nodes(nodes):
+        for node in self.builder.inline.grouped_nodes(nodes):
             if isinstance(node, tuple):
                 flush()
                 operation = fragment(self.builder, node, kind="joined native OpenMP")
@@ -377,8 +329,27 @@ class StructuredScope:
                 continue
             if kind == "Call_Stmt":
                 call = self.builder.resolve(self.builder.entry, node)
+                coordinator = self.builder.coordinator(call.procedure) if call.region is None else None
+                if coordinator is not None:
+                    flush()
+                    self.calls.append(call)
+                    result.append(Delegated(call, coordinator))
+                    continue
+                if call.region is not None and (call.region.runtime_guards or call.region.requires_numerical_environment):
+                    flush()
+                    private = {self.builder.entry.scope.bindings[name].root
+                               for name in (*call.region.private_arrays, *call.region.private_scalars)}
+                    try:
+                        fallback = fragment(self.builder, self.builder.inline.original_selection(node),
+                                            kind="guarded original numerical fallback", private_roots=private)
+                    except CompilationError as error:
+                        raise CompilationError("reached numerical guard lacks safe original native effects: " + str(error)) from error
+                    self.guarded[id(call.node)] = fallback
+                    self.native.append(fallback)
                 self.calls.append(call)
                 run.append(call)
+                if id(call.node) in self.guarded:
+                    flush()
                 continue
             flush()
             if kind == "If_Construct":
@@ -400,10 +371,18 @@ class StructuredScope:
                 condition = condition_fragment(self.builder, node)
                 self.native.append(condition)
                 self.operation_count += len(condition.summary["operations"])
-                action = copy.copy(node.items[1])
-                if getattr(action, "item", None) is None:
-                    action.item = node.item
+                action = self.builder.inline.statement_projection(node.items[1], node)
                 result.append(Branch([(condition, self.parse((action,), depth + 1))], statement_span(node)))
+            elif kind == "Associate_Construct":
+                originals = self.builder.inline.original_selection(node)
+                if len(originals) != 1 or _kind(originals[0]) != kind:
+                    raise CompilationError("lexical ASSOCIATE requires one original source construct")
+                record = self.builder.analysis._associate_scopes.get(id(originals[0]))
+                if record is None or not record.available:
+                    raise CompilationError("structured ASSOCIATE boundary: " +
+                                           (record.reason if record is not None else "missing original selector proof"))
+                result.append(Association(self.parse(node.content[1:-1], depth + 1),
+                                          statement_span(node), record.public()))
             elif kind in {"Assignment_Stmt", "Block_Nonlabel_Do_Construct"}:
                 operation = fragment(self.builder, (node,))
                 self.native.append(operation)
@@ -437,8 +416,7 @@ class StructuredScope:
                 except CompilationError:
                     continue
                 for root in controls:
-                    binding = self.builder.analysis._binding(self.builder.entry.scope,
-                                                             self.builder.visible(self.builder.entry, root))
+                    binding = self.builder.visible_binding(self.builder.entry, root)
                     scalars[root] = binding
 
     def check_conservative_definitions(self, arrays):
@@ -470,9 +448,18 @@ class StructuredScope:
                 if isinstance(item, Branch):
                     item.alternatives = [(condition, visit(body)) for condition, body in item.alternatives]
                     result.append(item)
+                elif isinstance(item, Association):
+                    item.body = visit(item.body)
+                    result.append(item)
                 elif isinstance(item, Segment):
                     run = []
                     for call in item.calls:
+                        if id(call.node) in self.guarded:
+                            if run:
+                                result.append(self.segment(run, arrays))
+                                run = []
+                            result.append(self.segment((call,), arrays))
+                            continue
                         candidate = [*run, call]
                         written = {root for c in candidate for root, actions in self.builder.roots_for(c)[0].items()
                                    if "write" in actions}
@@ -508,7 +495,7 @@ class StructuredScope:
         return item
 
     def original(self, parameters):
-        return [line for node in self.nodes for original in self.builder.inline.restore(node)
+        return [line for original in self.builder.inline.original_selection(self.nodes)
                 for line in renamed(self.builder, original, parameters).splitlines()]
 
     def public(self):
@@ -524,6 +511,17 @@ class StructuredScope:
                                    "alternatives": [{"condition_operation": self.native.index(condition) if condition else None,
                                                      "guard": str(condition.nodes[0]) if condition else None,
                                                      "nodes": tree(body)} for condition, body in item.alternatives]})
+                elif isinstance(item, Association):
+                    result.append({"kind": "lexical_association", "first_line": item.span[0],
+                                   "last_line": item.span[1], "proof": item.proof,
+                                   "nodes": tree(item.body)})
+                elif isinstance(item, Delegated):
+                    available, reason = item.coordinator.scope.planning_status()
+                    result.append({"kind": "reached_source_coordinator", "procedure": item.call.procedure,
+                                   "first_line": item.call.node.item.span[0], "last_line": item.call.node.item.span[1],
+                                   "structured_summary_identity": item.coordinator.public()["structured_summary_identity"],
+                                   "estimate_available": available, "planning_reason": reason,
+                                   "requirements": item.coordinator.public()["requirements"]})
                 else:
                     result.append({"kind": "native_operation", "operation_id": self.native.index(item)})
             return result
@@ -538,19 +536,48 @@ class StructuredScope:
                  "query_available": segment.query[0], "query_reason": segment.query[1],
                  "estimate_available": segment.query[2], "planning_reason": segment.query[3],
                  "query_host_reads": list(segment.payload),
+                 "semantic_guards": [guard for call in segment.calls if call.region is not None
+                                     for guard in (*call.region.runtime_guards,
+                                                   *( ("fort_scope_numerical_environment_supported() /= 0",)
+                                                      if call.region.requires_numerical_environment else ()))],
+                 "guard_failure": "original native operation with coherence hooks; earlier work is retained",
                  "position": "when reached after preceding source operations"}
                 for segment in self.segments],
             "native_operations": [{"operation_id": index, "kind": operation.kind,
                                    "first_line": operation.span[0], "last_line": operation.span[1],
                                    "resources": sorted(operation.effects),
+                                   "private_resources": sorted(operation.private_bindings),
                                    "completion": operation.summary["native_completion"],
                                    "sections": operation.sections.public(),
+                                   "structured_summary_identity": operation.summary.get("structured_identity"),
+                                   "demand_identity": operation.summary.get("demand_identity"),
+                                   "selected_original_nodes": operation.summary.get("selected_node_ids", []),
+                                   "reduction_analysis": self.builder.analysis.reduction_candidates(
+                                       self.builder.entry.qualified, operation.summary.get("selected_node_ids", ())),
                                    "planned_effects": True} for index, operation in enumerate(self.native)],
             "structured_tree": {"branch_depth_limit": 8, "operation_count": self.operation_count,
                                 "nodes": tree(self.tree)},
         }
 
-    def emit(self, handles, parameters, actuals, imports, *, selector):
+    def planning_status(self):
+        statuses = [(segment.query[2], segment.query[3]) for segment in self.segments
+                    if any(self.builder.closure(call.procedure)[0] for call in segment.calls)]
+
+        def children(items):
+            for item in items:
+                if isinstance(item, Delegated):
+                    statuses.append(item.coordinator.scope.planning_status())
+                elif isinstance(item, Branch):
+                    for _condition, body in item.alternatives:
+                        children(body)
+                elif isinstance(item, Association):
+                    children(item.body)
+        children(self.tree)
+        return all(available for available, _reason in statuses), next(
+            (reason for available, reason in statuses if not available), None)
+
+    def emit(self, handles, parameters, actuals, imports, *, selector, execution_mode=None, terminal_owner=True,
+             logical_lower_bounds=None, selector_name="fort_choose"):
         from compiler.scopes.source import _call, _checked, _name, _span
         builder = self.builder
 
@@ -561,6 +588,10 @@ class StructuredScope:
                     return None
                 return build_native_accesses(operation.sections, handles,
                                              _name("fort_piece_", str(self.native.index(operation))),
+                                             parameters={root: parameters[root] if root in parameters else builder.visible(builder.entry, root)
+                                                         for root, binding in operation.bindings.items()
+                                                         if not binding.rank and binding.dtype == "integer"},
+                                             logical_lower_bounds=logical_lower_bounds,
                                              on_error=("exit " + _name("fort_prepare_", str(self.native.index(operation))),) if query else
                                              ("error stop 'structured native section preparation failed'",))
             except CompilationError:
@@ -569,7 +600,7 @@ class StructuredScope:
         def choose():
             lines = ["if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_plan_validate(fort_context)"]
             if builder.config.policy == "auto":
-                lines += ["if (fort_status == FORT_SCOPE_OK) fort_status = fort_choose(fort_context, fort_decision)"]
+                lines += [f"if (fort_status == FORT_SCOPE_OK) fort_status = {selector_name}(fort_context, fort_decision)"]
             return lines
 
         def native_hooks(operation):
@@ -625,7 +656,7 @@ class StructuredScope:
         def execute(calls, mode, *, terminal=False):
             return builder.owner_calls(calls, mode, handles, parameters, actuals, imports, terminal=terminal)
 
-        def segment(item, *, terminal=False):
+        def record_segment(item, *, terminal=False):
             if not item.query[0]:
                 return ["! Current segment has no safe query: " + item.query[1],
                         *_checked("fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"),
@@ -654,7 +685,8 @@ class StructuredScope:
                                            *[native_handles[root] for root in roots], "fort_status"])
                 else:
                     block = _name("fort_record_", str(_span(call.node)))
-                    query_lines = builder.native_plan(call, *builder.native_effects(call.procedure), native_handles)
+                    query_lines = builder.native_plan(call, *builder.native_effects(call.procedure), native_handles,
+                                                      actuals=actuals(call))
                     lines += [block + ": block", *[line.replace("return", "exit " + block)
                                                    if "return" in line else line for line in query_lines],
                               "end block " + block]
@@ -665,6 +697,36 @@ class StructuredScope:
                       *execute(item.calls, "0_c_int", terminal=terminal), "else", *execute(item.calls, "fort_mode", terminal=terminal), "endif",
                       *_checked("fort_scope_wait(fort_context)")]
             return lines
+
+        def segment_impl(item, *, terminal=False):
+            if execution_mode is None:
+                return record_segment(item, terminal=terminal)
+            return ["if (" + execution_mode + " == 0_c_int) then",
+                    *_checked("fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"),
+                    *execute(item.calls, "0_c_int", terminal=terminal), *_checked("fort_scope_wait(fort_context)"),
+                    "else", *record_segment(item, terminal=terminal), "endif"]
+
+        def segment(item, *, terminal=False):
+            guarded = [call for call in item.calls if id(call.node) in self.guarded]
+            if not guarded:
+                return segment_impl(item, terminal=terminal)
+            if len(item.calls) != 1:
+                raise CompilationError("guarded numerical work must form its own reached planning segment")
+            call = guarded[0]
+            operation = self.guarded[id(call.node)]
+            guards = (*call.region.runtime_guards,
+                      *(("fort_scope_numerical_environment_supported() /= 0",) if call.region.requires_numerical_environment else ()))
+            lines = ["fort_numerical_guard = .true."]
+            original = builder.inline.original_selection(call.node)
+            scope = builder.analysis.source_scope_for(original[0], builder.entry.scope)
+            for guard in guards:
+                expression = F.Assignment_Stmt("fort_numerical_guard = " + guard).items[2]
+                lines += ["if (fort_numerical_guard) fort_numerical_guard = "
+                          + renamed(builder, expression, parameters, lexical_scope=scope)]
+            lines += ["if (fort_numerical_guard) then", *segment_impl(item, terminal=terminal), "else",
+                      *native_plan(operation), *native_hooks(operation)]
+            lines += [line for original in operation.nodes for line in renamed(builder, original, parameters).splitlines()]
+            return [*lines, *native_end(operation), *_checked("fort_scope_wait(fort_context)"), "endif"]
 
         def branch(item, index=0, *, terminal=False):
             condition, body = item.alternatives[index]
@@ -686,10 +748,18 @@ class StructuredScope:
                     lines += segment(item, terminal=closing)
                 elif isinstance(item, Branch):
                     lines += branch(item, terminal=closing)
+                elif isinstance(item, Association):
+                    # Proved scalar variable selectors establish aliases only;
+                    # each body reference already names its canonical storage.
+                    lines += ["block", *emit(item.body, terminal=closing), "end block"]
+                elif isinstance(item, Delegated):
+                    lines += builder.owner_calls((item.call,), execution_mode or "fort_mode", handles, parameters,
+                                                 actuals, imports, batch=False, terminal=False)
+                    lines += _checked("fort_scope_wait(fort_context)")
                 else:
                     lines += [*native_plan(item), *native_hooks(item)]
                     lines += [line for node in item.nodes for line in renamed(builder, node, parameters).splitlines()]
                     lines += [*native_end(item), *_checked("fort_scope_wait(fort_context)")]
             return lines
 
-        return emit(self.tree, terminal=True)
+        return emit(self.tree, terminal=terminal_owner)

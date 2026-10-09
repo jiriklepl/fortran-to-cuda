@@ -64,24 +64,20 @@ def test_same_array_literal_dimension_inquiries_are_typed_bounds(tmp_path):
     assert sections.available, sections.reason
     resource, = sections.resources
     axis = resource.writes[0].axes[0]
-    assert axis.lower.public() == {"kind": "lbound", "dimension": 1}
-    assert axis.upper.public() == {"kind": "ubound", "dimension": 1}
+    assert axis.lower.public() == {"kind": "lbound", "dimension": 1, "resource": "argument::a"}
+    assert axis.upper.public() == {"kind": "ubound", "dimension": 1, "resource": "argument::a"}
     assert resource.reads == ()
 
 
 @pytest.mark.parametrize(("body", "reason"), [
-    ("a(n,:)=7", "default INTEGER literals"),
-    ("a(1:n,:)=7", "default INTEGER literals"),
-    ("a(-2:2:2,:)=7", "unit stride"),
-    ("a([1,2],:)=7", "default INTEGER literals"),
-    ("a(-2:size(a,1),:)=7", "SIZE bounds require declared lower bound one"),
-    ("a(lbound(b,1):ubound(b,1),:)=7", "own array and dimension"),
-    ("a(lbound(a,2):ubound(a,2),:)=7", "own array and dimension"),
+    ("a([1,2],:)=7", "affine scalar arithmetic"),
+    ("a(-2:n:2,:)=7", "bounded constant endpoints"),
+    ("a(-2:2:0,:)=7", "nonzero constant stride"),
     ("a(2147483648,:)=7", "literal is out of range"),
-    ("a(1:size(a,1)-1,:)=7", "default INTEGER literals"),
-    ("if(n>0) a(-2,:)=7", "straight-line assignment-only"),
-    ("do i=1,n\na(i,:)=7\nenddo", "straight-line assignment-only"),
-    ("call other(a)", "straight-line assignment-only"),
+    ("if(n>0) a(-2,:)=7", "assignment-only affine DO"),
+    ("do i=1,n,2\na(i,:)=7\nenddo", "bounded constant endpoints"),
+    ("do i=1,n\na(i,i)=7\nenddo", "independent rectangular iterator axes"),
+    ("call other(a)", "assignment-only affine DO"),
 ])
 def test_unknown_bounds_and_control_keep_conservative_effects(tmp_path, body, reason):
     _, sections = analyze(tmp_path, body)
@@ -97,13 +93,16 @@ def test_native_section_union_has_a_bounded_rectangle_budget(tmp_path):
     assert "rectangle budget exceeded" in sections.reason
 
 
-def test_native_out_reads_and_dynamic_lower_bounds_keep_original_position_boundaries(tmp_path):
+def test_native_out_reads_keep_original_position_boundaries_and_dynamic_bounds_are_typed(tmp_path):
     _, sections = analyze(tmp_path, "a=4\na=a+1", declaration="real(8),intent(out)::a(-2:,:)")
     assert not sections.available
     assert "INTENT(OUT) reads" in sections.reason
     _, dynamic = analyze(tmp_path, "a(:,:)=7", declaration="real(8),intent(inout)::a(n:,:)")
-    assert not dynamic.available
-    assert "default INTEGER literals" in dynamic.reason
+    assert dynamic.available, dynamic.reason
+    resource, = dynamic.resources
+    assert resource.lower_bounds == (None, 1)
+    assert resource.lower_bound_expressions[0].public() == {"kind": "scalar", "resource": "argument::n"}
+    assert [item.public() for item in resource.dependencies] == [{"resource": "argument::n", "kind": "scalar_read"}]
 
 
 @pytest.mark.parametrize("body", [
@@ -133,7 +132,7 @@ def test_descriptor_dimensions_retain_payload_reads_and_unknown_storage_is_rejec
 def test_native_specification_payload_bounds_are_not_omitted_from_refinement(tmp_path):
     _, sections = analyze(tmp_path, "real(8)::scratch(int(a(-2,1)))\ni=size(scratch)")
     assert not sections.available
-    assert "default INTEGER literals" in sections.reason
+    assert "source-backed scalar arithmetic or array inquiries" in sections.reason
     assert sections.resources == ()
 
 
@@ -196,5 +195,5 @@ end function
     analysis = SourceEffects([source])
     sections = analysis.native_sections("original::touch")
     assert not sections.available
-    assert "checked same-array" in sections.reason
+    assert "section bounds require" in sections.reason
     assert not analysis.summarize("original::touch")["complete"]

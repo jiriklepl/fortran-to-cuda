@@ -187,8 +187,8 @@ def test_omitted_rectangle_bounds_are_descriptor_dependencies(tmp_path):
 
 
 @pytest.mark.parametrize(("actual", "reason"), [
-    ("a(1,:)", "in-place mapping and coherence"),
-    ("a([1,2],:)", "in-place mapping and coherence"),
+    ("a(1,:)", "type, kind or rank mismatch"),
+    ("a([1,2],:)", "affine scalar arithmetic"),
     ("a(::2,:)", "requires unit stride"),
     ("a(::-1,:)", "requires unit stride"),
     ("a(:n*n,:)", "affine scalar arithmetic"),
@@ -198,6 +198,34 @@ def test_unsupported_section_geometry_remains_a_boundary(tmp_path, actual, reaso
     analysis = SourceEffects([write(tmp_path, "rectangle.f90", source(actual + ",n"))])
     with pytest.raises(CompilationError, match=reason):
         resolve(analysis)
+
+
+def test_rank_reduced_actual_retains_physical_axes_and_scalar_dependencies(tmp_path):
+    text = source("field=a(:,n,:),value=n", declarations="real(8)::a(-3:8,-2:9,11:17)\ninteger::n")
+    call = resolve(SourceEffects([write(tmp_path, "plane.f90", text)]))
+    mapping = call.mappings[0]
+    assert mapping.binding.rank == 3 and mapping.formal_binding.rank == 2
+    assert mapping.section.logical_rank == 2
+    assert [axis.scalar for axis in mapping.section.axes] == [False, True, False]
+    assert mapping.section.axes[1].lower is mapping.section.axes[1].upper
+    assert mapping.section.axes[1].lower.resource == "clients::step::n"
+    record = mapping.section.public()
+    assert record["rank"] == 3 and record["logical_rank"] == 2 and record["retained_axes"] == [0, 2]
+    assert record["axes"][1]["kind"] == "scalar_coordinate"
+    assert call.resource_mapping["argument::field"] == "clients::step::a"
+
+
+def test_fixed_component_plane_and_bound_follow_original_component_resources(tmp_path):
+    text = source("field=state%field(:,state%plane,:),value=n",
+                  declarations="type(fields)::state\ninteger::n")
+    text = text.replace("implicit none", "implicit none\ntype fields\nreal(8)::field(-3:8,-2:9,11:17)\ninteger::plane\nend type")
+    call = resolve(SourceEffects([write(tmp_path, "components.f90", text)]))
+    mapping = call.mappings[0]
+    assert mapping.resource == "clients::step::state%field"
+    assert mapping.section.logical_rank == 2
+    assert mapping.section.axes[1].lower.resource == "clients::step::state%plane"
+    assert any(item.resource == "clients::step::state%plane" and item.kind == "scalar_read"
+               for item in mapping.section.dependencies)
 
 
 def test_writable_expression_actual_is_rejected(tmp_path):
@@ -231,7 +259,7 @@ end module
     outputs, report = form_source_scopes([path], "clients::step", facts=facts, options=CompilerOptions(),
                                         config=OffloadConfig(policy="sections"))
     assert report["scope_count"] == 1, report["boundaries"]
-    assert report["scopes"][0]["borrowed_views"]["abi_version"] == 1
+    assert report["scopes"][0]["borrowed_views"]["abi_version"] == 2
     assert report["resolved_calls"][0]["resource_mappings"][0]["storage"] == "rectangle"
     assert report["source_edits"]
     assert any(path.endswith("_views/shared_entry.cu") for path in outputs)

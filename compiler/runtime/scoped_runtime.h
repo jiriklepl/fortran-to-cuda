@@ -89,6 +89,30 @@ typedef struct fort_scope_view_layout_v1 {
  * Empty views perform no address arithmetic. No CUDA initialization occurs. */
 int fort_scope_view_get_v1(fort_scope_t context, const fort_scope_view_v1 *view,
                             fort_scope_view_layout_v1 *layout);
+/* Rank-reduced rectangular views. Origins have root_rank elements, while axes,
+ * extents and lower_bounds have rank elements. Each retained dummy dimension
+ * maps to one distinct zero-based root axis; other axes select one element.
+ * Root pitches and allocation identity remain unchanged. Version 1 remains
+ * available for existing independently generated companions. */
+#define FORT_SCOPE_VIEW_ABI_VERSION_V2 2
+typedef struct fort_scope_view_v2 {
+    uint32_t version, rank, root_rank, reserved;
+    fort_buffer_t buffer;
+    uint64_t generation;
+    const size_t *origins, *extents;
+    const int64_t *lower_bounds;
+    const uint32_t *axes;
+} fort_scope_view_v2;
+typedef struct fort_scope_view_layout_v2 {
+    fort_scope_layout root;
+    uint32_t rank, reserved;
+    const size_t *origins, *extents, *root_byte_strides;
+    const int64_t *lower_bounds;
+    const uint32_t *axes;
+    size_t elements, byte_offset;
+} fort_scope_view_layout_v2;
+int fort_scope_view_get_v2(fort_scope_t context, const fort_scope_view_v2 *view,
+                            fort_scope_view_layout_v2 *layout);
 /* Partial INTENT(OUT) changes definitions only inside the supplied root boxes.
  * All three coverage sets are prepared before committing; fragmentation leaves
  * them unchanged. Existing allocation and unrelated current values survive. */

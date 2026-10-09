@@ -55,20 +55,31 @@ def check_call(builder, call):
 def forget_view(name, rank, *, query, on_error):
     """Retain a wrapper's original partial INTENT(OUT) event."""
     function = "fort_scope_plan_forget_sections_v1" if query else "fort_scope_forget_sections_v1"
-    return ["block", "type(fort_scope_view_layout_v1) :: fort_discard_layout",
+    return ["block", "type(fort_scope_view_layout_v2) :: fort_discard_layout",
             "type(fort_scope_section), target :: fort_discard_section(1)",
             "integer(c_size_t), pointer :: fort_discard_origin(:), fort_discard_extent(:)",
-            f"integer(c_size_t), target :: fort_discard_upper({rank})",
+            "integer(c_int32_t), pointer :: fort_discard_axes(:)",
+            "integer(c_size_t), target :: fort_discard_upper(15)",
+            "integer :: fort_discard_axis, fort_discard_root_rank",
             "integer(c_size_t) :: fort_discard_count",
-            f"fort_status = fort_scope_view_get_v1(fort_context, {name}, fort_discard_layout)",
+            f"fort_status = fort_scope_view_get_v2(fort_context, {name}, fort_discard_layout)",
             "if (fort_status /= FORT_SCOPE_OK) then", *on_error, "endif",
-            f"call c_f_pointer({name}%origins, fort_discard_origin, [{rank}])",
+            "fort_discard_root_rank = fort_discard_layout%root%rank",
+            "if (fort_discard_root_rank < 1 .or. fort_discard_root_rank > 15) then",
+            "fort_status = FORT_SCOPE_BOUNDARY", *on_error, "endif",
+            f"call c_f_pointer({name}%origins, fort_discard_origin, [fort_discard_root_rank])",
             f"call c_f_pointer({name}%extents, fort_discard_extent, [{rank}])",
-            "fort_discard_upper = fort_discard_origin + fort_discard_extent",
+            f"call c_f_pointer({name}%axes, fort_discard_axes, [{rank}])",
+            "fort_discard_count = 0_c_size_t",
+            "if (all(fort_discard_extent > 0_c_size_t)) then",
+            "fort_discard_count = 1_c_size_t",
+            "fort_discard_upper(:fort_discard_root_rank) = fort_discard_origin + 1_c_size_t",
+            f"do fort_discard_axis=1,{rank}",
+            "fort_discard_upper(fort_discard_axes(fort_discard_axis)+1) = &",
+            "  & fort_discard_origin(fort_discard_axes(fort_discard_axis)+1) + fort_discard_extent(fort_discard_axis)",
+            "enddo", "endif",
             "fort_discard_section(1)%lower = c_loc(fort_discard_origin)",
             "fort_discard_section(1)%upper = c_loc(fort_discard_upper)",
-            "fort_discard_count = 0_c_size_t",
-            "if (all(fort_discard_extent > 0_c_size_t)) fort_discard_count = 1_c_size_t",
             f"fort_status = {function}(fort_context, {name}%buffer, c_loc(fort_discard_section), fort_discard_count)",
             "if (fort_status /= FORT_SCOPE_OK) then", *on_error, "endif", "end block"]
 
@@ -84,13 +95,22 @@ class BorrowedView:
 def build_view(mapping, handle, original_lower, parameters, prefix, *, on_error, parent_view=None):
     """Describe one root view without payload reads or a CUDA initialization."""
     rank = mapping.formal_binding.rank
+    actual_rank = mapping.binding.rank if mapping.binding is not None else 0
     if not rank or mapping.binding is None:
         raise CompilationError("borrowed numerical view requires a source-backed array actual")
+    if not 1 <= rank <= actual_rank <= 15:
+        raise CompilationError("borrowed numerical view rank exceeds the supported Fortran descriptor")
+    if mapping.section is None and rank != actual_rank:
+        raise CompilationError("rank-reduced actual requires original scalar-coordinate proofs")
+    if mapping.section is not None and mapping.section.logical_rank != rank:
+        raise CompilationError("borrowed numerical view logical rank differs from its formal")
     view, root, layout, dims = (prefix + suffix for suffix in ("_view", "_root", "_layout", "_dims"))
     origins, extents, lowers = (prefix + suffix for suffix in ("_origins", "_extents", "_lowers"))
-    spec = [f"type(fort_scope_view_v1) :: {view}", f"type(fort_scope_layout) :: {root}",
-            f"type(fort_scope_view_layout_v1) :: {layout}", f"integer(c_size_t), pointer :: {dims}(:)",
-            f"integer(c_size_t), target :: {origins}({rank}), {extents}({rank})",
+    axes = prefix + "_axes"
+    spec = [f"type(fort_scope_view_v2) :: {view}", f"type(fort_scope_layout) :: {root}",
+            f"type(fort_scope_view_layout_v2) :: {layout}", f"integer(c_size_t), pointer :: {dims}(:)",
+            f"integer(c_size_t), target :: {origins}(15), {extents}({rank})",
+            f"integer(c_int32_t), target :: {axes}({rank})",
             f"integer(c_int64_t), target :: {lowers}({rank})"]
     body = [f"fort_status = fort_scope_layout_get(fort_context, {handle}, {root})",
             "if (fort_status /= FORT_SCOPE_OK) then", *on_error, "endif"]
@@ -98,19 +118,27 @@ def build_view(mapping, handle, original_lower, parameters, prefix, *, on_error,
     def require(condition):
         body.extend([f"if ({condition}) then", "fort_status = FORT_SCOPE_BOUNDARY", *on_error, "endif"])
 
-    require(f"{root}%rank /= {rank} .or. .not. c_associated({root}%extents)")
+    require(f"{root}%rank < 1 .or. {root}%rank > 15 .or. .not. c_associated({root}%extents)")
     if parent_view:
         parent_origin = prefix + "_parent_origin"
-        spec.append(f"integer(c_size_t), pointer :: {parent_origin}(:)")
+        parent_axes = prefix + "_parent_axes"
+        spec += [f"integer(c_size_t), pointer :: {parent_origin}(:)",
+                 f"integer(c_int32_t), pointer :: {parent_axes}(:)"]
         require(f"{parent_view}%buffer /= {handle}")
-        body += [f"fort_status = fort_scope_view_get_v1(fort_context, {parent_view}, {layout})",
-                 "if (fort_status /= FORT_SCOPE_OK) then", *on_error, "endif",
-                 f"call c_f_pointer({parent_view}%extents, {dims}, [{rank}])",
-                 f"call c_f_pointer({parent_view}%origins, {parent_origin}, [{rank}])"]
+        body += [f"fort_status = fort_scope_view_get_v2(fort_context, {parent_view}, {layout})",
+                 "if (fort_status /= FORT_SCOPE_OK) then", *on_error, "endif"]
+        require(f"{parent_view}%rank /= {actual_rank}")
+        body += [
+                 f"call c_f_pointer({parent_view}%extents, {dims}, [{actual_rank}])",
+                 f"call c_f_pointer({parent_view}%axes, {parent_axes}, [{actual_rank}])",
+                 f"call c_f_pointer({parent_view}%origins, {parent_origin}, [{root}%rank])"]
     else:
-        body += [f"call c_f_pointer({root}%extents, {dims}, [{rank}])"]
+        require(f"{root}%rank /= {actual_rank}")
+        body += [f"call c_f_pointer({root}%extents, {dims}, [{actual_rank}])"]
     require(f"any({dims} < 0_c_size_t) .or. any({dims} > 2147483647_c_size_t)")
-    body += [f"{origins} = 0_c_size_t", f"{extents} = {dims}", f"{lowers} = 1_c_int64_t"]
+    body += [f"{origins} = 0_c_size_t", f"{lowers} = 1_c_int64_t"]
+    if parent_view:
+        body.append(f"{origins}(:{root}%rank) = {parent_origin}")
     serial = 0
 
     def temporary(expression):
@@ -124,7 +152,7 @@ def build_view(mapping, handle, original_lower, parameters, prefix, *, on_error,
 
     parent_lowers, parent_uppers = {}, {}
     if mapping.section is not None:
-        for axis in range(1, rank + 1):
+        for axis in range(1, actual_rank + 1):
             lo = temporary(f"{original_lower}({axis})")
             parent_lowers[axis] = lo
             parent_uppers[axis] = temporary(f"{lo} + int({dims}({axis}), c_int64_t) - 1_c_int64_t")
@@ -153,28 +181,39 @@ def build_view(mapping, handle, original_lower, parameters, prefix, *, on_error,
             return temporary(lhs + " " + value.operator + " " + rhs)
         raise CompilationError("unsupported checked rectangular bound expression")
 
+    ordinal = 0
     if mapping.section is not None:
         for axis, section_axis in enumerate(mapping.section.axes, 1):
             lo, hi = bound(section_axis.lower), bound(section_axis.upper)
+            physical_axis = f"({parent_axes}({axis})+1)" if parent_view else str(axis)
+            parent_offset = f"{parent_origin}({physical_axis}) + " if parent_view else ""
+            if section_axis.scalar:
+                require(f"{lo} < {parent_lowers[axis]} .or. {lo} > {parent_uppers[axis]}")
+                body.append(f"{origins}({physical_axis}) = {parent_offset}int({lo} - {parent_lowers[axis]}, c_size_t)")
+                continue
+            ordinal += 1
+            body.append(f"{axes}({ordinal}) = {physical_axis} - 1")
             # A zero-size section has no referenced element. Normalize that
             # axis only; independent axes still pass their containment checks.
-            body += [f"if ({hi} < {lo}) then", f"{origins}({axis}) = 0_c_size_t",
-                     f"{extents}({axis}) = 0_c_size_t", "else"]
+            body += [f"if ({hi} < {lo}) then", f"{extents}({ordinal}) = 0_c_size_t", "else"]
             require(f"{lo} < {parent_lowers[axis]} .or. {hi} > {parent_uppers[axis]}")
-            body += [f"{origins}({axis}) = int({lo} - {parent_lowers[axis]}, c_size_t)",
-                     f"{extents}({axis}) = int({hi} - {lo} + 1_c_int64_t, c_size_t)", "endif"]
-    if parent_view:
-        # Both operands are contained within the validated root extent. Their
-        # sum therefore cannot overflow size_t or change the canonical layout.
-        body += [f"{origins} = {origins} + {parent_origin}"]
-    body += [f"{view} = fort_scope_view_v1()", f"{view}%rank = {rank}", f"{view}%buffer = {handle}",
+            body += [f"{origins}({physical_axis}) = {parent_offset}int({lo} - {parent_lowers[axis]}, c_size_t)",
+                     f"{extents}({ordinal}) = int({hi} - {lo} + 1_c_int64_t, c_size_t)", "endif"]
+    else:
+        body.append(f"{extents} = {dims}")
+        body.append(f"{axes} = {parent_axes}" if parent_view else f"{axes} = [" +
+                    ",".join(str(axis) + "_c_int32_t" for axis in range(rank)) + "]")
+    body += [f"{view} = fort_scope_view_v2()", f"{view}%rank = {rank}", f"{view}%root_rank = {root}%rank",
+             f"{view}%buffer = {handle}",
              f"{view}%generation = {root}%generation", f"{view}%origins = c_loc({origins})",
              f"{view}%extents = c_loc({extents})", f"{view}%lower_bounds = c_loc({lowers})",
-             f"fort_status = fort_scope_view_get_v1(fort_context, {view}, {layout})",
+             f"{view}%axes = c_loc({axes})",
+             f"fort_status = fort_scope_view_get_v2(fort_context, {view}, {layout})",
              "if (fort_status /= FORT_SCOPE_OK) then", *on_error, "endif"]
     return BorrowedView(tuple(spec), tuple(body), view,
                         {"formal": mapping.formal, "resource": mapping.resource,
                          "section": mapping.section.public() if mapping.section is not None else None,
-                         "view_abi_version": 1, "logical_lower_bounds": [1] * rank,
+                         "view_abi_version": 2, "logical_rank": rank, "actual_rank": actual_rank,
+                         "logical_lower_bounds": [1] * rank,
                          "physical_layout": "borrowed canonical root pitches; no section packing",
                          "bounds": "checked original caller coordinates before numerical execution"})

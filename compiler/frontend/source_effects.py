@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from contextlib import suppress
-from copy import deepcopy
+from copy import copy, deepcopy
 from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
@@ -25,7 +25,7 @@ from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
 # Bump when source-effect, call-composition or summary semantics change.
-SOURCE_SUMMARY_VERSION = 4
+SOURCE_SUMMARY_VERSION = 5
 _DEFAULT_SUMMARY_CACHE = SummaryCache()
 
 
@@ -254,6 +254,12 @@ class SourceEffects:
         self.numerical_helpers = {}
         self._closures = {}
         self._native_sections = {}
+        self._structures, self._segments, self._descriptor_proofs = {}, {}, {}
+        self._joined_completions = {}
+        self._numerical_completions = {}
+        self._reduction_proofs, self._reduction_candidates = {}, {}
+        self._omp_reduction_proofs = {}
+        self._source_scopes, self._associate_scopes = {}, {}
         self._analysis_started = False
         self._stable_module_allocatables = frozenset()
         self._allocation_authorizations = {}
@@ -317,6 +323,17 @@ class SourceEffects:
                               for name, routine in self.routines.items()}
         self._numerical_roles = {name: (routine.scope.node, self._routine_signature(routine), str(routine.scope.node))
                                  for name, routine in self.numerical_helpers.items()}
+        from compiler.frontend.component_bindings import register_associates
+        for routine in self.numerical_helpers.values():
+            register_associates(self, routine)
+        self._source_module_roles = {name: (scope.node, str(scope.node)) for name, scope in self.modules.items()}
+        self._source_provenance = {}
+        for routine in self.numerical_helpers.values():
+            for node in walk(routine.scope.node):
+                item = getattr(node, "item", None)
+                if item is not None:
+                    self._source_provenance[id(node)] = (node, item, item.span,
+                                                         getattr(item, "fort_original_span", None))
 
     def _register_routine(self, parent, node, *, source_kind="module"):
         stmt = _part(node, "Subroutine_Stmt")
@@ -681,8 +698,10 @@ class SourceEffects:
                     scope.bindings[variable] = binding
                     if _kind(dtype) == "Intrinsic_Type_Spec" and selector is not None:
                         self.kind_expressions.append((binding, scope, selector.items[1]))
-            elif name not in {"Implicit_Part", "Comment", "Public_Stmt", "Private_Stmt", "Access_Stmt"}:
+            elif name not in {"Implicit_Part", "Comment", "Public_Stmt", "Private_Stmt", "Access_Stmt", "Derived_Type_Def"}:
                 issues.append(f"specification effect unavailable: {name}")
+        from compiler.frontend.component_bindings import register_types
+        register_types(self, scope, spec)
         return issues
 
     def _exported(self, scope, name):
@@ -697,6 +716,9 @@ class SourceEffects:
         return scope.default_public
 
     def _binding(self, scope, name, visited=frozenset()):
+        if _kind(name) == "Data_Ref":
+            from compiler.frontend.component_bindings import resolve_binding
+            return resolve_binding(self, scope, name)
         name = str(name).lower()
         key = (scope.module, id(scope), name)
         if key in visited:
@@ -782,6 +804,11 @@ class SourceEffects:
     def _actual_binding(self, scope, node):
         if _kind(node) == "Name":
             return self._binding(scope, node)
+        if _kind(node) == "Data_Ref":
+            from compiler.frontend.component_bindings import component_access
+            access = component_access(self, scope, node)
+            if access is not None and not access.indices:
+                return access.binding
         return None
 
     def _actual_mapping_boundary(self, scope, node):
@@ -806,10 +833,30 @@ class SourceEffects:
             scope = scope.parent
         return False
 
-    def _signature(self, scope, node):
+    def _signature(self, scope, node, _depth=0):
+        """Prove a bounded actual's type without evaluating its expression.
+
+        Scalar arithmetic keeps its original Fortran call position and effects.
+        This does not authorize reassociation, early bound evaluation or a
+        writable temporary actual; those remain separate call proofs.
+        """
+        if _depth > self.depth_limit:
+            return None
         binding = self._actual_binding(scope, node)
         if binding:
             return binding.signature()
+        items = _children(node)
+        if _kind(node) == "Parenthesis":
+            return self._signature(scope, items[1], _depth + 1)
+        if len(items) == 2 and str(items[0]) in {"+", "-"}:
+            child = self._signature(scope, items[1], _depth + 1)
+            return child if child in {("integer", 4, 0), ("integer", 8, 0),
+                                      ("real", 4, 0), ("real", 8, 0)} else None
+        if len(items) == 3 and str(items[1]) in {"+", "-", "*", "/"}:
+            left = self._signature(scope, items[0], _depth + 1)
+            right = self._signature(scope, items[2], _depth + 1)
+            return left if left == right and left in {
+                ("integer", 4, 0), ("integer", 8, 0), ("real", 4, 0), ("real", 8, 0)} else None
         if _kind(node) in {"Int_Literal_Constant", "Real_Literal_Constant", "Logical_Literal_Constant"}:
             dtype = {"Int_Literal_Constant": "integer", "Real_Literal_Constant": "real",
                      "Logical_Literal_Constant": "logical"}[_kind(node)]
@@ -986,9 +1033,13 @@ class SourceEffects:
         summary["descriptor_requirements"] = [b.public() for b in routine.scope.bindings.values()
                                                if b.name in routine.arguments
                                                and b.attributes & {"optional", "allocatable", "pointer"}]
+        descriptor_proof = (self.descriptor_stability(requested) if any(
+            "allocatable" in binding.attributes
+            for binding in routine.scope.bindings.values()) else {"resources": []})
+        stable_descriptors = {item["resource"] for item in descriptor_proof["resources"] if item["stable"]}
         for binding in routine.scope.bindings.values():
             if (binding.name in routine.arguments and "allocatable" in binding.attributes
-                    and binding.intent != "in"):
+                    and binding.intent != "in" and binding.root not in stable_descriptors):
                 reasons.append("allocation-changing dummy descriptor semantics: " + binding.root)
 
         def emit(operation):
@@ -1014,18 +1065,22 @@ class SourceEffects:
                 authorized = binding.root in self.stable_module_allocatables
                 readonly_descriptor = (binding.name in routine.arguments and binding.intent == "in"
                                        and "allocatable" in binding.attributes and "pointer" not in binding.attributes)
+                stable_descriptor = binding.root in stable_descriptors and "pointer" not in binding.attributes
                 lifetime_requirements[binding.root] = {
-                    "resource": binding.root, "authorized": authorized,
+                    "resource": binding.root, "authorized": authorized or stable_descriptor,
                     **({"requirement": "original_readonly_allocatable_descriptor",
-                        "execution_requires_runtime_guard": True} if readonly_descriptor else {})}
-                if not authorized and not readonly_descriptor:
+                        "execution_requires_runtime_guard": True} if readonly_descriptor else
+                       {"requirement": "original_stable_allocatable_descriptor",
+                        "execution_requires_runtime_guard": True} if stable_descriptor else {})}
+                if not authorized and not readonly_descriptor and not stable_descriptor:
                     reasons.append(f"storage lifetime requires capture proof: {binding.root}")
                 elif action == "overwrite":
                     # A whole allocatable LHS can allocate/reallocate even
                     # without an explicit ALLOCATE statement. Element/section
                     # assignments do not perform that association change.
                     reasons.append(f"whole allocatable assignment may change storage: {binding.root}")
-            external = binding.name in routine.arguments or not binding.root.startswith(requested + "::") or "save" in binding.attributes
+            external = (binding.name in routine.arguments or not binding.root.startswith(requested + "::")
+                        or "save" in binding.attributes or binding.root in getattr(self, "_captured_local_roots", ()))
             if external:
                 emit({"kind": action, "resource": binding.root, "rank": binding.rank,
                       "section": "whole", "guard": guard, "source_access": spelling})
@@ -1034,12 +1089,13 @@ class SourceEffects:
             if node is None or isinstance(node, (str, int)):
                 return
             name = _kind(node)
+            scope = self.source_scope_for(node, routine.scope)
             if name == "Name":
-                binding = self._binding(routine.scope, node)
+                binding = self._binding(scope, node)
                 effect(binding, "descriptor_read" if metadata else "read", guard, str(node))
             elif name == "Part_Ref":
                 base, indices = node.items
-                binding = self._binding(routine.scope, base)
+                binding = self._binding(scope, base)
                 if binding is None or not binding.rank:
                     reasons.append(f"unknown function or indexed storage: {node}")
                 else:
@@ -1050,8 +1106,8 @@ class SourceEffects:
                 function, args = node.items
                 intrinsic = str(function).lower()
                 # A declared/imported name may shadow the intrinsic.
-                shadowed = self._binding(routine.scope, intrinsic) or self._candidates(routine.scope, intrinsic)
-                if shadowed or self._unknown_exports(routine.scope) or intrinsic not in set(INTRINSICS) | ARRAY_INQUIRIES | MODEL_INQUIRIES | {
+                shadowed = self._binding(scope, intrinsic) or self._candidates(scope, intrinsic)
+                if shadowed or self._unknown_exports(scope) or intrinsic not in set(INTRINSICS) | ARRAY_INQUIRIES | MODEL_INQUIRIES | {
                     "allocated", "present", "sum", "product", "any", "all", "count", "minval", "maxval"}:
                     reasons.append(f"unresolved function effects: {function}")
                 for index, argument in enumerate(_children(args)):
@@ -1060,7 +1116,16 @@ class SourceEffects:
                     expression(argument, guard, metadata=index == 0 and intrinsic in ARRAY_INQUIRIES | MODEL_INQUIRIES | {"allocated", "present"})
             elif name.endswith("Literal_Constant"):
                 return
-            elif name in {"Data_Ref", "Function_Reference", "Structure_Constructor"}:
+            elif name == "Data_Ref":
+                from compiler.frontend.component_bindings import component_access
+                try:
+                    access = component_access(self, scope, node)
+                    effect(access.binding, "descriptor_read" if metadata else "read", guard, str(node))
+                    for index in access.indices:
+                        expression(index, guard)
+                except CompilationError as error:
+                    reasons.append(str(error))
+            elif name in {"Function_Reference", "Structure_Constructor"}:
                 reasons.append(f"unresolved component/function effects: {node}")
             else:
                 for child in _children(node):
@@ -1068,14 +1133,15 @@ class SourceEffects:
 
         def call(node, guard):
             target, actuals = node.items
+            scope = self.source_scope_for(node, routine.scope)
             if _kind(target) != "Name":
                 reasons.append(f"indirect call effects unavailable: {target}")
                 return
             actuals = tuple(_children(actuals))
-            candidates = self._candidates(routine.scope, target)
+            candidates = self._candidates(scope, target)
             if any(candidate in self.routines for candidate in candidates):
                 try:
-                    resolved = resolve_source_call(self, routine.scope, node)
+                    resolved = resolve_source_call(self, scope, node)
                 except CompilationError as error:
                     reasons.append(str(error))
                     emit({"kind": "boundary", "call": str(node), "guard": guard, "reason": reasons[-1]})
@@ -1098,7 +1164,10 @@ class SourceEffects:
                         effect(item.binding, "descriptor_read", guard, str(item.actual))
                     if (item.formal_binding.attributes & {"allocatable", "pointer"}
                             and (item.formal_binding.intent != "in"
-                                 or "pointer" in item.formal_binding.attributes)):
+                                 or "pointer" in item.formal_binding.attributes)
+                            and not ("pointer" not in item.formal_binding.attributes
+                                     and any(proof["resource"] == "argument::" + item.formal and proof["stable"]
+                                             for proof in self.descriptor_stability(chosen)["resources"]))):
                         # INTENT(OUT) can deallocate on entry even for unused
                         # dummies. Borrowed read-only descriptors cannot prove
                         # these allocation or association effects stable.
@@ -1132,7 +1201,7 @@ class SourceEffects:
                 # keywords, sections and descriptor forwarding need source.
                 matches = [candidate for candidate in candidates if candidate in self.contracts]
                 actual_boundary = next((reason for actual in actuals
-                                        if (reason := self._actual_mapping_boundary(routine.scope, actual))), None)
+                                        if (reason := self._actual_mapping_boundary(scope, actual))), None)
                 if (len(matches) != 1 or len(candidates) != 1
                         or any(_kind(actual) == "Actual_Arg_Spec" for actual in actuals) or actual_boundary):
                     reasons.append(actual_boundary or f"call effects unresolved or ambiguous: {target}")
@@ -1140,7 +1209,7 @@ class SourceEffects:
                     return
                 chosen = matches[0]
                 for actual in actuals:
-                    if self._actual_binding(routine.scope, actual) is None:
+                    if self._actual_binding(scope, actual) is None:
                         expression(actual, guard)
                 contract = self.contracts[chosen]
                 if (not isinstance(contract, dict) or contract.get("lifetime") != "stable"
@@ -1157,7 +1226,7 @@ class SourceEffects:
                     if "argument" in item and "resource" not in item:
                         if type(item["argument"]) is not int or not 0 <= item["argument"] < len(actuals):
                             raise CompilationError(f"invalid native contract argument: {chosen}")
-                        binding = self._actual_binding(routine.scope, actuals[item["argument"]])
+                        binding = self._actual_binding(scope, actuals[item["argument"]])
                     elif "resource" in item and "argument" not in item:
                         # Hidden fields need explicit, source-available identity.
                         found = [b for module in self.modules.values() for b in module.bindings.values()
@@ -1186,16 +1255,26 @@ class SourceEffects:
                         reasons.append("source operation budget exhausted")
                     return
                 kind = _kind(node)
+                scope = self.source_scope_for(node, routine.scope)
                 if kind == "Assignment_Stmt":
                     target, _, value = node.items
                     expression(value, guard)
                     if _kind(target) == "Name":
-                        binding = self._binding(routine.scope, target)
+                        binding = self._binding(scope, target)
                         effect(binding, "overwrite", guard, str(target))
                     elif _kind(target) == "Part_Ref":
-                        effect(self._binding(routine.scope, target.items[0]), "write", guard, str(target))
+                        effect(self._binding(scope, target.items[0]), "write", guard, str(target))
                         for index in _children(target.items[1]):
                             expression(index, guard)
+                    elif _kind(target) == "Data_Ref":
+                        from compiler.frontend.component_bindings import component_access
+                        try:
+                            access = component_access(self, scope, target)
+                            effect(access.binding, "write" if access.indices else "overwrite", guard, str(target))
+                            for index in access.indices:
+                                expression(index, guard)
+                        except CompilationError as error:
+                            reasons.append(str(error))
                     else:
                         reasons.append(f"unsupported assignment target effects: {target}")
                 elif kind == "Call_Stmt":
@@ -1235,8 +1314,15 @@ class SourceEffects:
                         # DO assigns its control variable even for a zero-trip
                         # loop. It can be a dummy or module variable, rather
                         # than a private local used only for addressing.
-                        effect(self._binding(routine.scope, iterator), "write", guard, str(iterator))
+                        effect(self._binding(scope, iterator), "write", guard, str(iterator))
                         statements(children[1:-1], guard + (str(header),))
+                elif kind == "Associate_Construct":
+                    association = self._associate_scopes.get(id(node))
+                    if association is None or not association.available:
+                        reasons.append(getattr(association, "reason", None) or "unproved lexical ASSOCIATE selector")
+                        emit({"kind": "boundary", "source": str(node), "guard": guard, "reason": reasons[-1]})
+                    else:
+                        statements(node.content[1:-1], guard)
                 elif kind == "Comment":
                     continue
                 elif kind in {"Continue_Stmt", "Return_Stmt"}:
@@ -1321,6 +1407,7 @@ class SourceEffects:
         if not summary["complete"]:
             return []
         result = []
+        from compiler.frontend.structured_effects import mapped_resource
 
         def append(item):
             if len(result) >= self.operation_limit:
@@ -1349,6 +1436,14 @@ class SourceEffects:
                 for effect in child["ordered_effects"]:
                     effect = deepcopy(effect)
                     mapped = mappings.get(effect.get("resource"))
+                    if mapped is None:
+                        parent = next((item for root, item in sorted(mappings.items(), key=lambda pair: -len(pair[0]))
+                                       if effect.get("resource", "").startswith(root + "%")), None)
+                        if parent is not None:
+                            projected = mapped_resource(effect["resource"],
+                                {parent["formal_resource"]: parent["resource"]})
+                            mapped = {**parent, "resource": projected,
+                                      "component_suffix": effect["resource"][len(parent["formal_resource"]):]}
                     if mapped is not None:
                         if mapped["resource"] is None:
                             # Omitted optional storage and scalar expressions
@@ -1490,6 +1585,286 @@ class SourceEffects:
             self._native_sections[key] = result
         return self._native_sections[key]
 
+    def source_scope_for(self, node, default=None):
+        from compiler.frontend.component_bindings import source_scope_for
+        return source_scope_for(self, node, default)
+
+    def _require_original(self, requested):
+        """Only original parsed source, not lookalike ASTs, grants authority."""
+        self.inputs.verify()
+        routine = self.routines.get(requested)
+        original = self._source_roles.get(requested)
+        numerical = self._numerical_roles.get(requested)
+        if any(getattr(node, "item", None) is not item or item.span != span
+               or getattr(item, "fort_original_span", None) != original_span
+               for node, item, span, original_span in self._source_provenance.values()):
+            raise CompilationError("structured effects require unchanged original source span authority")
+        if any(name not in self.modules or self.modules[name].node is not node or str(node) != text
+               for name, (node, text) in getattr(self, "_source_module_roles", {}).items()):
+            raise CompilationError("structured effects require unchanged original source-backed module authority")
+        if (routine is None or original is None or routine.execution is not original[0]
+                or self._routine_signature(routine) != original[1] or str(routine.execution) != original[2]
+                or numerical is None or routine.scope.node is not numerical[0]
+                or str(routine.scope.node) != numerical[2]):
+            raise CompilationError("structured effects require original source-backed procedure authority")
+        return routine
+
+    def structure(self, requested):
+        """Return one reusable local skeleton without expanding its callees."""
+        from compiler.frontend.structured_effects import admit_cached_structure, build_structure
+        self._analysis_started = True
+        routine = self._require_original(requested)
+        authority = self._summary_authority()
+        digest = sha256(_canonical(authority).encode()).hexdigest()
+        key = requested, digest
+        if key not in self._structures:
+            graph = build_structure(self, routine, digest)
+            cache_authority = {**authority, "payload_role": "structured_source"}
+            cached = self._summary_cache.lookup(cache_authority, requested)
+            if cached is not None:
+                try:
+                    admit_cached_structure(cached["structure"], graph)
+                except (KeyError, TypeError, ValueError):
+                    self._cache_rejections += 1
+                    cached = None
+            if cached is None:
+                self._summary_cache.store(cache_authority, requested, {"structure": graph.public()})
+            if len(self._structures) >= self.procedure_limit:
+                self._structures.pop(next(iter(self._structures)))
+            self._structures[key] = graph
+        return self._structures[key]
+
+    def _selected_source(self, requested, selected):
+        graph = self.structure(requested)
+        if not graph.available:
+            raise CompilationError("structured source skeleton unavailable: " + "; ".join(graph.reasons))
+        if isinstance(selected, str) or not isinstance(selected, (tuple, list)):
+            selected = (selected,)
+        identities = []
+        for item in selected:
+            if isinstance(item, str):
+                if item not in graph.nodes:
+                    raise CompilationError("selected structured effect ID lacks original source authority")
+                identity = item
+            else:
+                matches = [graph._ids[key] for key in ((id(item), "statement"), (id(item), "condition"),
+                                                     (id(item), "header"), (id(item), "selector"))
+                           if key in graph._ids]
+                if len(set(matches)) != 1:
+                    raise CompilationError("selected effect node lacks unambiguous original source authority")
+                identity = matches[0]
+            if identity in identities:
+                raise CompilationError("selected source effect node is repeated")
+            identities.append(identity)
+        if len(identities) > 1:
+            positions = {identity: index for index, identity in enumerate(graph.nodes)}
+            if len({graph.nodes[identity].guard for identity in identities}) != 1:
+                raise CompilationError("selected effects must form one reached guarded segment")
+            owned = set()
+            for identity in identities:
+                subtree = {id(item) for node in graph.source_nodes(identity) for item in walk(node)
+                           if hasattr(item, "items") or hasattr(item, "content")}
+                if owned & subtree:
+                    raise CompilationError("selected source effect subtrees overlap")
+                owned.update(subtree)
+            if [positions[identity] for identity in identities] != sorted(positions[identity] for identity in identities):
+                raise CompilationError("selected effect nodes must retain original source order")
+        return graph, tuple(identities)
+
+    def _segment_projection(self, requested, identities, *, include_entry=False, capture_locals=False):
+        """Create a private proof projection only after original-node checks."""
+        from fparser.two import Fortran2003 as F
+        graph = self.structure(requested)
+        original = self._require_original(requested)
+        analysis = copy(self)
+        analysis.routines = dict(self.routines)
+        analysis.summaries, analysis._closures, analysis._native_sections = {}, {}, {}
+        analysis._structures, analysis._segments, analysis._descriptor_proofs = {}, {}, {}
+        analysis._descriptor_source = self
+        routine = copy(original)
+        routine.scope = copy(original.scope)
+        routine.scope.bindings = {name: copy(binding) for name, binding in original.scope.bindings.items()}
+        if not include_entry:
+            for binding in routine.scope.bindings.values():
+                binding.intent = None
+        analysis._captured_local_roots = frozenset(binding.root for binding in routine.scope.bindings.values()
+                                                   if capture_locals and binding.rank)
+        body, guards = [], []
+        for identity in identities:
+            node = graph.nodes[identity]
+            originals = graph.source_nodes(identity)
+            if node.kind == "entry":
+                if not include_entry:
+                    raise CompilationError("source entry effects require include_entry=True")
+                continue
+            if node.details.get("evaluation") == "condition":
+                probe = "fort_effect_condition"
+                routine.scope.bindings[probe] = Binding(probe, requested + "::" + probe, "logical", 4, 0)
+                statement = F.Assignment_Stmt(probe + " = .true.")
+                statement.items = (statement.items[0], statement.items[1], originals[0])
+                body.append(statement)
+            elif node.details.get("evaluation") == "loop_header":
+                header = originals[0]
+                control = next((item for item in _children(header) if _kind(item) == "Loop_Control"), None)
+                if control is None or control.items[1] is None:
+                    raise CompilationError("source loop header requires counted DO control")
+                iterator, bounds = control.items[1]
+                for index, expression in enumerate(bounds):
+                    if expression is None:
+                        continue
+                    probe = "fort_effect_bound_" + str(index)
+                    routine.scope.bindings[probe] = Binding(probe, requested + "::" + probe, "integer", 4, 0)
+                    statement = F.Assignment_Stmt(probe + " = 0")
+                    statement.items = (statement.items[0], statement.items[1], expression)
+                    body.append(statement)
+                statement = F.Assignment_Stmt(str(iterator) + " = 0")
+                body.append(statement)
+            elif node.details.get("evaluation") == "associate_selector":
+                # Admitted selectors establish variable aliases, not payload
+                # values. Their association/descriptor checks remain source
+                # prerequisites, without falsely uploading a scalar field.
+                body.append(F.Continue_Stmt("continue"))
+            else:
+                body.extend(originals)
+            guards.extend(node.guard)
+        routine.execution = copy(original.execution)
+        routine.execution.content = body
+        routine.scope.node = copy(original.scope.node)
+        specification = _part(original.scope.node, "Specification_Part")
+        routine.scope.node.content = ([specification] if include_entry and specification is not None else []) + [routine.execution]
+        if capture_locals:
+            routine.arguments = tuple(name for name, binding in routine.scope.bindings.items()
+                                      if not name.startswith("fort_effect_") and "allocatable" not in binding.attributes)
+        analysis.routines[requested] = routine
+        return analysis, routine, tuple(dict.fromkeys(guards))
+
+    def segment_summary(self, requested, selected, *, include_entry=False, capture_locals=False):
+        """Materialize a reached original segment under its own proof budget.
+
+        Call effects still require a complete bounded child proof. A mixed
+        coordinator traverses child skeletons instead of treating an incomplete
+        child as one opaque native operation. No guard or bound is evaluated.
+        """
+        graph, identities = self._selected_source(requested, selected)
+        key = graph.identity, identities, bool(include_entry), bool(capture_locals)
+        if key in self._segments:
+            return deepcopy(self._segments[key])
+        analysis, _routine, guard = self._segment_projection(requested, identities,
+            include_entry=include_entry, capture_locals=capture_locals)
+        summary = analysis.summarize(requested)
+        summary["structured_identity"] = graph.identity
+        summary["selected_node_ids"] = list(identities)
+        summary["includes_entry"] = bool(include_entry)
+        # Materializing a branch/loop retains its inner original guards. The
+        # outer source guards describe where this demanded segment is reached;
+        # they are evidence and must never become early runtime predicates.
+        for operation in summary["operations"]:
+            operation["guard"] = (*guard, *operation.get("guard", ()))
+            operation["node_ids"] = list(identities)
+        for effect in summary.get("ordered_effects", ()):
+            effect["guard_frames"] = [{"procedure": requested, "condition": condition}
+                                       for condition in guard] + effect.get("guard_frames", [])
+            effect["node_ids"] = list(identities)
+        summary["analysis_identity"] = graph.authority_identity
+        summary["summary_role"] = "reached_source_segment"
+        summary["demand_identity"] = sha256(_canonical({"graph": graph.identity, "nodes": identities,
+            "entry": bool(include_entry), "capture_locals": bool(capture_locals)}).encode()).hexdigest()
+        summary["summary_identity"] = sha256(_canonical({key: value for key, value in summary.items()
+                                                         if key != "summary_identity"}).encode()).hexdigest()
+        if len(self._segments) >= self.procedure_limit:
+            self._segments.pop(next(iter(self._segments)))
+        self._segments[key] = deepcopy(summary)
+        return summary
+
+    def joined_completion(self, requested, selected):
+        """Issue a compiler-proved token for one whole original joined group."""
+        from compiler.frontend.native_completion import prove_joined_completion
+        proof = prove_joined_completion(self, requested, selected)
+        if proof.identity not in self._joined_completions:
+            if len(self._joined_completions) >= self.procedure_limit:
+                self._joined_completions.pop(next(iter(self._joined_completions)))
+            self._joined_completions[proof.identity] = proof
+        return self._joined_completions[proof.identity]
+
+    def numerical_joined_completion(self, requested, selected):
+        """Prove source-helper completion for numerical outlining only.
+
+        This distinct authority cannot authorize native coherence effects;
+        numerical lowering must separately prove the reached computation.
+        """
+        from compiler.frontend.numerical_completion import prove_numerical_completion
+        return prove_numerical_completion(self, requested, selected)
+
+    def reduction_candidates(self, requested, selected=None, *, limit=32):
+        """Lazily prove intrinsic reductions in authenticated reached nodes.
+
+        The local skeleton bounds this scan; direct callees are never expanded.
+        Returned source facts do not grant an executable reduction strategy or
+        calibrated automatic placement. The original native statement remains
+        the implementation until a separately admitted worker is generated.
+        """
+        from compiler.frontend.reductions import analyze_reduction, candidate_nodes
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+            raise CompilationError("reduction candidate limit must be positive")
+        limit = min(limit, 32, self.operation_limit)
+        graph = self.structure(requested)
+        identities = None if selected is None else self._selected_source(requested, selected)[1]
+        key = graph.identity, identities, limit
+        if key not in self._reduction_candidates:
+            candidates = candidate_nodes(graph, identities) if graph.available else ()
+            records = [analyze_reduction(self, requested, identity).public() for identity in candidates[:limit]]
+            result = {"schema_version": 1, "procedure": requested,
+                      "structured_identity": graph.identity,
+                      "source_analysis_available": graph.available,
+                      "execution_supported": False,
+                      "execution_reason": "source proofs only; generated reduction execution is not implemented",
+                      "selected_original_nodes": list(identities) if identities is not None else None,
+                      "candidate_limit": limit, "candidate_count": len(candidates),
+                      "truncated": len(candidates) > limit,
+                      "reason": "; ".join(graph.reasons) if not graph.available else
+                          "bounded reduction candidate limit exceeded" if len(candidates) > limit else None,
+                      "records": records}
+            if len(self._reduction_candidates) >= self.procedure_limit:
+                self._reduction_candidates.pop(next(iter(self._reduction_candidates)))
+            self._reduction_candidates[key] = deepcopy(result)
+        return deepcopy(self._reduction_candidates[key])
+
+    def openmp_reduction(self, requested, selected):
+        """Prove one requested original joined reduction group, without lowering."""
+        from compiler.frontend.omp_reductions import analyze_openmp_reduction
+        return analyze_openmp_reduction(self, requested, selected)
+
+    def native_sections_for_nodes(self, requested, selected, *, include_entry=False, capture_locals=False,
+                                 completion=None):
+        """Typed original-coordinate refinement for a demanded source segment."""
+        _graph, identities = self._selected_source(requested, selected)
+        if completion is not None:
+            from compiler.frontend.native_completion import NativeCompletionProof
+            if not isinstance(completion, NativeCompletionProof):
+                raise CompilationError("native section completion requires a registered original source proof token")
+            completion.validate(self, requested, identities)
+        analysis, routine, _guard = self._segment_projection(requested, identities,
+            include_entry=include_entry, capture_locals=capture_locals)
+        # The section analyzer needs original descriptor declarations even
+        # though this inner operation does not execute their entry expressions.
+        specification = _part(self.routines[requested].scope.node, "Specification_Part")
+        routine.scope.node.content = ([specification] if specification is not None else []) + [routine.execution]
+        analysis._native_sections_include_entry = bool(include_entry)
+        analysis._native_sections_completion = completion
+        return analyze_native_sections(analysis, routine)
+
+    def descriptor_stability(self, requested):
+        from compiler.frontend.structured_effects import descriptor_stability
+        if hasattr(self, "_descriptor_source"):
+            return self._descriptor_source.descriptor_stability(requested)
+        graph = self.structure(requested)
+        if graph.identity not in self._descriptor_proofs:
+            result = descriptor_stability(self, requested)
+            if len(self._descriptor_proofs) >= self.procedure_limit:
+                self._descriptor_proofs.pop(next(iter(self._descriptor_proofs)))
+            self._descriptor_proofs[graph.identity] = result
+        return deepcopy(self._descriptor_proofs[graph.identity])
+
     def summarize_span(self, procedures):
         """Prove a candidate span with one budget for its distinct closure."""
         self.inputs.verify()
@@ -1511,6 +1886,23 @@ class SourceEffects:
         if closure is None:
             closure = _Closure()
             summary = self.summarize(matches[0], _closure=closure)
+        # Reporting the legacy complete closure must not perform a second
+        # cache lookup (its public counters describe that closure). Explicit
+        # structure()/segment_summary() requests use the separate graph cache.
+        if self._summary_authority()["role"] == "source":
+            from compiler.frontend.structured_effects import build_structure
+            authority = sha256(_canonical(self._summary_authority()).encode()).hexdigest()
+            local_structure = build_structure(self, self._require_original(matches[0]), authority)
+            structured = local_structure.public()
+            requested_reductions = [item for key, item in self._reduction_candidates.items()
+                                    if key[0] == local_structure.identity]
+            requested_omp_reductions = [proof.public() for proof in self._omp_reduction_proofs.values()
+                                       if proof.procedure == matches[0]
+                                       and proof.structured_identity == local_structure.identity]
+        else:
+            structured = {"available": False, "reason": "private projection has no original structural authority"}
+            requested_reductions = []
+            requested_omp_reductions = []
         self.inputs.verify()
         cache_stats = self._summary_cache.stats
         cache_delta = {name: cache_stats[name] - self._cache_started.get(name, 0) for name in cache_stats}
@@ -1533,6 +1925,20 @@ class SourceEffects:
                             "operations": self.operation_limit}, "summarized_operations": closure.operations,
                 "summary_cache": cache_delta,
                 "call_graph": graph,
+                "structured_effects": structured,
+                "source_reductions": {"analysis": "requested" if requested_reductions else "not_requested",
+                    "source_analysis_available": bool(requested_reductions) and
+                        all(item["source_analysis_available"] for item in requested_reductions),
+                    "execution_supported": False,
+                    "reason": "generated reduction execution is not implemented" if requested_reductions else
+                        "source analysis is lazy; request original reached reduction candidates",
+                    "requests": requested_reductions},
+                "openmp_reductions": {"analysis": "requested" if requested_omp_reductions else "not_requested",
+                    "source_analysis_available": bool(requested_omp_reductions) and
+                        all(item["source_analysis_available"] for item in requested_omp_reductions),
+                    "execution_supported": False,
+                    "execution_reason": "original source contracts only; generated OpenMP reduction execution is not implemented",
+                    "records": requested_omp_reductions},
                 "automatic_scope_available": False,
                 "effect_coordinate_system": "logical source evidence; bounded call rectangles and conservative leaf effects"})
 

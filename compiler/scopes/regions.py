@@ -14,15 +14,15 @@ import re
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from types import SimpleNamespace
 
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import Base, walk
 
 from compiler.frontend.source_effects import Binding, _children, _kind, _part
+from compiler.frontend.component_bindings import component_access, references, source_scope_for
 from compiler.ir import CompilationError
 from compiler.scopes.numerical import Parameter
-from compiler.scopes.segments import directive, fortran_lines, grouped_nodes, joined_group_completion, statement_span
+from compiler.scopes.segments import directive, fortran_lines, grouped_nodes, statement_span
 
 
 @dataclass(frozen=True)
@@ -42,6 +42,12 @@ class RegionExtraction:
     numerical_helpers: tuple[str, ...] = ()
     tile_domains: tuple[dict, ...] = ()
     private_arrays: tuple[str, ...] = ()
+    operation_kind: str = "numerical_loop"
+    numerical_environment_required: bool = False
+
+    @property
+    def requires_numerical_environment(self):
+        return self.numerical_environment_required or bool(self.numerical_helpers)
 
     def write(self, directory: Path) -> Path:
         """Publish once, rejecting an accidental identity/content collision."""
@@ -54,6 +60,7 @@ class RegionExtraction:
 
     def public(self):
         return {"schema_version": 1, "source_identity": self.source_identity, "entry": self.entry,
+                "operation_kind": self.operation_kind,
                 "first_line": self.span[0], "last_line": self.span[1],
                 "resources": [binding.public() for binding in self.bindings],
                 "parameters": [{"name": item.name, "resource": item.resource, "rank": item.rank,
@@ -66,7 +73,7 @@ class RegionExtraction:
                 "private_arrays": list(self.private_arrays),
                 "numerical_environment": ({"required": True, "rounding": "round to nearest",
                                             "exceptions": "host traps disabled", "check": "at the original reached region",
-                                            "fallback": "unchanged original native span"} if self.numerical_helpers else {"required": False}),
+                                            "fallback": "unchanged original native span"} if self.requires_numerical_environment else {"required": False}),
                 "storage_owner": "original procedure; saved storage and initialization are not cloned",
                 "numerical_legality": "requires ordinary frontend and dependence proofs"}
 
@@ -92,8 +99,7 @@ def _variable_names(node):
 
 
 def _names(analysis, routine, node):
-    return {binding.root for name in _variable_names(node)
-            if (binding := analysis._binding(routine.scope, name)) is not None}
+    return {binding.root for binding, _ in references(analysis, routine.scope, node)}
 
 
 def _scalar_reads(analysis, routine, node):
@@ -147,7 +153,12 @@ def _helper_closure(analysis, routine, loops):
     result, active = {}, []
 
     def visit(owner, body):
+        # A field subscript is syntactically a Part_Ref too. Its component
+        # name must not resolve as a same-spelling lexical procedure.
+        component_selectors = {id(part) for reference in walk(body, F.Data_Ref) for part in reference.items}
         for item in walk(body):
+            if id(item) in component_selectors:
+                continue
             if _kind(item) not in {"Call_Stmt", "Part_Ref", "Function_Reference", "Structure_Constructor"}:
                 continue
             helper, _ = _helper_actuals(analysis, owner, item)
@@ -250,6 +261,9 @@ def _validate_real_varargs(analysis, routine, node):
 
 
 def _binding(analysis, routine, root):
+    if "%" in root:
+        from compiler.scopes.numerical import resource_binding
+        return resource_binding(analysis, routine, root)
     for name in walk(routine.scope.node, F.Name):
         candidate = analysis._binding(routine.scope, name)
         if candidate and candidate.root == root:
@@ -570,12 +584,17 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
     # fparser attaches an associated !$OMP DO prefix to its DO construct.
     # Peel only that original structural prefix; do not authorize a projected
     # routine or arbitrary foreign AST as source-backed numerical work.
-    grouped = grouped_nodes(nodes)
+    # Ordinary comments can precede an attached OpenMP prefix. They belong to
+    # the exact original selection, but do not create an execution operation
+    # beside the joined group. Keep that selection for completion authority.
+    grouped = tuple(item for item in grouped_nodes(nodes)
+                    if _kind(item) != "Comment" or directive(item) is not None)
     if len(grouped) == 1 and isinstance(grouped[0], tuple):
         nodes = grouped[0]
+    elif len(grouped) == 1:
+        nodes = grouped
     joined = directive(nodes[0]) is not None
     if joined:
-        completion = joined_group_completion(SimpleNamespace(analysis=analysis, entry=routine), nodes)
         loops = tuple(item for item in nodes if _kind(item) == "Block_Nonlabel_Do_Construct")
     else:
         if len(nodes) != 1 or _kind(nodes[0]) != "Block_Nonlabel_Do_Construct":
@@ -602,6 +621,13 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
         if not related:
             raise CompilationError("inline extraction nodes must belong to the original execution")
     helpers = _helper_closure(analysis, routine, loops)
+    if joined:
+        # Completion belongs to the exact original group. Source-proven pure
+        # helper closures have a separate token: it permits numerical outlining
+        # but cannot authorize native memory hooks or establish GPU legality.
+        prove_completion = (analysis.numerical_joined_completion if helpers
+                            else analysis.joined_completion)
+        completion = prove_completion(routine.qualified, source_nodes).public()
     if helpers and (observers := _exception_observers(analysis)):
         raise CompilationError("source-observable floating-point exception flags prevent GPU helper closure: "
                                + "; ".join(observers))
@@ -620,24 +646,24 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
 
     used = {}
     for owner, loop in bodies:
-        for name in _variable_names(loop):
-            binding = analysis._binding(owner.scope, name)
+        for binding, reference in references(analysis, owner.scope, loop):
             if owner is not routine and any(binding is own for own in owner.scope.bindings.values()):
                 continue  # Helper dummies/private storage belong to its worker.
-            if binding is not None:
-                boundary = analysis.resource_identity_boundary(binding)
-                if boundary:
-                    raise CompilationError(boundary)
-                used[binding.root] = binding
+            boundary = analysis.resource_identity_boundary(binding)
+            if boundary:
+                raise CompilationError(boundary)
+            used[binding.root] = binding
     writes, scalar_writes, iterators, local_arrays = set(), set(), set(), set()
     def write(binding, target):
         if binding is None:
             raise CompilationError("unresolved inline assignment target")
         if (binding.root.startswith(routine.qualified + "::") and binding.rank
+                and not hasattr(binding, "component_object")
                 and not binding.attributes & {"save", "allocatable", "pointer", "target"}):
             local_arrays.add(binding.root)
         elif binding.rank:
-            if _kind(target) != "Part_Ref":
+            if (_kind(target) != "Part_Ref" and not (_kind(target) == "Data_Ref"
+                    and component_access(analysis, routine.scope, target).indices)):
                 raise CompilationError("inline whole-array assignments require separate allocation/effect proofs")
             if binding.intent == "in":
                 raise CompilationError("inline region writes original INTENT(IN) storage")
@@ -649,7 +675,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
         for item in walk(loop):
             if _kind(item) == "Block_Nonlabel_Do_Construct":
                 name, _ = _iterator(item)
-                binding = analysis._binding(owner.scope, name)
+                binding = analysis._binding(source_scope_for(analysis, item, owner.scope), name)
                 if binding is None:
                     raise CompilationError("undeclared inline loop iterator")
                 if owner is not routine and binding is owner.scope.bindings.get(name):
@@ -659,7 +685,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
             elif _kind(item) == "Assignment_Stmt":
                 target = item.items[0]
                 name = target.items[0] if _kind(target) == "Part_Ref" else target
-                binding = analysis._binding(owner.scope, name)
+                binding = analysis._binding(source_scope_for(analysis, target, owner.scope), name)
                 if owner is not routine and binding is owner.scope.bindings.get(str(name).lower()):
                     continue
                 write(binding, target)
@@ -672,7 +698,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
                     if parameter.intent == "in":
                         continue
                     name = actual.items[0] if _kind(actual) == "Part_Ref" else actual
-                    binding = analysis._binding(owner.scope, name) if _kind(name) == "Name" else None
+                    binding = analysis._binding(source_scope_for(analysis, actual, owner.scope), name) if _kind(name) in {"Name", "Data_Ref"} else None
                     if owner is not routine and binding is owner.scope.bindings.get(str(name).lower()):
                         continue
                     # A whole private fixed array is a per-item output, rather
@@ -716,6 +742,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
     # element's definition before use; they must not be captured as live arrays.
     local_arrays |= {root for root, binding in used.items()
                      if root.startswith(routine.qualified + "::") and binding.rank
+                     and not hasattr(binding, "component_object")
                      and not binding.attributes & {"save", "allocatable", "pointer", "target"}}
     for root in local_arrays:
         binding = used[root]
@@ -743,7 +770,16 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
         raise CompilationError("inline numerical candidate has no array resources")
     if len(captures) > 64:
         raise CompilationError("inline numerical capture budget exceeded")
-    arrays = {binding.name: binding for binding in captures.values() if binding.rank}
+    capture_names = {root: binding.name for root, binding in captures.items()}
+    occupied = {binding.name for binding in used.values()}
+    for index, (root, binding) in enumerate(sorted(captures.items())):
+        if hasattr(binding, "component_object"):
+            name = "fort_region_field_" + str(index)
+            if name in occupied:
+                raise CompilationError("inline field parameter namespace conflicts")
+            occupied.add(name)
+            capture_names[root] = name
+    arrays = {capture_names[root]: binding for root, binding in captures.items() if binding.rank}
     names = {binding.name for binding in used.values()}
     lowers = {}
     for name, binding in arrays.items():
@@ -761,6 +797,19 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
         if not isinstance(value, Base):
             return value
         kind = _kind(value)
+        if kind == "Data_Ref":
+            access = component_access(analysis, source_scope_for(analysis, value, owner.scope), value)
+            binding = access.binding
+            if binding.root not in captures:
+                raise CompilationError("inline field is not a proved original capture")
+            name = capture_names[binding.root]
+            if not access.indices:
+                return F.Name(name)
+            if any(_kind(index) == "Subscript_Triplet" for index in access.indices):
+                raise CompilationError("inline field array accesses require scalar indices")
+            rendered = [f"({transformed(index, owner)}) - {lowers[name,axis]} + 1"
+                        for axis, index in enumerate(access.indices, 1)]
+            return F.Part_Ref(name + "(" + ",".join(rendered) + ")")
         if kind == "Comment":
             return value
         if kind == "Actual_Arg_Spec":
@@ -783,14 +832,14 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
             result.items = (F.Name(helper_names[helper.qualified]), transformed(value.items[1], owner), *value.items[2:])
             return result
         binding = analysis._binding(owner.scope, value.items[0]) if kind == "Part_Ref" else None
-        captured_array = (binding is not None and any(binding is item for item in captures.values()) and binding.rank)
+        captured_array = (binding is not None and binding.root in captures and binding.rank)
         private_array = binding is not None and binding.rank and (binding.root in private or binding is owner.scope.bindings.get(binding.name))
         if kind == "Part_Ref" and not captured_array and not private_array:
             name = str(value.items[0]).lower()
             if _intrinsic_shadowed(analysis, owner, name):
                 raise CompilationError("inline numerical intrinsic is shadowed: " + name)
         if kind == "Part_Ref" and captured_array:
-            name = binding.name
+            name = capture_names[binding.root]
             indices = _children(value.items[1])
             if len(indices) != arrays[name].rank or any(_kind(index) == "Subscript_Triplet" for index in indices):
                 raise CompilationError("inline numerical array accesses require scalar rank-preserving indices")
@@ -802,16 +851,21 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
             if _intrinsic_shadowed(analysis, owner, intrinsic):
                 raise CompilationError("inline array inquiry intrinsic is shadowed")
             arguments = _children(value.items[1])
-            if (not arguments or _kind(arguments[0]) != "Name"
-                    or str(arguments[0]).lower() not in arrays):
+            original_array = (analysis._binding(source_scope_for(analysis, arguments[0], owner.scope), arguments[0])
+                              if arguments and _kind(arguments[0]) in {"Name", "Data_Ref"} else None)
+            if original_array is None or original_array.root not in captures or not original_array.rank:
                 raise CompilationError("inline array inquiry requires an original array descriptor")
+            name = capture_names[original_array.root]
             if intrinsic == "size":
                 # Full-layout shape is unchanged by coordinate rebasing.
-                pass
+                result = copy.copy(value)
+                actuals = copy.copy(value.items[1])
+                actuals.items = (F.Name(name), *transformed(arguments[1:], owner))
+                result.items = (value.items[0], actuals)
+                return result
             else:
                 if len(arguments) != 2 or _kind(arguments[1]) != "Int_Literal_Constant":
                     raise CompilationError("inline bounds inquiries require a constant scalar DIM")
-                name = str(arguments[0]).lower()
                 axis = int(str(arguments[1]).split("_")[0])
                 if (name, axis) not in lowers:
                     raise CompilationError("inline bounds inquiry DIM is outside the original rank")
@@ -864,14 +918,15 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
         return binding.dtype if binding.dtype in {"integer", "logical"} else f"{binding.dtype}({binding.kind})"
 
     for binding in sorted(captures.values(), key=lambda item: item.root):
-        parameters.append(Parameter(binding.name, binding.root, binding.rank))
+        name = capture_names[binding.root]
+        parameters.append(Parameter(name, binding.root, binding.rank))
         dtype = numerical_type(binding)
         shape = "(" + ",".join(":" for _ in range(binding.rank)) + ")" if binding.rank else ""
         intent = "inout" if binding.root in writes else "in"
-        declarations.append(f"{dtype}, intent({intent}) :: {binding.name}{shape}")
+        declarations.append(f"{dtype}, intent({intent}) :: {name}{shape}")
         if binding.rank:
             for axis in range(1, binding.rank + 1):
-                lower = lowers[binding.name, axis]
+                lower = lowers[name, axis]
                 parameters.append(Parameter(lower, binding.root, 0, axis, True))
                 declarations.append(f"integer, intent(in) :: {lower}")
     declarations += [f"{numerical_type(binding)} :: {binding.name}" +

@@ -12,7 +12,7 @@ from compiler.frontend.source_effects import SourceEffects, _children, _kind
 from compiler.ir import CompilationError
 from compiler.offload.config import OffloadConfig
 from compiler.scopes.regions import extract_region
-from compiler.scopes.segments import grouped_nodes
+from compiler.tests.test_inline_source_regions import original_joined_group
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT
 
@@ -136,7 +136,7 @@ def test_combined_parallel_do_with_private_arrays_and_runtime_schedule_is_joined
     path.write_text(source)
     analysis = SourceEffects([path])
     routine = analysis.routines["renamed_numerics::advance"]
-    group, = [group for group in grouped_nodes(_children(routine.execution)) if isinstance(group, tuple)]
+    group = original_joined_group(routine)
     region = extract_region(analysis, routine, group)
     assert region.completion["available"]
     assert region.completion["has_openmp_in_closure"]

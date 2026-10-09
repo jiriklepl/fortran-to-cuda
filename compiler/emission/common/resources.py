@@ -59,6 +59,13 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
             "allocation": "borrow existing full-layout root; no independent registration or device buffer",
             "aliases": "bounded exact read unions; writable formal views must be disjoint",
             "bounds": "checked original descriptor generation and existing INTEGER ABI",
+            "rank_reduced": {
+                "abi_version": 2, "validate": "fort_scope_view_get_v2",
+                "coordinates": "root-rank origins; logical-rank extents and distinct retained-axis mapping",
+                "footprints": "exact rectangular planes; omitted axes select one original coordinate",
+                "strides": "original root pitches; initial actual views retain unit logical strides",
+                "compatibility": "version 1 interfaces retained",
+            },
         },
         "planning_abi_version": 1,
         "planning_numerical_costs": {
