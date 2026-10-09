@@ -20,6 +20,7 @@ from compiler.emission import generate_sources, read_common_header
 from compiler.emission.common.resources import read_scoped_runtime
 from compiler.emission.fortran.formatting import _fortran_line, _fortran_list
 from compiler.frontend import lower_file
+from compiler.frontend.call_bindings import resolve_source_call
 from compiler.frontend.source_effects import SourceEffects, _children, _kind, _part
 from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.integers import integer_literal
@@ -64,11 +65,16 @@ class Call:
     actuals: tuple
     bindings: dict
     summary: dict
+    resolved: object = None
+
+    def original_arguments(self, values=None):
+        return self.resolved.render_original_arguments(values) if self.resolved else tuple(
+            map(str, self.actuals if values is None else values))
 
 
 class ScopeBuilder:
     def __init__(self, paths, entry, *, facts, options, config, contracts=None, numerical_sources=None,
-                 analysis_sources=None):
+                 analysis_sources=None, summary_cache=None):
         if not isinstance(facts, dict) or facts.get("schema_version") != 1:
             raise CompilationError("scope capture facts require schema_version 1")
         if facts.get("participation") != "serial":
@@ -77,7 +83,8 @@ class ScopeBuilder:
             raise CompilationError("scope captures must be keyed by canonical source resource")
         if config.policy not in {"sections", "auto"} or config.collective:
             raise CompilationError("source scopes require sections/auto and a serial coordinator")
-        self.analysis = SourceEffects(paths, contracts=contracts, analysis_sources=analysis_sources)
+        self.analysis = SourceEffects(paths, contracts=contracts, analysis_sources=analysis_sources,
+                                      summary_cache=summary_cache)
         if facts.get("sources") != self.analysis.sources:
             raise CompilationError("scope capture facts do not match the supplied source hashes")
         names = [name for name in self.analysis.routines
@@ -113,46 +120,13 @@ class ScopeBuilder:
         self.batch_chains = {}
         self.numerical_reasons = {}
         self.boundaries, self.scopes = [], []
+        self.resolved_calls = {}
         self.runtime_outputs, self.runtime = read_scoped_runtime()
         self.visiting = set()
 
-    def resolve(self, routine, node):
-        target, args = node.items
-        if _kind(target) != "Name":
-            raise CompilationError("indirect calls are scope boundaries")
-        actuals = tuple(_children(args))
-        if any(_kind(a) == "Actual_Arg_Spec" for a in actuals):
-            raise CompilationError("keyword call mappings are not yet supported in source scopes")
-        for actual in actuals:
-            reason = self.analysis._actual_mapping_boundary(routine.scope, actual)
-            if reason:
-                raise CompilationError(reason)
-        candidates = self.analysis._candidates(routine.scope, target)
-        matches = []
-        for candidate in candidates:
-            callee = self.analysis.routines.get(candidate)
-            if callee is None:
-                # Opaque contracts are native operations; positional whole
-                # actuals still need a known resource identity.
-                if candidate in self.analysis.contracts:
-                    matches.append(candidate)
-                continue
-            formals = [callee.scope.bindings.get(a) for a in callee.arguments]
-            supplied = [self.analysis._signature(routine.scope, a) for a in actuals]
-            if len(formals) == len(actuals) and all(
-                f is not None and s is not None and None not in (f.kind, s[1]) and f.signature() == s
-                for f, s in zip(formals, supplied, strict=True)
-            ):
-                matches.append(candidate)
-        if len(matches) != 1:
-            raise CompilationError(f"source call is unresolved or ambiguous: {target}")
-        procedure = matches[0]
-        bindings = {}
-        callee = self.analysis.routines.get(procedure)
-        if callee is None:
-            raise CompilationError("opaque source-scope hooks require a source binding interface")
-        if any("allocatable" in callee.scope.bindings[argument].attributes for argument in callee.arguments):
-            raise CompilationError("allocatable callee formals require original descriptor and allocation semantics")
+    @staticmethod
+    def check_whole_view_formals(callee):
+        """Whole-root hooks require a complete, unreduced assumed-shape view."""
         for declaration in _children(_part(callee.scope.node, "Specification_Part")):
             if _kind(declaration) != "Type_Declaration_Stmt":
                 continue
@@ -165,10 +139,26 @@ class ScopeBuilder:
                 shape = entity.items[1] if entity.items[1] is not None else dimension
                 if any(_kind(axis) != "Assumed_Shape_Spec" for axis in _children(shape)):
                     raise CompilationError("explicit dummy extents require a proven whole-storage shape mapping")
-        for formal, actual in zip(callee.arguments, actuals, strict=True):
-            binding = self.analysis._actual_binding(routine.scope, actual)
-            if binding:
-                bindings["argument::" + formal] = binding
+
+    def resolve(self, routine, node):
+        resolved = resolve_source_call(self.analysis, routine.scope, node)
+        procedure, actuals, bindings = resolved.procedure, resolved.actuals, resolved.bindings
+        span = getattr(node.item, "fort_original_span", node.item.span)
+        self.resolved_calls[(routine.qualified, span)] = {
+            **resolved.public(), "caller": routine.qualified, "source": str(routine.scope.path),
+            "first_line": span[0], "last_line": span[1]}
+        callee = self.analysis.routines[procedure]
+        if callee.source_kind != "module":
+            raise CompilationError("external source entry execution requires standalone procedure variants: " + procedure)
+        if any(mapping.section is not None for mapping in resolved.mappings):
+            raise CompilationError("array-element/section actual requires in-place mapping and coherence: " + str(
+                next(mapping.actual for mapping in resolved.mappings if mapping.section is not None)))
+        if any("optional" in mapping.formal_binding.attributes or mapping.presence != "supplied"
+               for mapping in resolved.mappings):
+            raise CompilationError("optional source-call arguments require presence-preserving execution variants")
+        if any("allocatable" in mapping.formal_binding.attributes for mapping in resolved.mappings):
+            raise CompilationError("allocatable callee formals require original descriptor and allocation semantics")
+        self.check_whole_view_formals(callee)
         summary = self.analysis.summarize(procedure)
         if not summary["complete"]:
             raise CompilationError("native effects incomplete: " + "; ".join(summary["reasons"]))
@@ -189,7 +179,7 @@ class ScopeBuilder:
             raise CompilationError("writable source call arguments alias")
         if any(len(formals) > 1 for formals in aliases.values()) and self.numerical(procedure):
             raise CompilationError("numerical source aliases require merged entry access descriptors")
-        return Call(node, procedure, actuals, bindings, summary)
+        return Call(node, procedure, actuals, bindings, summary, resolved)
 
     def numerical(self, procedure):
         if procedure in self.generated:
@@ -314,6 +304,8 @@ class ScopeBuilder:
         """Flatten bounded effects with formal-to-root identities, never IR."""
         if procedure in active:
             raise CompilationError("recursive native effects")
+        if self.analysis.routines[procedure].source_kind != "module":
+            raise CompilationError("external source entry execution requires standalone procedure variants: " + procedure)
         summary = self.analysis.summarize(procedure)
         mapping = {} if mapping is None else mapping
         effects, definitions, overwrites = {}, set(), set()
@@ -329,6 +321,23 @@ class ScopeBuilder:
                 root = mapped(operation["resource"])
                 effects.setdefault(root, set()).add("read" if kind == "read" else "write")
             elif kind == "call":
+                # Summary composition can describe sections and descriptor
+                # forwarding before executable root views are implemented.
+                # Never turn a child's partial OUT/overwrite into a whole-root
+                # coherence claim through this legacy flattening path.
+                for actual in operation.get("resource_mappings", ()):
+                    descriptor = actual["formal_descriptor"]
+                    if actual["storage"] == "rectangle" or (descriptor["rank"] and actual["storage"] != "whole"):
+                        raise CompilationError("nested rectangular source-call mapping requires canonical root views: "
+                                               + operation["procedure"])
+                    if (actual["presence"] != "supplied" or "optional" in descriptor["attributes"]
+                            or actual["storage"] == "omitted"):
+                        raise CompilationError("nested optional source-call arguments require presence-preserving execution variants: "
+                                               + operation["procedure"])
+                    if "allocatable" in descriptor["attributes"]:
+                        raise CompilationError("nested allocatable callee formals require original descriptor and allocation semantics: "
+                                               + operation["procedure"])
+                self.check_whole_view_formals(self.analysis.routines[operation["procedure"]])
                 child_mapping = {formal: mapped(actual) for formal, actual in operation["resource_mapping"].items()}
                 child_effects, child_definitions, child_overwrites = self.native_effects(
                     operation["procedure"], child_mapping, active + (procedure,))
@@ -844,7 +853,7 @@ class ScopeBuilder:
             for access in refined:
                 lines += [*access.prepare]
                 lines += _checked(f"fort_scope_host_begin(fort_context, {access.handle}, {access.access_name})")
-            lines += _call(str(call.node.items[0]), map(str, call.actuals) if actuals is None else actuals)
+            lines += _call(str(call.node.items[0]), call.original_arguments(actuals))
             for access in refined:
                 lines += _checked(f"fort_scope_host_end(fort_context, {access.handle})")
             lines += ["end block"]
@@ -869,7 +878,7 @@ class ScopeBuilder:
             lines += ["fort_access = fort_scope_access()",
                       "fort_access%flags = " + " + ".join(flags)]
             lines += _checked(f"fort_scope_host_begin(fort_context, {handle}, fort_access)")
-        lines += _call(str(call.node.items[0]), map(str,call.actuals) if actuals is None else actuals)
+        lines += _call(str(call.node.items[0]), call.original_arguments(actuals))
         for handle in accesses:
             lines += _checked(f"fort_scope_host_end(fort_context, {handle})")
         return lines
@@ -1107,7 +1116,7 @@ class ScopeBuilder:
         # Explicit initialization on a local declaration implies SAVE. Assign at
         # entry instead: no scope-local context or state persists across calls.
         spec = [s.replace("fort_context = 0", "fort_context") for s in spec]
-        original = structure.original(parameters) if structure else [line for call in calls for line in _call(str(call.node.items[0]), actuals(call, shared=False))]
+        original = structure.original(parameters) if structure else [line for call in calls for line in _call(str(call.node.items[0]), call.original_arguments(actuals(call, shared=False)))]
         # An original numerical procedure may access its hidden module arrays
         # directly. A non-TARGET actual cannot be updated through that alias
         # while the new owner dummy is associated. Return before any numerical
@@ -1132,7 +1141,7 @@ class ScopeBuilder:
             # not acquire whole-array temporaries from synthetic owner dummies.
             if not caller_fallback:
                 native = (structure.original(views) if structure else
-                          [line for call in calls for line in _call(str(call.node.items[0]), actuals(call))]) + ["return"]
+                          [line for call in calls for line in _call(str(call.node.items[0]), call.original_arguments(actuals(call)))]) + ["return"]
             body += ["fort_status = fort_scope_create(0_c_int, fort_context)"]
             body += ["if (fort_status == FORT_SCOPE_OK) &",
                      f"  fort_status = fort_scope_set_device_budget(fort_context, {self.device_budget}_c_size_t)"]
@@ -1492,6 +1501,12 @@ class ScopeBuilder:
         self.build_span(run)
 
     def run(self):
+        if self.entry.source_kind != "module":
+            first = _span(_part(self.entry.scope.node, "Subroutine_Stmt"))[0]
+            last = _span(_part(self.entry.scope.node, "End_Subroutine_Stmt"))[1]
+            self.boundaries.append({"first_line": first, "last_line": last,
+                                   "reason": "external source entry execution requires standalone procedure variants"})
+            return self.finish()
         self.scan(_children(self.entry.execution))
         return self.finish()
 
@@ -1530,6 +1545,7 @@ class ScopeBuilder:
             "scopes":self.scopes, "boundaries":self.boundaries, "source_edits":patches,
             "sources":provenance, "runtime":self.runtime if self.scopes else None,
             "native_effects":self.analysis.report(self.entry.qualified),
+            "resolved_calls": [self.resolved_calls[key] for key in sorted(self.resolved_calls)],
             "automatic_estimate_available":any(scope["estimate_available"] for scope in self.scopes),
             "capture_facts_sha256":sha256(json.dumps(self.facts,sort_keys=True).encode()).hexdigest(),
             "source_inputs":self.analysis.sources,
@@ -1558,11 +1574,11 @@ class ScopeBuilder:
 
 
 def form_source_scopes(paths, entry, *, facts, options, config, contracts=None, numerical_sources=None,
-                       analysis_sources=None):
+                       analysis_sources=None, summary_cache=None):
     if isinstance(facts, dict) and facts.get("schema_version") == 2:
         from compiler.scopes.collective import CollectiveScopeBuilder
         return CollectiveScopeBuilder(paths, entry, facts=facts, options=options, config=config,
                                       contracts=contracts, numerical_sources=numerical_sources,
-                                      analysis_sources=analysis_sources).run()
+                                      analysis_sources=analysis_sources, summary_cache=summary_cache).run()
     return ScopeBuilder(paths,entry,facts=facts,options=options,config=config,contracts=contracts,
-                        numerical_sources=numerical_sources, analysis_sources=analysis_sources).run()
+                        numerical_sources=numerical_sources, analysis_sources=analysis_sources, summary_cache=summary_cache).run()

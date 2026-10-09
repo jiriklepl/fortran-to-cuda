@@ -69,6 +69,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Additional source available to native effect analysis; repeat for independent modules.")
     parser.add_argument("--effect-contracts", metavar="FILE",
                         help="Explicit versioned generic contracts for opaque native calls in effect analysis.")
+    parser.add_argument("--summary-cache", metavar="DIRECTORY",
+                        help="Optional bounded source-summary disk cache for effect/scope analysis.")
     parser.add_argument(
         "--json", action="store_true", help="Print candidate eligibility or generation results as JSON."
     )
@@ -153,6 +155,8 @@ def _parse_args() -> argparse.Namespace:
         parser.error("--analyze-effects cannot be combined with candidate listing or runtime export")
     if (args.source_file or args.effect_contracts) and not (args.analyze_effects or args.form_scopes):
         parser.error("--source-file and --effect-contracts require --analyze-effects or --form-scopes")
+    if args.summary_cache and not (args.analyze_effects or args.form_scopes):
+        parser.error("--summary-cache requires --analyze-effects or --form-scopes")
     if args.scope_facts and not args.form_scopes:
         parser.error("--scope-facts requires --form-scopes")
     if args.numerical_sources and not args.form_scopes:
@@ -261,7 +265,7 @@ def main() -> None:
                     raise CompilationError(f"invalid effect contracts: {error}") from error
             if args.analyze_effects:
                 effects = analyze_source_effects([source_file, *args.source_file], args.kernel, contracts=contracts,
-                                                 analysis_sources=analysis_sources)
+                                                 analysis_sources=analysis_sources, summary_cache=args.summary_cache)
                 report = {"kernel": args.kernel, "supported": True, "reason": None, "outputs": [], "effects": effects}
                 print(json.dumps(report, indent=2) if args.json else json.dumps(effects, indent=2))
                 return
@@ -290,7 +294,7 @@ def main() -> None:
             outputs, manifest = form_source_scopes([source_file,*args.source_file], args.kernel,
                                                    facts=facts, options=options, config=_offload_config(args),
                                                    contracts=contracts, numerical_sources=numerical_sources,
-                                                   analysis_sources=analysis_sources)
+                                                   analysis_sources=analysis_sources, summary_cache=args.summary_cache)
             output_dir = Path(args.output_dir).resolve()
             for name,content in outputs.items():
                 target = output_dir / name

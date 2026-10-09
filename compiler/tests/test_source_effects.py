@@ -336,13 +336,20 @@ end subroutine
 end module
 """)
     output = tmp_path / "untouched"
+    cache = tmp_path / "summary-cache"
     result = subprocess.run([sys.executable, "-m", "compiler", "--input", str(source), "--kernel", "utility",
-                             "--analyze-effects", "--json", "--output-dir", str(output)], cwd=tmp_path,
+                             "--analyze-effects", "--json", "--output-dir", str(output),
+                             "--summary-cache", str(cache)], cwd=tmp_path,
                             env={**os.environ, "PYTHONPATH": str(checkout)}, capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)
     assert report["supported"]
     assert report["effects"]["complete"]
+    repeated = subprocess.run([sys.executable, "-m", "compiler", "--input", str(source), "--kernel", "utility",
+                               "--analyze-effects", "--json", "--summary-cache", str(cache)], cwd=tmp_path,
+                              env={**os.environ, "PYTHONPATH": str(checkout)}, capture_output=True, text=True, timeout=60)
+    assert repeated.returncode == 0, repeated.stderr
+    assert json.loads(repeated.stdout)["effects"]["summary_cache"]["disk_hits"] == 1
     assert not report["outputs"]
     assert not output.exists()
 
@@ -674,7 +681,7 @@ def test_authority_does_not_hide_explicit_storage_or_association_changes(tmp_pat
 
 
 @pytest.mark.parametrize("intent", ["in", "inout", "out"])
-def test_unused_allocatable_callee_formals_keep_allocation_semantics_visible(tmp_path, intent):
+def test_unused_allocatable_callee_formals_keep_descriptor_semantics_visible(tmp_path, intent):
     helper = f"""subroutine unused(value)
 real(8),allocatable,intent({intent})::value(:)
 end subroutine
@@ -682,8 +689,14 @@ end subroutine
     _path, analysis = allocation_effects(tmp_path, "call unused(scratch)", helpers=helper)
     analysis.authorize_stable_module_allocatables({"allocations::scratch"})
     summary = analysis.summarize("allocations::inspect")
-    assert not summary["complete"]
-    assert any("allocatable callee formals" in reason for reason in summary["reasons"])
+    if intent == "in":
+        assert summary["complete"]
+        call = next(operation for operation in summary["operations"] if operation["kind"] == "call")
+        assert call["resource_mappings"][0]["requirements"]["original_allocation_descriptor"]
+        assert analysis.summarize("allocations::unused")["descriptor_requirements"]
+    else:
+        assert not summary["complete"]
+        assert any("allocatable callee formals" in reason for reason in summary["reasons"])
 
 
 @pytest.mark.parametrize("declaration", ["real(8),pointer::scratch(:)", "real(8),allocatable::scratch",
