@@ -57,6 +57,21 @@ module fort_scoped_memory
     integer(c_int64_t) :: launches=0, waits=0, allocations=0, peak_device_bytes=0
     real(c_double) :: estimated_seconds=0, native_seconds=0
   end type
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_PLAN_COMPLETE=0, FORT_SCOPE_PLAN_CONTINUE=1
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_PLANNING_REPORT_VERSION=2
+  type, bind(C), public :: fort_scope_terminal_cost
+    real(c_double) :: seconds=0
+    integer(c_int64_t) :: download_bytes=0, downloads=0, waits=0, releases=0
+  end type
+  type, bind(C), public :: fort_scope_plan_report
+    integer(c_int32_t) :: version=2, endpoint_mode=0, available=0, owner_available=0
+    real(c_double) :: execution_seconds=0, native_execution_seconds=0
+    type(fort_scope_terminal_cost) :: entry_terminal, terminal, native_terminal
+    real(c_double) :: ranking_seconds=0, native_ranking_seconds=0
+    integer(c_int64_t) :: owner_segments=0
+    real(c_double) :: owner_execution_seconds=0, owner_terminal_seconds=0, owner_complete_seconds=0
+    integer(c_int32_t) :: native_common_compute_excluded=0
+  end type
 
   public :: fort_scope_abi_version, fort_scope_error, fort_scope_create, fort_scope_register
   public :: fort_scope_register_sections, fort_scope_forget_definition
@@ -72,6 +87,7 @@ module fort_scoped_memory
   public :: fort_scope_plan_host_current
   public :: fort_scope_plan_reset, fort_scope_plan_add, fort_scope_plan_select, fort_scope_plan_next
   public :: fort_scope_plan_validate
+  public :: fort_scope_plan_reset_mode, fort_scope_plan_report_v2
 
   interface
 
@@ -83,6 +99,18 @@ module fort_scoped_memory
     function fort_scope_plan_reset(context) bind(C) result(status)
       import c_int, c_int64_t
       integer(c_int64_t), value :: context
+      integer(c_int) :: status
+    end function
+    function fort_scope_plan_reset_mode(context, endpoint_mode) bind(C) result(status)
+      import c_int, c_int32_t, c_int64_t
+      integer(c_int64_t), value :: context
+      integer(c_int32_t), value :: endpoint_mode
+      integer(c_int) :: status
+    end function
+    function fort_scope_plan_report_v2(context, report) bind(C) result(status)
+      import c_int, c_int64_t, fort_scope_plan_report
+      integer(c_int64_t), value :: context
+      type(fort_scope_plan_report), intent(out) :: report
       integer(c_int) :: status
     end function
     function fort_scope_plan_add(context, kind, unit, bindings, count, flops, memory_bytes, gpu_available) &

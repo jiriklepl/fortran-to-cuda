@@ -458,7 +458,26 @@ With `FORT_RUNTIME_TRACE=1`, planning diagnostics report construction, validatio
 and selection wall intervals and cache hits. The intervals are inclusive and can
 nest; they must not be added together as independent costs. Startup-shortcut
 evidence is explicitly aggregate-only. Tracing adds no CUDA synchronization.
-Query inputs must remain safe and unchanged throughout the complete scope.
+Query inputs must remain safe and unchanged throughout their recorded planning
+segment. The legacy `fort_scope_plan_reset` still plans a complete scope. The
+additive `fort_scope_plan_reset_mode` accepts `FORT_SCOPE_PLAN_CONTINUE` to plan a
+reached segment without closing its owner. Complete earlier work with
+`fort_scope_wait` before resetting a consumed schedule. Successful continuation
+selection installs CPU choices even when GPU estimates are unavailable; those
+workers execute with access hooks and preserve earlier device results. A failed
+query may run only the current segment through safe native hooks. Execution
+failure never permits replay of an earlier segment or the owning region.
+
+`fort_scope_plan_report_v2` separates incremental execution cost from hypothetical
+publication and teardown. A continuation ranks execution plus the change in
+terminal liability against native continuation from the same incoming state;
+the ranking can be negative when native writes retire dirty device values.
+Projected terminal operations do not execute between segments and do not count
+as their transferred bytes. Owner estimates sum reached execution and one final
+terminal cost. Creation and registrations are charged when incurred, and retained
+allocations are charged only when newly allocated. Unknown or failed execution
+invalidates the complete-owner estimate. Existing planning costs and decision
+structures remain ABI version 1.
 Shared numerical entry ABI version 2 accepts scalar pointers through its C
 interface, with matching Fortran reference arguments. Binding those references
 does not read their values. A scalar used only behind a conditional or possibly
@@ -504,14 +523,16 @@ to `storage: "stable"`, `escapes: false`, `allocation_changes: false`, and
 These are storage and source-definition assertions; they do not specify GPU
 leaves or transfer recipes. An optional `device_budget_bytes` defaults to 256 MiB.
 
-The compiler selects consecutive call spans, generates source helpers in their
+The compiler selects bounded source spans, generates source helpers in their
 original modules, and passes explicit context/root handles down call-only helper
 paths. Original native procedures remain available. Native operations execute
 behind compiler-generated access hooks; numerical leaves retain physical section
 transfers and borrow the same registered buffers. CPU reads retain a current GPU
 mirror. Unknown calls, recursion, lifetime changes, uncertain effects, writable
-aliases, and unsupported mappings are boundaries. Source guards remain outside
-their original call spans. Active OpenMP teams select the original native span
+aliases, and unsupported mappings are boundaries. Structured owners preserve
+conditions and mutable scalar reads at their original execution points and plan
+only reached straight-line segments after their inputs become available. Original
+caller guards remain outside their replacements. Active OpenMP teams select the original native span
 before descriptors are inspected; a runtime without OpenMP support also selects
 native execution because caller participation is unknown.
 
@@ -531,16 +552,36 @@ Native OpenMP helpers, including hidden callees, require proved completion.
 Serial scopes admit bounded, matched plain `do` or `parallel do` directives,
 whose work completes before the original helper returns. Other directives remain
 boundaries; memory effects alone cannot show that asynchronous work is finished.
+Proven joined inline native OpenMP operations may also remain in a structured
+owner; they finish before its next segment. Array conditions receive their
+required host coverage through hooks before evaluation, while unrelated device
+copies remain valid. The original allocation bounds reach structured owner
+dummies before assumed-shape association can rebase them. Unsupported exits,
+allocation changes, unknown effects and unproved completion end ownership.
+An original `ALLOCATED` predicate on a captured stable allocation may become a
+known true value only after the original caller's allocation check. Unallocated
+callers execute the unchanged source. This proof does not authorize allocation
+changes or substitute ordinary view descriptors for allocatable arguments.
 
 The public `scopes` JSON and saved `scope-manifest.json` identify approved source
 replacements, original hashes, artifact hashes, runtime identity, and build roles.
 Each scope publishes its synthetic owner parameters with canonical resources and
-original actual names. Capture dummies use private generated names so original
+original actual names. Structured owners additionally publish their reached-segment
+tree, native operations, retained resources and explicit ownership boundaries.
+Capture dummies use private generated names so original
 USE associations and re-exported module fields retain their source bindings.
+Hidden mutable module scalars retain their original host or USE bindings rather
+than acquiring a second dummy association. When an original native helper
+accesses a captured module array through such a binding, the original array
+must satisfy the `TARGET` aliasing proof; otherwise ownership ends at that call.
 After the caller and contiguity checks, contiguous pointer views bind the original
 storage. Context-aware helper calls use those views so `CONTIGUOUS` dummies do not
 introduce array temporaries that diverge from the registered host buffers. Native
 whole-span fallback retains the original arguments and their normal semantics.
+For numerical leaves with writable hidden module arrays that lack `TARGET`, a
+pre-execution fallback returns to the original caller before running that span.
+Once a segment has started, native continuation uses its coherent workers and
+cannot replay the owner.
 Stable allocatable owning arrays can be borrowed through ordinary assumed-shape
 helpers. A guard at the original caller checks serial participation, then
 `ALLOCATED`, before associating synthetic owner arguments or querying their
@@ -744,10 +785,12 @@ The optional calibration block preserves ordinary profiles and measures cold
 startup separately from the warm GPU context lifecycle (setup and teardown), allocation/release, access hooks, launch
 queueing, waits, and bounded planner work. It covers a recorded allocation-size
 range and rejects larger GPU alternatives. Queries preserve source definition
-positions and require immutable control scalars/payload arrays across the complete
-scope. Dynamic specification expressions retain original native execution.
-Missing calibration or unsafe queries select the original span before creating a
-context. A valid zero-GPU decision closes untouched metadata before native work.
+positions and require immutable control scalars/payload arrays across each recorded
+segment. Dynamic specification expressions retain original native execution.
+Legacy complete-scope owners select the original span before creating a context
+when calibration or queries are unavailable; a valid zero-GPU decision closes
+untouched metadata before native work. Structured continuation owners instead
+retain their context and execute the reached native segment with coherence hooks.
 Host CPU, compiler, precision, and thread-budget compatibility are checked without
 CUDA initialization; GPU identity is checked only for a candidate requiring it.
 
@@ -763,7 +806,9 @@ all modeled native work. No online timing or application-specific recipes are us
 `FORT_RUNTIME_TRACE=1` publishes decisions, modeled bytes, launches, waits, and
 planning work. Its versioned `FORT_SCOPED evidence` JSON records show current and
 required physical rectangles, preservation reads, planned copies, final exports,
-and the selected intervals' cost gates. The public scope manifest maps registration
+and the selected intervals' cost gates. Continuation decisions add execution,
+terminal projection, signed ranking and owner totals to the existing decision
+record. Hypothetical terminal bytes remain separate from observed traffic. The public scope manifest maps registration
 identities to source resources. Evidence is bounded to 4,096 detail records, with
 explicit truncation; tracing adds no CUDA work or synchronization. Keep tracing
 off during performance measurements and compare modeled copies with actual events.

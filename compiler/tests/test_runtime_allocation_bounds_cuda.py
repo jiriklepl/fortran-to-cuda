@@ -53,7 +53,7 @@ end subroutine
 """ if team else "")
     return f"""module original
 implicit none
-real(8),allocatable::field({shape})
+real(8),allocatable,target::field({shape})
 contains
 subroutine produce(ni,nj)
 integer,intent(in)::ni,nj

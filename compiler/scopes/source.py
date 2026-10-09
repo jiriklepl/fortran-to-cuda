@@ -952,12 +952,65 @@ class ScopeBuilder:
                     planning_reason = str(error)
         return query_available, query_reason, planning_available, planning_reason
 
-    def owner(self, calls, leaves):
+    def check_module_array_aliases(self, calls, arrays, written):
+        """Do not introduce an illegal host/use alias to a new target dummy."""
+        visited = set()
+
+        def visit(procedure):
+            if procedure in visited or self.numerical(procedure):
+                return
+            visited.add(procedure)
+            leaves, _ = self.closure(procedure)
+            if leaves:
+                routine = self.analysis.routines[procedure]
+                for node in _children(routine.execution):
+                    if _kind(node) == "Call_Stmt":
+                        visit(self.resolve(routine, node).procedure)
+                return
+            effects, _, _ = self.native_effects(procedure)
+            for root in effects:
+                if (root in arrays and root in written and not root.startswith("argument::")
+                        and "target" not in arrays[root].attributes):
+                    raise CompilationError("native host/use array alias requires original TARGET capture: "
+                                           + procedure + " " + root)
+        for call in calls:
+            visit(call.procedure)
+
+    def owner(self, calls, leaves, *, structure=None):
         routine = self.entry
-        digest = f"{routine.qualified}:{_span(calls[0].node)[0]}:{_span(calls[-1].node)[1]}"
+        first, last = ((structure.first, structure.last) if structure else
+                       (_span(calls[0].node)[0], _span(calls[-1].node)[1]))
+        digest = f"{routine.qualified}:{first}:{last}"
         name = _name("fort_scope_owner_", digest)
         arrays, scalars, written = self.owner_inputs(calls)
-        query_available, query_reason, planning_available, planning_reason = self.owner_query(calls, arrays, written)
+        if structure:
+            structure.inputs(arrays, scalars, written)
+            structure.check_conservative_definitions(arrays)
+            if any(binding.attributes & {"pointer", "optional", "volatile", "asynchronous", "allocatable", "value"}
+                   for binding in scalars.values()):
+                raise CompilationError("structured scalar association or participation is uncertain")
+            structure.prepare(arrays)
+            query_available, query_reason = True, None
+            planning_available = all(segment.query[2] for segment in structure.segments
+                                     if any(self.closure(call.procedure)[0] for call in segment.calls))
+            planning_reason = next((segment.query[3] for segment in structure.segments if not segment.query[2]), None)
+        else:
+            query_available, query_reason, planning_available, planning_reason = self.owner_query(calls, arrays, written)
+        self.check_module_array_aliases(calls, arrays, written)
+        caller_fallback = any(
+            parameter.rank and parameter.resource in written and parameter.resource in arrays
+            and not parameter.resource.startswith("argument::")
+            and "target" not in arrays[parameter.resource].attributes
+            for leaf in leaves if (package := self.packages.get(leaf))
+            for parameter in package.parameters)
+        original_scalars = {root: binding for root, binding in scalars.items()
+                            if len(root.split("::")) == 2 and root.split("::")[0] in self.analysis.modules}
+        if any(self.visible(routine, root).startswith("fort_") for root in original_scalars):
+            raise CompilationError("original module scalar conflicts with scope owner namespace")
+        # Native children may update module state by host/use association.
+        # Preserve those bindings directly, avoiding a new dummy association
+        # whose alias rules could hide an update from an optimizing compiler.
+        scalars = {root: binding for root, binding in scalars.items() if root not in original_scalars}
         names = [self.visible(routine, root) for root in (*arrays, *scalars)]
         if any(n.startswith("fort_") for n in names):
             raise CompilationError("capture names conflict with the initial scope owner namespace")
@@ -980,6 +1033,10 @@ class ScopeBuilder:
         parameters = {root: _name("fort_capture_", digest) + "_" + str(i)
                       for i, root in enumerate((*arrays, *scalars))}
         formal_names = list(parameters.values())
+        bounds = {root: parameters[root] + "_lower" for root in arrays} if structure else {}
+        formal_names += list(bounds.values())
+        if caller_fallback:
+            formal_names.append("fort_native_required")
         views = {root: parameters[root] + "_view" if root in arrays else parameters[root]
                  for root in parameters}
 
@@ -994,6 +1051,12 @@ class ScopeBuilder:
                    if _kind(n) == "Use_Stmt"]
         spec = []
         handles, layouts, flags = {}, {}, {}
+        if structure:
+            spec += [f"integer(c_int64_t), intent(in) :: {bounds[root]}({binding.rank})"
+                     for root, binding in arrays.items()]
+            spec += ["logical :: fort_branch"]
+        if caller_fallback:
+            spec += ["logical, intent(out) :: fort_native_required"]
         for i, (root, binding) in enumerate(arrays.items()):
             visible = parameters[root]
             dtype, enum, width = DTYPES[binding.signature()[:2]]
@@ -1003,7 +1066,8 @@ class ScopeBuilder:
             if binding.intent == "in" and root in written:
                 raise CompilationError("scope writes an INTENT(IN) capture")
             intent = "inout" if root in written else "in"
-            spec += [*_fortran_line(f"{dtype}, target, intent({intent}) :: {visible}({','.join(':' for _ in range(binding.rank))})", 0),
+            shape = ','.join(f"{bounds[root]}({axis}):" for axis in range(1, binding.rank + 1)) if structure else ','.join(':' for _ in range(binding.rank))
+            spec += [*_fortran_line(f"{dtype}, target, intent({intent}) :: {visible}({shape})", 0),
                      *_fortran_line(f"{dtype}, pointer, contiguous :: {views[root]}({','.join(':' for _ in range(binding.rank))})", 0),
                      f"integer(c_size_t), target :: fort_extents_{i}({binding.rank})",
                      f"integer(c_int64_t), target :: fort_lowers_{i}({binding.rank})",
@@ -1018,7 +1082,7 @@ class ScopeBuilder:
             if binding.signature()[:2] not in DTYPES and binding.signature()[:2] != ("logical",4):
                 raise CompilationError("unsupported scalar capture width")
             dtype = "logical" if binding.signature()[:2] == ("logical",4) else DTYPES[binding.signature()[:2]][0]
-            intent = "in" if binding.intent == "in" else "inout"
+            intent = "in" if binding.intent == "in" or "parameter" in binding.attributes else "inout"
             spec += [f"{dtype}, intent({intent}) :: {parameters[root]}"]
         spec += ["integer(c_int64_t) :: fort_context = 0",
                  *_fortran_list("integer(c_int64_t) ::", list(handles.values()), "", 0),
@@ -1031,10 +1095,14 @@ class ScopeBuilder:
         # Explicit initialization on a local declaration implies SAVE. Assign at
         # entry instead: no scope-local context or state persists across calls.
         spec = [s.replace("fort_context = 0", "fort_context") for s in spec]
-        original = [line for call in calls for line in _call(str(call.node.items[0]), actuals(call, shared=False))]
-        native = [*original, "return"]
-        body = ["fort_context = 0"]
-        if not query_available or (self.config.policy == "auto" and not planning_available):
+        original = structure.original(parameters) if structure else [line for call in calls for line in _call(str(call.node.items[0]), actuals(call, shared=False))]
+        # An original numerical procedure may access its hidden module arrays
+        # directly. A non-TARGET actual cannot be updated through that alias
+        # while the new owner dummy is associated. Return before any numerical
+        # work and run the original span after the helper association ends.
+        native = ["return"] if caller_fallback else [*original, "return"]
+        body = [*(["fort_native_required = .true."] if caller_fallback else []), "fort_context = 0"]
+        if not structure and (not query_available or (self.config.policy == "auto" and not planning_available)):
             body += ["! Whole-span native selection: " + (query_reason or planning_reason), *native]
         else:
             body += ["if (fort_scope_serial_caller() == 0) then", *native, "endif",
@@ -1050,7 +1118,9 @@ class ScopeBuilder:
             # These views have now proved the same contiguous original storage.
             # Use them on later native fallbacks too, so CONTIGUOUS callees do
             # not acquire whole-array temporaries from synthetic owner dummies.
-            native = [line for call in calls for line in _call(str(call.node.items[0]), actuals(call))] + ["return"]
+            if not caller_fallback:
+                native = (structure.original(views) if structure else
+                          [line for call in calls for line in _call(str(call.node.items[0]), actuals(call))]) + ["return"]
             body += ["fort_status = fort_scope_create(0_c_int, fort_context)"]
             body += ["if (fort_status == FORT_SCOPE_OK) &",
                      f"  fort_status = fort_scope_set_device_budget(fort_context, {self.device_budget}_c_size_t)"]
@@ -1090,87 +1160,50 @@ class ScopeBuilder:
             if self.config.policy == "auto":
                 selector = self.numerical(sorted(leaves)[0]).scoped
                 imports.append(f"use {selector['fortran_module']}, only: fort_choose => {selector['planning']['fortran_selector']}")
-            body += ["fort_status = fort_scope_plan_reset(fort_context)"]
-            for call in calls:
-                child_leaves, _ = self.closure(call.procedure)
-                mapping = {formal: binding.root for formal, binding in call.bindings.items()}
-                native_handles = {formal: handles[root] for formal, root in mapping.items() if root in handles}
-                native_handles.update({root: handle for root, handle in handles.items() if not root.startswith("argument::")})
-                body += ["if (fort_status == FORT_SCOPE_OK) then"]
-                if child_leaves:
-                    query, query_roots = self.query_clone(call.procedure)
-                    module = self.analysis.routines[call.procedure].scope.module
-                    if module != routine.scope.module:
-                        imports.append(f"use {module}, only: {query}")
-                    body += _call(query, ["fort_context", *actuals(call),
-                                          *[native_handles[root] for root in query_roots], "fort_status"])
-                else:
-                    # This owner may fall back; RETURN in query glue belongs
-                    # to the query helper rather than the executing owner.
-                    query_lines = self.native_plan(call, *self.native_effects(call.procedure), native_handles)
-                    block = _name("fort_record_", str(_span(call.node)))
-                    body += [block + ": block", *[("exit " + block if line.strip() == "return" else
-                                                  line.replace("if (fort_status /= FORT_SCOPE_OK) return",
-                                                               "if (fort_status /= FORT_SCOPE_OK) exit " + block))
-                                                for line in query_lines], "end block " + block]
-                body += ["endif"]
-            body += ["if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_plan_validate(fort_context)"]
-            fallback_condition = "fort_status /= FORT_SCOPE_OK"
-            if self.config.policy == "auto":
-                body += ["if (fort_status == FORT_SCOPE_OK) fort_status = fort_choose(fort_context, fort_decision)"]
-                fallback_condition += " .or. fort_decision%gpu_units == 0"
-            body += ["if (" + fallback_condition + ") then",
-                     "fort_cleanup = fort_scope_close(fort_context)",
-                     "if (fort_cleanup /= FORT_SCOPE_OK) error stop 'shared scope planning cleanup failed'",
-                     *native, "endif"]
-            for call in calls:
-                child_leaves, _ = self.closure(call.procedure)
-                if child_leaves:
-                    clone, arrays_ = self.clone(call.procedure)
-                    module = self.analysis.routines[call.procedure].scope.module
-                    if module != routine.scope.module:
-                        imports.append(f"use {module}, only: {clone}")
-                    body += _call(clone, ["fort_context", "fort_mode", *actuals(call),
-                                         *[handles[call.bindings[root].root if root.startswith("argument::") else root]
-                                           for root in arrays_]])
-                else:
-                    mapping = {formal: binding.root for formal, binding in call.bindings.items()}
-                    actions, definitions, overwrites = self.native_effects(call.procedure)
-                    native_handles = {formal: handles[root] for formal, root in mapping.items() if root in handles}
-                    # Hidden visible roots retain their canonical identity.
-                    native_handles.update({root: handle for root,handle in handles.items() if not root.startswith("argument::")})
-                    body += self.native_call(call, actions, definitions, overwrites, native_handles,
-                                             actuals=actuals(call))
-            body += _checked("fort_scope_close(fort_context)")
-        text = "\n".join([*header, "use iso_c_binding", "use fort_scoped_memory",
-                          *dict.fromkeys(imports), "implicit none", *spec, *body, "end subroutine " + name, ""])
+            if structure:
+                body += structure.emit(handles, views, actuals, imports, selector=selector if self.config.policy == "auto" else None)
+                body += _checked("fort_scope_close(fort_context)")
+            else:
+                body += self.owner_complete_plan(calls, leaves, handles, actuals, imports, native)
+        if caller_fallback:
+            body += ["fort_native_required = .false."]
+        lines = [*header, "use iso_c_binding", "use fort_scoped_memory",
+                 *dict.fromkeys(imports), "implicit none", *spec, *body, "end subroutine " + name, ""]
+        if structure:
+            from compiler.scopes.segments import fortran_lines
+            lines = fortran_lines(lines)
+        text = "\n".join(lines)
         self.append_procedure(routine.scope.parent, name, text)
-        first, last = _span(calls[0].node)[0], _span(calls[-1].node)[1]
-        replacement = "\n".join(_call(name,names)) + "\n"
+        owner_actuals = [*names, *["[" + ",".join(f"lbound({self.visible(routine, root)},{axis},kind=c_int64_t)"
+                                                  for axis in range(1, arrays[root].rank + 1)) + "]" for root in bounds]]
+        fallback_flag = _name("fort_native_", digest)
+        if caller_fallback:
+            owner_actuals.append(fallback_flag)
+        replacement = "\n".join(_call(name,owner_actuals)) + "\n"
+        if caller_fallback:
+            original_source = "".join(routine.scope.path.read_text().splitlines(keepends=True)[first-1:last])
+            replacement = ("block\nlogical :: " + fallback_flag + "\n" + replacement
+                           + "if (" + fallback_flag + ") then\n" + original_source
+                           + "endif\nend block\n")
+        if structure:
+            # Metadata is obtained from the original descriptor. The intrinsic
+            # declaration also prevents an original local name from shadowing
+            # the generated inquiry, before owner dummy association rebases it.
+            if allocated_roots:
+                replacement = "block\nuse iso_c_binding, only: c_int64_t\nintrinsic :: lbound\n" + replacement + "end block\n"
+            else:
+                original_source = "".join(routine.scope.path.read_text().splitlines(keepends=True)[first-1:last])
+                replacement = ("block\nuse iso_c_binding, only: c_int64_t\n"
+                               "use fort_scoped_memory, only: " + serial + " => fort_scope_serial_caller\n"
+                               "intrinsic :: lbound\nif (" + serial + "() == 0) then\n" + original_source
+                               + "else\n" + replacement + "endif\nend block\n")
         if allocated_roots:
-            # Passing an unallocated actual to this ordinary assumed-shape
-            # owner is already too early. Inspect only allocation state here,
-            # at the original caller, after proving serial participation.
-            original = "".join(routine.scope.path.read_text().splitlines(keepends=True)[first-1:last])
-            if not original.endswith("\n"):
-                original += "\n"
-            conditions = ["allocated(" + self.visible(routine, root) + ")" for root in allocated_roots]
-            guard = ["if ( &", *[condition + " .and. &" for condition in conditions[:-1]],
-                     conditions[-1] + " &", ") then"]
-            guard_intrinsics = "allocated"
-            if origin_roots:
-                conditions = [condition for root in origin_roots
-                              for condition in self.original_bound_conditions(self.visible(routine, root), arrays[root].rank)]
-                bounds = ["if ( &", *[condition + " .and. &" for condition in conditions[:-1]],
-                          conditions[-1] + " &", ") then"]
-                replacement = "\n".join(bounds) + "\n" + replacement + "else\n" + original + "endif\n"
-                guard_intrinsics += ", lbound, ubound, size"
-            replacement = ("block\nuse fort_scoped_memory, only: " + serial + " => fort_scope_serial_caller\n"
-                           "intrinsic :: " + guard_intrinsics + "\nif (" + serial + "() == 0) then\n" + original + "else\n"
-                           + "\n".join(guard) + "\n" + replacement + "else\n" + original
-                           + "endif\nendif\nend block\n")
+            replacement = self.guard_owner_allocation(routine, first, last, replacement, serial,
+                                                      allocated_roots, origin_roots, arrays)
+        if structure:
+            replacement = "\n".join(fortran_lines(replacement.splitlines())) + "\n"
         self.add_edit(routine.scope.path, first, last, replacement)
-        return {"owner": name, "path": str(routine.scope.path), "first_line": first, "last_line": last,
+        scope = {"owner": name, "path": str(routine.scope.path), "first_line": first, "last_line": last,
                 "parameters": [{"name": parameters[root], "resource": root, "actual": visible}
                                for root, visible in zip(parameters, names, strict=True)],
                 "calls": [c.procedure for c in calls], "gpu_leaves": sorted(leaves),
@@ -1182,23 +1215,116 @@ class ScopeBuilder:
                 "estimate_available": planning_available,
                 "planning_reason": planning_reason,
                 "definition_preflight": {"abi_version": 1, "query_available": query_available,
-                                         "reason": query_reason, "position": "before numerical execution"},
+                                         "reason": query_reason, "position": "when segment is reached" if structure else "before numerical execution"},
                 "cost_estimates": "modeled numerical work and runtime costs; fixed native helper compute is a common excluded term",
                 "native_estimate": "original compute baseline; estimated_seconds for zero-GPU decisions conservatively includes coherent CPU-worker hooks",
                 "placement": "forced scoped GPU with native helpers" if self.config.policy == "sections" else
                              "calibrated coherent source scope" if planning_available else
-                             "native; " + planning_reason,
+                             "native; " + str(planning_reason),
                 **({"allocation_preflight": {"resources": allocated_roots, "position": "original caller before owner association",
                                                "participation": "serial before allocation inquiries",
                                                "fallback": "unchanged original source span",
                                                **(self.bounds_preflight_public(origin_roots, "original module allocation descriptor")
                                                   if origin_roots else {})}} if allocated_roots else {}),
                 "mode": self.config.policy, "participation": "serial"}
+        if structure:
+            scope.update(structure.public())
+            scope["ownership"]["retained_resources"] = list(arrays)
+        if original_scalars:
+            scope["original_scalar_bindings"] = [{"resource": root, "visible": self.visible(routine, root),
+                                                "storage_owner": "original defining module", "association": "host/use"}
+                                               for root in original_scalars]
+        if caller_fallback:
+            scope["native_fallback"] = {"position": "original caller after owning helper returns",
+                                        "phase": "before numerical execution only",
+                                        "reason": "original hidden numerical array access requires ended dummy association"}
+        return scope
+
+    def owner_complete_plan(self, calls, leaves, handles, actuals, imports, native):
+        """Emit the unchanged whole-span plan used by legacy straight owners."""
+        routine = self.entry
+        body = ["fort_status = fort_scope_plan_reset(fort_context)"]
+        for call in calls:
+            child_leaves, _ = self.closure(call.procedure)
+            mapping = {formal: binding.root for formal, binding in call.bindings.items()}
+            native_handles = {formal: handles[root] for formal, root in mapping.items() if root in handles}
+            native_handles.update({root: handle for root, handle in handles.items() if not root.startswith("argument::")})
+            body += ["if (fort_status == FORT_SCOPE_OK) then"]
+            if child_leaves:
+                query, query_roots = self.query_clone(call.procedure)
+                module = self.analysis.routines[call.procedure].scope.module
+                if module != routine.scope.module:
+                    imports.append(f"use {module}, only: {query}")
+                body += _call(query, ["fort_context", *actuals(call),
+                                      *[native_handles[root] for root in query_roots], "fort_status"])
+            else:
+                # This owner may fall back; RETURN in query glue belongs
+                # to the query helper rather than the executing owner.
+                query_lines = self.native_plan(call, *self.native_effects(call.procedure), native_handles)
+                block = _name("fort_record_", str(_span(call.node)))
+                body += [block + ": block", *[("exit " + block if line.strip() == "return" else
+                                              line.replace("if (fort_status /= FORT_SCOPE_OK) return",
+                                                           "if (fort_status /= FORT_SCOPE_OK) exit " + block))
+                                            for line in query_lines], "end block " + block]
+            body += ["endif"]
+        body += ["if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_plan_validate(fort_context)"]
+        fallback_condition = "fort_status /= FORT_SCOPE_OK"
+        if self.config.policy == "auto":
+            body += ["if (fort_status == FORT_SCOPE_OK) fort_status = fort_choose(fort_context, fort_decision)"]
+            fallback_condition += " .or. fort_decision%gpu_units == 0"
+        body += ["if (" + fallback_condition + ") then",
+                 "fort_cleanup = fort_scope_close(fort_context)",
+                 "if (fort_cleanup /= FORT_SCOPE_OK) error stop 'shared scope planning cleanup failed'",
+                 *native, "endif"]
+        for call in calls:
+            child_leaves, _ = self.closure(call.procedure)
+            if child_leaves:
+                clone, arrays_ = self.clone(call.procedure)
+                module = self.analysis.routines[call.procedure].scope.module
+                if module != routine.scope.module:
+                    imports.append(f"use {module}, only: {clone}")
+                body += _call(clone, ["fort_context", "fort_mode", *actuals(call),
+                                     *[handles[call.bindings[root].root if root.startswith("argument::") else root]
+                                       for root in arrays_]])
+            else:
+                mapping = {formal: binding.root for formal, binding in call.bindings.items()}
+                actions, definitions, overwrites = self.native_effects(call.procedure)
+                native_handles = {formal: handles[root] for formal, root in mapping.items() if root in handles}
+                # Hidden visible roots retain their canonical identity.
+                native_handles.update({root: handle for root,handle in handles.items() if not root.startswith("argument::")})
+                body += self.native_call(call, actions, definitions, overwrites, native_handles,
+                                         actuals=actuals(call))
+        body += _checked("fort_scope_close(fort_context)")
+        return body
+
+    def guard_owner_allocation(self, routine, first, last, replacement, serial, allocated_roots, origin_roots, arrays):
+        # Passing an unallocated actual to this ordinary assumed-shape
+        # owner is already too early. Inspect only allocation state here,
+        # at the original caller, after proving serial participation.
+        original = "".join(routine.scope.path.read_text().splitlines(keepends=True)[first-1:last])
+        if not original.endswith("\n"):
+            original += "\n"
+        conditions = ["allocated(" + self.visible(routine, root) + ")" for root in allocated_roots]
+        guard = ["if ( &", *[condition + " .and. &" for condition in conditions[:-1]],
+                 conditions[-1] + " &", ") then"]
+        guard_intrinsics = "allocated"
+        if origin_roots:
+            conditions = [condition for root in origin_roots
+                          for condition in self.original_bound_conditions(self.visible(routine, root), arrays[root].rank)]
+            bounds = ["if ( &", *[condition + " .and. &" for condition in conditions[:-1]],
+                      conditions[-1] + " &", ") then"]
+            replacement = "\n".join(bounds) + "\n" + replacement + "else\n" + original + "endif\n"
+            guard_intrinsics += ", lbound, ubound, size"
+        replacement = ("block\nuse fort_scoped_memory, only: " + serial + " => fort_scope_serial_caller\n"
+                       "intrinsic :: " + guard_intrinsics + "\nif (" + serial + "() == 0) then\n" + original + "else\n"
+                       + "\n".join(guard) + "\n" + replacement + "else\n" + original
+                       + "endif\nendif\nend block\n")
+        return replacement
 
     def build_span(self, nodes):
         if len(nodes) < 2:
             return
-        before = (dict(self.outputs), {p:list(edits) for p,edits in self.edits.items()}, dict(self.clones), dict(self.queries))
+        before = self.scope_checkpoint()
         try:
             calls = [self.resolve(self.entry,node) for node in nodes]
             budget = self.analysis.summarize_span(c.procedure for c in calls)
@@ -1208,15 +1334,97 @@ class ScopeBuilder:
                 leaves.update(own)
             if not leaves:
                 return
-            scope = self.owner(calls,leaves)
+            arrays, _scalars, written = self.owner_inputs(calls)
+            query = self.owner_query(calls, arrays, written)
+            if not query[0] and query[1] == "planning scalar inputs change inside the complete source scope":
+                from compiler.scopes.segments import StructuredScope
+                scope = self.owner(calls, leaves, structure=StructuredScope(self, nodes))
+            else:
+                scope = self.owner(calls,leaves)
             scope["effect_closure"] = budget
             self.scopes.append(scope)
         except CompilationError as error:
-            self.outputs, self.edits, self.clones, self.queries = before
+            self.restore_scope_checkpoint(before)
             self.boundaries.append({"first_line":_span(nodes[0])[0], "last_line":_span(nodes[-1])[1],
                                     "reason":str(error)})
 
+    def scope_checkpoint(self):
+        return (dict(self.outputs), {path:list(edits) for path,edits in self.edits.items()},
+                dict(self.clones), dict(self.queries), dict(self.generated), dict(self.numerical_reasons))
+
+    def restore_scope_checkpoint(self, checkpoint):
+        (self.outputs, self.edits, self.clones, self.queries,
+         self.generated, self.numerical_reasons) = checkpoint
+
     def scan(self, nodes):
+        from compiler.scopes.segments import StructuredScope, statement_span
+        # A structured candidate is bounded and source-backed before edits are
+        # emitted. Rejected candidates retain the previous straight-span scan.
+        if any(_kind(node) in {"If_Construct", "If_Stmt", "Assignment_Stmt", "Block_Nonlabel_Do_Construct"}
+               for node in nodes):
+            candidate = []
+
+            def finish_candidate():
+                if not candidate:
+                    return
+                before = self.scope_checkpoint()
+                try:
+                    structure = StructuredScope(self, candidate)
+                    calls = structure.calls
+                    leaves = {leaf for call in calls for leaf in self.closure(call.procedure)[0]}
+                    has_outer_work = any(_kind(node) in {"Call_Stmt", "Assignment_Stmt", "Block_Nonlabel_Do_Construct"}
+                                         for node in candidate)
+                    if leaves and len(calls) >= 2 and has_outer_work:
+                        budget = self.analysis.summarize_span(call.procedure for call in calls)
+                        if budget["operations"] + structure.operation_count > 256:
+                            raise CompilationError("bounded structured source operation budget exhausted")
+                        scope = self.owner(calls, leaves, structure=structure)
+                        scope["effect_closure"] = budget
+                        self.scopes.append(scope)
+                        return
+                except CompilationError as error:
+                    self.restore_scope_checkpoint(before)
+                    self.boundaries.append({"first_line":statement_span(candidate[0])[0],
+                                            "last_line":statement_span(candidate[-1])[1], "reason":str(error)})
+                self.scan_straight(candidate)
+
+            for node in nodes:
+                nested_boundaries = {"Return_Stmt", "Exit_Stmt", "Cycle_Stmt", "Allocate_Stmt", "Deallocate_Stmt",
+                                     "Pointer_Assignment_Stmt", "Nullify_Stmt", "Stop_Stmt", "Error_Stop_Stmt"}
+                if (_kind(node) in {"If_Stmt", "If_Construct", "Block_Nonlabel_Do_Construct"}
+                        and any(_kind(item) in nested_boundaries for item in walk(node))):
+                    finish_candidate()
+                    candidate = []
+                    first, last = statement_span(node)
+                    self.boundaries.append({"first_line":first, "last_line":last,
+                                            "reason":"unsupported exit or lifetime boundary in original guarded operation"})
+                    if _kind(node) == "If_Construct":
+                        self.scan_straight((node,))
+                    continue
+                if _kind(node) == "Call_Stmt":
+                    try:
+                        self.resolve(self.entry, node)
+                    except CompilationError:
+                        finish_candidate()
+                        candidate = []
+                        self.scan_straight((node,))
+                        continue
+                if _kind(node) in {"Call_Stmt", "If_Construct", "If_Stmt", "Assignment_Stmt",
+                                   "Block_Nonlabel_Do_Construct", "Comment"}:
+                    candidate.append(node)
+                else:
+                    finish_candidate()
+                    candidate = []
+                    first, last = statement_span(node)
+                    reason = ("storage lifetime/association boundary" if _kind(node) in {
+                        "Allocate_Stmt", "Deallocate_Stmt", "Pointer_Assignment_Stmt", "Nullify_Stmt"}
+                              else "unsupported exit or native ordering boundary: " + _kind(node))
+                    self.boundaries.append({"first_line":first, "last_line":last, "reason":reason})
+            finish_candidate()
+            return
+        self.scan_straight(nodes)
+
+    def scan_straight(self, nodes):
         run = []
         for node in nodes:
             if _kind(node) == "Comment" and not str(node).lower().lstrip().startswith("!$omp"):
