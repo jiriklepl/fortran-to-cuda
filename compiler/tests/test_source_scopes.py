@@ -278,16 +278,56 @@ def test_unused_allocatable_out_formal_is_not_an_ordinary_borrowed_view(tmp_path
                for item in manifest["boundaries"])
 
 
-def test_hidden_allocatable_payload_effect_has_no_global_lifetime_waiver(tmp_path):
+@pytest.mark.parametrize("fact", [None, {**FACT, "allocation_changes": True}, FACT])
+def test_hidden_allocatable_native_effect_requires_its_own_stable_capture(tmp_path, fact):
     source = PROGRAM.replace("implicit none\ncontains", "implicit none\nreal(8),allocatable::hidden(:)\ncontains")
     source = source.replace("b=3*b", "b=3*b+hidden")
+    facts = {"schema_version":1,"participation":"serial","captures":{
+        "argument::a":FACT,"argument::b":{**FACT,"initialized":"none"},
+        "argument::out":{**FACT,"initialized":"none"}}}
+    if fact is not None:
+        facts["captures"]["original::hidden"] = fact
+    _, output, manifest = generate(tmp_path, source, facts=facts)
+    if fact == FACT:
+        assert manifest["scope_count"] == 1, manifest["boundaries"]
+        scope, = manifest["scopes"]
+        assert scope["allocation_preflight"]["resources"] == ["original::hidden"]
+        assert scope["gpu_leaves"] == ["original::consumer", "original::producer"]
+        text = (output / next(iter(manifest["sources"].values()))["replacement"]).read_text()
+        assert "allocated(hidden)" in text
+        assert "b=3*b+hidden" in text.lower()
+    else:
+        assert not manifest["automatic_scope_available"]
+        assert any("storage lifetime requires capture proof: original::hidden" in item["reason"]
+                   for item in manifest["boundaries"])
+
+
+@pytest.mark.parametrize("statement", ["hidden = 3*b", "allocate(hidden(8))", "deallocate(hidden)"])
+def test_module_capture_assertion_cannot_override_source_allocation_effects(tmp_path, statement):
+    source = PROGRAM.replace("implicit none\ncontains", "implicit none\nreal(8),allocatable::hidden(:)\ncontains")
+    source = source.replace("b=3*b", statement + "\nb=3*b+hidden")
     facts = {"schema_version":1,"participation":"serial","captures":{
         "argument::a":FACT,"argument::b":{**FACT,"initialized":"none"},
         "argument::out":{**FACT,"initialized":"none"},"original::hidden":FACT}}
     _, _, manifest = generate(tmp_path, source, facts=facts)
     assert not manifest["automatic_scope_available"]
-    assert any("storage lifetime requires capture proof: original::hidden" in item["reason"]
-               for item in manifest["boundaries"])
+    assert manifest["boundaries"]
+
+
+def test_hidden_module_origin_is_not_replaced_by_a_declared_numerical_origin(tmp_path):
+    source = PROGRAM.replace("implicit none\ncontains", "implicit none\nreal(8),allocatable::hidden(:)\ncontains")
+    source = source.replace("real(8),intent(out)::b(:)", "real(8),intent(inout)::b(:)")
+    source = source.replace("real(8),intent(out)::b(:),out(:)", "real(8),intent(inout)::b(:),out(:)")
+    source = source.replace("b(i)=2*a(i)+real(i,8)", "b(i)=2*a(i)+hidden(i-3)+real(i,8)")
+    facts = {"schema_version":1,"participation":"serial","captures":{
+        "argument::a":FACT,"argument::b":FACT,
+        "argument::out":{**FACT,"initialized":"none"},"original::hidden":FACT}}
+    _, _, manifest = generate(tmp_path, source, facts=facts)
+    assert manifest["scope_count"] == 1, manifest["boundaries"]
+    assert manifest["scopes"][0]["gpu_leaves"] == ["original::consumer"]
+    decision = next(item for item in manifest["numerical_decisions"] if item["procedure"] == "original::producer")
+    assert not decision["supported"]
+    assert "runtime lower bounds" in decision["reason"]
 
 
 @pytest.mark.parametrize("shadowed", [False, True])

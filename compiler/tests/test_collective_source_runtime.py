@@ -469,9 +469,8 @@ def test_hidden_unallocated_lifetime_boundary_preserves_original_team(source_tea
     original = output / "original.f90"
     original.write_text(HIDDEN_SOURCE)
     facts = _facts(original)
-    facts["captures"]["operators::scratch"] = {
-        "storage": "stable", "initialized": "none", "allocation_changes": False, "escapes": False,
-        "association": "shared_whole_storage", "descriptor_uniform": True}
+    # No authority for the hidden root: ordinary argument facts cannot waive
+    # an unavailable module allocation lifetime proof.
     facts_path = output / "facts.json"
     facts_path.write_text(json.dumps(facts))
     checkout = directory / "independent-compiler"
