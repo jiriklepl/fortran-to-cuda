@@ -194,8 +194,9 @@ class CollectiveScopeBuilder(ScopeBuilder):
         views = {root: parameters[root] + "_view" if root in arrays else parameters[root]
                  for root in parameters}
         handles = {root: f"fort_state%handles({i})" for i, root in enumerate(arrays, 1)}
+        origin_roots = self.runtime_origin_roots(leaves)
         count, rank, threads = len(arrays), max(binding.rank for binding in arrays.values()), self.config.host_threads
-        if threads * count * (32 + 16 * rank) > 1024 * 1024:
+        if threads * count * (32 + 16 * rank) + (4 * threads if origin_roots else 0) > 1024 * 1024:
             raise CompilationError("collective descriptor metadata exceeds the one-MiB bound")
         module = self.entry.scope.parent
         if _kind(module.node) != "Module":
@@ -204,6 +205,7 @@ class CollectiveScopeBuilder(ScopeBuilder):
                         if _kind(node) == "Contains_Stmt")
         declaration = [f"type, public :: {controller}",
                        f"logical :: allocated({threads}), contiguous({count},{threads})",
+                       *([f"logical :: bounds_fit({threads})"] if origin_roots else []),
                        f"integer(kind=8) :: extents({rank},{count},{threads}), lowers({rank},{count},{threads})",
                        f"integer(kind=8) :: addresses({count},{threads})",
                        f"integer(kind=8) :: context, handles({count})",
@@ -388,7 +390,7 @@ class CollectiveScopeBuilder(ScopeBuilder):
         self.append_procedure(module, name, text)
         for site in self.participation.sites:
             self.add_edit(site.source, site.first_line, site.last_line,
-                          self.caller_dispatch(site, name, controller, arrays, parameters))
+                          self.caller_dispatch(site, name, controller, arrays, parameters, origin_roots=origin_roots))
         return {"owner": name, "path": str(self.entry.scope.path),
                 "first_line": _span(calls[0].node)[0], "last_line": _span(calls[-1].node)[1],
                 "parameters": [{"name": parameters[root], "resource": root,
@@ -400,7 +402,9 @@ class CollectiveScopeBuilder(ScopeBuilder):
                 "definition_preflight": {"abi_version": 1, "query_available": True, "reason": None,
                                          "position": "before numerical execution"},
                 "allocation_preflight": {"position": "original qualified caller before owner association",
-                                         "participation": "full team; allocation agreement then exact descriptors"},
+                                         "participation": "full team; allocation agreement then exact descriptors",
+                                         **(self.bounds_preflight_public(origin_roots, "agreed original caller allocation descriptors")
+                                            if origin_roots else {})},
                 "resources": [{"resource": root, "registration_identity": i,
                                "allocation_generation": 1, "initialized": self.capture(binding)["initialized"]}
                               for i, (root, binding) in enumerate(arrays.items(), 1)],
@@ -458,6 +462,9 @@ class CollectiveScopeBuilder(ScopeBuilder):
             original = call.bindings.get(resource)
             root = original.root if original else resource
             if parameter and parameter.lower_bound_dimension is not None:
+                if parameter.runtime_lower_bound:
+                    index = list(handles).index(root) + 1
+                    return f"int(fort_state%lowers({parameter.lower_bound_dimension},{index},1), kind=c_int)"
                 binding = resource_binding(self.analysis, routine, resource)
                 dimension = parameter.lower_bound_dimension
                 lower = routine.scope.kinds.integer(F.Level_2_Expr(binding.lower_bounds[dimension - 1]),
@@ -480,7 +487,7 @@ class CollectiveScopeBuilder(ScopeBuilder):
         order = public["planning"]["argument_order"][1:] if query else public["argument_order"][2:]
         return [argument(name) for name in order]
 
-    def caller_dispatch(self, site, owner, controller, arrays, parameters):
+    def caller_dispatch(self, site, owner, controller, arrays, parameters, *, origin_roots=()):
         original = "".join(site.source.read_text().splitlines(keepends=True)[site.first_line - 1:site.last_line])
         if not original.endswith("\n"):
             original += "\n"
@@ -490,7 +497,9 @@ class CollectiveScopeBuilder(ScopeBuilder):
         # use-associated objects. All generated names are individually checked.
         locals_ = [prefix + suffix for suffix in ("_state", "_status", "_tid", "_level", "_threads")]
         reserved = {*locals_, prefix + "_id", owner, controller, "allocated", "lbound", "all"}
-        if reserved & set(names.values()) or str(site.node.items[0]).lower() in {"allocated", "lbound", "all"}:
+        intrinsics = {"allocated", "lbound", "all"} | ({"ubound", "size"} if origin_roots else set())
+        reserved.update(intrinsics)
+        if reserved & set(names.values()) or str(site.node.items[0]).lower() in intrinsics:
             raise CompilationError("collective caller helper namespace conflicts with an actual")
         state, status, tid, level, threads = locals_
         imports = [f"use omp_lib, only: {level} => omp_get_level, {threads} => omp_get_num_threads, &",
@@ -498,7 +507,7 @@ class CollectiveScopeBuilder(ScopeBuilder):
         if site.routine.scope.module != self.entry.scope.module:
             imports += [f"use {self.entry.scope.module}, only: {owner}, {controller}"]
         lines = ["block", *imports, f"type({controller}), pointer :: {state}",
-                 f"integer :: {status}, {tid}", "intrinsic :: allocated, lbound, all",
+                 f"integer :: {status}, {tid}", "intrinsic :: allocated, lbound, all" + (", ubound, size" if origin_roots else ""),
                  f"if ({level}() /= 1 .or. {threads}() /= {self.config.host_threads}) then",
                  original.rstrip(), "else", "!$omp barrier", "!$omp single", f"allocate({state}, stat={status})",
                  f"if ({status} == 0) then", f"{state}%context = 0_8", f"{state}%status = 0",
@@ -513,6 +522,18 @@ class CollectiveScopeBuilder(ScopeBuilder):
         for i, (root, binding) in enumerate(arrays.items(), 1):
             lines += _fortran_list(f"{state}%lowers(1:{binding.rank},{i},{tid}) = [",
                                    [f"lbound({names[root]},{axis},kind=8)" for axis in range(1,binding.rank+1)], "]", 0)
-        lines += ["!$omp barrier", *_call(owner, [*names.values(), state]), "else", original.rstrip(), "endif",
+        if origin_roots:
+            lines += [f"{state}%bounds_fit({tid}) = .true."]
+            for root in origin_roots:
+                for condition in self.original_bound_conditions(names[root], arrays[root].rank):
+                    lines += [f"{state}%bounds_fit({tid}) = &",
+                              f"    {state}%bounds_fit({tid}) .and. &", "    " + condition]
+        lines += ["!$omp barrier"]
+        if origin_roots:
+            lines += [f"if (all({state}%bounds_fit)) then", *_call(owner, [*names.values(), state]),
+                      "else", original.rstrip(), "endif"]
+        else:
+            lines += _call(owner, [*names.values(), state])
+        lines += ["else", original.rstrip(), "endif",
                   "!$omp barrier", "!$omp single", f"deallocate({state})", "!$omp end single", "endif", "endif", "end block", ""]
         return "\n".join(lines)

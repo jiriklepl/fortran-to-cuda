@@ -552,8 +552,8 @@ Context-aware clone array dummies also declare `TARGET`, making their associatio
 with runtime access through the registered address explicit.
 Native fallbacks after this storage proof also use the contiguous views, avoiding
 whole-array temporaries when the original helper or wrapper declares `CONTIGUOUS`.
-Stable module allocatable arrays can also participate in **original native
-operations** behind conservative whole-resource hooks. Their exact canonical
+Stable module allocatable arrays can also participate in original native
+operations behind conservative whole-resource hooks. Their exact canonical
 roots need source-hash-bound stable, non-escaping capture facts; the compiler
 checks these before effect analysis consumes them. Allocation agreement at the
 original caller still precedes descriptor queries and owner association. The
@@ -562,9 +562,19 @@ and explicit-section writes retain the original allocation and logical bounds.
 Whole-variable allocatable assignment, explicit allocation changes, allocatable
 formals, uncertain pointer effects, and unknown callees remain boundaries even
 when stable storage is asserted. Standalone effect analysis without capture
-authority remains conservative. Direct numerical accesses to these hidden
-allocatables stay native: their actual allocation lower bounds cannot be inferred from deferred-shape declarations
-or replaced by the current normalized numerical package's declared origins.
+authority remains conservative. Normalized numerical packages may borrow these
+hidden allocations when they supply a unique `lower_bound_dimension` parameter
+for every dimension of each dynamic resource. Runtime origins come from the
+original allocation descriptor, after allocation agreement and before synthetic
+assumed-shape arguments can rebase it. Collective callers use their agreed
+original descriptors for the same mapping. The dispatch checks 64-bit `LBOUND`,
+`UBOUND` and dimension `SIZE` against the existing 32-bit INTEGER ABI before
+conversion; unsupported ranges retain original native execution. Resources used
+only for descriptor inquiries still require capture and allocation guards.
+The mapping preserves original logical indices, bounds and index-as-data
+expressions while numerical buffers retain their full physical layout. Missing
+origin mappings remain conservative boundaries; lifetime authority does not
+establish an allocation's numerical bounds.
 An adapter verifies these artifacts, applies replacements to an application copy,
 and links the common runtime once. It does not inspect compiler IR or CUDA text.
 No accepted scopes is a successful unchanged/native result.

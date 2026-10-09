@@ -237,19 +237,52 @@ class ScopeBuilder:
         return result
 
     def check_numerical_capture_origins(self, procedure):
-        """Keep dynamic module allocation origins in original native source.
-
-        Deferred-shape module declarations do not describe an allocation's
-        actual lower bounds. Current normalized numerical packages use declared
-        origins; a stable lifetime proof alone cannot make that mapping valid.
-        """
+        """Require complete original-descriptor mappings for dynamic origins."""
         summary = self.analysis.summarize(procedure)
         resources = {operation.get("resource") for operation in summary["operations"]}
         package = self.packages.get(procedure)
         if package:
             resources.update(parameter.resource for parameter in package.parameters)
-        if resources & self.analysis.stable_module_allocatables:
+        dynamic = resources & self.analysis.stable_module_allocatables
+        if dynamic and (not package or not dynamic.issubset(package.runtime_origins)):
             raise CompilationError("module allocatable numerical origins require original runtime lower bounds; native execution")
+        if dynamic:
+            routine = self.analysis.routines[procedure]
+            for intrinsic in ("int", "lbound"):
+                if (self.analysis._binding(routine.scope, intrinsic)
+                        or self.analysis._candidates(routine.scope, F.Name(intrinsic))):
+                    raise CompilationError("numerical allocation origin conversion conflicts with an original "
+                                           + intrinsic.upper() + " binding")
+
+    @staticmethod
+    def lower_bound_actual(parameter, visible):
+        if parameter.runtime_lower_bound:
+            return (f"int(lbound({visible}, {parameter.lower_bound_dimension}, kind=c_int64_t), "
+                    "kind=c_int)")
+        return f"lbound({visible}, {parameter.lower_bound_dimension})"
+
+    def runtime_origin_roots(self, leaves):
+        return sorted({root for procedure in leaves if procedure in self.packages
+                       for root in self.packages[procedure].runtime_origins})
+
+    @staticmethod
+    def original_bound_conditions(visible, rank):
+        """Inspect original descriptors only after allocation/presence checks."""
+        minimum, maximum = "(-2147483647_8 - 1_8)", "2147483647_8"
+        return [condition for axis in range(1, rank + 1)
+                for condition in (f"lbound({visible}, {axis}, kind=8) >= {minimum}",
+                                  f"lbound({visible}, {axis}, kind=8) <= {maximum}",
+                                  f"ubound({visible}, {axis}, kind=8) >= {minimum}",
+                                  f"ubound({visible}, {axis}, kind=8) <= {maximum}",
+                                  f"size({visible}, {axis}, kind=8) <= {maximum}")]
+
+    @staticmethod
+    def bounds_preflight_public(resources, origin_source):
+        return {"bounds_guard": {"resources": list(resources), "inquiry_kind": 8,
+                                 "integer_abi_bits": 32, "inquiries": ["lbound", "ubound", "size"],
+                                 "position": "original caller after allocation checks; before owner association",
+                                 "fallback": "unchanged original source span"},
+                "origin_source": origin_source}
 
     def closure(self, procedure, active=()):
         """Return GPU leaves and cloneable call-only wrappers, or a boundary."""
@@ -443,7 +476,7 @@ class ScopeBuilder:
                 for parameter in public["scalar_parameters"]:
                     binding = bindings[parameter["name"].lower()]
                     visible = self.visible(routine, binding.resource)
-                    scalars.append(f"lbound({visible}, {binding.lower_bound_dimension})"
+                    scalars.append(self.lower_bound_actual(binding, visible)
                                    if binding.lower_bound_dimension is not None else visible)
                 # Normalized access intents do not replace source definitions.
                 for array in array_names:
@@ -707,7 +740,7 @@ class ScopeBuilder:
                     binding = parameters[parameter["name"].lower()]
                     visible = self.visible(routine, binding.resource)
                     if binding.lower_bound_dimension is not None:
-                        scalars.append(f"lbound({visible}, {binding.lower_bound_dimension})")
+                        scalars.append(self.lower_bound_actual(binding, visible))
                     elif parameter["dtype"] == "logical":
                         scalars.append(f"logical({visible}, kind=c_bool)")
                     else:
@@ -858,6 +891,11 @@ class ScopeBuilder:
                 binding = self.analysis._binding(routine.scope, visible)
                 self.capture(binding)
                 arrays[root] = binding
+            child_leaves, _ = self.closure(call.procedure)
+            for root in self.runtime_origin_roots(child_leaves):
+                binding = self.analysis._binding(routine.scope, self.visible(routine, root))
+                self.capture(binding)
+                arrays[root] = binding
             for actual in call.actuals:
                 binding = self.analysis._actual_binding(routine.scope, actual)
                 if binding and not binding.rank:
@@ -924,12 +962,17 @@ class ScopeBuilder:
         if any(n.startswith("fort_") for n in names):
             raise CompilationError("capture names conflict with the initial scope owner namespace")
         allocated_roots = [root for root, binding in arrays.items() if "allocatable" in binding.attributes]
+        origin_roots = self.runtime_origin_roots(leaves)
         serial = _name("fort_scope_serial_", digest)
         if allocated_roots and ("allocated" in names or
                                 any(str(call.node.items[0]).lower() == "allocated" for call in calls)):
             raise CompilationError("allocation guard intrinsic conflicts with an original capture or call: allocated")
         if allocated_roots and any(str(call.node.items[0]).lower() == serial for call in calls):
             raise CompilationError("allocation guard coordinator conflicts with an original call: " + serial)
+        bound_intrinsics = {"lbound", "ubound", "size"}
+        if origin_roots and (bound_intrinsics & set(names)
+                             or any(str(call.node.items[0]).lower() in bound_intrinsics for call in calls)):
+            raise CompilationError("allocation bounds guard intrinsic conflicts with an original capture or call")
         # Captured module fields can be re-exported by the original USE list.
         # A dummy with the same spelling conflicts with use association, even
         # when it would legally shadow host association. Keep synthetic formals
@@ -1114,8 +1157,16 @@ class ScopeBuilder:
             conditions = ["allocated(" + self.visible(routine, root) + ")" for root in allocated_roots]
             guard = ["if ( &", *[condition + " .and. &" for condition in conditions[:-1]],
                      conditions[-1] + " &", ") then"]
+            guard_intrinsics = "allocated"
+            if origin_roots:
+                conditions = [condition for root in origin_roots
+                              for condition in self.original_bound_conditions(self.visible(routine, root), arrays[root].rank)]
+                bounds = ["if ( &", *[condition + " .and. &" for condition in conditions[:-1]],
+                          conditions[-1] + " &", ") then"]
+                replacement = "\n".join(bounds) + "\n" + replacement + "else\n" + original + "endif\n"
+                guard_intrinsics += ", lbound, ubound, size"
             replacement = ("block\nuse fort_scoped_memory, only: " + serial + " => fort_scope_serial_caller\n"
-                           "intrinsic :: allocated\nif (" + serial + "() == 0) then\n" + original + "else\n"
+                           "intrinsic :: " + guard_intrinsics + "\nif (" + serial + "() == 0) then\n" + original + "else\n"
                            + "\n".join(guard) + "\n" + replacement + "else\n" + original
                            + "endif\nendif\nend block\n")
         self.add_edit(routine.scope.path, first, last, replacement)
@@ -1139,7 +1190,9 @@ class ScopeBuilder:
                              "native; " + planning_reason,
                 **({"allocation_preflight": {"resources": allocated_roots, "position": "original caller before owner association",
                                                "participation": "serial before allocation inquiries",
-                                               "fallback": "unchanged original source span"}} if allocated_roots else {}),
+                                               "fallback": "unchanged original source span",
+                                               **(self.bounds_preflight_public(origin_roots, "original module allocation descriptor")
+                                                  if origin_roots else {})}} if allocated_roots else {}),
                 "mode": self.config.policy, "participation": "serial"}
 
     def build_span(self, nodes):
