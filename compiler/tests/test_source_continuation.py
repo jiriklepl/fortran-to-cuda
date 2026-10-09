@@ -209,8 +209,28 @@ JOINED = TREE.replace("real(8),intent(out)::b(:)", "real(8),intent(inout)::b(:)"
     "!$omp end parallel\nn=n-1\ncall consumer")
 
 
-def test_joined_native_team_retains_and_renames_original_private_variables(tmp_path):
-    _, _, manifest, text = generate_tree(tmp_path, JOINED)
+def test_joined_native_team_retains_and_renames_original_private_variables(tmp_path, monkeypatch):
+    # Exercise the native operation independently of optional inline numerical
+    # admission; a legal joined region remains inside its owner either way.
+    from compiler.ir import CompilationError
+    from compiler.driver.options import CompilerOptions
+    from compiler.offload.config import OffloadConfig
+    from compiler.scopes.source import ScopeBuilder
+    from compiler.scopes import region_dispatch
+    from hashlib import sha256
+
+    def native_region(*args, **kwargs):
+        raise CompilationError("inline numerical admission unavailable")
+
+    monkeypatch.setattr(region_dispatch, "extract_region", native_region)
+    original = tmp_path / "original.f90"
+    original.write_text(JOINED)
+    facts = {"schema_version": 1, "participation": "serial",
+             "sources": {str(original): sha256(original.read_bytes()).hexdigest()},
+             "captures": {"argument::a": FACT, "argument::b": FACT, "argument::out": FACT}}
+    outputs, manifest = ScopeBuilder([original], "original::step", facts=facts,
+                                     options=CompilerOptions(), config=OffloadConfig(policy="sections")).run()
+    text = outputs[manifest["sources"][str(original)]["replacement"]]
     scope, owner = owner_text(manifest, text)
     operation, = [item for item in scope["native_operations"] if item["kind"] == "joined native OpenMP"]
     assert operation["completion"]["available"]

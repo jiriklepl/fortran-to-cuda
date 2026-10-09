@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
         in.operations[0].flops = std::numeric_limits<double>::quiet_NaN();
         in.operations[0].memory_bytes = std::numeric_limits<double>::infinity();
     } else if (scenario == "unknown_kind") {
-        in.operations[0].kind = 3;
+        in.operations[0].kind = std::numeric_limits<uint32_t>::max();
     } else if (scenario == "unknown_handle") {
         in.operations[0].bindings[0].buffer = 2;
     } else if (scenario == "duplicate_handle") {

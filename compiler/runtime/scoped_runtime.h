@@ -68,6 +68,32 @@ typedef struct fort_scope_layout {
     const int64_t *lower_bounds;
     uint64_t generation;
 } fort_scope_layout;
+/* Additive borrowed views. Origins are physical root coordinates; extents and
+ * lower bounds belong to the original child dummy. No compact allocation or
+ * pointer registration is created. Descriptor pointers remain caller-owned. */
+#define FORT_SCOPE_VIEW_ABI_VERSION 1
+typedef struct fort_scope_view_v1 {
+    uint32_t version, rank;
+    fort_buffer_t buffer;
+    uint64_t generation;
+    const size_t *origins, *extents;
+    const int64_t *lower_bounds;
+} fort_scope_view_v1;
+typedef struct fort_scope_view_layout_v1 {
+    fort_scope_layout root;
+    const size_t *origins, *extents, *byte_strides;
+    const int64_t *lower_bounds;
+    size_t elements, byte_offset;
+} fort_scope_view_layout_v1;
+/* Pure descriptor validation, including checked existing INTEGER ABI bounds.
+ * Empty views perform no address arithmetic. No CUDA initialization occurs. */
+int fort_scope_view_get_v1(fort_scope_t context, const fort_scope_view_v1 *view,
+                            fort_scope_view_layout_v1 *layout);
+/* Partial INTENT(OUT) changes definitions only inside the supplied root boxes.
+ * All three coverage sets are prepared before committing; fragmentation leaves
+ * them unchanged. Existing allocation and unrelated current values survive. */
+int fort_scope_forget_sections_v1(fort_scope_t context, fort_buffer_t buffer,
+                                  const fort_scope_section *sections, size_t count);
 typedef struct fort_scope_stats {
     uint64_t uploads, downloads, upload_bytes, download_bytes;
     uint64_t allocations, allocated_bytes, peak_device_bytes;
@@ -82,7 +108,10 @@ typedef struct fort_scope_stats {
 #define FORT_SCOPE_PLANNING_REPORT_VERSION 2
 enum fort_scope_plan_endpoint { FORT_SCOPE_PLAN_COMPLETE = 0, FORT_SCOPE_PLAN_CONTINUE = 1 };
 enum fort_scope_plan_kind { FORT_SCOPE_PLAN_NATIVE = 0, FORT_SCOPE_PLAN_WORKER = 1,
-                           FORT_SCOPE_PLAN_FORGET = 2 };
+                           FORT_SCOPE_PLAN_FORGET = 2, FORT_SCOPE_PLAN_DISCARD = 3,
+                           FORT_SCOPE_PLAN_TEAM_ENTRY = 4, FORT_SCOPE_PLAN_TEAM_NATIVE_CALL = 5 };
+int fort_scope_plan_forget_sections_v1(fort_scope_t context, fort_buffer_t buffer,
+                                       const fort_scope_section *sections, size_t count);
 typedef struct fort_scope_plan_binding {
     fort_buffer_t buffer;
     fort_scope_access access;
@@ -96,6 +125,24 @@ typedef struct fort_scope_plan_costs {
     double gpu_setup_seconds, cold_driver_startup_seconds, allocation_seconds, release_seconds;
     double wait_seconds, launch_enqueue_seconds, planning_operation_seconds;
 } fort_scope_plan_costs;
+/* Existing-team costs are a distinct optional contract: serial fork/join rates
+ * cannot justify collective placement. Rates in plan_costs describe generated
+ * cyclic workers; these native rates describe the original orphaned workers. */
+#define FORT_SCOPE_TEAM_ABI_VERSION 1
+#define FORT_SCOPE_TEAM_PROTOCOL_ID UINT64_C(0x4654434f4c4c0001)
+typedef struct fort_scope_team_costs {
+    uint32_t version, valid, cpu_threads, expected_omp_level;
+    uint64_t protocol_id;
+    double native_cpu_flops, native_cpu_bandwidth;
+    double owner_seconds, descriptor_seconds, entry_seconds;
+    double cpu_worker_seconds, gpu_worker_seconds, native_call_seconds, native_worker_seconds;
+} fort_scope_team_costs;
+int fort_scope_set_team_costs_v1(fort_scope_t context, const fort_scope_team_costs *costs, int compatible);
+int fort_scope_team_costs_ready_v1(fort_scope_t context, int *ready);
+int fort_scope_plan_team_entry_v1(fort_scope_t context);
+/* Protocol-only marker for an original native call in a persistent team.
+ * Internal host preparation remains PLAN_NATIVE and does not pay this cost. */
+int fort_scope_plan_team_native_call_v1(fort_scope_t context);
 typedef struct fort_scope_plan_decision {
     uint32_t available, gpu_units, cpu_units, candidates;
     uint64_t simulated_operations, upload_bytes, download_bytes, uploads, downloads;

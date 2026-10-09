@@ -71,14 +71,15 @@ def _cpu_worker(unit, signature, name):
     return [*lines, "    }", "}"]
 
 
-def _metadata(function, analysis, signature, name, value=_value):
+def _metadata(function, analysis, signature, name, value=_value, *, host_pointer=None):
     arrays = [s for s in function.parameters if s.rank]
     array_indices = {s: i for i, s in enumerate(arrays)}
     lines = [f"static offload::Data {name}({signature}) {{", "    offload::Data d;"]
     for symbol in arrays:
         dims = ", ".join(dimension_name(symbol, a + 1) for a in range(symbol.rank))
+        pointer = symbol.cpp_name if host_pointer is None else host_pointer(symbol)
         lines += ["    {", "        offload::Array a;",
-                  f"        a.host = const_cast<void*>(static_cast<const void*>({symbol.cpp_name}));",
+                  f"        a.host = const_cast<void*>(static_cast<const void*>({pointer}));",
                   f"        a.element_bytes = sizeof({cpp_type(symbol)}); a.dimensions = {{{dims}}};",
                   "        a.bytes = a.element_bytes;",
                   "        for (auto extent : a.dimensions) if (!offload::mul(a.bytes, extent, a.bytes)) d.valid = false;",

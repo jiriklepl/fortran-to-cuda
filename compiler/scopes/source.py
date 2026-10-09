@@ -9,7 +9,7 @@ control-flow around sibling spans remains in the original source.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from hashlib import sha256
 
 from fparser.two import Fortran2003 as F
@@ -18,14 +18,19 @@ from fparser.two.utils import walk
 from compiler.driver.pipeline import prepare_function
 from compiler.emission import generate_sources, read_common_header
 from compiler.emission.common.resources import read_scoped_runtime
+from compiler.emission.cuda.scoped import generate_scoped
 from compiler.emission.fortran.formatting import _fortran_line, _fortran_list
 from compiler.frontend import lower_file
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.frontend.source_effects import SourceEffects, _children, _kind, _part
 from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.integers import integer_literal
-from compiler.scopes.access import build_native_accesses
+from compiler.scopes.access import build_native_accesses, build_native_view_accesses
 from compiler.scopes.numerical import load_numerical_sources, resource_binding
+from compiler.scopes.variants import VariantRegistry
+from compiler.scopes.views import build_view, forget_view, view_call
+from compiler.scopes.views import check_call as check_view_call
+from compiler.scopes.views import dependencies as view_dependencies
 
 DTYPES = {
     ("real", 8): ("real(c_double)", "FORT_SCOPE_REAL64", 8),
@@ -66,6 +71,8 @@ class Call:
     bindings: dict
     summary: dict
     resolved: object = None
+    borrowed: bool = False
+    region: object = None
 
     def original_arguments(self, values=None):
         return self.resolved.render_original_arguments(values) if self.resolved else tuple(
@@ -117,12 +124,18 @@ class ScopeBuilder:
         self.outputs, self.edits, self.clones, self.generated = {}, {}, {}, {}
         self.queries = {}
         self.numerical_ir = {}
+        self.view_generated = {}
+        self.view_clones = {}
+        self.view_queries = {}
         self.batch_chains = {}
         self.numerical_reasons = {}
         self.boundaries, self.scopes = [], []
         self.resolved_calls = {}
+        self.variants = VariantRegistry()
         self.runtime_outputs, self.runtime = read_scoped_runtime()
         self.visiting = set()
+        from compiler.scopes.region_dispatch import InlineRegions
+        self.inline = InlineRegions(self)
 
     @staticmethod
     def check_whole_view_formals(callee):
@@ -134,13 +147,22 @@ class ScopeBuilder:
             dimension = next((a.items[1] for a in _children(attributes)
                               if _kind(a) == "Dimension_Attr_Spec"), None)
             for entity in _children(entities):
-                if str(entity.items[0]).lower() not in callee.arguments:
+                name = str(entity.items[0]).lower()
+                if name not in callee.arguments:
                     continue
                 shape = entity.items[1] if entity.items[1] is not None else dimension
-                if any(_kind(axis) != "Assumed_Shape_Spec" for axis in _children(shape)):
+                binding = callee.scope.bindings[name]
+                permitted = {"Assumed_Shape_Spec"}
+                if "allocatable" in binding.attributes and binding.intent == "in":
+                    permitted.add("Deferred_Shape_Spec")
+                if any(_kind(axis) not in permitted for axis in _children(shape)):
                     raise CompilationError("explicit dummy extents require a proven whole-storage shape mapping")
 
     def resolve(self, routine, node):
+        if hasattr(node, "fort_inline_region"):
+            if self.inline.nodes.get(node.fort_inline_region) is not node:
+                raise CompilationError("inline numerical call lacks compiler-owned source authority")
+            return self.inline.call(node)
         resolved = resolve_source_call(self.analysis, routine.scope, node)
         procedure, actuals, bindings = resolved.procedure, resolved.actuals, resolved.bindings
         span = getattr(node.item, "fort_original_span", node.item.span)
@@ -150,13 +172,11 @@ class ScopeBuilder:
         callee = self.analysis.routines[procedure]
         if callee.source_kind != "module":
             raise CompilationError("external source entry execution requires standalone procedure variants: " + procedure)
-        if any(mapping.section is not None for mapping in resolved.mappings):
-            raise CompilationError("array-element/section actual requires in-place mapping and coherence: " + str(
-                next(mapping.actual for mapping in resolved.mappings if mapping.section is not None)))
-        if any("optional" in mapping.formal_binding.attributes or mapping.presence != "supplied"
+        if any(mapping.presence not in {"supplied", "omitted", "allocation_dependent"}
                for mapping in resolved.mappings):
             raise CompilationError("optional source-call arguments require presence-preserving execution variants")
-        if any("allocatable" in mapping.formal_binding.attributes for mapping in resolved.mappings):
+        if any("allocatable" in mapping.formal_binding.attributes and mapping.formal_binding.intent != "in"
+               for mapping in resolved.mappings):
             raise CompilationError("allocatable callee formals require original descriptor and allocation semantics")
         self.check_whole_view_formals(callee)
         summary = self.analysis.summarize(procedure)
@@ -165,7 +185,11 @@ class ScopeBuilder:
         if summary.get("definition_diagnostics"):
             diagnostic = summary["definition_diagnostics"][0]
             raise CompilationError(diagnostic["reason"]+": "+diagnostic["procedure"]+" "+diagnostic["resource"])
-        effects, definitions, _ = self.native_effects(procedure)
+        borrowed = (any(mapping.section is not None for mapping in resolved.mappings)
+                    or self.view_wrapper_supported(procedure))
+        effects, definitions, _ = self.native_effects(
+            procedure, {"argument::" + item.formal: None for item in resolved.mappings if item.actual is None},
+            allow_views=borrowed)
         aliases = {}
         for formal, binding in bindings.items():
             if binding.rank:
@@ -173,13 +197,54 @@ class ScopeBuilder:
         for root in effects:
             if not root.startswith("argument::"):
                 aliases.setdefault(root, []).append(root)
-        if any(len(formals) > 1 and any("write" in effects.get(formal, set()) or
+        uses_views = borrowed
+        if not uses_views and any(len(formals) > 1 and any("write" in effects.get(formal, set()) or
                                         formal in definitions for formal in formals)
                for formals in aliases.values()):
             raise CompilationError("writable source call arguments alias")
-        if any(len(formals) > 1 for formals in aliases.values()) and self.numerical(procedure):
+        if not uses_views and any(len(formals) > 1 for formals in aliases.values()) and self.numerical(procedure):
             raise CompilationError("numerical source aliases require merged entry access descriptors")
-        return Call(node, procedure, actuals, bindings, summary, resolved)
+        call = Call(node, procedure, actuals, bindings, summary, resolved, borrowed)
+        check_view_call(self, call)
+        return call
+
+    def view_wrapper_supported(self, procedure, active=(), *, require_borrowed=True):
+        """Recognize bounded call-only numerical paths needing composed views."""
+        if procedure in active or len(active) >= 8:
+            return False
+        routine = self.analysis.routines[procedure]
+        summary = self.analysis.summarize(procedure)
+        nodes = [node for node in _children(routine.execution) if _kind(node) != "Comment"]
+        if (routine.source_kind != "module" or not summary["complete"] or not summary["cloneable"]
+                or not nodes or any(_kind(node) != "Call_Stmt" for node in nodes)
+                or any(routine.scope.bindings[name].attributes & {"optional", "allocatable", "contiguous"}
+                       for name in routine.arguments)):
+            return False
+        borrowed = False
+        try:
+            for node in nodes:
+                child = resolve_source_call(self.analysis, routine.scope, node)
+                if child.procedure in self.packages:
+                    return False
+                if (not self.numerical(child.procedure) and not self.view_native_supported(child.procedure)
+                        and not self.view_wrapper_supported(child.procedure, active + (procedure,), require_borrowed=False)):
+                    return False
+                borrowed |= any(mapping.section is not None for mapping in child.mappings)
+                borrowed |= self.view_wrapper_supported(child.procedure, active + (procedure,))
+            return borrowed if require_borrowed else True
+        except CompilationError:
+            return False
+
+    def view_native_supported(self, procedure):
+        routine = self.analysis.routines[procedure]
+        summary = self.analysis.summarize(procedure)
+        if (not summary["complete"] or not summary["native_completion"]["available"]
+                or any(_kind(node) == "Call_Stmt" for node in walk(routine.execution))
+                or any(routine.scope.bindings[name].attributes & {"optional", "allocatable", "contiguous"}
+                       for name in routine.arguments)):
+            return False
+        sections = self.analysis.native_sections(procedure)
+        return sections.available and all(resource.resource.startswith("argument::") for resource in sections.resources)
 
     def numerical(self, procedure):
         if procedure in self.generated:
@@ -197,6 +262,8 @@ class ScopeBuilder:
                   "persistent state or OpenMP participation requires original native execution")
         if summary.get("definition_diagnostics"):
             reason = summary["definition_diagnostics"][0]["reason"]
+        elif any(routine.scope.bindings[name].attributes & {"optional", "allocatable"} for name in routine.arguments):
+            reason = "optional or allocatable numerical formals require descriptor-aware numerical variants"
         elif (summary["cloneable"] or package and not summary["persistent_state"]) and summary["complete"] and leaf:
             try:
                 self.check_numerical_capture_origins(procedure)
@@ -256,7 +323,9 @@ class ScopeBuilder:
 
     def runtime_origin_roots(self, leaves):
         return sorted({root for procedure in leaves if procedure in self.packages
-                       for root in self.packages[procedure].runtime_origins})
+                       for root in self.packages[procedure].runtime_origins}
+                      | {binding.root for procedure in leaves if procedure in self.inline.regions
+                         for binding in self.inline.regions[procedure].bindings if binding.rank})
 
     @staticmethod
     def original_bound_conditions(visible, rank):
@@ -279,6 +348,8 @@ class ScopeBuilder:
 
     def closure(self, procedure, active=()):
         """Return GPU leaves and cloneable call-only wrappers, or a boundary."""
+        if procedure in self.inline.regions:
+            return {procedure}, {procedure}
         if procedure in active or len(active) >= 8:
             raise CompilationError("recursive or over-depth source scope")
         routine = self.analysis.routines[procedure]
@@ -292,6 +363,10 @@ class ScopeBuilder:
             return set(), set()
         if not summary["cloneable"]:
             return set(), set()
+        if any("optional" in routine.scope.bindings[name].attributes for name in routine.arguments):
+            # Original native forwarding retains absence without associating
+            # the optional argument with a generated ordinary array dummy.
+            return set(), set()
         leaves, wrappers = set(), {procedure}
         for node in children:
             call = self.resolve(routine, node)
@@ -300,7 +375,7 @@ class ScopeBuilder:
             wrappers.update(own_wrappers)
         return leaves, wrappers if leaves else set()
 
-    def native_effects(self, procedure, mapping=None, active=()):
+    def native_effects(self, procedure, mapping=None, active=(), *, allow_views=False):
         """Flatten bounded effects with formal-to-root identities, never IR."""
         if procedure in active:
             raise CompilationError("recursive native effects")
@@ -313,12 +388,14 @@ class ScopeBuilder:
         def mapped(root):
             return mapping.get(root, root)
 
-        definitions.update(mapped(root) for root in summary["definition_changes"])
-        overwrites.update(mapped(root) for root in summary["guaranteed_whole_overwrites"])
+        definitions.update(mapped(root) for root in summary["definition_changes"] if mapped(root) is not None)
+        overwrites.update(mapped(root) for root in summary["guaranteed_whole_overwrites"] if mapped(root) is not None)
         for operation in summary["operations"]:
             kind = operation["kind"]
             if kind in {"read", "write", "overwrite"} and operation["rank"]:
                 root = mapped(operation["resource"])
+                if root is None:
+                    continue
                 effects.setdefault(root, set()).add("read" if kind == "read" else "write")
             elif kind == "call":
                 # Summary composition can describe sections and descriptor
@@ -327,20 +404,22 @@ class ScopeBuilder:
                 # coherence claim through this legacy flattening path.
                 for actual in operation.get("resource_mappings", ()):
                     descriptor = actual["formal_descriptor"]
-                    if actual["storage"] == "rectangle" or (descriptor["rank"] and actual["storage"] != "whole"):
+                    if (actual["storage"] == "rectangle" and not allow_views
+                            or descriptor["rank"] and actual["storage"] not in {"whole", "omitted", "rectangle"}):
                         raise CompilationError("nested rectangular source-call mapping requires canonical root views: "
                                                + operation["procedure"])
-                    if (actual["presence"] != "supplied" or "optional" in descriptor["attributes"]
-                            or actual["storage"] == "omitted"):
+                    if actual["presence"] not in {"supplied", "omitted", "forwarded_optional", "allocation_dependent"}:
                         raise CompilationError("nested optional source-call arguments require presence-preserving execution variants: "
                                                + operation["procedure"])
-                    if "allocatable" in descriptor["attributes"]:
+                    if "allocatable" in descriptor["attributes"] and descriptor["intent"] != "in":
                         raise CompilationError("nested allocatable callee formals require original descriptor and allocation semantics: "
                                                + operation["procedure"])
                 self.check_whole_view_formals(self.analysis.routines[operation["procedure"]])
                 child_mapping = {formal: mapped(actual) for formal, actual in operation["resource_mapping"].items()}
+                child_mapping.update({actual["formal_resource"]: None for actual in operation.get("resource_mappings", ())
+                                      if actual["storage"] == "omitted"})
                 child_effects, child_definitions, child_overwrites = self.native_effects(
-                    operation["procedure"], child_mapping, active + (procedure,))
+                    operation["procedure"], child_mapping, active + (procedure,), allow_views=allow_views)
                 for root, actions in child_effects.items():
                     effects.setdefault(root, set()).update(actions)
                 definitions.update(child_definitions)
@@ -352,14 +431,32 @@ class ScopeBuilder:
                     if not effect.get("rank", 1):
                         continue
                     root = mapped(effect["resource"])
+                    if root is None:
+                        continue
                     effects.setdefault(root, set()).add("read" if effect["kind"] == "read" else "write")
                     if effect["kind"] == "overwrite" and not operation["guard"]:
                         overwrites.add(root)
         return effects, definitions, overwrites
 
     def roots_for(self, call):
+        if call.region is not None:
+            return self.inline.effects(call, mapped=True)
         mapping = {formal: binding.root for formal, binding in call.bindings.items()}
-        return self.native_effects(call.procedure, mapping)
+        mapping.update({root: None for root in self.omitted_resources(call)})
+        return self.native_effects(call.procedure, mapping, allow_views=view_call(call))
+
+    @staticmethod
+    def omitted_resources(call):
+        if call.region is not None:
+            return set()
+        return {"argument::" + item.formal for item in call.resolved.mappings if item.actual is None}
+
+    def call_effects(self, call):
+        """Absent optional actuals have no payload or definition events."""
+        if call.region is not None:
+            return self.inline.effects(call)
+        return self.native_effects(call.procedure, {root: None for root in self.omitted_resources(call)},
+                                   allow_views=view_call(call))
 
     def visible(self, routine, root):
         candidates = set(routine.scope.bindings)
@@ -417,18 +514,139 @@ class ScopeBuilder:
     def add_edit(self, path, first, last, replacement):
         self.edits.setdefault(path, []).append((first, last, replacement))
 
-    def entry_artifacts(self, procedure):
+    def entry_artifacts(self, procedure, *, views=False):
         sources = self.numerical(procedure)
         if sources is None:
             raise CompilationError("requested source leaf has no shared numerical entry")
-        directory = "entries/" + _name("entry_", procedure)
+        directory = "entries/" + _name("entry_", self.inline.entries.get(procedure, procedure))
+        if views:
+            if self.config.collective or procedure not in self.numerical_ir:
+                raise CompilationError("borrowed numerical views require a prepared serial source leaf")
+            if procedure not in self.view_generated:
+                function, plan = self.numerical_ir[procedure]
+                self.view_generated[procedure] = generate_scoped(
+                    function, plan, self.config, "common_functions.cuh", runtime_id=self.runtime["runtime_id"], root_views=True)
+            companion = self.view_generated[procedure]
+            public = companion.report
+            artifacts = {"shared_entry.cu": companion.cuda, "shared_interface.f90": companion.fortran}
+            directory += "_views"
+        else:
+            public, artifacts = sources.scoped, sources.artifacts
+        if procedure not in self.inline.regions:
+            self.variants.register(
+                procedure, interface="root_view_v1" if views else "full_root_entry_v1", role="numerical_entry",
+                name=public["fortran_module"] + "::" + public["fortran_procedure"],
+                summary_identity=self.analysis.summarize(procedure)["summary_identity"],
+                requirements=("compiler-approved numerical entry",
+                              "borrowed canonical root view descriptors" if views else "canonical full-root handles"),
+                shared_artifacts=(directory + "/shared_entry.cu", directory + "/shared_interface.f90"))
         if directory + "/shared_entry.cu" not in self.outputs:
             for name in ("shared_entry.cu", "shared_interface.f90"):
-                self.outputs[directory + "/" + name] = sources.artifacts[name]
+                self.outputs[directory + "/" + name] = artifacts[name]
             self.outputs[directory + "/common_functions.cuh"] = read_common_header()
             self.outputs[directory + "/scoped_entry.hpp"] = self.runtime_outputs["scoped_entry.hpp"]
             self.outputs[directory + "/scoped_runtime.h"] = self.runtime_outputs["scoped_runtime.h"]
-        return sources.scoped, directory
+            if views:
+                for name in ("view_entry.hpp", "scoped_regions.hpp"):
+                    self.outputs[directory + "/" + name] = self.runtime_outputs[name]
+        return public, directory
+
+    def view_clone(self, procedure, *, query=False):
+        """Reuse one original-state wrapper with mode-bearing borrowed views."""
+        cache = self.view_queries if query else self.view_clones
+        if procedure in cache:
+            return cache[procedure]
+        routine = self.analysis.routines[procedure]
+        if not self.view_wrapper_supported(procedure, require_borrowed=False):
+            raise CompilationError("source wrapper requires complete view-composable numerical calls: " + procedure)
+        if any(name.startswith("fort_") for name in routine.scope.bindings):
+            raise CompilationError("source names conflict with the view helper namespace")
+        arrays = [name for name in routine.arguments if routine.scope.bindings[name].rank]
+        roots = ["argument::" + name for name in arrays]
+        descriptors = {root: "fort_view_" + str(index) for index, root in enumerate(roots)}
+        handles = {root: descriptors[root] + "%buffer" for root in roots}
+        name = _name("fort_scope_view_query_" if query else "fort_scope_view_clone_", procedure)
+        cache[procedure] = name, roots
+        if not query:
+            self.variants.register(
+                procedure, interface="source_root_view_v1", role="call_worker", name=name,
+                summary_identity=self.analysis.summarize(procedure)["summary_identity"],
+                requirements=("mode-bearing CPU/GPU execution", "composed borrowed source views", "original storage retained"),
+                shared_artifacts=("sources/" + _name("source_", str(routine.scope.path)) + ".f90",))
+        arguments = ["fort_context", *([] if query else ["fort_mode"]), *routine.arguments,
+                     *descriptors.values(), *(["fort_status"] if query else [])]
+        header = _fortran_list("subroutine " + name + "(", arguments, ")", 0)
+        imports = ["use iso_c_binding", "use fort_scoped_memory"]
+        spec = []
+        for declaration in _children(_part(routine.scope.node, "Specification_Part")):
+            if _kind(declaration) != "Type_Declaration_Stmt":
+                spec.append(str(declaration))
+                continue
+            dtype, attributes, entities = declaration.items
+            for entity in _children(entities):
+                formal = str(entity.items[0]).lower()
+                attrs = [str(attribute) for attribute in _children(attributes)]
+                if formal in routine.arguments:
+                    if query:
+                        attrs = [attribute for attribute in attrs if not attribute.upper().startswith("INTENT")
+                                 and attribute.upper() != "VALUE"] + ["INTENT(IN)"]
+                    if formal in arrays and "TARGET" not in attrs:
+                        attrs.append("TARGET")
+                spec += _fortran_list(str(dtype) + (", " + ", ".join(attrs) if attrs else "") + " ::",
+                                      [str(entity)], "", 0)
+        spec += ["integer(c_int64_t), intent(in) :: fort_context",
+                 *( [] if query else ["integer(c_int), intent(in) :: fort_mode"]),
+                 "integer(c_int)" + (", intent(out)" if query else "") + " :: fort_status",
+                 *[f"type(fort_scope_view_v1), intent(in) :: {descriptor}" for descriptor in descriptors.values()]]
+        if query:
+            spec.append(f"type(fort_scope_plan_binding), target :: fort_bindings({max(1, len(roots))})")
+        original_lowers = {root: "fort_lower_" + str(index) for index, root in enumerate(roots)}
+        for root, lower in original_lowers.items():
+            spec.append(f"integer(c_int64_t) :: {lower}({routine.scope.bindings[root.split('::')[-1]].rank})")
+        body = ["fort_status = FORT_SCOPE_OK"]
+        on_error = ("return",) if query else ("error stop 'composed source view failed after preflight'",)
+        for root, lower in original_lowers.items():
+            binding = routine.scope.bindings[root.split("::")[-1]]
+            body += _fortran_list(lower + " = [", [f"lbound({binding.name},{axis},kind=c_int64_t)"
+                                                   for axis in range(1, binding.rank + 1)], "]", 0)
+        children = []
+        for index, node in enumerate(_children(routine.execution)):
+            if _kind(node) == "Comment":
+                continue
+            call = self.resolve(routine, node)
+            codes = {}
+            for formal_index, mapping in enumerate(call.resolved.mappings):
+                if not mapping.formal_binding.rank:
+                    continue
+                if mapping.resource not in descriptors:
+                    raise CompilationError("hidden source wrapper arrays require an explicit parent view: " + mapping.resource)
+                values = {dependency.root: self.visible(routine, dependency.root)
+                          for dependency in view_dependencies(call).values()}
+                code = build_view(mapping, handles[mapping.resource], original_lowers[mapping.resource], values,
+                                  f"fort_child_{index}_{formal_index}", on_error=on_error,
+                                  parent_view=descriptors[mapping.resource])
+                spec.extend(code.specification)
+                body.extend(code.prepare)
+                codes[mapping.formal] = code
+            children.append((call, codes))
+        for formal in arrays:
+            binding = routine.scope.bindings[formal]
+            if binding.intent == "out":
+                body += forget_view(descriptors["argument::" + formal], binding.rank, query=query, on_error=on_error)
+        for call, codes in children:
+            if self.closure(call.procedure)[0]:
+                body += self.view_numerical_call(call, codes, list(map(str, call.actuals)), imports, query=query,
+                                                caller_module=routine.scope.module)
+            else:
+                mapped_handles = {"argument::" + formal: code.name + "%buffer" for formal, code in codes.items()}
+                operation = self.native_plan if query else self.native_call
+                body += operation(call, *self.call_effects(call), mapped_handles, view_codes=codes)
+            if query:
+                body += ["if (fort_status /= FORT_SCOPE_OK) return"]
+        from compiler.scopes.segments import fortran_lines
+        self.append_procedure(routine.scope.parent, name, "\n".join(fortran_lines([
+            *header, *dict.fromkeys(imports), *spec, *body, "end subroutine " + name, ""])))
+        return cache[procedure]
 
     def owner_transfer_setup(self, leaves, imports, *, context="fort_context", status="fort_status"):
         """Configure nondefault transfers once, before recording any work."""
@@ -455,6 +673,11 @@ class ScopeBuilder:
         array_roots = ["argument::" + a for a in array_names]
         array_roots += sorted(set(effects) - set(array_roots))
         name = _name("fort_scope_clone_", procedure)
+        self.variants.register(
+            procedure, interface="root_handles_v1", role="call_worker", name=name,
+            summary_identity=summary["summary_identity"],
+            requirements=("source-proven complete effects", "mode-bearing CPU/GPU execution"),
+            shared_artifacts=("sources/" + _name("source_", str(routine.scope.path)) + ".f90",))
         handles = {root: "fort_handle_" + str(i) for i, root in enumerate(array_roots)}
         self.clones[procedure] = (name, array_roots)
         header = _fortran_list("subroutine " + name + "(",
@@ -530,7 +753,7 @@ class ScopeBuilder:
                                               *map(str, call.actuals),
                                               *[root_handles[root] for root in child_arrays]])
                 else:
-                    actions, definitions, overwrites = self.native_effects(call.procedure)
+                    actions, definitions, overwrites = self.call_effects(call)
                     body += self.native_call(call, actions, definitions, overwrites, root_handles)
         # USE statements precede the original specification, including IMPLICIT.
         extra = ["integer(c_int64_t), intent(in) :: fort_context",
@@ -544,6 +767,8 @@ class ScopeBuilder:
 
     def scalar_writes(self, procedure, mapping=None):
         """Map scalar effects through the same bounded source closure."""
+        if procedure in self.inline.regions:
+            return set()  # Extraction proved every loop-written scalar dead/private.
         mapping = {} if mapping is None else mapping
         routine = self.analysis.routines[procedure]
         result = {mapping.get(binding.root, binding.root) for binding in routine.scope.bindings.values()
@@ -588,6 +813,8 @@ class ScopeBuilder:
     def planning_inputs(self, procedure, mapping=None, *, require_estimates=True):
         """Read public numerical metadata; never infer costs from generated code."""
         mapping = {} if mapping is None else mapping
+        if procedure in self.inline.regions:
+            return self.inline.inputs(procedure, mapping, estimates=require_estimates)
         routine = self.analysis.routines[procedure]
         self.check_query_specification(routine)
         numeric = self.numerical(procedure)
@@ -641,36 +868,53 @@ class ScopeBuilder:
             own_payload, own_scalars = self.planning_inputs(call.procedure, child, require_estimates=require_estimates)
             payload.update(own_payload)
             scalars.update(own_scalars)
+            scalars.update(mapping.get(root, root) for root in view_dependencies(call))
         return payload, scalars
 
-    def native_accesses(self, call, handles, *, query):
+    def native_accesses(self, call, handles, *, query, view_codes=None):
         """Use one checked original-coordinate mapping for query and hooks."""
         sections = self.analysis.native_sections(call.procedure)
+        omitted = self.omitted_resources(call)
+        if omitted:
+            sections = replace(sections, resources=tuple(item for item in sections.resources if item.resource not in omitted))
         if not sections.available:
+            if view_codes is not None:
+                raise CompilationError("native rectangular source-call mapping lacks exact projected effects")
             return None
         prefix = _name("fort_native_", call.procedure + ":" + str(_span(call.node)))
         try:
+            if view_codes is not None:
+                return build_native_view_accesses(
+                    sections, {"argument::" + formal: code.name for formal, code in view_codes.items()}, handles, prefix,
+                    on_error=("return",) if query else ("error stop 'projected native access preparation failed'",))
             return build_native_accesses(sections, handles, prefix,
                                          on_error=("return",) if query else
                                          ("error stop 'shared native access preparation failed'",))
         except CompilationError:
+            if view_codes is not None:
+                raise
             # Read-only aliases and unsupported physical mappings keep the
             # existing conservative effects, which the preflight must validate.
             return None
 
-    def native_plan(self, call, actions, definitions, overwrites, handles):
+    def native_plan(self, call, actions, definitions, overwrites, handles, *, view_codes=None):
         """Record fixed host effects at their source positions without calling them."""
         outer = set(self.analysis.summarize(call.procedure)["definition_changes"])
         if (definitions - outer) & handles.keys():
             raise CompilationError("nested native definition changes require original-position planning hooks")
         lines = []
         for root in sorted(definitions & handles.keys()):
+            if view_codes is not None:
+                formal = root.split("::")[-1]
+                lines += forget_view(view_codes[formal].name, call.resolved.mappings[call.resolved.formals.index(formal)].formal_binding.rank,
+                                     query=True, on_error=("return",))
+                continue
             lines += ["fort_bindings(1) = fort_scope_plan_binding()",
                       f"fort_bindings(1)%buffer = {handles[root]}",
                       "fort_status = fort_scope_plan_add(fort_context, FORT_SCOPE_PLAN_FORGET, 0_c_int64_t, &",
                       "    c_loc(fort_bindings), 1_c_size_t, 0.0_c_double, 0.0_c_double, 0_c_int)",
                       "if (fort_status /= FORT_SCOPE_OK) return"]
-        refined = self.native_accesses(call, handles, query=True)
+        refined = self.native_accesses(call, handles, query=True, view_codes=view_codes)
         if refined is not None:
             lines += ["block", *[line for access in refined for line in access.specification]]
             for i, access in enumerate(refined, 1):
@@ -788,7 +1032,7 @@ class ScopeBuilder:
                                           *[root_handles[root] for root in child_roots], "fort_status"])
                     body += ["if (fort_status /= FORT_SCOPE_OK) return"]
                 else:
-                    actions, definitions, overwrites = self.native_effects(call.procedure)
+                    actions, definitions, overwrites = self.call_effects(call)
                     body += self.native_plan(call, actions, definitions, overwrites, root_handles)
         extra = ["integer(c_int64_t), intent(in) :: fort_context",
                  *_fortran_list("integer(c_int64_t), intent(in) ::", list(handles.values()), "", 0),
@@ -827,16 +1071,18 @@ class ScopeBuilder:
                                        + call.procedure + " " + root)
 
     def check_native_calls(self, call):
+        if call.region is not None:
+            return
         leaves, _ = self.closure(call.procedure)
         if not leaves:
-            self.check_native_definitions(call, *self.native_effects(call.procedure))
+            self.check_native_definitions(call, *self.call_effects(call))
         elif not self.numerical(call.procedure):
             routine = self.analysis.routines[call.procedure]
             for node in _children(routine.execution):
                 if _kind(node) == "Call_Stmt":
                     self.check_native_calls(self.resolve(routine, node))
 
-    def native_call(self, call, actions, definitions, overwrites, handles, *, actuals=None):
+    def native_call(self, call, actions, definitions, overwrites, handles, *, actuals=None, view_codes=None):
         self.check_native_definitions(call, actions, definitions, overwrites)
         lines = []
         # Only outer dummy definition changes can be performed before the call.
@@ -846,8 +1092,13 @@ class ScopeBuilder:
             raise CompilationError("nested native definition changes require original-position hooks")
         for root in sorted(definitions):
             if root in handles:
+                if view_codes is not None:
+                    formal = root.split("::")[-1]
+                    lines += forget_view(view_codes[formal].name, call.resolved.mappings[call.resolved.formals.index(formal)].formal_binding.rank,
+                                         query=False, on_error=("error stop 'native view definition failed'",))
+                    continue
                 lines += _checked(f"fort_scope_forget_definition(fort_context, {handles[root]})")
-        refined = self.native_accesses(call, handles, query=False)
+        refined = self.native_accesses(call, handles, query=False, view_codes=view_codes)
         if refined is not None:
             lines += ["block", *[line for access in refined for line in access.specification]]
             for access in refined:
@@ -897,10 +1148,19 @@ class ScopeBuilder:
             raise CompilationError("source names conflict with the initial scope owner namespace")
         arrays, scalars, written = {}, {}, set()
         for call in calls:
+            if call.region is not None:
+                for binding in call.region.bindings:
+                    if binding.rank:
+                        self.capture(binding)
+                        arrays[binding.root] = binding
+                    else:
+                        scalars[binding.root] = binding
+                written.update(call.region.written_resources)
+                continue
             self.check_native_calls(call)
             actions, definitions, overwrites = self.roots_for(call)
             written.update(root for root,kinds in actions.items() if "write" in kinds)
-            _, formal_definitions, _ = self.native_effects(call.procedure)
+            _, formal_definitions, _ = self.call_effects(call)
             for formal,binding in call.bindings.items():
                 if binding.rank:
                     self.capture(binding)
@@ -926,6 +1186,7 @@ class ScopeBuilder:
                             or binding.kind not in ({1, 4} if binding.dtype == "logical" else {4, 8})):
                         raise CompilationError("unsupported scalar source capture")
                     scalars[binding.root] = binding
+            scalars.update(view_dependencies(call))
         return arrays, scalars, written
 
     def owner_query(self, calls, arrays, written):
@@ -938,14 +1199,16 @@ class ScopeBuilder:
             payload, controls, changed_scalars = set(), set(), set()
             for call in calls:
                 mapping = {formal: binding.root for formal, binding in call.bindings.items()}
-                callee = self.analysis.routines[call.procedure]
-                for formal in callee.arguments:
-                    mapping.setdefault("argument::" + formal, None)
+                if call.region is None:
+                    callee = self.analysis.routines[call.procedure]
+                    for formal in callee.arguments:
+                        mapping.setdefault("argument::" + formal, None)
                 child_leaves, _ = self.closure(call.procedure)
                 if child_leaves:
                     own_payload, own_controls = self.planning_inputs(call.procedure, mapping, require_estimates=False)
                     payload.update(own_payload)
                     controls.update(own_controls)
+                controls.update(view_dependencies(call))
                 changed_scalars.update(self.scalar_writes(call.procedure, mapping))
             if payload & written:
                 raise CompilationError("planning payload arrays change inside the complete source scope")
@@ -978,7 +1241,7 @@ class ScopeBuilder:
         visited = set()
 
         def visit(procedure):
-            if procedure in visited or self.numerical(procedure):
+            if procedure in visited or procedure in self.inline.regions or self.numerical(procedure):
                 return
             visited.add(procedure)
             leaves, _ = self.closure(procedure)
@@ -1003,7 +1266,17 @@ class ScopeBuilder:
                        (_span(calls[0].node)[0], _span(calls[-1].node)[1]))
         digest = f"{routine.qualified}:{first}:{last}"
         name = _name("fort_scope_owner_", digest)
+        owner_variant = self.variants.register(
+            routine.qualified, interface=f"source_span_v1:{first}:{last}:{bool(structure)}",
+            role="coordinator", name=name,
+            summary_identity=self.analysis.summarize(routine.qualified)["summary_identity"],
+            requirements=("proved source span and caller participation", "one invocation owns buffer lifetime"),
+            shared_artifacts=("sources/" + _name("source_", str(routine.scope.path)) + ".f90",))
         arrays, scalars, written = self.owner_inputs(calls)
+        borrowed = any(view_call(call) for call in calls)
+        regional = any(call.region is not None for call in calls)
+        if borrowed and structure:
+            raise CompilationError("reached rectangular source views require per-segment descriptor preflight")
         if structure:
             structure.inputs(arrays, scalars, written)
             structure.check_conservative_definitions(arrays)
@@ -1054,7 +1327,7 @@ class ScopeBuilder:
         parameters = {root: _name("fort_capture_", digest) + "_" + str(i)
                       for i, root in enumerate((*arrays, *scalars))}
         formal_names = list(parameters.values())
-        bounds = {root: parameters[root] + "_lower" for root in arrays} if structure else {}
+        bounds = {root: parameters[root] + "_lower" for root in arrays} if structure or borrowed or regional else {}
         formal_names += list(bounds.values())
         if caller_fallback:
             formal_names.append("fort_native_required")
@@ -1062,19 +1335,30 @@ class ScopeBuilder:
                  for root in parameters}
 
         def actuals(call, *, shared=True):
-            bindings = views if shared else parameters
-            return [bindings[binding.root] if
-                    (binding := self.analysis._actual_binding(routine.scope, actual))
-                    and binding.root in parameters else str(actual) for actual in call.actuals]
+            if call.region is not None:
+                return [views[binding.root] if shared else parameters[binding.root] for binding in call.region.bindings]
+            values = []
+            for mapping, actual in zip(call.resolved.mappings, call.actuals, strict=True):
+                binding = self.analysis._actual_binding(routine.scope, actual)
+                storage = parameters if not shared or "allocatable" in mapping.formal_binding.attributes else views
+                if binding and binding.root in parameters:
+                    values.append(storage[binding.root])
+                elif borrowed and actual is not None:
+                    from compiler.scopes.segments import renamed
+                    values.append(renamed(self, actual, storage))
+                else:
+                    values.append(str(actual))
+            return values
 
         header = _fortran_list("subroutine " + name + "(", formal_names, ")", 0)
         imports = [str(n) for n in _children(_part(routine.scope.node, "Specification_Part"))
                    if _kind(n) == "Use_Stmt"]
         spec = []
         handles, layouts, flags = {}, {}, {}
-        if structure:
+        if structure or borrowed or regional:
             spec += [f"integer(c_int64_t), intent(in) :: {bounds[root]}({binding.rank})"
                      for root, binding in arrays.items()]
+        if structure:
             spec += ["logical :: fort_branch"]
         if caller_fallback:
             spec += ["logical, intent(out) :: fort_native_required"]
@@ -1087,8 +1371,10 @@ class ScopeBuilder:
             if binding.intent == "in" and root in written:
                 raise CompilationError("scope writes an INTENT(IN) capture")
             intent = "inout" if root in written else "in"
-            shape = ','.join(f"{bounds[root]}({axis}):" for axis in range(1, binding.rank + 1)) if structure else ','.join(':' for _ in range(binding.rank))
-            spec += [*_fortran_line(f"{dtype}, target, intent({intent}) :: {visible}({shape})", 0),
+            descriptor = "allocatable" in binding.attributes
+            shape = ','.join(f"{bounds[root]}({axis}):" for axis in range(1, binding.rank + 1)) if (structure or borrowed or regional) and not descriptor else ','.join(':' for _ in range(binding.rank))
+            attributes = "allocatable, target" if descriptor else "target"
+            spec += [*_fortran_line(f"{dtype}, {attributes}, intent({intent}) :: {visible}({shape})", 0),
                      *_fortran_line(f"{dtype}, pointer, contiguous :: {views[root]}({','.join(':' for _ in range(binding.rank))})", 0),
                      f"integer(c_size_t), target :: fort_extents_{i}({binding.rank})",
                      f"integer(c_int64_t), target :: fort_lowers_{i}({binding.rank})",
@@ -1105,6 +1391,26 @@ class ScopeBuilder:
             dtype = "logical" if binding.signature()[:2] == ("logical",4) else DTYPES[binding.signature()[:2]][0]
             intent = "in" if binding.intent == "in" or "parameter" in binding.attributes else "inout"
             spec += [f"{dtype}, intent({intent}) :: {parameters[root]}"]
+        private = {name for call in calls if call.region is not None for name in call.region.private_scalars}
+        for private_name in sorted(private):
+            binding = routine.scope.bindings[private_name]
+            spec.append(f"{DTYPES[binding.signature()[:2]][0]} :: {private_name}")
+        view_codes = {}
+        view_block = _name("fort_views_", digest)
+        scalar_values = {**parameters, **{root: self.visible(routine, root) for root in original_scalars}}
+        if borrowed:
+            for call_index, call in enumerate(calls):
+                if not view_call(call):
+                    continue
+                codes = {}
+                for mapping_index, mapping in enumerate(call.resolved.mappings):
+                    if not mapping.formal_binding.rank:
+                        continue
+                    code = build_view(mapping, handles[mapping.resource], bounds[mapping.resource], scalar_values,
+                                      f"fort_v{call_index}_{mapping_index}", on_error=("exit " + view_block,))
+                    spec.extend(code.specification)
+                    codes[mapping.formal] = code
+                view_codes[id(call.node)] = codes
         spec += ["integer(c_int64_t) :: fort_context = 0",
                  *_fortran_list("integer(c_int64_t) ::", list(handles.values()), "", 0),
                  "integer(c_int) :: fort_status, fort_cleanup",
@@ -1116,7 +1422,7 @@ class ScopeBuilder:
         # Explicit initialization on a local declaration implies SAVE. Assign at
         # entry instead: no scope-local context or state persists across calls.
         spec = [s.replace("fort_context = 0", "fort_context") for s in spec]
-        original = structure.original(parameters) if structure else [line for call in calls for line in _call(str(call.node.items[0]), call.original_arguments(actuals(call, shared=False)))]
+        original = structure.original(parameters) if structure else self.original_calls(calls, parameters, actuals, shared=False)
         # An original numerical procedure may access its hidden module arrays
         # directly. A non-TARGET actual cannot be updated through that alias
         # while the new owner dummy is associated. Return before any numerical
@@ -1141,7 +1447,7 @@ class ScopeBuilder:
             # not acquire whole-array temporaries from synthetic owner dummies.
             if not caller_fallback:
                 native = (structure.original(views) if structure else
-                          [line for call in calls for line in _call(str(call.node.items[0]), call.original_arguments(actuals(call)))]) + ["return"]
+                          self.original_calls(calls, views, actuals)) + ["return"]
             body += ["fort_status = fort_scope_create(0_c_int, fort_context)"]
             body += ["if (fort_status == FORT_SCOPE_OK) &",
                      f"  fort_status = fort_scope_set_device_budget(fort_context, {self.device_budget}_c_size_t)"]
@@ -1174,24 +1480,30 @@ class ScopeBuilder:
                                          ["fort_context", f"{i+1}_c_int64_t", "1_c_int64_t",
                                           layouts[root], f"{flags[root]}_c_int", handles[root]], ")", 0)
                 body += ["endif"]
+            if borrowed:
+                body += ["if (fort_status == FORT_SCOPE_OK) then", view_block + ": block"]
+                body += [line for codes in view_codes.values() for code in codes.values() for line in code.prepare]
+                body += ["end block " + view_block, "endif"]
             body += ["if (fort_status /= FORT_SCOPE_OK) then",
                      "if (fort_context /= 0) then",
                      "fort_cleanup = fort_scope_close(fort_context)",
                      "if (fort_cleanup /= FORT_SCOPE_OK) error stop 'shared scope preflight cleanup failed'",
                      "endif", *native, "endif"]
             if self.config.policy == "auto":
-                selector = self.numerical(sorted(leaves)[0]).scoped
+                selector = (self.entry_artifacts(sorted(leaves)[0], views=True)[0]
+                            if borrowed else self.numerical(sorted(leaves)[0]).scoped)
                 imports.append(f"use {selector['fortran_module']}, only: fort_choose => {selector['planning']['fortran_selector']}")
             if structure:
                 body += structure.emit(handles, views, actuals, imports, selector=selector if self.config.policy == "auto" else None)
                 body += _checked("fort_scope_close(fort_context)")
             else:
-                body += self.owner_complete_plan(calls, leaves, handles, actuals, imports, native, parameters=views)
+                body += self.owner_complete_plan(calls, leaves, handles, actuals, imports, native, parameters=views,
+                                                 view_codes=view_codes)
         if caller_fallback:
             body += ["fort_native_required = .false."]
         lines = [*header, "use iso_c_binding", "use fort_scoped_memory",
                  *dict.fromkeys(imports), "implicit none", *spec, *body, "end subroutine " + name, ""]
-        if structure:
+        if structure or borrowed or regional:
             from compiler.scopes.segments import fortran_lines
             lines = fortran_lines(lines)
         text = "\n".join(lines)
@@ -1207,7 +1519,7 @@ class ScopeBuilder:
             replacement = ("block\nlogical :: " + fallback_flag + "\n" + replacement
                            + "if (" + fallback_flag + ") then\n" + original_source
                            + "endif\nend block\n")
-        if structure:
+        if structure or borrowed or regional:
             # Metadata is obtained from the original descriptor. The intrinsic
             # declaration also prevents an original local name from shadowing
             # the generated inquiry, before owner dummy association rebases it.
@@ -1219,13 +1531,14 @@ class ScopeBuilder:
                                "use fort_scoped_memory, only: " + serial + " => fort_scope_serial_caller\n"
                                "intrinsic :: lbound\nif (" + serial + "() == 0) then\n" + original_source
                                + "else\n" + replacement + "endif\nend block\n")
-        if allocated_roots:
+        if allocated_roots or regional and origin_roots:
             replacement = self.guard_owner_allocation(routine, first, last, replacement, serial,
                                                       allocated_roots, origin_roots, arrays)
-        if structure:
+        if structure or borrowed or regional:
             replacement = "\n".join(fortran_lines(replacement.splitlines())) + "\n"
         self.add_edit(routine.scope.path, first, last, replacement)
-        scope = {"owner": name, "path": str(routine.scope.path), "first_line": first, "last_line": last,
+        scope = {"owner": name, "owner_variant": owner_variant.identity,
+                "path": str(routine.scope.path), "first_line": first, "last_line": last,
                 "parameters": [{"name": parameters[root], "resource": root, "actual": visible}
                                for root, visible in zip(parameters, names, strict=True)],
                 "calls": [c.procedure for c in calls], "gpu_leaves": sorted(leaves),
@@ -1250,6 +1563,17 @@ class ScopeBuilder:
                                                   if origin_roots else {})}} if allocated_roots else {}),
                 "mode": self.config.policy, "participation": "serial"}
         scope["transfer_configuration"] = self.numerical(sorted(leaves)[0]).scoped["transfer_configuration"]
+        if borrowed:
+            scope["borrowed_views"] = {
+                "abi_version": 1, "preflight": "all reached straight-span descriptors before numerical execution",
+                "resource_identity": "canonical root registered once; child views borrow its generation and lifetime",
+                "calls": [{"procedure": call.procedure, "first_line": _span(call.node)[0],
+                           "last_line": _span(call.node)[1],
+                           "mappings": [code.public for code in view_codes[id(call.node)].values()]}
+                          for call in calls if view_call(call)],
+                "boundaries": ["mutable or reached section bounds", "normalized package sections",
+                               "native effects or aliases without exact projected proofs",
+                               "optional or allocatable descriptor forwarding through view wrappers"]}
         chains = [item[3] for item in self.batch_chains.values()
                   if first <= item[3]["first_line"] <= item[3]["last_line"] <= last]
         if chains:
@@ -1267,7 +1591,7 @@ class ScopeBuilder:
                                         "reason": "original hidden numerical array access requires ended dummy association"}
         return scope
 
-    def owner_complete_plan(self, calls, leaves, handles, actuals, imports, native, *, parameters=None):
+    def owner_complete_plan(self, calls, leaves, handles, actuals, imports, native, *, parameters=None, view_codes=None):
         """Emit the unchanged whole-span plan used by legacy straight owners."""
         routine = self.entry
         body = ["fort_status = fort_scope_plan_reset(fort_context)"]
@@ -1277,7 +1601,11 @@ class ScopeBuilder:
             native_handles = {formal: handles[root] for formal, root in mapping.items() if root in handles}
             native_handles.update({root: handle for root, handle in handles.items() if not root.startswith("argument::")})
             body += ["if (fort_status == FORT_SCOPE_OK) then"]
-            if child_leaves:
+            if call.region is not None:
+                body += self.inline.emit_call(call, handles, parameters or {}, imports, query=True)
+            elif view_call(call) and child_leaves:
+                body += self.view_numerical_call(call, view_codes[id(call.node)], actuals(call), imports, query=True)
+            elif child_leaves:
                 query, query_roots = self.query_clone(call.procedure)
                 module = self.analysis.routines[call.procedure].scope.module
                 if module != routine.scope.module:
@@ -1287,7 +1615,8 @@ class ScopeBuilder:
             else:
                 # This owner may fall back; RETURN in query glue belongs
                 # to the query helper rather than the executing owner.
-                query_lines = self.native_plan(call, *self.native_effects(call.procedure), native_handles)
+                query_lines = self.native_plan(call, *self.call_effects(call), native_handles,
+                                               view_codes=view_codes.get(id(call.node)) if view_codes else None)
                 block = _name("fort_record_", str(_span(call.node)))
                 body += [block + ": block", *[("exit " + block if line.strip() == "return" else
                                               line.replace("if (fort_status /= FORT_SCOPE_OK) return",
@@ -1303,13 +1632,38 @@ class ScopeBuilder:
                  "fort_cleanup = fort_scope_close(fort_context)",
                  "if (fort_cleanup /= FORT_SCOPE_OK) error stop 'shared scope planning cleanup failed'",
                  *native, "endif"]
-        body += self.owner_calls(calls, "fort_mode", handles, parameters or {}, actuals, imports, terminal=True)
+        body += self.owner_calls(calls, "fort_mode", handles, parameters or {}, actuals, imports, terminal=True,
+                                 view_codes=view_codes)
         body += _checked("fort_scope_close(fort_context)")
         return body
 
-    def owner_calls(self, calls, mode, handles, parameters, actuals, imports, *, batch=True, terminal=False):
+    def view_numerical_call(self, call, codes, actuals, imports, *, query=False, mode="fort_mode", caller_module=None):
+        if not self.numerical(call.procedure):
+            name, roots = self.view_clone(call.procedure, query=query)
+            module = self.analysis.routines[call.procedure].scope.module
+            if module != (caller_module or self.entry.scope.module):
+                imports.append(f"use {module}, only: {name}")
+            return _call(name, ["fort_context", *([] if query else [mode]), *actuals,
+                                *[codes[root.split("::")[-1]].name for root in roots],
+                                *(["fort_status"] if query else [])])
+        public, _ = self.entry_artifacts(call.procedure, views=True)
+        function = public["planning"]["fortran_procedure"] if query else public["fortran_procedure"]
+        alias = _name("fort_view_plan_" if query else "fort_view_run_", call.procedure)
+        imports.append(f"use {public['fortran_module']}, only: {alias} => {function}")
+        values = dict(zip(call.resolved.formals, actuals, strict=True))
+        arguments = ["fort_context", *([] if query else [mode]),
+                     *[codes[parameter["name"].lower()].name for parameter in public["array_parameters"]],
+                     *[values[parameter["name"].lower()] for parameter in public["scalar_parameters"]
+                       if not query or parameter["name"] in public["planning"]["scalar_inputs"]]]
+        lines = _fortran_list("fort_status = " + alias + "(", arguments, ")", 0)
+        if not query:
+            lines += ["if (fort_status /= FORT_SCOPE_OK) error stop 'borrowed numerical entry failed'"]
+        return lines
+
+    def owner_calls(self, calls, mode, handles, parameters, actuals, imports, *, batch=True, terminal=False,
+                    view_codes=None):
         """Run original approved calls, or one generic direct-leaf batch chain."""
-        if batch and self.config.scope_transfers in {"pipelined", "auto"}:
+        if batch and not any(view_call(call) or call.region is not None for call in calls) and self.config.scope_transfers in {"pipelined", "auto"}:
             from compiler.scopes.batch import execute_calls
             return execute_calls(self, calls, mode, handles, parameters, actuals, imports,
                                  lambda group: self.owner_calls(group, mode, handles, parameters, actuals, imports, batch=False),
@@ -1318,7 +1672,11 @@ class ScopeBuilder:
         body = []
         for call in calls:
             child_leaves, _ = self.closure(call.procedure)
-            if child_leaves:
+            if call.region is not None:
+                body += self.inline.emit_call(call, handles, parameters, imports, query=False, mode=mode)
+            elif view_call(call) and child_leaves:
+                body += self.view_numerical_call(call, view_codes[id(call.node)], actuals(call), imports, mode=mode)
+            elif child_leaves:
                 clone, arrays_ = self.clone(call.procedure)
                 module = self.analysis.routines[call.procedure].scope.module
                 if module != routine.scope.module:
@@ -1328,13 +1686,23 @@ class ScopeBuilder:
                                        for root in arrays_]])
             else:
                 mapping = {formal: binding.root for formal, binding in call.bindings.items()}
-                actions, definitions, overwrites = self.native_effects(call.procedure)
+                actions, definitions, overwrites = self.call_effects(call)
                 native_handles = {formal: handles[root] for formal, root in mapping.items() if root in handles}
                 # Hidden visible roots retain their canonical identity.
                 native_handles.update({root: handle for root,handle in handles.items() if not root.startswith("argument::")})
                 body += self.native_call(call, actions, definitions, overwrites, native_handles,
-                                         actuals=actuals(call))
+                                         actuals=actuals(call),
+                                         view_codes=view_codes.get(id(call.node)) if view_codes else None)
         return body
+
+    def original_calls(self, calls, parameters, actuals, *, shared=True):
+        result = []
+        for call in calls:
+            if call.region is not None:
+                result += self.inline.original(call, parameters)
+            else:
+                result += _call(str(call.node.items[0]), call.original_arguments(actuals(call, shared=shared)))
+        return result
 
     def guard_owner_allocation(self, routine, first, last, replacement, serial, allocated_roots, origin_roots, arrays):
         # Passing an unallocated actual to this ordinary assumed-shape
@@ -1344,29 +1712,29 @@ class ScopeBuilder:
         if not original.endswith("\n"):
             original += "\n"
         conditions = ["allocated(" + self.visible(routine, root) + ")" for root in allocated_roots]
-        guard = ["if ( &", *[condition + " .and. &" for condition in conditions[:-1]],
-                 conditions[-1] + " &", ") then"]
-        guard_intrinsics = "allocated"
+        guard = (["if ( &", *[condition + " .and. &" for condition in conditions[:-1]],
+                  conditions[-1] + " &", ") then"] if conditions else [])
+        guard_intrinsics = "allocated" if conditions else ""
         if origin_roots:
             conditions = [condition for root in origin_roots
                           for condition in self.original_bound_conditions(self.visible(routine, root), arrays[root].rank)]
             bounds = ["if ( &", *[condition + " .and. &" for condition in conditions[:-1]],
                       conditions[-1] + " &", ") then"]
             replacement = "\n".join(bounds) + "\n" + replacement + "else\n" + original + "endif\n"
-            guard_intrinsics += ", lbound, ubound, size"
+            guard_intrinsics += (", " if guard_intrinsics else "") + "lbound, ubound, size"
         replacement = ("block\nuse fort_scoped_memory, only: " + serial + " => fort_scope_serial_caller\n"
                        "intrinsic :: " + guard_intrinsics + "\nif (" + serial + "() == 0) then\n" + original + "else\n"
-                       + "\n".join(guard) + "\n" + replacement + "else\n" + original
-                       + "endif\nendif\nend block\n")
+                       + ("\n".join(guard) + "\n" + replacement + "else\n" + original + "endif\n" if guard else replacement)
+                       + "endif\nend block\n")
         return replacement
 
     def build_span(self, nodes):
-        if len(nodes) < 2:
+        if len(nodes) < 2 and not any(hasattr(node, "fort_inline_region") for node in nodes):
             return
         before = self.scope_checkpoint()
         try:
             calls = [self.resolve(self.entry,node) for node in nodes]
-            budget = self.analysis.summarize_span(c.procedure for c in calls)
+            budget = self.scope_budget(calls)
             leaves = set()
             for call in calls:
                 own, _ = self.closure(call.procedure)
@@ -1387,14 +1755,28 @@ class ScopeBuilder:
             self.boundaries.append({"first_line":_span(nodes[0])[0], "last_line":_span(nodes[-1])[1],
                                     "reason":str(error)})
 
+    def scope_budget(self, calls):
+        budget = self.analysis.summarize_span(call.procedure for call in calls if call.region is None)
+        regional = {call.procedure for call in calls if call.region is not None}
+        operations = sum(sum(_kind(node) in {"Assignment_Stmt", "Block_Nonlabel_Do_Construct", "If_Stmt", "If_Construct"}
+                             for root in self.inline.regions[procedure].nodes for node in walk(root))
+                         for procedure in regional)
+        if budget["operations"] + operations > 256 or budget["procedures"] + len(regional) > 32:
+            raise CompilationError("inline source effect closure budget exhausted")
+        return {**budget, "operations": budget["operations"] + operations,
+                "procedures": budget["procedures"] + len(regional)}
+
     def scope_checkpoint(self):
         return (dict(self.outputs), {path:list(edits) for path,edits in self.edits.items()},
                 dict(self.clones), dict(self.queries), dict(self.generated), dict(self.numerical_reasons),
-                dict(self.numerical_ir), dict(self.batch_chains))
+                dict(self.numerical_ir), dict(self.batch_chains), self.variants.checkpoint(), dict(self.view_generated),
+                dict(self.view_clones), dict(self.view_queries), set(self.inline.used))
 
     def restore_scope_checkpoint(self, checkpoint):
         (self.outputs, self.edits, self.clones, self.queries,
-         self.generated, self.numerical_reasons, self.numerical_ir, self.batch_chains) = checkpoint
+         self.generated, self.numerical_reasons, self.numerical_ir, self.batch_chains, variants, self.view_generated,
+         self.view_clones, self.view_queries, self.inline.used) = checkpoint
+        self.variants.restore(variants)
 
     def scan(self, nodes):
         from compiler.scopes.segments import StructuredScope, statement_span
@@ -1415,7 +1797,7 @@ class ScopeBuilder:
                     has_outer_work = any(_kind(node) in {"Call_Stmt", "Assignment_Stmt", "Block_Nonlabel_Do_Construct"}
                                          for node in candidate)
                     if leaves and len(calls) >= 2 and has_outer_work:
-                        budget = self.analysis.summarize_span(call.procedure for call in calls)
+                        budget = self.scope_budget(calls)
                         if budget["operations"] + structure.operation_count > 256:
                             raise CompilationError("bounded structured source operation budget exhausted")
                         scope = self.owner(calls, leaves, structure=structure)
@@ -1484,7 +1866,8 @@ class ScopeBuilder:
                     run = []
                     self.boundaries.append({"first_line":first,"last_line":last,
                                             "reason":"preprocessor control boundary between source calls"})
-                if len(run) < 32 and text and text[0].lstrip().lower().startswith("call ") and all(";" not in line for line in text):
+                if (len(run) < 32 and text and (text[0].lstrip().lower().startswith("call ") or hasattr(node, "fort_inline_region"))
+                        and all(";" not in line for line in text)):
                     try:
                         self.resolve(self.entry,node)
                     except CompilationError as error:
@@ -1507,7 +1890,11 @@ class ScopeBuilder:
             self.boundaries.append({"first_line": first, "last_line": last,
                                    "reason": "external source entry execution requires standalone procedure variants"})
             return self.finish()
-        self.scan(_children(self.entry.execution))
+        nodes = self.inline.prepare(_children(self.entry.execution)) if not self.config.collective else _children(self.entry.execution)
+        self.generated.update(self.inline.generated)
+        self.numerical_ir.update(self.inline.ir)
+        self.numerical_reasons.update({procedure: None for procedure in self.inline.regions})
+        self.scan(nodes)
         return self.finish()
 
     def finish(self):
@@ -1515,6 +1902,7 @@ class ScopeBuilder:
         self.analysis.inputs.verify()
         if any(sha256(package.path.read_bytes()).hexdigest() != package.digest for package in self.packages.values()):
             raise CompilationError("normalized source changed while scope artifacts were being prepared")
+        self.inline.finish()
         provenance = {}
         patches = []
         for path, edits in self.edits.items():
@@ -1546,6 +1934,8 @@ class ScopeBuilder:
             "sources":provenance, "runtime":self.runtime if self.scopes else None,
             "native_effects":self.analysis.report(self.entry.qualified),
             "resolved_calls": [self.resolved_calls[key] for key in sorted(self.resolved_calls)],
+            "implementation_variants": self.variants.public(),
+            "inline_numerical_regions": self.inline.public(),
             "automatic_estimate_available":any(scope["estimate_available"] for scope in self.scopes),
             "capture_facts_sha256":sha256(json.dumps(self.facts,sort_keys=True).encode()).hexdigest(),
             "source_inputs":self.analysis.sources,

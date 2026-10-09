@@ -19,6 +19,7 @@ module fort_scoped_memory
 
   integer(c_int32_t), parameter, public :: FORT_SCOPE_PLANNING_ABI_VERSION=1
   integer(c_int32_t), parameter, public :: FORT_SCOPE_PLAN_NATIVE=0, FORT_SCOPE_PLAN_WORKER=1, FORT_SCOPE_PLAN_FORGET=2
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_PLAN_DISCARD=3, FORT_SCOPE_VIEW_ABI_VERSION=1
 
   type, bind(C), public :: fort_scope_section
     type(c_ptr) :: lower=c_null_ptr, upper=c_null_ptr
@@ -37,6 +38,16 @@ module fort_scoped_memory
     integer(c_size_t) :: element_bytes=0
     type(c_ptr) :: host=c_null_ptr, extents=c_null_ptr, lower_bounds=c_null_ptr
     integer(c_int64_t) :: generation=0
+  end type
+  type, bind(C), public :: fort_scope_view_v1
+    integer(c_int32_t) :: version=1, rank=0
+    integer(c_int64_t) :: buffer=0, generation=0
+    type(c_ptr) :: origins=c_null_ptr, extents=c_null_ptr, lower_bounds=c_null_ptr
+  end type
+  type, bind(C), public :: fort_scope_view_layout_v1
+    type(fort_scope_layout) :: root
+    type(c_ptr) :: origins=c_null_ptr, extents=c_null_ptr, byte_strides=c_null_ptr, lower_bounds=c_null_ptr
+    integer(c_size_t) :: elements=0, byte_offset=0
   end type
   type, bind(C), public :: fort_scope_stats
     integer(c_int64_t) :: uploads=0, downloads=0, upload_bytes=0, download_bytes=0
@@ -65,6 +76,16 @@ module fort_scoped_memory
     real(c_double) :: create_seconds=0, register_seconds=0, host_access_seconds=0, device_access_seconds=0
     real(c_double) :: gpu_setup_seconds=0, cold_driver_startup_seconds=0, allocation_seconds=0, release_seconds=0
     real(c_double) :: wait_seconds=0, launch_enqueue_seconds=0, planning_operation_seconds=0
+  end type
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_TEAM_ABI_VERSION=1, FORT_SCOPE_PLAN_TEAM_ENTRY=4
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_PLAN_TEAM_NATIVE_CALL=5
+  integer(c_int64_t), parameter, public :: FORT_SCOPE_TEAM_PROTOCOL_ID=int(z'4654434f4c4c0001',kind=c_int64_t)
+  type, bind(C), public :: fort_scope_team_costs
+    integer(c_int32_t) :: version=1, valid=0, cpu_threads=0, expected_omp_level=1
+    integer(c_int64_t) :: protocol_id=FORT_SCOPE_TEAM_PROTOCOL_ID
+    real(c_double) :: native_cpu_flops=0, native_cpu_bandwidth=0
+    real(c_double) :: owner_seconds=0, descriptor_seconds=0, entry_seconds=0
+    real(c_double) :: cpu_worker_seconds=0, gpu_worker_seconds=0, native_call_seconds=0, native_worker_seconds=0
   end type
   type, bind(C), public :: fort_scope_plan_decision
     integer(c_int32_t) :: available=0, gpu_units=0, cpu_units=0, candidates=0
@@ -146,6 +167,7 @@ module fort_scoped_memory
 
   public :: fort_scope_abi_version, fort_scope_error, fort_scope_create, fort_scope_register
   public :: fort_scope_register_sections, fort_scope_forget_definition
+  public :: fort_scope_view_get_v1, fort_scope_forget_sections_v1, fort_scope_plan_forget_sections_v1
   public :: fort_scope_set_device_budget
   public :: fort_scope_set_transfers, fort_scope_transfer_stats_get_v1
   public :: fort_scope_set_transfer_costs_v1, fort_scope_batch_execute_v1, fort_scope_batch_report_get_v1
@@ -161,8 +183,56 @@ module fort_scoped_memory
   public :: fort_scope_plan_reset, fort_scope_plan_add, fort_scope_plan_select, fort_scope_plan_next
   public :: fort_scope_plan_validate
   public :: fort_scope_plan_reset_mode, fort_scope_plan_report_v2
+  public :: fort_scope_set_team_costs_v1, fort_scope_team_costs_ready_v1, fort_scope_plan_team_entry_v1
+  public :: fort_scope_plan_team_native_call_v1
 
   interface
+
+    function fort_scope_set_team_costs_v1(context, costs, compatible) bind(C) result(status)
+      import c_int, c_int64_t, c_ptr
+      integer(c_int64_t), value :: context
+      type(c_ptr), value :: costs
+      integer(c_int), value :: compatible
+      integer(c_int) :: status
+    end function
+    function fort_scope_team_costs_ready_v1(context, ready) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: context
+      integer(c_int), intent(out) :: ready
+      integer(c_int) :: status
+    end function
+    function fort_scope_plan_team_entry_v1(context) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: context
+      integer(c_int) :: status
+    end function
+    function fort_scope_plan_team_native_call_v1(context) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: context
+      integer(c_int) :: status
+    end function
+
+    function fort_scope_view_get_v1(context, view, layout) bind(C) result(status)
+      import c_int, c_int64_t, fort_scope_view_v1, fort_scope_view_layout_v1
+      integer(c_int64_t), value :: context
+      type(fort_scope_view_v1), intent(in) :: view
+      type(fort_scope_view_layout_v1), intent(out) :: layout
+      integer(c_int) :: status
+    end function
+    function fort_scope_forget_sections_v1(context, buffer, sections, count) bind(C) result(status)
+      import c_int, c_int64_t, c_ptr, c_size_t
+      integer(c_int64_t), value :: context, buffer
+      type(c_ptr), value :: sections
+      integer(c_size_t), value :: count
+      integer(c_int) :: status
+    end function
+    function fort_scope_plan_forget_sections_v1(context, buffer, sections, count) bind(C) result(status)
+      import c_int, c_int64_t, c_ptr, c_size_t
+      integer(c_int64_t), value :: context, buffer
+      type(c_ptr), value :: sections
+      integer(c_size_t), value :: count
+      integer(c_int) :: status
+    end function
 
     function fort_scope_set_transfer_costs_v1(context, costs, compatible) bind(C) result(status)
       import c_int, c_int64_t, c_ptr

@@ -6,6 +6,9 @@ Usage: python -m compiler.offload.calibrate --output profile.json --threads 4
 Add --scoped-costs to measure the common runtime's management and planning
 operations. Base profiles stay usable for ordinary policies without this
 extension; scoped automatic execution requires matching runtime calibration.
+Add --collective-costs to measure the original persistent OpenMP team and its
+generated protocol. It also identifies the actual Fortran compiler and ordered
+semantic flags; defaults are -std=f2018 -O3 -fopenmp.
 """
 from __future__ import annotations
 
@@ -397,6 +400,10 @@ def _run(argv: list[str], directory: Path, log: Path, *, timeout: int, env: dict
     try:
         result = subprocess.run(argv, cwd=directory, capture_output=True, text=True, check=False, timeout=timeout, env=env)
     except (OSError, subprocess.TimeoutExpired) as error:
+        def partial(value):
+            return value.decode(errors="replace") if isinstance(value, bytes) else (value or "")
+        log.write_text(partial(getattr(error, "stdout", "")) + partial(getattr(error, "stderr", ""))
+                       + "\n" + str(error) + "\n")
         raise CalibrationError(f"cannot execute calibration command: {error}") from error
     log.write_text(result.stdout + result.stderr)
     if result.returncode:
@@ -511,6 +518,15 @@ def calibrate(args: argparse.Namespace) -> dict:
                 "base_rates_remeasured": False,
                 "identity_checked": "CPU, toolchain, precision and thread budget; current GPU/runtime/driver verified by new scoped measurements",
             }
+    if getattr(args, "collective_costs", False):
+        if not getattr(args, "scoped_costs", False):
+            raise CalibrationError("--collective-costs requires --scoped-costs")
+        from .collective_calibration import calibrate_collective
+        print("Measuring the original persistent-team and emitted collective protocol...", file=sys.stderr, flush=True)
+        try:
+            profile = calibrate_collective(profile, args, directory, nvcc, host, run=_run, tool=_tool)
+        except ValueError as error:
+            raise CalibrationError(str(error)) from error
     with tempfile.NamedTemporaryFile(mode="w", dir=output.parent, prefix=output.name + ".", delete=False) as stream:
         temporary = Path(stream.name)
         try:
@@ -539,11 +555,19 @@ def main(argv: list[str] | None = None) -> int:
                         help="also measure common-runtime management, allocation, planning, staging and batch costs")
     parser.add_argument("--refresh-scoped", metavar="BASE_PROFILE",
                         help="refresh scoped costs only, preserving base rates after hardware/toolchain verification; requires --scoped-costs")
+    parser.add_argument("--collective-costs", action="store_true",
+                        help="also measure the actual generated persistent-team protocol; requires --scoped-costs")
+    parser.add_argument("--fortran", help="Fortran compiler for collective calibration (default gfortran-15, gfortran-14 or gfortran)")
+    parser.add_argument("--fortran-flag", action="append", default=[],
+                        help="repeat to replace Fortran defaults in order; include -fopenmp "
+                             "(defaults: -std=f2018 -O3 -fopenmp)")
     args = parser.parse_args(argv)
     if args.threads < 1 or args.device < 0 or not 8 <= args.max_mib <= 1024:
         parser.error("threads must be positive, device nonnegative, and max-mib between 8 and 1024")
     if args.refresh_scoped and not args.scoped_costs:
         parser.error("--refresh-scoped requires --scoped-costs")
+    if args.collective_costs and (not args.scoped_costs or args.threads > 256):
+        parser.error("--collective-costs requires --scoped-costs and at most 256 threads")
     try:
         calibrate(args)
     except (CalibrationError, OSError) as error:

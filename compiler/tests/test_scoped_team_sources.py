@@ -77,7 +77,7 @@ def team_text(emission):
 
 
 def serial_text(emission):
-    value = emission.cuda.split('extern "C" int ' + emission.report["entry"], 1)[1]
+    value = emission.cuda.split('extern "C" int ' + emission.report["entry"] + "(", 1)[1]
     delimiter = "\n    return FORT_SCOPE_OK;\n}\n"
     return value.split(delimiter, 1)[0]
 

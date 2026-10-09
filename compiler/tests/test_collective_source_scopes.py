@@ -67,7 +67,7 @@ end module
 """
 
 
-def generate(tmp_path, *, source=SOURCE, mode="sections", threads=4, facts_change=None):
+def generate(tmp_path, *, source=SOURCE, mode="sections", threads=4, facts_change=None, hardware_profile=None):
     original = tmp_path / "source.f90"
     original.write_text(source)
     analysis = SourceEffects([original])
@@ -83,13 +83,15 @@ def generate(tmp_path, *, source=SOURCE, mode="sections", threads=4, facts_chang
                                "call_sites": [{"source": str(original), "caller": "callers::qualified",
                                                "first_line": first, "last_line": first,
                                                "span_sha256": sha256(lines[first-1].encode()).hexdigest(),
-                                               "team_first_line": first-1, "team_last_line": first+1,
+                                               "team_first_line": first-1,
+                                               "team_last_line": next(i for i,line in enumerate(lines,1)
+                                                                      if i>first and line.startswith("!$omp end parallel")),
                                                "uniform_guard": "unconditional"}]}}
     if facts_change:
         facts_change(facts)
     outputs, report = form_source_scopes([original], "operators::step", facts=facts,
                                         options=CompilerOptions(gpu_policy=mode, memory_model="scoped"),
-                                        config=OffloadConfig(mode, None, threads, True))
+                                        config=OffloadConfig(mode, hardware_profile, threads, True))
     replacement = outputs[report["sources"][str(original)]["replacement"]] if report["sources"] else source
     assert original.read_text() == source
     return original, outputs, report, replacement
@@ -128,6 +130,51 @@ def test_team_and_allocation_checks_precede_owner_descriptors_and_queries(tmp_pa
     assert "fort_state%addresses" in owner
     assert "fort_state%lowers" in owner
     assert "if (all(fort_state%extents" in owner
+
+
+def test_descriptor_agreement_flag_stays_immutable_during_planning(tmp_path):
+    _, _, report, text = generate(tmp_path)
+    assert report["scope_count"] == 1, report["boundaries"]
+    owner = text.split("subroutine " + report["scopes"][0]["owner"], 1)[1].split("end subroutine", 1)[0]
+    descriptor_phase, planning_phase = owner.split("fort_scope_create(", 1)
+    assert "logical :: descriptor_fallback, fallback" in text
+    assert "fort_state%descriptor_fallback = .not. all(fort_state%contiguous)" in descriptor_phase
+    assert "if (fort_state%descriptor_fallback) then" in descriptor_phase
+    assert "fort_state%fallback" not in descriptor_phase
+    assert "fort_state%descriptor_fallback" not in planning_phase
+    assert "if (fort_state%fallback) then" in planning_phase
+
+
+def test_only_original_native_calls_emit_the_collective_call_cost_marker(tmp_path):
+    source = SOURCE.replace("c(i)=a(i)+b(i)", "c(int(a(i)))=b(i)")
+    _, outputs, report, text = generate(tmp_path, source=source)
+    assert report["scope_count"] == 1, report["boundaries"]
+    scope, = report["scopes"]
+    assert scope["gpu_leaves"] == ["operators::produce"]
+    owner = text.split("subroutine " + scope["owner"], 1)[1].split("end subroutine", 1)[0]
+    assert owner.count("fort_scope_plan_team_native_call_v1(fort_state%context)") == 1
+    marker = owner.index("fort_scope_plan_team_native_call_v1(")
+    assert marker < owner.index("fort_scope_plan_add(", marker) < owner.index("fort_scope_plan_validate(")
+    entry = next(content for name, content in outputs.items() if name.endswith("shared_entry.cu"))
+    assert "fort_scope_plan_team_native_call_v1(" not in entry
+    assert report["runtime"]["collective_automatic_calibration"]["native_call_marker"] == \
+        "fort_scope_plan_team_native_call_v1"
+
+
+def test_collective_entry_preparation_uses_effect_records_without_native_call_markers(tmp_path):
+    from compiler.driver.pipeline import prepare_function
+    from compiler.emission.cuda.scoped import generate_scoped
+    from compiler.frontend import lower_file
+
+    source = SOURCE.replace("integer::i\n!$omp do\ndo i=1,n\nb(i)",
+                            "integer::i,limit\nlimit=n\n!$omp do\ndo i=1,limit\nb(i)")
+    path = tmp_path / "preparation.f90"
+    path.write_text(source)
+    function, plan = prepare_function(lower_file(path, "operators::produce"),
+                                      options=CompilerOptions(gpu_policy="sections"))
+    emitted = generate_scoped(function, plan, OffloadConfig("sections", None, 4, True), "common_functions.cuh")
+    assert ".record(FORT_SCOPE_PLAN_NATIVE," in emitted.cuda
+    assert "fort_scope_plan_team_native_call_v1(" not in emitted.cuda
 
 
 def test_automatic_team_execution_awaits_matching_offline_calibration(tmp_path):
@@ -173,14 +220,63 @@ def test_an_uncalibrated_serial_profile_cannot_sneak_into_collective_costs(tmp_p
     assert all(item["available"] for item in report["collective_roles"])
 
 
+def test_calibrated_auto_team_configures_before_registration_and_preserves_original_fallback(tmp_path):
+    from compiler.emission.common.resources import read_scoped_runtime
+    from compiler.offload.collective_calibration import profile_with_collective_measurements
+    from compiler.tests.test_collective_calibration import base, measurements
+    profile=base()
+    profile["scoped"]["runtime_id"]=read_scoped_runtime()[1]["runtime_id"]
+    profile["toolchain"].update(nvcc_version="NVCC V13.4.92",host_cxx_version="GCC 14.4.0")
+    profile=profile_with_collective_measurements(profile,measurements(),calibration={})
+    _,_,report,text=generate(tmp_path,mode="auto",hardware_profile=profile)
+    assert report["scope_count"]==1,report["boundaries"]
+    scope=report["scopes"][0]
+    assert scope["estimate_available"]
+    assert scope["owner_variant"]
+    assert len(scope["numerical_entries"])==2
+    owner=text.split("subroutine "+scope["owner"],1)[1]
+    assert owner.index("fort_configure_team(")<owner.index("fort_scope_register(")
+    assert owner.index("fort_scope_plan_validate(")<owner.index("fort_choose_team(")
+    assert owner.index("fort_decision%gpu_units == 0")<owner.index("fort_returned = fort_run_")
+    caller=text.split("subroutine qualified",1)[1].split("end subroutine",1)[0]
+    assert "compiler_version" in caller
+    assert "compiler_options" in caller
+    assert "intrinsic :: allocated, lbound, all, achar" in caller
+    assert caller.index("_compatible(")<caller.index("lbound(a")
+    assert "all-native decision executes original existing-team calls" in scope["placement"]
+
+
+def test_auto_identity_helper_does_not_shadow_an_original_achar_binding(tmp_path):
+    import re
+
+    from compiler.emission.common.resources import read_scoped_runtime
+    from compiler.offload.collective_calibration import profile_with_collective_measurements
+    from compiler.tests.test_collective_calibration import base, measurements
+    profile = base()
+    profile["scoped"]["runtime_id"] = read_scoped_runtime()[1]["runtime_id"]
+    profile["toolchain"].update(nvcc_version="NVCC V13.4.92", host_cxx_version="GCC 14.4.0")
+    profile = profile_with_collective_measurements(profile, measurements(), calibration={})
+    source = re.sub(r"\bn\b", "achar", SOURCE)
+    def rename_control(facts):
+        facts["captures"]["argument::achar"] = facts["captures"].pop("argument::n")
+    _, _, report, replacement = generate(tmp_path, source=source, mode="auto",
+                                         hardware_profile=profile, facts_change=rename_control)
+    assert report["scope_count"] == 0
+    assert replacement == source
+    assert any("namespace conflicts" in item["reason"] for item in report["boundaries"])
+
+
 @pytest.mark.parametrize("allocatable", [False, True])
-def test_public_fortran_team_source_compiles_without_line_limit_extensions(tmp_path, allocatable):
+@pytest.mark.parametrize("repeated", [False, True])
+def test_public_fortran_team_source_compiles_without_line_limit_extensions(tmp_path, allocatable, repeated):
     fortran = shutil.which("gfortran")
     if not fortran:
         pytest.skip("Fortran compiler unavailable")
     source = SOURCE
+    if repeated:
+        source=source.replace("call renamed_step(a,b,c,n)","call renamed_step(a,b,c,n)\ncall renamed_step(a,b,c,n)",1)
     if allocatable:
-        source = SOURCE.replace("subroutine qualified(a,b,c,n)\nreal(8),intent(in)::a(:)\n"
+        source = source.replace("subroutine qualified(a,b,c,n)\nreal(8),intent(in)::a(:)\n"
                                 "real(8),intent(inout)::b(:),c(:)",
                                 "subroutine qualified(a,b,c,n)\nreal(8),allocatable,intent(in)::a(:)\n"
                                 "real(8),allocatable,intent(inout)::b(:),c(:)")

@@ -17,6 +17,68 @@ COMPLETION = "all_participants_before_effect_commit"
 LOOPS = {"Block_Nonlabel_Do_Construct", "Block_Label_Do_Construct"}
 
 
+def _automatic_scalar_iterations(analysis, routine, loop):
+    """Prove local temporaries do not carry values between work iterations.
+
+    This is a source participation prerequisite. Numerical lowering still
+    independently proves privatization and dependencies before offering a GPU
+    worker. Conditional definitions are deliberately outside this small proof.
+    """
+    temporaries = {}
+    forbidden = {"save", "allocatable", "pointer", "optional", "volatile", "asynchronous"}
+    for node in walk(loop):
+        if _kind(node) != "Assignment_Stmt" or _kind(node.items[0]) != "Name":
+            continue
+        binding = analysis._binding(routine.scope, node.items[0])
+        if binding is not None and binding.rank:
+            continue
+        if (binding is None or binding.name in routine.arguments
+                or not binding.root.startswith(routine.qualified + "::")
+                or binding.attributes & forbidden):
+            return "existing-team scalar temporary requires nonpersistent procedure-local storage"
+        temporaries[binding.name] = binding
+
+    def reads(node, defined):
+        return any(str(name).lower() in temporaries and str(name).lower() not in defined
+                   for name in walk(node) if _kind(name) == "Name")
+
+    def sequence(nodes, defined):
+        defined = set(defined)
+        for node in nodes:
+            kind = _kind(node)
+            if kind in LOOPS:
+                children = [child for child in _children(node) if _kind(child) != "Comment"]
+                control = next((item for item in _children(children[0]) if _kind(item) == "Loop_Control"), None)
+                if control is None or control.items[1] is None:
+                    return "existing-team local temporary requires counted loops"
+                iterator, bounds = control.items[1]
+                if any(reads(bound, defined) for bound in bounds):
+                    return "existing-team local temporary is read before definition in an iteration"
+                error = sequence(children[1:-1], defined | {str(iterator).lower()})
+                if error:
+                    return error
+                # A nested loop may be empty, so its definitions do not escape.
+            elif kind == "Assignment_Stmt":
+                if reads(node.items[2], defined):
+                    return "existing-team local temporary is read before definition in an iteration"
+                lhs = node.items[0]
+                if _kind(lhs) == "Name" and str(lhs).lower() in temporaries:
+                    defined.add(str(lhs).lower())
+                elif reads(lhs, defined):
+                    return "existing-team local temporary is read before definition in an iteration"
+            elif kind not in {"Comment", "Continue_Stmt"}:
+                # Preserve existing scalar-free conditional support. A richer
+                # path join is unnecessary for the initial automatic locals.
+                if any(_kind(item) == "Assignment_Stmt" and _kind(item.items[0]) == "Name"
+                       and str(item.items[0]).lower() in temporaries for item in walk(node)):
+                    return "existing-team local temporary has an unsupported conditional definition"
+                if reads(node, defined):
+                    return "existing-team local temporary is read before definition in an iteration"
+        return None
+
+    return sequence([loop], set())
+
+
 def prove_existing_team_worksharing(analysis: SourceEffects, qualified_procedure: str, *, assertion=None):
     """Describe original clause-free DO worksharing; never authorize callers.
 
@@ -36,7 +98,10 @@ def prove_existing_team_worksharing(analysis: SourceEffects, qualified_procedure
 
     if routine is None:
         return boundary("existing-team role requires a source-backed qualified procedure")
-    summary = analysis.summarize(qualified_procedure)
+    try:
+        summary = analysis.summarize(qualified_procedure)
+    except CompilationError as error:
+        return boundary(str(error))
     if not summary["complete"]:
         return boundary("existing-team role requires complete original source effects")
     if any(operation["kind"] in {"call", "native_contract"} for operation in summary["operations"]):
@@ -93,15 +158,9 @@ def prove_existing_team_worksharing(analysis: SourceEffects, qualified_procedure
         close = next_statement(last + 1)
         if close == len(nodes) or directive(nodes[close]) != ["end", "do"]:
             return boundary("existing-team DO requires a matching clause-free end directive")
-        # DO control variables are local state by construction. Assignment
-        # statements to other scalars could carry thread-private values between
-        # iterations/loops and invalidate one-algorithm normalization. Exclude
-        # scalar assignments entirely; normal loop control is a separate AST.
-        for node in walk(loop):
-            if _kind(node) == "Assignment_Stmt" and _kind(node.items[0]) == "Name":
-                binding = analysis._binding(routine.scope, node.items[0])
-                if binding is None or not binding.rank:
-                    return boundary("existing-team role excludes scalar assignments inside worksharing loops")
+        scalar_reason = _automatic_scalar_iterations(analysis, routine, loop)
+        if scalar_reason:
+            return boundary(scalar_reason)
         covered.add(id(loop))
         index = close + 1
     if not covered:

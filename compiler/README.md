@@ -341,13 +341,11 @@ included in timing hooks. Unwritten `intent(inout)` cells are preserved. Unwritt
 
 ## Memory planning and runtime
 
-The [shared ownership and coherent memory scope plan](MEMORY_MODEL_PLAN.md)
-extends call-local transfers to shared buffers and section coherence across GPU
-entries and native CPU operations. It records current limitations, public
-interfaces, staged delivery, and complete-application validation gates. The
-common runtime, bounded source scopes and complete application comparisons are
-available as opt-in features. The plan tracks unsupported boundaries and broader
-integration; the measured ELMM cases do not establish a GPU speedup.
+Shared ownership extends call-local transfers to shared buffers and section
+coherence across GPU entries and native CPU operations. The common runtime and
+bounded source scopes are opt-in features. Their public interfaces and supported
+boundaries are described below; eligibility alone does not establish a GPU
+speedup in a complete application.
 
 `compiler.memory.plan_memory(plan, parameters, *, acquisition_policy=None)` derives immutable acquisition,
 caller uploads/downloads, host/device access, execution, write-invalidation, synchronization, and release
@@ -573,9 +571,9 @@ master performs preparation, access hooks and GPU work once; CPU workers use
 the existing thread IDs and team size. Shared preparation and nested branch
 choices are published at matching barriers. The entry returns a uniform status
 after all workers finish; failures after work starts prohibit replay. Existing
-serial entry names and behavior remain unchanged. Serial calibration does not
-calibrate these collective barriers, so automatic team execution currently stays
-native and reports unavailable collective estimates.
+serial entry names and behavior remain unchanged. Automatic team execution
+requires the separately measured collective protocol described below; serial
+calibration alone retains native execution with an explicit reason.
 
 Explicit entries and the initial source scopes below remain opt-in. Complete
 application evaluation and remaining lifetime/effect integration are tracked in
@@ -675,7 +673,7 @@ checks these before effect analysis consumes them. Allocation agreement at the
 original caller still precedes descriptor queries and owner association. The
 unallocated path executes the original source, preserving its guards. Element
 and explicit-section writes retain the original allocation and logical bounds.
-Whole-variable allocatable assignment, explicit allocation changes, allocatable
+Whole-variable allocatable assignment, explicit allocation changes, writable allocatable
 formals, uncertain pointer effects, and unknown callees remain boundaries even
 when stable storage is asserted. Standalone effect analysis without capture
 authority remains conservative. Normalized numerical packages may borrow these
@@ -726,8 +724,9 @@ formals; owning allocatable formals remain native so entry-time deallocation and
 descriptor semantics cannot be bypassed, including for unused outputs. Each original
 leaf must contain matched clause-free orphaned `do`/`end do` worksharing, with
 no computation outside those loops, nested worksharing, calls, persistent state,
-external scalar writes, or scalar assignment statements that could carry private
-state between iterations. An optional `native_participation` map can assert an
+or external scalar writes. Activation-local scalar assignments may be admitted;
+the numerical frontend independently proves private definitions and rejects
+state carried between iterations. An optional `native_participation` map can assert an
 original qualified leaf's source/hash, `kind: "existing_team_worksharing"` and
 `completion: "all_participants_before_effect_commit"`; an assertion cannot create
 a role the compiler cannot prove. This proof uses generic source structure.
@@ -744,16 +743,42 @@ retains original execution. Required original native worksharing executes on the
 whole team between coordinator access hooks and a completion barrier. The context
 closes and all participants finish before capture reuse or return.
 
-This source prototype supports forced `sections`; `auto` produces a successful
-unchanged native result until collective synchronization is calibrated. The public
+This source prototype supports forced `sections`. Automatic execution requires
+the optional offline `scoped.collective` calibration for the actual persistent
+team, emitted coordination protocol, hardware and toolchain. Without it, `auto`
+produces a successful unchanged native result. The public
 manifest publishes versioned `participation` proof even when no scopes qualify,
 plus original-source role reasons. The independent adapter transports these
 facts, applies public source edits and build roles, and performs no role inference
 or kernel-text inspection.
 Authority facts whose call or effect closure cannot be verified are rejected;
 stable module allocation captures can participate in original native leaves
-under the lifetime and allocation checks above. Direct numerical accesses to
-those hidden allocations remain native until runtime origins are supported.
+under the lifetime and allocation checks above. Normalized numerical packages
+can also supply their original runtime origins under the same descriptor checks.
+
+Add `--collective-costs --fortran gfortran-15` to `--scoped-costs` calibration
+to measure original native throughput, generated persistent-team CPU throughput,
+and exclusive owner, descriptor, entry, CPU/GPU-worker and native-call costs.
+The fixture compiles the public source-scope artifacts, keeps the original team
+alive during each measurement, checks complete numerical fields and validates
+exclusive protocol costs using fixed 4K and 16K training shapes and an independent
+8K warm validation shape. It also checks that public
+automatic-mode decisions agree with execution; an all-native decision is valid.
+These protocol checks exclude numerical computation and runtime API work, whose
+costs are measured separately. Complete-application performance remains a separate
+gate. Calibration does not time an application or tune live calls. Production
+observation is disabled. The profile records the protocol source hashes and original Fortran
+compiler version and semantic options; dispatch checks those identities and the
+actual team level/width before reading descriptors. A cached preview cannot bypass
+the actual-team check. A whole-native decision closes its metadata-only context
+and executes the untouched original calls, using their separately measured rates.
+In addition to each interval's margin, a fresh collective owner's complete GPU
+or mixed schedule must beat the original whole-native estimate by at least 20%.
+Unknown common native computation remains excluded from both estimates.
+Repeated `--fortran-flag=FLAG` options replace the default
+`-std=f2018 -O3 -fopenmp` list and must include `-fopenmp`. Use the application's
+semantic flags in their original order. Only include/module/output location flags
+are excluded from the compatibility comparison.
 
 Independent source extractors may add `--numerical-sources package.json` to offer
 normalized numerical leaves without selecting scopes or execution policies. The
@@ -829,24 +854,39 @@ read before any source write in an `INTENT(OUT)` leaf prevents captured scope
 execution, including through its caller closure. Original native calls remain
 available. Ordered physical-section preflight separately validates read and
 preservation requirements for the complete supported span.
-Native helpers with `INTENT(OUT)` arrays remain scope boundaries when their
-whole-resource effects require preserving undefined holes or reading values
-defined inside the helper. Complete write-only overwrites remain supported.
-Nested native procedure-entry definition changes also remain boundaries.
-Numerical workers retain their separate physical access and definition handling.
+Native helpers with `INTENT(OUT)` arrays require an exact mapped discard and
+ordered definition proof. Unsupported preservation of undefined holes or
+unmapped nested definition changes remains a boundary. Numerical workers retain
+their separate physical access and definition handling.
 
-Initial serial support covers contiguous whole-array bindings, numerical leaves,
-call-only wrapper clones, registered hidden module arrays (including visible
-reexports), bounded physical native sections, and conservative whole-resource
-effects when refinement is unavailable.
-Allocatable callee formals and scalar captures, direct hidden allocatable numerical
-GPU origins,
-array-valued actuals and scalar array-element actuals,
-explicit dummy extents without a proved whole-storage shape mapping,
-general opaque-call hooks, more general native-section refinement, collective
-call graphs beyond direct worksharing leaves, and calibrated collective placement
-require further integration. Automatic serial source scopes require an explicit
-profile with costs calibrated for the exact common runtime:
+Serial source scopes support whole-array and proved rectangular bindings,
+numerical leaves, mode-bearing call-only wrappers, registered hidden module
+arrays (including visible reexports), exact native view sections and conservative
+whole-resource effects where they remain safe. Read-only allocatable and optional
+arguments can pass through supported native calls with their original descriptors
+and presence. Writable allocatable formals, scalar array-element actuals,
+unproved explicit dummy shapes and unknown library effects remain boundaries.
+Collective call graphs are currently limited to proved direct worksharing leaves.
+
+The compiler can also offer bounded original inline loops to its ordinary
+numerical frontend. Original saved allocations, allocation guards, counters and
+initialization stay in their original procedure. A worker borrows the registered
+storage after fresh allocation and original-bound checks; it does not clone
+persistent state. Private scalar definitions must be local to the region, and
+values live across a cut remain native. One mode-bearing dispatcher per procedure
+reuses approved numerical entries by region ID. Reached branch segments evaluate
+their own query after the original conditions and preceding scalar updates;
+native partial writes use the same coherence hooks as other source operations.
+Discovery accounts for rejected attempts too, with limits of 32 regions and
+256 original operations. Unknown
+effects, allocation changes, unsupported synchronization and scalar state keep
+their original native boundaries. The `inline_numerical_regions` manifest records
+source identities, captures, completion proofs, shared computation and rejection
+reasons. These candidates use source properties, without application names or
+per-kernel transfer recipes.
+
+Automatic serial source scopes require an explicit profile with costs calibrated
+for the exact common runtime:
 
 ```bash
 python -m compiler.offload.calibrate --output hardware.json --threads 4 \
@@ -936,9 +976,12 @@ The compiler resolves bounded direct module calls and unambiguous generic
 overloads by type/kind/rank, including reordered keywords. Call summaries retain
 omitted and forwarded optional arguments, read-only allocatable descriptor
 requirements, and rank-preserving unit-stride rectangular actuals. Bounds stay at
-their original call under the original guards. These additional analysis mappings
-remain execution boundaries until the generated workers can preserve their
-descriptor, presence and partial-definition semantics. Source-backed free
+their original call under the original guards. Original native children may keep
+omitted/present optional arguments and read-only allocatable formals inside
+residency when their complete effects are known. Allocatable forwarding uses the
+original allocation descriptor; a synthetic pointer view cannot stand in for it.
+Numerical optional/allocatable formals and optional generated call wrappers
+remain conservative boundaries. Source-backed free
 subroutines with ordinary implicit-interface signatures can be analyzed through
 direct calls; assumed-shape, optional or allocation descriptors and keyword calls
 need a proven explicit external interface. Free entries remain execution
@@ -974,6 +1017,30 @@ corruption or write failure causes a miss. The cache retains at most 32 records 
 memory, each capped at 8 MiB; disk-directory cleanup belongs to its caller.
 `summary_cache` reports construction-local cache statistics. No application data,
 runtime placement or allocation addresses are cached by this mechanism.
+
+Generated procedure variants have a separate bounded registry. The public
+`implementation_variants` manifest retains the original native entry and records summary
+identities, interfaces, requirements and shared numerical artifacts. Workers
+carry runtime placement modes; shapes and CPU/GPU partitions do not create new
+procedure copies. Generation is capped at four variants per procedure and 128
+per compilation. Repeated leaves reuse their artifacts, and a rejected source
+candidate restores its generation budget before scanning later candidates.
+Budget exhaustion produces an explicit native boundary.
+
+The additive `fort_scope_view_v1` interface borrows a rectangular view of an
+existing canonical resource. It contains its registration generation, physical
+origin and extent, and logical dummy lower bounds. `fort_scope_view_get_v1`
+checks the descriptor without initializing CUDA or allocating another buffer.
+Numerical workers retain full-root pitches; normalized numerical dummy bounds
+remain one, with original logical origins supplied separately where required.
+Read-only aliases merge exact access unions, while writable formal views must
+be disjoint. Partial `INTENT(OUT)` events discard only the mapped view, preserving
+unrelated initialized or device-current sections. Invalid preflight can retain
+native execution; failures after numerical work starts poison the context and
+cannot replay the source span. View subchain batching remains unavailable until
+its complete window mapping is proved. Source rectangular actuals currently
+require a straight-line owner; reached structured owners retain a native boundary
+until per-segment view descriptor preflight is supported.
 
 Optional `--effect-contracts` input has `schema_version: 1` and a `procedures`
 object keyed by a qualified imported call name. Each contract explicitly declares

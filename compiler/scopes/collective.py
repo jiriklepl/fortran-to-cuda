@@ -3,7 +3,7 @@
 The original owning procedure remains callable. Only source-bound full-team
 calls enter this dispatcher; resource and definition checks precede computation.
 This initial implementation accepts direct worksharing leaves, not nested call
-graphs. Automatic placement awaits calibration of collective synchronization.
+graphs. Automatic placement requires matching offline collective calibration.
 """
 
 from __future__ import annotations
@@ -103,6 +103,7 @@ class CollectiveScopeBuilder(ScopeBuilder):
         super().check_native_definitions(call, actions, definitions, overwrites)
 
     def run(self):
+        variant_checkpoint = self.variants.checkpoint()
         try:
             if any("allocatable" in self.entry.scope.bindings[formal].attributes
                    for formal in self.entry.arguments):
@@ -129,7 +130,11 @@ class CollectiveScopeBuilder(ScopeBuilder):
             if not available:
                 raise CompilationError("complete collective query is unavailable: " + reason)
             if self.config.policy == "auto":
-                raise CompilationError("collective synchronization calibration is unavailable; native execution")
+                for procedure in sorted(leaves):
+                    public = self.numerical(procedure).scoped
+                    if not public.get("automatic_estimate_available"):
+                        raise CompilationError(public.get("automatic_reason") or
+                                               "collective synchronization calibration is unavailable; native execution")
             # Each captured owner root must be available at every qualified
             # caller, including hidden module state. Entry-local state cannot
             # be moved outside its original specification or initialization.
@@ -142,6 +147,7 @@ class CollectiveScopeBuilder(ScopeBuilder):
             # Invalid asserted authority was rejected in the constructor.
             self.outputs.clear()
             self.edits.clear()
+            self.variants.restore(variant_checkpoint)
             self.boundaries.append({"procedure": self.entry.qualified, "reason": str(error),
                                     "execution": "unchanged native source"})
         outputs, report = self.finish()
@@ -190,6 +196,11 @@ class CollectiveScopeBuilder(ScopeBuilder):
     def owner_team(self, calls, leaves, arrays, scalars, written):
         digest = self.entry.qualified + ":qualified-full-team"
         name, controller = _name("fort_team_owner_", digest), _name("fort_team_state_", digest)
+        owner_variant = self.variants.register(
+            self.entry.qualified, interface="source-team-v1", role="coordinator", name=name,
+            summary_identity=self.analysis.summarize(self.entry.qualified)["summary_identity"],
+            requirements=("proved source span and full-team caller participation", "one invocation owns buffer lifetime"),
+            shared_artifacts=("sources/" + _name("source_", str(self.entry.scope.path)) + ".f90",))
         parameters = {root: "fort_capture_" + str(i) for i, root in enumerate((*arrays, *scalars))}
         views = {root: parameters[root] + "_view" if root in arrays else parameters[root]
                  for root in parameters}
@@ -209,13 +220,13 @@ class CollectiveScopeBuilder(ScopeBuilder):
                        f"integer(kind=8) :: extents({rank},{count},{threads}), lowers({rank},{count},{threads})",
                        f"integer(kind=8) :: addresses({count},{threads})",
                        f"integer(kind=8) :: context, handles({count})",
-                       "integer :: status", "logical :: fallback", f"end type {controller}", ""]
+                       "integer :: status", "logical :: descriptor_fallback, fallback", f"end type {controller}", ""]
         # Source types use the ISO kinds of the generated owner below. This
         # controller stores only fixed-width integer metadata, never payload.
         # Require the established 64-bit source INTEGER ABI before publication.
         self.add_edit(module.path, _span(contains)[0], _span(contains)[0] - 1, "\n".join(declaration))
 
-        imports = ["use iso_c_binding", "use fort_scoped_memory", "use omp_lib"]
+        imports = ["use iso_c_binding", "use fort_scoped_memory", "use fort_scoped_team_observer", "use omp_lib"]
         imports += [str(node) for node in _children(_part(self.entry.scope.node, "Specification_Part"))
                     if _kind(node) == "Use_Stmt"]
         specs = [f"type({controller}), pointer, intent(inout) :: fort_state",
@@ -225,7 +236,8 @@ class CollectiveScopeBuilder(ScopeBuilder):
                  "type(fort_scope_access) :: fort_access",
                  f"type(fort_scope_plan_binding), target :: fort_bindings({max(1,count)})",
                  "integer(c_size_t) :: fort_elements, fort_extent",
-                 "integer(c_int), parameter :: fort_mode = 1_c_int"]
+                 f"integer(c_int), parameter :: fort_mode = {2 if self.config.policy == 'auto' else 1}_c_int",
+                 "type(fort_scope_plan_decision) :: fort_decision", "logical :: fort_observing"]
         for i, (root, binding) in enumerate(arrays.items(), 1):
             dtype, _, _ = DTYPES[binding.signature()[:2]]
             if binding.intent == "in" and root in written:
@@ -259,12 +271,18 @@ class CollectiveScopeBuilder(ScopeBuilder):
                for call in calls):
             raise CompilationError("collective owner intrinsic conflicts with an original call")
         postproof_native = [line for call in calls for line in _call(str(call.node.items[0]), actuals(call))]
-        body = ["fort_tid = omp_get_thread_num() + 1"]
+        def observed_native(lines):
+            return ["if (fort_observing) call fort_scope_team_observe_begin_v1(FORT_SCOPE_TEAM_OBSERVE_COMPUTE)",
+                    *lines, "if (fort_observing) call fort_scope_team_observe_end_v1(FORT_SCOPE_TEAM_OBSERVE_COMPUTE)"]
+        original, postproof_native = observed_native(original), observed_native(postproof_native)
+        body = ["fort_tid = omp_get_thread_num() + 1",
+                "fort_observing = fort_scope_team_observer_enabled_v1() /= 0"]
         # Allocation was agreed at the original caller. Only now may these
         # descriptors and empty-aware payload addresses be inspected.
         for i, (root, binding) in enumerate(arrays.items(), 1):
             visible = parameters[root]
-            body += [f"fort_state%contiguous({i},fort_tid) = is_contiguous({visible})",
+            body += ["if (fort_observing) call fort_scope_team_observe_begin_v1(FORT_SCOPE_TEAM_OBSERVE_DESCRIPTOR)",
+                     f"fort_state%contiguous({i},fort_tid) = is_contiguous({visible})",
                      f"fort_state%extents(:,{i},fort_tid) = 0_8"]
             body += _fortran_list(f"fort_state%extents(1:{binding.rank},{i},fort_tid) = [",
                                  [f"size({visible},{axis},kind=c_int64_t)" for axis in range(1,binding.rank+1)], "]", 0)
@@ -272,24 +290,35 @@ class CollectiveScopeBuilder(ScopeBuilder):
                      f"if (all(fort_state%extents(1:{binding.rank},{i},fort_tid) > 0)) &",
                      f"  fort_host_pointer = c_loc({visible})",
                      "fort_address = transfer(fort_host_pointer, fort_address)",
-                     f"fort_state%addresses({i},fort_tid) = int(fort_address,kind=8)"]
+                     f"fort_state%addresses({i},fort_tid) = int(fort_address,kind=8)",
+                     "if (fort_observing) call fort_scope_team_observe_end_v1(FORT_SCOPE_TEAM_OBSERVE_DESCRIPTOR)"]
+        # Participants can reach the descriptor branch at different times.
+        # Keep this decision immutable while the coordinator records the plan;
+        # reusing its flag for planning could divert a late peer into native
+        # worksharing while the coordinator waits at the planning barrier.
         body += ["!$omp barrier", "!$omp master",
-                 "fort_state%fallback = .not. all(fort_state%contiguous)",
+                 "fort_state%descriptor_fallback = .not. all(fort_state%contiguous)",
                  f"do fort_i = 2, {threads}",
                  "if (any(fort_state%extents(:,:,fort_i) /= fort_state%extents(:,:,1)) .or. &",
                  "    any(fort_state%lowers(:,:,fort_i) /= fort_state%lowers(:,:,1)) .or. &",
-                 "    any(fort_state%addresses(:,fort_i) /= fort_state%addresses(:,1))) fort_state%fallback = .true.",
+                 "    any(fort_state%addresses(:,fort_i) /= fort_state%addresses(:,1))) fort_state%descriptor_fallback = .true.",
                  "enddo", "!$omp end master", "!$omp barrier",
-                 "if (fort_state%fallback) then", *original, "return", "endif"]
+                 "if (fort_state%descriptor_fallback) then", *original, "return", "endif"]
         body += [f"{views[root]} => {parameters[root]}" for root in arrays]
         body += ["!$omp master", "fort_state%status = fort_scope_create(0_c_int, fort_state%context)",
                  "if (fort_state%status == FORT_SCOPE_OK) &",
                  f"  fort_state%status = fort_scope_set_device_budget(fort_state%context, {self.device_budget}_c_size_t)"]
         body += self.owner_transfer_setup(leaves, imports, context="fort_state%context", status="fort_state%status")
+        if self.config.policy == "auto" and self.config.scope_transfers == "direct":
+            public, _ = self.entry_artifacts(sorted(leaves)[0])
+            imports.append(f"use {public['fortran_module']}, only: fort_configure_team => configure")
+            body += ["if (fort_state%status == FORT_SCOPE_OK) &",
+                     "  fort_state%status = fort_configure_team(fort_state%context)"]
         for i, (root, binding) in enumerate(arrays.items(), 1):
             _, enum, width = DTYPES[binding.signature()[:2]]
             visible = views[root]
-            body += ["if (fort_state%status == FORT_SCOPE_OK) then"]
+            body += ["if (fort_state%status == FORT_SCOPE_OK) then",
+                     "if (fort_observing) call fort_scope_team_observe_begin_v1(FORT_SCOPE_TEAM_OBSERVE_DESCRIPTOR)"]
             body += _fortran_list(f"fort_extents_{i} = [",
                                  [f"size({visible},{axis},kind=c_size_t)" for axis in range(1,binding.rank+1)], "]", 0)
             body += [f"fort_lowers_{i} = 1_c_int64_t", "fort_elements = 1_c_size_t",
@@ -321,7 +350,7 @@ class CollectiveScopeBuilder(ScopeBuilder):
                 body += ["if (fort_state%status == FORT_SCOPE_OK) &",
                          "  fort_state%status = fort_scope_register(fort_state%context, &",
                          f"    {i}_c_int64_t, 1_c_int64_t, fort_layout_{i}, {initialized}_c_int, {handles[root]})"]
-            body += ["endif"]
+            body += ["if (fort_observing) call fort_scope_team_observe_end_v1(FORT_SCOPE_TEAM_OBSERVE_DESCRIPTOR)", "endif"]
         body += ["if (fort_state%status == FORT_SCOPE_OK) &",
                  "  fort_state%status = fort_scope_plan_reset(fort_state%context)"]
         for index, call in enumerate(calls):
@@ -338,6 +367,7 @@ class CollectiveScopeBuilder(ScopeBuilder):
                 body += _fortran_list(f"fort_state%status = {alias}(", ["fort_state%context", *arguments], ")", 0)
                 body += ["endif"]
             else:
+                body += self.checked("fort_scope_plan_team_native_call_v1(fort_state%context)")
                 lines = self.native_plan(call, *self.native_effects(call.procedure), native_handles)
                 block = f"fort_record_{index}"
                 lines = [line.replace("fort_context", "fort_state%context").replace("fort_status", "fort_state%status")
@@ -347,8 +377,17 @@ class CollectiveScopeBuilder(ScopeBuilder):
                 body += ["if (fort_state%status == FORT_SCOPE_OK) then", block + ": block", *lines,
                          "end block " + block, "endif"]
         body += ["if (fort_state%status == FORT_SCOPE_OK) &",
-                 "  fort_state%status = fort_scope_plan_validate(fort_state%context)",
-                 "fort_state%fallback = fort_state%status /= FORT_SCOPE_OK",
+                 "  fort_state%status = fort_scope_plan_validate(fort_state%context)"]
+        if self.config.policy == "auto":
+            public, _ = self.entry_artifacts(sorted(leaves)[0])
+            imports.append(f"use {public['fortran_module']}, only: fort_choose_team => choose")
+            body += ["if (fort_state%status == FORT_SCOPE_OK) &",
+                     "  fort_state%status = fort_choose_team(fort_state%context, fort_decision)",
+                     "fort_state%fallback = fort_state%status /= FORT_SCOPE_OK",
+                     "if (fort_state%status == FORT_SCOPE_OK) fort_state%fallback = fort_decision%gpu_units == 0"]
+        else:
+            body += ["fort_state%fallback = fort_state%status /= FORT_SCOPE_OK"]
+        body += [
                  "if (fort_state%fallback .and. fort_state%context /= 0) then",
                  "fort_cleanup = fort_scope_close(fort_state%context)",
                  "if (fort_cleanup /= FORT_SCOPE_OK) error stop 'collective preflight cleanup failed'", "endif",
@@ -371,18 +410,22 @@ class CollectiveScopeBuilder(ScopeBuilder):
                          "!$omp barrier", "end block", *self.check_status()]
             else:
                 actions, definitions, overwrites = self.roots_for(call)
-                body += ["!$omp master"]
+                body += ["if (fort_observing) call fort_scope_team_observe_begin_v1(FORT_SCOPE_TEAM_OBSERVE_NATIVE_CALL)",
+                         "!$omp master"]
                 for root in sorted(definitions):
                     body += self.checked(f"fort_scope_forget_definition(fort_state%context, {handles[root]})")
                 for root, kinds in sorted(actions.items()):
                     body += self.access_flags(kinds, root in overwrites)
                     body += self.checked(f"fort_scope_host_begin(fort_state%context, {handles[root]}, fort_access)")
                 body += ["!$omp end master", "!$omp barrier", *self.check_status()]
+                body += ["if (fort_observing) call fort_scope_team_observe_begin_v1(FORT_SCOPE_TEAM_OBSERVE_COMPUTE)"]
                 body += _call(str(call.node.items[0]), actuals(call))
+                body += ["if (fort_observing) call fort_scope_team_observe_end_v1(FORT_SCOPE_TEAM_OBSERVE_COMPUTE)"]
                 body += ["!$omp barrier", "!$omp master"]
                 for root in sorted(actions):
                     body += self.checked(f"fort_scope_host_end(fort_state%context, {handles[root]})")
-                body += ["!$omp end master", "!$omp barrier", *self.check_status()]
+                body += ["!$omp end master", "!$omp barrier", *self.check_status(),
+                         "if (fort_observing) call fort_scope_team_observe_end_v1(FORT_SCOPE_TEAM_OBSERVE_NATIVE_CALL)"]
         body += ["!$omp master", "fort_state%status = fort_scope_close(fort_state%context)",
                  "!$omp end master", "!$omp barrier", *self.check_status()]
         header = _fortran_list("subroutine " + name + "(", [*parameters.values(), "fort_state"], ")", 0)
@@ -398,8 +441,11 @@ class CollectiveScopeBuilder(ScopeBuilder):
                                 "actual": self.visible(self.entry, root)} for root in parameters],
                 "calls": [call.procedure for call in calls],
                 "gpu_leaves": sorted(leaves), "mode": self.config.policy,
-                "participation": "qualified_full_team", "estimate_available": False,
-                "planning_reason": "collective synchronization calibration is unavailable",
+                "numerical_entries": [{"procedure": procedure, "public": self.numerical(procedure).scoped}
+                                      for procedure in sorted(leaves)],
+                "participation": "qualified_full_team", "estimate_available": self.config.policy == "auto",
+                "planning_reason": None if self.config.policy == "auto" else "scoped automatic selection was not requested",
+                "owner_variant": owner_variant.identity,
                 "definition_preflight": {"abi_version": 1, "query_available": True, "reason": None,
                                          "position": "before numerical execution"},
                 "allocation_preflight": {"position": "original qualified caller before owner association",
@@ -409,7 +455,9 @@ class CollectiveScopeBuilder(ScopeBuilder):
                 "resources": [{"resource": root, "registration_identity": i,
                                "allocation_generation": 1, "initialized": self.capture(binding)["initialized"]}
                               for i, (root, binding) in enumerate(arrays.items(), 1)],
-                "placement": "forced shared GPU workers and original existing-team native worksharing",
+                "placement": ("calibrated shared CPU/GPU workers; all-native decision executes original existing-team calls"
+                              if self.config.policy == "auto" else
+                              "forced shared GPU workers and original existing-team native worksharing"),
                 "transfer_configuration": self.numerical(sorted(leaves)[0]).scoped["transfer_configuration"],
                 "metadata_budget_bytes": 1024 * 1024, "host_threads": threads}
 
@@ -498,32 +546,74 @@ class CollectiveScopeBuilder(ScopeBuilder):
         # Block declarations may not shadow actual names, including host and
         # use-associated objects. All generated names are individually checked.
         locals_ = [prefix + suffix for suffix in ("_state", "_status", "_tid", "_level", "_threads")]
-        reserved = {*locals_, prefix + "_id", owner, controller, "allocated", "lbound", "all"}
+        observing = prefix + "_observing"
+        hooks = {name: prefix + "_" + name for name in ("begin", "end", "enabled", "owner", "descriptor")}
+        fortran_identity = None
+        if self.config.policy == "auto" and self.config.profile:
+            fortran_identity = self.config.profile.get("scoped", {}).get("collective", {}).get("fortran")
+        reserved = {*locals_, observing, *hooks.values(), prefix + "_id", owner, controller, "allocated", "lbound", "all"}
+        reserved.update(prefix + suffix for suffix in ("_version", "_options", "_nul", "_compatible"))
         intrinsics = {"allocated", "lbound", "all"} | ({"ubound", "size"} if origin_roots else set())
+        if fortran_identity:
+            intrinsics.add("achar")
         reserved.update(intrinsics)
         if reserved & set(names.values()) or str(site.node.items[0]).lower() in intrinsics:
             raise CompilationError("collective caller helper namespace conflicts with an actual")
         state, status, tid, level, threads = locals_
         imports = [f"use omp_lib, only: {level} => omp_get_level, {threads} => omp_get_num_threads, &",
-                   f"    {prefix}_id => omp_get_thread_num"]
+                   f"    {prefix}_id => omp_get_thread_num",
+                   "use fort_scoped_team_observer, only: &",
+                   f"  {hooks['begin']} => fort_scope_team_observe_begin_v1, &",
+                   f"  {hooks['end']} => fort_scope_team_observe_end_v1, &",
+                   f"  {hooks['enabled']} => fort_scope_team_observer_enabled_v1, &",
+                   f"  {hooks['owner']} => FORT_SCOPE_TEAM_OBSERVE_OWNER, &",
+                   f"  {hooks['descriptor']} => FORT_SCOPE_TEAM_OBSERVE_DESCRIPTOR"]
+        if fortran_identity:
+            imports += [f"use iso_fortran_env, only: {prefix}_version => compiler_version, &",
+                        f"  {prefix}_options => compiler_options",
+                        f"use iso_c_binding, only: {prefix}_nul => c_null_char",
+                        f"use fort_scoped_team_observer, only: {prefix}_compatible => fort_scope_team_fortran_compatible_v1"]
         if site.routine.scope.module != self.entry.scope.module:
             imports += [f"use {self.entry.scope.module}, only: {owner}, {controller}"]
         lines = ["block", *imports, f"type({controller}), pointer :: {state}",
-                 f"integer :: {status}, {tid}", "intrinsic :: allocated, lbound, all" + (", ubound, size" if origin_roots else ""),
+                 f"integer :: {status}, {tid}", f"logical :: {observing}",
+                 "intrinsic :: allocated, lbound, all" + (", ubound, size" if origin_roots else "")
+                 + (", achar" if fortran_identity else ""),
                  f"if ({level}() /= 1 .or. {threads}() /= {self.config.host_threads}) then",
-                 original.rstrip(), "else", "!$omp barrier", "!$omp single", f"allocate({state}, stat={status})",
+                 original.rstrip(), "else", f"{observing} = {hooks['enabled']}() /= 0",
+                 f"if ({observing}) call {hooks['begin']}({hooks['owner']})",
+                 "!$omp barrier", "!$omp single", f"allocate({state}, stat={status})",
                  f"if ({status} == 0) then", f"{state}%context = 0_8", f"{state}%status = 0",
                  f"{state}%handles = 0_8", f"{state}%lowers = 0_8", f"{state}%fallback = .false.", "endif",
                  f"!$omp end single copyprivate({state},{status})", f"if ({status} /= 0) then",
                  original.rstrip(), "else", f"{tid} = {prefix}_id() + 1", f"{state}%allocated({tid}) = .true."]
+        if fortran_identity:
+            def literal(value):
+                return ["'" + value[index:index+48].replace("'", "''") + "'"
+                        for index in range(0, len(value), 48)] or ["''"]
+            version = literal(fortran_identity["compiler_version"])
+            semantic = []
+            for token in fortran_identity["semantic_options"].split("\x1f"):
+                if semantic:
+                    semantic.append("achar(31)")
+                semantic += literal(token)
+            lines += [f"{state}%allocated({tid}) = {prefix}_compatible( &",
+                      f"  {prefix}_version() // {prefix}_nul, &",
+                      f"  {prefix}_options() // {prefix}_nul, &"]
+            lines += ["  " + part + " // &" for part in version]
+            lines += [f"  {prefix}_nul, &"]
+            lines += ["  " + part + " // &" for part in semantic]
+            lines += [f"  {prefix}_nul) /= 0"]
         for root in arrays:
             if "allocatable" in site.bindings[root].attributes:
                 lines += [f"{state}%allocated({tid}) = &",
                           f"    {state}%allocated({tid}) .and. &", f"    allocated({names[root]})"]
         lines += ["!$omp barrier", f"if (all({state}%allocated)) then"]
         for i, (root, binding) in enumerate(arrays.items(), 1):
+            lines += [f"if ({observing}) call {hooks['begin']}({hooks['descriptor']})"]
             lines += _fortran_list(f"{state}%lowers(1:{binding.rank},{i},{tid}) = [",
                                    [f"lbound({names[root]},{axis},kind=8)" for axis in range(1,binding.rank+1)], "]", 0)
+            lines += [f"if ({observing}) call {hooks['end']}({hooks['descriptor']})"]
         if origin_roots:
             lines += [f"{state}%bounds_fit({tid}) = .true."]
             for root in origin_roots:
@@ -537,5 +627,12 @@ class CollectiveScopeBuilder(ScopeBuilder):
         else:
             lines += _call(owner, [*names.values(), state])
         lines += ["else", original.rstrip(), "endif",
-                  "!$omp barrier", "!$omp single", f"deallocate({state})", "!$omp end single", "endif", "endif", "end block", ""]
+                  "!$omp barrier", "!$omp single", f"deallocate({state})", "!$omp end single", "endif",
+                  f"if ({observing}) call {hooks['end']}({hooks['owner']})", "endif", "end block", ""]
+        # GNU otherwise associates a first BLOCK with the OpenMP construct's
+        # structured-BLOCK form and rejects subsequent sibling dispatchers.
+        # Keep the original team intact; CONTINUE performs no numerical work.
+        if not any(other.source == site.source and other.team_first_line == site.team_first_line
+                   and other.first_line < site.first_line for other in self.participation.sites):
+            lines.insert(0, "continue")
         return "\n".join(lines)
