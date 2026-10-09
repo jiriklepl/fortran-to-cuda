@@ -1,0 +1,129 @@
+Bootstrap: docker
+From: nvidia/cuda:12.6.2-devel-ubuntu24.04
+
+%labels
+    Author Research Team
+    Description Apptainer definition for Fortran/CUDA benchmark pipeline and figure reproduction on HPC / SLURM
+    Version 2.0
+
+%environment
+    export DEBIAN_FRONTEND=noninteractive
+    export TZ=Etc/UTC
+    export LANG=C.UTF-8
+    export LC_ALL=C.UTF-8
+    export PYTHONUNBUFFERED=1
+    export MPLCONFIGDIR=/tmp/matplotlib
+    export CUDA_HOME=/usr/local/cuda
+    export PATH=/opt/venv/bin:/usr/local/cuda/bin:${PATH}
+    export LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
+    export FC=gfortran-15
+    export CC=gcc-14
+    export CXX=g++-14
+    export CUDA_HOST_CXX=/usr/bin/g++-14
+    export PYTHONPATH=/workspace:/workspace/elmm-pipeline
+
+%files
+    . /workspace
+
+%post
+    export DEBIAN_FRONTEND=noninteractive
+    export TZ=Etc/UTC
+
+    # 1. System packages & build tools
+    apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        wget \
+        gnupg \
+        software-properties-common \
+        git \
+        build-essential \
+        make \
+        cmake \
+        ninja-build \
+        scons \
+        pkg-config \
+        libtool \
+        autotools-dev \
+        libfftw3-dev \
+        libfftw3-double3 \
+        libfftw3-single3 \
+        libfftw3-omp-dev \
+        libopenblas-dev \
+        liblapack-dev \
+        python3 \
+        python3-pip \
+        python3-venv \
+        python3-dev \
+        texlive-latex-base \
+        texlive-latex-extra \
+        texlive-fonts-recommended \
+        cm-super \
+        dvipng \
+        time \
+        procps \
+        rsync \
+    && rm -rf /var/lib/apt/lists/*
+
+    # 2. GFortran 15 & GCC 14 Toolchain
+    add-apt-repository -y ppa:ubuntu-toolchain-r/test
+    apt-get update && apt-get install -y --no-install-recommends \
+        gfortran-15 \
+        gcc-14 \
+        g++-14 \
+    && rm -rf /var/lib/apt/lists/*
+
+    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
+    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
+    update-alternatives --install /usr/bin/gfortran gfortran /usr/bin/gfortran-15 100
+    ln -sf /usr/bin/gfortran-15 /usr/bin/fc
+
+    # 3. Python virtual environment
+    python3 -m venv /opt/venv
+    export PATH="/opt/venv/bin:$PATH"
+    pip install --no-cache-dir --upgrade pip setuptools wheel
+    pip install --no-cache-dir \
+        fparser==0.2.5 \
+        matplotlib==3.11.2 \
+        islpy==2026.2.2 \
+        pytest \
+        numpy==2.5.3 \
+        scipy \
+        ruff \
+        tabulate
+
+    # 4. Volume mount directories & permissions
+    mkdir -p /output && chmod 777 /output
+    mkdir -p /tmp/matplotlib && chmod 777 /tmp/matplotlib
+    if [ -d /workspace/containers ]; then
+        chmod +x /workspace/containers/entrypoint.sh \
+                 /workspace/containers/reproduce_plots.sh
+    fi
+
+%runscript
+    exec /workspace/containers/entrypoint.sh "$@"
+
+%help
+    =============================================================================
+    Fortran/CUDA Benchmark Pipeline Apptainer Image
+    =============================================================================
+
+    This container provides GNU Fortran 15, GCC 14, CUDA Toolkit (nvcc), FFTW3,
+    and all Python dependencies required to run the compiler and benchmark pipeline
+    on datacenter GPUs (A100, H100, L40S, RTX 6000 Ada, etc.).
+
+    Usage Examples:
+
+    1. Reproduce all publication plots:
+       apptainer run --nv --bind ./output:/output fortran-abomination.sif reproduce-plots
+
+    2. Run fresh microbenchmarks on an NVIDIA A100 GPU:
+       apptainer run --nv --bind ./output:/output fortran-abomination.sif \
+           run-benchmarks --arch sm_80
+
+    3. Interactive shell inside container:
+       apptainer shell --nv --bind ./output:/output fortran-abomination.sif
+
+    4. SLURM batch job:
+       srun --gpus=1 apptainer run --nv --bind ./output:/output fortran-abomination.sif
+
