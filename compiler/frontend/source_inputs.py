@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
 
@@ -31,6 +33,13 @@ class SourceInputs:
         self.configuration=None
         if document is None:
             return
+        try:
+            json.dumps(document, allow_nan=False)
+        except (TypeError, ValueError, RecursionError) as error:
+            raise CompilationError("configured analysis sources require finite JSON facts") from error
+        # Configuration and provenance belong to this analysis snapshot. A
+        # caller changing its dictionaries must not change a cache authority.
+        document = deepcopy(document)
         if (not isinstance(document,dict) or document.get("schema_version")!=1
                 or document.get("source_inputs")!=self.sources or document.get("preserves_source_order") is not True
                 or not isinstance(document.get("entries"),list)
@@ -107,6 +116,13 @@ class SourceInputs:
     def public(self):
         if not self.entries:
             return None
-        return {"schema_version":1,"source_inputs":self.sources,"configuration":self.configuration,
+        return deepcopy({"schema_version":1,"source_inputs":self.sources,"configuration":self.configuration,
                 "preserves_source_order":True,"dependencies":self.dependencies,
-                "entries":[self.entries[name] for name in sorted(self.entries)]}
+                "entries":[self.entries[name] for name in sorted(self.entries)]})
+
+    def identity(self):
+        """Immutable JSON provenance for reusable source proofs, never ASTs."""
+        return deepcopy({"schema_version": 1, "sources": self.sources,
+                         "dependencies": self.dependencies,
+                         "configuration": self.configuration,
+                         "entries": [self.entries[name] for name in sorted(self.entries)]})

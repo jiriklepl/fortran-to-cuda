@@ -175,6 +175,7 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--scope-facts FILE` | none | Source-hash-bound capture, initialization, and caller facts; requires `--form-scopes` |
 | `--source-file FILE` | none | Additional effect-analysis source; repeat for separate modules |
 | `--effect-contracts FILE` | none | Versioned explicit contracts for opaque native calls; requires effect analysis |
+| `--summary-cache DIRECTORY` | memory only | Optional source-summary disk cache for effect/scope analysis |
 | `--host-threads N` | `4` | Total host thread budget, including hybrid GPU coordination |
 | `--gpu-collective` | off | Require every thread of one existing OpenMP team to call the entry |
 | `--verbose`, `-v` | off | Normalized IR, applied/skipped transformations, schedules, indexing decisions and reasons, region boundaries, scalar privacy, ISL relations, legality results, and memory operations |
@@ -932,7 +933,18 @@ effects cannot bypass a deeper call path's depth limit. Effect reports contain
 only the requested closure.
 
 The compiler resolves bounded direct module calls and unambiguous generic
-overloads by type/kind/rank. The public report contains source hashes, formal/root
+overloads by type/kind/rank, including reordered keywords. Call summaries retain
+omitted and forwarded optional arguments, read-only allocatable descriptor
+requirements, and rank-preserving unit-stride rectangular actuals. Bounds stay at
+their original call under the original guards. These additional analysis mappings
+remain execution boundaries until the generated workers can preserve their
+descriptor, presence and partial-definition semantics. Source-backed free
+subroutines with ordinary implicit-interface signatures can be analyzed through
+direct calls; assumed-shape, optional or allocation descriptors and keyword calls
+need a proven explicit external interface. Free entries remain execution
+boundaries, and dynamic targets remain analysis boundaries.
+
+The public report contains source hashes, formal/root
 mappings, original guards, descriptor reads, memory reads/writes, procedure-entry
 definition changes, persistent state, OpenMP directives, and boundary reasons.
 Array effects are currently conservative whole-resource effects, with a separate
@@ -942,6 +954,26 @@ whole-array overwrite proof. Retained source
 subscripts are evidence, not physical transfer coordinates. Unknown effects,
 storage lifetime, recursion, or analysis-budget exhaustion make the corresponding
 summary incomplete. Mutable saved state and OpenMP directives prevent cloning.
+
+Each procedure publishes a summary identity and the report publishes the resolved
+call graph. `ordered_effects` composes repeated and nested calls onto canonical
+resources while retaining original guard frames and logical view chains. A whole
+formal overwrite or `INTENT(OUT)` event through a rectangular actual covers that
+view, rather than the entire caller allocation. These are source facts; physical
+transfer sections still require runtime descriptor checks. Composition expansion
+is bounded by the source operation limit.
+
+Successfully completed source closures are reused through a bounded memory cache.
+`--summary-cache DIRECTORY` also enables immutable keyed disk records. Keys include
+source and include hashes, prepared source/configuration/line-map identity, explicit
+contracts, capture authorizations, analysis version and budgets. Changed facts
+invalidate affected proofs; private structured fragments cannot borrow complete
+procedure summaries. Imports recheck graph identities, reachability, depth and
+combined operation/procedure budgets. Public records are copied values, and cache
+corruption or write failure causes a miss. The cache retains at most 32 records in
+memory, each capped at 8 MiB; disk-directory cleanup belongs to its caller.
+`summary_cache` reports construction-local cache statistics. No application data,
+runtime placement or allocation addresses are cached by this mechanism.
 
 Optional `--effect-contracts` input has `schema_version: 1` and a `procedures`
 object keyed by a qualified imported call name. Each contract explicitly declares

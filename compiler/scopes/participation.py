@@ -167,7 +167,14 @@ def _effects(analysis, procedure, mapping=None, active=(), budget=None):
     if procedure in active:
         raise CompilationError("collective source effects cannot be recursive")
     summary = analysis.summarize(procedure)
-    if not summary["complete"]:
+    # An allocatable owning dummy prevents companion generation, including
+    # when unused. Its original entry event is nevertheless a known write for
+    # checking lexical sharing/immutable controls. Only this specific native
+    # boundary may continue participation validation; the owning dispatcher
+    # retains the original procedure and rejects descriptor-changing execution.
+    native_descriptor_entry = bool(summary["reasons"]) and all(
+        reason.startswith("allocation-changing dummy descriptor semantics: ") for reason in summary["reasons"])
+    if not summary["complete"] and not native_descriptor_entry:
         raise CompilationError("collective source effect closure is incomplete: " + procedure)
     mapping = mapping or {}
     budget = [analysis.operation_limit] if budget is None else budget

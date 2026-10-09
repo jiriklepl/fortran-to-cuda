@@ -309,7 +309,10 @@ def renamed(builder, node, parameters):
     # Readers/items contain open source handles; only typed syntax needs a
     # private copy. Original provenance references remain read-only.
     clone = clone_ast(node)
+    keywords = {id(item.items[0]) for item in walk(clone, F.Actual_Arg_Spec)}
     for name in walk(clone, F.Name):
+        if id(name) in keywords:
+            continue  # Keywords name callee formals, not caller storage.
         binding = builder.analysis._binding(builder.entry.scope, name)
         if binding is not None and binding.root in parameters:
             name.string = parameters[binding.root]
