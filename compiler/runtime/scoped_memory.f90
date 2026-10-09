@@ -10,6 +10,12 @@ module fort_scoped_memory
   integer(c_int32_t), parameter, public :: FORT_SCOPE_BYTES=0, FORT_SCOPE_REAL32=1, FORT_SCOPE_REAL64=2
   integer(c_int32_t), parameter, public :: FORT_SCOPE_INTEGER32=3, FORT_SCOPE_LOGICAL=4
   integer(c_int), parameter, public :: FORT_SCOPE_NATIVE=0, FORT_SCOPE_GPU=1, FORT_SCOPE_AUTO=2
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_ABI_VERSION=1
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFERS_DIRECT=0, FORT_SCOPE_TRANSFERS_PINNED=1
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFERS_PIPELINED=2, FORT_SCOPE_TRANSFERS_AUTO=3
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_NONE=0, FORT_SCOPE_TRANSFER_ESTIMATES_UNAVAILABLE=1
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_PIPELINED_UNAVAILABLE=2, FORT_SCOPE_TRANSFER_BUDGET=3
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_ALLOCATION=4
 
   integer(c_int32_t), parameter, public :: FORT_SCOPE_PLANNING_ABI_VERSION=1
   integer(c_int32_t), parameter, public :: FORT_SCOPE_PLAN_NATIVE=0, FORT_SCOPE_PLAN_WORKER=1, FORT_SCOPE_PLAN_FORGET=2
@@ -36,6 +42,15 @@ module fort_scoped_memory
     integer(c_int64_t) :: uploads=0, downloads=0, upload_bytes=0, download_bytes=0
     integer(c_int64_t) :: allocations=0, allocated_bytes=0, peak_device_bytes=0
     integer(c_int64_t) :: launches=0, waits=0, reconciliations=0
+  end type
+  type, bind(C), public :: fort_scope_transfer_stats
+    integer(c_int32_t) :: version=1, requested_mode=0, effective_mode=0, fallback_reason=0
+    integer(c_int64_t) :: fallbacks=0, pinned_uploads=0, pinned_downloads=0
+    integer(c_int64_t) :: pinned_upload_bytes=0, pinned_download_bytes=0
+    integer(c_int64_t) :: packed_bytes=0, unpacked_bytes=0, tiles=0, events=0, event_waits=0
+    integer(c_int64_t) :: staging_allocations=0, staging_reuses=0, slot_capacity=0, staging_device_bytes=0
+    integer(c_int64_t) :: process_reserved_bytes=0, process_peak_bytes=0
+    real(c_double) :: packing_seconds=0, unpacking_seconds=0, event_wait_seconds=0
   end type
 
   type, bind(C), public :: fort_scope_plan_binding
@@ -76,6 +91,7 @@ module fort_scoped_memory
   public :: fort_scope_abi_version, fort_scope_error, fort_scope_create, fort_scope_register
   public :: fort_scope_register_sections, fort_scope_forget_definition
   public :: fort_scope_set_device_budget
+  public :: fort_scope_set_transfers, fort_scope_transfer_stats_get_v1
   public :: fort_scope_device_get
   public :: fort_scope_serial_caller
   public :: fort_scope_layout_get, fort_scope_host_begin, fort_scope_host_end
@@ -90,6 +106,19 @@ module fort_scoped_memory
   public :: fort_scope_plan_reset_mode, fort_scope_plan_report_v2
 
   interface
+
+    function fort_scope_set_transfers(context, mode) bind(C) result(status)
+      import c_int, c_int32_t, c_int64_t
+      integer(c_int64_t), value :: context
+      integer(c_int32_t), value :: mode
+      integer(c_int) :: status
+    end function
+    function fort_scope_transfer_stats_get_v1(context, stats) bind(C) result(status)
+      import c_int, c_int64_t, fort_scope_transfer_stats
+      integer(c_int64_t), value :: context
+      type(fort_scope_transfer_stats), intent(out) :: stats
+      integer(c_int) :: status
+    end function
 
     function fort_scope_plan_host_current(context, buffer) bind(C) result(status)
       import c_int, c_int64_t

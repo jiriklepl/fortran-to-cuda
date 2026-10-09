@@ -26,6 +26,41 @@ def test_invalid_optimization_level_is_rejected(opt_level: int) -> None:
         CompilerOptions(opt_level=opt_level)
 
 
+def test_nondefault_scope_transfers_require_explicit_scoped_ownership():
+    from compiler.emission import generate_sources
+    from compiler.ir import CompilationError
+    from compiler.offload.config import OffloadConfig
+
+    with pytest.raises(CompilationError, match="require scoped memory"):
+        CompilerOptions(gpu_policy="sections", scope_transfers="pinned")
+    options = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_transfers="pinned")
+    function, plan = prepare_function(lower_file(Path(__file__).parent / "fixtures" / "fill_array.f90", "fill_array"),
+                                     options=options)
+    with pytest.raises(CompilationError, match="require scoped memory"):
+        generate_sources(function, plan, offload_config=OffloadConfig("sections", scope_transfers="pinned"))
+
+
+def test_invalid_scope_transfer_combination_preserves_public_outputs(tmp_path):
+    output = tmp_path / "generated"
+    output.mkdir()
+    expected = {name: f"original {name}" for name in OUTPUT_FILES}
+    for name, text in expected.items():
+        (output / name).write_text(text)
+    result = subprocess.run([
+        sys.executable, "-m", "compiler", "--input",
+        str(Path(__file__).parent / "fixtures" / "fill_array.f90"), "--kernel", "fill_array",
+        "--output-dir", str(output), "--gpu-policy", "sections", "--scope-transfers", "pinned", "--json",
+    ], cwd=ROOT, capture_output=True, text=True, timeout=30, check=False)
+    import json
+
+    assert result.returncode != 0
+    report = json.loads(result.stdout)
+    assert not report["supported"]
+    assert report["outputs"] == []
+    assert "require scoped memory" in report["reason"]
+    assert {path.name: path.read_text() for path in output.iterdir()} == expected
+
+
 @pytest.mark.parametrize("existing_outputs", [False, True], ids=["new-directory", "existing-outputs"])
 @pytest.mark.parametrize("opt_level", ["-1", "2", "x"])
 def test_invalid_optimization_options_preserve_outputs(

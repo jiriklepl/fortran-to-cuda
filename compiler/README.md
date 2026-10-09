@@ -169,6 +169,7 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--gpu-policy {always,sections,auto,chunked,hybrid}` | `always` | Select the ordinary-call transfer and execution prototype |
 | `--calibration-profile FILE` | none | Explicit reusable hardware calibration for automatic decisions |
 | `--memory-model {call,scoped}` | `call` | Shared-buffer numerical entry prototype with `scoped`; requires sections/auto |
+| `--scope-transfers {direct,pinned,pipelined,auto}` | `direct` | Scoped transfer choice, separate from CPU/GPU placement |
 | `--analyze-effects` | off | Bounded native source effects without requiring GPU lowering; writes no artifacts |
 | `--form-scopes` | off | Emit bounded serial source scopes, original-module helpers, and public source/build manifests |
 | `--scope-facts FILE` | none | Source-hash-bound capture, initialization, and caller facts; requires `--form-scopes` |
@@ -257,7 +258,8 @@ calls, reusing sufficient capacity on the same device. Inputs are packed and
 uploaded afresh on every call, including after host edits, shape changes, or
 reallocation. This is scratch reuse, not cross-entry data residency. Concurrent
 calls lease separate pairs; active and idle pinned capacity together remain
-within 64 MiB. An incompatible idle pair is evicted before allocating or waiting
+within the process-wide 64 MiB budget shared with scoped pinned transfers. In-progress
+allocations also reserve their capacity. An incompatible idle pair is evicted before allocating or waiting
 for budget. Allocation failure before execution selects native work once.
 `FORT_RUNTIME_TRACE=1` reports `scratch_reuse` and its retained capacity.
 Compact slabs retain
@@ -393,7 +395,7 @@ Export the independently compiled runtime and its versioned manifest:
 python -m compiler --emit-scoped-runtime --json --output-dir out/scoped
 ```
 
-The output contains `scoped_runtime.h`, `scoped_entry.hpp`, `section_copy.hpp`,
+The output contains `scoped_runtime.h`, `scoped_entry.hpp`, `section_copy.hpp`, `staging.hpp`,
 `scoped_regions.hpp`, `scoped_planning.hpp`,
 `scoped_runtime.cu`, `fort_scoped_memory.f90`, and `scoped-runtime.json`. Compile and link the CUDA
 runtime once per executable with host OpenMP support (`-Xcompiler=-fopenmp`) and compile the common Fortran interface before its
@@ -424,6 +426,40 @@ lazily, use one non-default stream and private pool where supported, and wait at
 host boundaries. All-native and empty accesses initialize no CUDA resources.
 Execution failures poison the context, preventing unsafe replay; abandoning a
 failed context releases resources without claiming valid host results.
+
+Scoped transfers default to `direct`. The opt-in `pinned` control packs exact
+sections into reusable pinned staging, copies against the existing full-layout
+device buffers, waits for completion, and unpacks only downloaded sections.
+Logical indices and array pitches are unchanged. This control is synchronous;
+it does not claim transfer/kernel overlap. Two staging slots, streams and events
+share the ordinary chunked/hybrid pool's 64 MiB pinned budget, including active,
+allocating and cached storage. A scoped copy acquires a short lease without
+waiting for another caller to release budget, and releases it before native
+procedure execution. A pre-copy resource failure uses direct transfers with an
+explicit reason; a failure after enqueue poisons the context and cannot replay
+numerical work.
+
+`--scope-transfers` requires scoped memory for nondefault modes and remains
+independent of `--gpu-policy`. Forced `sections` can use `pinned` without a
+calibration profile. Automatic GPU placement with explicit `pinned` remains
+native while complete pinned execution estimates are unavailable; existing
+pinned bandwidth measurements alone omit preparation and packing costs.
+The reserved `pipelined` mode currently selects direct transfers with
+`pipelined_not_available`; transfer `auto` selects direct with
+`transfer_estimates_unavailable`. Default direct placement keeps its existing
+costs and behavior.
+
+The additive `fort_scope_set_transfers` metadata operation configures a context
+before registration/planning and initializes no CUDA resources. Generated
+interfaces publish a `configure(context)` helper, and nondefault source owners
+call it once before planning. Standalone callers use the public helper before
+adding query operations. `fort_scope_transfer_stats_get_v1` reports requested
+and effective modes, fallback reasons, exact packing/transfer counts, staging
+reuse, capacity and event statistics without changing the original stats ABI.
+The runtime manifest describes the shared budget and supported modes. Common
+and scoped runtime units must link into the same program with the published
+default-linkage support header to share one pool; isolated loader namespaces
+are not covered by that contract.
 
 Emit a numerical entry that borrows common buffer handles:
 

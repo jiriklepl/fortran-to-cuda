@@ -14,6 +14,7 @@ class CompilerOptions:
     indexing: str | None = None
     gpu_policy: str = "always"
     memory_model: str = "call"
+    scope_transfers: str = "direct"
 
     def __post_init__(self) -> None:
         if self.opt_level not in (0, 1):
@@ -32,6 +33,10 @@ class CompilerOptions:
             raise CompilationError("memory model must be call or scoped")
         if self.memory_model == "scoped" and self.gpu_policy not in {"sections", "auto"}:
             raise CompilationError("scoped memory currently requires sections or auto GPU policy")
+        if self.scope_transfers not in {"direct", "pinned", "pipelined", "auto"}:
+            raise CompilationError("scope transfers must be direct, pinned, pipelined, or auto")
+        if self.scope_transfers != "direct" and self.memory_model != "scoped":
+            raise CompilationError("nondefault scope transfers require scoped memory")
 
     @property
     def resolved_schedule(self) -> str:

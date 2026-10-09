@@ -43,6 +43,8 @@ def generate_sources(
         raise CompilationError("Common header filename cannot contain quotes or newlines")
     if memory_model not in {"call", "scoped"}:
         raise CompilationError("memory model must be call or scoped")
+    if memory_model != "scoped" and getattr(offload_config, "scope_transfers", "direct") != "direct":
+        raise CompilationError("nondefault scope transfers require scoped memory")
     artifacts, scoped = {}, None
     if memory_model == "scoped":
         import json

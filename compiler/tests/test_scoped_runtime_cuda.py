@@ -66,6 +66,7 @@ extern "C" int consumer(fort_scope_t context, fort_buffer_t a, fort_buffer_t b, 
 
 MAIN = r'''
 #include "scoped_runtime.h"
+#include "staging.hpp"
 #include <cuda_runtime.h>
 #include <cassert>
 #include <cstdio>
@@ -151,9 +152,57 @@ void sections() {
     check(fort_scope_close(context));
     std::puts("4D pitched copies: correct; H2D=64 bytes; D2H=64 bytes; one copy each");
 }
+void pinned_control(const char *mode) {
+    fort_staging::Result occupied;
+    const bool budget = !std::strcmp(mode,"pinned-budget");
+    const bool failed_record = !std::strcmp(mode,"pinned-record");
+    if (budget) {
+        occupied = fort_staging::acquire(fort_staging::pinned_limit/2,fort_staging::Role::Compact,false);
+        assert(occupied.slots && occupied.status==cudaSuccess);
+    }
+    double a[8], b[8]={};
+    for (int i=0;i<8;++i) a[i]=i+1;
+    fort_scope_t context=0; fort_buffer_t ha=0,hb=0;
+    check(fort_scope_create(0,&context));
+    check(fort_scope_set_transfers(context,FORT_SCOPE_TRANSFERS_PINNED));
+    size_t shape[1]={8}; int64_t bounds[1]={-7};
+    fort_scope_layout layout{1,FORT_SCOPE_REAL64,8,a,shape,bounds,1};
+    check(fort_scope_register(context,1,1,&layout,1,&ha));
+    layout.host=b; check(fort_scope_register(context,2,1,&layout,0,&hb));
+    check(producer(context,ha,hb));
+    if (!budget) setenv(failed_record?"FORT_SCOPE_TEST_FAIL_STAGING_RECORD":"FORT_SCOPE_TEST_FAIL_STAGING_ALLOC","1",1);
+    fort_scope_access read{}; read.flags=FORT_SCOPE_READ_ALL;
+    const auto status=fort_scope_host_begin(context,hb,&read);
+    if (failed_record) {
+        assert(status==FORT_SCOPE_EXECUTION);
+        assert(fort_scope_host_begin(context,hb,&read)==FORT_SCOPE_EXECUTION);
+        assert(fort_scope_close(context)==FORT_SCOPE_EXECUTION);
+        check(fort_scope_abandon(context));
+        for (double value:b) assert(value==0); // No unpack and no numerical replay.
+        assert(fort_staging::usage().reserved==0); // Unrecorded slot stream was drained.
+    } else {
+        check(status); check(fort_scope_host_end(context,hb));
+        for (int i=0;i<8;++i) assert(b[i]==2*a[i]);
+        fort_scope_stats legacy{}; check(fort_scope_stats_get(context,&legacy));
+        assert(legacy.launches==1 && legacy.allocations==2 && legacy.download_bytes==64);
+        fort_scope_transfer_stats detail{}; check(fort_scope_transfer_stats_get_v1(context,&detail));
+        assert(detail.staging_device_bytes==0 && detail.pinned_download_bytes==0);
+        assert(detail.fallback_reason==(budget?FORT_SCOPE_TRANSFER_BUDGET:FORT_SCOPE_TRANSFER_ALLOCATION));
+        if(budget) assert(detail.process_reserved_bytes==fort_staging::pinned_limit && detail.fallbacks==2);
+        else assert(detail.pinned_upload_bytes==64 && detail.fallbacks==1);
+        check(fort_scope_close(context));
+    }
+    unsetenv("FORT_SCOPE_TEST_FAIL_STAGING_ALLOC"); unsetenv("FORT_SCOPE_TEST_FAIL_STAGING_RECORD");
+    size_t freed=0;
+    assert(fort_staging::release(std::move(occupied.slots),freed)==cudaSuccess);
+    assert(fort_staging::trim_cache(freed)==cudaSuccess);
+    assert(fort_staging::usage().reserved==0);
+    std::puts("pinned resource/event control: safe; launch executed once");
+}
 int main(int argc,char **argv) {
-    if (argc>1 && !std::strcmp(argv[1],"lazy")) {
+    if (argc>1 && (!std::strcmp(argv[1],"lazy") || !std::strcmp(argv[1],"lazy-pinned"))) {
         fort_scope_t context=0; check(fort_scope_create(0,&context));
+        if(!std::strcmp(argv[1],"lazy-pinned")) check(fort_scope_set_transfers(context,FORT_SCOPE_TRANSFERS_PINNED));
         double a[8]={}; size_t shape[1]={8}; int64_t bounds[1]={0};
         fort_scope_layout layout{1,FORT_SCOPE_REAL64,8,a,shape,bounds,1}; fort_buffer_t buffer=0;
         check(fort_scope_register(context,1,1,&layout,1,&buffer));
@@ -167,6 +216,8 @@ int main(int argc,char **argv) {
         assert(!empty_pointer); check(fort_scope_device_end(context,empty_buffer));
         fort_scope_stats stats{}; check(fort_scope_stats_get(context,&stats));
         assert(stats.allocations==0 && stats.uploads==0 && stats.downloads==0 && stats.waits==0);
+        fort_scope_transfer_stats detail{}; check(fort_scope_transfer_stats_get_v1(context,&detail));
+        assert(detail.pinned_uploads==0 && detail.pinned_downloads==0 && detail.staging_allocations==0);
         check(fort_scope_close(context)); std::puts("native-only scope: no CUDA initialization"); return 0;
     }
     int count=0;
@@ -174,6 +225,7 @@ int main(int argc,char **argv) {
         std::fprintf(stderr,"CUDA device unavailable\n"); return 77;
     }
     if (argc>1 && !std::strcmp(argv[1],"probe")) return 0;
+    if (argc>1 && !std::strncmp(argv[1],"pinned-",7)) { pinned_control(argv[1]); return 0; }
     if (argc>1 && !std::strcmp(argv[1],"sections")) sections(); else chain();
 }
 '''
@@ -196,6 +248,8 @@ def cuda_runtime_executable(tmp_path_factory):
         target = directory / (name + ".o")
         command = [nvcc, "-std=c++17", "-ccbin", host, "-arch=sm_86", "-I", str(RUNTIME),
                    "-c", str(source), "-o", str(target)]
+        if name == "runtime":
+            command.insert(1, "-DFORT_SCOPE_TEST_FAULTS")
         result = subprocess.run(command, capture_output=True, text=True, timeout=120)
         assert result.returncode == 0, result.stdout + result.stderr
         objects.append(str(target))
@@ -206,7 +260,7 @@ def cuda_runtime_executable(tmp_path_factory):
 
 
 @pytest.mark.cuda
-@pytest.mark.parametrize("mode", ["chain", "sections", "lazy"])
+@pytest.mark.parametrize("mode", ["chain", "sections", "lazy", "pinned-budget", "pinned-allocation", "pinned-record"])
 def test_scoped_cuda_public_consumers(cuda_runtime_executable, mode):
     result = subprocess.run([str(cuda_runtime_executable), mode], capture_output=True, text=True, timeout=30)
     if result.returncode == 77:
@@ -215,10 +269,11 @@ def test_scoped_cuda_public_consumers(cuda_runtime_executable, mode):
 
 
 @pytest.mark.cuda
-def test_native_only_and_empty_scope_with_cuda_devices_hidden(cuda_runtime_executable):
+@pytest.mark.parametrize("mode", ["lazy", "lazy-pinned"])
+def test_native_only_and_empty_scope_with_cuda_devices_hidden(cuda_runtime_executable, mode):
     import os
 
-    result = subprocess.run([str(cuda_runtime_executable), "lazy"], capture_output=True, text=True,
+    result = subprocess.run([str(cuda_runtime_executable), mode], capture_output=True, text=True,
                             env={**os.environ, "CUDA_VISIBLE_DEVICES": "", "FORT_RUNTIME_TRACE": "1"}, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "initialize" not in result.stderr
