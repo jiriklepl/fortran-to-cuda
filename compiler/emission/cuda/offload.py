@@ -33,6 +33,26 @@ def _precision(function):
     return 32 if kinds == {ScalarType.REAL32} else 64 if kinds <= {ScalarType.REAL} else 0
 
 
+def _host_profile_compatibility(host_threads, precision):
+    # A native-only preview must not initialize CUDA, but its CPU estimates
+    # still require the calibrated host and compiled toolchain identities.
+    return ["static bool scoped_host_compatible(const offload::Profile &profile) {",
+              f"    if (!profile.valid || profile.threads != {host_threads} || profile.precision != {precision}) return false;",
+              "    static const std::string cpu_name = []() {",
+              '        std::ifstream input("/proc/cpuinfo"); std::string line;',
+              "        while (std::getline(input, line)) {",
+              '            if (line.rfind("model name", 0) != 0) continue;',
+              "            const auto colon = line.find(':'); if (colon == std::string::npos) continue;",
+              r'            const auto first = line.find_first_not_of(" \t", colon + 1);',
+              r'            const auto last = line.find_last_not_of(" \t\r\n");',
+              "            return first == std::string::npos ? std::string{} : line.substr(first, last-first+1);",
+              "        }", "        return std::string{};", "    }();",
+              '    const auto host = std::to_string(__GNUC__) + "." + std::to_string(__GNUC_MINOR__) + "." + std::to_string(__GNUC_PATCHLEVEL__);',
+              '    const auto cuda = std::to_string(__CUDACC_VER_MAJOR__) + "." + std::to_string(__CUDACC_VER_MINOR__) + "." + std::to_string(__CUDACC_VER_BUILD__);',
+              "    return !cpu_name.empty() && cpu_name == profile.cpu_name && host == profile.host_compiler && cuda == profile.cuda_compiler;",
+              "}"]
+
+
 def _cpu_worker(unit, signature, name):
     region = unit.region
     lines = [f"static void {name}({signature}, int tid, int team) {{", *indent(mapped_snapshots(region))]

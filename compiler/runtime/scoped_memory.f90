@@ -87,11 +87,68 @@ module fort_scoped_memory
     real(c_double) :: owner_execution_seconds=0, owner_terminal_seconds=0, owner_complete_seconds=0
     integer(c_int32_t) :: native_common_compute_excluded=0
   end type
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_BATCH_ABI_VERSION=1, FORT_SCOPE_BATCH_FIXED_AXIS=-1
+  integer, parameter, public :: FORT_SCOPE_BATCH_CAPACITIES=4
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_BATCH_NONE=0, FORT_SCOPE_BATCH_MISSING_COSTS=1
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_BATCH_UNSUPPORTED_CHAIN=2, FORT_SCOPE_BATCH_PLACEMENT=3
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_BATCH_NO_ADVANTAGE=4, FORT_SCOPE_BATCH_BUDGET=5
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_BATCH_ALLOCATION=6, FORT_SCOPE_BATCH_GEOMETRY=7
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_BATCH_ARITHMETIC=8
+  type, bind(C), public :: fort_scope_batch_costs
+    integer(c_int32_t) :: version=1, valid=0, async_engine_count=0
+    integer(c_size_t) :: max_slot_bytes=0
+    real(c_double) :: staging_cold_seconds(4)=0, staging_reuse_seconds(4)=0
+    real(c_double) :: event_record_seconds=0, event_wait_seconds=0, ready_event_seconds=0
+    real(c_double) :: preparation_operation_seconds=0
+    real(c_double) :: pack_bytes_per_second=0, unpack_bytes_per_second=0, pack_row_seconds=0, unpack_row_seconds=0
+    real(c_double) :: pinned_h2d_latency=0, pinned_h2d_bandwidth=0, pinned_d2h_latency=0, pinned_d2h_bandwidth=0
+  end type
+  type, bind(C), public :: fort_scope_batch_binding
+    integer(c_int64_t) :: buffer=0
+    integer(c_int32_t) :: axis=-1
+    integer(c_int64_t) :: step=0
+    type(fort_scope_access) :: access
+  end type
+  type, bind(C), public :: fort_scope_batch_unit
+    integer(c_int32_t) :: kind=0
+    integer(c_int64_t) :: unit=0
+    type(c_ptr) :: bindings=c_null_ptr
+    integer(c_size_t) :: count=0
+    real(c_double) :: flops=0, memory_bytes=0
+  end type
+  type, bind(C), public :: fort_scope_batch
+    integer(c_int32_t) :: version=1, execution_mode=1
+    integer(c_size_t) :: iterations=0
+    type(c_ptr) :: units=c_null_ptr
+    integer(c_size_t) :: unit_count=0
+    type(c_ptr) :: exports=c_null_ptr
+    integer(c_size_t) :: export_count=0
+  end type
+  type, bind(C), public :: fort_scope_batch_view
+    integer(c_int64_t) :: buffer=0
+    type(c_ptr) :: device=c_null_ptr
+    type(fort_scope_layout) :: layout
+  end type
+  type, bind(C), public :: fort_scope_batch_window
+    integer(c_int32_t) :: version=1
+    integer(c_size_t) :: begin=0, count=0
+    type(c_ptr) :: stream=c_null_ptr, views=c_null_ptr
+    integer(c_size_t) :: view_count=0
+  end type
+  type, bind(C), public :: fort_scope_batch_report
+    integer(c_int32_t) :: version=1, available=0, applied=0, selected_transfers=0, reason=0, owner_cost_available=0
+    integer(c_int64_t) :: preparation_operations=0, batches=0, chunk_iterations=0, slot_bytes=0
+    integer(c_int64_t) :: upload_bytes=0, download_bytes=0, prefix_upload_bytes=0, prefix_uploads=0, launches=0
+    real(c_double) :: estimated_seconds=0, baseline_seconds=0, pinned_seconds=0, pipelined_seconds=0
+    real(c_double) :: execution_seconds=0, terminal_delta_seconds=0
+    integer(c_int64_t) :: completed_batches=0, actual_upload_bytes=0, actual_download_bytes=0, actual_launches=0
+  end type
 
   public :: fort_scope_abi_version, fort_scope_error, fort_scope_create, fort_scope_register
   public :: fort_scope_register_sections, fort_scope_forget_definition
   public :: fort_scope_set_device_budget
   public :: fort_scope_set_transfers, fort_scope_transfer_stats_get_v1
+  public :: fort_scope_set_transfer_costs_v1, fort_scope_batch_execute_v1, fort_scope_batch_report_get_v1
   public :: fort_scope_device_get
   public :: fort_scope_serial_caller
   public :: fort_scope_layout_get, fort_scope_host_begin, fort_scope_host_end
@@ -106,6 +163,31 @@ module fort_scoped_memory
   public :: fort_scope_plan_reset_mode, fort_scope_plan_report_v2
 
   interface
+
+    function fort_scope_set_transfer_costs_v1(context, costs, compatible) bind(C) result(status)
+      import c_int, c_int64_t, c_ptr
+      integer(c_int64_t), value :: context
+      type(c_ptr), value :: costs
+      integer(c_int), value :: compatible
+      integer(c_int) :: status
+    end function
+    function fort_scope_batch_execute_v1(context, batch, costs, transfers, compatible, worker, user, report) &
+        bind(C) result(status)
+      import c_int, c_int64_t, c_ptr, c_funptr, fort_scope_batch, fort_scope_batch_report
+      integer(c_int64_t), value :: context
+      type(fort_scope_batch), intent(in) :: batch
+      type(c_ptr), value :: costs, transfers, user
+      integer(c_int), value :: compatible
+      type(c_funptr), value :: worker
+      type(fort_scope_batch_report), intent(out) :: report
+      integer(c_int) :: status
+    end function
+    function fort_scope_batch_report_get_v1(context, report) bind(C) result(status)
+      import c_int, c_int64_t, fort_scope_batch_report
+      integer(c_int64_t), value :: context
+      type(fort_scope_batch_report), intent(out) :: report
+      integer(c_int) :: status
+    end function
 
     function fort_scope_set_transfers(context, mode) bind(C) result(status)
       import c_int, c_int32_t, c_int64_t

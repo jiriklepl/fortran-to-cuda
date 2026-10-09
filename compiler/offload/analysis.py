@@ -135,6 +135,36 @@ class ChunkPlan:
 
 
 @dataclass(frozen=True)
+class ScopeSlabArray:
+    """Full-layout mapping, or a fixed exact union for immutable input."""
+
+    symbol: Symbol
+    dimension: int | None
+    coefficient: int = 0
+    offset: Expr | None = None
+
+    @property
+    def immutable_prefix(self) -> bool:
+        return self.dimension is None
+
+
+@dataclass(frozen=True)
+class ScopeSlabPlan:
+    axis: int
+    domains: tuple[Loop, ...]
+    arrays: tuple[ScopeSlabArray, ...]
+
+    def to_dict(self) -> dict:
+        return {"axis": self.axis, "partition": "source-loop ordinals",
+                "arrays": [{"symbol": array.symbol.name, "dimension": array.dimension,
+                            "coefficient": array.coefficient,
+                            "offset": _expression_text(array.offset) if array.offset is not None else None,
+                            "immutable_prefix": array.immutable_prefix} for array in self.arrays],
+                "coordinates": "original logical coordinates and full-array pitches",
+                "independence": "complete subchain RAW/WAR/WAW proof"}
+
+
+@dataclass(frozen=True)
 class OffloadAnalysis:
     available: bool
     reason: str | None
@@ -579,6 +609,85 @@ def _chunk_plan(units, parameters):
         if valid and arrays:
             return ChunkPlan(axis, tuple(arrays), first), None
     return None, "no common slab axis without cross-chunk written-array dependence"
+
+
+def scope_slab_plan(units, parameters):
+    """Prove a complete full-layout chain without compact-buffer halo bounds.
+
+    Written resources must have the same slab coordinate for every access.
+    Immutable inputs may instead retain their exact full read union; this is
+    required for overlapping halos and invariant reads before batches start.
+    The caller supplies canonical symbols when composing direct numerical calls.
+    """
+    if not units:
+        return None, "batching requires a nonempty numerical subchain"
+    parameters = frozenset(parameters)
+    first = units[0].region.loops
+    common = tuple((_canonical(loop.lower, parameters), _canonical(loop.upper, parameters),
+                    loop.step if isinstance(loop.step, int) else _constant(loop.step)) for loop in first)
+    for unit in units:
+        domain = tuple((_canonical(loop.lower, parameters), _canonical(loop.upper, parameters),
+                        loop.step if isinstance(loop.step, int) else _constant(loop.step)) for loop in unit.region.loops)
+        if domain != common:
+            return None, "batching requires equal mapped domains across the complete subchain"
+        if unit.work_per_iteration is None or unit.work_is_upper_bound:
+            return None, "batching requires known unconditional numerical work"
+    if any(stride not in {-1, 1} for _, _, stride in common):
+        return None, "batching requires constant signed-unit strides"
+    footprints = _merge_footprints(fp for unit in units for fp in unit.footprints)
+    if any(fp.full_read or fp.full_write for fp in footprints):
+        return None, "batching requires exact rectangular physical footprints"
+    if any(fp.writes and not fp.exact for fp in footprints):
+        return None, "batching requires proved exact output sections"
+    for axis in range(len(first)):
+        arrays, valid = [], True
+        for footprint in footprints:
+            mappings = []
+            for box in (*footprint.reads, *footprint.writes):
+                found = [(dimension, value) for dimension, value in enumerate(box.axes) if value.axis == axis]
+                if len(found) != 1:
+                    mappings = []
+                    break
+                mappings.append(found[0])
+            if mappings:
+                dimension, mapping = mappings[0]
+                consistent = all((dim, value.coefficient, value.offset) ==
+                                 (dimension, mapping.coefficient, mapping.offset) for dim, value in mappings)
+            else:
+                consistent = False
+            if consistent:
+                if footprint.writes and abs(mapping.coefficient) != 1:
+                    valid = False
+                    break
+                arrays.append(ScopeSlabArray(footprint.symbol, dimension, mapping.coefficient, mapping.offset))
+            elif footprint.writes:
+                valid = False
+                break
+            else:
+                arrays.append(ScopeSlabArray(footprint.symbol, None))
+        if valid and arrays:
+            return ScopeSlabPlan(axis, first, tuple(arrays)), None
+    return None, "no common slab axis without cross-chunk written-array dependence"
+
+
+def analyze_scope_slabs(function, plan):
+    """Retain the ordinary legality checks, with full-layout readonly unions."""
+    analysis = analyze_offload(function, plan)
+    if not analysis.available:
+        return None, analysis.reason, analysis.units
+    slab, reason = scope_slab_plan(analysis.units, function.parameters)
+    return slab, reason, analysis.units
+
+
+def scope_slab_candidates(function, plan):
+    """The existing bounded GPU intervals, each with its own slab proof."""
+    analysis = analyze_offload(function, plan)
+    candidates = []
+    if analysis.available:
+        for interval in analysis.intervals:
+            slab, reason = scope_slab_plan(analysis.units[interval.start:interval.stop], function.parameters)
+            candidates.append((interval, slab, reason))
+    return analysis, tuple(candidates)
 
 
 def _protected_scalar_inputs(region, parameters):

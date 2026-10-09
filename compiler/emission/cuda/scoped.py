@@ -11,7 +11,7 @@ from compiler.emission.common.loops import _loop_snapshot, sequential_block
 from compiler.emission.common.schedules import checked_product, region_schedule, tile_counts
 from compiler.emission.common.symbols import host_symbols, region_symbols
 from compiler.emission.cuda.kernels import generate_kernel, generate_launch
-from compiler.emission.cuda.offload import _cpu_worker, _metadata, _precision
+from compiler.emission.cuda.offload import _cpu_worker, _host_profile_compatibility, _metadata, _precision
 from compiler.emission.cuda.structured import _query_expression
 from compiler.emission.fortran.formatting import _fortran_list
 from compiler.ir import (
@@ -26,10 +26,22 @@ from compiler.ir import (
     referenced_symbols,
     walk_expr,
 )
-from compiler.offload.analysis import OffloadAnalysis, Unit, _protected_scalar_inputs, _unit_footprints
+from compiler.offload.analysis import (
+    OffloadAnalysis,
+    Unit,
+    _protected_scalar_inputs,
+    _unit_footprints,
+    scope_slab_candidates,
+)
 from compiler.offload.codegen import profile_expression, query_expression
 from compiler.offload.preparation import prepare_offload
-from compiler.offload.profile import ProfileError, compiler_identity, scoped_costs, validate_profile
+from compiler.offload.profile import (
+    ProfileError,
+    compiler_identity,
+    scoped_costs,
+    scoped_transfer_costs,
+    validate_profile,
+)
 
 
 @dataclass(frozen=True)
@@ -71,25 +83,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
              f'#include "{common_header}"', '#include "scoped_entry.hpp"',
              '#define FORT_SHARED_CHECK(expr) do { int fort_check_result = (expr); if (fort_check_result) return fort_check_result; } while (false)',
              f"namespace generated_kernels::{name} {{", "using namespace indexing;"]
-    lines += [f'extern "C" int {configure_name}(fort_scope_t fort_context) {{',
-              f"    return fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]});", "}"]
-    # A native-only preview must not initialize CUDA, but its CPU estimates
-    # still require the calibrated host and compiled toolchain identities.
-    lines += ["static bool scoped_host_compatible(const offload::Profile &profile) {",
-              f"    if (!profile.valid || profile.threads != {config.host_threads} || profile.precision != {_precision(function)}) return false;",
-              "    static const std::string cpu_name = []() {",
-              '        std::ifstream input("/proc/cpuinfo"); std::string line;',
-              "        while (std::getline(input, line)) {",
-              '            if (line.rfind("model name", 0) != 0) continue;',
-              "            const auto colon = line.find(':'); if (colon == std::string::npos) continue;",
-              r'            const auto first = line.find_first_not_of(" \t", colon + 1);',
-              r'            const auto last = line.find_last_not_of(" \t\r\n");',
-              "            return first == std::string::npos ? std::string{} : line.substr(first, last-first+1);",
-              "        }", "        return std::string{};", "    }();",
-              '    const auto host = std::to_string(__GNUC__) + "." + std::to_string(__GNUC_MINOR__) + "." + std::to_string(__GNUC_PATCHLEVEL__);',
-              '    const auto cuda = std::to_string(__CUDACC_VER_MAJOR__) + "." + std::to_string(__CUDACC_VER_MINOR__) + "." + std::to_string(__CUDACC_VER_BUILD__);',
-              "    return !cpu_name.empty() && cpu_name == profile.cpu_name && host == profile.host_compiler && cuda == profile.cuda_compiler;",
-              "}"]
+    lines += _host_profile_compatibility(config.host_threads, _precision(function))
     invariants = set(function.parameters)
 
     def collect(current):
@@ -121,6 +115,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
     planning_available = prep.analysis.available and planning_reason is None
     profile_reason = config.profile_reason
     costs = None
+    transfer_costs = None
+    transfer_profile_reason = "hardware profile is missing"
     if config.profile is None:
         profile_reason = profile_reason or "hardware profile is missing"
     elif runtime_id is None:
@@ -131,19 +127,41 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
                              scoped_runtime_id=runtime_id)
             compiler_identity(config.profile)
             costs = scoped_costs(config.profile, runtime_id)
+            try:
+                transfer_costs = scoped_transfer_costs(config.profile, runtime_id)
+                transfer_profile_reason = None
+            except ProfileError as error:
+                transfer_profile_reason = str(error)
         except ProfileError as error:
             profile_reason = str(error)
+            transfer_profile_reason = str(error)
     if config.collective:
         # A serial worker profile includes different preparation/team costs.
         # It cannot establish the cost of this existing-team companion.
         costs = None
         profile_reason = "collective synchronization calibration is unavailable"
-    if config.scope_transfers == "pinned":
+    if config.scope_transfers == "pinned" and transfer_costs is None:
         # Pinned bandwidth alone omits staging preparation, packing and changed
         # copy geometry. Planning v1 has no complete calibrated model for it.
         costs = None
         profile_reason = "transfer_estimates_unavailable"
+    if transfer_costs is None or config.scope_transfers == "direct":
+        lines += [f'extern "C" int {configure_name}(fort_scope_t fort_context) {{',
+                  f"    return fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]});", "}"]
+    else:
+        from compiler.emission.cuda.batch import transfer_cost_lines
+        lines += [f'extern "C" int {configure_name}(fort_scope_t fort_context) {{',
+                  f"    if (const int status = fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]})) return status;",
+                  *indent(transfer_cost_lines(config.profile, transfer_costs)),
+                  "    const auto profile = " + profile_expression(config.profile) + ";",
+                  "    return fort_scope_set_transfer_costs_v1(fort_context, &transfer_costs, scoped_host_compatible(profile));", "}"]
     unit_ids = {r.id: int(sha256(f"{name}:region:{r.id}".encode()).hexdigest()[:16], 16) for r in plan.regions}
+    batch_analysis, batch_candidates = scope_slab_candidates(function, plan)
+    batch_requested = config.scope_transfers in {"pipelined", "auto"}
+    batch_eligible = batch_requested and not config.collective and any(slab for _, slab, _ in batch_candidates)
+    batch_enabled = batch_eligible and costs is not None and transfer_costs is not None
+    batch_name = c_name + "_batch_v1"
+    window_name = c_name + "_window_v1"
     captures = {}
     locals_ = host_symbols(function, plan)
     for region in plan.regions:
@@ -162,6 +180,11 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
             for a in abi)
         lines.extend(generate_kernel(region))
         lines.extend(_cpu_worker(units[region.id], worker_signature + extra_signature, f"cpu_{region.id}"))
+    if batch_eligible:
+        from compiler.emission.cuda.batch import numerical_batch_helpers
+        lines[0:0] = ["#include <memory>", "#include <vector>"]
+        lines += numerical_batch_helpers(function, plan, batch_candidates, batch_analysis.units, c_name, unit_ids,
+                                          config.profile, costs, transfer_costs, config.host_threads, _precision(function))
     lines += [f'extern "C" int {c_name}({", ".join(signature)}) {{',
               "    if (fort_scope_abi_version() != FORT_SCOPE_ABI_VERSION)",
               '        return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "incompatible shared runtime ABI");',
@@ -200,9 +223,14 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
     setup += layout_setup
     lines += setup
     lines += [f"    {cpp_type(s)} {s.cpp_name};" for s in host_symbols(function, plan)]
+    if batch_enabled:
+        from compiler.emission.cuda.batch import worker_arguments as batch_worker_arguments
+        batch_arguments = batch_worker_arguments(function)
+        lines += ["    std::size_t fort_batch_skip=0;",
+                  f"    FORT_SHARED_CHECK({batch_name}(fort_context,fort_mode,0,&fort_batch_skip,{','.join(batch_arguments)}));"]
     for s in arrays:
         if s.intent == "out":
-            lines += [f"    FORT_SHARED_CHECK(fort_scope_forget_definition(fort_context, {s.cpp_name}_handle));"]
+            lines += [f"    {'if (!fort_batch_skip) ' if batch_enabled else ''}FORT_SHARED_CHECK(fort_scope_forget_definition(fort_context, {s.cpp_name}_handle));"]
     lines += ["    const bool fort_gpu_requested = fort_mode == 1;"]
 
     def prefetch(symbols, *, planning=False, query_helper=False):
@@ -317,6 +345,12 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
                 result += host(step, sequential_block(step.body, 0, [0]))
             elif isinstance(step, ParallelRegion):
                 unit = units[step.id]
+                if batch_enabled:
+                    position = next(index for index, region in enumerate(plan.regions) if region.id == step.id)
+                    result += [f"if ({position}ULL >= fort_batch_skip) {{"]
+                    if position:
+                        result += [f"    FORT_SHARED_CHECK({batch_name}(fort_context,fort_mode,{position}ULL,&fort_batch_skip,{','.join(batch_arguments)}));"]
+                    result += [f"if ({position}ULL >= fort_batch_skip) {{"]
                 result += ["{", *indent(bounds(step)), "    if (fort_internal_total) {"]
                 # A CUDA launch captures scalar values before its kernel body.
                 # References preserve CPU guards, but cannot make that capture
@@ -351,6 +385,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
                        "    }", "}", "#else", f"cpu_{step.id}({arguments}, 0, 1);", "#endif"]
                 body += [*indent(cpu), "}", "FORT_SHARED_CHECK(fort_access.finish());"]
                 result += [*indent(body, 2), "    }", "}"]
+                if batch_enabled:
+                    result += ["}", "}"]
             else:
                 raise TypeError(step)
         return result
@@ -705,6 +741,29 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
                                    "runtime_stats": "fort_scope_transfer_stats_get_v1",
                                    "placement_estimate_available": bool(planning_available and costs is not None),
                                    "placement_estimate_reason": planning_reason or profile_reason},
+        "batch_execution": {"abi_version": 1, "runtime_api": "fort_scope_batch_execute_v1",
+                            "runtime_report": "fort_scope_batch_report_get_v1",
+                            "eligible": batch_eligible, "enabled": batch_enabled,
+                            "reason": ("collective batch coordination is unavailable" if config.collective else
+                                       batch_analysis.reason if not batch_analysis.available else
+                                       transfer_profile_reason if transfer_costs is None else None),
+                            "entry": batch_name if batch_eligible else None,
+                            "window_entry": window_name if batch_eligible else None,
+                            "window_argument_order": ["window", "first_unit", "stop_unit", "axis", "launches",
+                                                      *[s.name for s in arrays], *[s.name for s in scalars]],
+                            "candidates": [{"first_unit": interval.start, "stop_unit": interval.stop,
+                                            "eligible": slab is not None, "reason": reason,
+                                            "slab": slab.to_dict() if slab else None}
+                                           for interval, slab, reason in batch_candidates],
+                            "limits": {"adjacent_units": 4, "complete_legal_group": True},
+                            "coordinates": "original logical coordinates and full-array pitches",
+                            "kernels": "reuse existing numerical kernels; no partition-specific copies",
+                            "publication": "retain device results until original native consumers or owner close",
+                            "complete_owner_estimate": "unavailable after batch execution until full repricing",
+                            "fallback": "ordinary synchronous execution before batch work; no replay after start",
+                            "statistics": ["selected_transfers", "chunk_iterations", "slot_bytes", "prefix_upload_bytes",
+                                           "batches", "actual_upload_bytes", "actual_download_bytes", "actual_launches",
+                                           "preparation_operations", "execution_seconds", "terminal_delta_seconds"]},
         "automatic_estimate_available": bool(planning_available and costs is not None),
         "automatic_reason": planning_reason or profile_reason,
         "automatic_scope_available": planning_available, "host_threads": config.host_threads,
@@ -732,6 +791,9 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None):
                               "reason": "CUDA value capture would evaluate a protected scalar" if protected[r.id] else None}
                              for r in plan.regions],
     }
+    if batch_enabled:
+        report["transfer_configuration"].update(selected="runtime", reason=None,
+            available_modes=["direct", "pinned", "pipelined"], execution="synchronous return with two-stream batch overlap")
     if config.collective:
         report["team"] = {
             "available": True, "entry_abi_version": 1, "entry": team_name,

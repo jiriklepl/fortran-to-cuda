@@ -69,6 +69,9 @@ struct Context {
     std::unordered_map<uint64_t, fort_buffer_t> identities;
     fort_scope_stats stats{};
     fort_scope_transfer_stats transfer_stats{};
+    std::optional<fort_scope_batch_costs> transfer_costs;
+    std::optional<fort_scope_batch_report> batch_report;
+    bool batch_active = false;
     std::vector<fort_scoped::planning::Operation> plan;
     std::vector<bool> schedule;
     size_t worker_cursor = 0;
@@ -679,6 +682,9 @@ const fort_scoped::planning::Inputs &planning_inputs(Context &c, fort_scope_t ha
     input.device_budget = c.device_budget;
     input.device_ready = c.ready;
     input.pending = c.pending;
+    input.transfer_mode = c.transfer_stats.requested_mode == FORT_SCOPE_TRANSFERS_PINNED
+        ? FORT_SCOPE_TRANSFERS_PINNED : FORT_SCOPE_TRANSFERS_DIRECT;
+    input.transfer_costs = c.transfer_costs;
 #ifdef FORT_SCOPE_CPU_TEST
     input.asynchronous_release = false;
 #else
@@ -728,6 +734,480 @@ bool same_bindings(const std::vector<fort_scoped::planning::Binding> &a,
             !same_region(a[k].effects.overwrites, b[k].effects.overwrites)) return false;
     }
     return true;
+}
+struct BatchDecline { uint32_t reason; };
+void batch_require(bool condition, uint32_t reason = FORT_SCOPE_BATCH_GEOMETRY) {
+    if (!condition) throw BatchDecline{reason};
+}
+uint64_t batch_add(uint64_t a, uint64_t b) {
+    batch_require(b <= std::numeric_limits<uint64_t>::max()-a, FORT_SCOPE_BATCH_ARITHMETIC); return a+b;
+}
+struct BatchBinding { size_t resource; uint32_t axis; int64_t step; Effects base; };
+struct BatchUnit { uint32_t kind; uint64_t unit; std::vector<BatchBinding> bindings; double flops, memory; };
+struct BatchResource {
+    Buffer *original;
+    fort_scoped::planning::Resource final;
+    Region incoming, written, exported, prefix;
+    uint32_t axis = FORT_SCOPE_BATCH_FIXED_AXIS;
+    int64_t step = 0;
+    bool mutable_value = false, used = false;
+};
+struct BatchPlan {
+    size_t iterations = 0, workers = 0;
+    std::vector<BatchUnit> units;
+    std::vector<BatchResource> resources;
+    uint64_t operations = 1;
+};
+Region batch_intersection(const Region &a, const Region &b, uint64_t &operations) {
+    Budget budget; Region result;
+    for (const auto &left : a) for (const auto &right : b) {
+        operations = batch_add(operations, 1);
+        if (auto box = intersection(left, right, budget)) result = unite(std::move(result), {*box}, budget);
+    }
+    return result;
+}
+Region batch_shift(const Region &base, const BatchBinding &binding, const Buffer &b,
+                   size_t begin, size_t count, uint64_t &operations) {
+    if (!count || base.empty()) return {};
+    if (binding.axis == FORT_SCOPE_BATCH_FIXED_AXIS) return base;
+    batch_require(begin <= std::numeric_limits<size_t>::max()-(count-1), FORT_SCOPE_BATCH_ARITHMETIC);
+    const uint64_t magnitude = binding.step < 0 ? uint64_t(-(binding.step+1))+1 : uint64_t(binding.step);
+    const size_t last = begin+count-1;
+    batch_require(!magnitude || last <= std::numeric_limits<size_t>::max()/magnitude, FORT_SCOPE_BATCH_ARITHMETIC);
+    const auto first_shift = size_t(magnitude)*begin, last_shift = size_t(magnitude)*last;
+    Region result;
+    for (auto box : base) {
+        operations = batch_add(operations, 1);
+        // A sparse ordinal sequence is not its enclosing rectangle. Keep the
+        // ordinary worker path until an exact bounded union is supported.
+        batch_require(count==1 || box.hi[binding.axis]-box.lo[binding.axis]>=magnitude,
+                      FORT_SCOPE_BATCH_UNSUPPORTED_CHAIN);
+        if (binding.step < 0) {
+            batch_require(box.lo[binding.axis] >= last_shift && box.hi[binding.axis] >= first_shift);
+            box.lo[binding.axis] -= last_shift; box.hi[binding.axis] -= first_shift;
+        } else {
+            batch_require(last_shift <= b.extents[binding.axis] && box.hi[binding.axis] <= b.extents[binding.axis]-last_shift);
+            box.lo[binding.axis] += first_shift; box.hi[binding.axis] += last_shift;
+        }
+        append(result, std::move(box));
+    }
+    return result;
+}
+Effects batch_effects(const BatchBinding &binding, const BatchPlan &plan, size_t begin, size_t count,
+                      uint64_t &operations) {
+    const auto &b = *plan.resources[binding.resource].original;
+    return {batch_shift(binding.base.reads,binding,b,begin,count,operations),
+            batch_shift(binding.base.writes,binding,b,begin,count,operations),
+            batch_shift(binding.base.overwrites,binding,b,begin,count,operations)};
+}
+int64_t batch_floor(int64_t value, int64_t divisor) {
+    return value/divisor-(value<0 && value%divisor != 0);
+}
+int64_t batch_ceil(int64_t value, int64_t divisor) {
+    return value/divisor+(value>0 && value%divisor != 0);
+}
+bool batch_crosses(const Box &a, const Box &b, const BatchResource &resource, size_t iterations,
+                   uint64_t &operations) {
+    operations = batch_add(operations, 1);
+    for (size_t k=0; k<a.lo.size(); ++k) if (k != resource.axis)
+        if (a.hi[k] <= b.lo[k] || b.hi[k] <= a.lo[k]) return false;
+    const auto axis = resource.axis;
+    const auto extent = resource.original->extents[axis];
+    const auto alo = resource.step > 0 ? a.lo[axis] : extent-a.hi[axis];
+    const auto ahi = resource.step > 0 ? a.hi[axis] : extent-a.lo[axis];
+    const auto blo = resource.step > 0 ? b.lo[axis] : extent-b.hi[axis];
+    const auto bhi = resource.step > 0 ? b.hi[axis] : extent-b.lo[axis];
+    const auto step = resource.step > 0 ? resource.step : -resource.step;
+    // Strict rectangle intersection for any nonzero ordinal difference, not
+    // just neighboring batches. Coordinate bounds make subtraction checked.
+    const auto lower = batch_floor(int64_t(alo)-int64_t(bhi),step)+1;
+    const auto upper = batch_ceil(int64_t(ahi)-int64_t(blo),step)-1;
+    return std::max<int64_t>(1,lower) <= std::min<int64_t>(int64_t(iterations-1),upper);
+}
+BatchPlan prepare_batch(Context &c, const fort_scope_batch &descriptor) {
+    require(descriptor.version == FORT_SCOPE_BATCH_ABI_VERSION &&
+            (descriptor.execution_mode == FORT_SCOPE_GPU || descriptor.execution_mode == FORT_SCOPE_AUTO),
+            FORT_SCOPE_ARGUMENT, "invalid scoped batch version or execution mode");
+    batch_require(descriptor.iterations && descriptor.iterations <= size_t(std::numeric_limits<int64_t>::max()));
+    batch_require(descriptor.unit_count && descriptor.unit_count <= fort_scoped::planning::detail::operation_limit && descriptor.units,
+                  FORT_SCOPE_BATCH_UNSUPPORTED_CHAIN);
+    BatchPlan plan; plan.iterations = descriptor.iterations;
+    std::unordered_map<fort_buffer_t,size_t> indices;
+    auto resource = [&](fort_buffer_t handle) {
+        auto found = indices.find(handle);
+        if (found != indices.end()) return found->second;
+        auto &b = buffer(c,handle);
+        batch_require(!b.prepared, FORT_SCOPE_BATCH_UNSUPPORTED_CHAIN);
+        for (size_t extent : b.extents) batch_require(extent <= size_t(std::numeric_limits<int64_t>::max()));
+        const auto index = plan.resources.size(); indices.emplace(handle,index);
+        plan.resources.push_back({&b,{b.handle,b.element_bytes,b.bytes,b.extents,b.initialized,b.host_current,b.device_current,b.device != nullptr},
+                                  {},{},{},{}});
+        plan.operations = batch_add(plan.operations,1+b.extents.size()+b.initialized.size()+b.host_current.size()+b.device_current.size());
+        return index;
+    };
+    for (size_t i=0; i<descriptor.unit_count; ++i) {
+        const auto &source = descriptor.units[i];
+        batch_require(source.kind == FORT_SCOPE_PLAN_WORKER || source.kind == FORT_SCOPE_PLAN_FORGET,
+                      FORT_SCOPE_BATCH_UNSUPPORTED_CHAIN);
+        batch_require(source.count <= fort_scoped::planning::detail::operation_limit && (!source.count || source.bindings));
+        batch_require(std::isfinite(source.flops) && source.flops >= 0 && std::isfinite(source.memory_bytes) && source.memory_bytes >= 0);
+        if (source.kind == FORT_SCOPE_PLAN_WORKER) {
+            batch_require(source.unit && (source.flops>0 || source.memory_bytes>0));
+            batch_require(++plan.workers <= fort_scoped::planning::detail::worker_limit, FORT_SCOPE_BATCH_UNSUPPORTED_CHAIN);
+        }
+        BatchUnit unit{source.kind,source.unit,{},source.flops,source.memory_bytes};
+        for (size_t j=0; j<source.count; ++j) {
+            const auto &item = source.bindings[j]; const auto index = resource(item.buffer);
+            batch_require(std::none_of(unit.bindings.begin(),unit.bindings.end(),[&](const auto &old){return old.resource==index;}));
+            auto &r = plan.resources[index];
+            batch_require(item.axis == FORT_SCOPE_BATCH_FIXED_AXIS || item.axis < r.original->extents.size());
+            batch_require(item.axis != FORT_SCOPE_BATCH_FIXED_AXIS || item.step == 0);
+            batch_require(item.step != std::numeric_limits<int64_t>::min());
+            auto access = effects(*r.original,&item.access);
+            if (source.kind == FORT_SCOPE_PLAN_WORKER && (!access.reads.empty() || !access.writes.empty())) r.used=true;
+            if (source.kind == FORT_SCOPE_PLAN_WORKER && !access.writes.empty()) {
+                Budget budget;
+                batch_require(difference(access.writes,access.overwrites,budget).empty(), FORT_SCOPE_BATCH_UNSUPPORTED_CHAIN);
+                batch_require(item.axis != FORT_SCOPE_BATCH_FIXED_AXIS && item.step != 0);
+                const auto width = size_t(item.step<0 ? -item.step : item.step);
+                for (const auto &box : access.writes) batch_require(box.hi[item.axis]-box.lo[item.axis]==width);
+                r.mutable_value = true;
+            }
+            unit.bindings.push_back({index,item.axis,item.step,std::move(access)});
+            plan.operations = batch_add(plan.operations,1+item.access.read_count+item.access.write_count+item.access.overwrite_count);
+        }
+        plan.units.push_back(std::move(unit));
+    }
+    batch_require(plan.workers>0, FORT_SCOPE_BATCH_UNSUPPORTED_CHAIN);
+    for (auto &r : plan.resources) if (r.mutable_value) {
+        bool found = false;
+        for (const auto &unit : plan.units) if (unit.kind == FORT_SCOPE_PLAN_WORKER)
+            for (const auto &binding : unit.bindings) if (plan.resources[binding.resource].original == r.original) {
+                if (binding.base.reads.empty() && binding.base.writes.empty() && binding.base.overwrites.empty()) continue;
+                if (!found) { r.axis=binding.axis; r.step=binding.step; found=true; }
+                batch_require(r.axis != FORT_SCOPE_BATCH_FIXED_AXIS && r.step != 0 && binding.axis==r.axis && binding.step==r.step,
+                              FORT_SCOPE_BATCH_UNSUPPORTED_CHAIN);
+            }
+        if (plan.iterations>1) {
+            Region writes, accesses; Budget budget;
+            for (const auto &unit : plan.units) if (unit.kind == FORT_SCOPE_PLAN_WORKER)
+                for (const auto &binding : unit.bindings) if (plan.resources[binding.resource].original == r.original) {
+                    writes=unite(std::move(writes),binding.base.writes,budget);
+                    accesses=unite(std::move(accesses),binding.base.reads,budget);
+                    accesses=unite(std::move(accesses),binding.base.writes,budget);
+                }
+            for (const auto &write : writes) for (const auto &access : accesses)
+                batch_require(!batch_crosses(write,access,r,plan.iterations,plan.operations) &&
+                              !batch_crosses(access,write,r,plan.iterations,plan.operations), FORT_SCOPE_BATCH_UNSUPPORTED_CHAIN);
+        }
+    }
+    // Compose whole-entry definitions in source order. Earlier GPU outputs
+    // satisfy later reads; they never become uploads from stale host storage.
+    for (const auto &unit : plan.units) {
+        for (const auto &binding : unit.bindings) {
+            auto &r = plan.resources[binding.resource]; auto &state = r.final;
+            plan.operations = batch_add(plan.operations,1);
+            if (unit.kind == FORT_SCOPE_PLAN_FORGET) {
+                state.initialized.clear(); state.host_current.clear(); state.device_current.clear(); continue;
+            }
+            auto access=batch_effects(binding,plan,0,plan.iterations,plan.operations); Budget budget;
+            auto needs=unite(access.reads,difference(access.writes,access.overwrites,budget),budget);
+            require(difference(needs,state.initialized,budget).empty(),FORT_SCOPE_UNINITIALIZED,"batch reads an undefined section");
+            auto missing=difference(needs,state.device_current,budget);
+            require(difference(missing,state.host_current,budget).empty(),FORT_SCOPE_UNINITIALIZED,"batch input has no current source");
+            r.incoming=unite(std::move(r.incoming),missing,budget);
+            state.device_current=unite(std::move(state.device_current),missing,budget);
+            auto prepared=prepare(state,access,true);
+            state.initialized=std::move(prepared.initialized); state.device_current=std::move(prepared.current);
+            state.host_current=std::move(prepared.opposite);
+            r.written=unite(std::move(r.written),access.writes,budget);
+        }
+    }
+    batch_require(descriptor.export_count <= plan.resources.size() && (!descriptor.export_count || descriptor.exports));
+    for (size_t i=0; i<descriptor.export_count; ++i) {
+        const auto &item=descriptor.exports[i]; auto found=indices.find(item.buffer);
+        batch_require(found != indices.end()); auto &r=plan.resources[found->second];
+        auto access=effects(*r.original,&item.access); Budget budget;
+        batch_require(access.writes.empty() && access.overwrites.empty() && difference(access.reads,r.written,budget).empty());
+        require(difference(access.reads,r.final.initialized,budget).empty(),FORT_SCOPE_UNINITIALIZED,"batch exports undefined output");
+        r.exported=unite(std::move(r.exported),access.reads,budget);
+        r.final.host_current=unite(std::move(r.final.host_current),access.reads,budget);
+        plan.operations=batch_add(plan.operations,1+access.reads.size());
+    }
+    // Immutable repeated/halo reads are made current once before any batch.
+    for (size_t index=0; index<plan.resources.size(); ++index) {
+        auto &r=plan.resources[index]; if (r.mutable_value || r.incoming.empty()) continue;
+        bool overlapping=false;
+        for (const auto &unit : plan.units) if (unit.kind==FORT_SCOPE_PLAN_WORKER)
+            for (const auto &binding : unit.bindings) if (binding.resource==index) {
+                if (binding.axis==FORT_SCOPE_BATCH_FIXED_AXIS || binding.step==0) overlapping=true;
+                else for (const auto &box : binding.base.reads)
+                    if (box.hi[binding.axis]-box.lo[binding.axis] != size_t(binding.step<0 ? -binding.step : binding.step)) overlapping=true;
+            }
+        if (!overlapping && plan.iterations>1) {
+            Region reads; Budget budget; bool first=true;
+            for (const auto &unit : plan.units) if (unit.kind==FORT_SCOPE_PLAN_WORKER)
+                for (const auto &binding : unit.bindings) if (binding.resource==index) {
+                    if (first) { r.axis=binding.axis; r.step=binding.step; first=false; }
+                    if (binding.axis!=r.axis || binding.step!=r.step) overlapping=true;
+                    reads=unite(std::move(reads),binding.base.reads,budget);
+                }
+            if (!overlapping) for (const auto &left : reads) for (const auto &right : reads)
+                if (batch_crosses(left,right,r,plan.iterations,plan.operations)) overlapping=true;
+        }
+        if (overlapping) r.prefix=r.incoming;
+    }
+    return plan;
+}
+bool equivalent_region(const Region &a, const Region &b) {
+    Budget budget; return difference(a,b,budget).empty() && difference(b,a,budget).empty();
+}
+size_t batch_schedule(const Context &c, const BatchPlan &plan, uint32_t mode, uint64_t &operations) {
+    if (!c.plan_installed) {
+        batch_require(mode==FORT_SCOPE_GPU,FORT_SCOPE_BATCH_PLACEMENT); return 0;
+    }
+    size_t worker=0, position=c.plan.size();
+    for (size_t i=0; i<c.plan.size(); ++i) if (c.plan[i].kind==FORT_SCOPE_PLAN_WORKER)
+        if (worker++==c.worker_cursor) { position=i; break; }
+    size_t prefix=0; while (prefix<plan.units.size() && plan.units[prefix].kind==FORT_SCOPE_PLAN_FORGET) ++prefix;
+    batch_require(position<c.plan.size() && position>=prefix && plan.units.size()<=c.plan.size()-(position-prefix),FORT_SCOPE_BATCH_PLACEMENT);
+    position-=prefix; worker=c.worker_cursor;
+    for (size_t i=0; i<plan.units.size(); ++i) {
+        const auto &expected=c.plan[position+i]; const auto &unit=plan.units[i];
+        operations=batch_add(operations,1);
+        batch_require(expected.kind==unit.kind,FORT_SCOPE_BATCH_PLACEMENT);
+        if (unit.kind==FORT_SCOPE_PLAN_WORKER) {
+            batch_require(expected.unit==unit.unit && worker<c.schedule.size() && c.schedule[worker],FORT_SCOPE_BATCH_PLACEMENT); ++worker;
+        }
+        for (const auto &binding : unit.bindings) {
+            const auto handle=plan.resources[binding.resource].original->handle;
+            auto found=std::find_if(expected.bindings.begin(),expected.bindings.end(),[&](const auto &item){return item.buffer==handle;});
+            if (unit.kind==FORT_SCOPE_PLAN_FORGET) { batch_require(found!=expected.bindings.end(),FORT_SCOPE_BATCH_PLACEMENT); continue; }
+            auto full=batch_effects(binding,plan,0,plan.iterations,operations);
+            if (found==expected.bindings.end()) {
+                batch_require(full.reads.empty() && full.writes.empty() && full.overwrites.empty(),FORT_SCOPE_BATCH_PLACEMENT); continue;
+            }
+            batch_require(equivalent_region(found->effects.reads,full.reads) && equivalent_region(found->effects.writes,full.writes) &&
+                          equivalent_region(found->effects.overwrites,full.overwrites),FORT_SCOPE_BATCH_PLACEMENT);
+        }
+        for (const auto &binding : expected.bindings)
+            batch_require(std::any_of(unit.bindings.begin(),unit.bindings.end(),[&](const auto &item){
+                return plan.resources[item.resource].original->handle==binding.buffer;
+            }),FORT_SCOPE_BATCH_PLACEMENT);
+    }
+    return plan.workers;
+}
+struct BatchCopy { Buffer *buffer; fort_physical::CopyOperation operation; size_t packed_offset; };
+struct BatchCopies {
+    std::vector<BatchCopy> uploads, downloads;
+    uint64_t upload_bytes=0, download_bytes=0, upload_rows=0, download_rows=0, operations=1;
+};
+void batch_copies_append(BatchCopies &copies, Buffer &b, const Region &region, bool upload) {
+    auto &list=upload ? copies.uploads : copies.downloads;
+    auto &bytes=upload ? copies.upload_bytes : copies.download_bytes;
+    auto &rows=upload ? copies.upload_rows : copies.download_rows;
+    for (const auto &box : region) {
+        fort_physical::CopyPlan physical(b.element_bytes,b.extents,box.lo,box.hi);
+        batch_require(physical.valid,FORT_SCOPE_BATCH_ARITHMETIC);
+        physical.visit([&](const auto &op) {
+            batch_require(list.size()<intersection_limit,FORT_SCOPE_BATCH_UNSUPPORTED_CHAIN);
+            const auto size=multiply(multiply(op.width,op.height),op.depth);
+            list.push_back({&b,op,size_t(bytes)}); bytes=batch_add(bytes,size);
+            rows=batch_add(rows,multiply(op.height,op.depth)); copies.operations=batch_add(copies.operations,1); return true;
+        });
+    }
+}
+BatchCopies batch_copies(const BatchPlan &plan, size_t begin, size_t count, bool capacity_bound=false) {
+    BatchCopies copies;
+    for (size_t index=0; index<plan.resources.size(); ++index) {
+        const auto &r=plan.resources[index]; Region needs,writes; Budget budget;
+        for (const auto &unit : plan.units) if (unit.kind==FORT_SCOPE_PLAN_WORKER)
+            for (const auto &binding : unit.bindings) if (binding.resource==index) {
+                auto access=batch_effects(binding,plan,begin,count,copies.operations);
+                needs=unite(std::move(needs),access.reads,budget);
+                needs=unite(std::move(needs),difference(access.writes,access.overwrites,budget),budget);
+                writes=unite(std::move(writes),access.writes,budget);
+            }
+        if (!r.incoming.empty() && r.prefix.empty()) {
+            auto incoming=capacity_bound ? needs : batch_intersection(needs,r.incoming,copies.operations);
+            batch_copies_append(copies,*r.original,incoming,true);
+        }
+        if (!r.exported.empty()) {
+            auto outgoing=capacity_bound ? writes : batch_intersection(writes,r.exported,copies.operations);
+            batch_copies_append(copies,*r.original,outgoing,false);
+        }
+    }
+    return copies;
+}
+double batch_copy_cost(uint64_t bytes, uint64_t rows, uint64_t calls, const fort_scope_batch_costs &costs, bool upload) {
+    const double value=double(bytes)/(upload ? costs.pinned_h2d_bandwidth : costs.pinned_d2h_bandwidth) +
+        double(calls)*(upload ? costs.pinned_h2d_latency : costs.pinned_d2h_latency) +
+        double(bytes)/(upload ? costs.pack_bytes_per_second : costs.unpack_bytes_per_second) +
+        double(rows)*(upload ? costs.pack_row_seconds : costs.unpack_row_seconds);
+    batch_require(std::isfinite(value) && value>=0,FORT_SCOPE_BATCH_ARITHMETIC); return value;
+}
+fort_scoped::planning::Inputs batch_inputs(const Context &c, const BatchPlan &plan, uint64_t &operations) {
+    fort_scoped::planning::Inputs input;
+    input.device_budget=c.device_budget; input.device_ready=c.ready; input.driver_initialized=driver_initialized(c);
+    input.pending=c.pending; input.continuation=true; input.charge_create=false; input.registrations_incurred=0;
+#ifdef FORT_SCOPE_CPU_TEST
+    input.asynchronous_release=false;
+#endif
+    for (const auto &r : plan.resources) {
+        const auto &b=*r.original;
+        input.resources.push_back({b.handle,b.element_bytes,b.bytes,b.extents,b.initialized,b.host_current,b.device_current,b.device!=nullptr});
+    }
+    for (const auto &unit : plan.units) {
+        fort_scoped::planning::Operation op{unit.kind,unit.unit,{},unit.flops,unit.memory,true};
+        for (const auto &binding : unit.bindings) {
+            auto access=batch_effects(binding,plan,0,plan.iterations,operations);
+            if (unit.kind==FORT_SCOPE_PLAN_WORKER && access.reads.empty() && access.writes.empty() && access.overwrites.empty()) continue;
+            op.bindings.push_back({plan.resources[binding.resource].original->handle,std::move(access)});
+        }
+        input.operations.push_back(std::move(op));
+    }
+    return input;
+}
+fort_scope_batch_report price_batch(const Context &c, const BatchPlan &plan, const fort_scope_plan_costs &base,
+                                    const fort_scope_batch_costs &costs, uint64_t operations) {
+    using namespace fort_scoped::planning;
+    fort_scope_batch_report report{}; report.version=FORT_SCOPE_BATCH_ABI_VERSION;
+    report.selected_transfers=FORT_SCOPE_TRANSFERS_DIRECT;
+    auto input=batch_inputs(c,plan,operations); detail::validate(input,base);
+    auto baseline=detail::initial(input,base); uint64_t simulated=0;
+    const double entry_terminal=detail::entry_terminal(input,base,simulated).seconds;
+    for (const auto &op : input.operations) detail::execute(baseline,op,op.kind==FORT_SCOPE_PLAN_WORKER,input,base,simulated);
+    for (size_t k=0; k<plan.resources.size(); ++k) if (!plan.resources[k].exported.empty()) {
+        detail::seconds(baseline.time,base.host_access_seconds);
+        detail::ensure(baseline,baseline.resources[k],plan.resources[k].exported,false,input,base); detail::wait(baseline,base);
+    }
+    detail::finish(baseline,input,base,simulated);
+    report.baseline_seconds=baseline.execution_time;
+    report.terminal_delta_seconds=baseline.terminal.seconds-entry_terminal;
+    batch_require(std::isfinite(report.terminal_delta_seconds),FORT_SCOPE_BATCH_ARITHMETIC);
+    double lifecycle=0,compute=0;
+    if (!c.ready) lifecycle=base.gpu_setup_seconds+(input.driver_initialized ? 0 : base.cold_driver_startup_seconds);
+    for (const auto &r : plan.resources) {
+        if (r.used && r.original->bytes && !r.original->device) {
+            batch_require(r.original->bytes<=base.max_allocation_bytes,FORT_SCOPE_BATCH_GEOMETRY);
+            lifecycle+=base.allocation_seconds;
+        }
+        BatchCopies total; batch_copies_append(total,*r.original,r.incoming,true); batch_copies_append(total,*r.original,r.exported,false);
+        report.upload_bytes=batch_add(report.upload_bytes,total.upload_bytes);
+        report.download_bytes=batch_add(report.download_bytes,total.download_bytes);
+    }
+    for (const auto &unit : plan.units) if (unit.kind==FORT_SCOPE_PLAN_WORKER)
+        compute+=std::max(unit.flops/base.gpu_flops,unit.memory/base.gpu_bandwidth);
+    const auto requested=c.transfer_stats.requested_mode;
+    double best=requested==FORT_SCOPE_TRANSFERS_PIPELINED ? std::numeric_limits<double>::infinity() : report.baseline_seconds;
+    const auto one=batch_copies(plan,0,1,true);
+    const auto two=batch_copies(plan,0,std::min<size_t>(plan.iterations,2),true);
+    operations=batch_add(operations,one.operations+two.operations+simulated);
+    const uint64_t bytes_one=std::max(one.upload_bytes,one.download_bytes), bytes_two=std::max(two.upload_bytes,two.download_bytes);
+    const uint64_t per_iteration=std::max<uint64_t>(1,std::max(bytes_one,bytes_two>bytes_one ? bytes_two-bytes_one : 0));
+    for (size_t capacity_index=0; capacity_index<FORT_SCOPE_BATCH_CAPACITIES; ++capacity_index) {
+        const auto capacity=detail::batch_capacities[capacity_index];
+        if (capacity>costs.max_slot_bytes || per_iteration>capacity) continue;
+        size_t count=std::min<size_t>(plan.iterations,std::max<size_t>(1,capacity/per_iteration));
+        if ((requested==FORT_SCOPE_TRANSFERS_PIPELINED || requested==FORT_SCOPE_TRANSFERS_AUTO) && plan.iterations>1)
+            count=std::min(count,std::max<size_t>(1,plan.iterations/2));
+        auto maximum=batch_copies(plan,0,count,true); operations=batch_add(operations,maximum.operations);
+        while (std::max(maximum.upload_bytes,maximum.download_bytes)>capacity && count>1) {
+            count=std::max<size_t>(1,count/2); maximum=batch_copies(plan,0,count,true); operations=batch_add(operations,maximum.operations);
+        }
+        if (std::max(maximum.upload_bytes,maximum.download_bytes)>capacity) continue;
+        const uint64_t batches=plan.iterations/count+(plan.iterations%count!=0);
+        double prefix_seconds=0; uint64_t prefix_bytes=0,prefix_calls=0;
+        for (const auto &r : plan.resources) for (const auto &box : r.prefix) {
+            fort_physical::CopyPlan physical(r.original->element_bytes,r.original->extents,box.lo,box.hi);
+            batch_require(physical.valid,FORT_SCOPE_BATCH_ARITHMETIC);
+            uint64_t rows=0,calls=0;
+            physical.visit([&](const auto &op) {
+                return fort_physical::visit_tiles(op,capacity,[&](const auto &tile) {
+                    rows=batch_add(rows,multiply(tile.height,tile.depth)); calls=batch_add(calls,1);
+                    operations=batch_add(operations,1); return true;
+                });
+            });
+            prefix_seconds+=batch_copy_cost(physical.bytes,rows,calls,costs,true)+double(calls)*(costs.event_record_seconds+costs.event_wait_seconds);
+            prefix_bytes=batch_add(prefix_bytes,physical.bytes); prefix_calls=batch_add(prefix_calls,calls);
+        }
+        const double h2d=double(maximum.uploads.size())*costs.pinned_h2d_latency+double(maximum.upload_bytes)/costs.pinned_h2d_bandwidth;
+        const double d2h=double(maximum.downloads.size())*costs.pinned_d2h_latency+double(maximum.download_bytes)/costs.pinned_d2h_bandwidth;
+        const double gpu=compute*double(count)/double(plan.iterations)+double(plan.workers)*base.launch_enqueue_seconds;
+        const double pump=double(maximum.upload_bytes)/costs.pack_bytes_per_second+double(maximum.download_bytes)/costs.unpack_bytes_per_second+
+            double(maximum.upload_rows)*costs.pack_row_seconds+double(maximum.download_rows)*costs.unpack_row_seconds+
+            costs.event_record_seconds+costs.event_wait_seconds+double(maximum.operations)*costs.preparation_operation_seconds;
+        const double fixed=lifecycle+costs.staging_cold_seconds[capacity_index]+2*costs.ready_event_seconds+prefix_seconds;
+        const double pinned=fixed+double(batches)*(h2d+gpu+d2h+pump);
+        const double copies=costs.async_engine_count>1 ? std::max(h2d,d2h) : h2d+d2h;
+        const double period=std::max({copies,gpu,pump,(h2d+d2h+gpu)/2});
+        const double pipelined=fixed+h2d+gpu+d2h+pump+double(batches-1)*period;
+        batch_require(std::isfinite(pinned) && std::isfinite(pipelined),FORT_SCOPE_BATCH_ARITHMETIC);
+        if (requested==FORT_SCOPE_TRANSFERS_AUTO && pinned<best) {
+            best=pinned; report.selected_transfers=FORT_SCOPE_TRANSFERS_PINNED;
+            report.chunk_iterations=count; report.slot_bytes=capacity; report.batches=batches;
+            report.prefix_upload_bytes=prefix_bytes; report.prefix_uploads=prefix_calls;
+        }
+        if ((requested==FORT_SCOPE_TRANSFERS_AUTO || requested==FORT_SCOPE_TRANSFERS_PIPELINED) && costs.async_engine_count &&
+            batches>1 && (maximum.upload_bytes || maximum.download_bytes) && pipelined<best) {
+            best=pipelined; report.selected_transfers=FORT_SCOPE_TRANSFERS_PIPELINED;
+            report.chunk_iterations=count; report.slot_bytes=capacity; report.batches=batches;
+            report.prefix_upload_bytes=prefix_bytes; report.prefix_uploads=prefix_calls;
+        }
+        if (!report.pinned_seconds || pinned<report.pinned_seconds) report.pinned_seconds=pinned;
+        if (!report.pipelined_seconds || pipelined<report.pipelined_seconds) report.pipelined_seconds=pipelined;
+    }
+    report.preparation_operations=operations;
+    const double preparation=double(operations)*costs.preparation_operation_seconds;
+    report.baseline_seconds+=preparation; best+=preparation;
+    if (report.pinned_seconds) report.pinned_seconds+=preparation;
+    if (report.pipelined_seconds) report.pipelined_seconds+=preparation;
+    report.available=1; report.reason=FORT_SCOPE_BATCH_NONE;
+    if (report.selected_transfers==FORT_SCOPE_TRANSFERS_DIRECT ||
+        (requested==FORT_SCOPE_TRANSFERS_AUTO && !(best<=.8*report.baseline_seconds))) {
+        report.selected_transfers=FORT_SCOPE_TRANSFERS_DIRECT;
+        report.reason=requested==FORT_SCOPE_TRANSFERS_PIPELINED ? FORT_SCOPE_BATCH_GEOMETRY : FORT_SCOPE_BATCH_NO_ADVANTAGE;
+        report.chunk_iterations=report.batches=report.slot_bytes=report.prefix_upload_bytes=report.prefix_uploads=0; best=report.baseline_seconds;
+    }
+    report.execution_seconds=best; report.estimated_seconds=best+report.terminal_delta_seconds;
+    batch_require(!plan.workers || report.batches<=std::numeric_limits<uint64_t>::max()/plan.workers,FORT_SCOPE_BATCH_ARITHMETIC);
+    report.launches=report.selected_transfers==FORT_SCOPE_TRANSFERS_DIRECT ? plan.workers : report.batches*plan.workers;
+    batch_require(std::isfinite(report.baseline_seconds) && std::isfinite(report.execution_seconds) &&
+                  std::isfinite(report.estimated_seconds) && std::isfinite(report.pinned_seconds) &&
+                  std::isfinite(report.pipelined_seconds),FORT_SCOPE_BATCH_ARITHMETIC);
+    return report;
+}
+const char *batch_reason(uint32_t reason) noexcept {
+    switch (reason) {
+        case FORT_SCOPE_BATCH_MISSING_COSTS: return "batch_transfer_estimates_unavailable";
+        case FORT_SCOPE_BATCH_UNSUPPORTED_CHAIN: return "batch_independence_not_proven";
+        case FORT_SCOPE_BATCH_PLACEMENT: return "batch_requires_approved_gpu_chain";
+        case FORT_SCOPE_BATCH_NO_ADVANTAGE: return "batch_20_percent_margin_not_met";
+        case FORT_SCOPE_BATCH_BUDGET: return "pinned_budget_exhausted";
+        case FORT_SCOPE_BATCH_ALLOCATION: return "batch_resource_allocation_failed";
+        case FORT_SCOPE_BATCH_GEOMETRY: return "batch_geometry_not_supported";
+        case FORT_SCOPE_BATCH_ARITHMETIC: return "batch_arithmetic_overflow";
+        default: return "none";
+    }
+}
+void batch_trace(fort_scope_t handle, const fort_scope_batch_report &report) noexcept {
+    if (!diagnostics_enabled()) return;
+    try {
+        std::lock_guard<std::mutex> lock(trace_mutex);
+        std::cerr << std::setprecision(17) << "FORT_SCOPED evidence {\"schema_version\":1,\"event\":\"batch_statistics\",\"stats_version\":1,\"context\":" << handle
+                  << ",\"available\":" << report.available << ",\"applied\":" << report.applied
+                  << ",\"selected_transfers\":" << report.selected_transfers << ",\"reason\":\"" << batch_reason(report.reason) << "\""
+                  << ",\"owner_cost_available\":" << report.owner_cost_available
+                  << ",\"owner_cost_reason\":\"" << (report.applied ? "complete_owner_batch_reprice_unavailable" : "unchanged") << "\"";
+#define FORT_BATCH_FIELD(name) std::cerr << ",\"" #name "\":" << report.name
+        FORT_BATCH_FIELD(preparation_operations); FORT_BATCH_FIELD(batches); FORT_BATCH_FIELD(chunk_iterations); FORT_BATCH_FIELD(slot_bytes);
+        FORT_BATCH_FIELD(upload_bytes); FORT_BATCH_FIELD(download_bytes); FORT_BATCH_FIELD(prefix_upload_bytes); FORT_BATCH_FIELD(prefix_uploads);
+        FORT_BATCH_FIELD(launches); FORT_BATCH_FIELD(estimated_seconds); FORT_BATCH_FIELD(baseline_seconds); FORT_BATCH_FIELD(pinned_seconds);
+        FORT_BATCH_FIELD(pipelined_seconds); FORT_BATCH_FIELD(execution_seconds); FORT_BATCH_FIELD(terminal_delta_seconds);
+        FORT_BATCH_FIELD(completed_batches); FORT_BATCH_FIELD(actual_upload_bytes); FORT_BATCH_FIELD(actual_download_bytes); FORT_BATCH_FIELD(actual_launches);
+#undef FORT_BATCH_FIELD
+        std::cerr << "}\n";
+    } catch (...) {}
 }
 void decision_trace(const fort_scope_plan_decision &d, const std::string &reason) {
     const char *enabled = std::getenv("FORT_RUNTIME_TRACE");
@@ -1045,7 +1525,8 @@ extern "C" int fort_scope_plan_select(fort_scope_t h, const fort_scope_plan_cost
         auto pricing = *costs;
         // The v1 profile describes direct copies. Pinned preparation, tiling
         // and completion costs are not calibrated by that profile.
-        const bool pinned_uncalibrated = c.transfer_stats.requested_mode == FORT_SCOPE_TRANSFERS_PINNED;
+        const bool pinned_uncalibrated = c.transfer_stats.requested_mode == FORT_SCOPE_TRANSFERS_PINNED &&
+            (!c.transfer_costs || !fort_scoped::planning::detail::valid_transfer_costs(*c.transfer_costs));
         if (pinned_uncalibrated) pricing.valid = 0;
         auto result = timing.cache_hit
             ? *c.preview : fort_scoped::planning::select(planning_inputs(c, h), pricing);
@@ -1165,6 +1646,264 @@ extern "C" int fort_scope_transfer_stats_get_v1(fort_scope_t h, fort_scope_trans
         require(out, FORT_SCOPE_ARGUMENT, "missing scoped transfer statistics output");
         *out = transfer_statistics(c);
     }, Change::None);
+}
+extern "C" int fort_scope_set_transfer_costs_v1(fort_scope_t h, const fort_scope_batch_costs *costs,
+                                               int compatible) {
+    return with(h, [&](Context &c) {
+        require(compatible == 0 || compatible == 1, FORT_SCOPE_ARGUMENT, "invalid transfer calibration compatibility");
+        require(c.buffers.empty() && !c.ready && !c.plan_recording && !c.plan_installed,
+                FORT_SCOPE_STATE, "configure scoped transfer pricing before registration and planning");
+        c.transfer_costs.reset();
+        if (compatible && costs && fort_scoped::planning::detail::valid_transfer_costs(*costs)) {
+            c.transfer_costs = *costs;
+            if (c.transfer_stats.requested_mode==FORT_SCOPE_TRANSFERS_AUTO || c.transfer_stats.requested_mode==FORT_SCOPE_TRANSFERS_PIPELINED) {
+                c.transfer_stats.fallback_reason=FORT_SCOPE_TRANSFER_NONE; c.transfer_stats.fallbacks=0;
+            }
+        }
+    });
+}
+extern "C" int fort_scope_batch_report_get_v1(fort_scope_t h, fort_scope_batch_report *out) {
+    return with(h, [&](Context &c) {
+        require(out, FORT_SCOPE_ARGUMENT, "missing batch report output");
+        *out = c.batch_report.value_or(fort_scope_batch_report{});
+        out->version = FORT_SCOPE_BATCH_ABI_VERSION;
+    }, Change::None);
+}
+extern "C" int fort_scope_batch_execute_v1(fort_scope_t h, const fort_scope_batch *descriptor,
+        const fort_scope_plan_costs *base, const fort_scope_batch_costs *transfers, int compatible,
+        fort_scope_batch_worker worker, void *user, fort_scope_batch_report *out) {
+    return with(h,[&](Context &c) {
+        require(descriptor && out && compatible>=-1 && compatible<=1,FORT_SCOPE_ARGUMENT,"invalid scoped batch arguments");
+        require(!c.batch_active,FORT_SCOPE_STATE,"only one scoped batch may be active");
+        *out={}; out->version=FORT_SCOPE_BATCH_ABI_VERSION; out->preparation_operations=1;
+        const auto *pricing=transfers ? transfers : c.transfer_costs ? &*c.transfer_costs : nullptr;
+        auto observation=[&]() {
+            if (compatible!=-1) { c.batch_report=*out; batch_trace(h,*out); }
+        };
+        if (!compatible || !base || !pricing || !fort_scoped::planning::detail::valid_transfer_costs(*pricing)) {
+            out->reason=FORT_SCOPE_BATCH_MISSING_COSTS; observation(); return;
+        }
+        BatchPlan plan; size_t consume=0;
+        try {
+            plan=prepare_batch(c,*descriptor);
+            consume=batch_schedule(c,plan,descriptor->execution_mode,plan.operations);
+            *out=price_batch(c,plan,*base,*pricing,plan.operations);
+        } catch (const BatchDecline &decline) {
+            out->reason=decline.reason; out->preparation_operations=std::max<uint64_t>(1,plan.operations); observation(); return;
+        } catch (const Fragmented &) {
+            out->reason=FORT_SCOPE_BATCH_UNSUPPORTED_CHAIN; observation(); return;
+        } catch (const fort_scoped::planning::detail::Unavailable &) {
+            out->reason=FORT_SCOPE_BATCH_MISSING_COSTS; observation(); return;
+        } catch (const std::bad_alloc &) {
+            out->reason=FORT_SCOPE_BATCH_ALLOCATION; observation(); return;
+        }
+        if (compatible==-1) return;
+        if (out->selected_transfers==FORT_SCOPE_TRANSFERS_DIRECT) { observation(); return; }
+        require(worker,FORT_SCOPE_ARGUMENT,"selected scoped batch requires a numerical callback");
+        // All storage is acquired before the first transfer/numerical callback.
+        // A short nonblocking staging lease cannot deadlock with another owner.
+        invalidate(c,Change::State);
+#ifdef FORT_SCOPE_CPU_TEST
+        std::array<std::vector<unsigned char>,2> storage;
+        std::array<bool,2> pending{};
+        try {
+            require(!std::getenv("FORT_SCOPE_TEST_FAIL_BATCH_ALLOC"),FORT_SCOPE_RESOURCE,"injected batch resource failure");
+            for (auto &slot : storage) slot.resize(out->slot_bytes);
+            for (auto &r : plan.resources) if (r.used) allocate(c,*r.original);
+        } catch (const std::bad_alloc &) {
+            out->reason=FORT_SCOPE_BATCH_ALLOCATION; c.owner_estimate_available=false; observation(); return;
+        } catch (const Error &error) {
+            if (error.status!=FORT_SCOPE_RESOURCE) throw;
+            out->reason=FORT_SCOPE_BATCH_ALLOCATION; c.owner_estimate_available=false; observation(); return;
+        }
+        const size_t actual_capacity=out->slot_bytes;
+        auto packed=[&](size_t slot){return storage[slot].data();};
+        auto mark_pending=[&](size_t slot,bool value){pending[slot]=value;};
+        auto stream=[&](size_t slot)->void* {return reinterpret_cast<void*>(slot+1);};
+        c.transfer_stats.staging_allocations+=2;
+#else
+        try { initialize(c); }
+        catch (const Error &error) {
+            if (error.status!=FORT_SCOPE_RESOURCE) throw;
+            out->reason=FORT_SCOPE_BATCH_ALLOCATION; c.owner_estimate_available=false; observation(); return;
+        }
+        DeviceGuard guard(c);
+        auto lease=fort_staging::acquire(out->slot_bytes,fort_staging::Role::Staging,false);
+        if (lease.exhausted) { out->reason=FORT_SCOPE_BATCH_BUDGET; observation(); return; }
+        if (lease.status!=cudaSuccess) {
+            try { cuda_check(c,lease.status,true); }
+            catch (const Error &error) {
+                if (error.status!=FORT_SCOPE_RESOURCE) throw;
+                out->reason=FORT_SCOPE_BATCH_ALLOCATION; c.owner_estimate_available=false; observation(); return;
+            }
+        }
+        require(lease.slots!=nullptr,FORT_SCOPE_STATE,"missing batch staging lease");
+        const size_t actual_capacity=lease.slots->capacity;
+        auto packed=[&](size_t slot){return lease.slots->slots[slot].host;};
+        auto mark_pending=[&](size_t slot,bool value){lease.slots->slots[slot].pending=value;};
+        auto stream=[&](size_t slot)->void* {return reinterpret_cast<void*>(lease.slots->slots[slot].stream);};
+        c.transfer_stats.staging_allocations+=lease.reused ? 0 : 2;
+        c.transfer_stats.staging_reuses+=lease.reused ? 1 : 0;
+        // Reprice the acquisition actually incurred before numerical work.
+        size_t requested_index=0,actual_index=0;
+        while (requested_index+1<FORT_SCOPE_BATCH_CAPACITIES && fort_scoped::planning::detail::batch_capacities[requested_index]<out->slot_bytes) ++requested_index;
+        while (actual_index+1<FORT_SCOPE_BATCH_CAPACITIES && fort_scoped::planning::detail::batch_capacities[actual_index]<actual_capacity) ++actual_index;
+        if (lease.reused) {
+            const double change=pricing->staging_reuse_seconds[actual_index]-pricing->staging_cold_seconds[requested_index];
+            out->execution_seconds+=change; out->estimated_seconds+=change;
+        }
+        try { for (auto &r : plan.resources) if (r.used) allocate(c,*r.original); }
+        catch (const Error &error) {
+            if (error.status!=FORT_SCOPE_RESOURCE) throw;
+            out->reason=FORT_SCOPE_BATCH_ALLOCATION; c.owner_estimate_available=false; observation(); return;
+        }
+#endif
+        if (!std::isfinite(out->execution_seconds) || !std::isfinite(out->estimated_seconds) ||
+            (c.transfer_stats.requested_mode==FORT_SCOPE_TRANSFERS_AUTO && !(out->execution_seconds<=.8*out->baseline_seconds))) {
+            out->reason=FORT_SCOPE_BATCH_NO_ADVANTAGE; observation(); return;
+        }
+        c.transfer_stats.slot_capacity=actual_capacity;
+        std::vector<fort_scope_batch_view> views;
+        views.reserve(plan.resources.size());
+        for (auto &r : plan.resources) {
+            auto &b=*r.original;
+            views.push_back({b.handle,b.device,{uint32_t(b.extents.size()),b.type,b.element_bytes,b.host,b.extents.data(),b.lower.data(),b.generation}});
+        }
+        std::array<BatchCopies,2> copies;
+        std::array<bool,2> active{};
+        auto enqueue=[&](const BatchCopy &copy,size_t slot,bool upload) {
+            const auto &op=copy.operation; const auto bytes=multiply(multiply(op.width,op.height),op.depth);
+            auto *compact=packed(slot)+copy.packed_offset;
+            auto *device=static_cast<char*>(copy.buffer->device);
+#ifdef FORT_SCOPE_CPU_TEST
+            pack_tile(compact,device,op,upload);
+#else
+            const auto direction=upload ? cudaMemcpyHostToDevice : cudaMemcpyDeviceToHost;
+            auto *to=upload ? device+op.offset : reinterpret_cast<char*>(compact);
+            const auto *from=upload ? reinterpret_cast<const char*>(compact) : device+op.offset;
+            const size_t to_pitch=upload ? op.pitch : op.width, from_pitch=upload ? op.width : op.pitch;
+            auto cuda_stream=static_cast<cudaStream_t>(stream(slot));
+            if (op.depth==1) {
+                if (op.height==1) cuda_check(c,cudaMemcpyAsync(to,from,op.width,direction,cuda_stream));
+                else cuda_check(c,cudaMemcpy2DAsync(to,to_pitch,from,from_pitch,op.width,op.height,direction,cuda_stream));
+            } else {
+                cudaMemcpy3DParms parameters{};
+                parameters.srcPtr=make_cudaPitchedPtr(const_cast<char*>(from),from_pitch,op.width,upload ? op.height : op.physical_height);
+                parameters.dstPtr=make_cudaPitchedPtr(to,to_pitch,op.width,upload ? op.physical_height : op.height);
+                parameters.extent=make_cudaExtent(op.width,op.height,op.depth); parameters.kind=direction;
+                cuda_check(c,cudaMemcpy3DAsync(&parameters,cuda_stream));
+            }
+#endif
+            mark_pending(slot,true);
+            if (upload) {
+                ++c.stats.uploads; c.stats.upload_bytes+=bytes;
+                ++c.transfer_stats.pinned_uploads; c.transfer_stats.pinned_upload_bytes+=bytes; out->actual_upload_bytes+=bytes;
+            } else {
+                ++c.stats.downloads; c.stats.download_bytes+=bytes;
+                ++c.transfer_stats.pinned_downloads; c.transfer_stats.pinned_download_bytes+=bytes; out->actual_download_bytes+=bytes;
+            }
+            ++c.transfer_stats.tiles; trace(upload ? "upload" : "download",copy.buffer,bytes);
+        };
+        auto record=[&](size_t slot) {
+#ifdef FORT_SCOPE_CPU_TEST
+            (void)slot;
+#endif
+#if defined(FORT_SCOPE_CPU_TEST) || defined(FORT_SCOPE_TEST_FAULTS)
+            require(!std::getenv("FORT_SCOPE_TEST_FAIL_BATCH_RECORD"),FORT_SCOPE_EXECUTION,"injected batch completion record failure");
+#endif
+#ifndef FORT_SCOPE_CPU_TEST
+            cuda_check(c,cudaEventRecord(lease.slots->slots[slot].complete,static_cast<cudaStream_t>(stream(slot))));
+#endif
+            ++c.transfer_stats.events;
+        };
+        auto wait_slot=[&](size_t slot) {
+            const auto started=std::chrono::steady_clock::now();
+#if defined(FORT_SCOPE_CPU_TEST) || defined(FORT_SCOPE_TEST_FAULTS)
+            require(!std::getenv("FORT_SCOPE_TEST_FAIL_BATCH_WAIT"),FORT_SCOPE_EXECUTION,"injected batch completion wait failure");
+#endif
+#ifndef FORT_SCOPE_CPU_TEST
+            cuda_check(c,cudaEventSynchronize(lease.slots->slots[slot].complete));
+#endif
+            ++c.transfer_stats.event_waits;
+            c.transfer_stats.event_wait_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
+            mark_pending(slot,false);
+        };
+        auto pack=[&](const BatchCopy &copy,size_t slot,bool unpack) {
+            const auto started=std::chrono::steady_clock::now();
+            pack_tile(packed(slot)+copy.packed_offset,static_cast<char*>(copy.buffer->host),copy.operation,unpack);
+            const auto bytes=multiply(multiply(copy.operation.width,copy.operation.height),copy.operation.depth);
+            const auto seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-started).count();
+            if (unpack) { c.transfer_stats.unpacked_bytes+=bytes; c.transfer_stats.unpacking_seconds+=seconds; }
+            else { c.transfer_stats.packed_bytes+=bytes; c.transfer_stats.packing_seconds+=seconds; }
+        };
+        auto finish=[&](size_t slot) {
+            if (!active[slot]) return;
+            wait_slot(slot);
+            for (const auto &copy : copies[slot].downloads) pack(copy,slot,true);
+            active[slot]=false; ++out->completed_batches;
+        };
+        try {
+            // Ready-event waits capture this record; later slot completion
+            // records cannot change those already queued dependencies.
+            c.batch_active=true; out->applied=1; c.owner_estimate_available=false;
+            if (c.last_report) c.last_report->available=0;
+            c.worker_cursor+=consume;
+#ifndef FORT_SCOPE_CPU_TEST
+            cuda_check(c,cudaEventRecord(lease.slots->slots[0].complete,c.stream)); ++c.transfer_stats.events;
+            for (size_t slot=0; slot<2; ++slot) {
+                cuda_check(c,cudaStreamWaitEvent(static_cast<cudaStream_t>(stream(slot)),lease.slots->slots[0].complete,0));
+            }
+#endif
+            // Exact immutable unions complete before any batch kernel starts.
+            for (const auto &r : plan.resources) for (const auto &box : r.prefix) {
+                fort_physical::CopyPlan physical(r.original->element_bytes,r.original->extents,box.lo,box.hi);
+                physical.visit([&](const auto &op) {
+                    return fort_physical::visit_tiles(op,actual_capacity,[&](const auto &tile) {
+                        BatchCopy copy{r.original,tile,0}; pack(copy,0,false); enqueue(copy,0,true); record(0); wait_slot(0); return true;
+                    });
+                });
+            }
+            size_t ordinal=0,slot=0;
+            while (ordinal<plan.iterations) {
+                finish(slot);
+                const auto count=std::min<size_t>(out->chunk_iterations,plan.iterations-ordinal);
+                copies[slot]=batch_copies(plan,ordinal,count);
+                require(std::max(copies[slot].upload_bytes,copies[slot].download_bytes)<=actual_capacity,
+                        FORT_SCOPE_EXECUTION,"batch staging capacity changed after execution started");
+                for (const auto &copy : copies[slot].uploads) pack(copy,slot,false);
+                for (const auto &copy : copies[slot].uploads) enqueue(copy,slot,true);
+                fort_scope_batch_window window{FORT_SCOPE_BATCH_ABI_VERSION,ordinal,count,stream(slot),views.data(),views.size()};
+                uint64_t launches=0; mark_pending(slot,true);
+                const int status=worker(&window,user,&launches);
+                c.stats.launches+=launches; out->actual_launches+=launches;
+                require(status==FORT_SCOPE_OK,FORT_SCOPE_EXECUTION,"scoped batch numerical callback failed");
+                require(launches==plan.workers,FORT_SCOPE_EXECUTION,"scoped batch callback launch sequence changed");
+                for (const auto &copy : copies[slot].downloads) enqueue(copy,slot,false);
+                record(slot); active[slot]=true;
+                if (out->selected_transfers==FORT_SCOPE_TRANSFERS_PINNED) finish(slot);
+                ordinal+=count; slot^=1;
+            }
+            finish(0); finish(1);
+            for (auto &r : plan.resources) {
+                r.original->initialized=std::move(r.final.initialized);
+                r.original->host_current=std::move(r.final.host_current);
+                r.original->device_current=std::move(r.final.device_current);
+            }
+#ifndef FORT_SCOPE_CPU_TEST
+            size_t freed=0; cuda_check(c,fort_staging::release(std::move(lease.slots),freed));
+#endif
+            // Both slot events include the context readiness record. Completed
+            // slot work must not manufacture an extra c.stream wait.
+            c.pending=false; c.batch_active=false;
+            c.transfer_stats.effective_mode=out->selected_transfers;
+            c.transfer_stats.fallback_reason=FORT_SCOPE_TRANSFER_NONE;
+            out->owner_cost_available=0; observation();
+        } catch (...) {
+            c.poisoned=true; c.owner_estimate_available=false; c.batch_active=false;
+            c.batch_report=*out;
+            throw Error(FORT_SCOPE_EXECUTION,"scoped batch execution failed; unsafe replay prohibited");
+        }
+    },Change::None);
 }
 static int register_buffer(fort_scope_t h, uint64_t identity, uint64_t generation,
                            const fort_scope_layout *layout, bool full_initialized,

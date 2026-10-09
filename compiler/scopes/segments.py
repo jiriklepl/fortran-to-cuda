@@ -596,32 +596,14 @@ class StructuredScope:
                       *_checked("fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"), "endif"]
             return lines
 
-        def execute(calls, mode):
-            lines = []
-            for call in calls:
-                leaves, _ = builder.closure(call.procedure)
-                if leaves:
-                    clone, roots = builder.clone(call.procedure)
-                    module = builder.analysis.routines[call.procedure].scope.module
-                    if module != builder.entry.scope.module:
-                        imports.append(f"use {module}, only: {clone}")
-                    lines += _call(clone, ["fort_context", mode, *actuals(call),
-                                          *[handles[call.bindings[root].root if root.startswith("argument::") else root]
-                                            for root in roots]])
-                else:
-                    mapping = {formal: binding.root for formal, binding in call.bindings.items()}
-                    native_handles = {formal: handles[root] for formal, root in mapping.items() if root in handles}
-                    native_handles.update({root: handle for root, handle in handles.items()
-                                           if not root.startswith("argument::")})
-                    lines += builder.native_call(call, *builder.native_effects(call.procedure), native_handles,
-                                                 actuals=actuals(call))
-            return lines
+        def execute(calls, mode, *, terminal=False):
+            return builder.owner_calls(calls, mode, handles, parameters, actuals, imports, terminal=terminal)
 
-        def segment(item):
+        def segment(item, *, terminal=False):
             if not item.query[0]:
                 return ["! Current segment has no safe query: " + item.query[1],
                         *_checked("fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"),
-                        *execute(item.calls, "0_c_int"), *_checked("fort_scope_wait(fort_context)")]
+                        *execute(item.calls, "0_c_int", terminal=terminal), *_checked("fort_scope_wait(fort_context)")]
             lines = []
             if item.payload:
                 publication = Native((), {root: {"read"} for root in item.payload}, set(), {}, {}, "query payload read")
@@ -652,33 +634,34 @@ class StructuredScope:
             lines += choose()
             lines += ["if (fort_status /= FORT_SCOPE_OK) then",
                       *_checked("fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"),
-                      *execute(item.calls, "0_c_int"), "else", *execute(item.calls, "fort_mode"), "endif",
+                      *execute(item.calls, "0_c_int", terminal=terminal), "else", *execute(item.calls, "fort_mode", terminal=terminal), "endif",
                       *_checked("fort_scope_wait(fort_context)")]
             return lines
 
-        def branch(item, index=0):
+        def branch(item, index=0, *, terminal=False):
             condition, body = item.alternatives[index]
             if condition is None:
-                return emit(body)
+                return emit(body, terminal=terminal)
             lines = [*native_plan(condition), *native_hooks(condition),
                      "fort_branch = " + renamed(builder, condition.nodes[0], parameters), *native_end(condition),
                      *_checked("fort_scope_wait(fort_context)"),
-                     "if (fort_branch) then", *emit(body)]
+                     "if (fort_branch) then", *emit(body, terminal=terminal)]
             if index + 1 < len(item.alternatives):
-                lines += ["else", *branch(item, index + 1)]
+                lines += ["else", *branch(item, index + 1, terminal=terminal)]
             return [*lines, "endif"]
 
-        def emit(items):
+        def emit(items, *, terminal=False):
             lines = []
-            for item in items:
+            for position, item in enumerate(items):
+                closing = terminal and position == len(items)-1
                 if isinstance(item, Segment):
-                    lines += segment(item)
+                    lines += segment(item, terminal=closing)
                 elif isinstance(item, Branch):
-                    lines += branch(item)
+                    lines += branch(item, terminal=closing)
                 else:
                     lines += [*native_plan(item), *native_hooks(item)]
                     lines += [line for node in item.nodes for line in renamed(builder, node, parameters).splitlines()]
                     lines += [*native_end(item), *_checked("fort_scope_wait(fort_context)")]
             return lines
 
-        return emit(self.tree)
+        return emit(self.tree, terminal=True)

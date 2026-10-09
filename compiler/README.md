@@ -441,19 +441,57 @@ numerical work.
 
 `--scope-transfers` requires scoped memory for nondefault modes and remains
 independent of `--gpu-policy`. Forced `sections` can use `pinned` without a
-calibration profile. Automatic GPU placement with explicit `pinned` remains
-native while complete pinned execution estimates are unavailable; existing
-pinned bandwidth measurements alone omit preparation and packing costs.
-The reserved `pipelined` mode currently selects direct transfers with
-`pipelined_not_available`; transfer `auto` selects direct with
-`transfer_estimates_unavailable`. Default direct placement keeps its existing
-costs and behavior.
+calibration profile. Automatic GPU placement with explicit `pinned` requires
+the additional scoped transfer calibration; pinned bandwidth alone omits
+preparation, row packing and event costs. Older profiles remain valid for direct
+execution and cannot supply missing transfer costs. Default direct placement
+keeps its existing costs and behavior.
+
+`pipelined` admits complete GPU subchains with a common, source-proven independent
+slab partition. Two slots each enqueue upload, all subchain kernels, required
+download and a completion event in that order on non-default streams. Reusing
+a slot waits for its event and unpacks only its exact written output sections.
+The executor retains full device-array layouts, original logical bounds and
+pitches. Ordered definitions determine incoming reads: a GPU-produced
+intermediate is never uploaded from undefined or stale host storage. Immutable
+inputs with overlapping chunk reads have their exact required union established
+on the device before any batch kernel; subsequent slot uploads exclude them.
+
+Batch sizes come from the existing 256 KiB, 1 MiB, 4 MiB and 16 MiB payload
+candidates using offline costs, including packing row overhead, resource
+preparation, launches, completion events and pipeline fill/drain. Transfer
+`auto` requires a modeled 20% advantage over the corresponding synchronous
+transfer execution. Placement remains a separate decision; pipelining cannot
+create a GPU placement that the conservative placement planner rejected.
+Missing or incompatible calibration and unsupported slab proofs retain direct
+execution with a public reason. Resources are acquired before numerical work;
+an unapplied batch leaves the ordinary schedule available, and an error after
+work starts forbids replay. One batch can be active per context, and both slots
+complete before returning to a native boundary.
+
+The additive batch interface publishes eligibility, selected payload and chunk
+count, preparation work, modeled execution and terminal-cost change, and actual
+completed transfers and launches. A complete-owner estimate becomes unavailable
+when changed batch publication has not been repriced; direct estimates are not
+reported as if they described pipelined execution. Initial source integration
+uses direct numerical leaves in one reached straight-line segment. Native
+operations, mutable control boundaries, unsupported wrappers, uncertain aliases
+and cross-chunk dependencies retain synchronous execution. This eligibility is
+not overlap or speed evidence: use separate Nsight diagnostics with the
+synchronizing phase timer disabled and measure complete application wall time
+before promoting a policy.
 
 The additive `fort_scope_set_transfers` metadata operation configures a context
 before registration/planning and initializes no CUDA resources. Generated
 interfaces publish a `configure(context)` helper, and nondefault source owners
 call it once before planning. Standalone callers use the public helper before
-adding query operations. `fort_scope_transfer_stats_get_v1` reports requested
+adding query operations. Complete pinned costs are installed by the additive
+`fort_scope_set_transfer_costs_v1` after host/toolchain compatibility checks;
+GPU identity is still checked before a GPU selection executes. The versioned
+`fort_scope_batch_execute_v1` provides a metadata-only preview and a
+synchronous-on-return pipelined executor. Its callbacks receive original
+full-array views and the slot stream, and must not call context APIs while the
+executor owns that context. `fort_scope_transfer_stats_get_v1` reports requested
 and effective modes, fallback reasons, exact packing/transfer counts, staging
 reuse, capacity and event statistics without changing the original stats ABI.
 The runtime manifest describes the shared budget and supported modes. Common
@@ -829,6 +867,24 @@ untouched metadata before native work. Structured continuation owners instead
 retain their context and execute the reached native segment with coherence hooks.
 Host CPU, compiler, precision, and thread-budget compatibility are checked without
 CUDA initialization; GPU identity is checked only for a candidate requiring it.
+
+Fresh `--scoped-costs` calibration also records the optional
+`scoped.transfers` extension for the exact published runtime identity. It
+measures cold/cached two-slot preparation for each finite payload, physical
+contiguous and one-byte strided row packing/unpacking, event record/wait/readiness
+operations, and actual batch-preview work. A conservative byte bandwidth plus
+per-row cost prevents thin faces from inheriting bulk-copy packing estimates.
+Raw observations remain in the profile. Direct-only profiles remain valid;
+neither base pinned bandwidth nor live application timings fill missing batch
+costs.
+
+When only the scoped runtime changes,
+`--scoped-costs --refresh-scoped previous-hardware.json` refreshes these costs while retaining the exact base
+rates and raw observations. It verifies CPU, toolchain, precision and thread
+budget before measuring, then verifies the current GPU/runtime/driver through
+the new scoped observations. The refreshed profile records the input's hash.
+This permits ordinary timing reuse only after the emitted artifacts themselves
+are also proved equivalent.
 
 The compiler considers native workers, GPU intervals of up to four adjacent units,
 and complete legal worker blocks. A bounded 16-state frontier retains distinct

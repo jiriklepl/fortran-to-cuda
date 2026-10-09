@@ -115,6 +115,98 @@ typedef struct fort_scope_plan_report {
     double owner_execution_seconds, owner_terminal_seconds, owner_complete_seconds;
     uint32_t native_common_compute_excluded;
 } fort_scope_plan_report;
+/* Optional calibrated transfer costs. The four capacities are, in order,
+ * 256 KiB, 1 MiB, 4 MiB and 16 MiB. Existing planning/profile ABIs stay v1. */
+#define FORT_SCOPE_BATCH_ABI_VERSION 1
+#define FORT_SCOPE_BATCH_CAPACITIES 4
+#define FORT_SCOPE_BATCH_FIXED_AXIS UINT32_MAX
+typedef struct fort_scope_batch_costs {
+    uint32_t version, valid, async_engine_count;
+    size_t max_slot_bytes;
+    double staging_cold_seconds[FORT_SCOPE_BATCH_CAPACITIES];
+    double staging_reuse_seconds[FORT_SCOPE_BATCH_CAPACITIES];
+    double event_record_seconds, event_wait_seconds, ready_event_seconds;
+    double preparation_operation_seconds;
+    double pack_bytes_per_second, unpack_bytes_per_second, pack_row_seconds, unpack_row_seconds;
+    double pinned_h2d_latency, pinned_h2d_bandwidth, pinned_d2h_latency, pinned_d2h_bandwidth;
+} fort_scope_batch_costs;
+/* Access rectangles describe ordinal zero. For begin/count, shift the chosen
+ * axis by the minimum/maximum of step*begin and step*(begin+count-1).
+ * FIXED_AXIS permits immutable input sections independent of the partition.
+ * Unit records preserve source order, including whole-root FORGET events. */
+typedef struct fort_scope_batch_binding {
+    fort_buffer_t buffer;
+    uint32_t axis;
+    int64_t step;
+    fort_scope_access access;
+} fort_scope_batch_binding;
+typedef struct fort_scope_batch_unit {
+    uint32_t kind;
+    uint64_t unit;
+    const fort_scope_batch_binding *bindings;
+    size_t count;
+    double flops, memory_bytes;
+} fort_scope_batch_unit;
+typedef struct fort_scope_batch {
+    uint32_t version, execution_mode;
+    size_t iterations;
+    const fort_scope_batch_unit *units;
+    size_t unit_count;
+    /* Optional host requirements after the subchain: only READ descriptors.
+     * Unrelated current device values remain resident. */
+    const fort_scope_plan_binding *exports;
+    size_t export_count;
+} fort_scope_batch;
+typedef struct fort_scope_batch_view {
+    fort_buffer_t buffer;
+    void *device;
+    fort_scope_layout layout;
+} fort_scope_batch_view;
+typedef struct fort_scope_batch_window {
+    uint32_t version;
+    size_t begin, count;
+    void *stream;
+    const fort_scope_batch_view *views;
+    size_t view_count;
+} fort_scope_batch_window;
+/* The callback launches the complete admitted subchain in order. It must not
+ * call context APIs: the executor owns the context mutex and all coherence.
+ * Increment *launches after each actual enqueue, and return execution status.
+ * Original extents/lower bounds and full-root pointers are supplied unchanged. */
+typedef int (*fort_scope_batch_worker)(const fort_scope_batch_window *window,
+                                      void *user, uint64_t *launches);
+enum fort_scope_batch_reason {
+    FORT_SCOPE_BATCH_NONE = 0, FORT_SCOPE_BATCH_MISSING_COSTS = 1,
+    FORT_SCOPE_BATCH_UNSUPPORTED_CHAIN = 2, FORT_SCOPE_BATCH_PLACEMENT = 3,
+    FORT_SCOPE_BATCH_NO_ADVANTAGE = 4, FORT_SCOPE_BATCH_BUDGET = 5,
+    FORT_SCOPE_BATCH_ALLOCATION = 6, FORT_SCOPE_BATCH_GEOMETRY = 7,
+    FORT_SCOPE_BATCH_ARITHMETIC = 8
+};
+typedef struct fort_scope_batch_report {
+    uint32_t version, available, applied, selected_transfers, reason, owner_cost_available;
+    uint64_t preparation_operations, batches, chunk_iterations, slot_bytes;
+    uint64_t upload_bytes, download_bytes, prefix_upload_bytes, prefix_uploads, launches;
+    double estimated_seconds, baseline_seconds, pinned_seconds, pipelined_seconds;
+    double execution_seconds, terminal_delta_seconds;
+    uint64_t completed_batches, actual_upload_bytes, actual_download_bytes, actual_launches;
+} fort_scope_batch_report;
+/* Metadata-only transfer pricing, configured before registration/planning.
+ * compatible=0 retains unavailable estimates; raw pinned rates are insufficient.
+ * Missing costs preserve the existing direct placement/transfer behavior. */
+int fort_scope_set_transfer_costs_v1(fort_scope_t context, const fort_scope_batch_costs *costs,
+                                    int compatible);
+/* One active batch per context; synchronous on return. compatible=-1 previews
+ * bounded metadata/cost selection without CUDA, callbacks, resources, schedule
+ * consumption or coherence changes. An unapplied result leaves ordinary
+ * execution available. Once transfer/numerical work starts, errors poison the
+ * context and replay is prohibited. Only all-GPU approved chains are admitted. */
+int fort_scope_batch_execute_v1(fort_scope_t context, const fort_scope_batch *batch,
+                                const fort_scope_plan_costs *costs,
+                                const fort_scope_batch_costs *transfer_costs, int compatible,
+                                fort_scope_batch_worker worker, void *user,
+                                fort_scope_batch_report *report);
+/* Read the last completed batch observation without CUDA initialization. */
+int fort_scope_batch_report_get_v1(fort_scope_t context, fort_scope_batch_report *report);
 /* Pure check for INTEGER payloads used by planning controls. No transfers or
  * definition changes; the complete payload must already be host current. */
 int fort_scope_plan_host_current(fort_scope_t context, fort_buffer_t buffer);
@@ -159,8 +251,10 @@ int fort_scope_device_get(fort_scope_t context, int *device);
  * full-layout allocations, independently of the sections transferred. */
 int fort_scope_set_device_budget(fort_scope_t context, size_t bytes);
 /* Metadata-only. Configure before registering/querying numerical work.
- * PINNED is synchronous; AUTO/PIPELINED currently use DIRECT with an explicit
- * diagnostic reason. PINNED has no complete calibrated placement costs yet. */
+ * PINNED is synchronous and uses complete costs from the additive setter.
+ * AUTO/PIPELINED retain direct placement estimates; approved independent GPU
+ * chains may use the versioned batch executor. Missing costs/proofs/resources
+ * leave ordinary direct execution available with an explicit reason. */
 int fort_scope_set_transfers(fort_scope_t context, uint32_t mode);
 int fort_scope_transfer_stats_get_v1(fort_scope_t context, fort_scope_transfer_stats *stats);
 int fort_scope_register(fort_scope_t context, uint64_t identity, uint64_t generation,

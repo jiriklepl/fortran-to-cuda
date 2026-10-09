@@ -6,6 +6,13 @@
 #include <utility>
 
 namespace fort_scoped {
+// Window launchers borrow validated full-root views. No context call is legal
+// inside the batch callback, whose executor owns the context mutex/coherence.
+inline const fort_scope_batch_view *batch_view(const fort_scope_batch_window &window, fort_buffer_t handle) noexcept {
+    if (window.version!=FORT_SCOPE_BATCH_ABI_VERSION || (window.view_count && !window.views)) return nullptr;
+    for (size_t i=0; i<window.view_count; ++i) if (window.views[i].buffer==handle) return &window.views[i];
+    return nullptr;
+}
 template<size_t Capacity> class AccessBatch {
     struct Binding {
         fort_buffer_t handle = 0;
