@@ -41,6 +41,9 @@ struct Inputs {
     // The CUDA pool backend queues frees on its stream. A synchronous backend
     // may set this false; it has no final free-completion wait.
     bool asynchronous_release = true;
+    // Internal authority from the context's exact query/state generation.
+    // Standalone clients must leave this false unless preflight succeeded.
+    bool definitions_validated = false;
 };
 struct Result {
     fort_scope_plan_decision decision{};
@@ -52,6 +55,8 @@ struct Result {
     bool native_common_compute_excluded = false;
     // Other contexts may initialize CUDA between a preview and its final trace.
     bool driver_initialized = false;
+    // A fresh host-only native choice needs no coherence-state simulation.
+    bool native_startup_shortcut = false;
 };
 struct DefinitionValidation {
     int status = FORT_SCOPE_BOUNDARY;
@@ -407,7 +412,6 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
                 complete.push_back(std::move(state));
             }
         };
-        auto all_native = detail::simulate(input, costs, result.gpu_workers, work);
         const bool gpu_supported = std::any_of(input.operations.begin(), input.operations.end(), [](const Operation &op) {
             return op.kind == FORT_SCOPE_PLAN_WORKER && op.gpu_available;
         });
@@ -421,14 +425,42 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
         // the native result before constructing expensive candidate states.
         const double gpu_lower_bound = costs.gpu_setup_seconds + costs.launch_enqueue_seconds +
             (input.driver_initialized ? 0 : costs.cold_driver_startup_seconds);
-        if (!gpu_supported || (fresh && native <= gpu_lower_bound)) {
+        if (gpu_supported && fresh && native <= gpu_lower_bound) {
+            // Fresh, host-only coverage stays host current under every proven
+            // native definition/write. Reuse source preflight when available;
+            // raw planning clients must establish it before this shortcut.
+            if (!input.definitions_validated) {
+                const auto proof = validate_definitions(input);
+                detail::require(proof.status == FORT_SCOPE_OK, proof.reason);
+            }
+            double estimate = 0;
+            detail::seconds(estimate, costs.create_seconds + double(input.resources.size())*costs.register_seconds);
+            for (const auto &op : input.operations) {
+                if (op.kind == FORT_SCOPE_PLAN_FORGET) continue;
+                detail::seconds(estimate, detail::compute(op, costs, false));
+                detail::seconds(estimate, double(op.bindings.size())*costs.host_access_seconds);
+            }
+            // Retain the existing logical accounting for native operations and
+            // final publication checks, without allocating their snapshots.
+            work = detail::add(input.operations.size(), input.resources.size());
+            work = detail::add(work, input.query_construction_operations);
+            result.decision.cpu_units = uint32_t(workers); result.decision.available = 1;
+            result.decision.candidates = 1; result.decision.simulated_operations = work;
+            result.decision.native_seconds = native; result.decision.estimated_seconds = estimate;
+            detail::seconds(result.decision.estimated_seconds, double(work)*costs.planning_operation_seconds);
+            result.native_startup_shortcut = true;
+            result.reason = "native_gpu_startup_lower_bound";
+            return result;
+        }
+        auto all_native = detail::simulate(input, costs, result.gpu_workers, work);
+        if (!gpu_supported) {
             work = detail::add(work, input.query_construction_operations);
             result.decision = all_native.count;
             result.decision.cpu_units = uint32_t(workers); result.decision.available = 1;
             result.decision.candidates = 1; result.decision.simulated_operations = work;
             result.decision.native_seconds = native; result.decision.estimated_seconds = all_native.time;
             detail::seconds(result.decision.estimated_seconds, double(work)*costs.planning_operation_seconds);
-            result.reason = gpu_supported ? "native_gpu_startup_lower_bound" : "native_no_supported_gpu_workers";
+            result.reason = "native_no_supported_gpu_workers";
             return result;
         }
         detail::discard_coherence(all_native);
@@ -552,7 +584,7 @@ inline void evidence(const Inputs &input, const fort_scope_plan_costs &costs,
     for (const auto &resource : input.resources) {
         EvidenceEvent event; event.event = "snapshot"; event.phase = "initial"; event.resource = &resource; sink(event);
     }
-    if (!result.decision.available) return;
+    if (!result.decision.available || result.native_startup_shortcut) return;
     uint64_t ignored_work = 0;
     auto state = detail::initial(input, costs); size_t worker = 0;
     for (const auto &op : input.operations) {
