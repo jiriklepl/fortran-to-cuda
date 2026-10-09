@@ -219,7 +219,6 @@ def test_real_literal_precision_is_preserved(tmp_path: Path) -> None:
     [
         ("real(knd), intent(out) :: a(:)\ninteger, intent(inout) :: n", "", "writable scalar"),
         ("real(knd), pointer, intent(out) :: a(:)\ninteger, intent(in) :: n", "", "POINTER"),
-        ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n\nreal(knd) :: b(3)", "", "assumed shape"),
         ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n\nreal(knd) :: b(:)", "", "local arrays"),
         ("real(knd), intent(out) :: a(0:)\ninteger, intent(in) :: n", "", "assumed shape"),
         ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n\nreal(knd), save :: b", "", "SAVE"),
@@ -230,7 +229,7 @@ def test_real_literal_precision_is_preserved(tmp_path: Path) -> None:
             "stride must not be zero",
         ),
         ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "a(1)=erf(1.0_knd)", "unsupported intrinsic"),
-        ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "a(1)=2.0_knd**3", "unsupported expression"),
+        ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "a(1)=2.0_knd**n", "INTEGER constant exponent"),
         ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "a(1)=2_knd", "integer literal kinds"),
         ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "a(1)=a(1:2)", "unsupported expression"),
         ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "a(1)=size(a,1.0)", "dimension must be INTEGER"),

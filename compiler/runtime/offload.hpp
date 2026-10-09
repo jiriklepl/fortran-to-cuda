@@ -2,6 +2,7 @@
 #ifndef FORT_RUNTIME_OFFLOAD_HPP
 #define FORT_RUNTIME_OFFLOAD_HPP
 #include "section_copy.hpp"
+#include "floating_environment.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -62,6 +63,8 @@ inline bool context_valid(int threads, bool collective) {
 
 inline bool compatible(const Profile &p, int threads, int precision) {
     if (!p.valid || p.threads != threads || p.precision != precision) return false;
+    fort_runtime::HostFloatingEnvironment floating_environment;
+    if (!floating_environment.valid()) return false;
 #ifdef __CUDACC__
     static const std::string cpu_name = []() {
         std::ifstream input("/proc/cpuinfo");
@@ -174,6 +177,7 @@ struct Unit {
     std::size_t iterations = 0;
     double flops = 0, memory_bytes = 0;
     std::size_t source_region = 0;
+    double cpu_numerical_seconds = 0, gpu_numerical_seconds = 0;
 };
 struct Choice { std::size_t begin, end; bool gpu; };
 struct Plan {
@@ -356,13 +360,15 @@ inline std::vector<Footprint> interval(const Data &data, std::size_t begin, std:
     return result;
 }
 inline double cpu_seconds(const Unit &unit, const Profile &p) {
-    return std::max(unit.flops / p.cpu_flops, unit.memory_bytes / p.cpu_bandwidth);
+    return std::max(unit.flops / p.cpu_flops + unit.cpu_numerical_seconds,
+                    unit.memory_bytes / p.cpu_bandwidth);
 }
 inline double gpu_seconds(const Data &data, std::size_t begin, std::size_t end, const Profile &p) {
     bool valid = true;
-    double flops = 0, memory = 0, result = 0;
+    double flops = 0, memory = 0, result = 0, numerical = 0;
     for (std::size_t u = begin; u < end; ++u) {
         flops += data.units[u].flops; memory += data.units[u].memory_bytes;
+        numerical += data.units[u].gpu_numerical_seconds;
         if (data.units[u].iterations) result += p.launch_seconds;
     }
     auto footprints = interval(data, begin, end, p);
@@ -372,7 +378,7 @@ inline double gpu_seconds(const Data &data, std::size_t begin, std::size_t end, 
         for (const auto &b : footprints[a].download)
             result += p.d2h_latency * copy_operations(data.arrays[a], b, valid) + box_bytes(data.arrays[a], b, valid) / p.d2h_bandwidth;
     }
-    result += std::max(flops / p.gpu_flops, memory / p.gpu_bandwidth);
+    result += std::max(flops / p.gpu_flops + numerical, memory / p.gpu_bandwidth);
     return valid && std::isfinite(result) ? result : std::numeric_limits<double>::infinity();
 }
 struct DecisionRange {

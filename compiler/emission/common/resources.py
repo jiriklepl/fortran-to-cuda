@@ -16,9 +16,11 @@ def read_common_header() -> str:
     )
     section_copy = runtime.joinpath("section_copy.hpp").read_text(encoding="utf-8")
     staging = runtime.joinpath("staging.hpp").read_text(encoding="utf-8")
+    floating_environment = runtime.joinpath("floating_environment.hpp").read_text(encoding="utf-8")
     experimental = [runtime.joinpath(name).read_text(encoding="utf-8")
                     .replace('#include "section_copy.hpp"', section_copy)
                     .replace('#include "staging.hpp"', staging)
+                    .replace('#include "floating_environment.hpp"', floating_environment)
                     for name in ("offload.hpp", "hybrid.hpp") if runtime.joinpath(name).is_file()]
     units += "\n#ifdef FORT_OFFLOAD_ENABLED\n" + "\n".join(experimental) + "\n#endif\n"
     return base.replace("// FORT_RUNTIME_UNITS", units)
@@ -29,6 +31,7 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
     runtime = files("compiler.runtime")
     outputs = {
         "scoped_runtime.h": runtime.joinpath("scoped_runtime.h").read_text(encoding="utf-8"),
+        "floating_environment.hpp": runtime.joinpath("floating_environment.hpp").read_text(encoding="utf-8"),
         "scoped_entry.hpp": runtime.joinpath("scoped_entry.hpp").read_text(encoding="utf-8"),
         "scoped_team_observer.hpp": runtime.joinpath("scoped_team_observer.hpp").read_text(encoding="utf-8"),
         "fort_scoped_team_observer.f90": runtime.joinpath("scoped_team_observer.f90").read_text(encoding="utf-8"),
@@ -47,7 +50,7 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
         "abi_version": 1,
         "runtime_id": identity,
         "link_once": True,
-        "headers": ["scoped_runtime.h", "scoped_entry.hpp", "scoped_team_observer.hpp", "view_entry.hpp", "section_copy.hpp", "staging.hpp", "scoped_regions.hpp", "scoped_planning.hpp"],
+        "headers": ["scoped_runtime.h", "floating_environment.hpp", "scoped_entry.hpp", "scoped_team_observer.hpp", "view_entry.hpp", "section_copy.hpp", "staging.hpp", "scoped_regions.hpp", "scoped_planning.hpp"],
         "borrowed_views": {
             "abi_version": 1, "validate": "fort_scope_view_get_v1",
             "partial_definition": "fort_scope_forget_sections_v1",
@@ -58,6 +61,16 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
             "bounds": "checked original descriptor generation and existing INTEGER ABI",
         },
         "planning_abi_version": 1,
+        "planning_numerical_costs": {
+            "abi_version": 2, "record": "fort_scope_plan_add_costs_v2",
+            "basis": "static scalar intrinsic counts and compatible independent offline holdouts",
+            "missing_or_incompatible": "unknown estimate; automatic placement remains native",
+        },
+        "numerical_environment": {
+            "check": "fort_scope_numerical_environment_supported",
+            "requires": "original nontrapping round-to-nearest thread; native IEEE guards stay in place",
+            "runtime_setup": "preserve caller flags, rounding and trap mask",
+        },
         "collective_automatic_calibration": {
             "abi_version": 1, "protocol_id": "0x4654434f4c4c0001",
             "configure": "fort_scope_set_team_costs_v1", "ready": "fort_scope_team_costs_ready_v1",

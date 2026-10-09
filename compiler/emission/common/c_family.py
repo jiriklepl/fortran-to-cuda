@@ -105,6 +105,13 @@ def render_expression(expression: Expr, *, addressing: RegionAddressing | None =
             return f"static_cast<{target}>({arguments[0]})"
         if intrinsic in {"min", "max", "mod", "modulo", "sign", "dim", "merge", "nint", "floor", "ceiling"}:
             name = {"min": "minimum", "max": "maximum"}.get(intrinsic, intrinsic)
+            first = expression.arguments[0]
+            while isinstance(first, Unary) and first.operator in {"+", "-"}:
+                first = first.operand
+            if (intrinsic in {"min", "max"} and len(expression.arguments) == 2
+                    and expression.dtype in {ScalarType.REAL, ScalarType.REAL32}
+                    and isinstance(first, Literal)):
+                name += "_constant_first"
             if intrinsic in {"nint", "floor", "ceiling"}:
                 arguments = arguments[:1]
             return f"::generated_kernels::numeric::{name}({', '.join(arguments)})"

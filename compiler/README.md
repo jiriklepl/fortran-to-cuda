@@ -1170,7 +1170,8 @@ end module example
   Unknown runtime values retain the existing arithmetic and ABI.
 - Explicit `intent(in/out/inout)` arrays. Omitted array intent is conservatively
   treated as `inout`; omitted scalar intent is treated as read-only input. Scalar
-  argument writes remain unsupported. `contiguous` and `target` are accepted;
+  entry argument writes remain unsupported. Pure numerical helpers can write
+  private scalar actuals with explicit `INTENT(OUT/INOUT)`. `contiguous` and `target` are accepted;
   pointers remain unsupported.
 - Counted `do` loops with positive or negative integer strides, including
   invariant runtime stride expressions. Constant zero strides reject; a runtime
@@ -1188,6 +1189,7 @@ end module example
   `SIZE(array, dimension)`, and `SIZE(array)` total element counts.
   Default real literals retain single precision; `D` exponent literals use
   binary64. Explicit kind suffixes use their declared numeric precision.
+  Integer constant powers from zero through sixteen lower to ordered products.
 - Affine access relations and constant-stride congruences are modeled exactly.
   Invariant non-affine bounds are captured as symbolic parameters. Unknown
   subscript coordinates are conservatively unconstrained, allowing read-only
@@ -1198,15 +1200,42 @@ end module example
 - Positional whole-variable calls to same-module helpers. Inlining creates fresh
   locals per call and preserves actual storage identities and case-insensitive
   Fortran name resolution.
+- Source-backed pure module/internal functions and subroutines, including lexical
+  captures and scalar function results. Pure scalar input actuals may be
+  expressions; pure function arguments require `INTENT(IN)`. Helper work remains
+  at its original expression evaluation point, including guarded `ELSEIF` paths.
+  Recursion rejects; numerical inlining is bounded to depth eight and 128 calls.
+- Fixed-size private numerical arrays with constant explicit bounds, including
+  negative bounds, scalarize to independently defined scalar storage. Each array
+  has at most 256 elements. Constant indexing loops are unrolled with a shared
+  256-iteration budget; unknown private subscripts remain boundaries. Array
+  arguments retain Fortran element-order association and dummy-bound rebasing.
+  Explicit-shape helper arrays currently require private fixed array actuals.
+- Rank-one constant sections of private arrays support `DOT_PRODUCT`, including
+  nonzero constant strides and empty vectors. Products accumulate in logical
+  element order from a typed zero. Private `SIZE`, `LBOUND` and `UBOUND` inquiries
+  preserve original bounds and empty-array semantics. Scalar real `PARAMETER`
+  declarations preserve their initializer expressions. Private `INTENT(OUT)`
+  outputs require complete ordered definitions on every reached helper path.
 
-Local arrays, logical arrays, writable scalar arguments, recursion, slices/expression
-call arguments, other intrinsics/operators, explicit lower array bounds, and
+Logical arrays, writable scalar entry arguments, recursion, general slices,
+non-pure expression call arguments, other intrinsics/operators, explicit lower
+dummy array bounds, and
 unsupported specification statements reject with a source location.
 Parallel reductions remain unsupported. Initialized scalar recurrences, valid
 scalar live-outs, final induction values, and otherwise unproved regions can
 execute sequentially with `--fallback host`. General nonlinear or indirect writes
 are parallelized only when conservative relations prove independence; no runtime
 alias or index-uniqueness checks are introduced.
+
+Transcendental helper tests cover both precisions, zero gradients, repeated
+singular values and signed zero against native Fortran. Ill-conditioned spectral
+intermediates can amplify small scalar/vector math-library rounding differences:
+an independent rank-deficient diagnostic observed approximately `7.5e-9` in a
+nominally zero binary64 singular value with gfortran 16.2 at `-O3` and contraction
+disabled. This does not establish strict agreement for those intermediates.
+Complete application field tolerances remain the acceptance criterion and are
+not relaxed to admit a helper closure.
 
 ### Conditions and scalar intrinsics
 
@@ -1251,6 +1280,25 @@ structural effects live in `analysis/effects.py`; `analysis/planning.py` builds
 execution plans according to the selected fallback policy. Intrinsic signatures
 live in `ir/intrinsics.py`; `runtime/numeric.hpp` is assembled into the existing
 shared support header.
+
+The optimized GNU Fortran numerical contract is checked against `gfortran-15
+-O3` for both REAL kinds. Two-argument runtime `MIN`/`MAX` preserve ordered
+operand selection, including signed zero. A finite leading literal uses the
+separately checked constant-first form, including degenerate numerical clamps.
+Unordered multi-argument forms are not covered by this contract and new helper
+closures retain native execution for them. IEEE exception guards remain at
+their original source locations. Scoped runtime setup and planning save and
+restore the caller thread's rounding mode, exception flags and trap mask;
+numerical computation is not moved into setup or query evaluation.
+
+`--numerical-costs` extends offline hardware calibration with generic private
+array and transcendental workloads. Scalar intrinsic coefficients require
+independent primitive and mixed-expression holdouts. Planning records static
+intrinsic counts and calibrated CPU/GPU seconds separately from arithmetic
+FLOPs through `fort_scope_plan_add_costs_v2`; existing callers retain zero
+additional costs. Missing, incompatible or failed numerical calibration leaves
+automatic estimates unavailable. Collective and hybrid intrinsic pricing
+remain unavailable until their execution protocols are calibrated.
 
 ## Legality and caller contract
 

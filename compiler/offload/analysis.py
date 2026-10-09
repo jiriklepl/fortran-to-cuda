@@ -40,6 +40,7 @@ from compiler.ir import (
     walk_expr,
 )
 from compiler.ir.integers import constant_integer
+from compiler.ir.intrinsics import REAL_MATH
 
 
 @dataclass(frozen=True)
@@ -97,6 +98,11 @@ class Unit:
     footprints: tuple[Footprint, ...]
     work_per_iteration: int | None
     work_is_upper_bound: bool = False
+    intrinsic_work_per_iteration: tuple[tuple[str, int], ...] = ()
+    arithmetic_work_per_iteration: int | None = None
+    cpu_numerical_seconds_per_iteration: float = 0
+    gpu_numerical_seconds_per_iteration: float = 0
+    work_estimate_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -237,6 +243,12 @@ class OffloadAnalysis:
                     "region": unit.region.id,
                     "work_per_iteration": unit.work_per_iteration,
                     "work_is_upper_bound": unit.work_is_upper_bound,
+                    **({"intrinsic_work_per_iteration": dict(unit.intrinsic_work_per_iteration),
+                        "arithmetic_work_per_iteration": unit.arithmetic_work_per_iteration,
+                        "cpu_numerical_seconds_per_iteration": unit.cpu_numerical_seconds_per_iteration,
+                        "gpu_numerical_seconds_per_iteration": unit.gpu_numerical_seconds_per_iteration,
+                        "work_estimate_reason": unit.work_estimate_reason}
+                       if unit.intrinsic_work_per_iteration else {}),
                     "footprints": [footprint_record(value) for value in unit.footprints],
                 }
                 for unit in self.units
@@ -456,6 +468,7 @@ def _unit_footprints(unit, parameters):
     work = 0
     upper_bound = False
     retained_loop = False
+    intrinsic_work = {}
 
     def record(access, kind, definitions, conditional, unknown):
         access = _resolve(access, definitions)
@@ -481,6 +494,9 @@ def _unit_footprints(unit, parameters):
         for node in walk_expr(expression):
             if isinstance(node, ArrayAccess):
                 record(node, "read", definitions, conditional, unknown)
+            elif isinstance(node, IntrinsicCall) and node.name.lower() in REAL_MATH | {"atan2"}:
+                name = node.name.lower()
+                intrinsic_work[name] = intrinsic_work.get(name, 0) + 1
             elif isinstance(node, (Binary, Unary, IntrinsicCall)):
                 work += 1
 
@@ -531,8 +547,13 @@ def _unit_footprints(unit, parameters):
     return replace(
         unit,
         footprints=_merge_footprints(accesses),
-        work_per_iteration=None if retained_loop else max(work, 1),
+        work_per_iteration=None if retained_loop or intrinsic_work else max(work, 1),
         work_is_upper_bound=upper_bound or retained_loop,
+        intrinsic_work_per_iteration=tuple(sorted(intrinsic_work.items())),
+        arithmetic_work_per_iteration=None if retained_loop else max(work, 1),
+        work_estimate_reason=("retained-loop work is unknown" if retained_loop else
+                              "scalar math requires compatible independently validated numerical calibration"
+                              if intrinsic_work else None),
     )
 
 

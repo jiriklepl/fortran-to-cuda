@@ -1266,6 +1266,10 @@ class ScopeBuilder:
                        (_span(calls[0].node)[0], _span(calls[-1].node)[1]))
         digest = f"{routine.qualified}:{first}:{last}"
         name = _name("fort_scope_owner_", digest)
+        caller_kind = _name("fort_scope_i64_", digest)
+        if (self.analysis._binding(routine.scope, caller_kind)
+                or self.analysis._candidates(routine.scope, F.Name(caller_kind))):
+            raise CompilationError("original source conflicts with descriptor guard INTEGER kind alias")
         owner_variant = self.variants.register(
             routine.qualified, interface=f"source_span_v1:{first}:{last}:{bool(structure)}",
             role="coordinator", name=name,
@@ -1275,6 +1279,14 @@ class ScopeBuilder:
         arrays, scalars, written = self.owner_inputs(calls)
         borrowed = any(view_call(call) for call in calls)
         regional = any(call.region is not None for call in calls)
+        tile_guards = tuple(dict.fromkeys(guard for call in calls if call.region is not None
+                                         for guard in call.region.runtime_guards))
+        numerical_environment = any(call.region is not None and call.region.numerical_helpers for call in calls)
+        runtime_guards = (*tile_guards, *(["fort_scope_numerical_environment_supported() /= 0"] if numerical_environment else []))
+        if runtime_guards and structure:
+            raise CompilationError("tile runtime guards require the original reached straight-line segment")
+        if tile_guards and len(calls) != 1:
+            raise CompilationError("tile runtime guards initially require one original reached numerical region")
         if borrowed and structure:
             raise CompilationError("reached rectangular source views require per-segment descriptor preflight")
         if structure:
@@ -1291,7 +1303,7 @@ class ScopeBuilder:
         else:
             query_available, query_reason, planning_available, planning_reason = self.owner_query(calls, arrays, written)
         self.check_module_array_aliases(calls, arrays, written)
-        caller_fallback = any(
+        caller_fallback = any(call.region is not None and call.region.numerical_helpers for call in calls) or any(
             parameter.rank and parameter.resource in written and parameter.resource in arrays
             and not parameter.resource.startswith("argument::")
             and "target" not in arrays[parameter.resource].attributes
@@ -1391,10 +1403,13 @@ class ScopeBuilder:
             dtype = "logical" if binding.signature()[:2] == ("logical",4) else DTYPES[binding.signature()[:2]][0]
             intent = "in" if binding.intent == "in" or "parameter" in binding.attributes else "inout"
             spec += [f"{dtype}, intent({intent}) :: {parameters[root]}"]
-        private = {name for call in calls if call.region is not None for name in call.region.private_scalars}
+        private = {name for call in calls if call.region is not None
+                   for name in (*call.region.private_scalars, *call.region.private_arrays)}
         for private_name in sorted(private):
             binding = routine.scope.bindings[private_name]
-            spec.append(f"{DTYPES[binding.signature()[:2]][0]} :: {private_name}")
+            from compiler.scopes.regions import _fixed_shape
+            shape = "(" + ",".join(_fixed_shape(routine, binding)) + ")" if binding.rank else ""
+            spec.append(f"{DTYPES[binding.signature()[:2]][0]} :: {private_name}{shape}")
         view_codes = {}
         view_block = _name("fort_views_", digest)
         scalar_values = {**parameters, **{root: self.visible(routine, root) for root in original_scalars}}
@@ -1508,7 +1523,7 @@ class ScopeBuilder:
             lines = fortran_lines(lines)
         text = "\n".join(lines)
         self.append_procedure(routine.scope.parent, name, text)
-        owner_actuals = [*names, *["[" + ",".join(f"lbound({self.visible(routine, root)},{axis},kind=c_int64_t)"
+        owner_actuals = [*names, *["[" + ",".join(f"lbound({self.visible(routine, root)},{axis},kind={caller_kind})"
                                                   for axis in range(1, arrays[root].rank + 1)) + "]" for root in bounds]]
         fallback_flag = _name("fort_native_", digest)
         if caller_fallback:
@@ -1524,16 +1539,16 @@ class ScopeBuilder:
             # declaration also prevents an original local name from shadowing
             # the generated inquiry, before owner dummy association rebases it.
             if allocated_roots:
-                replacement = "block\nuse iso_c_binding, only: c_int64_t\nintrinsic :: lbound\n" + replacement + "end block\n"
+                replacement = "block\nuse iso_c_binding, only: " + caller_kind + " => c_int64_t\nintrinsic :: lbound\n" + replacement + "end block\n"
             else:
                 original_source = "".join(routine.scope.path.read_text().splitlines(keepends=True)[first-1:last])
-                replacement = ("block\nuse iso_c_binding, only: c_int64_t\n"
+                replacement = ("block\nuse iso_c_binding, only: " + caller_kind + " => c_int64_t\n"
                                "use fort_scoped_memory, only: " + serial + " => fort_scope_serial_caller\n"
                                "intrinsic :: lbound\nif (" + serial + "() == 0) then\n" + original_source
                                + "else\n" + replacement + "endif\nend block\n")
-        if allocated_roots or regional and origin_roots:
+        if allocated_roots or regional and origin_roots or runtime_guards:
             replacement = self.guard_owner_allocation(routine, first, last, replacement, serial,
-                                                      allocated_roots, origin_roots, arrays)
+                                                      allocated_roots, origin_roots, arrays, runtime_guards)
         if structure or borrowed or regional:
             replacement = "\n".join(fortran_lines(replacement.splitlines())) + "\n"
         self.add_edit(routine.scope.path, first, last, replacement)
@@ -1562,6 +1577,11 @@ class ScopeBuilder:
                                                **(self.bounds_preflight_public(origin_roots, "original module allocation descriptor")
                                                   if origin_roots else {})}} if allocated_roots else {}),
                 "mode": self.config.policy, "participation": "serial"}
+        if runtime_guards:
+            scope["runtime_preflight"] = {
+                "conditions": list(runtime_guards),
+                "position": "original reached segment after allocation and bounds guards",
+                "fallback": "unchanged original source span"}
         scope["transfer_configuration"] = self.numerical(sorted(leaves)[0]).scoped["transfer_configuration"]
         if borrowed:
             scope["borrowed_views"] = {
@@ -1704,7 +1724,8 @@ class ScopeBuilder:
                 result += _call(str(call.node.items[0]), call.original_arguments(actuals(call, shared=shared)))
         return result
 
-    def guard_owner_allocation(self, routine, first, last, replacement, serial, allocated_roots, origin_roots, arrays):
+    def guard_owner_allocation(self, routine, first, last, replacement, serial, allocated_roots, origin_roots, arrays,
+                               runtime_guards=()):
         # Passing an unallocated actual to this ordinary assumed-shape
         # owner is already too early. Inspect only allocation state here,
         # at the original caller, after proving serial participation.
@@ -1715,6 +1736,27 @@ class ScopeBuilder:
         guard = (["if ( &", *[condition + " .and. &" for condition in conditions[:-1]],
                   conditions[-1] + " &", ") then"] if conditions else [])
         guard_intrinsics = "allocated" if conditions else ""
+        kind_import = ""
+        guard_digest = f"{routine.qualified}:{first}:{last}"
+        environment_name = _name("fort_scope_environment_", guard_digest)
+        if runtime_guards:
+            if any("kind=c_int64_t" in condition for condition in runtime_guards):
+                guard_intrinsics += (", " if guard_intrinsics else "") + "int"
+                kind_name = _name("fort_scope_guard_i64_", guard_digest)
+                if (self.analysis._binding(routine.scope, kind_name)
+                        or self.analysis._candidates(routine.scope, F.Name(kind_name))):
+                    raise CompilationError("original source conflicts with numerical guard INTEGER kind alias")
+                kind_import = "use iso_c_binding, only: " + kind_name + " => c_int64_t\n"
+                runtime_guards = tuple(condition.replace("c_int64_t", kind_name) for condition in runtime_guards)
+            if any("fort_scope_numerical_environment_supported" in condition for condition in runtime_guards):
+                if (self.analysis._binding(routine.scope, environment_name)
+                        or self.analysis._candidates(routine.scope, F.Name(environment_name))):
+                    raise CompilationError("original source conflicts with numerical environment guard alias")
+                runtime_guards = tuple(condition.replace("fort_scope_numerical_environment_supported", environment_name)
+                                       for condition in runtime_guards)
+            checks = ["if ( &", *[condition + " .and. &" for condition in runtime_guards[:-1]],
+                      runtime_guards[-1] + " &", ") then"]
+            replacement = "\n".join(checks) + "\n" + replacement + "else\n" + original + "endif\n"
         if origin_roots:
             conditions = [condition for root in origin_roots
                           for condition in self.original_bound_conditions(self.visible(routine, root), arrays[root].rank)]
@@ -1722,8 +1764,11 @@ class ScopeBuilder:
                       conditions[-1] + " &", ") then"]
             replacement = "\n".join(bounds) + "\n" + replacement + "else\n" + original + "endif\n"
             guard_intrinsics += (", " if guard_intrinsics else "") + "lbound, ubound, size"
-        replacement = ("block\nuse fort_scoped_memory, only: " + serial + " => fort_scope_serial_caller\n"
-                       "intrinsic :: " + guard_intrinsics + "\nif (" + serial + "() == 0) then\n" + original + "else\n"
+        environment_import = (", " + environment_name + " => fort_scope_numerical_environment_supported"
+                              if any(environment_name in guard for guard in runtime_guards) else "")
+        replacement = ("block\n" + kind_import + "use fort_scoped_memory, only: " + serial + " => fort_scope_serial_caller" + environment_import + "\n"
+                       + ("intrinsic :: " + guard_intrinsics + "\n" if guard_intrinsics else "")
+                       + "if (" + serial + "() == 0) then\n" + original + "else\n"
                        + ("\n".join(guard) + "\n" + replacement + "else\n" + original + "endif\n" if guard else replacement)
                        + "endif\nend block\n")
         return replacement

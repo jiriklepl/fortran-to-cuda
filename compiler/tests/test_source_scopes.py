@@ -171,7 +171,10 @@ def test_allocatable_owning_roots_are_guarded_at_original_caller(tmp_path, mode)
     assert scope["allocation_preflight"]["resources"] == ["argument::a", "argument::b", "argument::out"]
     edit = next(edit for edit in manifest["source_edits"] if edit["first_line"] <= edit["last_line"])
     guarded = edit["replacement"]
-    assert guarded.startswith("block\nuse fort_scoped_memory, only:")
+    assert guarded.startswith("block\n")
+    coordinator_import = next(line for line in guarded.splitlines()
+                              if line.startswith("use fort_scoped_memory, only:"))
+    assert "=> fort_scope_serial_caller" in coordinator_import
     assert "intrinsic :: allocated\n" in guarded
     assert guarded.index("() == 0) then") < guarded.index("allocated(a)") < guarded.index("call fort_scope_owner_")
     span = "".join(original.read_text().splitlines(keepends=True)[edit["first_line"]-1:edit["last_line"]])
@@ -206,7 +209,9 @@ end module""")
 def test_allocatable_owner_guard_coordinator_cannot_hide_original_callee(tmp_path):
     _, _, first = generate(tmp_path / "first", ALLOCATABLE_PROGRAM)
     edit = next(edit for edit in first["source_edits"] if edit["first_line"] <= edit["last_line"])
-    alias = edit["replacement"].split("only: ", 1)[1].split(" =>", 1)[0]
+    coordinator_import = next(line for line in edit["replacement"].splitlines()
+                              if line.startswith("use fort_scoped_memory, only:"))
+    alias = coordinator_import.split("only: ", 1)[1].split(" =>", 1)[0]
     # Procedure/call renaming preserves the owning entry and call-span positions.
     source = ALLOCATABLE_PROGRAM.replace("producer(", alias + "(")
     _, _, manifest = generate(tmp_path / "collision", source)

@@ -4,6 +4,7 @@
 #include "section_copy.hpp"
 #include "scoped_regions.hpp"
 #include "scoped_planning.hpp"
+#include "floating_environment.hpp"
 #define FORT_SCOPE_TEAM_OBSERVER_IMPLEMENTATION
 #include "scoped_team_observer.hpp"
 #include <algorithm>
@@ -571,6 +572,11 @@ void release(Context &c, Buffer &b) {
     trace("release", &b, b.bytes);
 }
 template<class F> int protect(F &&f) noexcept {
+    fort_runtime::HostFloatingEnvironment floating_environment;
+    if (!floating_environment.valid()) {
+        diagnostic("cannot preserve the caller floating-point environment");
+        return FORT_SCOPE_RESOURCE;
+    }
     fort_scoped::TeamObservation observation(FORT_SCOPE_TEAM_OBSERVE_API);
     try { f(); return FORT_SCOPE_OK; }
     catch (const Error &error) { diagnostic(error.what()); return error.status; }
@@ -1452,6 +1458,13 @@ extern "C" int fort_scope_plan_report_v2(fort_scope_t h, fort_scope_plan_report 
 extern "C" int fort_scope_plan_add(fort_scope_t h, uint32_t kind, uint64_t unit,
                                    const fort_scope_plan_binding *bindings, size_t count,
                                    double flops, double memory_bytes, int gpu_available) {
+    return fort_scope_plan_add_costs_v2(h, kind, unit, bindings, count, flops, memory_bytes,
+                                      gpu_available, 0, 0);
+}
+extern "C" int fort_scope_plan_add_costs_v2(fort_scope_t h, uint32_t kind, uint64_t unit,
+                                   const fort_scope_plan_binding *bindings, size_t count,
+                                   double flops, double memory_bytes, int gpu_available,
+                                   double cpu_numerical_seconds, double gpu_numerical_seconds) {
     return with(h, [&](Context &c) {
         PlanningTimer timing(c, h, "query_construction");
         require(c.plan_recording && !c.plan_installed, FORT_SCOPE_STATE, "reset the planning query before recording");
@@ -1459,7 +1472,11 @@ extern "C" int fort_scope_plan_add(fort_scope_t h, uint32_t kind, uint64_t unit,
                 FORT_SCOPE_ARGUMENT, "invalid planning operation kind or availability");
         require(c.plan.size() < 256, FORT_SCOPE_BOUNDARY, "planning record budget exceeded");
         require(kind != FORT_SCOPE_PLAN_WORKER || unit, FORT_SCOPE_ARGUMENT, "worker planning unit requires an identity");
-        c.plan.push_back({kind, unit, planning_bindings(c, bindings, count), flops, memory_bytes, gpu_available != 0});
+        require(std::isfinite(cpu_numerical_seconds) && cpu_numerical_seconds >= 0 &&
+                std::isfinite(gpu_numerical_seconds) && gpu_numerical_seconds >= 0,
+                FORT_SCOPE_ARGUMENT, "invalid offline numerical costs");
+        c.plan.push_back({kind, unit, planning_bindings(c, bindings, count), flops, memory_bytes,
+                          gpu_available != 0, cpu_numerical_seconds, gpu_numerical_seconds});
     }, Change::Query);
 }
 extern "C" int fort_scope_set_team_costs_v1(fort_scope_t h, const fort_scope_team_costs *costs, int compatible) {
@@ -1681,6 +1698,9 @@ extern "C" int fort_scope_serial_caller(void) {
     // is in a team. Unknown participation retains the original native span.
     return 0;
 #endif
+}
+extern "C" int fort_scope_numerical_environment_supported(void) {
+    return fort_runtime::numerical_environment_supported() ? 1 : 0;
 }
 extern "C" int fort_scope_device_get(fort_scope_t h, int *out) {
     return with(h, [&](Context &c) {

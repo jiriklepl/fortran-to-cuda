@@ -25,7 +25,7 @@ from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
 # Bump when source-effect, call-composition or summary semantics change.
-SOURCE_SUMMARY_VERSION = 3
+SOURCE_SUMMARY_VERSION = 4
 _DEFAULT_SUMMARY_CACHE = SummaryCache()
 
 
@@ -220,6 +220,11 @@ class Scope:
     access: dict[str, bool] = field(default_factory=dict)
     externals: set[str] = field(default_factory=set)
     procedure_arguments: set[str] = field(default_factory=set)
+    # Lexical procedure bindings are distinct from module exports. In
+    # particular, equal helper names in two CONTAINS owners must not collide.
+    procedures: dict[str, str] = field(default_factory=dict)
+    intrinsic_procedures: dict[str, str] = field(default_factory=dict)
+    intrinsic_wildcards: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -246,6 +251,7 @@ class SourceEffects:
         self.depth_limit, self.procedure_limit, self.operation_limit = depth, procedures, operations
         self.modules, self.routines, self.summaries = {}, {}, {}
         self.functions = set()
+        self.numerical_helpers = {}
         self._closures = {}
         self._native_sections = {}
         self._analysis_started = False
@@ -290,7 +296,7 @@ class SourceEffects:
         for scope in self.modules.values():
             for node in _children(_part(scope.node, "Module_Subprogram_Part")):
                 if _kind(node) == "Function_Subprogram":
-                    self.functions.add(scope.module + "::" + str(_part(node, "Function_Stmt").items[1]).lower())
+                    self._register_function(scope, node)
                     continue
                 if _kind(node) != "Subroutine_Subprogram":
                     continue
@@ -301,24 +307,70 @@ class SourceEffects:
             self._import_kinds(scope)
         for routine in self.routines.values():
             self._import_kinds(routine.scope)
+        for routine in self.numerical_helpers.values():
+            self._import_kinds(routine.scope)
         for binding, scope, selector in self.kind_expressions:
             # An unresolved kind cannot select a generic overload.
             with suppress(CompilationError):
                 binding.kind = scope.kinds.integer(selector, SourceLocation(str(scope.path)))
         self._source_roles = {name: (routine.execution, self._routine_signature(routine), str(routine.execution))
                               for name, routine in self.routines.items()}
+        self._numerical_roles = {name: (routine.scope.node, self._routine_signature(routine), str(routine.scope.node))
+                                 for name, routine in self.numerical_helpers.items()}
 
     def _register_routine(self, parent, node, *, source_kind="module"):
         stmt = _part(node, "Subroutine_Stmt")
-        qualified = parent.module + "::" + str(stmt.items[1]).lower()
+        owner = getattr(parent, "qualified", parent.module)
+        qualified = owner + "::" + str(stmt.items[1]).lower()
         if qualified in self.routines or qualified in self.functions:
             raise CompilationError("duplicate source procedure " + qualified)
-        child = Scope(parent.module, parent.path, node, parent if source_kind == "module" else None)
+        child = Scope(parent.module, parent.path, node, parent if source_kind != "external" else None)
+        child.qualified = qualified
+        parent.procedures[str(stmt.items[1]).lower()] = qualified
         arguments = tuple(str(argument).lower() for argument in _children(stmt.items[2]))
         issues = parent.issues + self._specification(child, arguments, qualified)
-        if _part(node, "Internal_Subprogram_Part") is not None:
-            issues.append("internal procedures need an explicit effect closure")
-        self.routines[qualified] = Routine(child, arguments, _part(node, "Execution_Part"), qualified, issues, source_kind)
+        routine = Routine(child, arguments, _part(node, "Execution_Part"), qualified, issues, source_kind)
+        self.routines[qualified] = routine
+        self.numerical_helpers[qualified] = routine
+        self._register_internal(child, node)
+
+    def _register_function(self, parent, node):
+        stmt = _part(node, "Function_Stmt")
+        qualified = getattr(parent, "qualified", parent.module) + "::" + str(stmt.items[1]).lower()
+        if qualified in self.routines or qualified in self.functions:
+            raise CompilationError("duplicate source procedure " + qualified)
+        self.functions.add(qualified)
+        parent.procedures[str(stmt.items[1]).lower()] = qualified
+        child = Scope(parent.module, parent.path, node, parent)
+        child.qualified = qualified
+        arguments = tuple(str(argument).lower() for argument in _children(stmt.items[2]))
+        issues = parent.issues + self._specification(child, arguments, qualified)
+        prefix_type = next((item for item in _children(stmt.items[0]) if _kind(item) == "Intrinsic_Type_Spec"), None)
+        result = str(stmt.items[3].items[0] if stmt.items[3] is not None else stmt.items[1]).lower()
+        if prefix_type is not None and result not in child.bindings:
+            base, selector = prefix_type.items
+            base = str(base).lower()
+            width = 8 if base == "double precision" else 4
+            if base == "double precision":
+                base = "real"
+            if selector is not None:
+                width = None
+                with suppress(CompilationError):
+                    width = child.kinds.integer(selector.items[1], SourceLocation(str(child.path)))
+            binding = Binding(result, qualified + "::" + result, base, width, 0)
+            child.bindings[result] = binding
+            if selector is not None:
+                self.kind_expressions.append((binding, child, selector.items[1]))
+        self.numerical_helpers[qualified] = Routine(child, arguments, _part(node, "Execution_Part"), qualified,
+                                                    issues, "internal_function" if parent.parent else "function")
+        self._register_internal(child, node)
+
+    def _register_internal(self, parent, node):
+        for child in _children(_part(node, "Internal_Subprogram_Part")):
+            if _kind(child) == "Subroutine_Subprogram":
+                self._register_routine(parent, child, source_kind="internal")
+            elif _kind(child) == "Function_Subprogram":
+                self._register_function(parent, child)
 
     @staticmethod
     def external_interface(routine):
@@ -350,6 +402,9 @@ class SourceEffects:
     def _routine_signature(routine):
         return _canonical({"arguments": routine.arguments, "issues": routine.issues, "source_kind": routine.source_kind,
                            "bindings": {name: binding.public() for name, binding in routine.scope.bindings.items()},
+                           "lexical_procedures": dict(routine.scope.procedures),
+                           "intrinsic_procedures": dict(routine.scope.intrinsic_procedures),
+                           "intrinsic_wildcards": sorted(routine.scope.intrinsic_wildcards),
                            "logical_bound_nodes": {name: [str(node) if node is not None else None for node in binding.lower_bound_nodes]
                                                    for name, binding in routine.scope.bindings.items()}})
 
@@ -540,6 +595,20 @@ class SourceEffects:
             if name == "Use_Stmt":
                 nature, _, module, only, symbols = node.items
                 module = str(module).lower()
+                if (module in {"ieee_arithmetic", "ieee_exceptions", "ieee_features"}
+                        and str(nature).lower() != "non_intrinsic"
+                        and (str(nature).lower() == "intrinsic" or module not in self.modules)):
+                    # Standard intrinsic modules do not export mutable user
+                    # storage which could shadow a host capture. Their calls
+                    # still require explicit numerical/effect support below.
+                    if symbols is None or str(only).upper().replace(" ", "") != ",ONLY:":
+                        scope.intrinsic_wildcards.add(module)
+                    if symbols is not None:
+                        for item in symbols.items:
+                            local, remote = ((str(item.items[1]).lower(), str(item.items[2]).lower())
+                                             if _kind(item) == "Rename" else (str(item).lower(), str(item).lower()))
+                            scope.intrinsic_procedures[local] = "$intrinsic::" + module + "::" + remote
+                    continue
                 if module in _KindScope.intrinsic_kinds and str(nature).lower() != "non_intrinsic":
                     continue
                 if symbols is None or str(only).upper().replace(" ", "") != ",ONLY:":
@@ -634,6 +703,8 @@ class SourceEffects:
             return None
         if name in scope.bindings:
             return scope.bindings[name]
+        if name in scope.intrinsic_procedures or (name.startswith("ieee_") and scope.intrinsic_wildcards):
+            return None
         found = []
         if name in scope.imports:
             module, remote = scope.imports[name]
@@ -667,6 +738,12 @@ class SourceEffects:
             return []
         if name in scope.bindings or name in scope.procedure_arguments:
             return []
+        if name in scope.intrinsic_procedures:
+            return [scope.intrinsic_procedures[name]]
+        if name.startswith("ieee_") and scope.intrinsic_wildcards:
+            return ["$intrinsic::" + sorted(scope.intrinsic_wildcards)[0] + "::" + name]
+        if name in scope.procedures:
+            return [scope.procedures[name]]
         external = "$external::" + name
         if name in scope.externals:
             return [external] if external in self.routines or external in self.functions else []
