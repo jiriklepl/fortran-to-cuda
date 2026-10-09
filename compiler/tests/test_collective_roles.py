@@ -78,7 +78,6 @@ end do
     "j=2\n" + WORKSHARING,
     "!$omp do\ndo i=1,size(a)\n!$omp do\ndo j=1,2\na(i)=scale\nend do\n!$omp end do\nend do\n!$omp end do",
     "!$omp do\ndo i=1,size(a)\nif(scale<0.d0) return\na(i)=scale\nend do\n!$omp end do",
-    "!$omp do\ndo i=1,size(a)\nj=i\na(i)=real(j,8)\nend do\n!$omp end do",
 ])
 def test_unknown_clauses_teams_outside_effects_and_private_scalar_state_are_boundaries(tmp_path, body):
     _path, analysis = source(tmp_path, body)
@@ -89,6 +88,30 @@ def test_unknown_clauses_teams_outside_effects_and_private_scalar_state_are_boun
 
 def test_duplicate_rendered_header_cannot_hide_an_unmarked_array_writer(tmp_path):
     _path, analysis = source(tmp_path, LOOP + "\n" + WORKSHARING)
+    assert not prove_existing_team_worksharing(analysis, "unrelated::adjust")["available"]
+
+
+def test_activation_local_recurrence_resets_before_every_work_iteration(tmp_path):
+    body = WORKSHARING.replace("a(i)=a(i)+scale", "x=a(i)\ndo j=1,8\nx=x*1.01d0+scale\nenddo\na(i)=x")
+    _path, analysis = source(tmp_path, body, specification="real(8)::x")
+    assert prove_existing_team_worksharing(analysis, "unrelated::adjust")["available"]
+
+
+@pytest.mark.parametrize("statement", ["x=x+scale\na(i)=x", "a(i)=x\nx=scale",
+                                        "if(scale>0) x=scale\na(i)=x"])
+def test_iteration_carried_or_conditionally_defined_temporaries_are_boundaries(tmp_path, statement):
+    _path, analysis = source(tmp_path, WORKSHARING.replace("a(i)=a(i)+scale", statement),
+                             specification="real(8)::x")
+    proof = prove_existing_team_worksharing(analysis, "unrelated::adjust")
+    assert not proof["available"]
+    assert "temporary" in proof["reason"]
+
+
+@pytest.mark.parametrize("declaration", ["real(8),save::x", "real(8)::x=1.d0",
+                                          "real(8),volatile::x", "real(8),asynchronous::x"])
+def test_nonautomatic_scalar_storage_is_not_an_iteration_temporary(tmp_path, declaration):
+    _path, analysis = source(tmp_path, WORKSHARING.replace("a(i)=a(i)+scale", "x=scale\na(i)=x"),
+                             specification=declaration)
     assert not prove_existing_team_worksharing(analysis, "unrelated::adjust")["available"]
 
 

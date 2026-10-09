@@ -180,7 +180,11 @@ def test_allocatable_owning_roots_are_guarded_at_original_caller(tmp_path, mode)
     text = (output / manifest["sources"][str(original)]["replacement"]).read_text()
     assert "if (allocated(a) .and. allocated(b) .and. allocated(out)) then\nblock\n" in text
     owner = text.split("subroutine fort_scope_owner_", 1)[1].split("end subroutine", 1)[0]
-    assert "allocatable" not in owner.lower()
+    # Owners preserve the original descriptors for read-only allocatable
+    # native children. Payload registration still occurs after caller guards.
+    assert owner.lower().count("allocatable, target, intent(") == 3
+    assert "allocate(" not in owner.lower()
+    assert "deallocate(" not in owner.lower()
     if mode == "sections":
         assert "if (all(fort_extents_0 > 0)) fort_host_pointer = c_loc(" in owner
         assert "fort_scope_close(fort_context)" in owner
@@ -252,7 +256,7 @@ def test_allocatable_owning_root_still_requires_stable_lifetime_facts(tmp_path):
                for item in manifest["boundaries"])
 
 
-@pytest.mark.parametrize("intent", ["in", "inout", "out"])
+@pytest.mark.parametrize("intent", ["inout", "out"])
 def test_allocatable_callee_formals_remain_original_native_boundaries(tmp_path, intent):
     source = ALLOCATABLE_PROGRAM.replace("real(8),intent(out)::b(:)",
                                          "real(8),allocatable,intent(" + intent + ")::b(:)", 1)
@@ -438,7 +442,7 @@ def test_writable_alias_is_a_boundary_including_inside_wrappers(tmp_path):
     assert not any("original::producer" in scope["gpu_leaves"] for scope in manifest["scopes"])
 
 
-@pytest.mark.parametrize("actual", ["b(1)", "b(n)", "b(1)+1.d0", "b(1:n)"])
+@pytest.mark.parametrize("actual", ["b(1)", "b(n)", "b(1)+1.d0"])
 def test_indexed_actual_keeps_its_source_position_between_shared_scopes(tmp_path, actual):
     helper = ("subroutine inspect_scalar(value,total)\n"
               "real(8),intent(in)::value\nreal(8),intent(out)::total\n"
@@ -463,6 +467,27 @@ def test_indexed_actual_keeps_its_source_position_between_shared_scopes(tmp_path
     step = replacement.split("subroutine step(a,b,out,n)", 1)[1].split("end subroutine", 1)[0]
     assert step.count("call fort_scope_owner_") == 2
     assert f"\ncall inspect_scalar({actual},total)\ncall fort_scope_owner_" in step
+
+
+def test_rectangular_native_actual_stays_inside_shared_owner(tmp_path):
+    helper = ("subroutine inspect_section(value,total)\n"
+              "real(8),intent(in)::value(:)\nreal(8),intent(out)::total\n"
+              "total=sum(value)\nend subroutine\n")
+    source = PROGRAM.replace("end module", helper + "end module")
+    source = source.replace("subroutine step(a,b,out,n)\n", "subroutine step(a,b,out,n)\nreal(8)::total\n")
+    source = source.replace("call consumer(a,b,out,n)",
+                            "call inspect_section(b(1:n),total)\ncall consumer(a,b,out,n)\ncall transform(out)")
+    _, _, manifest = generate(tmp_path, source)
+    assert manifest["scope_count"] == 1
+    assert not manifest["boundaries"]
+    scope, = manifest["scopes"]
+    assert scope["calls"] == ["original::producer", "original::transform", "original::inspect_section",
+                              "original::consumer", "original::transform"]
+    call, = scope["borrowed_views"]["calls"]
+    mapping, = call["mappings"]
+    assert mapping["resource"] == "argument::b"
+    assert mapping["section"]["source_access"].replace(" ", "") == "b(1:n)"
+    assert mapping["view_abi_version"] == 1
 
 
 @pytest.mark.parametrize("actual", ["3.d0", "factor"])

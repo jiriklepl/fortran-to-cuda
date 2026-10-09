@@ -847,6 +847,11 @@ def lower_file(path: str | Path, entry_name: str, *, require_markers: bool = Fal
     """
     path = Path(path)
     tree = _parse_file(path, require_markers=require_markers)
+    return _lower_tree(tree, path, entry_name, require_markers=require_markers)
+
+
+def _lower_tree(tree, path, entry_name, *, require_markers=False):
+    """Share source-backed file and compiler-owned string entry resolution."""
     lowerer = _Lowerer(path, require_markers=require_markers)
     lowerer.discover(tree)
     requested = entry_name.lower().split("::")

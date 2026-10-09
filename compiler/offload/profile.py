@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 import math
 import re
+from hashlib import sha256
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +41,26 @@ SCOPED_TRANSFER_COST_NAMES = (
     "pack_bytes_per_second", "unpack_bytes_per_second", "pack_row_seconds", "unpack_row_seconds",
 )
 SCOPED_BATCH_PAYLOADS = (256 * 1024, 1024 * 1024, 4 * 1024 * 1024, 16 * 1024 * 1024)
+SCOPED_TEAM_PROTOCOL_ID = 0x4654434F4C4C0001
+SCOPED_TEAM_RATE_NAMES = ("cpu_flops", "cpu_bandwidth", "native_cpu_flops", "native_cpu_bandwidth")
+SCOPED_TEAM_COST_NAMES = (
+    "owner_seconds", "descriptor_seconds", "entry_seconds", "cpu_worker_seconds",
+    "gpu_worker_seconds", "native_call_seconds", "native_worker_seconds",
+)
+
+
+def collective_protocol_identity() -> dict:
+    """Conservatively identify source that emits the measured team protocol."""
+    sources = {}
+    for package, names in (
+        ("compiler.scopes", ("collective.py", "collective_roles.py", "source.py")),
+        ("compiler.emission.cuda", ("scoped.py", "offload.py")),
+        ("compiler.runtime", ("scoped_team_observer.hpp", "scoped_team_observer.f90")),
+    ):
+        for name in names:
+            sources[package + "/" + name] = sha256(files(package).joinpath(name).read_bytes()).hexdigest()
+    identity = sha256("\n".join(f"{name}:{digest}" for name,digest in sorted(sources.items())).encode()).hexdigest()
+    return {"identity": identity, "sources": sources}
 
 
 class ProfileError(ValueError):
@@ -154,6 +176,46 @@ def validate_profile(
             raise ProfileError("missing scoped costs")
         for name in SCOPED_COST_NAMES:
             _number(costs.get(name), f"scoped.costs.{name}")
+        if "collective" in scoped:
+            collective = scoped["collective"]
+            if (not isinstance(collective, dict) or type(collective.get("schema_version")) is not int
+                    or collective["schema_version"] != 1):
+                raise ProfileError("scoped.collective requires schema_version 1")
+            if (type(collective.get("protocol_id")) is not int
+                    or collective["protocol_id"] != SCOPED_TEAM_PROTOCOL_ID):
+                raise ProfileError("scoped.collective protocol_id mismatch")
+            if (type(collective.get("cpu_threads")) is not int
+                    or collective["cpu_threads"] != profile["cpu_threads"]):
+                raise ProfileError("scoped.collective thread budget mismatch")
+            if type(collective.get("expected_omp_level")) is not int or collective["expected_omp_level"] != 1:
+                raise ProfileError("scoped.collective requires a level-one persistent team")
+            team_costs = collective.get("costs")
+            if not isinstance(team_costs, dict):
+                raise ProfileError("missing scoped.collective costs")
+            for name in SCOPED_TEAM_RATE_NAMES:
+                _number(team_costs.get(name), f"scoped.collective.costs.{name}")
+            for name in SCOPED_TEAM_COST_NAMES:
+                _number(team_costs.get(name), f"scoped.collective.costs.{name}", zero=True)
+            fortran = collective.get("fortran")
+            if not isinstance(fortran, dict) or any(not isinstance(fortran.get(name), str) or not fortran[name]
+                    for name in ("compiler_version", "compiler_options", "semantic_options")):
+                raise ProfileError("scoped.collective requires the original Fortran compiler and semantic options")
+            # The normalizer is shared with the offline producer; location
+            # flags are the only explicitly excluded compiler options.
+            from .collective_calibration import normalize_fortran_options
+            try:
+                semantic = normalize_fortran_options(fortran["compiler_options"])
+            except ValueError as error:
+                raise ProfileError("invalid collective Fortran compiler options") from error
+            if semantic != fortran["semantic_options"]:
+                raise ProfileError("collective Fortran semantic options disagree with raw provenance")
+            protocol = collective.get("protocol_sources")
+            if (not isinstance(protocol,dict) or not isinstance(protocol.get("identity"),str)
+                    or not re.fullmatch(r"[0-9a-f]{64}",protocol["identity"])
+                    or not isinstance(protocol.get("sources"),dict) or not protocol["sources"]
+                    or any(not isinstance(name,str) or not isinstance(digest,str)
+                           or not re.fullmatch(r"[0-9a-f]{64}",digest) for name,digest in protocol["sources"].items())):
+                raise ProfileError("scoped.collective requires protocol source identities")
         if "transfers" in scoped:
             transfers = scoped["transfers"]
             if (not isinstance(transfers, dict) or type(transfers.get("schema_version")) is not int
@@ -208,6 +270,22 @@ def scoped_transfer_costs(profile: dict, runtime_id: str) -> dict:
     if not isinstance(transfers, dict):
         raise ProfileError("hardware profile has no scoped transfer calibration")
     return transfers["costs"]
+
+
+def scoped_collective_costs(profile: dict, runtime_id: str, *, cpu_threads: int | None = None) -> dict:
+    """Require actual persistent-team costs for the current coordination ABI.
+
+    Serial/fork-join rates never establish an existing team's cost. Callers
+    must additionally verify the actual OpenMP level, width and hardware at
+    dispatch; this accessor neither enters a team nor initializes CUDA.
+    """
+    validate_profile(profile, cpu_threads=cpu_threads, scoped_runtime_id=runtime_id)
+    collective = profile["scoped"].get("collective")
+    if not isinstance(collective, dict):
+        raise ProfileError("collective synchronization calibration is unavailable")
+    if collective.get("protocol_sources") != collective_protocol_identity():
+        raise ProfileError("collective synchronization calibration source identity mismatch")
+    return collective["costs"]
 
 
 def load_profile(path: str | Path, **expected: Any) -> dict:

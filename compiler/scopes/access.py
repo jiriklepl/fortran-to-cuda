@@ -36,7 +36,7 @@ def _statement_lines(statement):
 
 
 def build_native_access(resource: NativeResourceSections, handle: str, prefix: str, *,
-                        context="fort_context", status="fort_status", on_error=("return",)):
+                        context="fort_context", status="fort_status", on_error=("return",), view=None):
     """Map original callee coordinates through the registered full layout.
 
     The returned TARGET arrays must remain in the caller's specification until
@@ -51,17 +51,32 @@ def build_native_access(resource: NativeResourceSections, handle: str, prefix: s
     rank = resource.rank
     access, layout, extents = (prefix + suffix for suffix in ("_access", "_layout", "_extents"))
     origin, lower, upper, empty = (prefix + suffix for suffix in ("_origin", "_lower", "_upper", "_empty"))
-    specification = [f"type(fort_scope_access) :: {access}", f"type(fort_scope_layout) :: {layout}",
+    layout_type = "fort_scope_view_layout_v1" if view is not None else "fort_scope_layout"
+    specification = [f"type(fort_scope_access) :: {access}", f"type({layout_type}) :: {layout}",
                      f"integer(c_size_t), pointer :: {extents}(:)",
                      f"integer(c_int64_t) :: {origin}({rank}), {lower}({rank}), {upper}({rank})",
                      f"logical :: {empty}"]
-    prepare = [f"{status} = fort_scope_layout_get({context}, {handle}, {layout})",
-               f"if ({status} /= FORT_SCOPE_OK) then", *on_error, "endif"]
+    prepare = []
 
     def require(condition):
         prepare.extend([f"if ({condition}) then", f"{status} = FORT_SCOPE_BOUNDARY", *on_error, "endif"])
 
-    require(f"{layout}%rank /= {rank} .or. .not. c_associated({layout}%extents)")
+    if view is None:
+        prepare += [f"{status} = fort_scope_layout_get({context}, {handle}, {layout})",
+                    f"if ({status} /= FORT_SCOPE_OK) then", *on_error, "endif"]
+        require(f"{layout}%rank /= {rank} .or. .not. c_associated({layout}%extents)")
+    else:
+        physical_origin = prefix + "_physical_origin"
+        specification += [f"integer(c_size_t), pointer :: {physical_origin}(:)"]
+        # The view and the eventual host/query hook must name the same root.
+        # view_get establishes generation, type, bounds and full-root pitches
+        # without touching numerical data or changing coherence.
+        require(f"{view}%buffer /= {handle}")
+        prepare += [f"{status} = fort_scope_view_get_v1({context}, {view}, {layout})",
+                    f"if ({status} /= FORT_SCOPE_OK) then", *on_error, "endif"]
+        require(f"{layout}%root%rank /= {rank} .or. .not. c_associated({layout}%extents) .or. "
+                f".not. c_associated({layout}%origins)")
+        prepare += [f"call c_f_pointer({layout}%origins, {physical_origin}, [{rank}])"]
     prepare += [f"call c_f_pointer({layout}%extents, {extents}, [{rank}])"]
     require(f"any({extents} < 0_c_size_t)")
     for axis, declared in enumerate(resource.lower_bounds, 1):
@@ -139,8 +154,12 @@ def build_native_access(resource: NativeResourceSections, handle: str, prefix: s
                 prepare += ["endif"]
             prepare += [f"if (.not. {empty}) then", f"{count} = {count} + 1_c_size_t"]
             for axis in range(1, rank+1):
-                prepare += [f"{lows}({axis},{count}) = int({lower}({axis}), c_size_t)",
-                            f"{highs}({axis},{count}) = int({upper}({axis}), c_size_t)"]
+                offset = f" + {physical_origin}({axis})" if view is not None else ""
+                # Local endpoints were checked against the child extent. The
+                # validated root origin plus either endpoint stays within the
+                # canonical allocation, including noncontiguous rectangles.
+                prepare += [f"{lows}({axis},{count}) = int({lower}({axis}), c_size_t){offset}",
+                            f"{highs}({axis},{count}) = int({upper}({axis}), c_size_t){offset}"]
             prepare += [f"{sections}({count})%lower = c_loc({lows}(1,{count}))",
                         f"{sections}({count})%upper = c_loc({highs}(1,{count}))", "endif"]
         singular = {"reads": "read", "writes": "write", "overwrites": "overwrite"}[label]
@@ -163,3 +182,40 @@ def build_native_accesses(sections: NativeSections, handles, prefix: str, **opti
         raise CompilationError("native section aliases require a proved common physical mapping")
     return tuple(build_native_access(resource, handle, prefix + "_" + str(index), **options)
                  for index, (resource, handle) in enumerate(zip(sections.resources, mapped, strict=True)))
+
+
+def build_native_view_accesses(sections: NativeSections, views, handles, prefix: str, **options):
+    """Project exact native effects through validated canonical-root views.
+
+    An unavailable refinement is a compile boundary: a partial actual cannot
+    silently acquire whole-root hooks. Partial procedure-entry INTENT(OUT)
+    events remain separate, using views.forget_view at their original point.
+    Native callee lower bounds are independent of prepared numerical view
+    lower bounds; only physical origins and child extents come from the view.
+    """
+    if not sections.available:
+        raise CompilationError(sections.reason or "native view sections are unavailable")
+    mapped = []
+    for resource in sections.resources:
+        if resource.resource not in handles or resource.resource not in views:
+            raise CompilationError("native view mapping is unavailable: " + resource.resource)
+        mapped.append(handles[resource.resource])
+    if len(set(mapped)) != len(mapped):
+        raise CompilationError("native view aliases require a proved common physical mapping")
+    codes = tuple(build_native_access(resource, handle, prefix + "_" + str(index),
+                                      view=views[resource.resource], **options)
+                  for index, (resource, handle) in enumerate(zip(sections.resources, mapped, strict=True)))
+    # Distinct generated expressions may name the same token after a nested
+    # call maps separate formals onto one root. Reject that ambiguity before
+    # preparing any access; string inequality is not an alias proof.
+    status = options.get("status", "fort_status")
+    on_error = options.get("on_error", ("return",))
+    preflight = []
+    for index, handle in enumerate(mapped):
+        for previous in mapped[:index]:
+            preflight += [f"if ({handle} == {previous}) then", f"{status} = FORT_SCOPE_ALIAS", *on_error, "endif"]
+    if preflight:
+        first = codes[0]
+        checked = tuple(line for statement in preflight for line in _statement_lines(statement))
+        codes = (NativeAccessCode(first.specification, checked + first.prepare, first.access_name, first.handle), *codes[1:])
+    return codes

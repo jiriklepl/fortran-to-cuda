@@ -4,6 +4,8 @@
 #include "section_copy.hpp"
 #include "scoped_regions.hpp"
 #include "scoped_planning.hpp"
+#define FORT_SCOPE_TEAM_OBSERVER_IMPLEMENTATION
+#include "scoped_team_observer.hpp"
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -70,6 +72,7 @@ struct Context {
     fort_scope_stats stats{};
     fort_scope_transfer_stats transfer_stats{};
     std::optional<fort_scope_batch_costs> transfer_costs;
+    std::optional<fort_scope_team_costs> team_costs;
     std::optional<fort_scope_batch_report> batch_report;
     bool batch_active = false;
     std::vector<fort_scoped::planning::Operation> plan;
@@ -103,6 +106,15 @@ struct Context {
     cudaMemPool_t pool = nullptr;
 #endif
 };
+bool actual_team_matches(const Context &c) {
+#ifdef _OPENMP
+    return c.team_costs && omp_get_level() == int(c.team_costs->expected_omp_level) &&
+        omp_get_num_threads() == int(c.team_costs->cpu_threads);
+#else
+    (void)c;
+    return false;
+#endif
+}
 std::mutex driver_mutex;
 std::unordered_set<int> initialized_devices;
 std::mutex registry_mutex;
@@ -559,6 +571,7 @@ void release(Context &c, Buffer &b) {
     trace("release", &b, b.bytes);
 }
 template<class F> int protect(F &&f) noexcept {
+    fort_scoped::TeamObservation observation(FORT_SCOPE_TEAM_OBSERVE_API);
     try { f(); return FORT_SCOPE_OK; }
     catch (const Error &error) { diagnostic(error.what()); return error.status; }
     catch (const Fragmented &) { diagnostic("section fragmentation requires a scope boundary"); return FORT_SCOPE_BOUNDARY; }
@@ -670,6 +683,7 @@ const fort_scoped::planning::Inputs &planning_inputs(Context &c, fort_scope_t ha
             FORT_SCOPE_BOUNDARY, "planning_record_budget_exceeded");
     fort_scoped::planning::Inputs input;
     input.operations = c.plan;
+    input.team_costs = c.team_costs;
     input.continuation = c.endpoint_mode == FORT_SCOPE_PLAN_CONTINUE;
     if (input.continuation) {
         input.charge_create = !c.owner_create_accounted;
@@ -1448,6 +1462,56 @@ extern "C" int fort_scope_plan_add(fort_scope_t h, uint32_t kind, uint64_t unit,
         c.plan.push_back({kind, unit, planning_bindings(c, bindings, count), flops, memory_bytes, gpu_available != 0});
     }, Change::Query);
 }
+extern "C" int fort_scope_set_team_costs_v1(fort_scope_t h, const fort_scope_team_costs *costs, int compatible) {
+    return with(h, [&](Context &c) {
+        require(compatible == 0 || compatible == 1, FORT_SCOPE_ARGUMENT, "invalid collective profile compatibility");
+        require(c.buffers.empty() && !c.ready && !c.plan_recording && !c.plan_installed,
+                FORT_SCOPE_STATE, "configure collective costs before registration and planning");
+        c.team_costs.reset();
+        if (!compatible) return;
+        require(costs && fort_scoped::planning::detail::valid_team_costs(*costs),
+                FORT_SCOPE_BOUNDARY, "collective synchronization calibration is unavailable");
+#ifdef _OPENMP
+        if (omp_get_level() == int(costs->expected_omp_level) && omp_get_num_threads() == int(costs->cpu_threads))
+            c.team_costs = *costs;
+#endif
+    });
+}
+extern "C" int fort_scope_team_costs_ready_v1(fort_scope_t h, int *out) {
+    return with(h, [&](Context &c) {
+        require(out, FORT_SCOPE_ARGUMENT, "missing collective readiness output");
+        *out = actual_team_matches(c) ? 1 : 0;
+    }, Change::None);
+}
+extern "C" int fort_scope_plan_team_entry_v1(fort_scope_t h) {
+    return with(h, [&](Context &c) {
+        PlanningTimer timing(c, h, "query_construction");
+        require(c.plan_recording && !c.plan_installed, FORT_SCOPE_STATE, "reset the planning query before recording");
+        require(c.plan.size() < 256, FORT_SCOPE_BOUNDARY, "planning record budget exceeded");
+        c.plan.push_back({FORT_SCOPE_PLAN_TEAM_ENTRY, 0, {}, 0, 0, false});
+    }, Change::Query);
+}
+extern "C" int fort_scope_plan_team_native_call_v1(fort_scope_t h) {
+    return with(h, [&](Context &c) {
+        PlanningTimer timing(c, h, "query_construction");
+        require(c.plan_recording && !c.plan_installed, FORT_SCOPE_STATE, "reset the planning query before recording");
+        require(c.plan.size() < 256, FORT_SCOPE_BOUNDARY, "planning record budget exceeded");
+        c.plan.push_back({FORT_SCOPE_PLAN_TEAM_NATIVE_CALL, 0, {}, 0, 0, false});
+    }, Change::Query);
+}
+extern "C" int fort_scope_plan_forget_sections_v1(fort_scope_t h, fort_buffer_t handle,
+                                                  const fort_scope_section *items, size_t count) {
+    return with(h, [&](Context &c) {
+        PlanningTimer timing(c, h, "query_construction");
+        require(c.plan_recording && !c.plan_installed, FORT_SCOPE_STATE, "reset the planning query before recording");
+        require(c.plan.size() < 256, FORT_SCOPE_BOUNDARY, "planning record budget exceeded");
+        auto &b = buffer(c, handle);
+        auto removed = sections(b, items, count, false);
+        fort_scoped::planning::Binding binding{handle, {}};
+        binding.effects.writes = std::move(removed);
+        c.plan.push_back({FORT_SCOPE_PLAN_DISCARD, 0, {std::move(binding)}, 0, 0, false});
+    }, Change::Query);
+}
 extern "C" int fort_scope_plan_validate(fort_scope_t h) {
     return with(h, [&](Context &c) {
         PlanningTimer timing(c, h, "validation");
@@ -1518,7 +1582,8 @@ extern "C" int fort_scope_plan_select(fort_scope_t h, const fort_scope_plan_cost
                 c.definition_proof = Context::Proof{c.query_generation, c.state_generation, proof};
             }
         }
-        timing.cache_hit = c.preview && c.preview_query_generation == c.query_generation &&
+        const bool team_mismatch = c.team_costs && !actual_team_matches(c);
+        timing.cache_hit = !team_mismatch && c.preview && c.preview_query_generation == c.query_generation &&
             c.preview_state_generation == c.state_generation &&
             c.preview->driver_initialized == driver_initialized(c) &&
             !std::memcmp(c.preview_costs.data(), costs, sizeof(*costs));
@@ -1527,10 +1592,10 @@ extern "C" int fort_scope_plan_select(fort_scope_t h, const fort_scope_plan_cost
         // and completion costs are not calibrated by that profile.
         const bool pinned_uncalibrated = c.transfer_stats.requested_mode == FORT_SCOPE_TRANSFERS_PINNED &&
             (!c.transfer_costs || !fort_scoped::planning::detail::valid_transfer_costs(*c.transfer_costs));
-        if (pinned_uncalibrated) pricing.valid = 0;
+        if (pinned_uncalibrated || team_mismatch) pricing.valid = 0;
         auto result = timing.cache_hit
             ? *c.preview : fort_scoped::planning::select(planning_inputs(c, h), pricing);
-        if (compatible == -1) {
+        if (compatible == -1 && !team_mismatch) {
             c.preview = result;
             c.preview_query_generation = c.query_generation;
             c.preview_state_generation = c.state_generation;
@@ -1550,6 +1615,7 @@ extern "C" int fort_scope_plan_select(fort_scope_t h, const fort_scope_plan_cost
             result.report.available = 0;
         }
         if (pinned_uncalibrated) result.reason = "transfer_estimates_unavailable";
+        if (team_mismatch) result.reason = "collective_team_mismatch";
         *out = result.decision;
         if (compatible != -1) {
             if (c.endpoint_mode == FORT_SCOPE_PLAN_CONTINUE) {
@@ -1974,6 +2040,58 @@ extern "C" int fort_scope_forget_definition(fort_scope_t h, fort_buffer_t handle
         b.initialized.clear(); b.host_current.clear(); b.device_current.clear();
         trace("forget_definition", &b);
     });
+}
+extern "C" int fort_scope_forget_sections_v1(fort_scope_t h, fort_buffer_t handle,
+                                             const fort_scope_section *items, size_t count) {
+    return with(h, [&](Context &c) {
+        auto &b = buffer(c, handle);
+        require(!b.prepared, FORT_SCOPE_STATE, "definition change during a prepared buffer access");
+        const auto removed = sections(b, items, count, false);
+        Budget budget;
+        // Do not partially invalidate state if any bounded subtraction fails.
+        auto initialized = difference(b.initialized, removed, budget);
+        auto host = difference(b.host_current, removed, budget);
+        auto device = difference(b.device_current, removed, budget);
+        wait(c);
+        b.initialized = std::move(initialized);
+        b.host_current = std::move(host);
+        b.device_current = std::move(device);
+        trace("forget_sections", &b);
+    });
+}
+extern "C" int fort_scope_view_get_v1(fort_scope_t h, const fort_scope_view_v1 *view,
+                                       fort_scope_view_layout_v1 *out) {
+    return with(h, [&](Context &c) {
+        require(view && out && view->version == FORT_SCOPE_VIEW_ABI_VERSION && view->rank &&
+                view->origins && view->extents && view->lower_bounds,
+                FORT_SCOPE_ARGUMENT, "invalid borrowed view descriptor");
+        auto &b = buffer(c, view->buffer);
+        require(view->generation == b.generation, FORT_SCOPE_STALE, "borrowed view allocation generation changed");
+        require(view->rank == b.extents.size(), FORT_SCOPE_ARGUMENT, "borrowed view rank differs from root");
+        const bool is_empty = std::find(view->extents, view->extents+view->rank, size_t(0)) != view->extents+view->rank;
+        size_t elements = is_empty ? 0 : 1, offset = 0;
+        for (size_t k=0; k<view->rank; ++k) {
+            require(view->origins[k] <= b.extents[k] && view->extents[k] <= b.extents[k]-view->origins[k],
+                    FORT_SCOPE_ARGUMENT, "borrowed view exceeds canonical root");
+            const int64_t lower = view->lower_bounds[k];
+            require(lower >= INT32_MIN && lower <= INT32_MAX && view->extents[k] <= INT32_MAX,
+                    FORT_SCOPE_BOUNDARY, "borrowed view bounds exceed INTEGER ABI");
+            if (view->extents[k])
+                require(int64_t(view->extents[k]-1) <= INT32_MAX-lower,
+                        FORT_SCOPE_BOUNDARY, "borrowed view upper bound exceeds INTEGER ABI");
+            // Empty arrays have no address, even if another extent overflows.
+            if (!is_empty) {
+                elements = multiply(elements, view->extents[k]);
+                const size_t part = multiply(view->origins[k], b.strides[k]);
+                require(part <= std::numeric_limits<size_t>::max()-offset,
+                        FORT_SCOPE_ARGUMENT, "borrowed view byte offset overflow");
+                offset += part;
+            }
+        }
+        *out = {{static_cast<uint32_t>(b.extents.size()), b.type, b.element_bytes, b.host,
+                 b.extents.data(), b.lower.data(), b.generation}, view->origins, view->extents,
+                b.strides.data(), view->lower_bounds, elements, offset};
+    }, Change::None);
 }
 extern "C" int fort_scope_layout_get(fort_scope_t h, fort_buffer_t b, fort_scope_layout *out) {
     return with(h, [&](Context &c) {

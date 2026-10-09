@@ -206,7 +206,7 @@ def test_writable_expression_actual_is_rejected(tmp_path):
         resolve(SourceEffects([path]))
 
 
-def test_rectangular_analysis_does_not_enable_root_only_execution(tmp_path):
+def test_direct_rectangular_execution_requires_a_borrowed_root_view(tmp_path):
     path = write(tmp_path, "rectangle.f90", """module clients
 contains
 subroutine leaf(a,n)
@@ -221,6 +221,7 @@ subroutine step(a,n)
 real(8),intent(inout)::a(-3:)
 integer,intent(in)::n
 call leaf(n=n,a=a(-2:n))
+call leaf(n=n,a=a(-2:n))
 end subroutine
 end module
 """)
@@ -229,12 +230,11 @@ end module
                                          "allocation_changes": False}}}
     outputs, report = form_source_scopes([path], "clients::step", facts=facts, options=CompilerOptions(),
                                         config=OffloadConfig(policy="sections"))
-    assert report["scope_count"] == 0
-    assert any("in-place mapping and coherence" in boundary["reason"] for boundary in report["boundaries"])
-    resolved, = report["resolved_calls"]
-    assert resolved["resource_mappings"][0]["storage"] == "rectangle"
-    assert not report["source_edits"]
-    assert list(outputs) == ["scope-manifest.json"]
+    assert report["scope_count"] == 1, report["boundaries"]
+    assert report["scopes"][0]["borrowed_views"]["abi_version"] == 1
+    assert report["resolved_calls"][0]["resource_mappings"][0]["storage"] == "rectangle"
+    assert report["source_edits"]
+    assert any(path.endswith("_views/shared_entry.cu") for path in outputs)
 
 
 def test_keyword_execution_uses_formal_workers_and_original_native_calls(tmp_path):
@@ -379,8 +379,6 @@ end module
 @pytest.mark.parametrize(("declaration", "call", "leaf", "reason"), [
     ("real(8),intent(inout)::a(:)", "call inner(a(2:))", "real(8),intent(out)::a(:)\na=7.d0", "canonical root views"),
     ("real(8),intent(inout)::a(:)", "call inner(a)", "real(8),intent(out)::a(2)\na=7.d0", "explicit dummy extents"),
-    ("real(8),intent(inout)::a(:)", "call inner(a)",
-     "real(8),intent(inout)::a(:)\ninteger,optional,intent(in)::offset\nif(present(offset)) a(1)=offset", "presence-preserving"),
 ])
 def test_complete_nested_summaries_do_not_enable_unsupported_native_views(tmp_path, declaration, call, leaf, reason):
     inner_arguments = "a,offset" if "optional" in leaf else "a"
@@ -422,7 +420,7 @@ end module
     assert all("clients::middle" not in scope["calls"] for scope in report["scopes"])
 
 
-def test_hidden_readonly_allocatable_nested_call_is_analysis_only(tmp_path):
+def test_native_nested_call_retains_its_hidden_readonly_allocation_descriptor(tmp_path):
     path = write(tmp_path, "hidden_descriptor.f90", """module clients
 real(8),allocatable::hidden(:)
 contains
@@ -462,6 +460,7 @@ end module
              "captures": {"argument::a": capture, "clients::hidden": capture}}
     _outputs, report = form_source_scopes([path], "clients::step", facts=facts, options=CompilerOptions(),
                                          config=OffloadConfig(policy="sections"))
-    assert any("nested allocatable callee formals require original descriptor" in boundary["reason"]
-               for boundary in report["boundaries"])
-    assert all("clients::middle" not in scope["calls"] for scope in report["scopes"])
+    assert report["scope_count"] == 1, report["boundaries"]
+    assert {resource["resource"] for resource in report["scopes"][0]["resources"]} == {"argument::a"}
+    assert report["native_effects"]["complete"]
+    assert report["scopes"][0]["calls"] == ["clients::gpu", "clients::middle", "clients::gpu"]

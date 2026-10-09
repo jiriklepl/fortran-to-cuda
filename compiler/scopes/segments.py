@@ -208,7 +208,10 @@ def fragment(builder, nodes, *, kind="native source"):
     routine.scope.bindings = {name: copy.copy(binding) for name, binding in routine.scope.bindings.items()}
     for binding in routine.scope.bindings.values():
         binding.intent = None
-        if binding.rank and "allocatable" in binding.attributes and binding.root.startswith("argument::"):
+        if binding.rank and "allocatable" in binding.attributes and any(
+                builder.analysis._binding(builder.entry.scope, name) is not None
+                and builder.analysis._binding(builder.entry.scope, name).root == binding.root
+                for node in nodes for name in walk(node, F.Name)):
             # Original caller guards + source-bound lifetime facts authorize
             # borrowing this descriptor within the fragment, not allocation
             # changes or allocatable child interfaces. Whole allocatable writes
@@ -225,7 +228,9 @@ def fragment(builder, nodes, *, kind="native source"):
     # Entry-local resources can also have registered device state from an
     # earlier call. Treat their fragment accesses as externally visible while
     # removing procedure-entry definition events from this inner operation.
-    routine.arguments, routine.issues = tuple(routine.scope.bindings), []
+    routine.arguments = tuple(name for name, binding in routine.scope.bindings.items()
+                              if "allocatable" not in binding.attributes)
+    routine.issues = []
     analysis.routines[routine.qualified] = routine
     summary = analysis.summarize(routine.qualified)
     if not summary["complete"]:
@@ -486,7 +491,8 @@ class StructuredScope:
         return item
 
     def original(self, parameters):
-        return [line for node in self.nodes for line in renamed(self.builder, node, parameters).splitlines()]
+        return [line for node in self.nodes for original in self.builder.inline.restore(node)
+                for line in renamed(self.builder, original, parameters).splitlines()]
 
     def public(self):
         from compiler.scopes.source import _span
@@ -620,7 +626,9 @@ class StructuredScope:
                                        if not root.startswith("argument::")})
                 leaves, _ = builder.closure(call.procedure)
                 lines += ["if (fort_status == FORT_SCOPE_OK) then"]
-                if leaves:
+                if call.region is not None:
+                    lines += builder.inline.emit_call(call, handles, parameters, imports, query=True)
+                elif leaves:
                     query, roots = builder.query_clone(call.procedure)
                     module = builder.analysis.routines[call.procedure].scope.module
                     if module != builder.entry.scope.module:

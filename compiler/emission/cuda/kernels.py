@@ -120,9 +120,9 @@ def _tiled_body(region: ParallelRegion) -> list[str]:
     return lines
 
 
-def generate_kernel(region: ParallelRegion) -> list[str]:
+def generate_kernel(region: ParallelRegion, *, array_views: bool = False) -> list[str]:
     schedule = region_schedule(region)
-    parameters = [cpp_declaration(argument) for argument in abi_arguments(region_symbols(region))]
+    parameters = [cpp_declaration(argument, array_views=array_views) for argument in abi_arguments(region_symbols(region))]
     for axis in range(len(region.loops)):
         parameters.extend(
             [
