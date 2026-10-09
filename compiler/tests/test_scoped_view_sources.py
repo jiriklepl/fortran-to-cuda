@@ -112,14 +112,15 @@ end subroutine
 """
 
 
-def emit(directory, entry="advance", *, root_views=True, collective=False):
+def emit(directory, entry="advance", *, root_views=True, collective=False, root_view_abi=1):
     directory.mkdir(parents=True, exist_ok=True)
     source = directory / "numerical.f90"
     source.write_text(NORMALIZED)
     function, plan = prepare_function(lower_file(source, entry), options=CompilerOptions(gpu_policy="sections"))
     runtime_sources, runtime = read_scoped_runtime()
     emitted = generate_scoped(function, plan, OffloadConfig("sections", host_threads=4, collective=collective),
-                              "common_functions.cuh", runtime_id=runtime["runtime_id"], root_views=root_views)
+                              "common_functions.cuh", runtime_id=runtime["runtime_id"], root_views=root_views,
+                              root_view_abi=root_view_abi)
     return emitted, runtime_sources
 
 
@@ -167,6 +168,20 @@ def test_out_companion_uses_partial_definition_events_in_query_and_execution(tmp
     assert any(line.endswith(", false));") for line in definitions)
     assert any(line.endswith(", true));") for line in definitions)
     assert "fort_scope_forget_definition(" not in emitted.cuda
+
+
+def test_rank_reduced_companion_uses_distinct_abi_and_logical_rank_validation(tmp_path):
+    legacy, _ = emit(tmp_path / "v1")
+    current, sources = emit(tmp_path / "v2", root_view_abi=2)
+    assert current.report["entry"] != legacy.report["entry"]
+    assert current.report["argument_order"] == legacy.report["argument_order"]
+    assert current.report["borrowed_views"]["abi_version"] == 2
+    assert current.report["borrowed_views"]["validation"] == "fort_scope_view_get_v2"
+    assert all(parameter["passing"] == "root_view_v2" for parameter in current.report["array_parameters"])
+    assert "fort_scope_view_v2" in current.fortran
+    assert ".rank != 2" in current.cuda and ".root.rank != 2" not in current.cuda
+    assert "fort_scope_view_get_v1" in sources["scoped_runtime.h"]
+    assert "fort_scope_view_get_v2" in sources["scoped_runtime.h"]
 
 
 def test_borrowed_companion_keeps_original_full_root_entry_and_rejects_collective_generation(tmp_path):

@@ -49,6 +49,13 @@ def resource_binding(analysis, routine, resource):
     """Resolve a source resource through actual visible bindings, including aliases."""
     if not isinstance(resource, str):
         raise CompilationError("numerical source parameter needs a canonical resource")
+    if "%" in resource:
+        base, fields = resource.split("%", 1)
+        owner = resource_binding(analysis, routine, base)
+        binding = analysis._binding(routine.scope, F.Data_Ref(owner.name + "%" + fields))
+        if binding is None or binding.root != resource:
+            raise CompilationError("numerical component resource differs from its original source binding")
+        return binding
     if resource.startswith("argument::"):
         name = resource.split("::", 1)[1]
         binding = routine.scope.bindings.get(name)

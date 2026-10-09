@@ -195,15 +195,18 @@ def test_source_continuation_matches_complete_native_fields(continuation_binarie
     assert "array temporary" not in result.stderr.lower()
     assert result.stdout.count("CALL_OK") == 8
     if mode == "serial":
+        if label == "automatic":
+            # No profile supplies any GPU estimate. The compiler proves this
+            # before creating an owner, while retaining the original fields.
+            assert "FIXTURE_CLOSE" not in result.stderr
+            assert "FORT_SCOPED" not in result.stderr
+            return
         assert result.stderr.count("FIXTURE_CLOSE") == 8, result.stderr
-        if label in {"automatic", "resource-before"}:
+        if label == "resource-before":
             assert "FORT_SCOPED launch" not in result.stderr
             assert "FORT_SCOPED upload" not in result.stderr
         else:
             assert result.stderr.count("FORT_SCOPED launch") >= 8, result.stderr
-        if label == "automatic":
-            assert "gpu_units=0" in result.stderr
-            assert "segments=0 " not in result.stderr
     else:
         assert "FORT_SCOPED launch" not in result.stderr
         assert "FORT_SCOPED upload" not in result.stderr

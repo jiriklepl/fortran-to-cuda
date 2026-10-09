@@ -1006,13 +1006,106 @@ view, rather than the entire caller allocation. These are source facts; physical
 transfer sections still require runtime descriptor checks. Composition expansion
 is bounded by the source operation limit.
 
-Successfully completed source closures are reused through a bounded memory cache.
+Summary version 5 also retains a reusable local source skeleton: ordered
+sequences, guarded branches, counted loops, direct call references, procedure
+entry events and explicit native boundaries. Callees and unselected branches
+are not eagerly expanded. Reached planning segments materialize their effects
+under the existing limits; an unknown alternate arm or an oversized complete
+call closure therefore need not reject a separately proved reached segment.
+The complete legacy summary remains strict. Segment records identify their
+original source nodes, enclosing guards, definition events and demand identity.
+Copied or fabricated syntax cannot establish this authority; source text,
+configuration, contract, capture, descriptor and original span changes invalidate
+the corresponding proof. The graph itself does not grant GPU eligibility.
+
+The current coordinator execution path still requires a complete bounded legacy
+closure for called procedures. A reusable local skeleton can prove a separately
+reached segment, but does not yet admit an oversized child closure, an arbitrary
+internal coordinator, or a complete application stage. Those execution gates
+remain explicit native boundaries.
+
+Native section schema 2 refines original assignment and independent Cartesian
+counted-loop accesses into at most 32 physical rectangles. Opposite faces stay
+separate; small constant strides use exact unions, including their holes, and
+never acquire a volume-sized overwrite proof. Runtime affine INTEGER bounds use
+safely reached canonical scalar mappings and checked wider arithmetic at every
+intermediate operation. Empty loops retain their original nested evaluation
+guards. Diagonal/moving sections, mutable bounds and unbounded strided unions
+keep conservative effects. Stable allocatable storage obtains lower bounds
+from its guarded original allocation descriptor. Reached parent operations use
+the original dummy descriptor for dynamic specification bounds, rather than
+reevaluating a scalar that may already have changed. These proofs neither assert
+allocation/presence nor define unwritten array sections.
+
+A complete original native OpenMP region can supply a compiler-owned completion
+token. The token retains the original team, worksharing directives, private
+storage and final join; a serialized completion claim cannot authorize native
+section hooks. Uniform branches may contribute bounded unions of possible
+reads and writes, while conditional writes receive no overwrite claim. Original
+private scalars and fixed arrays stay private native state and are excluded from
+owner captures. Detached work, unresolved calls, nonuniform conditions and
+unsupported directives remain boundaries. A token for an entire joined group
+cannot be reused for one of its unfinished child loops.
+
+Numerical outlining uses a distinct registered completion proof when the
+original joined loop calls bounded source-backed PURE helpers. The complete
+transitive helper closure must finish synchronously, without unknown calls,
+I/O, OpenMP work or allocation changes; output arguments must refer to original
+private scalar or fixed-array storage. This proof grants neither native memory
+hook authority nor GPU legality. Numerical lowering still proves definitions,
+aliases, supported computation and numerical semantics before generation.
+
+Reduction source proofs are separate from generated execution support. They
+retain the original intrinsic form, argument order, MASK/DIM, empty identity,
+exact input sections and a single scalar publication at the original statement.
+The first exact parallel subset is integer MINVAL/MAXVAL and default-logical
+ALL/ANY. An IEEE_IS_NAN predicate additionally requires the actual intrinsic
+module identity and a verified native classification/exception policy. Scalar
+MIN/MAX assignments are not mistaken for array reductions. Real extrema need
+their own NaN/signed-zero/native exception contract; a guarded implementation
+must publish the exact input and run the original reduction statement once on
+exceptional data, without replaying its owner. SUM remains native without an
+authorized original numerical reassociation contract. A source proof alone
+neither emits a GPU reduction nor supplies calibration for automatic placement.
+An authenticated original OpenMP `reduction(+:x)` is a separate source-backed
+contract: OpenMP leaves the combination order unspecified, so it can permit a
+parallel real sum without granting that permission to a serial recurrence or
+an intrinsic SUM statement. Its proof must retain the original value of `x`,
+private initialization, contribution computations and the original completion
+point. Numerical field tolerances and supported IEEE behavior still apply;
+task/inscan variants and unproved intermediate accumulator consumers remain
+boundaries. The lazy `SourceEffects.openmp_reduction(procedure, original_nodes)`
+API proves one explicitly requested complete original joined group with a
+single ordinary local REAL(4/8) `+` accumulator and a bounded rectangular loop
+nest. Per-item private scalar definitions, contribution math and complete source
+effects are checked; uncertain aliases, array writes, calls and exits reject
+the proof. INTEGER(4) sums additionally need a proof that every partial sum is
+representable. Public reports include only requested proof records and report
+`execution_supported: false`: generated OpenMP reduction execution and its
+calibration remain unavailable. Ordinary native completion tokens still reject
+reduction clauses; this separate source contract does not grant them authority.
+See [OpenMP reduction scoping](https://www.openmp.org/spec-html/5.2/openmpsu50.html)
+and [the reduction clause](https://www.openmp.org/spec-html/5.2/openmpsu52.html).
+`SourceEffects.reduction_candidates` lazily scans only an authenticated reached
+selection or one bounded local source skeleton, without expanding callees. Its
+public records distinguish `source_analysis_available` from
+`execution_supported`; generated reduction execution is currently unavailable.
+The existing numerical runtime supports INTEGER(4), while INTEGER(8) and
+default LOGICAL(4) require their own representation-preserving execution ABI.
+The runtime's one-byte logical buffers cannot stand in for original default
+Fortran logical storage. Integer extrema additionally retain a nonempty tag:
+the empty MAXVAL result is `-HUGE`, which is not a neutral accumulator for the
+minimum representable signed integer. A worker must initialize from the first
+selected value and apply the empty result only when no element was selected.
+
+Successfully completed source closures and local skeletons are reused through a bounded memory cache.
 `--summary-cache DIRECTORY` also enables immutable keyed disk records. Keys include
 source and include hashes, prepared source/configuration/line-map identity, explicit
 contracts, capture authorizations, analysis version and budgets. Changed facts
 invalidate affected proofs; private structured fragments cannot borrow complete
 procedure summaries. Imports recheck graph identities, reachability, depth and
-combined operation/procedure budgets. Public records are copied values, and cache
+combined operation/procedure budgets. Cached skeletons are rebound to original
+parser nodes and compared against current source authority before use. Public records are copied values, and cache
 corruption or write failure causes a miss. The cache retains at most 32 records in
 memory, each capped at 8 MiB; disk-directory cleanup belongs to its caller.
 `summary_cache` reports construction-local cache statistics. No application data,
@@ -1041,6 +1134,40 @@ cannot replay the source span. View subchain batching remains unavailable until
 its complete window mapping is proved. Source rectangular actuals currently
 require a straight-line owner; reached structured owners retain a native boundary
 until per-segment view descriptor preflight is supported.
+
+The additive `fort_scope_view_v2` interface also represents rank-reduced
+rectangles such as `field(:,plane,:)`. Its origins retain the canonical root
+rank, while a checked axis map connects the child's logical extents and lower
+bounds to the original root pitches. Source-generated borrowed workers use this
+interface; the version 1 runtime and companion interface remain available.
+Nested supported call-only wrappers compose axis maps without creating packed
+allocations. Fixed coordinates and every retained extent are checked at the
+original call, before numerical work. Native effects and partial `INTENT(OUT)`
+events project to the exact root plane. Vector subscripts and nonunit-stride
+actual arguments remain boundaries; they require an additional physical mapping
+proof.
+
+Original conformant array assignments are also numerical candidates in scoped
+source generation. Broadcasts, scaling, accumulation and boundary planes are
+normalized to ordinal loops with separate original logical lower bounds.
+Constant positive and negative section strides are supported inside these
+operations; strided actual arguments through a call remain unsupported.
+Checked allocation, bound arithmetic, containment and shape-conformance guards
+run at the original reached operation, in order. A failed guard executes the
+original native assignment with its proved coherence effects; an unproved native
+fallback retains an ownership boundary. Ordinary dependence
+proofs reject shifted or reversed self-assignments needing a cross-iteration RHS
+snapshot; those assignments retain native Fortran snapshot semantics.
+
+Fixed numeric leaves of scalar, nonpolymorphic derived objects can be captured
+without copying their owning objects. Supported lexical `ASSOCIATE` aliases
+resolve to the same original resources. Unsupported dynamic siblings do not
+invalidate a fixed field, while pointers, optional object associations and
+array-valued object selectors retain explicit boundaries. Public inline records
+identify `operation_kind`, canonical fields, original source selections, semantic
+guards and native fallback requirements. New real array math preserves the
+reached floating-point environment check and rejects unproved observable
+exception behavior or real multi-operand extrema ordering.
 
 Optional `--effect-contracts` input has `schema_version: 1` and a `procedures`
 object keyed by a qualified imported call name. Each contract explicitly declares
@@ -1222,7 +1349,9 @@ Logical arrays, writable scalar entry arguments, recursion, general slices,
 non-pure expression call arguments, other intrinsics/operators, explicit lower
 dummy array bounds, and
 unsupported specification statements reject with a source location.
-Parallel reductions remain unsupported. Initialized scalar recurrences, valid
+Parallel reductions remain unsupported by this ordinary numerical frontend.
+Scoped source generation has the additional proven array-operation normalization
+described above; it does not make arbitrary numerical slices legal. Initialized scalar recurrences, valid
 scalar live-outs, final induction values, and otherwise unproved regions can
 execute sequentially with `--fallback host`. General nonlinear or indirect writes
 are parallelized only when conservative relations prove independence; no runtime

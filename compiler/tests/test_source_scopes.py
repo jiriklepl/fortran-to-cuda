@@ -261,7 +261,7 @@ def test_allocatable_owning_root_still_requires_stable_lifetime_facts(tmp_path):
                for item in manifest["boundaries"])
 
 
-@pytest.mark.parametrize("intent", ["inout", "out"])
+@pytest.mark.parametrize("intent", ["out"])
 def test_allocatable_callee_formals_remain_original_native_boundaries(tmp_path, intent):
     source = ALLOCATABLE_PROGRAM.replace("real(8),intent(out)::b(:)",
                                          "real(8),allocatable,intent(" + intent + ")::b(:)", 1)
@@ -271,7 +271,7 @@ def test_allocatable_callee_formals_remain_original_native_boundaries(tmp_path, 
     assert not manifest["automatic_scope_available"]
     assert not manifest["source_edits"]
     assert original.read_text() == source
-    assert any("allocatable callee formals require original descriptor and allocation semantics" in item["reason"]
+    assert any("source-proven stable original descriptor" in item["reason"]
                for item in manifest["boundaries"])
 
 
@@ -283,8 +283,26 @@ def test_unused_allocatable_out_formal_is_not_an_ordinary_borrowed_view(tmp_path
     _, _, manifest = generate(tmp_path, source)
     assert not manifest["automatic_scope_available"]
     assert not manifest["source_edits"]
-    assert any("allocatable callee formals require original descriptor and allocation semantics" in item["reason"]
+    assert any("source-proven stable original descriptor" in item["reason"]
                for item in manifest["boundaries"])
+
+
+def test_descriptor_stable_allocatable_inout_native_call_keeps_original_descriptor(tmp_path):
+    source = ALLOCATABLE_PROGRAM.replace("real(8),intent(out)::b(:)",
+                                         "real(8),allocatable,intent(inout)::b(:)", 1)
+    facts = {"schema_version": 1, "participation": "serial", "captures": {
+        "argument::a": FACT, "argument::b": FACT, "argument::out": FACT}}
+    original, output, manifest = generate(tmp_path, source, facts=facts)
+    assert original.read_text() == source
+    scope, = manifest["scopes"]
+    text = (output / manifest["sources"][str(original)]["replacement"]).read_text()
+    b = next(item["name"] for item in scope["parameters"] if item["resource"] == "argument::b")
+    assert "allocatable, target, intent(inout) :: " + b in text
+    assert "call producer(" in text
+    import re
+    native_calls = re.findall(r"call producer\(([^)]*)\)", text, re.IGNORECASE)
+    assert any(b in arguments and b + "_view" not in arguments for arguments in native_calls)
+    assert not any("source-proven stable original descriptor" in item["reason"] for item in manifest["boundaries"])
 
 
 @pytest.mark.parametrize("fact", [None, {**FACT, "allocation_changes": True}, FACT])
@@ -462,8 +480,9 @@ def test_indexed_actual_keeps_its_source_position_between_shared_scopes(tmp_path
     assert manifest["scope_count"] == 2
     boundary, = manifest["boundaries"]
     prefix = "array-element/section actual requires in-place mapping and coherence: "
-    assert boundary["reason"].startswith(prefix)
-    assert boundary["reason"][len(prefix):].lower().replace(" ", "") == actual
+    assert boundary["reason"].partition(": ")[0] in {
+        prefix.removesuffix(": "), "array-element actual requires scalar payload coherence"}
+    assert boundary["reason"].partition(": ")[2].lower().replace(" ", "") == actual
     assert [scope["calls"] for scope in manifest["scopes"]] == [
         ["original::producer", "original::transform"], ["original::consumer", "original::transform"]]
     replacement = (output / manifest["sources"][str(original)]["replacement"]).read_text()
@@ -492,7 +511,7 @@ def test_rectangular_native_actual_stays_inside_shared_owner(tmp_path):
     mapping, = call["mappings"]
     assert mapping["resource"] == "argument::b"
     assert mapping["section"]["source_access"].replace(" ", "") == "b(1:n)"
-    assert mapping["view_abi_version"] == 1
+    assert mapping["view_abi_version"] == 2
 
 
 @pytest.mark.parametrize("actual", ["3.d0", "factor"])
@@ -507,6 +526,44 @@ def test_whole_scalar_and_literal_actuals_remain_supported(tmp_path, actual):
     assert manifest["scope_count"] == 1
     assert not manifest["boundaries"]
     assert manifest["native_effects"]["complete"]
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_scalar_expression_actual_retains_native_guard_and_earlier_scalar_write(tmp_path, nested):
+    helper = """subroutine inspect_integer(value,total)
+integer,intent(in)::value
+integer,intent(out)::total
+total=value
+end subroutine
+"""
+    invocation = "call inspect_integer(n/denominator,total)"
+    if nested:
+        helper += """subroutine relay(n,denominator,total)
+integer,intent(in)::n,denominator
+integer,intent(out)::total
+call inspect_integer(n/denominator,total)
+end subroutine
+"""
+        invocation = "call relay(n,denominator,total)"
+    text = PROGRAM.replace("end module", helper + "end module").replace(
+        "integer,intent(in)::n\ncall producer(a,b,n)",
+        "integer,intent(in)::n\ninteger::denominator,total\ncall producer(a,b,n)").replace(
+        "call transform(b)\ncall consumer(a,b,out,n)",
+        "denominator=0\nif(denominator/=0) then\n" + invocation +
+        "\nendif\ncall transform(b)\ncall consumer(a,b,out,n)")
+    original, output, manifest = generate(tmp_path, text)
+    assert original.read_text() == text
+    # A complete type/effect proof deliberately does not authorize evaluating
+    # division in a planning preview, or before its original native guard.
+    assert manifest["native_effects"]["complete"]
+    reason = "scalar-expression actual requires original-position checked evaluation: n / denominator"
+    assert any(reason in boundary["reason"] for boundary in manifest["boundaries"])
+    replacement = (output / manifest["sources"][str(original)]["replacement"]).read_text()
+    step = replacement.split("subroutine step(a,b,out,n)", 1)[1].split("end subroutine", 1)[0]
+    assert step.index("denominator=0") < step.index("if(denominator/=0)") < step.index(invocation)
+    # No generated helper/query contains another evaluation of the arithmetic.
+    assert replacement.count("n/denominator") == 1
+    assert "n / denominator" not in replacement
 
 
 def test_capture_sections_and_budget_are_public_and_checked(tmp_path):

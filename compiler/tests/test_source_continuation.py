@@ -68,14 +68,33 @@ def test_structured_owner_queries_only_reached_segments_and_preserves_bounds(tmp
     assert step.index("fort_scope_serial_") < step.index("lbound(")
 
 
-def test_missing_calibration_keeps_coherent_native_segment_not_owner_replay(tmp_path):
+def test_missing_calibration_selects_original_before_creating_context(tmp_path):
     _, _, manifest, text = generate_tree(tmp_path, mode="auto")
     scope, owner = owner_text(manifest, text)
     assert not scope["estimate_available"]
-    assert "fort_choose(fort_context, fort_decision)" in owner
-    assert "gpu_units == 0" not in owner
-    assert "fort_scope_wait(fort_context)" in owner
-    assert owner.rfind("fort_scope_close(fort_context)") > owner.rfind("fort_scope_wait(fort_context)")
+    assert scope["automatic_preflight"]["successful"]
+    assert scope["automatic_preflight"]["selection"] == "native"
+    assert scope["automatic_preflight"]["runtime_decision_inputs"] == []
+    assert "fort_scope_create(" not in owner
+    assert "fort_scope_register(" not in owner
+    assert not re.search(r"fort_scope_plan_\w+\(", owner)
+    assert "fort_scope_query_" not in owner
+    assert "call producer(" in owner.lower() and "call consumer(" in owner.lower()
+
+
+def test_one_available_alternative_preserves_reached_automatic_planning():
+    from types import SimpleNamespace
+    from compiler.scopes.source import ScopeBuilder
+
+    builder = object.__new__(ScopeBuilder)
+    builder.config = SimpleNamespace(policy="auto")
+    available = SimpleNamespace(scoped={"planning": {
+        "available": True, "profile_available": True, "reason": None, "profile_reason": None}})
+    missing = SimpleNamespace(scoped={"planning": {
+        "available": False, "profile_available": True, "reason": "numerical calibration missing", "profile_reason": None}})
+    builder.numerical = lambda procedure: {"heavy": missing, "simple": available}[procedure]
+    assert builder.automatic_native_preflight({"heavy", "simple"}) is None
+    assert "numerical calibration missing" in builder.automatic_native_preflight({"heavy"})
 
 
 def test_native_scalar_change_splits_future_queries(tmp_path):
@@ -123,13 +142,31 @@ def test_partial_definition_condition_has_exact_point_read_and_native_overwrite(
 
 
 def test_unknown_condition_point_on_partial_definition_ends_owner_safely(tmp_path):
-    source = TREE.replace("flag=sum(b)>0", "flag=.true.").replace("b(-2)>0", "b(n-3)>0")
+    source = TREE.replace("flag=sum(b)>0", "flag=.true.").replace("b(-2)>0", "b(n*n-3)>0")
     _, _, manifest = generate(tmp_path, source, facts={
         "schema_version": 1, "participation": "serial",
         "captures": {"argument::a": FACT, "argument::b": {**FACT, "initialized": "none"}, "argument::out": FACT}})
     assert not any(scope.get("ownership") for scope in manifest["scopes"])
     assert any("unknown native footprint requires complete definitions" in boundary["reason"]
                for boundary in manifest["boundaries"])
+
+
+def test_affine_condition_point_uses_reached_scalar_and_definition_checks(tmp_path):
+    source = TREE.replace("flag=sum(b)>0", "flag=.true.").replace("b(-2)>0", "b(n-3)>0")
+    original, output, manifest = generate(tmp_path, source, facts={
+        "schema_version": 1, "participation": "serial",
+        "captures": {"argument::a": FACT, "argument::b": {**FACT, "initialized": "none"}, "argument::out": FACT}})
+    scope, = manifest["scopes"]
+    operation, = [item for item in scope["native_operations"]
+                  if item["kind"] == "condition read" and item["resources"] == ["argument::b"]]
+    assert operation["sections"]["available"]
+    assert operation["structured_summary_identity"] and operation["demand_identity"]
+    assert operation["selected_original_nodes"]
+    text = (output / manifest["sources"][str(original)]["replacement"]).read_text()
+    _, owner = owner_text(manifest, text)
+    assert "fort_scope_plan_validate(fort_context)" in owner
+    point_condition = owner.index("fort_branch =", owner.index("fort_branch =") + 1)
+    assert owner.index("fort_scope_host_begin(") < point_condition
 
 
 def test_inline_parameter_capture_is_read_only(tmp_path):
@@ -217,7 +254,7 @@ JOINED = TREE.replace("real(8),intent(out)::b(:)", "real(8),intent(inout)::b(:)"
     "!$omp end parallel\nn=n-1\ncall consumer")
 
 
-def test_joined_native_team_retains_and_renames_original_private_variables(tmp_path, monkeypatch):
+def test_joined_native_team_retains_original_private_variables(tmp_path, monkeypatch):
     # Exercise the native operation independently of optional inline numerical
     # admission; a legal joined region remains inside its owner either way.
     from compiler.ir import CompilationError
@@ -243,7 +280,9 @@ def test_joined_native_team_retains_and_renames_original_private_variables(tmp_p
     operation, = [item for item in scope["native_operations"] if item["kind"] == "joined native OpenMP"]
     assert operation["completion"]["available"]
     captures = {entry["resource"]: entry["name"] for entry in scope["parameters"]}
-    iterator = captures["original::step::i"]
+    assert "original::step::i" in operation["private_resources"]
+    assert "original::step::i" not in captures
+    iterator = "i"
     assert "!$omp parallel private(" + iterator + ") shared(" in owner
     assert "DO " + iterator + " = - 2" in owner
     assert "!$omp end do nowait" in owner

@@ -62,7 +62,12 @@ TYPES = {
 ENTRY_ABI_VERSION = 2
 
 
-def generate_scoped(function, plan, config, common_header, *, runtime_id=None, root_views=False):
+def generate_scoped(function, plan, config, common_header, *, runtime_id=None, root_views=False, root_view_abi=1):
+    if root_view_abi not in {1, 2}:
+        raise CompilationError("unsupported borrowed numerical view ABI")
+    view_type = f"fort_scope_view_v{root_view_abi}"
+    view_layout_type = f"fort_scope_view_layout_v{root_view_abi}"
+    view_get = f"fort_scope_view_get_v{root_view_abi}"
     if root_views and config.collective:
         raise CompilationError("borrowed section workers require a serial host coordinator")
     arrays = tuple(s for s in function.parameters if s.rank)
@@ -71,7 +76,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         raise CompilationError("shared numerical entries require read-only scalar parameters")
     digest = sha256(f"entry-abi:{ENTRY_ABI_VERSION}:{function.module.lower()}::{function.name.lower()}:{plan!r}".encode()).hexdigest()[:12]
     if root_views:
-        digest = sha256((digest + ":root-view-v1").encode()).hexdigest()[:12]
+        digest = sha256((digest + f":root-view-v{root_view_abi}").encode()).hexdigest()[:12]
     name = "fort_shared_" + digest
     c_name = "cpp_" + name
     configure_name = c_name + "_configure"
@@ -80,7 +85,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
     transfer_reason = {"auto": "transfer_estimates_unavailable", "pipelined": "pipelined_not_available"}.get(config.scope_transfers)
     scalar_signature = [f"const {cpp_type(s)} *fort_scalar_{s.cpp_name}" for s in scalars]
     def array_parameter(symbol):
-        return (f"const fort_scope_view_v1 *{symbol.cpp_name}_view" if root_views else
+        return (f"const {view_type} *{symbol.cpp_name}_view" if root_views else
                 f"fort_buffer_t {symbol.cpp_name}_handle")
 
     def array_argument(symbol):
@@ -263,11 +268,11 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         field = a.cpp_name + "_layout"
         if root_views:
             value_type = ("const " if a.intent == "in" else "") + cpp_type(a)
-            layout_setup += [f"    fort_scope_view_layout_v1 {field}{{}};",
-                             f"    FORT_SHARED_CHECK(fort_scope_view_get_v1(fort_context, {a.cpp_name}_view, &{field}));",
+            layout_setup += [f"    {view_layout_type} {field}{{}};",
+                             f"    FORT_SHARED_CHECK({view_get}(fort_context, {a.cpp_name}_view, &{field}));",
                              f"    const fort_buffer_t {a.cpp_name}_handle = {a.cpp_name}_view->buffer;",
                              f"    if ({field}.root.type != {TYPES[a.dtype][0]} || {field}.root.element_bytes != sizeof({cpp_type(a)}) ||",
-                             f"        {field}.root.rank != {a.rank})",
+                             f"        {field}{'.root' if root_view_abi == 1 else ''}.rank != {a.rank})",
                              '        return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "entry view layout/type mismatch");',
                              f"    for (std::size_t axis=0; axis<{a.rank}; ++axis)",
                              f"        if ({field}.lower_bounds[axis] != 1)",
@@ -792,12 +797,12 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
               "    return FORT_SCOPE_OK;", "}", "}", "#undef FORT_SHARED_CHECK", ""]
     parameters = ["fort_context", "fort_mode", *[array_argument(s) for s in arrays], *[s.cpp_name for s in scalars]]
     public = "  public :: run, run_team, plan, choose, configure" if config.collective else "  public :: run, plan, choose, configure"
-    view_import = ", fort_scope_view_v1" if root_views else ""
+    view_import = ", " + view_type if root_views else ""
     fortran = [f"module {name}", "  use iso_c_binding", "  use fort_scoped_memory, only: fort_scope_plan_decision" + view_import, "  implicit none", "  private", public, "  interface"]
     fortran += _fortran_list("function run(", parameters, f") bind(C, name='{c_name}') result(fort_status)", 4)
     fortran += ["      import :: c_int, c_int64_t, c_double, c_float, c_bool" + view_import, "      integer(c_int) :: fort_status",
                 "      integer(c_int64_t), value :: fort_context", "      integer(c_int), value :: fort_mode"]
-    fortran += [(f"      type(fort_scope_view_v1), intent(in) :: {s.cpp_name}_view" if root_views else
+    fortran += [(f"      type({view_type}), intent(in) :: {s.cpp_name}_view" if root_views else
                  f"      integer(c_int64_t), value :: {s.cpp_name}_handle") for s in arrays]
     fortran += [f"      {TYPES[s.dtype][1]}, intent(in) :: {s.cpp_name}" for s in scalars]
     fortran += ["    end function"]
@@ -813,7 +818,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
     fortran += _fortran_list("function plan(", planning_parameters, f") bind(C, name='{plan_name}') result(fort_status)", 4)
     fortran += ["      import :: c_int, c_int64_t, c_double, c_float, c_bool" + view_import, "      integer(c_int) :: fort_status",
                 "      integer(c_int64_t), value :: fort_context"]
-    fortran += [(f"      type(fort_scope_view_v1), intent(in) :: {s.cpp_name}_view" if root_views else
+    fortran += [(f"      type({view_type}), intent(in) :: {s.cpp_name}_view" if root_views else
                  f"      integer(c_int64_t), value :: {s.cpp_name}_handle") for s in arrays]
     fortran += [f"      {TYPES[s.dtype][1]}, intent(in) :: {s.cpp_name}" for s in query_scalars]
     fortran += ["    end function", f"    function choose(fort_context, decision) bind(C, name='{choose_name}') result(fort_status)",
@@ -903,13 +908,15 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         report["transfer_configuration"].update(selected="runtime", reason=None,
             available_modes=["direct", "pinned", "pipelined"], execution="synchronous return with two-stream batch overlap")
     if root_views:
-        report["borrowed_views"] = {"abi_version": 1, "validation": "fort_scope_view_get_v1",
+        report["borrowed_views"] = {"abi_version": root_view_abi, "validation": view_get,
                                    "layout": "full-root byte pitches; formal logical dimensions and coordinates",
                                    "logical_bounds": "prepared one-based numerical ABI; original indices remain in source-proven normalized scalars",
                                    "definitions": "exact partial view discard at original entry",
                                    "aliases": "disjoint writable views; exact bounded read unions"}
         for parameter in report["array_parameters"]:
-            parameter["passing"] = "root_view_v1"
+            parameter["passing"] = f"root_view_v{root_view_abi}"
+        if root_view_abi == 2:
+            report["borrowed_views"]["rank_reduction"] = "retained logical axes map to original full-layout pitches; fixed axes select one coordinate"
         if batch_requested:
             report["batch_execution"]["reason"] = "borrowed-view subchain batching is unavailable"
     if config.collective:

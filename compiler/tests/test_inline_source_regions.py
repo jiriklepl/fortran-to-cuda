@@ -10,7 +10,7 @@ import pytest
 from compiler.frontend.source_effects import SourceEffects, _children, _kind
 from compiler.ir import CompilationError
 from compiler.scopes.regions import allocation_guard, extract_region
-from compiler.scopes.segments import grouped_nodes
+from compiler.scopes.segments import grouped_nodes, statement_span
 
 
 def case(tmp_path, body, *, declarations="", uses="", extra=""):
@@ -44,6 +44,14 @@ def selected(routine, index=0):
 def extracted(analysis, routine, index=0):
     node, preceding, following = selected(routine, index)
     return extract_region(analysis, routine, node, preceding=preceding, following=following)
+
+
+def original_joined_group(routine):
+    original = tuple(_children(routine.execution))
+    group, = [node for node in grouped_nodes(original) if isinstance(node, tuple)]
+    first, last = statement_span(group[0])[0], statement_span(group[-1])[1]
+    return tuple(node for node in original
+                 if first <= statement_span(node)[0] and statement_span(node)[1] <= last)
 
 
 def test_negative_coordinates_and_index_as_data_are_preserved(tmp_path):
@@ -340,7 +348,7 @@ a(i,7)=t+1
 enddo
 !$omp end do nowait
 !$omp end parallel""", declarations="real(8)::t")
-    group, = [node for node in grouped_nodes(_children(routine.execution)) if isinstance(node, tuple)]
+    group = original_joined_group(routine)
     if accepted:
         region = extract_region(analysis, routine, group)
         assert region.completion["has_openmp_in_closure"]
@@ -361,6 +369,26 @@ enddo
 !$omp end parallel""")
     with pytest.raises(CompilationError, match="OpenMP"):
         extracted(analysis, routine)
+
+
+def test_comments_before_attached_joined_group_do_not_create_a_second_operation(tmp_path):
+    analysis, routine, _ = case(tmp_path, """k=0
+! ordinary documentation before the numerical region
+!
+!$omp parallel default(shared)
+!$omp do
+do i=-3,n
+a(i,7)=a(i,7)+1
+enddo
+!$omp end do
+!$omp end parallel""")
+    original = tuple(_children(routine.execution))
+    region = extract_region(analysis, routine, original[1:], preceding=original[:1])
+    assert region.completion["has_openmp_in_closure"]
+    assert region.written_resources == {"argument::a"}
+    # Removing comments must not authorize a real operation outside the team.
+    with pytest.raises(CompilationError, match="one counted DO or a complete joined team"):
+        extract_region(analysis, routine, original)
 
 
 @pytest.mark.parametrize("joined", [False, True])
@@ -390,7 +418,7 @@ end module
     analysis = SourceEffects([path])
     routine = analysis.routines["inline_case::step"]
     if joined:
-        group, = [node for node in grouped_nodes(_children(routine.execution)) if isinstance(node, tuple)]
+        group = original_joined_group(routine)
         with pytest.raises(CompilationError, match="THREADPRIVATE"):
             extract_region(analysis, routine, group)
     else:

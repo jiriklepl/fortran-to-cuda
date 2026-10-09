@@ -137,7 +137,7 @@ end module
     boundary, = wrapper["operations"]
     assert boundary["kind"] == "boundary"
     assert boundary["reason"].endswith("field(1)")
-    assert "in-place mapping and coherence" in boundary["reason"]
+    assert "scalar payload coherence" in boundary["reason"]
 
 
 @pytest.mark.parametrize("statement", ["call unknown(a)", "allocate(a(3))", "a=>b", "print *, a"])
@@ -611,8 +611,16 @@ def test_source_bound_authorized_module_array_reads_descriptors_and_section_writ
     assert report["capture_lifetime_authorizations"] == [
         {"resource": "allocations::scratch", "source": str(path), "source_sha256": report["sources"][str(path)]}]
     assert analysis.stable_module_allocatables == frozenset({"allocations::scratch"})
-    # Lifetime authority does not invent a fixed original lower bound.
-    assert not summary["native_sections"]["available"]
+    # Lifetime authority still does not invent a fixed lower bound. Exact
+    # assignment footprints retain a requirement for the live descriptor.
+    if body.startswith("if("):
+        assert not summary["native_sections"]["available"]
+    else:
+        assert summary["native_sections"]["available"]
+        hidden, = [item for item in summary["native_sections"]["resources"]
+                   if item["resource"] == "allocations::scratch"]
+        assert hidden["original_allocation_lower_bounds"]
+        assert hidden["logical_lower_bounds"] == [None]
     assert "lifetime requires capture proof" not in " ".join(summary["reasons"])
 
 
@@ -636,8 +644,10 @@ def test_authorization_of_one_root_does_not_waive_other_hidden_or_formal_storage
     analysis = SourceEffects([path])
     analysis.authorize_stable_module_allocatables({"allocations::scratch"})
     summary = analysis.summarize("allocations::inspect")
-    assert not summary["complete"]
-    assert "storage lifetime requires capture proof: argument::a" in summary["reasons"]
+    assert summary["complete"]
+    descriptor = analysis.descriptor_stability("allocations::inspect")["resources"][0]
+    assert descriptor["resource"] == "argument::a" and descriptor["stable"]
+    assert descriptor["execution_requires_runtime_guard"]
 
 
 def test_imported_alias_authorization_uses_defining_canonical_module_identity(tmp_path):
@@ -689,7 +699,7 @@ end subroutine
     _path, analysis = allocation_effects(tmp_path, "call unused(scratch)", helpers=helper)
     analysis.authorize_stable_module_allocatables({"allocations::scratch"})
     summary = analysis.summarize("allocations::inspect")
-    if intent == "in":
+    if intent in {"in", "inout"}:
         assert summary["complete"]
         call = next(operation for operation in summary["operations"] if operation["kind"] == "call")
         assert call["resource_mappings"][0]["requirements"]["original_allocation_descriptor"]

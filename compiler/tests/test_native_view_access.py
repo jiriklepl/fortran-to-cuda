@@ -26,15 +26,16 @@ def test_exact_native_view_rectangles_keep_original_formal_bounds_and_root_origi
     assert body.index("if (hb == ha)") < body.index("va%buffer /= ha")
     assert "fort_status = FORT_SCOPE_ALIAS" in body
     assert "if (va%buffer /= ha)" in body
-    assert body.index("va%buffer /= ha") < body.index("fort_scope_view_get_v1")
-    assert "fort_scope_view_get_v1(fort_context, va," in body
+    assert body.index("va%buffer /= ha") < body.index("fort_scope_view_get_v2")
+    assert "fort_scope_view_get_v2(fort_context, va," in body
     assert "_origin(1) = -2_c_int64_t" in body
     assert "_layout%extents" in body
     assert "_layout%origins" in body
-    assert "fort_native_0_physical_origin(1)" in body
+    assert "fort_native_0_physical_axes(1)" in body
+    assert "fort_native_0_physical_origin(fort_native_0_root_axis)" in body
     assert "%lower_bounds" not in body
     assert all("READ_ALL" not in line and "WRITE_ALL" not in line for line in output.prepare)
-    assert any("fort_scope_view_layout_v1" in line for line in output.specification)
+    assert any("fort_scope_view_layout_v2" in line for line in output.specification)
     assert all(len(line) <= 132 for item in (output, input_) for line in (*item.specification, *item.prepare))
 
 
@@ -75,10 +76,11 @@ def test_query_and_execution_keep_same_checked_effects_with_context_specific_fai
 ])
 def test_native_partial_out_discards_only_the_actual_view(query, function):
     body = "\n".join(forget_view("va", 2, query=query, on_error=("return",)))
-    assert "fort_scope_view_get_v1(fort_context, va," in body
+    assert "fort_scope_view_get_v2(fort_context, va," in body
     assert function + "(fort_context, va%buffer," in body
-    assert "fort_discard_origin + fort_discard_extent" in body
+    assert "fort_discard_origin(fort_discard_axes(fort_discard_axis)+1) + fort_discard_extent(fort_discard_axis)" in body
     assert "if (all(fort_discard_extent > 0_c_size_t))" in body
+    assert body.index("if (all(fort_discard_extent > 0_c_size_t))") < body.index("fort_discard_origin + 1_c_size_t")
     assert "forget_definition" not in body
 
 
@@ -101,7 +103,7 @@ def test_generated_native_view_coordinates_against_public_fortran_descriptor(
     _, sections = analyze(tmp_path, body, declaration=declaration)
     assert sections.available, sections.reason
     resource, = sections.resources
-    code = build_native_access(resource, "1_c_int64_t", "fort_native", context="1_c_int64_t",
+    code = build_native_access(resource, "1_c_int64_t", "fort_native", context="1_c_int64_t", view_abi=1,
                                status="result", view="borrowed")
     shape_text = ",".join(str(value) + "_c_size_t" for value in shape)
     origin_text = ",".join(str(value) + "_c_size_t" for value in origins)
@@ -163,7 +165,7 @@ def test_nested_distinct_formal_expressions_cannot_hide_equal_root_tokens(tmp_pa
     _, sections = analyze(tmp_path, "a(-1:1,:)=b(2:4,:)")
     codes = build_native_view_accesses(sections, {"argument::a": "va", "argument::b": "vb"},
                                        {"argument::a": "va%buffer", "argument::b": "vb%buffer"},
-                                       "fort_native", context="1_c_int64_t", status="result")
+                                       "fort_native", context="1_c_int64_t", status="result", view_abi=1)
     source = tmp_path / "alias.f90"
     source.write_text("""function view_get(context,view,layout) bind(C,name='fort_scope_view_get_v1') result(status)
 use iso_c_binding

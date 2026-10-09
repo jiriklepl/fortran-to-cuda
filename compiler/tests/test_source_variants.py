@@ -112,14 +112,15 @@ def test_borrowed_view_companion_reuses_its_worker_and_publishes_runtime_depende
     compiler = builder(tmp_path)
     public, directory = compiler.entry_artifacts("original::producer", views=True)
     companion = compiler.view_generated["original::producer"]
-    assert all(parameter["passing"] == "root_view_v1" for parameter in public["array_parameters"])
+    assert all(parameter["passing"] == "root_view_v2" for parameter in public["array_parameters"])
     assert compiler.entry_artifacts("original::producer", views=True) == (public, directory)
     assert compiler.view_generated["original::producer"] is companion
     assert all(directory + "/" + name in compiler.outputs for name in (
         "shared_entry.cu", "shared_interface.f90", "scoped_entry.hpp", "scoped_regions.hpp", "view_entry.hpp"))
     default, full_directory = compiler.entry_artifacts("original::producer")
     assert full_directory != directory
-    assert all(parameter.get("passing") != "root_view_v1" for parameter in default["array_parameters"])
+    assert all(parameter.get("passing") not in {"root_view_v1", "root_view_v2"}
+               for parameter in default["array_parameters"])
     assert compiler.variants.public()["generated_count"] == 2
 
 

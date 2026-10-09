@@ -23,13 +23,86 @@ class InlineRegions:
         self.regions, self.nodes, self.generated, self.ir, self.entries = {}, {}, {}, {}, {}
         self.used = set()
         self.bindings = {}
+        # These identities authorize projections made here, never an arbitrary
+        # AST carrying a plausible span or fort_inline_region attribute.
+        self.source_selections = {}
+        self.facade_proofs = {}
         self.name = "fort_regions_" + sha256(builder.entry.qualified.encode()).hexdigest()[:12]
         self.path = "regions/" + self.name + ".f90"
 
+    def _register_projection(self, node, sources):
+        from compiler.scopes.segments import statement_span
+        self.source_selections[id(node)] = (node, tuple(sources), str(node), statement_span(node))
+
+    def statement_projection(self, action, header):
+        """Attach an original single-line IF span without changing its AST."""
+        from compiler.scopes.segments import statement_span
+        self.original_selection(header)
+        if _kind(header) != "If_Stmt" or header.items[1] is not action:
+            raise CompilationError("statement projection requires the original IF action")
+        projected = copy.copy(action)
+        span = statement_span(header)
+        projected.item = SimpleNamespace(span=span, fort_original_span=span, label=None, name=None)
+        self._register_projection(projected, (action,))
+        return projected
+
+    def grouped_nodes(self, nodes):
+        """Group approved nodes and register any peeled directive projections."""
+        from compiler.scopes.segments import grouped_nodes
+        nodes = tuple(nodes)
+        for node in nodes:
+            self.original_selection(node)
+        groups = grouped_nodes(nodes)
+        for group in groups:
+            for node in group if isinstance(group, tuple) else (group,):
+                if id(node) in self.source_selections or any(node is original for original in nodes):
+                    continue
+                source = next((candidate for candidate in nodes
+                               if _kind(candidate) in {"Block_Nonlabel_Do_Construct", "If_Construct", "Associate_Construct"}
+                               and _kind(node) == _kind(candidate)
+                               and node.content and len(candidate.content) >= len(node.content)
+                               and all(left is right for left, right in
+                                       zip(candidate.content[-len(node.content):], node.content, strict=True))), None)
+                if source is None:
+                    # Exposed prefix comments remain original descendants.
+                    self.original_selection(node)
+                else:
+                    self._register_projection(node, self.original_selection(source))
+        return groups
+
     def prepare(self, nodes):
-        """Outline bounded original loops, including reached structured branches."""
+        """Outline bounded numerical work, including reached structured branches."""
         from compiler.scopes.segments import grouped_nodes, statement_span
         original = tuple(nodes)
+        authoritative = {id(node): node for node in walk(self.builder.entry.execution)}
+
+        def register_projection(node, sources):
+            self._register_projection(node, sources)
+
+        def original_group(group, sequence):
+            selected = []
+            for node in group:
+                if id(node) in authoritative:
+                    selected.append(node)
+                    continue
+                # grouped_nodes peels the original directive prefix off a DO.
+                # Recover only that compiler-created projection, by exact
+                # child identity, while we hold its authoritative input list.
+                source = next((candidate for candidate in sequence
+                               if _kind(candidate) in {"Block_Nonlabel_Do_Construct", "If_Construct", "Associate_Construct"}
+                               and _kind(node) == _kind(candidate)
+                               and node.content and len(candidate.content) >= len(node.content)
+                               and all(left is right for left, right in
+                                       zip(candidate.content[-len(node.content):], node.content, strict=True))), None)
+                if source is None:
+                    raise CompilationError("inline grouping lost original source authority")
+                register_projection(node, (source,))
+                selected.append(source)
+            # A peeled directive can also be contained in its selected DO.
+            # Materialize the original construct once, including its prefix.
+            descendants = {id(child) for node in selected for child in walk(node) if child is not node}
+            unique = {id(node): node for node in selected}
+            return tuple(node for key, node in unique.items() if key not in descendants)
         computations, operations, attempts = {}, 0, 0
         lifetime = {"Return_Stmt", "Exit_Stmt", "Cycle_Stmt", "Allocate_Stmt", "Deallocate_Stmt",
                     "Pointer_Assignment_Stmt", "Nullify_Stmt", "Stop_Stmt", "Error_Stop_Stmt"}
@@ -64,19 +137,31 @@ class InlineRegions:
                 return tuple(sequence)
             for grouped in groups:
                 group = tuple(grouped) if isinstance(grouped, tuple) else (grouped,)
+                sources = original_group(group, sequence)
                 node = group[0]
-                if len(group) == 1 and _kind(node) == "If_Construct":
+                if len(group) == 1 and _kind(node) in {"If_Construct", "Associate_Construct"}:
                     # Lifetimes/exits remain original boundaries. In particular
                     # do not borrow a region through a possibly reallocating
                     # branch and then pretend that its owner is unchanged.
-                    if depth < 8 and not any(_kind(item) in lifetime for item in walk(node)):
+                    association = self.builder.analysis._associate_scopes.get(id(node)) if _kind(node) == "Associate_Construct" else None
+                    if (depth < 8 and (_kind(node) != "Associate_Construct" or association is not None and association.available)
+                            and not any(_kind(item) in lifetime for item in walk(node))):
                         clone = copy.copy(node)
                         clone.content = list(prepare_sequence(node.content, depth + 1))
+                        register_projection(clone, sources)
                         result.append(clone)
                     else:
                         result.append(node)
                     continue
-                if not any(_kind(item) == "Block_Nonlabel_Do_Construct" for item in group):
+                array_operation = len(group) == 1 and _kind(node) == "Assignment_Stmt"
+                if array_operation:
+                    from compiler.frontend.component_bindings import source_scope_for
+                    original_target = node.items[0]
+                    base = original_target.items[0] if _kind(original_target) == "Part_Ref" else original_target
+                    target = self.builder.analysis._binding(source_scope_for(self.builder.analysis, original_target,
+                                                                            self.builder.entry.scope), base)
+                    array_operation = target is not None and bool(target.rank)
+                if not array_operation and not any(_kind(item) == "Block_Nonlabel_Do_Construct" for item in group):
                     result.extend(group)
                     continue
                 first, last = statement_span(group[0])[0], statement_span(group[-1])[1]
@@ -88,8 +173,14 @@ class InlineRegions:
                         raise CompilationError("bounded inline region/operation budget exhausted")
                     attempts += 1
                     operations += own_operations
-                    extraction = extract_region(self.builder.analysis, self.builder.entry, group if len(group) > 1 else group[0],
-                                                preceding=before, following=after)
+                    if array_operation:
+                        from compiler.scopes.array_operations import extract_array_operation
+                        extraction = extract_array_operation(self.builder.analysis, self.builder.entry, node,
+                                                             preceding=before, following=after)
+                    else:
+                        extraction = extract_region(self.builder.analysis, self.builder.entry,
+                                                    sources if len(sources) > 1 else sources[0],
+                                                    preceding=before, following=after)
                     for binding in extraction.bindings:
                         if binding.rank:
                             self.builder.capture(binding)
@@ -120,6 +211,8 @@ class InlineRegions:
                     facade.item = SimpleNamespace(span=extraction.span, fort_original_span=extraction.span, label=None, name=None)
                     facade.fort_inline_region = procedure
                     self.nodes[procedure] = facade
+                    register_projection(facade, sources)
+                    self.facade_proofs[procedure] = extraction
                     result.append(facade)
                 except CompilationError as error:
                     self.builder.boundaries.append({"first_line": first, "last_line": last,
@@ -128,6 +221,37 @@ class InlineRegions:
             return tuple(result)
 
         return prepare_sequence(original)
+
+    def original_selection(self, node):
+        """Recover authoritative original nodes from approved preparations.
+
+        Source summaries use these nodes rather than interpreting synthetic
+        calls, their arguments or normalized numerical INTENT declarations.
+        """
+        analysis, routine = self.builder.analysis, self.builder.entry
+        analysis.inputs.verify()
+        role = analysis._source_roles.get(routine.qualified)
+        if (analysis.routines.get(routine.qualified) is not routine or role is None
+                or routine.execution is not role[0] or analysis._routine_signature(routine) != role[1]
+                or str(routine.execution) != role[2]):
+            raise CompilationError("inline selection requires unchanged original source authority")
+        if isinstance(node, (tuple, list)):
+            return tuple(source for child in node for source in self.original_selection(child))
+        registered = self.source_selections.get(id(node))
+        if registered is not None:
+            from compiler.scopes.segments import statement_span
+            original_node, sources, text, span = registered
+            if node is not original_node or str(node) != text or statement_span(node) != span:
+                raise CompilationError("inline source projection was changed after registration")
+            if hasattr(node, "fort_inline_region"):
+                procedure = node.fort_inline_region
+                if (self.nodes.get(procedure) is not node
+                        or self.regions.get(procedure) is not self.facade_proofs.get(procedure)):
+                    raise CompilationError("inline numerical facade lacks its registered proof")
+            return sources
+        if any(node is original for original in walk(routine.execution)):
+            return (node,)
+        raise CompilationError("source selection is not an original node or approved inline projection")
 
     @staticmethod
     def artifact_ir(value, source_name, identity):
@@ -143,6 +267,7 @@ class InlineRegions:
 
     def call(self, node):
         from compiler.scopes.source import Call
+        self.original_selection(node)
         procedure = node.fort_inline_region
         region = self.regions[procedure]
         bindings = {"argument::" + parameter.name: self.bindings[parameter.resource]
@@ -157,6 +282,7 @@ class InlineRegions:
                 result = []
                 for child in value:
                     if hasattr(child, "fort_inline_region"):
+                        self.original_selection(child)
                         result.extend(self.regions[child.fort_inline_region].nodes)
                     else:
                         result.append(visit(child))
@@ -164,6 +290,7 @@ class InlineRegions:
             if not isinstance(value, Base):
                 return value
             if hasattr(value, "fort_inline_region"):
+                self.original_selection(value)
                 return self.regions[value.fort_inline_region].nodes
             # fparser comments do not implement Base's pickle/copy protocol
             # (they have no ``string``). Keep their source and directive

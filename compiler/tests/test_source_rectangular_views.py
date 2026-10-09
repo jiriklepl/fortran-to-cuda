@@ -75,7 +75,7 @@ def test_direct_rectangles_use_shared_root_views_and_preflight_before_work(tmp_p
                if path.endswith("_views/shared_entry.cu"))
     generated = outputs[next(path for path in outputs if path.startswith("sources/"))]
     if policy == "sections":
-        assert generated.index("fort_scope_view_get_v1") < generated.index("fort_status = fort_view_plan_")
+        assert generated.index("fort_scope_view_get_v2") < generated.index("fort_status = fort_view_plan_")
         assert "fort_scope_forget_definition(fort_context" not in generated
     assert all(name + "/view_entry.hpp" in outputs for name in {
         path.rsplit("/", 1)[0] for path in outputs if path.endswith("_views/shared_entry.cu")})
@@ -87,7 +87,7 @@ def test_view_entry_is_reused_for_multiple_rectangles_without_shape_variants(tmp
     assert report["scope_count"] == 1, report["boundaries"]
     procedure = next(item for item in report["implementation_variants"]["procedures"] if item["procedure"] == "windows::produce")
     assert len(procedure["variants"]) == 1
-    assert procedure["variants"][0]["interface"] == "root_view_v1"
+    assert procedure["variants"][0]["interface"] == "root_view_v2"
 
 
 def test_integer8_section_control_remains_an_explicit_native_boundary(tmp_path):
@@ -153,10 +153,10 @@ def test_nested_call_only_wrappers_compose_and_reuse_borrowed_views(tmp_path):
     variants = {item["procedure"]: item["variants"] for item in report["implementation_variants"]["procedures"]}
     for name in ("windows::inner", "windows::outer"):
         worker, = variants[name]
-        assert worker["interface"] == "source_root_view_v1"
+        assert worker["interface"] == "source_root_view_v2"
     for name in ("windows::produce", "windows::consume"):
         numerical, = variants[name]
-        assert numerical["interface"] == "root_view_v1"
+        assert numerical["interface"] == "root_view_v2"
     generated = outputs[next(path for path in outputs if path.startswith("sources/"))]
     assert "_parent_origin" in generated
     assert "fort_scope_forget_definition(" not in generated

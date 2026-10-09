@@ -28,7 +28,7 @@ def payload(requested="module::root"):
 
 
 def disk_record(directory):
-    files = list(directory.glob("fort_source_summary_v1_*.json"))
+    files = list(directory.glob("fort_source_summary_v2_*.json"))
     assert len(files) == 1
     return files[0]
 
@@ -105,7 +105,7 @@ def test_disk_cache_survives_instance_and_canonical_identity_order(tmp_path):
     cache.store(key, "module::root", payload())
     assert cache.stats["disk_writes"] == 1
     saved = disk_record(tmp_path)
-    suffix = saved.stem.removeprefix("fort_source_summary_v1_")
+    suffix = saved.stem.removeprefix("fort_source_summary_v2_")
     assert len(suffix) == 64
     assert set(suffix) <= set("0123456789abcdef")
     imported = SummaryCache(tmp_path)
@@ -180,7 +180,7 @@ def test_oversized_disk_read_and_payload_store_are_bounded(tmp_path):
     large["summaries"]["module::root"]["extra"] = "x" * (8 * 1024 * 1024)
     cache.store({"source": "large"}, "module::root", large)
     assert cache.lookup({"source": "large"}, "module::root") is None
-    assert len(list(tmp_path.glob("fort_source_summary_v1_*.json"))) == 1
+    assert len(list(tmp_path.glob("fort_source_summary_v2_*.json"))) == 1
 
 
 @pytest.mark.parametrize("invalid", ["incomplete", "operations", "operation_structure", "missing_requested", "order", "depth", "ast",

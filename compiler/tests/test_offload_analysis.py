@@ -9,7 +9,7 @@ import pytest
 from compiler.analysis import build_execution_plan
 from compiler.driver.options import CompilerOptions
 from compiler.frontend import lower_file
-from compiler.ir import Binary, IntrinsicCall, Literal, Reference, Size, Unary
+from compiler.ir import Binary, CompilationError, IntrinsicCall, Literal, Reference, Size, Unary
 from compiler.offload import analyze_offload
 
 
@@ -247,9 +247,20 @@ def test_array_valued_bound_is_not_eagerly_queried(tmp_path):
     assert "bounds" in analysis.reason
 
 
-def test_nonconstant_division_bound_is_conservatively_unavailable(tmp_path):
+def test_positive_constant_divisor_bound_has_a_total_cost_query(tmp_path):
     analysis = analyze(tmp_path, RANK1, "do i=1,n/2\na(i)=b(i)\nend do")
+    assert analysis.available, analysis.reason
+
+
+@pytest.mark.parametrize("divisor", ["n", "-1"])
+def test_unproved_divisor_bound_is_conservatively_unavailable(tmp_path, divisor):
+    analysis = analyze(tmp_path, RANK1, f"do i=1,n/({divisor})\na(i)=b(i)\nend do")
     assert not analysis.available
+
+
+def test_zero_divisor_is_rejected_before_cost_analysis(tmp_path):
+    with pytest.raises(CompilationError, match="division by zero"):
+        analyze(tmp_path, RANK1, "do i=1,n/0\na(i)=b(i)\nend do")
 
 
 def test_descriptor_minimum_bound_is_queryable(tmp_path):

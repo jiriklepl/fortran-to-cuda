@@ -2113,6 +2113,51 @@ extern "C" int fort_scope_view_get_v1(fort_scope_t h, const fort_scope_view_v1 *
                 b.strides.data(), view->lower_bounds, elements, offset};
     }, Change::None);
 }
+extern "C" int fort_scope_view_get_v2(fort_scope_t h, const fort_scope_view_v2 *view,
+                                       fort_scope_view_layout_v2 *out) {
+    return with(h, [&](Context &c) {
+        require(view && out && view->version == FORT_SCOPE_VIEW_ABI_VERSION_V2 && !view->reserved &&
+                view->rank && view->root_rank && view->rank <= view->root_rank &&
+                view->origins && view->extents && view->lower_bounds && view->axes,
+                FORT_SCOPE_ARGUMENT, "invalid rank-reduced borrowed view descriptor");
+        auto &b = buffer(c, view->buffer);
+        require(view->generation == b.generation, FORT_SCOPE_STALE, "borrowed view allocation generation changed");
+        require(view->root_rank == b.extents.size(), FORT_SCOPE_ARGUMENT, "borrowed view root rank differs from allocation");
+        const bool is_empty = std::find(view->extents, view->extents+view->rank, size_t(0)) != view->extents+view->rank;
+        size_t elements = is_empty ? 0 : 1, offset = 0;
+        for (size_t axis=0; axis<view->root_rank; ++axis) {
+            require(view->origins[axis] <= b.extents[axis], FORT_SCOPE_ARGUMENT, "borrowed view origin exceeds allocation");
+            bool retained = false;
+            for (size_t k=0; k<view->rank; ++k) retained |= view->axes[k] == axis;
+            if (!retained && !is_empty)
+                require(view->origins[axis] < b.extents[axis], FORT_SCOPE_ARGUMENT, "borrowed view fixed coordinate exceeds allocation");
+            if (!is_empty) {
+                const size_t part = multiply(view->origins[axis], b.strides[axis]);
+                require(part <= std::numeric_limits<size_t>::max()-offset,
+                        FORT_SCOPE_ARGUMENT, "borrowed view byte offset overflow");
+                offset += part;
+            }
+        }
+        for (size_t k=0; k<view->rank; ++k) {
+            const size_t axis=view->axes[k];
+            require(axis < view->root_rank, FORT_SCOPE_ARGUMENT, "borrowed view axis exceeds root rank");
+            for (size_t previous=0; previous<k; ++previous)
+                require(view->axes[previous] != axis, FORT_SCOPE_ARGUMENT, "borrowed view repeats a root axis");
+            require(view->extents[k] <= b.extents[axis]-view->origins[axis],
+                    FORT_SCOPE_ARGUMENT, "borrowed view extent exceeds allocation");
+            const int64_t lower=view->lower_bounds[k];
+            require(lower >= INT32_MIN && lower <= INT32_MAX && view->extents[k] <= INT32_MAX,
+                    FORT_SCOPE_BOUNDARY, "borrowed view bounds exceed INTEGER ABI");
+            if (view->extents[k])
+                require(int64_t(view->extents[k]-1) <= INT32_MAX-lower,
+                        FORT_SCOPE_BOUNDARY, "borrowed view upper bound exceeds INTEGER ABI");
+            if (!is_empty) elements=multiply(elements,view->extents[k]);
+        }
+        *out = {{static_cast<uint32_t>(b.extents.size()), b.type, b.element_bytes, b.host,
+                 b.extents.data(), b.lower.data(), b.generation}, view->rank, 0,
+                view->origins, view->extents, b.strides.data(), view->lower_bounds, view->axes, elements, offset};
+    }, Change::None);
+}
 extern "C" int fort_scope_layout_get(fort_scope_t h, fort_buffer_t b, fort_scope_layout *out) {
     return with(h, [&](Context &c) {
         require(out, FORT_SCOPE_ARGUMENT, "missing layout output");
