@@ -803,12 +803,11 @@ class ScopeBuilder:
         self.add_edit(module.path, _span(end)[0], _span(end)[0]-1, code)
         self.add_edit(module.path, _span(contains)[0], _span(contains)[0]-1, "public :: " + name + "\n")
 
-    def owner(self, calls, leaves):
+    def owner_inputs(self, calls):
+        """Resolve checked root captures shared by serial and team owners."""
         routine = self.entry
         if any(name.startswith("fort_") for name in routine.scope.bindings):
             raise CompilationError("source names conflict with the initial scope owner namespace")
-        digest = f"{routine.qualified}:{_span(calls[0].node)[0]}:{_span(calls[-1].node)[1]}"
-        name = _name("fort_scope_owner_", digest)
         arrays, scalars, written = {}, {}, set()
         for call in calls:
             self.check_native_calls(call)
@@ -831,9 +830,15 @@ class ScopeBuilder:
                 if binding and not binding.rank:
                     if "allocatable" in binding.attributes:
                         raise CompilationError("allocatable scalar captures require original descriptor semantics")
-                    if binding.dtype not in {"real", "integer", "logical"} or binding.kind not in {4, 8}:
+                    if (binding.dtype not in {"real", "integer", "logical"}
+                            or binding.kind not in ({1, 4} if binding.dtype == "logical" else {4, 8})):
                         raise CompilationError("unsupported scalar source capture")
                     scalars[binding.root] = binding
+        return arrays, scalars, written
+
+    def owner_query(self, calls, arrays, written):
+        """Prove immutable, safely available query inputs before execution."""
+        routine = self.entry
         planning_available = False
         planning_reason = "scoped automatic selection was not requested"
         query_available, query_reason = False, None
@@ -874,6 +879,14 @@ class ScopeBuilder:
                     planning_available = True
                 except CompilationError as error:
                     planning_reason = str(error)
+        return query_available, query_reason, planning_available, planning_reason
+
+    def owner(self, calls, leaves):
+        routine = self.entry
+        digest = f"{routine.qualified}:{_span(calls[0].node)[0]}:{_span(calls[-1].node)[1]}"
+        name = _name("fort_scope_owner_", digest)
+        arrays, scalars, written = self.owner_inputs(calls)
+        query_available, query_reason, planning_available, planning_reason = self.owner_query(calls, arrays, written)
         names = [self.visible(routine, root) for root in (*arrays, *scalars)]
         if any(n.startswith("fort_") for n in names):
             raise CompilationError("capture names conflict with the initial scope owner namespace")
@@ -1155,6 +1168,10 @@ class ScopeBuilder:
 
     def run(self):
         self.scan(_children(self.entry.execution))
+        return self.finish()
+
+    def finish(self):
+        """Publish source edits and build artifacts after approved scope work."""
         self.analysis.inputs.verify()
         if any(sha256(package.path.read_bytes()).hexdigest() != package.digest for package in self.packages.values()):
             raise CompilationError("normalized source changed while scope artifacts were being prepared")
@@ -1215,5 +1232,10 @@ class ScopeBuilder:
 
 def form_source_scopes(paths, entry, *, facts, options, config, contracts=None, numerical_sources=None,
                        analysis_sources=None):
+    if isinstance(facts, dict) and facts.get("schema_version") == 2:
+        from compiler.scopes.collective import CollectiveScopeBuilder
+        return CollectiveScopeBuilder(paths, entry, facts=facts, options=options, config=config,
+                                      contracts=contracts, numerical_sources=numerical_sources,
+                                      analysis_sources=analysis_sources).run()
     return ScopeBuilder(paths,entry,facts=facts,options=options,config=config,contracts=contracts,
                         numerical_sources=numerical_sources, analysis_sources=analysis_sources).run()
