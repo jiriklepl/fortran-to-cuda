@@ -1,5 +1,7 @@
 // Generic offline costs for the public common-runtime API, with no application.
 #include "scoped_runtime.h"
+#include "staging.hpp"
+#include "section_copy.hpp"
 #include <cuda_runtime.h>
 #include <omp.h>
 #include <algorithm>
@@ -7,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -81,7 +84,109 @@ template<class Operation> static std::vector<double> measure(int rounds, Operati
 static void cost(const char *name, const std::vector<double> &durations) {
     record("\"kind\":\"scoped_cost\",\"name\":" + quoted(name), durations);
 }
+static void transfer_cost(const char *name, const std::vector<double> &durations,
+                          const std::string &extra = "") {
+    record("\"kind\":\"scoped_transfer\",\"name\":" + quoted(name) + extra, durations);
+}
 __global__ void empty_kernel() {}
+
+static void staging_check(const fort_staging::Result &result) {
+    CUDA(result.status);
+    if (result.exhausted || !result.slots) {
+        std::cerr << "offline staging resources unavailable\n";
+        std::exit(2);
+    }
+}
+static void release_staging(std::unique_ptr<fort_staging::Slots> slots) {
+    size_t freed = 0;
+    CUDA(fort_staging::release(std::move(slots), freed));
+}
+// Use the same physical copy plan and tiled row order as scoped transfers.
+// No logical bounds or application-specific indexing enters this benchmark.
+static __attribute__((noinline)) void copy_rows(const fort_physical::CopyPlan &plan,
+                                                unsigned char *packed, unsigned char *original,
+                                                size_t capacity, bool unpack) {
+    size_t compact_offset = 0;
+    const bool ok = plan.visit([&](const fort_physical::CopyOperation &operation) {
+        return fort_physical::visit_tiles(operation, capacity, [&](const fort_physical::CopyOperation &tile) {
+            for (size_t z = 0; z < tile.depth; ++z) {
+                for (size_t y = 0; y < tile.height; ++y) {
+                    auto *root = original + tile.offset + z * tile.pitch * tile.physical_height + y * tile.pitch;
+                    if (unpack) std::memcpy(root, packed + compact_offset, tile.width);
+                    else std::memcpy(packed + compact_offset, root, tile.width);
+                    compact_offset += tile.width;
+                }
+            }
+            return true;
+        });
+    });
+    if (!ok || compact_offset != plan.bytes) {
+        std::cerr << "invalid offline physical packing plan\n";
+        std::exit(2);
+    }
+}
+
+static void measure_staging() {
+    const size_t payloads[] = {256 * 1024, 1024 * 1024, 4 * 1024 * 1024, 16 * 1024 * 1024};
+    for (const size_t payload : payloads) {
+        auto acquire_release = [&] {
+            auto acquired = fort_staging::acquire(payload, fort_staging::Role::Staging, false);
+            staging_check(acquired);
+            release_staging(std::move(acquired.slots));
+        };
+        auto trim = [] {
+            size_t freed = 0;
+            CUDA(fort_staging::trim_cache(freed));
+        };
+        const auto bytes = ",\"bytes\":" + std::to_string(payload);
+        transfer_cost("staging_cold_seconds", measure(4, trim, acquire_release, [] {}), bytes);
+        // The cold sample left an exact-capacity complete pair cached.
+        transfer_cost("staging_reuse_seconds", measure(128, acquire_release), bytes);
+        auto acquired = fort_staging::acquire(payload, fort_staging::Role::Staging, false);
+        staging_check(acquired);
+        auto &slot = acquired.slots->slots[0];
+        std::vector<unsigned char> original(2 * payload, 7);
+        std::memset(slot.host, 11, payload);
+        for (const bool thin : {false, true}) {
+            // One-byte physical faces cover mixed logical/integer captures as
+            // well as the real precision selected for compute calibration.
+            const size_t element_bytes = thin ? 1 : sizeof(real);
+            const size_t rows = thin ? payload : 1;
+            const std::vector<size_t> extents = thin ? std::vector<size_t>{2, rows}
+                                                    : std::vector<size_t>{payload / sizeof(real)};
+            const std::vector<size_t> lower(extents.size(), 0);
+            const std::vector<size_t> upper = thin ? std::vector<size_t>{1, rows} : extents;
+            const fort_physical::CopyPlan plan(element_bytes, extents, lower, upper);
+            const auto geometry = bytes + ",\"geometry\":" + quoted(thin ? "thin_rows" : "contiguous")
+                                  + ",\"rows\":" + std::to_string(rows);
+            transfer_cost("pack_bytes_per_second", measure(4, [&] {
+                copy_rows(plan, slot.host, original.data(), payload, false);
+            }), geometry);
+            transfer_cost("unpack_bytes_per_second", measure(4, [&] {
+                copy_rows(plan, slot.host, original.data(), payload, true);
+            }), geometry);
+        }
+        release_staging(std::move(acquired.slots));
+    }
+    auto acquired = fort_staging::acquire(payloads[0], fort_staging::Role::Staging, false);
+    staging_check(acquired);
+    auto &first = acquired.slots->slots[0];
+    auto &second = acquired.slots->slots[1];
+    transfer_cost("event_record_seconds", measure(128, [] {}, [&] {
+        CUDA(cudaEventRecord(first.complete, first.stream));
+    }, [&] { CUDA(cudaEventSynchronize(first.complete)); }));
+    transfer_cost("event_wait_seconds", measure(128, [&] {
+        CUDA(cudaEventRecord(first.complete, first.stream));
+        CUDA(cudaStreamSynchronize(first.stream));
+    }, [&] { CUDA(cudaEventSynchronize(first.complete)); }, [] {}));
+    transfer_cost("ready_event_seconds", measure(128, [] {}, [&] {
+        CUDA(cudaEventRecord(first.complete, first.stream));
+        CUDA(cudaStreamWaitEvent(second.stream, first.complete, 0));
+    }, [&] { CUDA(cudaStreamSynchronize(second.stream)); }));
+    release_staging(std::move(acquired.slots));
+    size_t freed = 0;
+    CUDA(fort_staging::trim_cache(freed));
+}
 
 static void identity(int device, int threads) {
     cudaDeviceProp properties{};
@@ -166,6 +271,91 @@ static void measure_planning(fort_scope_t context, fort_buffer_t buffer) {
         }
     }
     SCOPE(fort_scope_plan_reset(context));
+}
+
+static void measure_batch_preparation(int device, const fort_scope_layout &layout) {
+    fort_scope_t context = 0;
+    fort_buffer_t buffer = 0;
+    SCOPE(fort_scope_create(device, &context));
+    SCOPE(fort_scope_set_transfers(context, FORT_SCOPE_TRANSFERS_PIPELINED));
+    SCOPE(fort_scope_register(context, 1, 1, &layout, 1, &buffer));
+    fort_scope_plan_costs base{};
+    base.version = FORT_SCOPE_PLANNING_ABI_VERSION; base.valid = 1;
+    base.max_allocation_bytes = size_t(1024) * 1024 * 1024;
+    // As in the existing planner benchmark, coefficients below only exercise
+    // viable alternatives. Only measured duration/work enters the profile.
+    base.cpu_flops = base.cpu_bandwidth = 1e9;
+    base.gpu_flops = base.gpu_bandwidth = 1e11;
+    base.h2d_bandwidth = base.d2h_bandwidth = 1e10;
+    base.h2d_latency = base.d2h_latency = 5e-6;
+    base.create_seconds = base.register_seconds = base.host_access_seconds = 1e-6;
+    base.device_access_seconds = base.gpu_setup_seconds = base.allocation_seconds = 1e-6;
+    base.cold_driver_startup_seconds = 0.1;
+    base.release_seconds = base.wait_seconds = base.launch_enqueue_seconds = 1e-6;
+    base.planning_operation_seconds = 1e-9;
+    fort_scope_batch_costs staging{};
+    staging.version = FORT_SCOPE_BATCH_ABI_VERSION; staging.valid = 1;
+    staging.async_engine_count = 1; staging.max_slot_bytes = 16 * 1024 * 1024;
+    std::fill_n(staging.staging_cold_seconds, FORT_SCOPE_BATCH_CAPACITIES, 1e-6);
+    std::fill_n(staging.staging_reuse_seconds, FORT_SCOPE_BATCH_CAPACITIES, 1e-7);
+    staging.event_record_seconds = staging.event_wait_seconds = staging.ready_event_seconds = 1e-6;
+    staging.preparation_operation_seconds = 1e-9;
+    staging.pack_bytes_per_second = staging.unpack_bytes_per_second = 1e10;
+    staging.pack_row_seconds = staging.unpack_row_seconds = 1e-9;
+    staging.pinned_h2d_latency = staging.pinned_d2h_latency = 1e-6;
+    staging.pinned_h2d_bandwidth = staging.pinned_d2h_bandwidth = 1e10;
+    const size_t rank = layout.rank;
+    std::vector<size_t> lower(rank, 0), upper(layout.extents, layout.extents + rank);
+    // A one-plane ordinal retains the original full physical array layout.
+    const auto iterations = layout.extents[rank - 1];
+    upper[rank - 1] = 1;
+    const fort_scope_section plane{lower.data(), upper.data()};
+    const fort_scope_access ordinal_access{0, 1, &plane, 1, &plane, 1, &plane};
+    const fort_scope_batch_binding binding{buffer, uint32_t(rank - 1), 1, ordinal_access};
+    const fort_scope_access whole_access{FORT_SCOPE_READ_ALL | FORT_SCOPE_WRITE_ALL | FORT_SCOPE_OVERWRITE_ALL,
+                                       0, nullptr, 0, nullptr, 0, nullptr};
+    const fort_scope_plan_binding query_binding{buffer, whole_access};
+    for (int count : {1, 4, 16}) {
+        std::vector<fort_scope_batch_unit> units;
+        SCOPE(fort_scope_plan_reset_mode(context, FORT_SCOPE_PLAN_CONTINUE));
+        for (int unit = 0; unit < count; ++unit) {
+            const auto id = uint64_t(unit + 1);
+            SCOPE(fort_scope_plan_add(context, FORT_SCOPE_PLAN_WORKER, id, &query_binding, 1, 1e9, 1e8, 1));
+            units.push_back({FORT_SCOPE_PLAN_WORKER, id, &binding, 1, 1e9, 1e8});
+        }
+        SCOPE(fort_scope_plan_validate(context));
+        fort_scope_plan_decision decision{};
+        SCOPE(fort_scope_plan_select(context, &base, 1, &decision));
+        if (decision.gpu_units != unsigned(count)) {
+            std::cerr << "offline batch preview must have an approved all-GPU chain\n";
+            std::exit(2);
+        }
+        const fort_scope_batch batch{FORT_SCOPE_BATCH_ABI_VERSION, 1, iterations,
+                                     units.data(), units.size(), nullptr, 0};
+        fort_scope_batch_report report{};
+        uint64_t work = 0;
+        auto durations = measure(32, [&] {
+            SCOPE(fort_scope_batch_execute_v1(context, &batch, &base, &staging, -1, nullptr, nullptr, &report));
+            if (!report.preparation_operations || (work && work != report.preparation_operations) || report.applied) {
+                std::cerr << "offline preview must report stable positive work and execute no callbacks\n";
+                std::exit(2);
+            }
+            work = report.preparation_operations;
+        });
+        transfer_cost("preparation_operation_seconds", durations,
+                      ",\"units\":" + std::to_string(count) + ",\"work\":" + std::to_string(work));
+        // Preview must not consume the installed query. Retire its synthetic
+        // metadata schedule outside the timed observations before reset/close.
+        for (int unit = 0; unit < count; ++unit) {
+            int gpu = 0;
+            SCOPE(fort_scope_plan_next(context, uint64_t(unit + 1), &query_binding, 1, &gpu));
+            if (!gpu) {
+                std::cerr << "offline batch preview schedule changed\n";
+                std::exit(2);
+            }
+        }
+    }
+    SCOPE(fort_scope_close(context));
 }
 
 int main(int argc, char **argv) {
@@ -276,7 +466,9 @@ int main(int argc, char **argv) {
         SCOPE(fort_scope_register(context, 1, 1, &layout, 1, &buffer));
     }
     measure_planning(context, buffer);
+    measure_staging();
     SCOPE(fort_scope_gpu_leave(context, previous));
     SCOPE(fort_scope_close(context));
+    measure_batch_preparation(device, layout);
     return 0;
 }

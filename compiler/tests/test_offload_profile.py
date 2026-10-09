@@ -12,9 +12,11 @@ from compiler.offload.calibrate import (
     parse_scoped_measurements,
     profile_from_measurements,
     profile_with_scoped_measurements,
+    scoped_transfers_from_measurements,
 )
 from compiler.offload.profile import (
     LATENCY_RATES,
+    SCOPED_BATCH_PAYLOADS,
     SCOPED_COST_NAMES,
     THROUGHPUT_RATES,
     WORKER_RATES,
@@ -22,6 +24,7 @@ from compiler.offload.profile import (
     compiler_identity,
     load_profile,
     scoped_costs,
+    scoped_transfer_costs,
     validate_profile,
 )
 
@@ -206,6 +209,76 @@ def scoped_profile():
                                              cold_startup_seconds=[0.1, 0.1, 10, 0.1, 0.1])
 
 
+def scoped_transfer_observations():
+    records = []
+    for index, size in enumerate(SCOPED_BATCH_PAYLOADS, 1):
+        for name, value in (("staging_cold_seconds", index * 1e-4), ("staging_reuse_seconds", index * 1e-6)):
+            records.append({"kind": "scoped_transfer", "name": name, "bytes": size, "seconds": [value] * 5})
+        for name in ("pack_bytes_per_second", "unpack_bytes_per_second"):
+            for geometry, rows in (("contiguous", 1), ("thin_rows", size // 8)):
+                duration = size / 1e9 + (rows * 1e-8 if geometry == "thin_rows" else 0)
+                records.append({"kind": "scoped_transfer", "name": name, "bytes": size,
+                                "rows": rows, "geometry": geometry, "seconds": [duration] * 5})
+    for name in ("event_record_seconds", "event_wait_seconds", "ready_event_seconds"):
+        records.append({"kind": "scoped_transfer", "name": name, "seconds": [1e-6] * 5})
+    records.append({"kind": "scoped_transfer", "name": "preparation_operation_seconds",
+                    "work": 10, "seconds": [2e-6] * 5})
+    return records
+
+
+def test_scoped_transfer_calibration_prices_thin_rows_and_each_slot_capacity():
+    records = scoped_transfer_observations()
+    result = profile_with_scoped_measurements(profile(), scoped_observations() + records,
+                                             runtime_id=RUNTIME_ID, cold_startup_seconds=[0.1] * 5)
+    costs = scoped_transfer_costs(result, RUNTIME_ID)
+    assert costs["staging_cold_seconds"] == pytest.approx([1e-4, 2e-4, 3e-4, 4e-4])
+    assert costs["staging_reuse_seconds"] == pytest.approx([1e-6, 2e-6, 3e-6, 4e-6])
+    assert costs["pack_bytes_per_second"] == pytest.approx(1e9)
+    assert costs["unpack_bytes_per_second"] == pytest.approx(1e9)
+    assert costs["pack_row_seconds"] == pytest.approx(1e-8)
+    assert costs["unpack_row_seconds"] == pytest.approx(1e-8)
+    assert costs["preparation_operation_seconds"] == pytest.approx(2e-7)
+    assert result["scoped"]["transfers"]["measurements"] == records
+    assert parse_scoped_measurements("\n".join(json.dumps(record) for record in records)) == records
+    # Direct costs remain independently usable; missing transfer costs cannot
+    # be reconstructed from pinned bandwidth or application measurements.
+    validate_profile(scoped_profile())
+    with pytest.raises(ProfileError, match="no scoped transfer calibration"):
+        scoped_transfer_costs(scoped_profile(), RUNTIME_ID)
+    with pytest.raises(ProfileError, match="runtime_id mismatch"):
+        scoped_transfer_costs(result, "0" * 64)
+
+
+@pytest.mark.parametrize("mutation", ["missing_size", "missing_geometry", "duplicate", "no_work", "bad_rows"])
+def test_incomplete_scoped_transfer_observations_never_supply_guessed_costs(mutation):
+    records = scoped_transfer_observations()
+    if mutation == "missing_size":
+        records = [record for record in records if record.get("bytes") != SCOPED_BATCH_PAYLOADS[-1]]
+    elif mutation == "missing_geometry":
+        records = [record for record in records if record.get("geometry") != "thin_rows"]
+    elif mutation == "duplicate":
+        records.append(deepcopy(records[0]))
+    elif mutation == "no_work":
+        records[-1]["work"] = 0
+    else:
+        next(record for record in records if "rows" in record)["rows"] = True
+    with pytest.raises(CalibrationError):
+        scoped_transfers_from_measurements(records)
+
+
+@pytest.mark.parametrize(("name", "value"), [
+    ("staging_cold_seconds", [1e-4]), ("staging_reuse_seconds", [1e-5, 1e-5, 0, 1e-5]),
+    ("pack_bytes_per_second", 0), ("pack_row_seconds", -1),
+    ("event_record_seconds", float("nan")), ("preparation_operation_seconds", True),
+])
+def test_scoped_transfer_cost_validation_rejects_incompatible_models(name, value):
+    result = scoped_profile()
+    result["scoped"]["transfers"] = scoped_transfers_from_measurements(scoped_transfer_observations())
+    result["scoped"]["transfers"]["costs"][name] = value
+    with pytest.raises(ProfileError, match="scoped.transfers.costs"):
+        validate_profile(result)
+
+
 def test_scoped_extension_uses_real_measurements_and_separate_cold_setup():
     records = scoped_observations()
     assert parse_scoped_measurements("\n".join(json.dumps(record) for record in records)) == records
@@ -328,6 +401,67 @@ def test_default_calibration_never_builds_or_measures_common_runtime(monkeypatch
     assert len(commands) == 4
     assert result["calibration"]["application_profiled"] is False
     assert all("scoped" not in str(value) for command in commands for value in command)
+
+
+def test_scoped_refresh_preserves_exact_base_rates_and_records_input_identity(monkeypatch, tmp_path):
+    import hashlib
+
+    from compiler.offload import calibrate as module
+    base = profile()
+    base["toolchain"].update(nvcc_version="NVCC V13.4.92", host_cxx_version="GCC 14.4.0")
+    source = tmp_path / "base.json"
+    source.write_text(json.dumps(base))
+    source_bytes = source.read_bytes()
+    commands = []
+    monkeypatch.setattr(module, "_tool", lambda requested, candidates: candidates[0])
+    monkeypatch.setattr(module, "cpu_identity", lambda: base["hardware"]["cpu_name"])
+
+    def run(argv, directory, log, *, timeout, env=None):
+        commands.append(argv)
+        assert argv[1:] == ["--version"]
+        return base["toolchain"]["nvcc_version" if argv[0] == "nvcc" else "host_cxx_version"]
+
+    def refresh(old, *args):
+        assert old == base
+        # A later source edit must not alter the provenance of rates already
+        # loaded, or falsely attribute the refreshed costs to those new bytes.
+        source.write_text("changed after loading")
+        return {**old, "scoped": {"calibration": {}, "runtime_id": RUNTIME_ID}}
+
+    monkeypatch.setattr(module, "_run", run)
+    monkeypatch.setattr(module, "_calibrate_scoped", refresh)
+    destination = tmp_path / "refresh.json"
+    assert module.main(["--output", str(destination), "--scoped-costs", "--refresh-scoped", str(source)]) == 0
+    result = json.loads(destination.read_text())
+    assert result["rates"] == base["rates"]
+    assert result["measurements"] == base["measurements"]
+    assert len(commands) == 2
+    provenance = result["scoped"]["calibration"]["base_profile"]
+    assert provenance["sha256"] == hashlib.sha256(source_bytes).hexdigest()
+    assert provenance["base_rates_remeasured"] is False
+
+
+@pytest.mark.parametrize("change", [{"cpu_threads": 2}, {"precision_bits": 32},
+                                  {"hardware": {"cpu_name": "different"}},
+                                  {"toolchain": {"nvcc_version": "other"}}])
+def test_scoped_refresh_requires_matching_base_identity_before_measurement(monkeypatch, tmp_path, change):
+    from compiler.offload import calibrate as module
+    base = profile()
+    base["toolchain"].update(nvcc_version="NVCC V13.4.92", host_cxx_version="GCC 14.4.0")
+    for key, value in change.items():
+        if isinstance(value, dict):
+            base[key].update(value)
+        else:
+            base[key] = value
+    source = tmp_path / "base.json"
+    source.write_text(json.dumps(base))
+    monkeypatch.setattr(module, "_tool", lambda requested, candidates: candidates[0])
+    monkeypatch.setattr(module, "cpu_identity", lambda: "Test CPU")
+    monkeypatch.setattr(module, "_run", lambda argv, *args, **kwargs:
+                        "NVCC V13.4.92" if argv[0] == "nvcc" else "GCC 14.4.0")
+    monkeypatch.setattr(module, "_calibrate_scoped", lambda *args: pytest.fail("mismatched calibration was measured"))
+    assert module.main(["--output", str(tmp_path / "bad.json"), "--scoped-costs", "--refresh-scoped", str(source)]) == 2
+    assert not (tmp_path / "bad.json").exists()
 
 
 def test_scoped_runner_uses_published_runtime_and_fresh_processes(monkeypatch, tmp_path):

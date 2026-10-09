@@ -33,6 +33,12 @@ SCOPED_COST_NAMES = (
     "gpu_setup_seconds", "cold_driver_startup_seconds", "allocation_seconds", "release_seconds",
     "wait_seconds", "launch_enqueue_seconds", "planning_operation_seconds",
 )
+SCOPED_TRANSFER_COST_NAMES = (
+    "staging_cold_seconds", "staging_reuse_seconds", "event_record_seconds",
+    "event_wait_seconds", "ready_event_seconds", "preparation_operation_seconds",
+    "pack_bytes_per_second", "unpack_bytes_per_second", "pack_row_seconds", "unpack_row_seconds",
+)
+SCOPED_BATCH_PAYLOADS = (256 * 1024, 1024 * 1024, 4 * 1024 * 1024, 16 * 1024 * 1024)
 
 
 class ProfileError(ValueError):
@@ -148,6 +154,29 @@ def validate_profile(
             raise ProfileError("missing scoped costs")
         for name in SCOPED_COST_NAMES:
             _number(costs.get(name), f"scoped.costs.{name}")
+        if "transfers" in scoped:
+            transfers = scoped["transfers"]
+            if (not isinstance(transfers, dict) or type(transfers.get("schema_version")) is not int
+                    or transfers["schema_version"] != 1):
+                raise ProfileError("scoped.transfers requires schema_version 1")
+            if (transfers.get("batch_payload_bytes") != list(SCOPED_BATCH_PAYLOADS)
+                    or any(type(value) is not int for value in transfers["batch_payload_bytes"])):
+                raise ProfileError("scoped.transfers requires the supported finite batch payloads")
+            if (type(transfers.get("max_slot_bytes")) is not int
+                    or transfers["max_slot_bytes"] != SCOPED_BATCH_PAYLOADS[-1]):
+                raise ProfileError("scoped.transfers.max_slot_bytes must match the measured slot bound")
+            transfer_costs = transfers.get("costs")
+            if not isinstance(transfer_costs, dict):
+                raise ProfileError("missing scoped.transfers.costs")
+            for name in SCOPED_TRANSFER_COST_NAMES:
+                value = transfer_costs.get(name)
+                if name.startswith("staging_"):
+                    if not isinstance(value, list) or len(value) != len(SCOPED_BATCH_PAYLOADS):
+                        raise ProfileError(f"scoped.transfers.costs.{name} requires four measured slot costs")
+                    for index, item in enumerate(value):
+                        _number(item, f"scoped.transfers.costs.{name}[{index}]")
+                else:
+                    _number(value, f"scoped.transfers.costs.{name}", zero=name.endswith("row_seconds"))
     if scoped_runtime_id is not None:
         scoped_costs(profile, scoped_runtime_id)
     return profile
@@ -166,6 +195,19 @@ def scoped_costs(profile: dict, runtime_id: str) -> dict:
     if scoped.get("runtime_id") != runtime_id:
         raise ProfileError("hardware profile scoped runtime_id mismatch")
     return scoped["costs"]
+
+
+def scoped_transfer_costs(profile: dict, runtime_id: str) -> dict:
+    """Require separately measured staging costs for the same common runtime.
+
+    The optional extension does not make an older direct-transfer profile
+    invalid. No defaults or live measurements fill missing staging costs.
+    """
+    scoped_costs(profile, runtime_id)
+    transfers = profile["scoped"].get("transfers")
+    if not isinstance(transfers, dict):
+        raise ProfileError("hardware profile has no scoped transfer calibration")
+    return transfers["costs"]
 
 
 def load_profile(path: str | Path, **expected: Any) -> dict:

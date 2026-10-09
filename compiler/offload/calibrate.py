@@ -29,7 +29,9 @@ from compiler.emission.common.resources import read_scoped_runtime
 from .profile import (
     LATENCY_RATES,
     SCHEMA_VERSION,
+    SCOPED_BATCH_PAYLOADS,
     SCOPED_COST_NAMES,
+    SCOPED_TRANSFER_COST_NAMES,
     THROUGHPUT_RATES,
     TRANSFER_KINDS,
     WORKER_RATES,
@@ -191,7 +193,7 @@ def parse_scoped_measurements(text: str) -> list[dict]:
         except ValueError as error:
             raise CalibrationError("scoped benchmark emitted a non-JSON measurement") from error
         if not isinstance(record, dict) or record.get("kind") not in {
-            "device", "scoped_cost", "scoped_allocation", "scoped_planning",
+            "device", "scoped_cost", "scoped_allocation", "scoped_planning", "scoped_transfer",
         }:
             raise CalibrationError("scoped benchmark emitted an unknown measurement kind")
         if record["kind"] != "device":
@@ -230,9 +232,13 @@ def profile_with_scoped_measurements(
     costs = {"cold_driver_startup_seconds": statistics.median(cold)}
     allocations: dict[str, list[tuple[int, float]]] = {"allocation_seconds": [], "release_seconds": []}
     planning = []
+    transfer_records = []
     for record in records:
         kind, name = record["kind"], record.get("name")
         if kind == "device":
+            continue
+        if kind == "scoped_transfer":
+            transfer_records.append(record)
             continue
         if kind == "scoped_planning":
             work = record.get("work")
@@ -264,6 +270,7 @@ def profile_with_scoped_measurements(
     result = dict(profile)
     result["scoped"] = {
         "schema_version": 1, "runtime_id": runtime_id,
+        "created_utc": datetime.now(timezone.utc).isoformat(),
         "max_allocation_bytes": max(allocation_sizes), "costs": costs,
         "measurements": records,
         "cold_driver_startup_samples_seconds": cold,
@@ -284,10 +291,96 @@ def profile_with_scoped_measurements(
             "application_profiled": False,
         },
     }
+    if transfer_records:
+        result["scoped"]["transfers"] = scoped_transfers_from_measurements(transfer_records)
     try:
         return validate_profile(result, scoped_runtime_id=runtime_id)
     except ProfileError as error:
         raise CalibrationError(str(error)) from error
+
+
+def scoped_transfers_from_measurements(records: list[dict]) -> dict:
+    """Fit bounded single-coordinator staging costs from explicit observations.
+
+    Slowest medians/rates cover the finite slot payload set and representative
+    rectangular packing geometries. These costs remain separate from direct
+    copies, launch/compute rates, and allocation costs. Application timing is
+    never supplied to this function.
+    """
+    observations = {name: [] for name in SCOPED_TRANSFER_COST_NAMES if not name.endswith("row_seconds")}
+    seen = set()
+    for record in records:
+        name = record.get("name")
+        if record.get("kind") != "scoped_transfer" or name not in observations:
+            raise CalibrationError("unknown scoped transfer measurement")
+        size, geometry = record.get("bytes"), record.get("geometry", "")
+        if size is not None and (type(size) is not int or size <= 0):
+            raise CalibrationError("scoped transfer bytes must be a positive integer")
+        if not isinstance(geometry, str):
+            raise CalibrationError("scoped transfer geometry must be a string")
+        units = record.get("units")
+        if units is not None and (name != "preparation_operation_seconds" or type(units) is not int or units <= 0):
+            raise CalibrationError("batch preparation units must be a positive integer")
+        key = (name, size, geometry, units)
+        if key in seen:
+            raise CalibrationError("duplicate scoped transfer measurement")
+        seen.add(key)
+        duration = _median(record)
+        if name.endswith("bytes_per_second"):
+            if size is None or size not in SCOPED_BATCH_PAYLOADS or not geometry:
+                raise CalibrationError("packing measurements require a finite payload and geometry")
+            rows = record.get("rows")
+            if type(rows) is not int or rows <= 0 or size % rows:
+                raise CalibrationError("packing measurements require a positive exact physical row count")
+            if geometry not in {"contiguous", "thin_rows"} or (geometry == "contiguous" and rows != 1):
+                raise CalibrationError("unsupported scoped packing measurement geometry")
+            observations[name].append((size, duration, rows, geometry))
+        else:
+            if name.startswith("staging_") and size not in SCOPED_BATCH_PAYLOADS:
+                raise CalibrationError("staging measurements require the finite slot payloads")
+            if name == "preparation_operation_seconds":
+                work = record.get("work")
+                if type(work) is not int or work <= 0:
+                    raise CalibrationError("batch preparation requires an actual positive integer work count")
+                duration /= work
+            observations[name].append((size, duration))
+    costs = {}
+    for name, values in observations.items():
+        if not values:
+            raise CalibrationError("missing scoped transfer measurement: " + name)
+        if name.startswith("staging_"):
+            if {size for size, _ in values} != set(SCOPED_BATCH_PAYLOADS):
+                raise CalibrationError("staging measurements must cover all finite payloads: " + name)
+            costs[name] = [max(value for size, value in values if size == payload)
+                           for payload in SCOPED_BATCH_PAYLOADS]
+        elif name.endswith("bytes_per_second"):
+            for geometry in ("contiguous", "thin_rows"):
+                if {size for size, _, _, observed_geometry in values if observed_geometry == geometry} != set(SCOPED_BATCH_PAYLOADS):
+                    raise CalibrationError("packing measurements must cover both geometries and all finite payloads: " + name)
+            bandwidth = min(size / duration for size, duration, _, geometry in values if geometry == "contiguous")
+            row_cost = max(0.0, max((duration - size / bandwidth) / rows
+                                   for size, duration, rows, geometry in values if geometry == "thin_rows"))
+            costs[name] = bandwidth
+            costs[name.replace("bytes_per_second", "row_seconds")] = row_cost
+        else:
+            costs[name] = max(value for _, value in values)
+    return {
+        "schema_version": 1,
+        "max_slot_bytes": SCOPED_BATCH_PAYLOADS[-1],
+        "batch_payload_bytes": list(SCOPED_BATCH_PAYLOADS),
+        "costs": costs,
+        "measurements": records,
+        "measurement_method": {
+            "application_profiled": False,
+            "coordinators": 1,
+            "staging": "actual shared two-slot acquire/release; cold allocation and cached reuse measured separately",
+            "packing": "exact physical rectangular row copies into/from pinned storage; conservative contiguous bandwidth plus nonnegative per-row overhead from thin rows",
+            "events": "non-default stream completion event record and completed-event wait measured separately",
+            "batch_prepare": "actual metadata-only versioned batch preview divided by its reported preparation work; no callback execution",
+            "aggregation": "maximum median fixed costs per slot payload; minimum contiguous bandwidth and maximum nonnegative thin-row residual across bounded observations",
+            "pipeline": "model includes preparation, initial immutable uploads, per-batch launches/events, fill and drain; no online timing feedback",
+        },
+    }
 
 
 def cpu_identity() -> str:
@@ -379,25 +472,45 @@ def calibrate(args: argparse.Namespace) -> dict:
     host = _tool(args.cuda_host_cxx, ("g++-14", "g++"))
     nvcc_version = _run([nvcc, "--version"], directory, directory / "nvcc-version.log", timeout=30).strip()
     host_version = _run([host, "--version"], directory, directory / "host-version.log", timeout=30).strip()
-    source = Path(__file__).with_name("calibration.cu")
-    binary = directory / "calibration"
-    command = [nvcc, "-O3", "-std=c++17", "-arch=" + args.arch, "-ccbin", host,
-               "-Xcompiler=-fopenmp", "-DCALIBRATION_PRECISION=" + str(args.precision),
-               str(source), "-o", str(binary)]
-    print("Building standalone CUDA calibration...", file=sys.stderr, flush=True)
-    _run(command, directory, directory / "build.log", timeout=180)
-    run_command = [str(binary), str(args.threads), str(args.max_mib), str(args.device)]
-    print("Measuring offline CPU/GPU costs...", file=sys.stderr, flush=True)
-    observations = _run(run_command, directory, directory / "measurements.jsonl", timeout=180)
-    profile = profile_from_measurements(parse_measurements(observations), precision_bits=args.precision,
-                                        cpu_threads=args.threads, cpu_name=cpu_identity(),
-                                        nvcc_version=nvcc_version, host_cxx_version=host_version)
-    profile["calibration"] = {"build_command": command, "run_command": run_command,
-                              "benchmark_source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
-                              "max_transfer_bytes": args.max_mib * 1024 * 1024,
-                              "artifacts": str(directory), "application_profiled": False}
+    refresh = getattr(args, "refresh_scoped", None)
+    base_profile_bytes = None
+    if refresh:
+        if not getattr(args, "scoped_costs", False):
+            raise CalibrationError("--refresh-scoped requires --scoped-costs")
+        try:
+            base_profile_bytes = Path(refresh).read_bytes()
+            profile = validate_profile(json.loads(base_profile_bytes), precision_bits=args.precision, cpu_threads=args.threads,
+                                       hardware={"cpu_name": cpu_identity()},
+                                       toolchain={"nvcc_version": nvcc_version, "host_cxx_version": host_version})
+        except (ProfileError, ValueError) as error:
+            raise CalibrationError(str(error)) from error
+    else:
+        source = Path(__file__).with_name("calibration.cu")
+        binary = directory / "calibration"
+        command = [nvcc, "-O3", "-std=c++17", "-arch=" + args.arch, "-ccbin", host,
+                   "-Xcompiler=-fopenmp", "-DCALIBRATION_PRECISION=" + str(args.precision),
+                   str(source), "-o", str(binary)]
+        print("Building standalone CUDA calibration...", file=sys.stderr, flush=True)
+        _run(command, directory, directory / "build.log", timeout=180)
+        run_command = [str(binary), str(args.threads), str(args.max_mib), str(args.device)]
+        print("Measuring offline CPU/GPU costs...", file=sys.stderr, flush=True)
+        observations = _run(run_command, directory, directory / "measurements.jsonl", timeout=180)
+        profile = profile_from_measurements(parse_measurements(observations), precision_bits=args.precision,
+                                            cpu_threads=args.threads, cpu_name=cpu_identity(),
+                                            nvcc_version=nvcc_version, host_cxx_version=host_version)
+        profile["calibration"] = {"build_command": command, "run_command": run_command,
+                                  "benchmark_source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                                  "max_transfer_bytes": args.max_mib * 1024 * 1024,
+                                  "artifacts": str(directory), "application_profiled": False}
     if getattr(args, "scoped_costs", False):
         profile = _calibrate_scoped(profile, args, directory, nvcc, host)
+        if refresh:
+            profile["scoped"]["calibration"]["base_profile"] = {
+                "path": str(Path(refresh).resolve()),
+                "sha256": hashlib.sha256(base_profile_bytes).hexdigest(),
+                "base_rates_remeasured": False,
+                "identity_checked": "CPU, toolchain, precision and thread budget; current GPU/runtime/driver verified by new scoped measurements",
+            }
     with tempfile.NamedTemporaryFile(mode="w", dir=output.parent, prefix=output.name + ".", delete=False) as stream:
         temporary = Path(stream.name)
         try:
@@ -423,10 +536,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--arch", default="native", help="NVCC architecture, normally native for offline calibration")
     parser.add_argument("--build-dir", help="optional directory retaining native benchmark and raw measurements")
     parser.add_argument("--scoped-costs", action="store_true",
-                        help="also measure common-runtime management, allocation, and bounded candidate planning costs")
+                        help="also measure common-runtime management, allocation, planning, staging and batch costs")
+    parser.add_argument("--refresh-scoped", metavar="BASE_PROFILE",
+                        help="refresh scoped costs only, preserving base rates after hardware/toolchain verification; requires --scoped-costs")
     args = parser.parse_args(argv)
     if args.threads < 1 or args.device < 0 or not 8 <= args.max_mib <= 1024:
         parser.error("threads must be positive, device nonnegative, and max-mib between 8 and 1024")
+    if args.refresh_scoped and not args.scoped_costs:
+        parser.error("--refresh-scoped requires --scoped-costs")
     try:
         calibrate(args)
     except (CalibrationError, OSError) as error:

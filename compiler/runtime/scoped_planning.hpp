@@ -46,6 +46,8 @@ struct Inputs {
     bool definitions_validated = false;
     bool continuation = false, charge_create = true;
     size_t registrations_incurred = std::numeric_limits<size_t>::max();
+    uint32_t transfer_mode = FORT_SCOPE_TRANSFERS_DIRECT;
+    std::optional<fort_scope_batch_costs> transfer_costs;
 };
 struct Result {
     fort_scope_plan_decision decision{};
@@ -92,6 +94,7 @@ struct EvidenceSink {
 namespace detail {
 constexpr size_t operation_limit = 256, worker_limit = 64;
 constexpr size_t frontier_limit = 16, candidate_limit = 128;
+constexpr size_t batch_capacities[] = {256*1024, 1024*1024, 4*1024*1024, 16*1024*1024};
 struct Unavailable { const char *reason; };
 inline void require(bool test, const char *reason) { if (!test) throw Unavailable{reason}; }
 inline uint64_t add(uint64_t a, uint64_t b) {
@@ -107,6 +110,21 @@ inline void seconds(double &value, double delta) {
 inline double compute(const Operation &op, const fort_scope_plan_costs &costs, bool gpu) {
     return std::max(op.flops/(gpu ? costs.gpu_flops : costs.cpu_flops),
                     op.memory_bytes/(gpu ? costs.gpu_bandwidth : costs.cpu_bandwidth));
+}
+inline bool valid_transfer_costs(const fort_scope_batch_costs &costs) {
+    if (costs.version != FORT_SCOPE_BATCH_ABI_VERSION || !costs.valid ||
+        costs.max_slot_bytes != batch_capacities[3]) return false;
+    for (double value : {costs.event_record_seconds, costs.event_wait_seconds, costs.ready_event_seconds,
+                         costs.preparation_operation_seconds, costs.pack_bytes_per_second,
+                         costs.unpack_bytes_per_second, costs.pinned_h2d_bandwidth, costs.pinned_d2h_bandwidth})
+        if (!std::isfinite(value) || value <= 0) return false;
+    for (double value : {costs.pack_row_seconds, costs.unpack_row_seconds,
+                         costs.pinned_h2d_latency, costs.pinned_d2h_latency})
+        if (!std::isfinite(value) || value < 0) return false;
+    for (size_t k=0; k<FORT_SCOPE_BATCH_CAPACITIES; ++k)
+        if (!std::isfinite(costs.staging_cold_seconds[k]) || costs.staging_cold_seconds[k] <= 0 ||
+            !std::isfinite(costs.staging_reuse_seconds[k]) || costs.staging_reuse_seconds[k] <= 0) return false;
+    return true;
 }
 inline void validate_region(const Region &region, const Resource &b) {
     require(region.size() <= coherence::rectangle_limit, "region_budget_exceeded");
@@ -180,6 +198,8 @@ inline void validate(const Inputs &input, const fort_scope_plan_costs &costs) {
     // measured lifecycle costs still require strictly positive values.
     for (double latency : {costs.h2d_latency, costs.d2h_latency})
         require(std::isfinite(latency) && latency >= 0, "invalid_calibration_cost");
+    if (input.transfer_mode == FORT_SCOPE_TRANSFERS_PINNED)
+        require(input.transfer_costs && valid_transfer_costs(*input.transfer_costs), "transfer_estimates_unavailable");
     validate_metadata(input, true, true);
 }
 struct State {
@@ -189,6 +209,9 @@ struct State {
     std::vector<bool> choices;
     std::vector<std::pair<size_t, size_t>> intervals;
     size_t allocated = 0;
+    // Short leases retain one cached pair between proved straight-line GPU
+    // operations. First use is conservative; native calls can replace it.
+    size_t staging_capacity = 0;
     bool ready = false, driver_initialized = false, pending = false;
     double time = 0;
     double execution_time = 0;
@@ -237,17 +260,41 @@ inline void copy(State &s, Resource &b, const Box &box, bool upload,
     const fort_physical::CopyPlan plan(b.element_bytes, b.extents, box.lo, box.hi);
     require(plan.valid, "physical_transfer_overflow");
     if (!plan.bytes) return;
+    allocate(s, b, input, costs);
+    uint64_t calls = plan.copies;
+    if (input.transfer_mode == FORT_SCOPE_TRANSFERS_PINNED) {
+        const auto &transfer = *input.transfer_costs;
+        size_t capacity_index = 0;
+        while (capacity_index+1<FORT_SCOPE_BATCH_CAPACITIES && batch_capacities[capacity_index]<plan.bytes) ++capacity_index;
+        wait(s, costs); // The synchronous control orders full-layout storage first.
+        const bool reused=s.staging_capacity>=batch_capacities[capacity_index];
+        if (reused) while (capacity_index+1<FORT_SCOPE_BATCH_CAPACITIES && batch_capacities[capacity_index]<s.staging_capacity) ++capacity_index;
+        else s.staging_capacity=batch_capacities[capacity_index];
+        seconds(s.time, reused ? transfer.staging_reuse_seconds[capacity_index] : transfer.staging_cold_seconds[capacity_index]);
+        calls = 0; uint64_t rows = 0;
+        plan.visit([&](const fort_physical::CopyOperation &op) {
+            return fort_physical::visit_tiles(op, batch_capacities[capacity_index], [&](const fort_physical::CopyOperation &tile) {
+                calls = add(calls, 1); rows = add(rows, product(tile.height, tile.depth)); return true;
+            });
+        });
+        seconds(s.time, double(plan.bytes)/(upload ? transfer.pack_bytes_per_second : transfer.unpack_bytes_per_second) +
+                        double(rows)*(upload ? transfer.pack_row_seconds : transfer.unpack_row_seconds));
+        seconds(s.time, double(calls)*(upload ? transfer.pinned_h2d_latency : transfer.pinned_d2h_latency) +
+                        double(plan.bytes)/(upload ? transfer.pinned_h2d_bandwidth : transfer.pinned_d2h_bandwidth));
+        seconds(s.time, double(calls)*(transfer.event_record_seconds+transfer.event_wait_seconds));
+    } else {
+        seconds(s.time, double(plan.copies)*(upload ? costs.h2d_latency : costs.d2h_latency) +
+                        double(plan.bytes)/(upload ? costs.h2d_bandwidth : costs.d2h_bandwidth));
+    }
     if (sink) {
         EvidenceEvent event; event.event = "copy"; event.phase = phase; event.resource = &b;
         event.rectangle = &box; event.unit = unit; event.upload = upload;
-        event.bytes = plan.bytes; event.copies = plan.copies; (*sink)(event);
+        event.bytes = plan.bytes; event.copies = calls; (*sink)(event);
     }
-    allocate(s, b, input, costs);
-    seconds(s.time, double(plan.copies)*(upload ? costs.h2d_latency : costs.d2h_latency) +
-                    double(plan.bytes)/(upload ? costs.h2d_bandwidth : costs.d2h_bandwidth));
     auto &bytes = upload ? s.count.upload_bytes : s.count.download_bytes;
     auto &copies = upload ? s.count.uploads : s.count.downloads;
-    bytes = add(bytes, plan.bytes); copies = add(copies, plan.copies); s.pending = true;
+    bytes = add(bytes, plan.bytes); copies = add(copies, calls);
+    s.pending = input.transfer_mode != FORT_SCOPE_TRANSFERS_PINNED;
 }
 inline void ensure(State &s, Resource &b, const Region &requested, bool device,
                    const Inputs &input, const fort_scope_plan_costs &costs,
@@ -307,6 +354,7 @@ inline void execute(State &s, const Operation &op, bool gpu,
         (gpu ? b.host_current : b.device_current) = std::move(p.opposite);
     }
     if (op.kind == FORT_SCOPE_PLAN_WORKER) s.choices.push_back(gpu);
+    if (!gpu) s.staging_capacity=0; // Native computation may enter another staging user.
 }
 inline void close(State &s, const Inputs &input, const fort_scope_plan_costs &costs, uint64_t &work,
                   const EvidenceSink *sink = nullptr) {

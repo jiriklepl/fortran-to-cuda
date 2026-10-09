@@ -109,6 +109,8 @@ class ScopeBuilder:
             raise CompilationError("scope device budget must be a nonnegative signed-64-bit byte count")
         self.outputs, self.edits, self.clones, self.generated = {}, {}, {}, {}
         self.queries = {}
+        self.numerical_ir = {}
+        self.batch_chains = {}
         self.numerical_reasons = {}
         self.boundaries, self.scopes = [], []
         self.runtime_outputs, self.runtime = read_scoped_runtime()
@@ -226,6 +228,7 @@ class ScopeBuilder:
                     sources = generate_sources(function, plan, offload_config=self.config, memory_model="scoped")
                     if sources.scoped:
                         result = sources
+                        self.numerical_ir[procedure] = (function, plan)
                     else:
                         reason = "numerical source has no supported shared entry"
                 else:
@@ -1174,7 +1177,7 @@ class ScopeBuilder:
                 body += structure.emit(handles, views, actuals, imports, selector=selector if self.config.policy == "auto" else None)
                 body += _checked("fort_scope_close(fort_context)")
             else:
-                body += self.owner_complete_plan(calls, leaves, handles, actuals, imports, native)
+                body += self.owner_complete_plan(calls, leaves, handles, actuals, imports, native, parameters=views)
         if caller_fallback:
             body += ["fort_native_required = .false."]
         lines = [*header, "use iso_c_binding", "use fort_scoped_memory",
@@ -1238,6 +1241,10 @@ class ScopeBuilder:
                                                   if origin_roots else {})}} if allocated_roots else {}),
                 "mode": self.config.policy, "participation": "serial"}
         scope["transfer_configuration"] = self.numerical(sorted(leaves)[0]).scoped["transfer_configuration"]
+        chains = [item[3] for item in self.batch_chains.values()
+                  if first <= item[3]["first_line"] <= item[3]["last_line"] <= last]
+        if chains:
+            scope["batch_subchains"] = chains
         if structure:
             scope.update(structure.public())
             scope["ownership"]["retained_resources"] = list(arrays)
@@ -1251,7 +1258,7 @@ class ScopeBuilder:
                                         "reason": "original hidden numerical array access requires ended dummy association"}
         return scope
 
-    def owner_complete_plan(self, calls, leaves, handles, actuals, imports, native):
+    def owner_complete_plan(self, calls, leaves, handles, actuals, imports, native, *, parameters=None):
         """Emit the unchanged whole-span plan used by legacy straight owners."""
         routine = self.entry
         body = ["fort_status = fort_scope_plan_reset(fort_context)"]
@@ -1287,6 +1294,19 @@ class ScopeBuilder:
                  "fort_cleanup = fort_scope_close(fort_context)",
                  "if (fort_cleanup /= FORT_SCOPE_OK) error stop 'shared scope planning cleanup failed'",
                  *native, "endif"]
+        body += self.owner_calls(calls, "fort_mode", handles, parameters or {}, actuals, imports, terminal=True)
+        body += _checked("fort_scope_close(fort_context)")
+        return body
+
+    def owner_calls(self, calls, mode, handles, parameters, actuals, imports, *, batch=True, terminal=False):
+        """Run original approved calls, or one generic direct-leaf batch chain."""
+        if batch and self.config.scope_transfers in {"pipelined", "auto"}:
+            from compiler.scopes.batch import execute_calls
+            return execute_calls(self, calls, mode, handles, parameters, actuals, imports,
+                                 lambda group: self.owner_calls(group, mode, handles, parameters, actuals, imports, batch=False),
+                                 terminal=terminal)
+        routine = self.entry
+        body = []
         for call in calls:
             child_leaves, _ = self.closure(call.procedure)
             if child_leaves:
@@ -1294,7 +1314,7 @@ class ScopeBuilder:
                 module = self.analysis.routines[call.procedure].scope.module
                 if module != routine.scope.module:
                     imports.append(f"use {module}, only: {clone}")
-                body += _call(clone, ["fort_context", "fort_mode", *actuals(call),
+                body += _call(clone, ["fort_context", mode, *actuals(call),
                                      *[handles[call.bindings[root].root if root.startswith("argument::") else root]
                                        for root in arrays_]])
             else:
@@ -1305,7 +1325,6 @@ class ScopeBuilder:
                 native_handles.update({root: handle for root,handle in handles.items() if not root.startswith("argument::")})
                 body += self.native_call(call, actions, definitions, overwrites, native_handles,
                                          actuals=actuals(call))
-        body += _checked("fort_scope_close(fort_context)")
         return body
 
     def guard_owner_allocation(self, routine, first, last, replacement, serial, allocated_roots, origin_roots, arrays):
@@ -1361,11 +1380,12 @@ class ScopeBuilder:
 
     def scope_checkpoint(self):
         return (dict(self.outputs), {path:list(edits) for path,edits in self.edits.items()},
-                dict(self.clones), dict(self.queries), dict(self.generated), dict(self.numerical_reasons))
+                dict(self.clones), dict(self.queries), dict(self.generated), dict(self.numerical_reasons),
+                dict(self.numerical_ir), dict(self.batch_chains))
 
     def restore_scope_checkpoint(self, checkpoint):
         (self.outputs, self.edits, self.clones, self.queries,
-         self.generated, self.numerical_reasons) = checkpoint
+         self.generated, self.numerical_reasons, self.numerical_ir, self.batch_chains) = checkpoint
 
     def scan(self, nodes):
         from compiler.scopes.segments import StructuredScope, statement_span
@@ -1517,7 +1537,9 @@ class ScopeBuilder:
             "numerical_sources":[{"procedure":p.procedure,"path":str(p.path),"entry":p.entry,"sha256":p.digest}
                                  for p in sorted(self.packages.values(), key=lambda p:p.procedure)],
             "numerical_decisions":[{"procedure":procedure,"supported":bool(self.generated[procedure]),
-                                    "reason":self.numerical_reasons[procedure]}
+                                    "reason":self.numerical_reasons[procedure],
+                                    **({"batch_execution": self.generated[procedure].scoped["batch_execution"]}
+                                       if self.generated[procedure] else {})}
                                    for procedure in sorted(self.generated)],
             "artifacts_sha256":{name:sha256(content.encode()).hexdigest() for name,content in self.outputs.items()},
             "device_budget_bytes":self.device_budget,
