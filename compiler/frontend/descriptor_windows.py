@@ -1,0 +1,317 @@
+"""Original interval descriptor proofs, independent of entry payload facts.
+
+No projected/synthetic body or whole-procedure descriptor proof grants this
+authority. Selected original source and its complete direct call closure are
+checked; excluded prefixes/tails, reachability, aliases and definitions remain
+separate obligations before any owner may open.
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass, field
+from hashlib import sha256
+
+from fparser.two.utils import Base
+
+from compiler.frontend.call_bindings import resolve_source_call
+from compiler.frontend.native_prefix import NativePrefixProof
+from compiler.frontend.source_functions import _validate_resolution, _walk
+from compiler.frontend.structured_effects import _freeze, _thaw
+from compiler.ir import CompilationError
+from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
+
+DESCRIPTOR_WINDOW_VERSION = 1
+_UNSAFE = {"pointer", "optional", "volatile", "asynchronous", "value"}
+_INTRINSICS = set(INTRINSICS) | ARRAY_INQUIRIES | MODEL_INQUIRIES | {
+    "allocated", "present", "sum", "product", "any", "all", "count", "minval", "maxval"}
+
+
+def _kind(node):
+    return type(node).__name__
+
+
+def _children(node):
+    return node if isinstance(node, (tuple, list)) else getattr(node, "content", getattr(node, "items", ())) or ()
+
+
+def _hash(value):
+    return sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+
+
+class _Check:
+    def __init__(self, analysis):
+        self.analysis = analysis
+        self.nodes = self.operations = 0
+        self.active, self.checked = [], {}
+        self.functions = {}
+        self.prefix_scopes, self.prefixes = {}, {}
+
+    def prefix_directive(self, routine):
+        proof = self.prefix_scopes.get(routine.qualified)
+        if proof is None:
+            raise CompilationError("descriptor window original OpenMP storage requires registered whole-closure authority")
+        proof.validate(self.analysis, proof.procedure)
+        public = proof.public()
+        self.prefixes[proof.identity] = {
+            "proof_identity": proof.identity, "procedure": proof.procedure,
+            "covered_original_procedures": [item["procedure"] for item in public["closure"]],
+            "descriptor_evidence_only": True,
+            "whole_original_closure_scanned": True,
+            "native_prefix_execution_requirements": {
+                "requires_original_native_execution": public["requires_original_native_execution"],
+                "requires_serial_caller": public["requires_serial_caller"],
+                "requires_no_active_context": public["requires_no_active_context"]},
+            "execution_authorized": False, "allocation_freshness_authority": False,
+            "entry_definition_authority": False, "gpu_legality_established": False}
+
+    def tick(self):
+        self.nodes += 1
+        if self.nodes > 65536:
+            raise CompilationError("descriptor window original-source traversal budget exhausted")
+
+    def expression(self, routine, node, depth=0):
+        self.tick()
+        if depth > self.analysis.depth_limit:
+            raise CompilationError("descriptor window expression depth exhausted")
+        if not isinstance(node, (Base, tuple, list)):
+            return
+        kind = _kind(node)
+        scope = self.analysis.source_scope_for(node, routine.scope)
+        if (kind in {"Data_Ref", "Proc_Component_Ref", "Coindexed_Named_Object"}
+                or kind.startswith("Defined_") and kind.endswith("_Op")):
+            raise CompilationError("descriptor window association/operator effects require separate authority")
+        if kind == "Actual_Arg_Spec":
+            self.expression(routine, node.items[1], depth + 1)
+            return
+        if kind == "Name":
+            binding = self.analysis._binding(scope, node)
+            if binding is None or binding.attributes & _UNSAFE or binding.dtype.startswith("type("):
+                raise CompilationError("descriptor window original expression storage is unproved: " + str(node))
+            return
+        if kind in {"Part_Ref", "Function_Reference", "Intrinsic_Function_Reference", "Structure_Constructor"}:
+            name, args = node.items
+            binding = self.analysis._binding(scope, name)
+            if kind == "Part_Ref" and binding is not None and binding.rank:
+                self.expression(routine, name, depth + 1)
+                self.expression(routine, args, depth + 1)
+                return
+            candidates = self.analysis._candidates(scope, name)
+            if candidates:
+                proofs = [proof for proof in self.analysis._native_functions.values()
+                          if proof.procedure == routine.qualified and proof._expression is node]
+                if len(proofs) != 1:
+                    raise CompilationError("descriptor window requires registered original readonly source-function proof")
+                proof = proofs[0].validate(self.analysis, routine.qualified, node)
+                self.functions[proof.identity] = proof.public()
+                for mapping in proof.resolved.mappings:
+                    self.expression(routine, mapping.actual, depth + 1)
+                return
+            if (kind != "Intrinsic_Function_Reference" or binding is not None
+                    or self.analysis._unknown_exports(scope) or str(name).lower() not in _INTRINSICS):
+                raise CompilationError("descriptor window unknown function/escape effects: " + str(name))
+            self.expression(routine, args, depth + 1)
+            return
+        for child in _children(node):
+            self.expression(routine, child, depth + 1)
+
+    def visit(self, routine, graph, identities, depth=0):
+        if depth > self.analysis.depth_limit:
+            raise CompilationError("descriptor window control depth exhausted")
+        for identity in identities:
+            self.tick()
+            node = graph.nodes[identity]
+            if node.kind in {"sequence", "loop"}:
+                self.visit(routine, graph, node.children, depth + 1)
+            elif node.kind == "branch":
+                for condition, body in node.alternatives:
+                    self.visit(routine, graph, (body,) if condition is None else (condition, body), depth + 1)
+            elif node.kind == "operation":
+                self.operations += 1
+                if self.operations > self.analysis.operation_limit:
+                    raise CompilationError("descriptor window source operation budget exhausted")
+                role = node.details.get("evaluation")
+                for original in graph.source_nodes(identity):
+                    if role == "directive":
+                        self.prefix_directive(routine)
+                    elif role == "condition":
+                        self.expression(routine, original)
+                    elif role == "loop_header":
+                        control = original.items[1]
+                        if control is None or control.items[1] is None:
+                            raise CompilationError("descriptor window requires original counted loop control")
+                        self.expression(routine, control.items[1])
+                    elif _kind(original) == "Assignment_Stmt":
+                        target, _equals, value = original.items
+                        scope = self.analysis.source_scope_for(original, routine.scope)
+                        binding = self.analysis._binding(scope, target) if _kind(target) == "Name" else None
+                        if binding is not None and "allocatable" in binding.attributes:
+                            raise CompilationError("descriptor window whole allocatable assignment may replace storage")
+                        self.expression(routine, target)
+                        self.expression(routine, value)
+                    elif _kind(original) != "Continue_Stmt":
+                        raise CompilationError("descriptor window operation lacks descriptor/escape authority")
+            elif node.kind == "call":
+                self.operations += 1
+                if self.operations > self.analysis.operation_limit:
+                    raise CompilationError("descriptor window source operation budget exhausted")
+                originals = graph.source_nodes(identity)
+                if len(originals) != 1 or node.details.get("contract"):
+                    raise CompilationError("descriptor window requires original direct source calls")
+                call = originals[0]
+                scope = self.analysis.source_scope_for(call, routine.scope)
+                resolved = resolve_source_call(self.analysis, scope, call)
+                for mapping in resolved.mappings:
+                    if (mapping.presence != "supplied" or mapping.source_object is not None
+                            or mapping.formal_binding.attributes & _UNSAFE
+                            or mapping.binding is not None and mapping.binding.attributes & _UNSAFE):
+                        raise CompilationError("descriptor window call association/escape authority is unavailable")
+                    self.expression(routine, mapping.actual)
+                self.procedure(resolved.procedure)
+            else:
+                raise CompilationError("descriptor window unknown selected storage effects: " + node.kind)
+
+    def procedure(self, name):
+        if name in self.active:
+            raise CompilationError("descriptor window recursive call closure is unavailable")
+        if name in self.checked:
+            return
+        if len(self.active) >= self.analysis.depth_limit or len(self.checked) + len(self.active) >= self.analysis.procedure_limit:
+            raise CompilationError("descriptor window direct call closure budget exhausted")
+        routine = self.analysis._require_original(name)
+        _validate_resolution(self.analysis, routine.scope, _walk(routine.scope.node))
+        proofs = [proof for proof in getattr(self.analysis, "_native_prefix_proofs", {}).values()
+                  if isinstance(proof, NativePrefixProof) and proof.procedure == name]
+        if proofs:
+            if len(proofs) != 1:
+                raise CompilationError("descriptor window requires unique registered native-prefix authority")
+            proof = proofs[0].validate(self.analysis, name)
+            for item in proof.public()["closure"]:
+                self.prefix_scopes[item["procedure"]] = proof
+        for binding in routine.scope.bindings.values():
+            if binding.dtype not in {"real", "integer", "logical"} or binding.attributes & {"pointer", "volatile", "asynchronous"}:
+                raise CompilationError("descriptor window child specification effects require separate authority")
+            for axis in binding.shape_nodes:
+                self.expression(routine, _children(axis))
+        for argument in routine.arguments:
+            binding = routine.scope.bindings.get(argument)
+            if binding is None or binding.attributes & _UNSAFE:
+                raise CompilationError("descriptor window child formal storage is unproved")
+            if "allocatable" in binding.attributes and binding.intent not in {"in", "inout"}:
+                raise CompilationError("descriptor window allocatable OUT/unspecified entry may replace storage")
+        graph = self.analysis.structure(name)
+        if not graph.available:
+            raise CompilationError("descriptor window child bounded original graph is unavailable")
+        self.active.append(name)
+        self.visit(routine, graph, (graph.root_id,))
+        self.active.pop()
+        self.checked[name] = graph.identity
+
+
+def _derive(analysis, procedure, identities, roots):
+    routine = analysis._require_original(procedure)
+    graph = analysis.structure(procedure)
+    if not graph.available:
+        raise CompilationError("descriptor window requires a bounded original structured graph")
+    if (not isinstance(identities, tuple) or not identities or len(identities) > analysis.operation_limit
+            or any(not isinstance(identity, str) for identity in identities)):
+        raise CompilationError("descriptor window requires exact original structured node IDs")
+    _graph, selected = analysis._selected_source(procedure, identities)
+    _validate_resolution(analysis, routine.scope, _walk(tuple(
+        node for identity in selected for node in graph.source_nodes(identity))))
+    sequences = []
+    for parent in graph.nodes.values():
+        if parent.kind == "sequence" and selected[0] in parent.children:
+            first = parent.children.index(selected[0])
+            if parent.children[first:first + len(selected)] == selected:
+                sequences.append(parent.id)
+    headers = [node.id for node in graph.nodes.values() if node.kind == "loop"
+               and len(selected) == 1 and selected[0] in node.children
+               and graph.nodes[selected[0]].details.get("evaluation") == "loop_header"]
+    if len(sequences) != 1 and len(headers) != 1:
+        raise CompilationError("descriptor window requires one contiguous original immediate sequence")
+    if (not isinstance(roots, tuple) or not roots or len(roots) > analysis.operation_limit
+            or any(not isinstance(root, str) for root in roots) or len(set(roots)) != len(roots)):
+        raise CompilationError("descriptor window requires bounded unique original formal roots")
+    bindings = {binding.root: binding for binding in routine.scope.bindings.values() if binding.name in routine.arguments}
+    states = []
+    for root in roots:
+        binding = bindings.get(root)
+        if (binding is None or "allocatable" not in binding.attributes or binding.attributes & _UNSAFE
+                or binding.dtype not in {"real", "integer"} or binding.kind not in {4, 8}
+                or not 1 <= binding.rank <= 4):
+            raise CompilationError("descriptor window requires original numeric allocatable formals: " + root)
+        states.append({"resource": root, "original_binding": binding.public(),
+                       "stable": True, "original_descriptor_required": True,
+                       "descriptor_changes_within_selection": False, "escapes_within_selection": False,
+                       "requires_prior_noescape_and_current_allocation_proof": True,
+                       "requires_original_allocation_presence_and_alias_guards": True,
+                       "execution_requires_runtime_guard": True,
+                       "entry_definition_authority": False})
+    check = _Check(analysis)
+    check.active.append(procedure)
+    check.visit(routine, graph, selected)
+    return {"schema_version": DESCRIPTOR_WINDOW_VERSION, "procedure": procedure,
+            "source_identity": analysis.inputs.identity(), "structured_identity": graph.identity,
+            "analysis_identity": graph.authority_identity, "selected_node_ids": list(selected),
+            "parent_sequence": sequences[0] if sequences else None,
+            "parent_node": sequences[0] if sequences else headers[0],
+            "selection_role": "original contiguous sequence" if sequences else "original counted header",
+            "original_guard": list(graph.nodes[selected[0]].guard),
+            "resources": states, "source_call_closure": check.checked,
+            "native_source_function_requirements": list(check.functions.values()),
+            "native_prefix_descriptor_requirements": list(check.prefixes.values()),
+            "source_operations": check.operations, "source_traversal_entries": check.nodes,
+            "prefix_effects_proved": False, "entry_definition_authority": False,
+            "reachability_authority": False, "execution_authorized": False, "gpu_legality_established": False,
+            "requires_close_before_excluded_tail": True, "freshness_by_address_or_shape": False,
+            "limits": ["numeric allocatable original formals only", "no deferred groups or derived-object accesses",
+                       "child OpenMP requires registered complete native-prefix proof and full descriptor rescan",
+                       "excluded prefix and tail have no lifetime or definition authority",
+                       "registered readonly source-function proof required before query",
+                       "selected closure replacement, escapes, unknown calls and effects reject"]}
+
+
+@dataclass(frozen=True)
+class DescriptorWindowProof:
+    procedure: str
+    identity: str
+    _analysis: object = field(repr=False, compare=False)
+    _selected: tuple[str, ...] = field(repr=False, compare=False)
+    _roots: tuple[str, ...] = field(repr=False, compare=False)
+    _record: object = field(repr=False, compare=False)
+
+    def public(self):
+        return {"proof_identity": self.identity, **_thaw(self._record)}
+
+    def validate(self, analysis, procedure, selected_node_ids):
+        if (analysis is not self._analysis or procedure != self.procedure
+                or not isinstance(selected_node_ids, tuple) or selected_node_ids != self._selected
+                or getattr(analysis, "_descriptor_window_proofs", {}).get(self.identity) is not self):
+            raise CompilationError("descriptor window lacks registered original interval authority")
+        if _freeze(_derive(analysis, procedure, self._selected, self._roots)) != self._record:
+            raise CompilationError("descriptor window original source authority changed")
+        return self
+
+    def resource_state(self, root):
+        self.validate(self._analysis, self.procedure, self._selected)
+        states = {state["resource"]: state for state in _thaw(self._record)["resources"]}
+        if root not in states:
+            raise CompilationError("descriptor window resource was not proved")
+        return states[root]
+
+
+def prove_descriptor_window(analysis, procedure, selected_node_ids, requested_roots):
+    """Register selected-span stability, never prefix freshness or definitions."""
+    record = _derive(analysis, procedure, selected_node_ids, requested_roots)
+    identity = _hash(record)
+    registry = getattr(analysis, "_descriptor_window_proofs", None)
+    if registry is None:
+        registry = analysis._descriptor_window_proofs = {}
+    if identity in registry:
+        return registry[identity].validate(analysis, procedure, selected_node_ids)
+    if len(registry) >= analysis.procedure_limit:
+        raise CompilationError("descriptor window proof registry budget exhausted")
+    proof = DescriptorWindowProof(procedure, identity, analysis, selected_node_ids, requested_roots, _freeze(record))
+    registry[identity] = proof
+    return proof

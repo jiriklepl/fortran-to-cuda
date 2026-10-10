@@ -26,7 +26,7 @@ from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
 # Bump when source-effect, call-composition or summary semantics change.
-SOURCE_SUMMARY_VERSION = 16
+SOURCE_SUMMARY_VERSION = 17
 _DEFAULT_SUMMARY_CACHE = SummaryCache()
 
 
@@ -176,6 +176,14 @@ def _admit_cached_summary(item, routine, limit):
     for requirement in item["capture_lifetime_requirements"]:
         require(type(requirement) is dict and type(requirement.get("resource")) is str
                 and type(requirement.get("authorized")) is bool)
+        if "source_procedure" in requirement:
+            require(type(requirement["source_procedure"]) is str)
+        for view in requirement.get("view_chain", ()):
+            mapping(view)
+            require(type(view.get("caller")) is str and type(view.get("callee")) is str)
+        for guard in requirement.get("guard_frames", ()):
+            require(type(guard) is dict and type(guard.get("procedure")) is str
+                    and type(guard.get("condition")) is str)
     completion, sections, composition = item["native_completion"], item["native_sections"], item["effect_composition"]
     require(type(completion) is dict and type(completion.get("available")) is bool)
     require("reason" in completion and (type(completion["reason"]) is str or completion["reason"] is None))
@@ -1183,7 +1191,7 @@ class SourceEffects:
                    "native_function_requirements": []}
         if routine.source_kind == "external":
             summary["call_interface"] = self.external_interface(routine)
-        lifetime_requirements = {}
+        lifetime_requirements, mapped_lifetime_requirements = {}, {}
         summary["capture_lifetime_requirements"] = []
         _closure.summaries[requested] = summary
         undeclared = set(routine.arguments) - routine.scope.bindings.keys()
@@ -1436,6 +1444,34 @@ class SourceEffects:
                 summary["definition_diagnostics"].extend(child.get("definition_diagnostics",[]))
                 public = resolved.public()
                 by_formal = {item["formal_resource"]: item for item in public["resource_mappings"]}
+                # Incomplete children still expose typed lifetime obligations.
+                # Map those obligations at the original call without treating
+                # partial raw effects as complete or upgrading authorization.
+                # Distinct views/guards must not collapse into one root fact.
+                for requirement in child.get("capture_lifetime_requirements", ()):
+                    from compiler.frontend.structured_effects import mapped_resource
+                    projected = deepcopy(requirement)
+                    resource = requirement["resource"]
+                    mapping = by_formal.get(resource)
+                    if mapping is None:
+                        mapping = next((item for formal, item in sorted(by_formal.items(), key=lambda pair: -len(pair[0]))
+                                        if resource.startswith(formal + "%")), None)
+                    if mapping is not None:
+                        resource = mapped_resource(resource, {mapping["formal_resource"]: mapping["resource"]})
+                        if resource is None:
+                            continue
+                        projected["view_chain"] = [{"caller": requested, "callee": chosen, **deepcopy(mapping)},
+                                                   *projected.get("view_chain", ())]
+                    projected["resource"] = resource
+                    projected.setdefault("source_procedure", chosen)
+                    projected["guard_frames"] = [*({"procedure": requested, "condition": condition}
+                                                   for condition in guard), *projected.get("guard_frames", ())]
+                    identity = _canonical(projected)
+                    if (identity not in mapped_lifetime_requirements
+                            and len(mapped_lifetime_requirements) >= self.operation_limit):
+                        reasons.append("mapped lifetime requirement budget exhausted")
+                        break
+                    mapped_lifetime_requirements[identity] = projected
                 definition_events = []
                 for formal in child.get("definition_changes", ()):
                     item = by_formal.get(formal)
@@ -1632,7 +1668,9 @@ class SourceEffects:
                 elif operation["kind"] in {"write","overwrite"}:
                     written.add(root)
         summary["reasons"] = list(dict.fromkeys(reasons))
-        summary["capture_lifetime_requirements"] = [lifetime_requirements[root] for root in sorted(lifetime_requirements)]
+        summary["capture_lifetime_requirements"] = [
+            *(lifetime_requirements[root] for root in sorted(lifetime_requirements)),
+            *(mapped_lifetime_requirements[key] for key in sorted(mapped_lifetime_requirements))]
         summary["complete"] = not reasons
         summary["guaranteed_whole_overwrites"] = self.whole_overwrites(routine) if summary["complete"] else []
         summary["ordered_effects"] = self._compose_effects(summary, _closure)
@@ -1968,7 +2006,7 @@ class SourceEffects:
         return graph, tuple(identities)
 
     def _segment_projection(self, requested, identities, *, include_entry=False, capture_locals=False,
-                            _graph=None):
+                            _graph=None, descriptor_window=None):
         """Create a private proof projection only after original-node checks."""
         from fparser.two import Fortran2003 as F
         graph = self.structure(requested) if _graph is None else _graph
@@ -1980,6 +2018,8 @@ class SourceEffects:
         analysis.summaries, analysis._closures, analysis._native_sections = {}, {}, {}
         analysis._structures, analysis._segments, analysis._descriptor_proofs = {}, {}, {}
         analysis._descriptor_source = self
+        if descriptor_window is not None:
+            analysis._selected_descriptor_window = self, requested, identities, descriptor_window
         routine = copy(original)
         routine.scope = copy(original.scope)
         routine.scope.bindings = {name: copy(binding) for name, binding in original.scope.bindings.items()}
@@ -2037,7 +2077,8 @@ class SourceEffects:
         analysis.routines[requested] = routine
         return analysis, routine, tuple(dict.fromkeys(guards))
 
-    def segment_summary(self, requested, selected, *, include_entry=False, capture_locals=False):
+    def segment_summary(self, requested, selected, *, include_entry=False, capture_locals=False,
+                        descriptor_window=None):
         """Materialize a reached original segment under its own proof budget.
 
         Call effects still require a complete bounded child proof. A mixed
@@ -2045,17 +2086,26 @@ class SourceEffects:
         child as one opaque native operation. No guard or bound is evaluated.
         """
         graph, identities = self._selected_source(requested, selected)
+        descriptor_identity = None
+        if descriptor_window is not None:
+            from compiler.frontend.descriptor_windows import DescriptorWindowProof
+            if not isinstance(descriptor_window, DescriptorWindowProof):
+                raise CompilationError("selected descriptor effects require a registered original window proof")
+            descriptor_window.validate(self, requested, identities)
+            descriptor_identity = descriptor_window.identity
         if graph.deferred_native_descendants(identities):
             raise CompilationError("deferred native group requires whole original native completion authority")
-        key = graph.identity, identities, bool(include_entry), bool(capture_locals)
+        key = graph.identity, identities, bool(include_entry), bool(capture_locals), descriptor_identity
         if key in self._segments:
             return deepcopy(self._segments[key])
         analysis, _routine, guard = self._segment_projection(requested, identities,
-            include_entry=include_entry, capture_locals=capture_locals)
+            include_entry=include_entry, capture_locals=capture_locals, descriptor_window=descriptor_window)
         summary = analysis.summarize(requested)
         summary["structured_identity"] = graph.identity
         summary["selected_node_ids"] = list(identities)
         summary["includes_entry"] = bool(include_entry)
+        if descriptor_identity is not None:
+            summary["descriptor_window_identity"] = descriptor_identity
         # Materializing a branch/loop retains its inner original guards. The
         # outer source guards describe where this demanded segment is reached;
         # they are evidence and must never become early runtime predicates.
@@ -2075,7 +2125,8 @@ class SourceEffects:
         summary["analysis_identity"] = graph.authority_identity
         summary["summary_role"] = "reached_source_segment"
         summary["demand_identity"] = sha256(_canonical({"graph": graph.identity, "nodes": identities,
-            "entry": bool(include_entry), "capture_locals": bool(capture_locals)}).encode()).hexdigest()
+            "entry": bool(include_entry), "capture_locals": bool(capture_locals),
+            "descriptor_window_identity": descriptor_identity}).encode()).hexdigest()
         summary["summary_identity"] = sha256(_canonical({key: value for key, value in summary.items()
                                                          if key != "summary_identity"}).encode()).hexdigest()
         if len(self._segments) >= self.procedure_limit:
@@ -2324,6 +2375,16 @@ class SourceEffects:
 
     def descriptor_stability(self, requested):
         from compiler.frontend.structured_effects import descriptor_stability
+        selected = getattr(self, "_selected_descriptor_window", None)
+        if selected is not None and selected[1] == requested:
+            original, procedure, identities, proof = selected
+            proof.validate(original, procedure, identities)
+            result = proof.public()
+            return {"procedure": procedure, "structured_identity": result["structured_identity"],
+                    "analysis_identity": result["analysis_identity"], "complete": True,
+                    "resources": result["resources"], "descriptor_window_identity": proof.identity,
+                    "requirements": ["registered exact original source window", "close before excluded tail",
+                                     "independent entry/prefix definitions and runtime descriptor/alias guards"]}
         if hasattr(self, "_descriptor_source"):
             return self._descriptor_source.descriptor_stability(requested)
         graph = self.structure(requested)

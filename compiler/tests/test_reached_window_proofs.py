@@ -122,16 +122,20 @@ end subroutine
 def test_unknown_effects_or_allocation_prefix_never_resets_facts(tmp_path, prefix):
     attributes = ",allocatable" if prefix.startswith("allocate") else ""
     _path, analysis, _routine, selected, facts = fixture(tmp_path, prefix, attributes=attributes)
-    with pytest.raises(CompilationError, match="unknown effects|lifetime authority|complete prefix"):
+    with pytest.raises(CompilationError, match="unknown.*effects|lifetime authority|complete prefix|unknown selected storage"):
         prove(analysis, selected, facts)
     assert not getattr(analysis, "_reached_window_proofs", {})
 
 
-def test_same_shape_reallocation_in_suffix_is_honestly_unavailable(tmp_path):
+def test_later_reallocation_does_not_change_an_exact_earlier_window(tmp_path):
     _path, analysis, _routine, selected, facts = fixture(tmp_path, suffix="deallocate(a)\nallocate(a(7))",
                                                      attributes=",allocatable")
-    with pytest.raises(CompilationError, match="source-relative lifetime authority"):
-        prove(analysis, selected, facts)
+    assert not analysis.descriptor_stability(ENTRY)["complete"]
+    proof = prove(analysis, selected, facts)
+    assert proof.capture_state(ROOT)["initialized"] == "whole"
+    assert proof.public()["descriptor_window_identities"]
+    assert proof.public()["mandatory_close"].startswith("before the first excluded operation")
+    assert not proof.public()["execution_authorized"]
 
 
 def test_unchanged_allocatable_input_retains_original_descriptor_guard(tmp_path):
@@ -172,13 +176,54 @@ def test_complete_control_paths_are_met_without_evaluating_flags(tmp_path):
     assert "IF (flag)" in str(routine.execution)
 
 
-def test_nested_and_partial_joined_selections_need_distinct_authority(tmp_path):
+def test_nested_counted_window_proves_first_traversal_only(tmp_path):
     _path, analysis, routine, _selected, facts = fixture(tmp_path, prefix="do counter=1,3\ncall consume(a)\nend do")
     nested = next(node for node in walk(routine.execution) if type(node).__name__ == "Call_Stmt")
-    with pytest.raises(CompilationError, match="top-level"):
-        prove(analysis, (nested,), facts)
+    proof = prove(analysis, (nested,), facts)
+    assert proof.public()["first_traversal_controls"]
+    assert proof.public()["activation"] == "first traversal only; no live context during the native prefix"
+    assert "backedge" in proof.public()["mandatory_close"]
+    assert proof.public()["lifecycle"].endswith("no reopening")
+    assert not proof.public()["execution_authorized"]
+
+
+def test_partial_joined_selections_need_distinct_authority(tmp_path):
     _path, analysis, routine, selected, facts = fixture(tmp_path, prefix="!$omp parallel\na=3.0_8\n!$omp end parallel")
     with pytest.raises(CompilationError, match="whole-completion authority"):
+        prove(analysis, selected, facts)
+
+
+def test_nested_window_preserves_loop_prefix_definitions_and_excludes_swapping_tail(tmp_path):
+    source, analysis, routine, _selected, facts = fixture(tmp_path, initialized="none", attributes=",allocatable")
+    source.write_text(source.read_text().replace("counter=2\ncall consume(a)", """do counter=1,3
+a(:)=3.0_8
+call consume(a)
+deallocate(a)
+allocate(a(7))
+end do"""))
+    analysis = SourceEffects([source])
+    routine = analysis.routines[ENTRY]
+    selected = (next(node for node in walk(routine.execution) if type(node).__name__ == "Call_Stmt"),)
+    facts["sources"] = dict(analysis.sources)
+    # Element/section updates do not replace storage, but the current whole
+    # coverage prover intentionally declines this section sweep. Seed whole
+    # entry coverage to test lifetime independently from whole-write inference.
+    facts["captures"][ROOT]["initialized"] = "whole"
+    proof = prove(analysis, selected, facts)
+    assert proof.capture_state(ROOT)["initialized"] == "whole"
+    assert not analysis.descriptor_stability(ENTRY)["complete"]
+    assert len(proof.public()["descriptor_window_identities"]) == 3
+
+
+@pytest.mark.parametrize("prefix", [
+    "if(flag) then\ncall consume(a)\nend if",
+    "do counter=1,3\nif(flag) then\ncall consume(a)\nend if\nend do",
+    "do counter=1,3\ndo other=1,3\ncall consume(a)\nend do\nend do",
+])
+def test_conditional_or_deeper_loop_activation_requires_distinct_reachability(tmp_path, prefix):
+    _path, analysis, routine, _selected, facts = fixture(tmp_path, prefix=prefix, declaration="integer::other")
+    selected = (next(node for node in walk(routine.execution) if type(node).__name__ == "Call_Stmt"),)
+    with pytest.raises(CompilationError, match="first-traversal top-level counted"):
         prove(analysis, selected, facts)
 
 
@@ -261,3 +306,75 @@ def test_seed_snapshot_cannot_be_changed_after_proof_issue(tmp_path):
     facts["captures"][ROOT]["initialized"] = "none"
     assert proof.capture_state(ROOT)["initialized"] == "whole"
     assert proof.validate(analysis, ENTRY, selected) is proof
+
+
+@pytest.mark.parametrize("allocatable", [False, True])
+@pytest.mark.parametrize("parallel", [False, True])
+@pytest.mark.parametrize("source_function", [False, True])
+def test_original_native_prefix_hidden_reads_compose_without_gpu_capture(tmp_path, allocatable, parallel, source_function):
+    body = "total=sum(a)*spacing(1)"
+    if parallel:
+        body = """total=0.0_8
+!$omp parallel do private(i) reduction(+:total)
+do i=lbound(a,1),ubound(a,1)
+total=total+a(i)*spacing(1)
+end do
+!$omp end parallel do"""
+    function = ""
+    if source_function:
+        body = (body.replace("private(i)", "private(i,p)")
+                .replace("total=total+a(i)*spacing(1)", "p=a(i)\ntotal=total+value(p)")
+                .replace("total=sum(a)*spacing(1)", "p=sum(a)\ntotal=value(p)"))
+        function = """pure real(8) function value(x) result(r)
+use native_geometry,only:spacing
+real(8),intent(in)::x
+r=x*spacing(1)
+end function
+"""
+    helper = function + f"""subroutine measure(a,total)
+use native_geometry,only:spacing
+real(8),intent(in)::a(:)
+real(8),intent(out)::total
+real(8)::p
+integer::i
+if(allocated(spacing)) then
+{body}
+end if
+end subroutine"""
+    path, _old, _routine, _selected, facts = fixture(tmp_path, prefix="call measure(a,total)",
+        declaration="real(8)::total", helper=helper, attributes=",allocatable" if allocatable else "")
+    path.write_text("module native_geometry\nreal(8),allocatable::spacing(:)\nend module\n" + path.read_text())
+    analysis = SourceEffects([path])
+    facts["sources"] = dict(analysis.sources)
+    selected = (next(node for node in analysis.routines[ENTRY].execution.content
+                     if type(node).__name__ == "Call_Stmt" and str(node.items[0]) == "consume"),)
+    child = "renamed_windows::measure"
+    original = analysis.summarize(child)
+    assert not original["complete"]
+    proof = prove(analysis, selected, facts)
+    assert proof.public()["native_prefix_proof_identities"]
+    assert proof.capture_state(ROOT)["initialized"] == "whole"
+    assert analysis.summarize(child) == original
+    assert not analysis.stable_module_allocatables
+    assert "native_geometry::spacing" not in facts["captures"]
+    assert not proof.public()["execution_authorized"]
+    facts["captures"][ROOT]["initialized"] = "none"
+    with pytest.raises(CompilationError, match="incomplete definition"):
+        prove(analysis, selected, facts)
+
+
+def test_selected_window_never_uses_native_prefix_lifetime_exemption(tmp_path):
+    path, _old, _routine, _selected, facts = fixture(tmp_path)
+    text = path.read_text().replace("module renamed_windows", """module native_geometry
+real(8),allocatable::spacing(:)
+end module
+module renamed_windows
+use native_geometry,only:spacing""").replace("a=a+1.0_8", "a=a+spacing(1)")
+    path.write_text(text)
+    analysis = SourceEffects([path])
+    facts["sources"] = dict(analysis.sources)
+    selected = (next(node for node in analysis.routines[ENTRY].execution.content
+                     if type(node).__name__ == "Call_Stmt"),)
+    with pytest.raises(CompilationError, match="complete prefix/window effects"):
+        prove(analysis, selected, facts)
+    assert not analysis.stable_module_allocatables

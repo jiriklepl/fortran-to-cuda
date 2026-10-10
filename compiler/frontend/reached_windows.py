@@ -1,10 +1,10 @@
 """One-shot source-position state proofs; no execution or owner reopening.
 
-The first contract selects contiguous original top-level statements. It reuses
-the structured tree and ordered native effects, meets all prefix branches, and
-declines allocation replacement and incomplete closures. Supplied invocation
-facts are assumptions requiring independent admission. Registration guards,
-runtime alias checks and numerical legality remain separate obligations.
+The contract selects contiguous original statements at entry or in the first
+traversal of one serial counted loop. It reuses ordered native effects and
+source-relative descriptor proofs, meets prefix branches, and declines unknown
+closures. Supplied invocation facts require independent admission. Registration,
+runtime alias checks, mandatory closure and numerical legality remain separate.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from fparser.two.utils import walk
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 
-REACHED_WINDOW_VERSION = 1
+REACHED_WINDOW_VERSION = 2
 _EFFECTS = {"read", "write", "overwrite", "descriptor_read", "definition_change"}
 _FORBIDDEN = {"pointer", "optional", "volatile", "asynchronous", "value"}
 
@@ -54,6 +54,51 @@ def _whole_view(effect):
     return True
 
 
+def _position(analysis, procedure, selection):
+    """Authenticate an immediate sequence without expanding its excluded tail."""
+    try:
+        graph, selected = analysis._selected_source(procedure, selection)
+    except CompilationError as error:
+        raise CompilationError("reached window requires contiguous original source authority: " + str(error)) from error
+    parents = []
+    for node in graph.nodes.values():
+        if node.kind != "sequence" or not selected or selected[0] not in node.children:
+            continue
+        first = node.children.index(selected[0])
+        if tuple(node.children[first:first + len(selected)]) == selected:
+            parents.append((node, first))
+    if len(parents) != 1:
+        raise CompilationError("reached window requires one contiguous original immediate sequence")
+    parent, first = parents[0]
+    root = graph.nodes[graph.root_id]
+    prefix, controls = list(parent.children[:first]), []
+    if parent.id != root.id:
+        loops = [node for node in graph.nodes.values()
+                 if node.kind == "loop" and node.children and node.children[-1] == parent.id
+                 and node.id in root.children]
+        if len(loops) != 1:
+            raise CompilationError("reached window nested entry requires a first-traversal top-level counted loop")
+        loop = loops[0]
+        originals = graph.source_nodes(loop.id)
+        if len(originals) != 1 or type(originals[0]).__name__ != "Block_Nonlabel_Do_Construct":
+            raise CompilationError("reached window requires original serial counted DO syntax")
+        contents = tuple(originals[0].content)
+        syntax = [node for node in contents if type(node).__name__ != "Comment"]
+        header = syntax[0] if syntax else None
+        control = getattr(header, "items", (None, None))[1] if header is not None else None
+        if (type(header).__name__ != "Nonlabel_Do_Stmt" or type(control).__name__ != "Loop_Control"
+                or control.items[1] is None or type(syntax[-1]).__name__ != "End_Do_Stmt"
+                or any(type(node).__name__ == "Comment" and str(node).lstrip().lower().startswith("!$")
+                       for node in contents)):
+            raise CompilationError("reached window requires an unchanged serial counted header and join")
+        headers = loop.children[:-1]
+        if (len(headers) != 1 or graph.nodes[headers[0]].details.get("evaluation") != "loop_header"):
+            raise CompilationError("reached window cannot split an attached OpenMP construct")
+        prefix = [*root.children[:root.children.index(loop.id)], *headers, *prefix]
+        controls = [loop.id]
+    return graph, selected, tuple(prefix), tuple(controls)
+
+
 def _derive(analysis, procedure, selection, roots, facts):
     routine = analysis._require_original(procedure)
     graph = analysis.structure(procedure)
@@ -64,20 +109,9 @@ def _derive(analysis, procedure, selection, roots, facts):
     if (not isinstance(selection, tuple) or not selection
             or len(selection) > analysis.operation_limit or any(isinstance(node, str) for node in selection)):
         raise CompilationError("reached window requires an exact original statement tuple")
-    original = tuple(getattr(routine.execution, "content", ()))
-    starts = [index for index in range(len(original) - len(selection) + 1)
-              if all(node is original[index + offset] for offset, node in enumerate(selection))]
-    if len(starts) != 1:
-        raise CompilationError("reached window requires contiguous original top-level statements; nested entry is unavailable")
-    graph, selected = analysis._selected_source(procedure, selection)
-    children = graph.nodes[graph.root_id].children
-    if not selected or any(identity not in children for identity in selected):
-        raise CompilationError("reached window cannot split an original control or native joined group")
-    first = children.index(selected[0])
-    if tuple(children[first:first + len(selected)]) != selected:
-        raise CompilationError("reached window selection is not one complete contiguous source span")
+    graph, selected, prefix, controls = _position(analysis, procedure, selection)
     if any(type(node).__name__ == "Comment" and str(node).lstrip().lower().startswith("!$omp")
-           for node in walk(original[:starts[0] + len(selection)])):
+           for identity in (*prefix, *selected) for node in walk(graph.source_nodes(identity))):
         raise CompilationError("reached window direct OpenMP groups require separate whole-completion authority")
     if (not isinstance(roots, tuple) or not roots or len(roots) > analysis.operation_limit
             or any(not isinstance(root, str) for root in roots) or len(set(roots)) != len(roots)):
@@ -97,22 +131,45 @@ def _derive(analysis, procedure, selection, roots, facts):
         if "allocatable" in binding.attributes and binding.name not in routine.arguments:
             raise CompilationError("reached window local/module allocation requires separate selected-position lifetime authority: " + root)
         bindings[root], coverage[root] = binding, fact["initialized"]
-    # Existing descriptor proof is intentionally stricter than this window.
-    # A later replacement therefore declines, rather than inventing a selected
-    # lifetime proof or restoring entry facts from a matching address.
-    if any("allocatable" in binding.attributes for binding in bindings.values()):
-        descriptors = analysis.descriptor_stability(procedure)
-        stable = {item["resource"] for item in descriptors["resources"] if item["stable"]}
-        if any("allocatable" in binding.attributes and root not in stable for root, binding in bindings.items()):
-            raise CompilationError("reached window allocation replacement or escape requires source-relative lifetime authority")
+    descriptor_roots = tuple(root for root, binding in bindings.items() if "allocatable" in binding.attributes)
     for root in graph.nodes[graph.entry_id].details.get("definition_changes", ()):
         if root in coverage:
             coverage[root] = "none"
-    demands, visits, effects = [], 0, 0
+    demands, descriptor_demands, native_prefix_demands, visits, effects = [], [], [], 0, 0
 
-    def leaf(identity, state):
+    def leaf(identity, state, *, before_owner=False):
         nonlocal effects
-        summary = analysis.segment_summary(procedure, (identity,), capture_locals=True)
+        selected_analysis, native_prefix, native_reads = analysis, None, set()
+        # Native prefix effects are conditional on the original call finishing
+        # before any owner exists. They never grant a managed capture or make
+        # an incomplete ordinary summary complete in the original analysis.
+        if before_owner and graph.nodes[identity].kind == "call":
+            initial = analysis.segment_summary(procedure, (identity,), capture_locals=True)
+            if not initial["complete"] or not initial["native_completion"]["available"]:
+                from compiler.frontend.native_prefix import _fork, prove_native_prefix
+                child = graph.nodes[identity].details.get("procedure")
+                if child not in analysis.routines or graph.nodes[identity].details.get("contract"):
+                    raise CompilationError("reached window native prefix needs a complete original source call")
+                native_prefix = prove_native_prefix(analysis, child).validate(analysis, child)
+                native_reads = set(native_prefix.readonly_module_resources)
+                selected_analysis = _fork(analysis, native_reads)
+                # Any descriptor consumer authenticates its child token in the
+                # same private analysis, never in the original GPU authority.
+                prove_native_prefix(selected_analysis, child)
+                # Rebuild readonly scalar-expression tokens in this exact
+                # analysis. The prefix proof's deeper detached fork cannot
+                # lend its registered function tokens to a descriptor query.
+                child_effects = selected_analysis.summarize(child)
+                if not child_effects["complete"]:
+                    raise CompilationError("reached window native prefix child proof is incomplete")
+                native_prefix_demands.append(native_prefix.identity)
+        descriptor = None
+        if descriptor_roots:
+            from compiler.frontend.descriptor_windows import prove_descriptor_window
+            descriptor = prove_descriptor_window(selected_analysis, procedure, (identity,), descriptor_roots)
+            descriptor_demands.append(descriptor.identity)
+        summary = selected_analysis.segment_summary(procedure, (identity,), capture_locals=True,
+                                                    descriptor_window=descriptor)
         if not summary["complete"] or not summary.get("effect_composition", {}).get("available"):
             raise CompilationError("reached window needs complete prefix/window effects: "
                                    + "; ".join(summary.get("reasons", ())))
@@ -126,6 +183,9 @@ def _derive(analysis, procedure, selection, roots, facts):
                 raise CompilationError("reached window native environment/control effect needs distinct authority")
             root = effect["resource"]
             if root not in state:
+                if (before_owner and native_prefix is not None and root in native_reads
+                        and effect["kind"] in {"read", "descriptor_read"}):
+                    continue  # Unchanged native read; no device capture or coverage.
                 array = effect.get("rank", 0) or any(
                     view.get("actual_descriptor", {}).get("rank", 0)
                     for view in effect.get("view_chain", ()) if view.get("actual_descriptor") is not None)
@@ -146,7 +206,7 @@ def _derive(analysis, procedure, selection, roots, facts):
                 state[root] = "whole"
         return state
 
-    def transfer(identity, state, depth=0):
+    def transfer(identity, state, depth=0, *, before_owner=False):
         nonlocal visits
         visits += 1
         if visits > graph.node_limit or depth > analysis.depth_limit:
@@ -154,15 +214,15 @@ def _derive(analysis, procedure, selection, roots, facts):
         node = graph.nodes[identity]
         if node.kind == "sequence":
             for child in node.children:
-                state = transfer(child, state, depth + 1)
+                state = transfer(child, state, depth + 1, before_owner=before_owner)
             return state
         if node.kind == "branch":
             paths = []
             for condition, body in node.alternatives:
                 path = dict(state)
                 if condition is not None:
-                    path = transfer(condition, path, depth + 1)
-                paths.append(transfer(body, path, depth + 1))
+                    path = transfer(condition, path, depth + 1, before_owner=before_owner)
+                paths.append(transfer(body, path, depth + 1, before_owner=before_owner))
             if not node.alternatives or node.alternatives[-1][0] is not None:
                 paths.append(dict(state))
             return {root: "whole" if all(path[root] == "whole" for path in paths) else "none" for root in state}
@@ -170,34 +230,38 @@ def _derive(analysis, procedure, selection, roots, facts):
             raise CompilationError("reached window unknown effects or deferred native group lacks window authority")
         if node.kind not in {"operation", "call", "loop", "associate"}:
             raise CompilationError("reached window source node requires distinct control authority")
-        return leaf(identity, state)
+        return leaf(identity, state, before_owner=before_owner)
 
-    for identity in children[:first]:
-        coverage = transfer(identity, coverage)
+    for identity in prefix:
+        coverage = transfer(identity, coverage, before_owner=True)
     at_entry = dict(coverage)
     for identity in selected:
         coverage = transfer(identity, coverage)
     states = [{"resource": root, "initialized": at_entry[root], "definition_coverage": at_entry[root],
                "coverage_on_return": coverage[root], "storage": "original current binding",
                "escapes": False, "allocation_changes": False,
-               "descriptor_authority": "complete original effects; existing whole-procedure allocatable proof when needed",
+               "descriptor_authority": "registered source-relative prefix/window proofs; excluded tail requires close",
                "requires_original_allocation_presence_guard": "allocatable" in bindings[root].attributes,
                "requires_runtime_layout_and_alias_guards": True,
                "address_or_shape_freshness_inferred": False} for root in roots]
     return {"schema_version": REACHED_WINDOW_VERSION, "procedure": procedure,
             "structured_identity": graph.identity, "source_identity": analysis.inputs.identity(),
             "analysis_identity": graph.authority_identity, "selected_node_ids": list(selected),
-            "prefix_node_ids": list(children[:first]), "entry_facts_identity": _hash(facts),
+            "prefix_node_ids": list(prefix), "first_traversal_controls": list(controls),
+            "descriptor_window_identities": descriptor_demands, "entry_facts_identity": _hash(facts),
+            "native_prefix_proof_identities": native_prefix_demands,
             "entry_facts_authority": "conditional on supplied invocation-entry facts; independent admission required",
             "source_demands": demands, "control_visits": visits, "ordered_effects": effects,
             "states": states, "lifecycle": "one invocation; dormant -> active -> spent; no reopening",
             "native_only_proof": True, "gpu_legality_established": False,
             "execution_authorized": False, "definition_facts_reset": False,
             "requires_original_serial_caller_guard": True,
-            "limits": ["top-level contiguous original selections only", "whole/none coverage only",
+            "mandatory_close": "before the first excluded operation; before any enclosing loop backedge",
+            "activation": "first traversal only; no live context during the native prefix",
+            "limits": ["one original immediate sequence at top level or first traversal of one top-level counted loop", "whole/none coverage only",
                        "direct OpenMP groups require a separate complete-group selection contract",
                        "every payload array dependency must be included; runtime nonalias guards remain required",
-                       "allocation replacement and incomplete closures rejected",
+                       "allocation replacement within prefix/window and incomplete closures rejected",
                        "runtime registration/layout/alias guards and numerical legality required separately"]}
 
 
