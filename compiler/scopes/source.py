@@ -676,8 +676,8 @@ class ScopeBuilder:
             for name in ("shared_entry.cu", "shared_interface.f90"):
                 self.outputs[directory + "/" + name] = artifacts[name]
             self.outputs[directory + "/common_functions.cuh"] = read_common_header()
-            self.outputs[directory + "/scoped_entry.hpp"] = self.runtime_outputs["scoped_entry.hpp"]
-            self.outputs[directory + "/scoped_runtime.h"] = self.runtime_outputs["scoped_runtime.h"]
+            for name in ("scoped_entry.hpp", "scoped_runtime.h", "scoped_team_observer.hpp"):
+                self.outputs[directory + "/" + name] = self.runtime_outputs[name]
             if views:
                 for name in ("view_entry.hpp", "scoped_regions.hpp"):
                     self.outputs[directory + "/" + name] = self.runtime_outputs[name]

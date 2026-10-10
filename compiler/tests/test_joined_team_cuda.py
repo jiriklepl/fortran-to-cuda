@@ -292,7 +292,10 @@ def joined_binaries(tmp_path_factory):
                 target = cache[key] if cached else build/(str(len(objects))+'.o')
                 if not cached:
                     flags = cuda_flags if item['language'] == 'cuda' else fortran_flags
-                    run([*flags, '-I', str(output), '-I', str(build), '-c', str(source), '-o', str(target)], cwd=build)
+                    # Public entries must find their approved support headers
+                    # through their own artifact tree, as independent adapters do.
+                    include_flags = [] if item['language'] == 'cuda' else ['-I', str(output), '-I', str(build)]
+                    run([*flags, *include_flags, '-c', str(source), '-o', str(target)], cwd=build)
                     if item['language'] == 'cuda':
                         cache[key] = target
                 reuse.append({'case': label, 'source': item['path'], 'sha256': digest, 'reused': cached,
