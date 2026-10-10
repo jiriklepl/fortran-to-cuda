@@ -8,6 +8,7 @@ from compiler.emission.common.c_family import cpp_type, indent, render_assignmen
 from compiler.emission.common.loops import sequential_block
 from compiler.emission.common.memory import render_memory
 from compiler.emission.common.sessions import (
+    _preserve_numerical_environment,
     execution_definition,
     lifecycle_definition,
     lifecycle_name,
@@ -18,6 +19,37 @@ from compiler.emission.common.symbols import host_symbols
 from compiler.emission.cuda.kernels import generate_kernel, generate_launch
 from compiler.ir import ExecutionPlan, FunctionIR, HostBlock, ParallelRegion, SequentialRegion
 from compiler.memory import MemoryPlan, plan_memory, validate_memory
+
+
+def _numerical_environment_guard(function, *, collective=False, query=False):
+    """Check the original caller threads before setup, policy or numerical work.
+
+    Direct/session entries have no original Fortran body to replay. Their
+    failure is explicit; only source-integrated callers own a native fallback.
+    """
+    if not function.requires_numerical_environment:
+        return []
+    if collective:
+        # Every participant owns a local value. Its lifetime extends through
+        # both barriers, so one selected local safely carries uniform readiness.
+        lines = ["int fort_internal_environment = 1;",
+                 "int *fort_internal_shared_environment = nullptr;",
+                 "#pragma omp single copyprivate(fort_internal_shared_environment)",
+                 "{ fort_internal_shared_environment = &fort_internal_environment; }",
+                 "if (!fort_runtime::numerical_environment_supported()) {",
+                 "    #pragma omp atomic write",
+                 "    *fort_internal_shared_environment = 0;", "}",
+                 "#pragma omp barrier",
+                 "const bool fort_internal_environment_ready = *fort_internal_shared_environment != 0;",
+                 "#pragma omp barrier"]
+        condition = "!fort_internal_environment_ready"
+    else:
+        lines = []
+        condition = "!fort_runtime::numerical_environment_supported()"
+    failure = ("return 0;" if query else
+               'storage::fail("unsupported numerical environment for real short reduction; '
+               'requires round-to-nearest with host traps disabled");')
+    return [*lines, f"if ({condition}) {{ {failure} }}"]
 
 
 def _execute(step) -> list[str]:
@@ -69,6 +101,12 @@ def generate_cuda(
     for region in plan.regions:
         lines.extend(generate_kernel(region))
     if offload is not None:
+        offload.report["numerical_environment"] = {
+            "required": function.requires_numerical_environment,
+            "runtime_check": "original caller threads before query and execution",
+            "unsupported": "query selects original native caller; direct execution fails before work",
+            "caller_contract": "floating-point exception flags are not observed",
+        }
         lines.append(offload.helpers)
         signature = ", ".join(cpp_declaration(a) if a.symbol.rank else
                               f"const {cpp_type(a.symbol)} &{a.name}" for a in abi)
@@ -79,6 +117,9 @@ def generate_cuda(
                         *indent([line.replace("offload::decision_trace(", "offload::decision_trace_single(") for line in decision], 2),
                         "    }();", "}", "return result;"]
         lines += [f'extern "C" int cpp_{offload.query_name}({signature}) {{',
+                  *indent(_numerical_environment_guard(function,
+                              collective=offload.report["collective_entry"], query=True)),
+                  *(_preserve_numerical_environment() if function.requires_numerical_environment else []),
                   *indent(decision), "}"]
 
     def run_body(operations):
@@ -114,6 +155,10 @@ def generate_cuda(
         )
     )
     lines.append(") {")
+    lines.extend(indent(_numerical_environment_guard(function,
+        collective=offload is not None and offload.report["collective_entry"])))
+    if function.requires_numerical_environment:
+        lines.extend(_preserve_numerical_environment())
     if offload is not None:
         lines.extend(indent(offload.body))
         lines.extend(["}", "}", ""])

@@ -231,7 +231,7 @@ def test_real_literal_precision_is_preserved(tmp_path: Path) -> None:
         ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "a(1)=erf(1.0_knd)", "unsupported intrinsic"),
         ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "a(1)=2.0_knd**n", "INTEGER constant exponent"),
         ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "a(1)=2_knd", "integer literal kinds"),
-        ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "a(1)=a(1:2)", "unsupported expression"),
+        ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "a(1)=a(1:2)", "scalar assignment requires a scalar expression"),
         ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "a(1)=size(a,1.0)", "dimension must be INTEGER"),
         ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "a(1)=size(a,2)", "outside rank"),
         ("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "a(1)=missing", "undeclared"),

@@ -128,10 +128,13 @@ def generate_structured(function, plan, config):
     known = analysis.available and all(
         u.work_per_iteration is not None and not u.work_is_upper_bound for u in analysis.units
     )
-    report["estimate_available"] = bool(known and config.profile is not None)
+    report["estimate_available"] = bool(known and config.profile is not None
+                                        and not function.requires_numerical_environment)
     report["work_per_iteration"] = [u.work_per_iteration for u in analysis.units]
     if not known:
         report["estimate_reason"] = "work estimate is unknown or conditional"
+    if function.requires_numerical_environment:
+        report["estimate_reason"] = "numerical_environment_protocol_calibration_unavailable"
     fallback = [f"{cpp_type(s)} {s.cpp_name};" for s in host_symbols(function, plan)] + cpp_plan_lines(plan)
     serial_fallback = [line for line in fallback if not line.lstrip().startswith("#pragma omp")]
     if config.collective:
@@ -333,7 +336,7 @@ def generate_structured(function, plan, config):
     if config.policy == "sections":
         compatible = "true"
     else:
-        ready += f" && {name}_profile.valid" if known else " && false"
+        ready += f" && {name}_profile.valid" if known and not function.requires_numerical_environment else " && false"
     decision = [
         f"if (!({ready})) {{",
         f'    offload::decision_trace("{function.name}", "native", 0, 0); return 0;',

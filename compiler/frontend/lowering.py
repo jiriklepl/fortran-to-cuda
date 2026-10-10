@@ -7,7 +7,6 @@ arguments to their actual storage identities before any dependence analysis.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from itertools import product
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +33,7 @@ from compiler.ir import (
     SourceLocation,
     Symbol,
     Unary,
+    walk_expr,
 )
 from compiler.ir.integers import constant_integer, integer_literal
 from compiler.ir.intrinsics import (
@@ -98,6 +98,39 @@ class _PrivateArray:
             offset += (index - lower) * pitch
             pitch *= max(0, upper - lower + 1)
         return self.elements[offset]
+
+
+@dataclass(frozen=True)
+class _ConstantArray:
+    """Immutable declared constants; these are not private runtime storage."""
+
+    name: str
+    dtype: ScalarType
+    bounds: tuple[tuple[int, int], ...]
+    elements: tuple[Expr, ...]
+
+    @property
+    def rank(self):
+        return len(self.bounds)
+
+    def element(self, indices, location):
+        offset, pitch = 0, 1
+        for index, (lower, upper) in zip(indices, self.bounds, strict=True):
+            if not lower <= index <= upper:
+                raise CompilationError(f"constant array subscript outside bounds of {self.name}", location)
+            offset += (index - lower) * pitch
+            pitch *= max(0, upper - lower + 1)
+        if offset >= len(self.elements):
+            raise CompilationError("PARAMETER arrays require dependency-ordered initializers", location)
+        return self.elements[offset]
+
+
+@dataclass(frozen=True)
+class _FixedVector:
+    """A transient bounded expression, expanded before the public scalar IR."""
+
+    dtype: ScalarType
+    elements: tuple[Expr, ...]
 
 
 @dataclass(frozen=True)
@@ -234,6 +267,9 @@ class _Lowerer:
         self.private_array_groups = 0
         self.unrolled_values: dict[Symbol, int] = {}
         self.unrolled_iterations = 0
+        self.vector_elements = 0
+        self.constant_initialization = False
+        self.requires_numerical_environment = False
 
     def location(self, node: Any, stack: tuple[str, ...] = ()) -> SourceLocation:
         for child in walk(node):
@@ -475,8 +511,8 @@ class _Lowerer:
                     entity_intent = "inout" if rank else "in"
             elif intent is not None:
                 raise self.error(f"INTENT is only valid for dummy arguments: {name}", node)
-            if parameter and (name in arguments or initializer is None or rank):
-                raise self.error("only initialized scalar PARAMETER declarations are supported", node)
+            if parameter and (name in arguments or initializer is None or rank and (rank != 1 or not bounds)):
+                raise self.error("PARAMETER declarations require initialized scalars or bounded rank-one vectors", node)
             result.append(
                 _Declaration(
                     name,
@@ -513,7 +549,8 @@ class _Lowerer:
         bindings = {name: self.new_symbol(declarations[name], parameter=True) for name in routine.arguments}
         parameters = tuple(bindings[name] for name in routine.arguments)
         body = self.inline(routine, bindings, (), (), frozenset())
-        return FunctionIR(routine.name, routine.module, parameters, tuple(self.symbols), body, self.path)
+        return FunctionIR(routine.name, routine.module, parameters, tuple(self.symbols), body, self.path,
+                          requires_numerical_environment=self.requires_numerical_environment)
 
     def inline(
         self,
@@ -540,7 +577,10 @@ class _Lowerer:
                                 for name, value in host[2].items()}, **declarations}
         for declaration in routine.declarations:
             if declaration.name not in parameters:
-                if declaration.bounds:
+                if declaration.constant and declaration.rank:
+                    bindings[declaration.name] = _ConstantArray(declaration.name, declaration.dtype,
+                                                                 declaration.bounds, ())
+                elif declaration.bounds:
                     count = 1
                     for lower, upper in declaration.bounds:
                         count *= max(0, upper - lower + 1)
@@ -563,7 +603,31 @@ class _Lowerer:
             initializers = []
             for declaration in routine.declarations:
                 if declaration.initializer is not None:
-                    value, prelude = self.evaluated(declaration.initializer, bindings, declaration.location)
+                    previous_constant = self.constant_initialization
+                    self.constant_initialization = declaration.constant
+                    try:
+                        value, prelude = self.evaluated(declaration.initializer, bindings, declaration.location)
+                    finally:
+                        self.constant_initialization = previous_constant
+                    if declaration.rank:
+                        constant = bindings[declaration.name]
+                        count = max(0, declaration.bounds[0][1] - declaration.bounds[0][0] + 1)
+                        values = value.elements if isinstance(value, _FixedVector) else (value,) * count
+                        if len(values) != count:
+                            raise CompilationError("PARAMETER vector initializer extent differs from its declaration",
+                                                   declaration.location)
+                        constant_symbols = {bindings[name] for name, item in declarations.items()
+                                            if item.constant and isinstance(bindings.get(name), Symbol)}
+                        if prelude or any(isinstance(item, (ArrayAccess, Size)) or
+                                          isinstance(item, Reference) and item.symbol not in constant_symbols
+                                          for expression in values for item in walk_expr(expression)):
+                            raise CompilationError("PARAMETER vector requires immutable constant expressions",
+                                                   declaration.location)
+                        bindings[declaration.name] = replace(constant, elements=tuple(
+                            self.convert(expression, declaration.dtype, declaration.location) for expression in values))
+                        continue
+                    if isinstance(value, _FixedVector):
+                        raise CompilationError("scalar PARAMETER initializer requires a scalar expression", declaration.location)
                     initializers.extend(prelude)
                     initializers.append(Assignment(Reference(bindings[declaration.name]), value, declaration.location))
             body = self.block(
@@ -603,19 +667,44 @@ class _Lowerer:
             if kind == "Assignment_Stmt":
                 target_node, _, value_node = node.items
                 target, target_prelude = self.evaluated(target_node, bindings, location)
-                if not isinstance(target, (Reference, ArrayAccess)):
+                targets = target.elements if isinstance(target, _FixedVector) else (target,)
+                if any(not isinstance(item, (Reference, ArrayAccess)) for item in targets):
                     raise CompilationError("assignment targets must be scalar variables or array elements", location)
                 name = str(target_node if type(target_node).__name__ == "Name" else target_node.items[0]).lower()
-                if declarations[name].intent == "in" or declarations[name].constant or target.symbol.intent == "in":
+                if declarations[name].intent == "in" or declarations[name].constant or any(
+                        item.symbol.intent == "in" for item in targets):
                     raise CompilationError(f"cannot write INTENT(IN) variable {name}", location)
-                if target.symbol in active_iterators:
+                if any(item.symbol in active_iterators for item in targets):
                     raise CompilationError(f"cannot modify active loop iterator {name}", location)
                 value, value_prelude = self.evaluated(value_node, bindings, location)
-                if (target.symbol.dtype is ScalarType.LOGICAL) != (self.dtype(value) is ScalarType.LOGICAL):
+                if (self.dtype(target) is ScalarType.LOGICAL) != (self.dtype(value) is ScalarType.LOGICAL):
                     raise CompilationError("assignment requires compatible logical or numeric types", location)
                 statements.extend(target_prelude)
                 statements.extend(value_prelude)
-                statements.append(Assignment(target, value, location))
+                if isinstance(target, _FixedVector):
+                    if ((not isinstance(value, _FixedVector) and self.has_floating_value(value))
+                            or self.has_floating_work((*target_prelude, *value_prelude))):
+                        self.requires_numerical_environment = True
+                    if isinstance(value, _FixedVector):
+                        if len(target.elements) != len(value.elements):
+                            raise CompilationError("array assignment vector extents differ", location)
+                        # Fortran evaluates all RHS values before defining any
+                        # overlapping LHS element, including kind conversions.
+                        snapshots = []
+                        for expression in value.elements:
+                            symbol = self.temporary(self.dtype(target), location, "fort_snapshot")
+                            statements.append(Assignment(Reference(symbol), expression, location))
+                            snapshots.append(Reference(symbol))
+                    else:
+                        symbol = self.temporary(self.dtype(target), location, "fort_broadcast")
+                        statements.append(Assignment(Reference(symbol), value, location))
+                        snapshots = [Reference(symbol)] * len(target.elements)
+                    statements.extend(Assignment(destination, expression, location)
+                                      for destination, expression in zip(target.elements, snapshots, strict=True))
+                elif isinstance(value, _FixedVector):
+                    raise CompilationError("scalar assignment requires a scalar expression", location)
+                else:
+                    statements.append(Assignment(target, value, location))
             elif kind in {"If_Stmt", "If_Construct"}:
 
                 def lower_branch(children):
@@ -645,13 +734,13 @@ class _Lowerer:
                             continue
                         branch_location = self.location(header, provenance)
                         condition, prelude = self.evaluated(header.items[0], bindings, branch_location)
-                        if self.dtype(condition) is not ScalarType.LOGICAL:
+                        if isinstance(condition, _FixedVector) or self.dtype(condition) is not ScalarType.LOGICAL:
                             raise CompilationError("IF condition must be LOGICAL", branch_location)
                         then_body = branch_body
                         else_body = Block(prelude + (If(condition, then_body, else_body, branch_location),))
                     statements.extend(else_body.statements)
                     continue
-                if self.dtype(condition) is not ScalarType.LOGICAL:
+                if isinstance(condition, _FixedVector) or self.dtype(condition) is not ScalarType.LOGICAL:
                     raise CompilationError("IF condition must be LOGICAL", location)
                 statements.extend(prelude)
                 statements.append(If(condition, then_body, else_body, location))
@@ -681,7 +770,7 @@ class _Lowerer:
                 if len(ranges) == 3:
                     step, prelude = self.evaluated(ranges[2], bindings, location)
                     statements.extend(prelude)
-                    if self.dtype(step) != ScalarType.INTEGER:
+                    if isinstance(step, _FixedVector) or self.dtype(step) != ScalarType.INTEGER:
                         raise CompilationError("loop strides must be INTEGER expressions", location)
                     constant = step
                     while isinstance(constant, Unary):
@@ -692,11 +781,11 @@ class _Lowerer:
                 statements.extend(prelude)
                 upper, prelude = self.evaluated(ranges[1], bindings, location)
                 statements.extend(prelude)
-                if self.dtype(lower) != ScalarType.INTEGER or self.dtype(upper) != ScalarType.INTEGER:
+                if any(isinstance(value, _FixedVector) or self.dtype(value) != ScalarType.INTEGER for value in (lower, upper)):
                     raise CompilationError("loop bounds must be INTEGER expressions", location)
                 private_index = any(
                     type(access).__name__ == "Part_Ref"
-                    and isinstance(bindings.get(str(access.items[0]).lower()), _PrivateArray)
+                    and isinstance(bindings.get(str(access.items[0]).lower()), (_PrivateArray, _ConstantArray))
                     and any(type(name).__name__ == "Name" and str(name).lower() == str(iterator_node).lower()
                             for name in walk(access.items[1]))
                     for child in loop_nodes[1:-1] for access in walk(child)
@@ -794,19 +883,21 @@ class _Lowerer:
                         raise CompilationError(f"type or rank mismatch for argument {formal} of {callee.name}", location)
                     raise CompilationError("array call arguments must be positional whole variables", location)
                 if expected.bounds:
-                    if not isinstance(actual, _PrivateArray):
+                    if not isinstance(actual, (_PrivateArray, _ConstantArray)):
                         raise CompilationError("explicit-shape numerical helpers require private fixed arrays", location)
                     expected_extents = tuple(max(0, upper-lower+1) for lower, upper in expected.bounds)
                     actual_extents = tuple(max(0, upper-lower+1) for lower, upper in actual.bounds)
                     if expected_extents != actual_extents:
                         raise CompilationError("private array helper shape mismatch", location)
                     actual = replace(actual, bounds=expected.bounds)
-                elif isinstance(actual, _PrivateArray):
+                elif isinstance(actual, (_PrivateArray, _ConstantArray)):
                     actual = replace(actual, bounds=tuple((1, max(0, hi-lo+1)) for lo, hi in actual.bounds))
             elif actual is None or actual.rank:
                 if expected.intent != "in":
                     raise CompilationError("writable scalar helper arguments require private whole variables", location)
                 value, prefix = self.evaluated(actual_node, bindings, location)
+                if isinstance(value, _FixedVector):
+                    raise CompilationError("scalar helper argument requires a scalar expression", location)
                 prelude.extend(prefix)
                 actual = self.new_symbol(replace(expected, intent=None, rank=0))
                 prelude.append(Assignment(Reference(actual), value, location))
@@ -814,11 +905,14 @@ class _Lowerer:
                     raise CompilationError(f"type or rank mismatch for argument {formal} of {callee.name}", location)
             if actual.rank != expected.rank or actual.dtype != expected.dtype:
                 raise CompilationError(f"type or rank mismatch for argument {formal} of {callee.name}", location)
-            symbols = set(actual.elements) if isinstance(actual, _PrivateArray) else {actual}
+            symbols = (set(actual.elements) if isinstance(actual, _PrivateArray) else
+                       {value.symbol for expression in actual.elements for value in walk_expr(expression)
+                        if isinstance(value, Reference)} if isinstance(actual, _ConstantArray) else {actual})
             modifies = expected.intent in {"out", "inout"} and not expected.inferred_intent
             if modifies:
                 actual_declaration = declarations.get(name)
-                if ((actual_declaration is not None and (actual_declaration.intent == "in" or actual_declaration.constant))
+                if (isinstance(actual, _ConstantArray) or
+                    (actual_declaration is not None and (actual_declaration.intent == "in" or actual_declaration.constant))
                     or any(symbol.intent == "in" or symbol in active_iterators for symbol in symbols)):
                     raise CompilationError(f"writable argument {formal} of {callee.name} aliases a read-only variable", location)
                 if not expected.rank and (not callee.pure or any(symbol.parameter for symbol in symbols)):
@@ -865,8 +959,189 @@ class _Lowerer:
 
     def expression(self, node: Any, bindings: dict[str, Symbol], location: SourceLocation) -> Expr:
         expression = self._expression(node, bindings, location)
-        constant_integer(expression, location)
+        for value in expression.elements if isinstance(expression, _FixedVector) else (expression,):
+            constant_integer(value, location)
         return expression
+
+    def temporary(self, dtype, location, prefix):
+        name = prefix + "_" + str(len(self.symbols))
+        return self.new_symbol(_Declaration(name, dtype, 0, None, location, name))
+
+    def fixed_vector(self, dtype, elements, location):
+        elements = tuple(elements)
+        self.vector_elements += len(elements)
+        if len(elements) > 256 or self.vector_elements > 4096:
+            raise CompilationError("fixed vector expansion exceeds its bounded scalarization budget", location)
+        # Scalarization must not erase the floating environment contract of
+        # new vector arithmetic, conversions or assignments. Address metadata
+        # alone (for example SIZE of a real array) is not a floating value.
+        if (dtype in {ScalarType.REAL32, ScalarType.REAL}
+                or any(self.has_floating_value(value) for value in elements)
+                or self.has_floating_work(self.pending)):
+            self.requires_numerical_environment = True
+        return _FixedVector(dtype, elements)
+
+    @staticmethod
+    def has_floating_value(expression):
+        real = {ScalarType.REAL32, ScalarType.REAL}
+        return any((isinstance(item, (Literal, IntrinsicCall)) and item.dtype in real)
+                   or (isinstance(item, (Reference, ArrayAccess)) and item.symbol.dtype in real)
+                   for item in walk_expr(expression))
+
+    def has_floating_work(self, statements):
+        for statement in statements:
+            if isinstance(statement, Assignment):
+                if self.has_floating_value(statement.value) or self.has_floating_value(statement.target):
+                    return True
+            elif isinstance(statement, Loop):
+                bounds = (statement.lower, statement.upper) + (() if isinstance(statement.step, int) else (statement.step,))
+                if any(self.has_floating_value(bound) for bound in bounds) or self.has_floating_work(statement.body.statements):
+                    return True
+            elif isinstance(statement, If) and (self.has_floating_value(statement.condition)
+                    or self.has_floating_work(statement.then_body.statements)
+                    or self.has_floating_work(statement.else_body.statements)):
+                return True
+        return False
+
+    def convert(self, expression, dtype, location):
+        source = self.dtype(expression)
+        if source is dtype:
+            return expression
+        if ScalarType.LOGICAL in {source, dtype}:
+            raise CompilationError("constant initialization requires compatible logical or numeric types", location)
+        if dtype is ScalarType.INTEGER:
+            return IntrinsicCall("int", (expression,), dtype)
+        return IntrinsicCall("real", (expression, Literal("4" if dtype is ScalarType.REAL32 else "8",
+                                                        ScalarType.INTEGER)), dtype)
+
+    def elementwise(self, arguments, operation, dtype, location, *, scalar_arguments=frozenset()):
+        vectors = [value for value in arguments if isinstance(value, _FixedVector)]
+        if not vectors:
+            return operation(*arguments)
+        extent = len(vectors[0].elements)
+        if any(len(value.elements) != extent for value in vectors):
+            raise CompilationError("array expression vector extents differ", location)
+        values = []
+        for index, value in enumerate(arguments):
+            if isinstance(value, _FixedVector):
+                if index in scalar_arguments:
+                    raise CompilationError("array expression requires a scalar intrinsic argument", location)
+                values.append(value.elements)
+            elif index in scalar_arguments or isinstance(value, Literal) or self.constant_initialization:
+                values.append((value,) * extent)
+            else:
+                constant_integer(value, location)
+                symbol = self.temporary(self.dtype(value), location, "fort_broadcast")
+                self.pending.append(Assignment(Reference(symbol), value, location))
+                values.append((Reference(symbol),) * extent)
+        return self.fixed_vector(dtype, (operation(*items) for items in zip(*values, strict=True)), location)
+
+    def integer_affine(self, expression, location, depth=0):
+        """Cancel equal runtime origins without evaluating any runtime bound."""
+        if depth > 64:
+            raise CompilationError("fixed vector bound expression exceeds its depth budget", location)
+        value = constant_integer(expression, location)
+        if value is not None:
+            return {}, value
+        if isinstance(expression, Unary) and expression.operator in {"+", "-"}:
+            terms, offset = self.integer_affine(expression.operand, location, depth + 1)
+            factor = -1 if expression.operator == "-" else 1
+            return {key: factor * value for key, value in terms.items()}, factor * offset
+        if isinstance(expression, Binary) and expression.operator in {"+", "-"}:
+            left, a = self.integer_affine(expression.left, location, depth + 1)
+            right, b = self.integer_affine(expression.right, location, depth + 1)
+            factor = -1 if expression.operator == "-" else 1
+            for key, value in right.items():
+                left[key] = left.get(key, 0) + factor * value
+                if not left[key]:
+                    del left[key]
+            if len(left) > 32:
+                raise CompilationError("fixed vector bound expression exceeds its term budget", location)
+            return left, a + factor * b
+        return {expression: 1}, 0
+
+    def vector_section(self, array, subscripts, bindings, location):
+        if len(subscripts) != array.rank:
+            raise CompilationError("array section rank mismatch", location)
+        axes, vector_axis = [], None
+        bounded = isinstance(array, (_PrivateArray, _ConstantArray))
+        for axis, subscript in enumerate(subscripts):
+            if subscript is not None and type(subscript).__name__ != "Subscript_Triplet":
+                index = self._expression(subscript, bindings, location)
+                if isinstance(index, _FixedVector) or self.dtype(index) is not ScalarType.INTEGER:
+                    raise CompilationError("array subscripts require scalar INTEGER expressions", location)
+                axes.append(index)
+                continue
+            if vector_axis is not None:
+                raise CompilationError("fixed vector sections require exactly one varying axis", location)
+            vector_axis = axis
+            start_node, stop_node, stride_node = (None, None, None) if subscript is None else subscript.items
+            stride = 1 if stride_node is None else constant_integer(self._expression(stride_node, bindings, location), location)
+            if stride is None or stride == 0:
+                raise CompilationError("fixed vector sections require a constant nonzero stride", location)
+            lower = Literal(str(array.bounds[axis][0]) if bounded else "1", ScalarType.INTEGER)
+            upper = Literal(str(array.bounds[axis][1]), ScalarType.INTEGER) if bounded else Size(array, axis + 1)
+            # Fortran's omitted first/last bounds are LBOUND/UBOUND even when
+            # the stride is negative. A reverse traversal needs explicit ends.
+            start = lower if start_node is None else self._expression(start_node, bindings, location)
+            stop = upper if stop_node is None else self._expression(stop_node, bindings, location)
+            if any(isinstance(item, _FixedVector) or self.dtype(item) is not ScalarType.INTEGER for item in (start, stop)):
+                raise CompilationError("fixed vector bounds require scalar INTEGER expressions", location)
+            a, c = self.integer_affine(start, location)
+            b, d = self.integer_affine(stop, location)
+            if a != b:
+                raise CompilationError("array section requires bounded constant cardinality", location)
+            extent = max(0, (d - c) // stride + 1) if (d - c) * stride >= 0 else 0
+            if extent > 256:
+                raise CompilationError("fixed vector section exceeds the 256-element scalarization budget", location)
+            coordinates = tuple(start if index == 0 else Binary("+", start, Literal(str(index * stride), ScalarType.INTEGER))
+                                for index in range(extent))
+            axes.append(coordinates)
+        if vector_axis is None:
+            raise CompilationError("fixed vector section requires one varying axis", location)
+        elements = []
+        for coordinate in axes[vector_axis]:
+            indices = tuple(coordinate if axis == vector_axis else value for axis, value in enumerate(axes))
+            if bounded:
+                constants = tuple(constant_integer(index, location) for index in indices)
+                if any(index is None for index in constants):
+                    raise CompilationError("private sections require constant subscripts and bounds", location)
+                value = array.element(constants, location)
+                elements.append(Reference(value) if isinstance(array, _PrivateArray) else value)
+            else:
+                elements.append(ArrayAccess(array, indices))
+        return self.fixed_vector(array.dtype, elements, location)
+
+    def array_constructor(self, node, bindings, location):
+        constructor = node.items[1]
+        dtype = None
+        if type(constructor).__name__ == "Ac_Spec":
+            type_node, constructor = constructor.items
+            if type(type_node).__name__ != "Intrinsic_Type_Spec":
+                raise CompilationError("array constructors require a supported numeric type", location)
+            name, selector = type_node.items
+            if str(name).upper() == "REAL":
+                dtype = ScalarType.REAL32 if selector is None else self.active_kinds.real_type(selector.items[1], location)
+            elif str(name).upper() == "DOUBLE PRECISION" and selector is None:
+                dtype = ScalarType.REAL
+            elif str(name).upper() == "INTEGER" and selector is None:
+                dtype = ScalarType.INTEGER
+            else:
+                raise CompilationError("array constructors require a supported numeric type", location)
+        elements = []
+        for item in getattr(constructor, "items", ()):
+            value = self._expression(item, bindings, location)
+            if dtype is None:
+                dtype = self.dtype(value)
+            if type(node.items[1]).__name__ != "Ac_Spec" and self.dtype(value) is not dtype:
+                raise CompilationError("untyped array constructor elements require matching kinds", location)
+            elements.extend(self.convert(element, dtype, location) for element in
+                            (value.elements if isinstance(value, _FixedVector) else (value,)))
+            if len(elements) > 256:
+                raise CompilationError("array constructor exceeds the 256-element scalarization budget", location)
+        if dtype is None:
+            raise CompilationError("empty array constructors require an explicit supported type", location)
+        return self.fixed_vector(dtype, elements, location)
 
     def intrinsic_arguments(self, name: str, argument_list: Any, location: SourceLocation) -> tuple[Any, ...]:
         """Resolve positional/keyword arguments before lowering their values."""
@@ -924,7 +1199,7 @@ class _Lowerer:
         if len(args) == 1 or args[1] is None:
             if name != "size":
                 raise CompilationError(f"{name.upper()} requires DIM; array-valued results are unsupported", location)
-            if isinstance(symbol, _PrivateArray):
+            if isinstance(symbol, (_PrivateArray, _ConstantArray)):
                 total = 1
                 for lower, upper in symbol.bounds:
                     total *= max(0, upper-lower+1)
@@ -943,7 +1218,7 @@ class _Lowerer:
                 raise CompilationError(
                     f"{name.upper()} dimension {dimension} is outside rank {symbol.rank} of {symbol.name}", location
                 )
-            if isinstance(symbol, _PrivateArray):
+            if isinstance(symbol, (_PrivateArray, _ConstantArray)):
                 lower, upper = symbol.bounds[dimension-1]
                 value = lower if name == "lbound" else upper if name == "ubound" else max(0, upper-lower+1)
                 # Fortran bounds inquiries on an empty dimension return 1/0.
@@ -951,7 +1226,7 @@ class _Lowerer:
                     value = 1 if name == "lbound" else 0
                 return Literal(str(value), ScalarType.INTEGER)
             return one if name == "lbound" else Size(symbol, dimension)
-        if isinstance(symbol, _PrivateArray):
+        if isinstance(symbol, (_PrivateArray, _ConstantArray)):
             raise CompilationError("private array inquiries require constant DIM", location)
         # Assumed-shape dummy bounds start at 1. Select runtime dimensions from
         # existing extent nodes so dependence and memory analyses see metadata.
@@ -971,20 +1246,39 @@ class _Lowerer:
     def intrinsic(self, node: Any, bindings: dict[str, Symbol], location: SourceLocation) -> Expr:
         name_node, argument_list = node.items
         name = str(name_node).lower()
+        if name == "sum":
+            args = getattr(argument_list, "items", ())
+            if len(args) == 1 and type(args[0]).__name__ == "Actual_Arg_Spec" and str(args[0].items[0]).lower() == "array":
+                args = (args[0].items[1],)
+            if len(args) != 1 or type(args[0]).__name__ == "Actual_Arg_Spec":
+                raise CompilationError("short SUM supports only one fixed numeric vector without DIM or MASK", location)
+            vector = self._expression(args[0], bindings, location)
+            if not isinstance(vector, _FixedVector) or vector.dtype is ScalarType.LOGICAL:
+                raise CompilationError("short SUM requires a fixed numeric vector", location)
+            if vector.dtype in {ScalarType.REAL32, ScalarType.REAL}:
+                self.requires_numerical_environment = True
+            # The supported native backend's bounded serial SUM uses this
+            # zero-seeded order. This is not an OpenMP reduction contract.
+            result = Literal("0" if vector.dtype is ScalarType.INTEGER else "0.0", vector.dtype)
+            for element in vector.elements:
+                result = Binary("+", result, element)
+            return result
         if name == "dot_product":
             args = getattr(argument_list, "items", ())
             if len(args) != 2:
                 raise CompilationError("DOT_PRODUCT requires two private constant vector sections", location)
-            left, right = (self.private_section(arg, bindings, location) for arg in args)
-            if len(left) != len(right):
+            left, right = (self._expression(arg, bindings, location) for arg in args)
+            if not isinstance(left, _FixedVector) or not isinstance(right, _FixedVector):
+                raise CompilationError("DOT_PRODUCT requires two fixed numeric vectors", location)
+            if len(left.elements) != len(right.elements):
                 raise CompilationError("DOT_PRODUCT vector extents differ", location)
-            types = tuple(self.lookup(arg if type(arg).__name__ == "Name" else arg.items[0], bindings, location).dtype
-                          for arg in args)
-            if types[0] is not types[1] or any(symbol.dtype is not types[0] for symbol in (*left, *right)):
+            if left.dtype is not right.dtype or left.dtype is ScalarType.LOGICAL:
                 raise CompilationError("DOT_PRODUCT requires matching numeric kinds", location)
-            result: Expr = Literal("0" if types[0] is ScalarType.INTEGER else "0.0", types[0])
-            for a, b in zip(left, right, strict=True):
-                result = Binary("+", result, Binary("*", Reference(a), Reference(b)))
+            if left.dtype in {ScalarType.REAL32, ScalarType.REAL}:
+                self.requires_numerical_environment = True
+            result: Expr = Literal("0" if left.dtype is ScalarType.INTEGER else "0.0", left.dtype)
+            for a, b in zip(left.elements, right.elements, strict=True):
+                result = Binary("+", result, Binary("*", a, b))
             return result
         args = self.intrinsic_arguments(name, argument_list, location)
         if name in ARRAY_INQUIRIES:
@@ -1005,7 +1299,13 @@ class _Lowerer:
         dtype = intrinsic_type(
             name, tuple(self.dtype(arg) for arg in arguments), location, kind=intrinsic_kind(name, arguments, location)
         )
-        return IntrinsicCall(name, arguments, dtype)
+        if (name in {"min", "max"} and len(arguments) > 2
+                and dtype in {ScalarType.REAL32, ScalarType.REAL}
+                and any(isinstance(argument, _FixedVector) for argument in arguments)):
+            raise CompilationError("real vector MIN/MAX supports only two operands until native NaN ordering is proved",
+                                   location)
+        return self.elementwise(arguments, lambda *values: IntrinsicCall(name, values, dtype), dtype, location,
+                                scalar_arguments=frozenset((1,)) if name in KIND_ARGUMENT else frozenset())
 
     def private_section(self, node, bindings, location):
         if type(node).__name__ == "Name":
@@ -1018,24 +1318,7 @@ class _Lowerer:
             raise CompilationError("constant sections require private fixed arrays", location)
         if not isinstance(array, _PrivateArray) or len(subscripts) != array.rank:
             raise CompilationError("constant sections require private fixed arrays", location)
-        axes, vectors = [], 0
-        for subscript, (lower, upper) in zip(subscripts, array.bounds, strict=True):
-            if subscript is None or type(subscript).__name__ == "Subscript_Triplet":
-                vectors += 1
-                parts = (None, None, None) if subscript is None else subscript.items
-                start, stop, step = (default if part is None else constant_integer(self._expression(part, bindings, location), location)
-                                     for part, default in zip(parts, (lower, upper, 1), strict=True))
-                if None in (start, stop, step) or step == 0:
-                    raise CompilationError("private sections require constant nonzero strides and bounds", location)
-                axes.append(tuple(range(start, stop + (1 if step > 0 else -1), step)))
-            else:
-                value = constant_integer(self._expression(subscript, bindings, location), location)
-                if value is None:
-                    raise CompilationError("private sections require constant subscripts", location)
-                axes.append((value,))
-        if vectors != 1:
-            raise CompilationError("DOT_PRODUCT requires rank-one sections", location)
-        return tuple(array.element(tuple(reversed(indices)), location) for indices in product(*reversed(axes)))
+        return tuple(value.symbol for value in self.vector_section(array, subscripts, bindings, location).elements)
 
     def _expression(self, node: Any, bindings: dict[str, Symbol], location: SourceLocation) -> Expr:
         kind = type(node).__name__
@@ -1044,7 +1327,7 @@ class _Lowerer:
                 return Literal(str(self.active_kinds.integer(node, location)), ScalarType.INTEGER)
             symbol = self.lookup(node, bindings, location)
             if symbol.rank:
-                raise CompilationError(f"array {symbol.name} must be accessed with {symbol.rank} subscripts", location)
+                return self.vector_section(symbol, (None,) * symbol.rank, bindings, location)
             if symbol in self.unrolled_values:
                 return Literal(str(self.unrolled_values[symbol]), ScalarType.INTEGER)
             return Reference(symbol)
@@ -1071,6 +1354,8 @@ class _Lowerer:
             return Literal(str(value).replace("D", "e").replace("d", "e"), dtype)
         if kind == "Parenthesis":
             return self._expression(node.items[1], bindings, location)
+        if kind == "Array_Constructor":
+            return self.array_constructor(node, bindings, location)
         if kind == "Part_Ref":
             if str(node.items[0]).lower() not in bindings:
                 return self.function_call(node, bindings, location)
@@ -1078,14 +1363,17 @@ class _Lowerer:
             subscripts = node.items[1].items
             if not symbol.rank or len(subscripts) != symbol.rank:
                 raise CompilationError(f"array access rank mismatch for {symbol.name}", location)
+            if any(type(index).__name__ == "Subscript_Triplet" for index in subscripts):
+                return self.vector_section(symbol, subscripts, bindings, location)
             indices = tuple(self._expression(index, bindings, location) for index in subscripts)
-            if any(self.dtype(index) != ScalarType.INTEGER for index in indices):
+            if any(isinstance(index, _FixedVector) or self.dtype(index) != ScalarType.INTEGER for index in indices):
                 raise CompilationError("array subscripts must be INTEGER expressions", location)
-            if isinstance(symbol, _PrivateArray):
+            if isinstance(symbol, (_PrivateArray, _ConstantArray)):
                 constants = tuple(constant_integer(index, location) for index in indices)
                 if any(index is None for index in constants):
                     raise CompilationError("private fixed array accesses require constant subscripts", location)
-                return Reference(symbol.element(constants, location))
+                value = symbol.element(constants, location)
+                return Reference(value) if isinstance(symbol, _PrivateArray) else value
             return ArrayAccess(symbol, indices)
         if kind == "Function_Reference":
             return self.function_call(node, bindings, location)
@@ -1103,7 +1391,7 @@ class _Lowerer:
             logical = self.dtype(operand) is ScalarType.LOGICAL
             if (operator == ".not.") != logical:
                 raise CompilationError("invalid operand type for unary operator", location)
-            return Unary(operator, operand)
+            return self.elementwise((operand,), lambda value: Unary(operator, value), self.dtype(operand), location)
         if len(items) == 3:
             left_node, operator, right_node = items
             operator = str(operator).lower()
@@ -1112,12 +1400,14 @@ class _Lowerer:
                 exponent = constant_integer(self._expression(right_node, bindings, location), location)
                 if exponent is None or not 0 <= exponent <= 16 or self.dtype(left) is ScalarType.LOGICAL:
                     raise CompilationError("numerical powers require an INTEGER constant exponent from 0 through 16", location)
-                if exponent == 0:
-                    return Literal("1" if self.dtype(left) is ScalarType.INTEGER else "1.0", self.dtype(left))
-                result = left
-                for _ in range(exponent-1):
-                    result = Binary("*", result, left)
-                return result
+                def power(value):
+                    if exponent == 0:
+                        return Literal("1" if self.dtype(left) is ScalarType.INTEGER else "1.0", self.dtype(left))
+                    result = value
+                    for _ in range(exponent-1):
+                        result = Binary("*", result, value)
+                    return result
+                return self.elementwise((left,), power, self.dtype(left), location)
             operators = {
                 "+",
                 "-",
@@ -1146,7 +1436,8 @@ class _Lowerer:
                 logical_operator = operator in {".and.", ".or.", ".eqv.", ".neqv."}
                 if any((self.dtype(operand) is ScalarType.LOGICAL) != logical_operator for operand in (left, right)):
                     raise CompilationError("invalid operand types for operator " + operator, location)
-                return Binary(operator, left, right)
+                dtype = self.dtype(Binary(operator, left, right))
+                return self.elementwise((left, right), lambda a, b: Binary(operator, a, b), dtype, location)
         raise CompilationError(f"unsupported expression {kind}: {node}", location)
 
     def function_call(self, node, bindings, location):
@@ -1160,7 +1451,7 @@ class _Lowerer:
         return Reference(result)
 
     def dtype(self, expression: Expr) -> ScalarType:
-        if isinstance(expression, (Literal, IntrinsicCall)):
+        if isinstance(expression, (Literal, IntrinsicCall, _FixedVector)):
             return expression.dtype
         if isinstance(expression, (Reference, ArrayAccess)):
             return expression.symbol.dtype

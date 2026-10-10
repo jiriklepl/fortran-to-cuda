@@ -114,7 +114,11 @@ def window_worker(function, plan, name):
     arrays = [symbol for symbol in function.parameters if symbol.rank]
     scalars = [symbol for symbol in function.parameters if not symbol.rank]
     regions = tuple(plan.regions)
-    result = [f'extern "C" int {name}({", ".join(window_signature(function, name))}) {{',
+    result = [f'extern "C" int {name}({", ".join(window_signature(function, name))}) {{']
+    if function.requires_numerical_environment:
+        result += ["    if (!fort_runtime::numerical_environment_supported())",
+                   '        return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "unsupported batch numerical environment for real short reduction");']
+    result += [
               "    if (!fort_window || fort_window->version != FORT_SCOPE_BATCH_ABI_VERSION || !fort_launches ||",
               f"        fort_first >= fort_stop || fort_stop > {len(regions)}ULL) return FORT_SCOPE_ARGUMENT;",
               *indent(layout_lines(arrays, window=True)), *indent(scalar_lines(scalars))]
@@ -327,7 +331,11 @@ def attempt_helper(function, candidates, name, preparation_name, callback_name, 
                  *[f"fort_buffer_t {symbol.cpp_name}_handle" for symbol in arrays],
                  *[f"const {cpp_type(symbol)} *fort_scalar_{symbol.cpp_name}" for symbol in scalars]]
     arguments = worker_arguments(function)
-    result = [f'extern "C" int {name}({", ".join(signature)}) {{',
+    result = [f'extern "C" int {name}({", ".join(signature)}) {{']
+    if function.requires_numerical_environment:
+        result += ["    if (!fort_runtime::numerical_environment_supported())",
+                   '        return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "unsupported batch numerical environment for real short reduction");']
+    result += [
               "    if (!fort_stop) return FORT_SCOPE_ARGUMENT; *fort_stop=fort_first;",
               "    if (fort_mode == FORT_SCOPE_NATIVE) return FORT_SCOPE_OK;",
               *indent(base_cost_lines(profile, costs)), *indent(transfer_cost_lines(profile, transfer_costs)),

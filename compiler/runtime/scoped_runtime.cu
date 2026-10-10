@@ -63,7 +63,10 @@ struct Buffer {
     Box full() const { return {std::vector<size_t>(extents.size(), 0), extents}; }
 };
 struct Context {
-    explicit Context(int ordinal) : device(ordinal) { transfer_stats.version = FORT_SCOPE_TRANSFER_ABI_VERSION; }
+    explicit Context(int ordinal) : device(ordinal) {
+        transfer_stats.version = FORT_SCOPE_TRANSFER_ABI_VERSION;
+        scratch_stats.version = FORT_SCOPE_SCRATCH_ABI_VERSION;
+    }
     int device;
     bool ready = false, pending = false, poisoned = false, closed = false;
     size_t device_budget = std::numeric_limits<size_t>::max();
@@ -71,6 +74,10 @@ struct Context {
     std::unordered_map<fort_buffer_t, std::unique_ptr<Buffer>> buffers;
     std::unordered_map<uint64_t, fort_buffer_t> identities;
     fort_scope_stats stats{};
+    void *scratch = nullptr;
+    size_t scratch_capacity = 0;
+    uint64_t scratch_token = 0;
+    fort_scope_scratch_stats_v1 scratch_stats{};
     fort_scope_transfer_stats transfer_stats{};
     std::optional<fort_scope_batch_costs> transfer_costs;
     std::optional<fort_scope_team_costs> team_costs;
@@ -204,10 +211,21 @@ void initialize(Context &c) {
     { std::lock_guard<std::mutex> lock(driver_mutex); initialized_devices.insert(c.device); }
     trace("initialize");
 }
+size_t field_budget(const Context &c) {
+    require(c.scratch_capacity <= c.device_budget, FORT_SCOPE_STATE, "scratch capacity exceeds scope budget");
+    return c.device_budget-c.scratch_capacity;
+}
+void payload_peak(Context &c) noexcept {
+    // Every allocation has already passed the inclusive, overflow-safe budget
+    // check. Preserve the original field-only peak in fort_scope_stats.
+    const auto total = c.stats.allocated_bytes+c.scratch_capacity;
+    c.scratch_stats.peak_total_device_bytes = std::max<uint64_t>(
+        total, c.scratch_stats.peak_total_device_bytes);
+}
 void allocate(Context &c, Buffer &b) {
     if (b.device || !b.bytes) return;
-    require(c.stats.allocated_bytes <= c.device_budget &&
-            b.bytes <= c.device_budget-c.stats.allocated_bytes,
+    const auto budget = field_budget(c);
+    require(c.stats.allocated_bytes <= budget && b.bytes <= budget-c.stats.allocated_bytes,
             FORT_SCOPE_RESOURCE, "full-layout device allocation exceeds the declared scope budget");
 #ifdef FORT_SCOPE_TEST_FAULTS
     const char *fail_after = std::getenv("FORT_SCOPE_TEST_FAIL_ALLOC_AFTER");
@@ -231,6 +249,7 @@ void allocate(Context &c, Buffer &b) {
     ++c.stats.allocations;
     c.stats.allocated_bytes += b.bytes;
     c.stats.peak_device_bytes = std::max(c.stats.allocated_bytes, c.stats.peak_device_bytes);
+    payload_peak(c);
     trace("allocate", &b, b.bytes);
 }
 void wait(Context &c) {
@@ -247,6 +266,63 @@ void wait(Context &c) {
     c.pending = false;
     ++c.stats.waits;
     trace("wait");
+}
+void release_scratch(Context &c) {
+    if (!c.scratch) return;
+#ifdef FORT_SCOPE_CPU_TEST
+    std::free(c.scratch);
+#else
+    DeviceGuard guard(c);
+#if CUDART_VERSION >= 11020
+    if (c.pool) { cuda_check(c, cudaFreeAsync(c.scratch, c.stream)); c.pending = true; }
+    else
+#endif
+        cuda_check(c, cudaFree(c.scratch));
+#endif
+    trace("scratch_free", nullptr, c.scratch_capacity);
+    c.scratch = nullptr;
+    c.scratch_capacity = 0;
+    c.scratch_stats.capacity_bytes = 0;
+}
+void grow_scratch(Context &c, size_t bytes) {
+    require(c.stats.allocated_bytes <= c.device_budget &&
+            bytes <= c.device_budget-c.stats.allocated_bytes,
+            FORT_SCOPE_RESOURCE, "scratch allocation exceeds the declared scope budget");
+    const bool growing = c.scratch != nullptr;
+    // An idle lease can still have pending kernels on this stream. Retire its
+    // storage only after completion; do not temporarily reserve two arenas.
+    if (growing) {
+        wait(c);
+        release_scratch(c);
+        wait(c);
+    }
+#ifdef FORT_SCOPE_TEST_FAULTS
+    require(!std::getenv("FORT_SCOPE_TEST_FAIL_SCRATCH_ALLOC"), FORT_SCOPE_RESOURCE,
+            "injected scratch allocation failure");
+#endif
+    initialize(c);
+    void *device = nullptr;
+#ifdef FORT_SCOPE_CPU_TEST
+    require(!std::getenv("FORT_SCOPE_TEST_FAIL_ALLOC"), FORT_SCOPE_RESOURCE, "injected device allocation failure");
+    device = std::malloc(bytes);
+    require(device, FORT_SCOPE_RESOURCE, "scratch reference allocation failed");
+#else
+    DeviceGuard guard(c);
+#if CUDART_VERSION >= 11020
+    if (c.pool) cuda_check(c, cudaMallocFromPoolAsync(&device, bytes, c.pool, c.stream), true);
+    else
+#endif
+        cuda_check(c, cudaMalloc(&device, bytes), true);
+    c.pending = true;
+#endif
+    c.scratch = device;
+    c.scratch_capacity = bytes;
+    ++c.scratch_stats.allocations;
+    if (growing) ++c.scratch_stats.grows;
+    c.scratch_stats.capacity_bytes = bytes;
+    c.scratch_stats.peak_scratch_bytes = std::max<uint64_t>(bytes, c.scratch_stats.peak_scratch_bytes);
+    payload_peak(c);
+    trace("scratch_allocate", nullptr, bytes);
 }
 const char *transfer_reason(uint32_t reason) noexcept {
     switch (reason) {
@@ -699,7 +775,7 @@ const fort_scoped::planning::Inputs &planning_inputs(Context &c, fort_scope_t ha
         c.definition_proof->query_generation == c.query_generation &&
         c.definition_proof->state_generation == c.state_generation;
     input.query_construction_operations = 1 + c.plan.size();
-    input.device_budget = c.device_budget;
+    input.device_budget = field_budget(c);
     input.device_ready = c.ready;
     input.pending = c.pending;
     input.transfer_mode = c.transfer_stats.requested_mode == FORT_SCOPE_TRANSFERS_PINNED
@@ -1068,7 +1144,7 @@ double batch_copy_cost(uint64_t bytes, uint64_t rows, uint64_t calls, const fort
 }
 fort_scoped::planning::Inputs batch_inputs(const Context &c, const BatchPlan &plan, uint64_t &operations) {
     fort_scoped::planning::Inputs input;
-    input.device_budget=c.device_budget; input.device_ready=c.ready; input.driver_initialized=driver_initialized(c);
+    input.device_budget=field_budget(c); input.device_ready=c.ready; input.driver_initialized=driver_initialized(c);
     input.pending=c.pending; input.continuation=true; input.charge_create=false; input.registrations_incurred=0;
 #ifdef FORT_SCOPE_CPU_TEST
     input.asynchronous_release=false;
@@ -2267,6 +2343,48 @@ extern "C" int fort_scope_wait(fort_scope_t h) {
 extern "C" int fort_scope_stats_get(fort_scope_t h, fort_scope_stats *out) {
     return with(h, [&](Context &c) { require(out, FORT_SCOPE_ARGUMENT, "missing stats output"); *out = c.stats; }, Change::None);
 }
+extern "C" int fort_scope_scratch_acquire_v1(fort_scope_t h, size_t bytes, fort_scope_scratch_lease_v1 *out) {
+    if (out) *out = {};
+    return with(h, [&](Context &c) {
+        require(out, FORT_SCOPE_ARGUMENT, "missing scratch lease output");
+        require(!c.scratch_token, FORT_SCOPE_STATE, "only one scratch lease may be active");
+        require(!c.batch_active, FORT_SCOPE_STATE, "scratch acquisition during an active batch");
+        // Reserve a globally unique token before allocating. A failed request
+        // never exposes a pointer or an active lease, even after arena growth.
+        const auto lease_token = token();
+        if (bytes) {
+            // Existing planning costs do not include scratch lifetime costs.
+            // Do not present a complete-owner estimate for unpriced resources.
+            c.owner_estimate_available = false;
+            if (bytes > c.scratch_capacity) grow_scratch(c, bytes);
+            else ++c.scratch_stats.reuses;
+        }
+        c.scratch_token = lease_token;
+        ++c.scratch_stats.acquisitions;
+        c.scratch_stats.active = 1;
+        c.scratch_stats.active_bytes = bytes;
+        *out = {FORT_SCOPE_SCRATCH_ABI_VERSION, 0, lease_token,
+                bytes ? c.scratch : nullptr, bytes, c.scratch_capacity};
+        trace("scratch_acquire", nullptr, bytes);
+    });
+}
+extern "C" int fort_scope_scratch_release_v1(fort_scope_t h, uint64_t lease_token) {
+    return with(h, [&](Context &c) {
+        require(lease_token && c.scratch_token == lease_token, FORT_SCOPE_STALE,
+                "invalid, foreign, or stale scratch lease");
+        c.scratch_token = 0;
+        c.scratch_stats.active = 0;
+        c.scratch_stats.active_bytes = 0;
+        ++c.scratch_stats.releases;
+        trace("scratch_release");
+    });
+}
+extern "C" int fort_scope_scratch_stats_get_v1(fort_scope_t h, fort_scope_scratch_stats_v1 *out) {
+    return with(h, [&](Context &c) {
+        require(out, FORT_SCOPE_ARGUMENT, "missing scratch stats output");
+        *out = c.scratch_stats;
+    }, Change::None);
+}
 extern "C" int fort_scope_unregister(fort_scope_t h, fort_buffer_t handle) {
     return with(h, [&](Context &c) {
         auto &b = buffer(c,handle); publish(c,b); release(c,b);
@@ -2275,10 +2393,15 @@ extern "C" int fort_scope_unregister(fort_scope_t h, fort_buffer_t handle) {
 }
 extern "C" int fort_scope_close(fort_scope_t h) {
     const auto status = with(h, [&](Context &c) {
+        require(!c.scratch_token, FORT_SCOPE_STATE, "scope closed with an active scratch lease");
         require(!c.plan_installed || c.worker_cursor == c.schedule.size(), FORT_SCOPE_STATE,
                 "scope closed before its scheduled workers completed");
         for (auto &entry : c.buffers) publish(c, *entry.second);
         for (auto &entry : c.buffers) release(c, *entry.second);
+        // Complete scratch uses before retiring the idle arena. Scratch is
+        // never registered, defined, reconciled, or published to host storage.
+        wait(c);
+        release_scratch(c);
         wait(c);
 #ifndef FORT_SCOPE_CPU_TEST
         if (c.ready) {
@@ -2303,6 +2426,7 @@ extern "C" int fort_scope_abandon(fort_scope_t h) {
         require(c->poisoned, FORT_SCOPE_STATE, "only a failed scope can be abandoned");
 #ifdef FORT_SCOPE_CPU_TEST
         for (auto &entry : c->buffers) std::free(entry.second->device);
+        std::free(c->scratch);
 #else
         // A CUDA execution failure invalidates results. Cleanup is best effort;
         // CUDA can reject further operations after a fatal device fault.
@@ -2313,11 +2437,13 @@ extern "C" int fort_scope_abandon(fort_scope_t h) {
             for (auto &entry : c->buffers) {
                 if (entry.second->device) (void)cudaFree(entry.second->device);
             }
+            if (c->scratch) (void)cudaFree(c->scratch);
             if (c->pool) (void)cudaMemPoolDestroy(c->pool);
             (void)cudaStreamDestroy(c->stream);
         }
         if (restore) (void)cudaSetDevice(previous);
 #endif
+        c->scratch = nullptr; c->scratch_capacity = 0; c->scratch_token = 0;
         c->buffers.clear(); c->identities.clear(); c->closed = true;
         std::lock_guard<std::mutex> registry_lock(registry_mutex); contexts.erase(h);
     });

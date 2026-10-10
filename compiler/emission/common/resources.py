@@ -22,6 +22,7 @@ def read_common_header() -> str:
                     .replace('#include "staging.hpp"', staging)
                     .replace('#include "floating_environment.hpp"', floating_environment)
                     for name in ("offload.hpp", "hybrid.hpp") if runtime.joinpath(name).is_file()]
+    units += "\n" + floating_environment
     units += "\n#ifdef FORT_OFFLOAD_ENABLED\n" + "\n".join(experimental) + "\n#endif\n"
     return base.replace("// FORT_RUNTIME_UNITS", units)
 
@@ -115,6 +116,19 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
         "source_sha256": hashes,
         "devices_per_context": 1,
         "streams_per_context": 1,
+        "scratch": {
+            "abi_version": 1,
+            "acquire": "fort_scope_scratch_acquire_v1",
+            "release": "fort_scope_scratch_release_v1",
+            "statistics": "fort_scope_scratch_stats_get_v1",
+            "leases_per_context": 1,
+            "storage": "cached context-owned device arena; no host binding or publication",
+            "ordering": "existing context stream; growth waits for earlier use before replacement",
+            "budget": "cached capacity and registered field payload share the context device budget",
+            "zero_bytes": "null pointer with a release-required token; no CUDA initialization",
+            "automatic_costs": "unavailable until numerical integration prices scratch lifetime costs",
+            "compatibility": "existing field statistics and runtime interfaces remain unchanged",
+        },
         "scope_transfers": {
             "abi_version": 1,
             "configure": "fort_scope_set_transfers",
@@ -155,6 +169,6 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
         "concurrent_access": "separate contexts with nonconflicting host storage",
         "rectangle_limit": 32,
         "intersection_limit": 1024,
-        "capabilities": ["section_coherence", "partial_host_initialization", "source_definition_changes", "device_memory_budget", "coherent_runtime_placement", "ordered_definition_validation", "context_query_reuse", "segment_continuation", "pinned_section_transfers", "pipelined_subchain_transfers"],
+        "capabilities": ["section_coherence", "partial_host_initialization", "source_definition_changes", "device_memory_budget", "coherent_runtime_placement", "ordered_definition_validation", "context_query_reuse", "segment_continuation", "pinned_section_transfers", "pipelined_subchain_transfers", "context_scratch_leases"],
     }
     return outputs, manifest

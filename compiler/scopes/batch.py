@@ -91,7 +91,8 @@ def compose(builder, calls):
     slab, reason = scope_slab_plan(tuple(units), parameters)
     if slab is None:
         raise CompilationError(reason)
-    function = FunctionIR("batch_chain", "generated_scope", parameters, parameters, Block(()), "source-backed direct chain")
+    function = FunctionIR("batch_chain", "generated_scope", parameters, parameters, Block(()), "source-backed direct chain",
+                          requires_numerical_environment=any(entry[1].requires_numerical_environment for entry in entries))
     return function, tuple(units), entries, definitions, unit_ids, slab, actuals
 
 
