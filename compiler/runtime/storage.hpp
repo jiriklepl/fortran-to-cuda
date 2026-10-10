@@ -1,5 +1,6 @@
 // Owned fixed-shape storage shared by ordinary wrappers and resident sessions.
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
 #include <initializer_list>
 #include <limits>
@@ -18,14 +19,14 @@ inline void trace(const char *operation, std::size_t bytes = 0) {
     }();
     if (!enabled)
         return;
-    static std::mutex trace_mutex;
-    std::lock_guard<std::mutex> lock(trace_mutex);
-    std::cerr << "FORT_RUNTIME " << operation;
+    // Use one stdio operation per record, sharing stderr's stream lock with
+    // placement diagnostics emitted concurrently by the coordinating thread.
     if (std::strcmp(operation, "alloc") == 0 || std::strcmp(operation, "upload") == 0 ||
         std::strcmp(operation, "download") == 0 || std::strcmp(operation, "pool_create") == 0 ||
         std::strcmp(operation, "pool_alloc") == 0 || std::strcmp(operation, "scratch_reuse") == 0)
-        std::cerr << " bytes=" << bytes;
-    std::cerr << '\n';
+        std::fprintf(stderr, "FORT_RUNTIME %s bytes=%zu\n", operation, bytes);
+    else
+        std::fprintf(stderr, "FORT_RUNTIME %s\n", operation);
 }
 
 [[noreturn]] inline void fail(const char *message) {
