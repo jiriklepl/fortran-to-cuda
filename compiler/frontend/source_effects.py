@@ -316,6 +316,7 @@ class SourceEffects:
         self._structures, self._segments, self._descriptor_proofs = {}, {}, {}
         self._joined_completions = {}
         self._numerical_completions = {}
+        self._worksharing_completions = {}
         self._reduction_proofs, self._reduction_candidates = {}, {}
         self._omp_reduction_proofs = {}
         self._source_scopes, self._associate_scopes = {}, {}
@@ -1905,6 +1906,16 @@ class SourceEffects:
         """
         from compiler.frontend.numerical_completion import prove_numerical_completion
         return prove_numerical_completion(self, requested, selected)
+
+    def worksharing_completion(self, requested, joined, selected):
+        """Prove one synchronized DO's participation within its original team."""
+        from compiler.frontend.worksharing_completion import prove_worksharing_completion
+        proof = prove_worksharing_completion(self, requested, joined, selected)
+        if proof.identity not in self._worksharing_completions:
+            if len(self._worksharing_completions) >= self.operation_limit:
+                self._worksharing_completions.pop(next(iter(self._worksharing_completions)))
+            self._worksharing_completions[proof.identity] = proof
+        return self._worksharing_completions[proof.identity]
 
     def reduction_candidates(self, requested, selected=None, *, limit=32):
         """Lazily prove intrinsic reductions in authenticated reached nodes.

@@ -1160,6 +1160,17 @@ owner captures. Detached work, unresolved calls, nonuniform conditions and
 unsupported directives remain boundaries. A token for an entire joined group
 cannot be reused for one of its unfinished child loops.
 
+`SourceEffects.worksharing_completion` supplies a separate versioned proof for
+one original worksharing DO inside a complete joined team. It requires uniform
+participation and completion at every DO; a `NOWAIT` anywhere in that team
+prevents this split. Numerical extraction can consume the registered proof
+without pretending the loop was serial. Thread-private inputs, changed source,
+copied proofs and proofs for a sibling loop are rejected. This is analysis
+support for mixed-team execution: it does not authorize native coherence hooks,
+standalone execution, or a generated GPU replacement. Automatic scope formation
+continues to keep such mixed teams native until their coordinator and hooks are
+implemented.
+
 Numerical outlining uses a distinct registered completion proof when the
 original joined loop calls bounded source-backed PURE helpers. The complete
 transitive helper closure must finish synchronously, without unknown calls,

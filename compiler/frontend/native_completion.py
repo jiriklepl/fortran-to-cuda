@@ -55,7 +55,7 @@ class NativeCompletionProof:
         return self
 
 
-def _joined_completion_facts(analysis, procedure, selected, *, call_completion=None):
+def _joined_completion_facts(analysis, procedure, selected, *, call_completion=None, worksharing=None):
     """Verify one original group; serialized facts cannot grant a token.
 
     The retained native source supplies its original team, private storage,
@@ -236,14 +236,19 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
             if index >= len(items) or _kind(items[index]) != "Block_Nonlabel_Do_Construct":
                 raise CompilationError("native OpenMP DO requires one complete associated loop")
             check_loop(items[index])
+            loop, opening = items[index], node
             index += 1
             while index < len(items) and _kind(items[index]) == "Comment" and _directive(items[index]) is None:
                 index += 1
+            ending = None
             if index < len(items) and _directive(items[index]) in {"end do", "end do nowait"}:
+                ending = items[index]
                 index += 1
             elif index < len(items) and (_directive(items[index]) or "").startswith("end do"):
                 raise CompilationError("native OpenMP DO has an unsupported ending directive")
             # An omitted END DO has the original implicit worksharing barrier.
+            if worksharing is not None:
+                worksharing.append((opening, loop, ending))
 
     if combined:
         items = [item for item in (nodes[1:] if implicit_join else nodes[1:-1]) if _kind(item) != "Comment"]

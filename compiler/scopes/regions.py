@@ -601,8 +601,8 @@ def allocation_guard(analysis, routine, binding, preceding):
             "lifetime": "reached bounded region; allocation changes and unknown effects end ownership"}
 
 
-def extract_region(analysis, routine, node, *, preceding=(), following=()):
-    """Construct one bounded serial or complete joined OpenMP DO candidate."""
+def extract_region(analysis, routine, node, *, preceding=(), following=(), worksharing=None):
+    """Construct a bounded loop candidate with its original participation proof."""
     analysis.inputs.verify()
     role = analysis._source_roles.get(routine.qualified)
     if (analysis.routines.get(routine.qualified) is not routine or role is None
@@ -619,7 +619,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
         raise CompilationError("inline original specification is unsupported: " + "; ".join(specification_issues))
     if analysis._unknown_exports(routine.scope):
         raise CompilationError("inline intrinsic authority requires complete wildcard imports")
-    if any(directive(item) is not None for item in walk(_part(routine.scope.node, "Specification_Part"))):
+    if worksharing is None and any(directive(item) is not None
+                                   for item in walk(_part(routine.scope.node, "Specification_Part"))):
         # fparser may attach opening executable directives to specifications.
         # A detached DO alone does not prove either serial participation or the
         # complete parallel region; retain the original operation in that case.
@@ -628,6 +629,11 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
     nodes = source_nodes
     if not nodes:
         raise CompilationError("inline numerical region is empty")
+    if worksharing is not None:
+        from compiler.frontend.worksharing_completion import WorksharingCompletionProof
+        if not isinstance(worksharing, WorksharingCompletionProof):
+            raise CompilationError('inline worksharing requires a compiler-issued participation proof')
+        worksharing.validate(analysis, routine.qualified, source_nodes)
     selected_span = (min(statement_span(item)[0] for item in nodes),
                      max(statement_span(item)[1] for item in nodes))
 
@@ -645,7 +651,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
 
     # A detached DO can be a genuine original AST node while still belonging
     # to a larger team. Source identity alone must not turn it into serial work.
-    complete_original_groups(_children(routine.execution))
+    if worksharing is None:
+        complete_original_groups(_children(routine.execution))
     # fparser attaches an associated !$OMP DO prefix to its DO construct.
     # Peel only that original structural prefix; do not authorize a projected
     # routine or arbitrary foreign AST as source-backed numerical work.
@@ -656,9 +663,9 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
                     if _kind(item) != "Comment" or directive(item) is not None)
     if len(grouped) == 1 and isinstance(grouped[0], tuple):
         nodes = grouped[0]
-    elif len(grouped) == 1:
+    elif len(grouped) == 1 or worksharing is not None:
         nodes = grouped
-    joined = directive(nodes[0]) is not None
+    joined = worksharing is not None or directive(nodes[0]) is not None
     if joined:
         loops = tuple(item for item in nodes if _kind(item) == "Block_Nonlabel_Do_Construct")
     else:
@@ -686,7 +693,9 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
         if not related:
             raise CompilationError("inline extraction nodes must belong to the original execution")
     helpers = _helper_closure(analysis, routine, loops)
-    if joined:
+    if worksharing is not None:
+        completion = worksharing.public()
+    elif joined:
         # Completion belongs to the exact original group. Source-proven pure
         # helper closures have a separate token: it permits numerical outlining
         # but cannot authorize native memory hooks or establish GPU legality.
@@ -801,7 +810,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
         from compiler.scopes.participation import _threadprivate
         if set(used) & _threadprivate(analysis):
             raise CompilationError("inline OpenMP capture is THREADPRIVATE")
-        explicit_private = set()
+        explicit_private = set(worksharing.private_roots) if worksharing is not None else set()
         for item in nodes:
             text = directive(item) or ""
             for match in re.finditer(r"private\s*\(([^()]*)\)", text):
@@ -832,6 +841,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=()):
     private = {root: used[root] for root in scalar_writes | local_arrays}
     captures = {root: binding for root, binding in used.items()
                 if root not in private and not ("parameter" in binding.attributes and binding.dtype == "integer")}
+    if worksharing is not None and set(captures) & set(worksharing.private_roots):
+        raise CompilationError('inline worksharing cannot borrow a thread-private input value')
     guards = []
     for binding in captures.values():
         if binding.attributes & {"pointer", "optional", "volatile", "asynchronous", "value"}:
