@@ -181,6 +181,13 @@ def validate_profile(
             validate_numerical_profile(profile["numerical"], profile)
         except NumericalCalibrationError as error:
             raise ProfileError(str(error)) from error
+    if "numerical_execution" in profile:
+        from .numerical_calibration import NumericalCalibrationError
+        from .numerical_execution import validate_execution_profile
+        try:
+            validate_execution_profile(profile)
+        except NumericalCalibrationError as error:
+            raise ProfileError(str(error)) from error
     if "cpu_execution_protocol" in profile:
         from .cpu_protocol_calibration import validate_cpu_protocol
         from .numerical_calibration import NumericalCalibrationError
