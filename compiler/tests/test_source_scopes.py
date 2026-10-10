@@ -173,6 +173,12 @@ def test_allocatable_owning_roots_are_guarded_at_original_caller(tmp_path, mode)
     assert scope["allocation_preflight"]["resources"] == ["argument::a", "argument::b", "argument::out"]
     edit = next(edit for edit in manifest["source_edits"] if edit["first_line"] <= edit["last_line"])
     guarded = edit["replacement"]
+    if mode == "auto":
+        span = "".join(original.read_text().splitlines(keepends=True)[edit["first_line"]-1:edit["last_line"]])
+        assert guarded == span
+        assert scope["automatic_preflight"]["caller_source_unchanged"]
+        assert not scope["automatic_preflight"]["caller_guards_evaluated"]
+        return
     assert guarded.startswith("block\n")
     coordinator_import = next(line for line in guarded.splitlines()
                               if line.startswith("use fort_scoped_memory, only:"))

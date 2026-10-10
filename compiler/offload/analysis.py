@@ -30,6 +30,7 @@ from compiler.ir import (
     Literal,
     Loop,
     ParallelRegion,
+    PrivateArrayOrigin,
     Reference,
     ScalarType,
     Size,
@@ -92,6 +93,79 @@ class Footprint:
 
 
 @dataclass(frozen=True)
+class PrivateArrayUsage:
+    """An original private group actually used by one numerical unit."""
+
+    group_id: int
+    dtype: ScalarType
+    bounds: tuple[tuple[int, int], ...]
+    element_offsets: tuple[int, ...]
+
+    @property
+    def extents(self) -> tuple[int, ...]:
+        return tuple(max(0, upper - lower + 1) for lower, upper in self.bounds)
+
+    @property
+    def element_count(self) -> int:
+        count = 1
+        for extent in self.extents:
+            count *= extent
+        return count
+
+    def to_dict(self) -> dict:
+        return {"group_id": self.group_id, "dtype": self.dtype.value,
+                "bounds": [list(bound) for bound in self.bounds], "extents": list(self.extents),
+                "declared_elements": self.element_count,
+                "referenced_element_offsets": list(self.element_offsets)}
+
+
+@dataclass(frozen=True)
+class WorkloadFeatures:
+    """Versioned cost classification; it does not establish model applicability.
+
+    Counts conservatively include the complete declared storage of each group
+    actually read or written in a unit. Unused declarations have no effect.
+    These are not register-allocation or liveness estimates. Native execution
+    participation requires separate authority from the original source.
+    """
+
+    private_arrays: tuple[PrivateArrayUsage, ...] = ()
+    classification_complete: bool = True
+    reason: str | None = None
+    schema_version: int = 2
+
+    @property
+    def private_array_groups(self) -> int:
+        return len(self.private_arrays)
+
+    @property
+    def private_array_elements(self) -> int:
+        return sum(group.element_count for group in self.private_arrays)
+
+    @property
+    def referenced_private_array_elements(self) -> int:
+        return sum(len(group.element_offsets) for group in self.private_arrays)
+
+    @property
+    def max_private_array_elements(self) -> int:
+        return max((group.element_count for group in self.private_arrays), default=0)
+
+    @property
+    def max_private_array_rank(self) -> int:
+        return max((len(group.bounds) for group in self.private_arrays), default=0)
+
+    def to_dict(self) -> dict:
+        return {"schema_version": self.schema_version,
+                "classification_complete": self.classification_complete, "reason": self.reason,
+                "private_array_groups": self.private_array_groups,
+                "private_array_elements": self.private_array_elements,
+                "referenced_private_array_elements": self.referenced_private_array_elements,
+                "max_private_array_elements": self.max_private_array_elements,
+                "max_private_array_rank": self.max_private_array_rank,
+                "private_arrays": [group.to_dict() for group in self.private_arrays]}
+
+
+@dataclass(frozen=True)
 class Unit:
     index: int
     region: ParallelRegion
@@ -103,6 +177,14 @@ class Unit:
     cpu_numerical_seconds_per_iteration: float = 0
     gpu_numerical_seconds_per_iteration: float = 0
     work_estimate_reason: str | None = None
+    workload_class: str = "scalar_expression_v2"
+    workload_features: WorkloadFeatures = WorkloadFeatures()
+    compute_model: dict | None = None
+    # V2 compute calibration counts real operators, separately from the legacy
+    # work proxy, which also includes assignments and address expressions.
+    compute_arithmetic_operations_per_iteration: int | None = None
+    compute_runtime_divisions_per_iteration: int | None = None
+    compute_arithmetic_estimate_reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -243,6 +325,12 @@ class OffloadAnalysis:
                     "region": unit.region.id,
                     "work_per_iteration": unit.work_per_iteration,
                     "work_is_upper_bound": unit.work_is_upper_bound,
+                    "workload_class": unit.workload_class,
+                    "workload_features": unit.workload_features.to_dict(),
+                    "compute_model": unit.compute_model,
+                    "compute_arithmetic_operations_per_iteration": unit.compute_arithmetic_operations_per_iteration,
+                    "compute_runtime_divisions_per_iteration": unit.compute_runtime_divisions_per_iteration,
+                    "compute_arithmetic_estimate_reason": unit.compute_arithmetic_estimate_reason,
                     **({"intrinsic_work_per_iteration": dict(unit.intrinsic_work_per_iteration),
                         "arithmetic_work_per_iteration": unit.arithmetic_work_per_iteration,
                         "cpu_numerical_seconds_per_iteration": unit.cpu_numerical_seconds_per_iteration,
@@ -465,12 +553,137 @@ def _merge_footprints(footprints):
     return tuple(result)
 
 
+def _workload_features(symbols):
+    """Use compiler-issued storage origins, never scalar or routine names."""
+    groups = {}
+    for symbol in sorted(symbols, key=lambda value: value.id):
+        origin = symbol.private_array_origin
+        if origin is None:
+            continue
+        valid = (isinstance(origin, PrivateArrayOrigin) and type(origin.schema_version) is int
+                 and origin.schema_version == 1
+                 and type(origin.group_id) is int and origin.group_id >= 0
+                 and type(origin.element_offset) is int and symbol.rank == 0 and not symbol.parameter
+                 and isinstance(origin.bounds, tuple) and bool(origin.bounds)
+                 and all(isinstance(bound, tuple) and len(bound) == 2
+                         and all(type(value) is int for value in bound) for bound in origin.bounds))
+        if not valid:
+            return WorkloadFeatures(classification_complete=False, reason="invalid private-storage provenance")
+        count = 1
+        for extent in origin.extents:
+            count *= extent
+        if not 0 <= origin.element_offset < count <= 256:
+            return WorkloadFeatures(classification_complete=False, reason="unbounded private-storage provenance")
+        key = (symbol.dtype, origin.bounds)
+        if origin.group_id in groups and groups[origin.group_id][0] != key:
+            return WorkloadFeatures(classification_complete=False, reason="conflicting private-storage group")
+        _, offsets = groups.setdefault(origin.group_id, (key, {}))
+        if origin.element_offset in offsets and offsets[origin.element_offset] != symbol.id:
+            return WorkloadFeatures(classification_complete=False, reason="conflicting private-storage element")
+        offsets[origin.element_offset] = symbol.id
+    return WorkloadFeatures(tuple(PrivateArrayUsage(group_id, dtype, bounds, tuple(sorted(offsets)))
+                                  for group_id, ((dtype, bounds), offsets) in sorted(groups.items())))
+
+
+def _compute_arithmetic_operations(block):
+    operations, _, reason = _compute_operation_counts(block)
+    return operations, reason
+
+
+def _compute_operation_counts(block):
+    """Count V2's ordinary real operations without changing legacy work.
+
+    Binary +,-,*,/ and ABS cost one operation; a real unary minus costs one
+    except for compile-time constant expressions. MIN/MAX cost one comparison/select
+    per pair. Numerical primitives have separate coefficients. Assignments,
+    casts, comparisons, logical and INTEGER operations, and address/index
+    trees do not count. Counts are exact only for reached straight-line IR;
+    conditional or retained-loop bodies and unpriced real operations remain
+    unknown. This classification does not prove calibrated applicability.
+    Real divisions with nonconstant denominators are also counted separately;
+    their calibrated primitive increment supplements ordinary arithmetic.
+    """
+    real = {ScalarType.REAL32, ScalarType.REAL}
+    ordinary = {"+", "-", "*", "/"}
+    runtime_divisions = 0
+
+    def expression(node):
+        nonlocal runtime_divisions
+        if isinstance(node, Literal):
+            return node.dtype, 0, None, True
+        if isinstance(node, (Reference, ArrayAccess)):
+            # In particular, never descend into physical array subscripts.
+            return node.symbol.dtype, 0, None, False
+        if isinstance(node, Size):
+            return ScalarType.INTEGER, 0, None, False
+        if isinstance(node, Unary):
+            dtype, count, reason, constant = expression(node.operand)
+            if reason:
+                return dtype, 0, reason, constant
+            if dtype in real:
+                if node.operator == "-":
+                    count += not constant
+                elif node.operator != "+":
+                    return dtype, 0, "unsupported real unary operation " + node.operator, constant
+            return dtype, count, None, constant
+        if isinstance(node, Binary):
+            left, left_count, left_reason, left_constant = expression(node.left)
+            right, right_count, right_reason, right_constant = expression(node.right)
+            constant = left_constant and right_constant
+            dtype = (ScalarType.REAL if ScalarType.REAL in {left, right} else
+                     ScalarType.REAL32 if ScalarType.REAL32 in {left, right} else ScalarType.INTEGER)
+            if left_reason or right_reason:
+                return dtype, 0, left_reason or right_reason, constant
+            count = left_count + right_count
+            if node.operator in ordinary:
+                if node.operator == "/" and dtype in real and not right_constant:
+                    runtime_divisions += 1
+                return dtype, count + (dtype in real and not constant), None, constant
+            if node.operator in {"==", "/=", "<", "<=", ">", ">=", ".eq.", ".ne.",
+                                 ".lt.", ".le.", ".gt.", ".ge.", ".and.", ".or.",
+                                 ".eqv.", ".neqv."}:
+                return ScalarType.LOGICAL, count, None, constant
+            return dtype, 0, "unsupported real binary operation " + node.operator, constant
+        if isinstance(node, IntrinsicCall):
+            name = node.name.lower()
+            arguments = node.arguments[:1] if name in {"real", "dble", "int"} else node.arguments
+            values = [expression(argument) for argument in arguments]
+            constant = all(constant for _, _, _, constant in values)
+            reason = next((reason for _, _, reason, _ in values if reason), None)
+            if reason:
+                return node.dtype, 0, reason, constant
+            count = sum(count for _, count, _, _ in values)
+            if constant or name in {"real", "dble", "int"} or node.dtype not in real or name in REAL_MATH | {"atan2"}:
+                return node.dtype, count, None, constant
+            if name == "abs":
+                return node.dtype, count + 1, None, constant
+            if name in {"min", "max"}:
+                return node.dtype, count + len(node.arguments) - 1, None, constant
+            return node.dtype, 0, "unsupported real intrinsic " + name, constant
+        return ScalarType.INTEGER, 0, "unsupported compute expression", False
+
+    total = 0
+    for statement in block.statements:
+        if isinstance(statement, If):
+            return None, None, "conditional arithmetic work is unknown"
+        if isinstance(statement, Loop):
+            return None, None, "retained-loop arithmetic work is unknown"
+        if not isinstance(statement, Assignment):
+            return None, None, "unsupported compute statement"
+        _, count, reason, _ = expression(statement.value)
+        if reason:
+            return None, None, reason
+        total += count
+    return total, runtime_divisions, None
+
+
 def _unit_footprints(unit, parameters):
     accesses: list[Footprint] = []
     work = 0
     upper_bound = False
     retained_loop = False
     intrinsic_work = {}
+    used_symbols = set()
 
     def record(access, kind, definitions, conditional, unknown):
         access = _resolve(access, definitions)
@@ -494,6 +707,8 @@ def _unit_footprints(unit, parameters):
     def reads(expression, definitions, conditional, unknown):
         nonlocal work
         for node in walk_expr(expression):
+            if isinstance(node, (Reference, ArrayAccess, Size)):
+                used_symbols.add(node.symbol)
             if isinstance(node, ArrayAccess):
                 record(node, "read", definitions, conditional, unknown)
             elif isinstance(node, IntrinsicCall) and node.name.lower() in REAL_MATH | {"atan2"}:
@@ -508,6 +723,7 @@ def _unit_footprints(unit, parameters):
         for statement in block.statements:
             if isinstance(statement, Assignment):
                 work += 1
+                used_symbols.add(statement.target.symbol)
                 reads(statement.value, definitions, conditional, unknown)
                 if isinstance(statement.target, ArrayAccess):
                     for expression in statement.target.indices:
@@ -545,7 +761,13 @@ def _unit_footprints(unit, parameters):
                     definitions.pop(symbol, None)
         return definitions
 
+    for loop in unit.region.loops:
+        for expression in (loop.lower, loop.upper, *(() if isinstance(loop.step, int) else (loop.step,))):
+            used_symbols.update(node.symbol for node in walk_expr(expression)
+                                if isinstance(node, (Reference, ArrayAccess, Size)))
     visit(unit.region.body, {})
+    features = _workload_features(used_symbols)
+    compute_operations, compute_divisions, compute_reason = _compute_operation_counts(unit.region.body)
     return replace(
         unit,
         footprints=_merge_footprints(accesses),
@@ -556,6 +778,12 @@ def _unit_footprints(unit, parameters):
         work_estimate_reason=("retained-loop work is unknown" if retained_loop else
                               "scalar math requires compatible independently validated numerical calibration"
                               if intrinsic_work else None),
+        workload_class=("unclassified_v2" if not features.classification_complete else
+                        "fixed_private_array_v2" if features.private_array_groups else "scalar_expression_v2"),
+        workload_features=features,
+        compute_arithmetic_operations_per_iteration=compute_operations,
+        compute_runtime_divisions_per_iteration=compute_divisions,
+        compute_arithmetic_estimate_reason=compute_reason,
     )
 
 

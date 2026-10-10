@@ -73,6 +73,18 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
             "basis": "static scalar intrinsic counts and compatible independent offline holdouts",
             "missing_or_incompatible": "unknown estimate; automatic placement remains native",
         },
+        "planning_compute_costs": {
+            "abi_version": 1, "record": "fort_scope_plan_add_compute_costs_v3",
+            "payload": "fort_scope_compute_costs_v1",
+            "backends": {"native_fortran": 1, "generated_cpu": 2, "gpu": 4},
+            "basis": "complete compute seconds; original Fortran and generated workers calibrated independently",
+            "native_operation_cpu": "actual coordinated host execution including candidate-only preparation",
+            "separate_costs": "transfers, allocation, launches, synchronization and coordination",
+            "applicability": "original compiler semantics, fixed CPU placement, workload class and runtime item range",
+            "missing_or_incompatible": "definition validation retained; automatic estimate unavailable",
+            "continuation": "coherent host counterfactual; no replay of earlier numerical work",
+            "compatibility": "v1/v2 planning interfaces retain their original meaning",
+        },
         "numerical_environment": {
             "check": "fort_scope_numerical_environment_supported",
             "requires": "original nontrapping round-to-nearest thread; native IEEE guards stay in place",

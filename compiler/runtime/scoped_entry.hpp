@@ -59,6 +59,13 @@ public:
         return fort_scope_plan_add_costs_v2(context_, kind, unit, values.data(), size_, flops, memory_bytes,
                                            gpu_available, cpu_numerical_seconds, gpu_numerical_seconds);
     }
+    int record_compute(uint32_t kind, uint64_t unit, double flops, double memory_bytes, int gpu_available,
+                       const fort_scope_compute_costs_v1 &compute) const {
+        std::array<fort_scope_plan_binding, Capacity> values{};
+        for (size_t i=0; i<size_; ++i) values[i] = {bindings_[i].handle, bindings_[i].effects};
+        return fort_scope_plan_add_compute_costs_v3(context_, kind, unit, values.data(), size_, flops,
+                                                  memory_bytes, gpu_available, &compute);
+    }
     int decision(uint64_t unit, bool &gpu) const {
         std::array<fort_scope_plan_binding, Capacity> values{};
         for (size_t i=0; i<size_; ++i) values[i] = {bindings_[i].handle, bindings_[i].effects};

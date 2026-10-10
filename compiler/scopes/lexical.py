@@ -37,6 +37,8 @@ class Unit:
     native_source: str | None = None
     publication_only: bool = False
     host_metadata: object = None
+    compute_identity: dict | None = None
+    native_preflight: dict | None = None
 
 
 class LexicalOwner:
@@ -383,6 +385,16 @@ class LexicalOwner:
                 f"type(fort_scope_plan_binding), target :: fort_bindings({max(1,len(arrays))})",
                 f"integer(c_int), parameter :: fort_mode = {1 if builder.config.policy == 'sections' else 2}"]
         prepare = ["fort_status = FORT_SCOPE_OK", "fort_can = .true."]
+        metadata_native = None
+        preflight = None
+        if builder.config.policy == "auto":
+            from compiler.scopes.compute_identity import compute_identity_guard
+            identity = compute_identity_guard(builder, unit.leaves, caller=self.routine)
+            unit.compute_identity = identity.public()
+            if identity.required:
+                imports += list(identity.imports)
+                prepare += ["if (.not. (" + identity.expression + ")) then",
+                            *self.close(), "exit " + block, "endif"]
         for root, binding in arrays.items():
             name, number = parameters[root], self.resources[root][1]
             dtype, enum, width = DTYPES[binding.signature()[:2]]
@@ -394,8 +406,34 @@ class LexicalOwner:
                 prepare += [f"if (fort_can) fort_can = allocated({name})"]
             prepare += [f"if (fort_can) fort_can = is_contiguous({name})"]
             prepare += [f"if (fort_can) fort_can = {condition}" for condition in builder.original_bound_conditions(name,binding.rank)]
-        prepare += ["if (.not. fort_can) then", *self.close(), "exit " + block, "endif",
-                    "if (fort_context == 0) then", "fort_status = fort_scope_create(0_c_int, fort_context)",
+        prepare += ["if (.not. fort_can) then", *self.close(), "exit " + block, "endif"]
+        from compiler.scopes.segments import Segment
+        if builder.config.policy == "auto" and unit.definition_summary.changes:
+            unit.native_preflight = {"abi_version": 1, "available": False,
+                "reason": "ordered definition changes require reached registration and validation"}
+        if (builder.config.policy == "auto" and not unit.definition_summary.changes
+                and not unit.scope.native and len(unit.scope.tree) == 1
+                and isinstance(unit.scope.tree[0], Segment)
+                and unit.scope.tree[0].query and unit.scope.tree[0].query[0]):
+            from compiler.scopes.native_preflight import source_native_preflight
+            preflight = source_native_preflight(builder, unit.scope.calls, unit.leaves, parameters,
+                                               original_descriptors=True)
+            unit.native_preflight = preflight.public
+            if preflight.expression is not None:
+                metadata_native = "fort_metadata_native_" + block.rsplit("_", 1)[-1]
+                scope = self.routine.scope
+                if (builder.analysis._binding(scope, metadata_native) is not None
+                        or builder.analysis._candidates(scope, metadata_native)
+                        or metadata_native in scope.imports or metadata_native in scope.ambiguous_imports
+                        or metadata_native in scope.generics):
+                    metadata_native = None
+                    unit.native_preflight = {"abi_version": 1, "available": False,
+                                             "reason": "metadata flag conflicts with original source"}
+                else:
+                    imports += list(preflight.imports)
+                    prepare += ["if (fort_context == 0) then", "if (" + preflight.expression + ") then",
+                                metadata_native + " = .true.", "exit " + block, "endif", "endif"]
+        prepare += ["if (fort_context == 0) then", "fort_status = fort_scope_create(0_c_int, fort_context)",
                     "if (fort_status == FORT_SCOPE_OK) &",
                     f"fort_status = fort_scope_set_device_budget(fort_context, {builder.device_budget}_c_size_t)",
                     *builder.owner_transfer_setup(self.owner.leaves, imports), "endif"]
@@ -527,9 +565,18 @@ class LexicalOwner:
             return [(first, first-1, "\n".join(fortran_lines(prefix))+"\n"),
                     (last+1, last, "\n".join(fortran_lines(suffix))+"\n"), *joined_patches]
         original = unit.native_source if unit.native_source is not None else self.original(unit.nodes)
+        native_condition = f".not. {self.enabled}"
+        if metadata_native is not None:
+            native_condition += " .or. " + metadata_native
         lines = [f"if ({self.enabled}) then", f"associate(fort_context => {self.context})", block + ": block",
                  *dict.fromkeys(imports), *spec, *prepare, *execution, "end block " + block, "end associate", "endif",
-                 f"if (.not. {self.enabled}) then", *original.splitlines(), "endif"]
+                 f"if ({native_condition}) then", *original.splitlines(), "endif"]
+        if metadata_native is not None:
+            # A fresh native unit must not disable profitable later segments.
+            # Existing contexts never take this shortcut: their coherent CPU
+            # continuation still publishes the sections it actually needs.
+            lines = ["block", "logical :: " + metadata_native, metadata_native + " = .false.",
+                     *lines, "end block"]
         if unit.source_guard is not None:
             # Evaluate the original predicate once, before descriptor guards
             # and any fallback for its one original action.
@@ -541,12 +588,44 @@ class LexicalOwner:
 
     def run(self, nodes):
         builder = self.builder
+        checkpoint = builder.scope_checkpoint()
         self.active.append(self.routine.qualified)
         self.scan(nodes)
         self.active.pop()
         self.leaves = {leaf for member in self.members.values() for unit in member.units for leaf in unit.leaves}
         if not self.leaves:
             return False
+        native_reason = builder.automatic_native_preflight(self.leaves)
+        if builder.config.policy == "auto" and any(
+                getattr(operation, "indirect_sections", None) is not None
+                for member in self.members.values() for unit in member.units for operation in unit.scope.native):
+            native_reason = "native indirect inspector preparation lacks compatible offline cost estimates"
+        if native_reason:
+            # No reached runtime fact can make these alternatives estimable.
+            # Preserve the lexical owner, including declarations and internal
+            # procedures, instead of adding TARGET and coordination guards.
+            transfer_configuration = builder.numerical(sorted(self.leaves)[0]).scoped["transfer_configuration"]
+            builder.restore_scope_checkpoint(checkpoint)
+            first, last = statement_span(nodes[0])[0], statement_span(nodes[-1])[1]
+            builder.add_edit(self.routine.scope.path, first, last, self.original(nodes))
+            builder.scopes.append({
+                "owner": self.context, "owner_variant": None,
+                "path": str(self.routine.scope.path), "first_line": first, "last_line": last,
+                "gpu_leaves": sorted(self.leaves), "mode": "auto", "estimate_available": False,
+                "planning_reason": native_reason,
+                "source_authority": {"version": 1, "structured_summary_identity": self.graph.identity},
+                "automatic_preflight": {
+                    "selection": "native", "successful": True, "reason": native_reason,
+                    "authority": "compiler-produced offline estimate availability for every numerical alternative",
+                    "position": "before source instrumentation and runtime evaluation",
+                    "runtime_decision_inputs": [], "contexts_created": 0,
+                    "registrations": 0, "queries_constructed": 0,
+                    "caller_source_unchanged": True, "caller_guards_evaluated": False,
+                    "generated_owner_invoked": False,
+                    "execution": "unchanged original lexical owner"},
+                "transfer_configuration": transfer_configuration,
+                "boundaries": self.boundaries})
+            return True
         # One shared implementation identity, independent of the count of
         # reached source segments. Original native control/storage stays here.
         variant = builder.variants.register(self.routine.qualified, interface="lexical_owner_v1", role="coordinator",
@@ -583,7 +662,6 @@ class LexicalOwner:
         last = statement_span(nodes[-1])[1]
         builder.add_edit(self.routine.scope.path, start,start-1,
                          f"use iso_c_binding, only: {self.kind} => c_int64_t\n")
-        native_reason = builder.automatic_native_preflight(self.leaves)
         declarations = [f"integer({self.kind}) :: {self.context}", f"logical :: {self.enabled}",
                         *[f"integer({self.kind}) :: fort_buffer_{number}" for _binding, number in self.resources.values()]]
         initialize = [f"{self.context} = 0", *[f"fort_buffer_{number} = 0" for _binding,number in self.resources.values()],
@@ -595,8 +673,12 @@ class LexicalOwner:
         builder.scopes.append({"owner": self.context, "owner_variant": variant.identity,
             "path": str(self.routine.scope.path), "first_line": first, "last_line": last,
             "gpu_leaves": sorted(self.leaves), "mode": builder.config.policy,
-            "estimate_available": all(unit.scope.planning_status()[0] for member in self.members.values() for unit in member.units),
-            "planning_reason": native_reason,
+            "estimate_available": all(unit.scope.planning_status()[0] and
+                                      (unit.compute_identity is None or unit.compute_identity["available"])
+                                      for member in self.members.values() for unit in member.units),
+            "planning_reason": native_reason or next((unit.compute_identity["reason"]
+                for member in self.members.values() for unit in member.units
+                if unit.compute_identity is not None and not unit.compute_identity["available"]), None),
             "ownership": {"lifetime": "one original invocation", "planning_mode": "continuation",
                           "retained_resources": list(self.resources), "end_reason": "reached boundary or original invocation end"},
             "resource_bindings": {"schema_version": 1,
@@ -612,6 +694,8 @@ class LexicalOwner:
                 "planning_segments": [{"segment_id": index, "first_line": unit.scope.first,
                     "last_line": unit.scope.last, "resources": list(unit.arrays),
                     "gpu_leaves": sorted(unit.leaves), "ordered_definitions": unit.definition_summary.public(),
+                    "compute_identity": unit.compute_identity,
+                    "native_preflight": unit.native_preflight,
                     "operations": unit.scope.public()}
                     for index, unit in enumerate(member.units)]}
                 for member in self.members.values() if member is not self and not hasattr(member, "emit_companion")],
@@ -620,6 +704,8 @@ class LexicalOwner:
             "planning_segments": [{"segment_id": index, "first_line": unit.scope.first, "last_line": unit.scope.last,
                                    "resources": list(unit.arrays), "gpu_leaves": sorted(unit.leaves),
                                    "ordered_definitions": unit.definition_summary.public(),
+                                   "compute_identity": unit.compute_identity,
+                                   "native_preflight": unit.native_preflight,
                                    "operations": unit.scope.public()} for index,unit in enumerate(self.units)],
             "boundaries": self.boundaries, "native_continuation": "original lexical scope; no replay and no synthetic argument association",
             "registration": "first reached use after original allocation and descriptor guards",

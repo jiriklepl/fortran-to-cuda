@@ -127,7 +127,11 @@ def test_owners_configure_once_before_registration_and_planning(tmp_path, collec
 
 @pytest.mark.parametrize("structured", [False, True])
 def test_pinned_automatic_source_keeps_native_when_old_profile_has_only_direct_costs(tmp_path, structured):
-    outputs, report, owner = source_scope(tmp_path, "pinned", policy="auto", profile=calibration(), structured=structured)
+    from compiler.offload.numerical_calibration import profile_from_compute_measurements
+    from compiler.tests.test_numerical_calibration_v2 import observations_v2
+
+    profile = profile_from_compute_measurements(calibration(), observations_v2(), calibration={})
+    outputs, report, owner = source_scope(tmp_path, "pinned", policy="auto", profile=profile, structured=structured)
     assert not report["automatic_estimate_available"]
     scope, = report["scopes"]
     assert scope["planning_reason"] == "transfer_estimates_unavailable"

@@ -12,6 +12,9 @@ class OffloadConfig:
     profile_reason: str | None = None
     scope_transfers: str = "direct"
     scope_execution: str = "bounded"
+    # None prices generated workers only. Source-backed original Fortran
+    # alternatives require a separately calibrated participation contract.
+    native_participation: str | None = None
 
     def __post_init__(self):
         if self.policy not in {"always", "sections", "auto", "chunked", "hybrid"}:
@@ -22,3 +25,5 @@ class OffloadConfig:
             raise ValueError("Unknown scope transfer mode")
         if self.scope_execution not in {"bounded", "reached"}:
             raise ValueError("Unknown source scope execution mode")
+        if self.native_participation not in {None, "serial", "fork_join", "fork_join_runtime", "existing_team", "unknown"}:
+            raise ValueError("Unknown native Fortran participation")

@@ -1479,6 +1479,28 @@ extern "C" int fort_scope_plan_add_costs_v2(fort_scope_t h, uint32_t kind, uint6
                           gpu_available != 0, cpu_numerical_seconds, gpu_numerical_seconds});
     }, Change::Query);
 }
+extern "C" int fort_scope_plan_add_compute_costs_v3(fort_scope_t h, uint32_t kind, uint64_t unit,
+                                   const fort_scope_plan_binding *bindings, size_t count,
+                                   double flops, double memory_bytes, int gpu_available,
+                                   const fort_scope_compute_costs_v1 *compute) {
+    return with(h, [&](Context &c) {
+        PlanningTimer timing(c, h, "query_construction");
+        require(c.plan_recording && !c.plan_installed, FORT_SCOPE_STATE, "reset the planning query before recording");
+        require(kind <= FORT_SCOPE_PLAN_FORGET && (gpu_available == 0 || gpu_available == 1) &&
+                (kind == FORT_SCOPE_PLAN_WORKER || !gpu_available),
+                FORT_SCOPE_ARGUMENT, "invalid planning operation kind or availability");
+        require(c.plan.size() < 256, FORT_SCOPE_BOUNDARY, "planning record budget exceeded");
+        require(kind != FORT_SCOPE_PLAN_WORKER || unit, FORT_SCOPE_ARGUMENT, "worker planning unit requires an identity");
+        require(compute && fort_scoped::planning::detail::valid_compute_costs(*compute),
+                FORT_SCOPE_ARGUMENT, "invalid offline backend compute costs");
+        require(std::isfinite(flops) && flops >= 0 && std::isfinite(memory_bytes) && memory_bytes >= 0,
+                FORT_SCOPE_ARGUMENT, "invalid planning work");
+        fort_scoped::planning::Operation operation{kind, unit, planning_bindings(c, bindings, count), flops,
+                                                  memory_bytes, gpu_available != 0};
+        operation.compute_costs = *compute;
+        c.plan.push_back(std::move(operation));
+    }, Change::Query);
+}
 extern "C" int fort_scope_set_team_costs_v1(fort_scope_t h, const fort_scope_team_costs *costs, int compatible) {
     return with(h, [&](Context &c) {
         require(compatible == 0 || compatible == 1, FORT_SCOPE_ARGUMENT, "invalid collective profile compatibility");

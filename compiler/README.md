@@ -1589,13 +1589,65 @@ restore the caller thread's rounding mode, exception flags and trap mask;
 numerical computation is not moved into setup or query evaluation.
 
 `--numerical-costs` extends offline hardware calibration with generic private
-array and transcendental workloads. Scalar intrinsic coefficients require
-independent primitive and mixed-expression holdouts. Planning records static
-intrinsic counts and calibrated CPU/GPU seconds separately from arithmetic
-FLOPs through `fort_scope_plan_add_costs_v2`; existing callers retain zero
-additional costs. Missing, incompatible or failed numerical calibration leaves
-automatic estimates unavailable. Collective and hybrid intrinsic pricing
-remain unavailable until their execution protocols are calibrated.
+array and transcendental workloads. Numerical calibration v2 measures original
+Fortran serial and fork/join implementations separately from generated CPU and
+GPU workers. Seven predefined interleaved batches run for at least 200 ms each,
+with fixed CPU placement, independent sizes and mixed-expression holdouts, and
+a 25% validation ceiling. Rejected observations remain in the profile; each
+backend and workload class is accepted independently. Compiler options, device,
+precision, CPU placement and runtime size ranges must match before AUTO can
+use a model. Existing-team execution requires its own coordination calibration.
+Runtime real division has a separately validated primitive family; division by
+a compile-time constant remains in ordinary arithmetic. Mixed holdouts include
+data-dependent division and validate the exact fixed terms emitted at runtime.
+Memory calibration uses eight predefined working-set sizes and independent
+intermediate holdouts. A bounded bandwidth table follows cache-size changes;
+it never extrapolates. Runtime pricing separates read/write traffic from the
+unique physical union of accessed sections. Opposite faces remain separate,
+read/write overlaps count once in the working set, and unknown footprints,
+repeated touched root aliases or checked-arithmetic failures leave AUTO native.
+CPU execution startup is removed from the memory measurements and charged
+once outside the computation/memory maximum; validation uses the same formula.
+If a fitted startup exceeds a measured memory invocation, that family is
+rejected rather than clamped. Successful primitive fits do not override failed
+mixed-expression validation or establish costs for a different dependency shape.
+
+Original `SCHEDULE(runtime)` work needs the separate top-level
+`source_schedule_validation` profile section. Its fixed paired protocol compares
+runtime-static execution against the frozen compute model without fitting new
+coefficients, retains every observation, and intersects only structurally valid
+working-set ranges. Missing or failed evidence keeps AUTO native. An admitted
+entry checks the current OpenMP schedule before context creation and in every
+public query; static scheduling with default contiguous chunks is required.
+Changing the schedule or selecting cyclic chunks invalidates the estimate.
+The standalone `python -m compiler.offload.schedule_calibrate` producer takes
+`--profile`, a new `--output`, a new `--build-dir`, and repeated
+`--fortran-flag=...` arguments matching the numerical profile. It checks both
+compiled Fortran identities and CPU placement before timing. A profile with no
+accepted native workload class is rejected before building the validation job.
+
+Source planning supplies complete compute seconds for all three implementations
+through `fort_scope_plan_add_compute_costs_v3`. Transfers, launches, allocation
+and coordination are charged separately. A native operation inside an active
+owner uses its actual coordinated host cost, including candidate-only inspectors;
+that differs from the whole-original native fallback. Missing preparation costs
+keep AUTO unavailable. Continuations compare against coherent host execution
+and cannot replay an earlier GPU prefix. The existing v2 additive-cost ABI and
+legacy calibration reader remain available (`--numerical-version 1`), but C++
+measurements cannot establish original Fortran costs.
+
+When every numerical alternative statically lacks an applicable estimate,
+AUTO preserves the original caller source without descriptor or IEEE guards,
+runtime registration or queries. This is a successful native decision. A valid
+alternative retains reached runtime planning and its guarded evaluations.
+For a fresh, unconditional single numerical unit, `native_preflight_v1` can also
+prove native execution from an empty domain or an item count outside the model's
+validated range. It reads only guarded descriptor metadata and read-only INTEGER
+inputs, before context creation or registration. Unknown or overflowing inputs
+continue ordinary planning. Reached lexical units with definition changes retain
+registration and ordered validation; an existing owner always uses coherent
+continuation. This preflight does not yet prove native execution from GPU startup
+costs; no unproved native memory-cost upper bound is assumed.
 
 ## Legality and caller contract
 

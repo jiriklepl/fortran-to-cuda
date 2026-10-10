@@ -10,7 +10,9 @@ from compiler.emission.common.c_family import cpp_type, indent, render_assignmen
 from compiler.emission.common.loops import _loop_snapshot, sequential_block
 from compiler.emission.common.schedules import checked_product, region_schedule, tile_counts
 from compiler.emission.common.symbols import host_symbols, region_symbols
+from compiler.emission.cuda.compute_memory import COMPUTE_MEMORY_INCLUDES, generate_compute_memory
 from compiler.emission.cuda.kernels import generate_kernel, generate_launch
+from compiler.emission.cuda.native_preflight import generate_native_preflight
 from compiler.emission.cuda.offload import _cpu_worker, _host_profile_compatibility, _metadata, _precision
 from compiler.emission.cuda.structured import _query_expression
 from compiler.emission.fortran.formatting import _fortran_list
@@ -127,7 +129,13 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                   for e in (*box.lower, *box.upper))
         for r in plan.regions
     }
-    if not config.collective:
+    if config.native_participation is not None:
+        from compiler.offload.source_compute import apply_source_compute_costs
+        numerical_analysis = apply_source_compute_costs(
+            OffloadAnalysis(prep.analysis.available, prep.analysis.reason, tuple(units.values())),
+            config.profile, config.native_participation)
+        units = {unit.region.id: unit for unit in numerical_analysis.units}
+    elif not config.collective:
         from compiler.offload.numerical_calibration import apply_numerical_costs
         numerical_analysis = apply_numerical_costs(
             OffloadAnalysis(prep.analysis.available, prep.analysis.reason, tuple(units.values())), config.profile)
@@ -139,6 +147,26 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         planning_reason = "; ".join(dict.fromkeys(u.work_estimate_reason or "work estimate is unknown or conditional"
             for u in units.values() if u.work_per_iteration is None or u.work_is_upper_bound))
     planning_available = prep.analysis.available and planning_reason is None
+    compute_models = [unit.compute_model for unit in units.values() if unit.compute_model is not None]
+    source_compute = config.native_participation is not None
+    affinity = compute_models[0]["cpu_affinity"] if compute_models else None
+    runtime_schedule = any(model.get("runtime_schedule") is not None for model in compute_models)
+    if runtime_schedule:
+        lines += ["static bool scoped_compute_schedule_compatible() {",
+                  "    omp_sched_t schedule; int chunk = -1;",
+                  "    omp_get_schedule(&schedule, &chunk);",
+                  "    const auto kind = static_cast<unsigned int>(schedule) & 0x7fffffffU;",
+                  "    return kind == static_cast<unsigned int>(omp_sched_static) && chunk == 0;", "}"]
+    if affinity is not None:
+        lines.insert(0, '#include <sched.h>')
+        lines += ["static bool scoped_compute_placement_compatible() {",
+                  "    cpu_set_t actual; CPU_ZERO(&actual);",
+                  "    if (sched_getaffinity(0, sizeof(actual), &actual)) return false;",
+                  f"    if (CPU_COUNT(&actual) != {len(affinity)}) return false;",
+                  *[f"    if (!CPU_ISSET({cpu}, &actual)) return false;" for cpu in affinity],
+                  f"    return !omp_get_dynamic() && omp_get_max_threads() == {config.host_threads} && omp_get_proc_bind() == omp_proc_bind_false{' && scoped_compute_schedule_compatible()' if runtime_schedule else ''};", "}"]
+    else:
+        lines += ["static bool scoped_compute_placement_compatible() { return true; }"]
     profile_reason = config.profile_reason
     costs = None
     transfer_costs = None
@@ -653,6 +681,18 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
             planning_payload_arrays.update(expression_reads(expressions))
 
     planning_inputs(plan)
+    memory_helpers = {}
+    for unit in units.values():
+        if unit.compute_model is None:
+            continue
+        for role in ("native_fortran", "generated_cpu", "gpu"):
+            memory_model = unit.compute_model[role].get("memory_cost_model", {})
+            if memory_model.get("kind") == "piecewise_bandwidth_v1":
+                helper = "fort_compute_memory_" + role + "_" + sha256(str(unit.region.id).encode()).hexdigest()[:12]
+                memory_helpers[unit.region.id, role] = helper
+                lines += generate_compute_memory(helper, memory_model)
+    if memory_helpers:
+        lines[0:0] = COMPUTE_MEMORY_INCLUDES
     query_scalars = tuple(s for s in scalars if s in prep.query_scalars)
     planning_parameters = ["fort_context", *[array_argument(s) for s in arrays], *[s.cpp_name for s in query_scalars]]
     planning_signature = [signature[0], *[array_parameter(s) for s in arrays],
@@ -696,6 +736,11 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         # Helpers must be defined before the public query, and never execute
         # numerical assignments. INTEGER/LOGICAL values form a checked slice.
         lines += query_helpers
+    native_preflight_name = c_name + "_native_preflight_v1"
+    native_preflight = generate_native_preflight(function, plan, tuple(units.values()), native_preflight_name,
+        source_compute=source_compute, collective=config.collective,
+        planning_available=planning_available, profile_available=costs is not None, protected=protected)
+    lines += native_preflight.cpp
     lines += [f'extern "C" int {plan_name}({", ".join(planning_signature)}) {{']
     if not query_available:
         lines += [f"    return fort_scope_report_error(FORT_SCOPE_BOUNDARY, {json.dumps(query_reason)});"]
@@ -754,11 +799,43 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                     known_work = units[step.id].work_per_iteration is not None and not units[step.id].work_is_upper_bound
                     flops = "unit.units[0].flops" if known_work else "0.0"
                     memory_bytes = "unit.units[0].memory_bytes" if known_work else "0.0"
+                    model = units[step.id].compute_model
+                    record = [f"        FORT_SHARED_CHECK(fort_access.record(FORT_SCOPE_PLAN_WORKER, {unit_ids[step.id]}ULL, {flops}, {memory_bytes}, {'true' if known_work and not protected[step.id] else 'false'}, unit.units[0].cpu_numerical_seconds, unit.units[0].gpu_numerical_seconds));"]
+                    if source_compute:
+                        record = ["        fort_scope_compute_costs_v1 fort_compute{};",
+                                  "        fort_compute.version = FORT_SCOPE_COMPUTE_ABI_VERSION;"]
+                        if model is not None:
+                            lower, upper = model["item_range"]
+                            schedule_guard = " && scoped_compute_schedule_compatible()" if model.get("runtime_schedule") is not None else ""
+                            record += [f"        if (unit.units[0].iterations >= {lower}ULL && unit.units[0].iterations <= {upper}ULL{schedule_guard}) {{"]
+                            if any((step.id, role) in memory_helpers for role in ("native_fortran", "generated_cpu", "gpu")):
+                                from compiler.emission.cuda.working_set import working_set_lines
+                                exact = (not protected_footprints[step.id] and all(
+                                    fp.exact and not fp.full_upload and not fp.full_write
+                                    for fp in units[step.id].footprints))
+                                record += indent(working_set_lines([s.cpp_name + "_handle" for s in arrays], exact=exact), 3)
+                            for role, bit in (("native_fortran", "FORT_SCOPE_COMPUTE_NATIVE_FORTRAN"),
+                                              ("generated_cpu", "FORT_SCOPE_COMPUTE_GENERATED_CPU"),
+                                              ("gpu", "FORT_SCOPE_COMPUTE_GPU")):
+                                coefficients = model[role]
+                                arithmetic = units[step.id].compute_arithmetic_operations_per_iteration
+                                seconds = arithmetic * coefficients["arithmetic_seconds_per_operation"] + coefficients["intrinsic_seconds_per_item"]
+                                helper = memory_helpers.get((step.id, role))
+                                if helper is not None:
+                                    record += ["            {", "                double fort_memory_seconds = 0.0;",
+                                               f"                if (fort_working_set_available && {helper}(unit.units[0].memory_bytes, fort_working_set_bytes, fort_memory_seconds)) {{",
+                                               f"                    fort_compute.{role}_seconds = std::max(static_cast<double>(unit.units[0].iterations) * {seconds!r}, fort_memory_seconds) + {coefficients['fixed_seconds']!r};",
+                                               f"                    fort_compute.known_backends |= {bit};", "                }", "            }"]
+                                else:
+                                    record += [f"            fort_compute.{role}_seconds = std::max(static_cast<double>(unit.units[0].iterations) * {seconds!r}, unit.units[0].memory_bytes * {coefficients['memory_seconds_per_byte']!r}) + {coefficients['fixed_seconds']!r};",
+                                               f"            fort_compute.known_backends |= {bit};"]
+                            record += ["        }"]
+                        record += [f"        FORT_SHARED_CHECK(fort_access.record_compute(FORT_SCOPE_PLAN_WORKER, {unit_ids[step.id]}ULL, {flops}, {memory_bytes}, {'true' if known_work and not protected[step.id] else 'false'}, fort_compute));"]
                     result += ["if (d.valid) {",
                                f"    auto unit = plan_unit_{step.id}({query_arguments[step.id]});",
                                "    FORT_SHARED_CHECK(fort_query_status);", "    d.valid = unit.valid;", "    if (d.valid && unit.units[0].iterations) {",
                                *indent(descriptors(units[step.id], planning=True), 2),
-                               f"        FORT_SHARED_CHECK(fort_access.record(FORT_SCOPE_PLAN_WORKER, {unit_ids[step.id]}ULL, {flops}, {memory_bytes}, {'true' if known_work and not protected[step.id] else 'false'}, unit.units[0].cpu_numerical_seconds, unit.units[0].gpu_numerical_seconds));",
+                               *record,
                                "    }", "}"]
                 else:
                     raise TypeError(step)
@@ -791,12 +868,14 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
               "    FORT_SHARED_CHECK(fort_scope_device_get(fort_context, &fort_scope_device));",
               "    fort_scope_plan_decision preview{};",
               "    FORT_SHARED_CHECK(fort_scope_plan_select(fort_context, &costs, -1, &preview));",
-              f"    const bool compatible = !preview.available || (scoped_host_compatible(profile) && (!preview.gpu_units || (cudaGetDevice(&fort_current_device) == cudaSuccess && fort_current_device == fort_scope_device && offload::compatible(profile, {config.host_threads}, {_precision(function)}))));",
+              f"    const bool compatible = !preview.available || (scoped_host_compatible(profile) && scoped_compute_placement_compatible() && (!preview.gpu_units || (cudaGetDevice(&fort_current_device) == cudaSuccess && fort_current_device == fort_scope_device && offload::compatible(profile, {config.host_threads}, {_precision(function)}))));",
               "    FORT_SHARED_CHECK(fort_scope_plan_select(fort_context, &costs, compatible ? 1 : 0, decision));",
               f'    offload::decision_trace("{function.name}", decision->gpu_units ? "scoped-scheduled" : "native-scoped-scheduled", decision->gpu_units, decision->cpu_units);',
               "    return FORT_SCOPE_OK;", "}", "}", "#undef FORT_SHARED_CHECK", ""]
     parameters = ["fort_context", "fort_mode", *[array_argument(s) for s in arrays], *[s.cpp_name for s in scalars]]
     public = "  public :: run, run_team, plan, choose, configure" if config.collective else "  public :: run, plan, choose, configure"
+    if native_preflight.available:
+        public += ", native_preflight"
     view_import = ", " + view_type if root_views else ""
     fortran = [f"module {name}", "  use iso_c_binding", "  use fort_scoped_memory, only: fort_scope_plan_decision" + view_import, "  implicit none", "  private", public, "  interface"]
     fortran += _fortran_list("function run(", parameters, f") bind(C, name='{c_name}') result(fort_status)", 4)
@@ -827,7 +906,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                 "    end function", f"    function configure(fort_context) bind(C, name='{configure_name}') result(fort_status)",
                 "      import :: c_int, c_int64_t", "      integer(c_int) :: fort_status",
                 "      integer(c_int64_t), value :: fort_context", "    end function",
-                "  end interface", f"end module {name}", ""]
+                *native_preflight.fortran, "  end interface", f"end module {name}", ""]
     report = {
         "schema_version": 1, "abi_version": 1, "entry_abi_version": ENTRY_ABI_VERSION,
         "entry": c_name, "fortran_module": name, "fortran_procedure": "run",
@@ -874,6 +953,17 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                            "preparation_operations", "execution_seconds", "terminal_delta_seconds"]},
         "automatic_estimate_available": bool(planning_available and costs is not None),
         "automatic_reason": planning_reason or profile_reason,
+        "compute_estimates": {"abi_version": 1 if source_compute else 0,
+                              "runtime_api": "fort_scope_plan_add_compute_costs_v3" if source_compute else "fort_scope_plan_add_costs_v2",
+                              "native_participation": config.native_participation,
+                              "cpu_affinity": affinity,
+                              "runtime_item_range_enforced": source_compute,
+                              "memory_working_set": "checked per-resource union of exact physical sections; repeated touched root aliases unavailable",
+                              "memory_range_enforced": bool(memory_helpers),
+                              "runtime_schedule_checked": runtime_schedule,
+                              "decision_timing_coverage": "runtime query recording, validation and selection; emitted footprint preparation is outside those timers",
+                              "native_backend": "original Fortran" if source_compute else "generated C++ worker"},
+        "native_preflight": native_preflight.public(native_preflight_name),
         "automatic_scope_available": planning_available, "host_threads": config.host_threads,
         "planning": {"abi_version": 1, "available": planning_available, "reason": planning_reason,
                      "supported_endpoint_modes": ["complete", "continue"],
@@ -886,10 +976,25 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                      "layout_arrays": [s.name for s in arrays],
                      "source_effects": False, "preparation": "checked INTEGER/LOGICAL control slice",
                      "units": [{"region": r.id, "id": unit_ids[r.id], "work_per_iteration": units[r.id].work_per_iteration,
+                                "workload_class": units[r.id].workload_class,
+                                "workload_features": units[r.id].workload_features.to_dict(),
+                                "compute_model": units[r.id].compute_model,
+                                "work_estimate_reason": units[r.id].work_estimate_reason,
+                                "physical_working_set": {
+                                    "source_sections_exact": all(fp.exact and not fp.full_upload and not fp.full_write
+                                                                 for fp in units[r.id].footprints),
+                                    "range_check_required": any((r.id, role) in memory_helpers
+                                                                for role in ("native_fortran", "generated_cpu", "gpu")),
+                                    "union": "checked bounded read/write section union per touched canonical root",
+                                    "runtime_requirements": ["distinct touched canonical roots", "validated injective views",
+                                                             "per-backend calibrated working-set range", "checked byte arithmetic"],
+                                    "unavailable": "compute estimate only; ordered effects and forced execution retained"},
+                                "compute_arithmetic_operations_per_iteration": units[r.id].compute_arithmetic_operations_per_iteration,
+                                "compute_runtime_divisions_per_iteration": units[r.id].compute_runtime_divisions_per_iteration,
+                                "compute_arithmetic_estimate_reason": units[r.id].compute_arithmetic_estimate_reason,
                                 **({"intrinsic_work_per_iteration": dict(units[r.id].intrinsic_work_per_iteration),
                                     "cpu_numerical_seconds_per_iteration": units[r.id].cpu_numerical_seconds_per_iteration,
-                                    "gpu_numerical_seconds_per_iteration": units[r.id].gpu_numerical_seconds_per_iteration,
-                                    "work_estimate_reason": units[r.id].work_estimate_reason}
+                                    "gpu_numerical_seconds_per_iteration": units[r.id].gpu_numerical_seconds_per_iteration}
                                    if units[r.id].intrinsic_work_per_iteration else {})}
                                for r in plan.regions],
                      "profile_available": costs is not None, "profile_reason": profile_reason,

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 
@@ -32,6 +32,26 @@ class CompilationError(Exception):
 
 
 @dataclass(frozen=True)
+class PrivateArrayOrigin:
+    """Cost provenance for one scalarized element of original fixed storage.
+
+    ``group_id`` is local to the lowered function, including its inlined helper
+    activations. Bounds describe the original declared storage, before a helper's
+    dummy association rebases coordinates. This metadata proves no numerical
+    legality, native participation, or calibrated workload applicability.
+    """
+
+    group_id: int
+    bounds: tuple[tuple[int, int], ...]
+    element_offset: int
+    schema_version: int = 1
+
+    @property
+    def extents(self) -> tuple[int, ...]:
+        return tuple(max(0, upper - lower + 1) for lower, upper in self.bounds)
+
+
+@dataclass(frozen=True)
 class Symbol:
     id: int
     name: str
@@ -39,6 +59,8 @@ class Symbol:
     rank: int = 0
     intent: str | None = None
     parameter: bool = False
+    # Cost metadata must not change numerical symbol identity or legality.
+    private_array_origin: PrivateArrayOrigin | None = field(default=None, compare=False)
 
     @property
     def cpp_name(self) -> str:
