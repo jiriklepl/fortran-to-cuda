@@ -1543,6 +1543,11 @@ are supported. Unknown calls, allocation replacement and uncertain associations
 inside the interval reject. `segment_summary(..., descriptor_window=proof)` may
 consume that registered token in an isolated projection; the ordinary
 whole-procedure descriptor proof remains unchanged.
+Version 2 also checks original fixed numeric object schemas and exact source-call
+object mappings. Existing registered whole-group completion tokens may
+authenticate original OpenMP directives; the complete descriptor/escape scan
+still checks every group statement. Neither object mappings nor completion
+tokens establish GPU legality or initialized payloads.
 
 The separate `prove_native_prefix` API can establish complete effects of an
 unchanged native call before any context exists. A detached, bounded analysis
@@ -1565,6 +1570,20 @@ admission. These APIs do not create an owner or authorize execution. Whole/none
 coverage, deeper or conditional activation, direct OpenMP cuts, unknown effects,
 module/local allocation ownership and prefix allocation replacement remain
 limitations. No address/shape freshness or owner reopening is inferred.
+
+The internal `ReachedWindowOwner` emitter consumes an exact registered window
+proof together with the same independently admitted capture document. It keeps
+the original native prefix and excluded tail in place, declares control at
+procedure entry, and activates once at the selected source point. The attempt
+is spent before allocation, layout, alias or placement guards. It closes before
+the excluded tail or an enclosing backedge, including resource failures; later
+traversals remain native. Source-position definition coverage is private to the
+window-bound builder and does not rewrite entry facts or whole-procedure
+descriptor proofs. Per-unit native summaries reissue descriptor tokens in their
+own analysis, and managed captures require exact original bindings. Numerical
+lowering and existing native coherence/failure checks remain separate gates.
+This explicit internal emitter does not yet discover application windows or
+admit saved module allocations; it does not establish whole-stage residency.
 
 Optional `--effect-contracts` input has `schema_version: 1` and a `procedures`
 object keyed by a qualified imported call name. Each contract explicitly declares

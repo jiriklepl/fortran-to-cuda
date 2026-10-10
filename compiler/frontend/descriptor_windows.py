@@ -15,13 +15,16 @@ from hashlib import sha256
 from fparser.two.utils import Base
 
 from compiler.frontend.call_bindings import resolve_source_call
+from compiler.frontend.component_bindings import component_access
+from compiler.frontend.native_completion import NativeCompletionProof
 from compiler.frontend.native_prefix import NativePrefixProof
 from compiler.frontend.source_functions import _validate_resolution, _walk
+from compiler.frontend.source_objects import _TypeBuilder
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
-DESCRIPTOR_WINDOW_VERSION = 1
+DESCRIPTOR_WINDOW_VERSION = 2
 _UNSAFE = {"pointer", "optional", "volatile", "asynchronous", "value"}
 _INTRINSICS = set(INTRINSICS) | ARRAY_INQUIRIES | MODEL_INQUIRIES | {
     "allocated", "present", "sum", "product", "any", "all", "count", "minval", "maxval"}
@@ -46,6 +49,53 @@ class _Check:
         self.active, self.checked = [], {}
         self.functions = {}
         self.prefix_scopes, self.prefixes = {}, {}
+        self.joined_directives, self.joins = {}, {}
+        self.object_builder = _TypeBuilder(analysis)
+        self.objects, self.object_schemas, self.object_mappings = {}, {}, {}
+
+    def fixed_object(self, binding):
+        if id(binding) not in self.objects:
+            schema = self.object_builder.binding(binding)
+            if id(schema.node) not in self.object_schemas:
+                self.object_schemas[id(schema.node)] = self.object_builder.schema(schema)
+            self.objects[id(binding)] = {
+                "original_binding": binding.public(),
+                "type_definition": self.object_schemas[id(schema.node)],
+                "descriptor_evidence_only": True,
+                "native_continuation_authority": False, "numerical_abi": False}
+        return self.objects[id(binding)]
+
+    def joined_groups(self, routine, graph, selected):
+        present = set()
+        for original in _walk(tuple(node for identity in selected for node in graph.source_nodes(identity))):
+            self.tick()
+            present.add(id(original))
+        for proof in getattr(self.analysis, "_joined_completions", {}).values():
+            if not isinstance(proof, NativeCompletionProof) or proof.procedure != routine.qualified:
+                continue
+            proof.validate(self.analysis, routine.qualified, proof.selected_node_ids)
+            originals = tuple(node for identity in proof.selected_node_ids for node in graph.source_nodes(identity))
+            if not all(id(node) in present for node in originals):
+                continue
+            for original in _walk(originals):
+                self.tick()
+                if _kind(original) == "Comment" and str(original).lstrip().lower().startswith("!$omp"):
+                    self.joined_directives[(routine.qualified, id(original))] = proof
+
+    def directive(self, routine, original):
+        proof = self.joined_directives.get((routine.qualified, id(original)))
+        if proof is not None:
+            proof.validate(self.analysis, routine.qualified, proof.selected_node_ids)
+            self.joins[proof.identity] = {
+                "proof_identity": proof.identity, "procedure": proof.procedure,
+                "structured_identity": proof.structured_identity,
+                "selected_node_ids": list(proof.selected_node_ids),
+                "descriptor_evidence_only": True, "whole_original_group_scanned": True,
+                "retains_original_team_and_directives": True,
+                "internal_cuts_authorized": False, "execution_authorized": False,
+                "entry_definition_authority": False, "gpu_legality_established": False}
+            return
+        self.prefix_directive(routine)
 
     def prefix_directive(self, routine):
         proof = self.prefix_scopes.get(routine.qualified)
@@ -78,9 +128,17 @@ class _Check:
             return
         kind = _kind(node)
         scope = self.analysis.source_scope_for(node, routine.scope)
-        if (kind in {"Data_Ref", "Proc_Component_Ref", "Coindexed_Named_Object"}
+        if (kind in {"Proc_Component_Ref", "Coindexed_Named_Object"}
                 or kind.startswith("Defined_") and kind.endswith("_Op")):
             raise CompilationError("descriptor window association/operator effects require separate authority")
+        if kind == "Data_Ref":
+            access = component_access(self.analysis, scope, node)
+            self.fixed_object(access.root_binding)
+            if access.binding.dtype not in {"real", "integer", "logical"}:
+                raise CompilationError("descriptor window whole-object effects require separate authority")
+            for index in access.indices:
+                self.expression(routine, index, depth + 1)
+            return
         if kind == "Actual_Arg_Spec":
             self.expression(routine, node.items[1], depth + 1)
             return
@@ -133,7 +191,7 @@ class _Check:
                 role = node.details.get("evaluation")
                 for original in graph.source_nodes(identity):
                     if role == "directive":
-                        self.prefix_directive(routine)
+                        self.directive(routine, original)
                     elif role == "condition":
                         self.expression(routine, original)
                     elif role == "loop_header":
@@ -162,14 +220,20 @@ class _Check:
                 scope = self.analysis.source_scope_for(call, routine.scope)
                 resolved = resolve_source_call(self.analysis, scope, call)
                 for mapping in resolved.mappings:
-                    if (mapping.presence != "supplied" or mapping.source_object is not None
+                    if (mapping.presence != "supplied"
                             or mapping.formal_binding.attributes & _UNSAFE
                             or mapping.binding is not None and mapping.binding.attributes & _UNSAFE):
                         raise CompilationError("descriptor window call association/escape authority is unavailable")
-                    self.expression(routine, mapping.actual)
+                    if mapping.source_object is not None:
+                        self.fixed_object(mapping.formal_binding)
+                        self.fixed_object(mapping.binding)
+                        self.object_mappings[mapping.source_object.identity] = mapping.source_object.public()
+                    else:
+                        self.expression(routine, mapping.actual)
                 self.procedure(resolved.procedure)
             else:
-                raise CompilationError("descriptor window unknown selected storage effects: " + node.kind)
+                raise CompilationError("descriptor window unknown selected storage effects: " + node.kind
+                                       + (": " + node.details["reason"] if node.details.get("reason") else ""))
 
     def procedure(self, name):
         if name in self.active:
@@ -189,7 +253,9 @@ class _Check:
             for item in proof.public()["closure"]:
                 self.prefix_scopes[item["procedure"]] = proof
         for binding in routine.scope.bindings.values():
-            if binding.dtype not in {"real", "integer", "logical"} or binding.attributes & {"pointer", "volatile", "asynchronous"}:
+            if binding.dtype.startswith("type("):
+                self.fixed_object(binding)
+            elif binding.dtype not in {"real", "integer", "logical"} or binding.attributes & {"pointer", "volatile", "asynchronous"}:
                 raise CompilationError("descriptor window child specification effects require separate authority")
             for axis in binding.shape_nodes:
                 self.expression(routine, _children(axis))
@@ -202,6 +268,7 @@ class _Check:
         graph = self.analysis.structure(name)
         if not graph.available:
             raise CompilationError("descriptor window child bounded original graph is unavailable")
+        self.joined_groups(routine, graph, (graph.root_id,))
         self.active.append(name)
         self.visit(routine, graph, (graph.root_id,))
         self.active.pop()
@@ -250,6 +317,7 @@ def _derive(analysis, procedure, identities, roots):
                        "entry_definition_authority": False})
     check = _Check(analysis)
     check.active.append(procedure)
+    check.joined_groups(routine, graph, selected)
     check.visit(routine, graph, selected)
     return {"schema_version": DESCRIPTOR_WINDOW_VERSION, "procedure": procedure,
             "source_identity": analysis.inputs.identity(), "structured_identity": graph.identity,
@@ -261,12 +329,16 @@ def _derive(analysis, procedure, identities, roots):
             "resources": states, "source_call_closure": check.checked,
             "native_source_function_requirements": list(check.functions.values()),
             "native_prefix_descriptor_requirements": list(check.prefixes.values()),
+            "native_joined_descriptor_requirements": list(check.joins.values()),
+            "fixed_source_object_requirements": list(check.objects.values()),
+            "source_object_mappings": list(check.object_mappings.values()),
             "source_operations": check.operations, "source_traversal_entries": check.nodes,
             "prefix_effects_proved": False, "entry_definition_authority": False,
             "reachability_authority": False, "execution_authorized": False, "gpu_legality_established": False,
             "requires_close_before_excluded_tail": True, "freshness_by_address_or_shape": False,
-            "limits": ["numeric allocatable original formals only", "no deferred groups or derived-object accesses",
-                       "child OpenMP requires registered complete native-prefix proof and full descriptor rescan",
+            "limits": ["numeric allocatable original formals only", "no deferred groups or whole derived-object effects",
+                       "fixed object mappings prove original storage/type only, never native continuation or numeric ABI",
+                       "OpenMP requires registered whole joined-group or native-prefix proof and full descriptor rescan",
                        "excluded prefix and tail have no lifetime or definition authority",
                        "registered readonly source-function proof required before query",
                        "selected closure replacement, escapes, unknown calls and effects reject"]}
