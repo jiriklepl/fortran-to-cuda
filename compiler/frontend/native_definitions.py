@@ -20,7 +20,7 @@ from compiler.frontend.native_sections import RECTANGLE_LIMIT, NativeRectangle, 
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 
-NATIVE_DEFINITION_VERSION = 1
+NATIVE_DEFINITION_VERSION = 2
 
 
 def _hash(value):
@@ -80,6 +80,58 @@ def _unique(boxes):
     return tuple(result.values())
 
 
+def _rectangles(boxes):
+    if (not isinstance(boxes, tuple) or len(boxes) > RECTANGLE_LIMIT
+            or any(not isinstance(box, NativeRectangle) or not 1 <= len(box.axes) <= 4 for box in boxes)
+            or len({len(box.axes) for box in boxes}) > 1):
+        raise CompilationError("native definition geometry requires bounded same-rank rectangle tuples")
+    return boxes
+
+
+def rectangle_covers(definition, read):
+    """Conditional geometry only; neither rectangle gains source authority."""
+    _rectangles((definition,))
+    _rectangles((read,))
+    return _covers(definition, read)
+
+
+def rectangle_dependencies(box):
+    """Original scalar bounds whose writes invalidate this symbolic box."""
+    _rectangles((box,))
+    return tuple(sorted(_dependencies(box)))
+
+
+def merge_rectangles(*groups):
+    """Deduplicate a bounded union without inferring its bounding hull."""
+    if len(groups) > RECTANGLE_LIMIT:
+        raise CompilationError("native definition geometry group budget exhausted")
+    for boxes in groups:
+        _rectangles(boxes)
+    boxes = tuple(box for group in groups for box in group)
+    if len({len(box.axes) for box in boxes}) > 1:
+        raise CompilationError("native definition geometry requires same-rank rectangles")
+    return _unique(boxes)
+
+
+def intersect_rectangles(left, right):
+    """Conservative all-path meet; partial overlaps are not split or widened."""
+    _rectangles(left)
+    _rectangles(right)
+    if left and right and len(left[0].axes) != len(right[0].axes):
+        raise CompilationError("native definition geometry requires same-rank rectangles")
+    return _unique(box for boxes, others in ((left, right), (right, left)) for box in boxes
+                   if any(_covers(other, box) for other in others))
+
+
+def invalidate_rectangles(boxes, scalar_writes):
+    """Apply to every tracked root, including roots not read by this leaf."""
+    _rectangles(boxes)
+    if (not isinstance(scalar_writes, tuple) or len(scalar_writes) > 256
+            or any(not isinstance(root, str) or not root for root in scalar_writes)):
+        raise CompilationError("native definition invalidation requires bounded original scalar roots")
+    return tuple(box for box in boxes if not _dependencies(box).intersection(scalar_writes))
+
+
 @dataclass(frozen=True)
 class NativeDefinitionStep:
     node_id: str
@@ -130,7 +182,7 @@ class NativeDefinitionTransfer:
                 "entry_rectangles_require_independent_admission": True}
 
 
-def _derive(analysis, procedure, selection, include_entry):
+def _derive(analysis, procedure, selection, include_entry, descriptor_window=None):
     routine = analysis._require_original(procedure)
     if (not isinstance(selection, tuple) or not selection or len(selection) > analysis.operation_limit
             or any(isinstance(item, str) for item in selection) or type(include_entry) is not bool):
@@ -149,10 +201,18 @@ def _derive(analysis, procedure, selection, include_entry):
         raise CompilationError("native definitions require contiguous original immediate statements")
     if include_entry and identities != graph.nodes[graph.root_id].children:
         raise CompilationError("native definition entry changes require the complete original body")
+    descriptor_roots, module_roots = (), ()
+    if descriptor_window is not None:
+        analysis._validate_descriptor_window(procedure, identities, descriptor_window)
+        states = descriptor_window.public()["resources"]
+        descriptor_roots = tuple(state["resource"] for state in states
+                                 if state["resource_kind"] == "original_allocatable_formal")
+        module_roots = tuple(state["resource"] for state in states
+                             if state["resource_kind"] == "original_module_allocatable")
     if any(type(node).__name__ in {"Common_Stmt", "Equivalence_Stmt"} for node in walk(routine.scope.node)):
         raise CompilationError("native definitions storage association requires separate authority")
     visits, leaves, rectangle_count = 0, 0, 0
-    resources, demands = {}, []
+    resources, demands, leaf_descriptors = {}, [], []
 
     def step(identity, depth=0):
         nonlocal visits, leaves, rectangle_count
@@ -187,13 +247,24 @@ def _derive(analysis, procedure, selection, include_entry):
         elif node.details.get("evaluation") != "condition" and any(
                 type(item).__name__ not in {"Assignment_Stmt", "Continue_Stmt"} for item in originals):
             raise CompilationError("native definitions require original assignment or condition source")
-        summary = analysis.segment_summary(procedure, (identity,), capture_locals=True)
+        descriptor = None
+        if descriptor_window is not None:
+            from compiler.frontend.descriptor_windows import prove_descriptor_window
+            # SourceEffects requires exact selection authority. Re-prove only
+            # this original descendant, with the same source-authenticated
+            # roots; the enclosing token is never used as a leaf alias.
+            descriptor = prove_descriptor_window(analysis, procedure, (identity,), descriptor_roots,
+                                                 module_roots=module_roots)
+            leaf_descriptors.append({"node_id": identity, "proof_identity": descriptor.identity})
+        summary = analysis.segment_summary(procedure, (identity,), capture_locals=True,
+                                           descriptor_window=descriptor)
         if (not summary["complete"] or not summary.get("effect_composition", {}).get("available")
                 or not summary["native_completion"]["available"]
                 or any(effect["kind"] not in {"read", "write", "overwrite", "descriptor_read"}
                        for effect in summary["ordered_effects"])):
             raise CompilationError("native definitions require complete original ordered effects and completion")
-        sections = analysis.native_sections_for_nodes(procedure, (identity,), capture_locals=True)
+        sections = analysis.native_sections_for_nodes(procedure, (identity,), capture_locals=True,
+                                                     descriptor_window=descriptor)
         if not sections.available:
             raise CompilationError("native definition sections unavailable: " + str(sections.reason))
         scalar_writes, iterators = set(), set()
@@ -234,6 +305,8 @@ def _derive(analysis, procedure, selection, include_entry):
               "structured_identity": graph.identity, "analysis_identity": graph.authority_identity,
               "source_identity": analysis.inputs.identity(), "selected_node_ids": list(identities),
               "include_entry": include_entry, "entry_definition_changes": list(kills),
+              "descriptor_window_identity": descriptor_window.identity if descriptor_window is not None else None,
+              "leaf_descriptor_windows": leaf_descriptors,
               "resources": [resources[root] for root in sorted(resources)],
               "steps": [item.public() for item in steps], "source_demands": demands,
               "control_visits": visits, "leaf_count": leaves, "rectangle_count": rectangle_count,
@@ -259,6 +332,7 @@ class NativeDefinitionProof:
     _analysis: object = field(repr=False, compare=False)
     _selection: tuple = field(repr=False, compare=False)
     _include_entry: bool = field(repr=False, compare=False)
+    _descriptor_window: object = field(repr=False, compare=False)
     _kills: tuple[str, ...] = field(repr=False, compare=False)
     _record: object = field(repr=False, compare=False)
 
@@ -271,7 +345,7 @@ class NativeDefinitionProof:
                 or any(left is not right for left, right in zip(original_selection, self._selection, strict=True))
                 or getattr(analysis, "_native_definition_proofs", {}).get(self.identity) is not self):
             raise CompilationError("native definitions lack registered exact original source authority")
-        if _derive(analysis, procedure, original_selection, self._include_entry)[2] != _thaw(self._record):
+        if _derive(analysis, procedure, original_selection, self._include_entry, self._descriptor_window)[2] != _thaw(self._record):
             raise CompilationError("native definition source authority changed")
         return self
 
@@ -317,7 +391,7 @@ class NativeDefinitionProof:
                             if len(uncovered) > self._analysis.operation_limit * RECTANGLE_LIMIT:
                                 raise CompilationError("native definition read-obligation budget exhausted")
                 if item.scalar_writes:
-                    current = {root: tuple(box for box in boxes if not _dependencies(box).intersection(item.scalar_writes))
+                    current = {root: invalidate_rectangles(boxes, item.scalar_writes)
                                for root, boxes in current.items()}
                 for resource in item.sections.resources:
                     current[resource.resource] = _unique((*current[resource.resource], *resource.overwrites))
@@ -328,9 +402,9 @@ class NativeDefinitionProof:
         return NativeDefinitionTransfer(MappingProxyType(state), tuple(uncovered))
 
 
-def prove_native_definitions(analysis, procedure, original_selection, *, include_entry=False):
+def prove_native_definitions(analysis, procedure, original_selection, *, include_entry=False, descriptor_window=None):
     """Register a source transfer, never facts about any current allocation."""
-    steps, kills, record = _derive(analysis, procedure, original_selection, include_entry)
+    steps, kills, record = _derive(analysis, procedure, original_selection, include_entry, descriptor_window)
     identity = _hash(record)
     registry = getattr(analysis, "_native_definition_proofs", None)
     if registry is None:
@@ -339,6 +413,7 @@ def prove_native_definitions(analysis, procedure, original_selection, *, include
         return registry[identity].validate(analysis, procedure, original_selection)
     if len(registry) >= analysis.procedure_limit:
         raise CompilationError("native definition proof registry budget exhausted")
-    proof = NativeDefinitionProof(procedure, identity, steps, analysis, original_selection, include_entry, kills, _freeze(record))
+    proof = NativeDefinitionProof(procedure, identity, steps, analysis, original_selection, include_entry,
+                                  descriptor_window, kills, _freeze(record))
     registry[identity] = proof
     return proof

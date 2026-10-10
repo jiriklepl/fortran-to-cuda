@@ -81,7 +81,8 @@ def _native_analysis(analysis):
     # These tokens belong to one exact analysis object. A shallow copy must
     # reissue selected proofs; sharing their registries would either lend
     # foreign authority or mutate the original owner's proof state.
-    for name in ("_descriptor_window_proofs", "_native_prefix_proofs", "_reached_window_proofs"):
+    for name in ("_descriptor_window_proofs", "_native_prefix_proofs", "_reached_window_proofs",
+                 "_native_definition_proofs"):
         setattr(result, name, {})
     result._summary_cache = SummaryCache(max_entries=0)
     return result

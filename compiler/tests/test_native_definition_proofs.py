@@ -6,7 +6,15 @@ from dataclasses import replace
 
 import pytest
 
-from compiler.frontend.native_definitions import prove_native_definitions
+from compiler.frontend.descriptor_windows import prove_descriptor_window
+from compiler.frontend.native_definitions import (
+    intersect_rectangles,
+    invalidate_rectangles,
+    merge_rectangles,
+    prove_native_definitions,
+    rectangle_covers,
+    rectangle_dependencies,
+)
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 
@@ -227,3 +235,159 @@ def test_source_operation_budget_does_not_admit_truncated_partial_proof(tmp_path
     _path, analysis, selection = fixture(tmp_path, "a(-2,:)=1\na(-1,:)=2\na(0,:)=3", operations=2)
     with pytest.raises(CompilationError):
         prove_native_definitions(analysis, ENTRY, selection)
+
+
+def module_fixture(tmp_path, body, *, declaration=""):
+    path = tmp_path / "module_edges.f90"
+    path.write_text("module original_storage\nimplicit none\n"
+                    "real(8),allocatable::cells(:,:),other(:,:)\nend module\n"
+                    "module renamed_edges\nuse original_storage,only:a=>cells,b=>other\n"
+                    "implicit none\ncontains\nsubroutine touch(n,flag)\n"
+                    "integer,intent(inout)::n\nlogical,intent(in)::flag\ninteger::i,j\n"
+                    + declaration + "\n" + body + "\nend subroutine\nend module\n")
+    analysis = SourceEffects([path], summary_cache=tmp_path / "cache")
+    selection = tuple(analysis.routines[ENTRY].execution.content)
+    graph = analysis.structure(ENTRY)
+    ids = tuple(graph.node_id(node) for node in selection)
+    descriptor = prove_descriptor_window(analysis, ENTRY, ids,
+        module_roots=("original_storage::cells", "original_storage::other"))
+    return path, analysis, selection, descriptor
+
+
+def test_module_partial_definitions_use_exact_descriptor_without_initialization(tmp_path):
+    path, analysis, selection, descriptor = module_fixture(tmp_path,
+        "a(-2:2,-1)=1\nb(0,-1)=a(0,-1)")
+    original = path.read_bytes()
+    before = analysis.summarize(ENTRY)
+    assert not before["complete"]
+    with pytest.raises(CompilationError, match="complete original"):
+        prove_native_definitions(analysis, ENTRY, selection)
+    proof = prove_native_definitions(analysis, ENTRY, selection, descriptor_window=descriptor)
+    result = proof.transfer()
+    assert result.reads_covered
+    assert set(result.definitions) == {"original_storage::cells", "original_storage::other"}
+    assert len(result.definitions["original_storage::cells"]) == 1
+    assert proof.public()["schema_version"] == 2
+    assert proof.public()["descriptor_window_identity"] == descriptor.identity
+    assert len(proof.public()["leaf_descriptor_windows"]) == 2
+    assert not proof.public()["global_initialization_authority"]
+    assert not descriptor.public()["entry_definition_authority"]
+    assert analysis.summarize(ENTRY) == before
+    assert analysis.stable_module_allocatables == frozenset()
+    assert not analysis.window_module_allocatables(ENTRY)
+    assert analysis._allocation_authorizations == {}
+    assert path.read_bytes() == original
+
+
+def test_module_descriptor_only_does_not_cover_a_prior_read(tmp_path):
+    _path, analysis, selection, descriptor = module_fixture(tmp_path, "b(0,-1)=a(0,-1)")
+    proof = prove_native_definitions(analysis, ENTRY, selection, descriptor_window=descriptor)
+    read, = proof.transfer().uncovered_reads
+    assert read.resource == "original_storage::cells"
+    assert read.rectangle.axes[0].lower.value == 0
+
+
+def test_module_branch_leaves_get_exact_source_descriptor_tokens(tmp_path):
+    _path, analysis, selection, descriptor = module_fixture(tmp_path,
+        "if(flag)then\na(-2,:)=1\nelse\na(-2,:)=2\nendif\nb(-2,:)=a(-2,:)")
+    proof = prove_native_definitions(analysis, ENTRY, selection, descriptor_window=descriptor)
+    assert proof.transfer().reads_covered
+    demands = proof.public()["leaf_descriptor_windows"]
+    assert len(demands) == 4  # Original condition, two writes, then read/write.
+    assert all(item["proof_identity"] != descriptor.identity for item in demands)
+    for item in demands:
+        token = analysis._descriptor_window_proofs[item["proof_identity"]]
+        assert token.public()["selected_node_ids"] == [item["node_id"]]
+
+
+def test_module_runtime_bounds_remain_original_descriptor_trees(tmp_path):
+    _path, analysis, selection, descriptor = module_fixture(tmp_path,
+        "do j=lbound(a,2),ubound(a,2)\ndo i=lbound(a,1),ubound(a,1)\na(i,j)=1\nenddo\nenddo")
+    proof = prove_native_definitions(analysis, ENTRY, selection, descriptor_window=descriptor)
+    sections = resource(proof.steps[0], "original_storage::cells")
+    assert sections.descriptor_lower_bounds
+    assert sections.descriptor_origin == "allocation"
+    box, = proof.transfer().definitions["original_storage::cells"]
+    assert box.axes[0].lower.kind == "lbound"
+    assert box.axes[0].upper.kind == "ubound"
+    assert box.axes[0].lower.resource == "original_storage::cells"
+    assert proof.public()["bounds_evaluated"] is False
+
+
+def test_formal_descriptor_window_keeps_partial_payload_and_original_coordinates(tmp_path):
+    _path, analysis, selection = fixture(tmp_path, "a(-2:2,-1)=1\nb(0,-1)=a(0,-1)",
+        declaration="real(8),allocatable,intent(inout)::a(:,:),b(:,:)")
+    graph = analysis.structure(ENTRY)
+    ids = tuple(graph.node_id(node) for node in selection)
+    descriptor = prove_descriptor_window(analysis, ENTRY, ids, ("argument::a", "argument::b"))
+    proof = prove_native_definitions(analysis, ENTRY, selection, descriptor_window=descriptor)
+    assert proof.transfer().reads_covered
+    assert proof.public()["descriptor_window_identity"] == descriptor.identity
+    assert resource(proof.steps[0]).descriptor_origin == "allocation"
+    assert resource(proof.steps[0]).overwrites[0].axes[0].lower.value == -2
+
+
+def test_descriptor_tokens_cannot_alias_neighbors_foreign_or_copied_selections(tmp_path):
+    _path, analysis, selection, descriptor = module_fixture(tmp_path, "a(-2,:)=1\nb(-2,:)=1")
+    for token in (replace(descriptor), object(), descriptor.public()):
+        with pytest.raises(CompilationError):
+            prove_native_definitions(analysis, ENTRY, selection, descriptor_window=token)
+    with pytest.raises(CompilationError, match="registered original interval"):
+        prove_native_definitions(analysis, ENTRY, selection[:1], descriptor_window=descriptor)
+    other = SourceEffects(analysis.inputs.paths)
+    with pytest.raises(CompilationError, match="registered original interval"):
+        prove_native_definitions(other, ENTRY, tuple(other.routines[ENTRY].execution.content),
+                                 descriptor_window=descriptor)
+    assert not getattr(analysis, "_native_definition_proofs", {})
+
+
+def test_descriptor_source_and_binding_mutations_reject_partial_transfer(tmp_path):
+    path, analysis, selection, descriptor = module_fixture(tmp_path, "a(-2,:)=1")
+    proof = prove_native_definitions(analysis, ENTRY, selection, descriptor_window=descriptor)
+    analysis.modules["original_storage"].bindings["cells"].attributes |= {"target"}
+    with pytest.raises(CompilationError):
+        proof.transfer()
+    analysis.modules["original_storage"].bindings["cells"].attributes -= {"target"}
+    path.write_text(path.read_text().replace("a(-2,:)=1", "a(-2,:)=2"))
+    with pytest.raises(CompilationError, match="changed"):
+        proof.transfer()
+
+
+def test_geometry_helpers_meet_and_merge_without_face_hulls(tmp_path):
+    _path, _analysis, _selection, proof = prove(tmp_path,
+        "a(-2:2,-1)=1\na(8:10,-1)=2\nb(0,-1)=3")
+    left = resource(proof.steps[0]).overwrites
+    opposite = resource(proof.steps[1]).overwrites
+    point = resource(proof.steps[2], "argument::b").overwrites
+    assert rectangle_covers(left[0], point[0])
+    assert not rectangle_covers(opposite[0], point[0])
+    assert merge_rectangles(left, left, opposite) == (*left, *opposite)
+    assert intersect_rectangles(left, point) == point
+    assert intersect_rectangles(left, opposite) == ()
+    assert intersect_rectangles(left, ()) == ()
+    assert rectangle_dependencies(left[0]) == ()
+
+
+def test_scalar_write_invalidates_rectangles_for_root_not_accessed_by_leaf(tmp_path):
+    _path, analysis, selection, proof = prove(tmp_path, "a(n,-1)=1\nn=n+1")
+    prior = resource(proof.steps[0]).overwrites
+    scalar = prove_native_definitions(analysis, ENTRY, selection[1:])
+    assert scalar.transfer().definitions == {}
+    assert rectangle_dependencies(prior[0]) == ("argument::n",)
+    assert invalidate_rectangles(prior, scalar.steps[0].scalar_writes) == ()
+    assert invalidate_rectangles(prior, ("argument::unrelated",)) == prior
+
+
+def test_geometry_helpers_reject_unbounded_or_malformed_groups(tmp_path):
+    _path, _analysis, _selection, proof = prove(tmp_path, "a(-2,:)=1")
+    boxes = resource(proof.steps[0]).overwrites
+    with pytest.raises(CompilationError, match="bounded"):
+        merge_rectangles(boxes * 33)
+    with pytest.raises(CompilationError, match="group budget"):
+        merge_rectangles(*(boxes for _ in range(33)))
+    with pytest.raises(CompilationError, match="rectangle tuples"):
+        intersect_rectangles(list(boxes), boxes)
+    with pytest.raises(CompilationError, match="invalidation"):
+        invalidate_rectangles(boxes, ["argument::n"])
+    with pytest.raises(CompilationError, match="rectangle tuples"):
+        rectangle_covers(object(), boxes[0])
