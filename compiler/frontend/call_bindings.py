@@ -100,6 +100,7 @@ class SourceActualMapping:
     binding: object = field(default=None, compare=False, repr=False)
     section: RectangularSection | None = None
     presence: str = "supplied"
+    source_object: object = field(default=None, compare=False, repr=False)
     canonical_resource: str | None = field(init=False)
 
     def __post_init__(self):
@@ -118,6 +119,7 @@ class SourceActualMapping:
                 "formal_descriptor": self.formal_binding.public(),
                 "actual_descriptor": self.binding.public() if self.binding is not None else None,
                 "section": self.section.public() if self.section is not None else None,
+                **({"source_object": self.source_object.public()} if self.source_object is not None else {}),
                 "requirements": {"presence_preserving_forwarding": self.presence == "forwarded_optional",
                                  "descriptor_dependent_presence": self.presence in {"allocation_dependent", "association_dependent"},
                                  "original_actual_presence": bool(self.binding is not None
@@ -361,11 +363,19 @@ def resolve_source_call(analysis, scope, call_node):
             mappings = []
             for formal, actual in zip(callee.arguments, actuals, strict=True):
                 declaration = callee.scope.bindings[formal]
+                from compiler.frontend.component_bindings import _typename
+                derived = _typename(declaration.dtype) is not None
                 if actual is None:
+                    if derived:
+                        raise CompilationError("source object requires fixed nonoptional scalar original storage")
                     mappings.append(SourceActualMapping(formal, None, declaration, presence="omitted"))
                     continue
                 signature, binding, section = _actual(analysis, scope, actual)
-                if (signature is None or None in (declaration.kind, signature[1])
+                source_object = None
+                if derived:
+                    from compiler.frontend.source_objects import source_object_mapping
+                    source_object = source_object_mapping(analysis, declaration, binding, actual, call_node, scope)
+                elif (signature is None or None in (declaration.kind, signature[1])
                         or declaration.signature() != signature):
                     raise CompilationError("source-call type, kind or rank mismatch: " + formal)
                 if binding is None and (declaration.intent in {"out", "inout"} or "allocatable" in declaration.attributes):
@@ -382,7 +392,7 @@ def resolve_source_call(analysis, scope, call_node):
                 if "allocatable" in declaration.attributes and (binding is None or section is not None
                                                                 or "allocatable" not in binding.attributes):
                     raise CompilationError("allocatable callee formal requires its original allocation descriptor: " + formal)
-                mappings.append(SourceActualMapping(formal, actual, declaration, binding, section, presence))
+                mappings.append(SourceActualMapping(formal, actual, declaration, binding, section, presence, source_object))
             matches.append(ResolvedSourceCall(procedure, callee.arguments, actuals, tuple(mappings),
                                               original_arguments, str(target), callee.source_kind))
         except CompilationError as error:

@@ -324,6 +324,12 @@ class InlineRegions:
         """Lower an authenticated extraction and register its private facade."""
         if collective and extraction.scalar_element_captures:
             raise CompilationError("immutable element preparation requires a serial reached preflight; collective execution remains native")
+        # Publishing arrays cannot reconstruct CPU exception flags produced by
+        # device arithmetic. Apply the same configured-source observer boundary
+        # as array operations before acquiring any capture or artifact authority.
+        if observers := _exception_observers(self.builder.analysis):
+            raise CompilationError("source-observable floating-point exception flags prevent GPU numerical closure: "
+                                   + "; ".join(observers))
         native_environment = self.native_environment_required()
         if native_environment and not collective and extraction.completion.get("has_openmp_in_closure"):
             # A serial caller's mask cannot establish the original workers'
@@ -352,9 +358,6 @@ class InlineRegions:
         if function.requires_numerical_environment:
             # Numerical lowering is authoritative: vector expressions can lose
             # their source syntax when expanded into ordinary scalar IR.
-            if observers := _exception_observers(self.builder.analysis):
-                raise CompilationError("source-observable floating-point exception flags prevent GPU numerical closure: "
-                                       + "; ".join(observers))
             extraction = replace(extraction, numerical_environment_required=True)
         if not plan.regions:
             raise CompilationError("inline numerical candidate has no proven parallel region")

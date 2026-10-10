@@ -26,7 +26,7 @@ from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
 # Bump when source-effect, call-composition or summary semantics change.
-SOURCE_SUMMARY_VERSION = 14
+SOURCE_SUMMARY_VERSION = 15
 _DEFAULT_SUMMARY_CACHE = SummaryCache()
 
 
@@ -136,6 +136,7 @@ def _admit_cached_summary(item, routine, limit):
 
     def mapping(value):
         require(type(value) is dict and {"formal", "formal_resource", "actual", "resource", "storage", "presence", "formal_descriptor", "actual_descriptor", "requirements", "section"} <= value.keys())
+        require("source_object" not in value)  # Original scalar object proofs are always rebuilt.
         require(type(value.get("formal")) is str and value.get("formal_resource") == "argument::" + value["formal"])
         require(value.get("actual") is None or type(value["actual"]) is str)
         require(value.get("resource") is None or type(value["resource"]) is str)
@@ -159,6 +160,7 @@ def _admit_cached_summary(item, routine, limit):
     require(type(item) is dict and item.get("procedure") == routine.qualified and item.get("complete") is True)
     require(item.get("source_kind") == routine.source_kind and item.get("reasons") == [])
     require(type(item.get("cloneable")) is bool)
+    require(item.get("native_predicate_requirements") == [])
     for key in ("definition_changes", "guaranteed_whole_overwrites", "persistent_state", "openmp_directives"):
         require(strings(item.get(key)))
     for key in ("arguments", "descriptor_requirements"):
@@ -317,6 +319,7 @@ class SourceEffects:
         self._structures, self._segments, self._descriptor_proofs = {}, {}, {}
         self._joined_completions = {}
         self._native_environments, self._native_environment_states = {}, {}
+        self._native_predicates = {}
         self._numerical_completions = {}
         self._worksharing_completions = {}
         self._worksharing_native_completions = {}
@@ -390,9 +393,14 @@ class SourceEffects:
         for routine in self.numerical_helpers.values():
             register_associates(self, routine)
         self._source_module_roles = {name: (scope.node, str(scope.node)) for name, scope in self.modules.items()}
+        from compiler.frontend.source_objects import register_source_object_authority
+        register_source_object_authority(self)
         self._source_provenance = {}
+        self._source_object_calls = {}
         for routine in self.numerical_helpers.values():
-            for node in walk(routine.scope.node):
+            for ordinal, node in enumerate(walk(routine.scope.node)):
+                if _kind(node) == "Call_Stmt":
+                    self._source_object_calls[id(node)] = (node, str(node), routine.scope, ordinal)
                 item = getattr(node, "item", None)
                 if item is not None:
                     self._source_provenance[id(node)] = (node, item, item.span,
@@ -497,6 +505,8 @@ class SourceEffects:
                                                    for name, binding in routine.scope.bindings.items()}})
 
     def _summary_authority(self):
+        from compiler.frontend.native_intrinsics import NATIVE_PREDICATE_VERSION
+        from compiler.frontend.source_objects import SOURCE_OBJECT_VERSION
         from compiler.frontend.structured_effects import STRUCTURED_EFFECT_VERSION
         projections = []
         for name, routine in self.routines.items():
@@ -508,6 +518,8 @@ class SourceEffects:
                                     "execution": str(routine.execution)})
         return {"summary_version": SOURCE_SUMMARY_VERSION, "sources": self.inputs.identity(),
                 "structured_version": STRUCTURED_EFFECT_VERSION,
+                "source_object_version": SOURCE_OBJECT_VERSION,
+                "native_predicate_version": NATIVE_PREDICATE_VERSION,
                 "native_metadata_version": 1 if getattr(self, '_native_metadata', False) else None,
                 "contracts": self.contracts, "capture_authorizations": self._allocation_authorizations,
                 "stable_module_allocatables": sorted(self.stable_module_allocatables),
@@ -590,8 +602,11 @@ class SourceEffects:
                 if name in selected:
                     return True
                 summary = closure.summaries.get(name)
-                if (summary is None or not summary["complete"]
-                        or any(operation["kind"] == "native_environment" for operation in summary["operations"])):
+                if (summary is None or not summary["complete"] or summary.get("native_predicate_requirements")
+                        or any(operation["kind"] == "native_environment"
+                               or (operation["kind"] == "call" and any(mapping.get("source_object")
+                                   for mapping in operation.get("resource_mappings", ())))
+                               for operation in summary["operations"])):
                     # Registered native-state/environment authority is rebuilt
                     # from original calls; serialized summaries never issue it.
                     return False
@@ -1145,7 +1160,7 @@ class SourceEffects:
         summary = {"procedure": requested, "source_kind": routine.source_kind, "complete": False, "cloneable": False,
                    "arguments": [routine.scope.bindings[a].public() for a in routine.arguments
                                  if a in routine.scope.bindings], "operations": operations, "reasons": reasons,
-                   "definition_diagnostics": [], "closure_depth": 1}
+                   "definition_diagnostics": [], "closure_depth": 1, "native_predicate_requirements": []}
         if routine.source_kind == "external":
             summary["call_interface"] = self.external_interface(routine)
         lifetime_requirements = {}
@@ -1189,6 +1204,9 @@ class SourceEffects:
                 return
             if "parameter" in binding.attributes:
                 return
+            if action != "descriptor_read" and binding.dtype.startswith("type("):
+                reasons.append("whole derived-object effects require original assignment and copy semantics: " + spelling)
+                return
             if action != "descriptor_read" and {"pointer", "allocatable"} & binding.attributes:
                 authorized = binding.root in self.stable_module_allocatables
                 readonly_descriptor = (binding.name in routine.arguments and binding.intent == "in"
@@ -1213,11 +1231,30 @@ class SourceEffects:
                 emit({"kind": action, "resource": binding.root, "rank": binding.rank,
                       "section": "whole", "guard": guard, "source_access": spelling})
 
+        def predicate_requirement(requirement):
+            if len(summary["native_predicate_requirements"]) >= self.operation_limit:
+                reasons.append("native predicate requirement budget exhausted")
+                return
+            summary["native_predicate_requirements"].append(requirement)
+
         def expression(node, guard, metadata=False):
             if node is None or isinstance(node, (str, int)):
                 return
             name = _kind(node)
             scope = self.source_scope_for(node, routine.scope)
+            if name in {"Part_Ref", "Function_Reference", "Intrinsic_Function_Reference", "Structure_Constructor"}:
+                from compiler.frontend.native_intrinsics import native_intrinsic_export, prove_native_predicate
+                if native_intrinsic_export(self, scope, node.items[0]) is not None:
+                    try:
+                        proof = prove_native_predicate(self, requested, node)
+                    except CompilationError as error:
+                        reasons.append(str(error))
+                        return
+                    predicate_requirement({**proof.public(),
+                        "guard_frames": [{"procedure": requested, "condition": condition} for condition in guard]})
+                    for actual in proof.actuals:
+                        expression(actual, guard)
+                    return
             if name == "Name":
                 binding = self._binding(scope, node)
                 if binding is None and metadata:
@@ -1321,6 +1358,10 @@ class SourceEffects:
                         # these allocation or association effects stable.
                         reasons.append(f"allocatable callee formals require original descriptor and allocation semantics: {chosen}")
                 child = self.summarize(chosen, active + (requested,), _closure=_closure)
+                for requirement in child.get("native_predicate_requirements", ()):
+                    predicate_requirement({**deepcopy(requirement), "guard_frames": [
+                        *({"procedure": requested, "condition": condition} for condition in guard),
+                        *requirement["guard_frames"]]})
                 summary["closure_depth"] = max(summary["closure_depth"], 1 + child.get("closure_depth", 1))
                 if not child["complete"]:
                     reasons.append(f"callee effects incomplete: {chosen}")
@@ -1538,8 +1579,14 @@ class SourceEffects:
         summary["openmp_directives"] = directives
         summary["native_completion"] = self._native_completion(routine, summary, _closure)
         summary["cloneable"] = (routine.source_kind == "module" and summary["complete"] and not persistent
+                                and not summary["native_predicate_requirements"]
                                 and not directives and not any(effect["kind"] in {"environment_read", "environment_write"}
-                                                              for effect in summary["ordered_effects"]))
+                                                              for effect in summary["ordered_effects"])
+                                and not any(binding.dtype not in {"real", "integer", "logical"}
+                                            for name in routine.arguments for binding in (routine.scope.bindings[name],))
+                                and not any(operation["kind"] == "call" and any(mapping.get("source_object")
+                                            for mapping in operation.get("resource_mappings", ()))
+                                            for operation in summary["operations"]))
         sections = self.native_sections(requested)
         summary["native_sections"] = sections.public()
         summary["section_precision"] = ("typed bounded native rectangles; checked physical mapping required"
@@ -1659,6 +1706,9 @@ class SourceEffects:
 
         if not summary["complete"]:
             return boundary("native source effects are incomplete")
+        if any(operation["kind"] == "call" and any(mapping.get("source_object")
+               for mapping in operation.get("resource_mappings", ())) for operation in summary["operations"]):
+            return boundary("source object call mappings do not prove native continuation eligibility")
         if module_directives:
             return boundary("enclosing module OpenMP ownership is unproven: " + module_directives[0])
         for child in children:
@@ -1941,6 +1991,9 @@ class SourceEffects:
             effect["guard_frames"] = [{"procedure": requested, "condition": condition}
                                        for condition in guard] + effect.get("guard_frames", [])
             effect["node_ids"] = list(identities)
+        for requirement in summary["native_predicate_requirements"]:
+            requirement["guard_frames"] = [{"procedure": requested, "condition": condition}
+                                             for condition in guard] + requirement["guard_frames"]
         summary["analysis_identity"] = graph.authority_identity
         summary["summary_role"] = "reached_source_segment"
         summary["demand_identity"] = sha256(_canonical({"graph": graph.identity, "nodes": identities,
@@ -1974,6 +2027,9 @@ class SourceEffects:
             summary = analysis.summarize(requested)
             for operation in summary["operations"]:
                 operation["guard"] = tuple(dict.fromkeys((*unit.guard, *guard, *operation.get("guard", ()))))
+            for requirement in summary["native_predicate_requirements"]:
+                requirement["guard_frames"] = [{"procedure": requested, "condition": condition}
+                    for condition in dict.fromkeys((*unit.guard, *guard))] + requirement["guard_frames"]
             summary.update(structured_identity=graph.identity, selected_node_ids=list(identities),
                            summary_role="complete_native_group_unit",
                            demand_identity=unit.id, native_group_identity=group.identity)

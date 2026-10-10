@@ -24,11 +24,21 @@ def summarize(analysis, procedure, selected, completion):
         summaries = tuple(analysis.segment_summary(procedure, (node,), capture_locals=True) for node in selected)
     if not summaries or len(summaries) > analysis.operation_limit:
         raise CompilationError("native atomic operation exceeds its bounded source-unit budget")
-    effects, environment = {}, []
+    effects, environment, predicates = {}, [], []
     allowed = {"read", "write", "overwrite", "descriptor_read"}
     for proof in summaries:
         if not proof['complete'] or proof.get('definition_changes') or proof.get('definition_diagnostics'):
             raise CompilationError("native atomic unit lacks complete effects: " + '; '.join(proof['reasons']))
+        for requirement in proof.get('native_predicate_requirements', ()):
+            token = analysis._native_predicates.get(requirement.get('proof_identity'))
+            if token is None:
+                raise CompilationError("native atomic predicate lacks registered original source authority")
+            token.validate(analysis, procedure, token._expression)
+            if {key: value for key, value in requirement.items() if key != 'guard_frames'} != token.public():
+                raise CompilationError("native atomic predicate differs from original source authority")
+            predicates.append(deepcopy(requirement))
+            if len(predicates) > analysis.operation_limit:
+                raise CompilationError("native atomic predicate union exceeds the operation budget")
         for operation in proof['operations']:
             if operation['kind'] == 'native_environment':
                 token = analysis._native_environments.get(operation.get('proof_identity'))
@@ -61,6 +71,9 @@ def summarize(analysis, procedure, selected, completion):
               'communication': 'conservative whole managed resources unless independently refined'}
     if group is not None:
         record['deferred_native_group'] = group.public()
+    if predicates:
+        record.update(native_predicate_requirements=predicates, native_only=True,
+                      internal_cuts_authorized=False, numerical_lowering_authorized=False)
     ordered_environment = []
     if environment:
         record.update(native_environment_operations=[token.public() for _operation, token in environment],
@@ -75,8 +88,11 @@ def summarize(analysis, procedure, selected, completion):
     summary.update(operations=[*effects.values(), *(operation for operation, _token in environment)],
                    ordered_effects=ordered_environment, definition_changes=[],
                    definition_diagnostics=[], guaranteed_whole_overwrites=[],
+                   native_predicate_requirements=predicates,
                    selected_node_ids=list(identities), demand_identity=identity, summary_identity=identity,
                    native_atomic=record, native_completion=completion.public(),
                    effect_composition={'available': False, 'operations': len(ordered_environment),
                        'reason': 'managed effects are an unordered atomic union; native environment effects retain source order'})
+    if predicates:
+        summary['cloneable'] = False
     return summary

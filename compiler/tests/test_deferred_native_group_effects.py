@@ -103,6 +103,43 @@ def test_guarded_scalar_bounds_keep_whole_effects_without_early_evaluation(tmp_p
     assert "unproved early scalar bound" in sections.reason
 
 
+@pytest.mark.parametrize("forged", [False, True])
+def test_later_native_unit_retains_authenticated_predicate_requirements(tmp_path, monkeypatch, forged):
+    text = source(count=48).replace("real(8),intent(in)::a", "use,intrinsic::ieee_arithmetic,only:ieee_is_nan\nreal(8),intent(in)::a")
+    original = "b(-2,j)=b(-2,j)+sum(a(-2:-2,j))"
+    first = text.index(original)
+    second = text.index(original, first + len(original))
+    text = text[:second] + "if(ieee_is_nan(0.d0)) " + text[second:]
+    path = tmp_path / "native_predicate.f90"
+    path.write_text(text)
+    analysis = SourceEffects([path])
+    group, = analysis.structure(ENTRY).native_groups.values()
+    completion = analysis.joined_completion(ENTRY, group.original_nodes)
+    native_units = analysis.native_group_summaries
+
+    if forged:
+        def modified(*args, **kwargs):
+            result = native_units(*args, **kwargs)
+            for unit in result[-1]:
+                for requirement in unit.get("native_predicate_requirements", ()):
+                    requirement["proof_identity"] = "0" * 64
+            return result
+        monkeypatch.setattr(analysis, "native_group_summaries", modified)
+        with pytest.raises(CompilationError, match="predicate lacks registered original source authority"):
+            summarize(analysis, ENTRY, group.original_nodes, completion)
+        return
+
+    result = summarize(analysis, ENTRY, group.original_nodes, completion)
+    requirement, = result["native_predicate_requirements"]
+    assert result["complete"] and not result["cloneable"]
+    assert requirement["source_expression"].lower() == "ieee_is_nan(0.d0)"
+    assert requirement["guard_frames"] == [{"procedure": ENTRY, "condition": "flag"},
+                                            {"procedure": ENTRY, "condition": "DO j = 0, 2"}]
+    assert result["native_atomic"]["native_predicate_requirements"] == [requirement]
+    assert not result["native_atomic"]["numerical_lowering_authorized"]
+    assert not any(operation["kind"] == "native_predicate" for operation in result["operations"])
+
+
 def test_read_and_write_rectangles_share_one_bounded_union(tmp_path):
     repeated = "b(100,j)=sum(b(200:200,j))"
     text = source(body=repeated)
