@@ -1019,6 +1019,18 @@ Copied or fabricated syntax cannot establish this authority; source text,
 configuration, contract, capture, descriptor and original span changes invalidate
 the corresponding proof. The graph itself does not grant GPU eligibility.
 
+Reached manifests use `SourceEffects.report(entry, materialize=False)` for native
+effect diagnostics. Report schema 2 publishes the authenticated local skeleton,
+already materialized complete source-leaf and reached-segment proofs, and observed
+rejections in `materialized_rejections`; it requests no transitive closure or
+additional reduction analysis. Its `complete: false`,
+`closure_complete_available: false` and `closure_materialization: not_requested`
+describe the unrequested whole-entry closure, not reached-scope eligibility.
+Each proof retains its own identity and authority; the diagnostic call graph
+covers those records only. Reduction records appear only after an explicit proof
+request. The default `report(entry)` and explicit `materialize=True` retain the
+legacy schema 1 complete-closure behavior and cache accounting.
+
 The default `bounded` coordinator path requires complete bounded legacy closures
 for called procedures. The experimental `--scope-execution reached` path uses
 reusable child requirements and local source graphs instead. Each original
@@ -1026,6 +1038,11 @@ procedure supplies its own numerical regions, descriptor bounds and segment
 dispatcher; repeated calls do not duplicate the transitive effect list or consume
 one wrapper variant per source span. The four-variant per-procedure and
 128-variant compilation limits remain unchanged.
+For compatibility, rejected initial inline extraction attempts remain in the
+top-level `boundaries` list with their original reasons, labeled
+`kind: candidate_rejection` and `phase: inline_numerical_extraction`. A later
+reached owner can still cover that source; its own `boundaries` describe actual
+ownership breaks.
 Structured representation version 3 accounts for source operations separately
 from sequence, branch and loop containers. It retains the 256-operation limit
 and a derived structural-node bound; container bookkeeping cannot exhaust the
@@ -1050,8 +1067,13 @@ that read array values or call unproved helpers still require an earlier close.
 Copy-producing, optional or `INTENT(OUT)` associations and unproved entry-time
 specification expressions remain boundaries. Child-local arrays that would
 outlive their procedure also remain boundaries.
-Original complete joined OpenMP operations retain their
-teams and joins; this is not a general mixed-team execution implementation.
+Original complete joined OpenMP operations retain their teams and joins.
+In opt-in reached mode, supported separate worksharing DOs can use collective
+numerical workers inside that same original team. One master coordinates runtime
+queries and coherence, all members call the fixed-budget worker, and native
+corrections retain their original worksharing and synchronization. Uniform
+branches remain at their original execution points. A different actual team size
+or level publishes and closes the owner before the original work proceeds.
 Fortran's optional combined `END PARALLEL DO` and worksharing `END DO` retain
 their implicit joins at the end of the associated original loop. A following
 statement cannot become part of that team through extraction.
@@ -1073,9 +1095,17 @@ alias detection; they are never numerical device captures, and no definition
 coverage is claimed for their bytes or padding. Their original allocation
 guards, field expressions and indexed updates stay in place. Overlap with a
 managed numerical resource closes ownership before the native operation.
-Unproved indirect numerical footprints still require conservative whole-array
-coherence and complete definitions. Pointer fields, dynamic fields and indirect
-GPU scatter remain unsupported. This analysis has a separate summary identity
+Retained native worksharing corrections can inspect stable INTEGER metadata
+fields to prepare exact read/write sections at their original reached boundary.
+The inspector uses original Fortran field selectors and full-layout coordinates;
+it does not assume a C layout or establish independent GPU scatter writes. It
+checks coordinates and conversions, preserves holes and opposite faces, and
+coalesces up to 32 rectangles per access direction. At most 1,048,576 counted
+iterations or unlooped accesses are inspected per resource preparation. An
+invalid coordinate or exhausted budget publishes and closes ownership before
+the original native operation. Unproved footprints retain conservative whole
+effects and their definition requirements. Pointer fields, dynamic fields and
+indirect GPU scatter remain unsupported. This analysis has a separate summary identity
 from numerical eligibility, including when it is used only to check scalar
 liveness after a candidate loop.
 
@@ -1165,11 +1195,25 @@ one original worksharing DO inside a complete joined team. It requires uniform
 participation and completion at every DO; a `NOWAIT` anywhere in that team
 prevents this split. Numerical extraction can consume the registered proof
 without pretending the loop was serial. Thread-private inputs, changed source,
-copied proofs and proofs for a sibling loop are rejected. This is analysis
-support for mixed-team execution: it does not authorize native coherence hooks,
-standalone execution, or a generated GPU replacement. Automatic scope formation
-continues to keep such mixed teams native until their coordinator and hooks are
-implemented.
+copied proofs and proofs for a sibling loop are rejected. Numerical legality is
+proved separately. This token does not authorize native coherence hooks or
+standalone execution. `worksharing_native_completion` supplies distinct native
+authority for contiguous synchronized original units or complete uniform
+branches. Native exact-section bounds cannot depend on another thread's private
+state. Host begin precedes a team barrier; the unchanged original units finish
+before host end and its publication barrier.
+
+The reached mixed-team coordinator shares invocation-local control through
+always-present local mirrors. Native entries never reference absent borrowed
+control arguments, including in OpenMP SHARED clauses. Failed preflight closes
+and executes only the current original operation; failures after numerical work
+cannot replay it. The public manifest identifies the original team, numerical
+participation proofs, native completion proofs and any runtime inspector.
+The existing source and generation limits still apply. Expanded native effects
+are bounded per reached operation rather than summed across the whole owner;
+the manifest reports both the reached-proof bound and the expanded total.
+Automatic continuation through these teams remains native without compatible
+calibration for the complete original-team coordination protocol.
 
 Numerical outlining uses a distinct registered completion proof when the
 original joined loop calls bounded source-backed PURE helpers. The complete

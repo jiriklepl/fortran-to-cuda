@@ -48,6 +48,12 @@ def test_uniform_reached_unit_needs_separate_participation_proof(tmp_path):
         assert extracted.private_scalars == ('i',)
 
 
+def test_whole_team_extraction_cannot_drop_a_uniform_sibling_branch(tmp_path):
+    _, analysis, nodes, _ = example(tmp_path)
+    with pytest.raises(CompilationError, match='every original operation'):
+        extract_region(analysis, analysis.routines[PROCEDURE], nodes)
+
+
 def test_optional_end_do_retains_implicit_worksharing_completion(tmp_path):
     _, analysis, nodes, loops = example(tmp_path, BODY.replace('!$omp end do\n', ''))
     proof = analysis.worksharing_completion(PROCEDURE, nodes, (loops[0],))

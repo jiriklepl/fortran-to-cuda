@@ -668,6 +668,11 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
         nodes = grouped
     joined = worksharing is not None or directive(nodes[0]) is not None
     if joined:
+        if any(_kind(item) not in {"Comment", "Block_Nonlabel_Do_Construct"} for item in nodes):
+            # Selecting only sibling DOs would silently discard an intervening
+            # branch, assignment or call. Reached team scheduling can retain
+            # those original operations; this flat numerical extraction cannot.
+            raise CompilationError("whole-team numerical extraction requires every original operation; structured siblings remain native")
         loops = tuple(item for item in nodes if _kind(item) == "Block_Nonlabel_Do_Construct")
     else:
         if len(nodes) != 1 or _kind(nodes[0]) != "Block_Nonlabel_Do_Construct":
