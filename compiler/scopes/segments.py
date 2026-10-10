@@ -8,6 +8,8 @@ mode-bearing workers and public planning interface.
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 import re
 from dataclasses import dataclass, field, replace
 
@@ -33,6 +35,65 @@ class Native:
     private_bindings: dict = field(default_factory=dict)
     host_metadata: dict = field(default_factory=dict)
     preserve_original: bool = False
+    host_only_reads: dict = field(default_factory=dict)
+    host_only_proof: dict = field(default_factory=dict)
+
+    @property
+    def coherence_effects(self):
+        """Managed obligations only; ``effects`` still reports original reads."""
+        return {root: actions for root, actions in self.effects.items() if root not in self.host_only_reads}
+
+    @property
+    def coherence_sections(self):
+        if self.sections is None or not self.host_only_reads:
+            return self.sections
+        return replace(self.sections, resources=tuple(section for section in self.sections.resources
+                                                     if section.resource not in self.host_only_reads))
+
+
+def _native_analysis(analysis):
+    """Isolate reached native proofs without changing GPU lifetime authority.
+
+    Original source/AST objects remain shared and authenticated. Cache and token
+    dictionaries are private, including eviction and persistent-cache counters.
+    No caller capture fact or initialized coverage is created by this projection.
+    """
+    from compiler.frontend.summary_cache import SummaryCache
+
+    result = copy.copy(analysis)
+    for name in ("summaries", "_closures", "_native_sections", "_structures", "_segments",
+                 "_descriptor_proofs", "_joined_completions", "_numerical_completions",
+                 "_worksharing_completions", "_worksharing_native_completions", "_reduction_proofs",
+                 "_reduction_candidates", "_omp_reduction_proofs", "_source_scopes", "_associate_scopes",
+                 "_source_provenance", "_allocation_authorizations"):
+        setattr(result, name, dict(getattr(analysis, name)))
+    result._summary_cache = SummaryCache(max_entries=0)
+    return result
+
+
+def _host_read_candidate(builder, binding):
+    """A missing GPU capture proof can admit only original module storage."""
+    if binding.root in builder.facts.get("captures", {}):
+        return False
+    parts = binding.root.split("::")
+    module = builder.analysis.modules.get(parts[0]) if len(parts) == 2 else None
+    forbidden = {"pointer", "optional", "volatile", "asynchronous", "value", "parameter"}
+    candidate = (module is not None and module.bindings.get(parts[1]) is binding and binding.rank > 0
+            and "allocatable" in binding.attributes and not binding.attributes & forbidden
+            and binding.dtype in {"real", "integer"} and binding.kind in {4, 8})
+    if not candidate:
+        return False
+    specification = next((node for node in getattr(module.node, "content", ())
+                          if _kind(node) == "Specification_Part"), None)
+    for node in walk(specification):
+        if _kind(node) in {"Common_Stmt", "Equivalence_Stmt"}:
+            return False
+        value = directive(node)
+        if value is not None and value.startswith("threadprivate"):
+            match = re.fullmatch(r"threadprivate\s*\(([^()]*)\)", value)
+            if match is None or binding.name.lower() in {name.strip().lower() for name in match[1].split(",")}:
+                return False
+    return True
 
 
 @dataclass
@@ -181,11 +242,12 @@ def statement_span(node):
 
 
 def fragment(builder, nodes, *, kind="native source", selected=None, private_roots=(), native_metadata=False,
+             native_host_reads=False,
              completion=None, span=None):
     """Demand effects from exact original nodes, excluding owner entry events."""
     original = original_roots(builder.inline.original_selection(nodes)) if selected is None else ()
     full_original = original
-    analysis = copy.copy(builder.analysis)
+    analysis = _native_analysis(builder.analysis) if native_host_reads else copy.copy(builder.analysis)
     analysis._native_metadata = native_metadata
     joined = kind == "joined native OpenMP" or (
         kind == "guarded original numerical fallback"
@@ -234,6 +296,7 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     host_metadata = {binding.native_metadata_object.root: binding.native_metadata_object
                      for binding, _ in referenced if hasattr(binding, 'native_metadata_object')}
     payload_roots = {binding.root for binding, reference in referenced if id(reference) not in descriptor_references}
+    host_only_reads = {}
     for binding, _ in referenced:
         if hasattr(binding, 'native_metadata_object') or binding.root in host_metadata:
             continue
@@ -241,6 +304,13 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
             private_bindings[binding.root] = binding
             continue
         bindings[binding.root] = binding
+        if native_host_reads and _host_read_candidate(builder, binding):
+            # This provisional *native-only* allowance is validated against the
+            # complete reached operation below. It grants neither GPU access
+            # nor any initialized/defined coverage, and never escapes this fork.
+            host_only_reads[binding.root] = binding
+            analysis._stable_module_allocatables = analysis._stable_module_allocatables | {binding.root}
+            continue
         if binding.rank and "allocatable" in binding.attributes and binding.root in payload_roots:
             builder.capture(binding)
             analysis._stable_module_allocatables = analysis._stable_module_allocatables | {binding.root}
@@ -285,6 +355,24 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
                 continue
             effects.setdefault(operation["resource"], set()).add(
                 "read" if operation["kind"] == "read" else "write")
+    for root in host_only_reads:
+        if any(operation.get("resource") == root and operation["kind"] not in {"read", "descriptor_read"}
+               for operation in summary["operations"]):
+            raise CompilationError("host-only native storage requires read-only complete effects: " + root)
+        if "write" in effects.get(root, ()) or root in summary["guaranteed_whole_overwrites"]:
+            raise CompilationError("host-only native storage cannot acquire a managed write: " + root)
+    host_only_proof = {}
+    if host_only_reads:
+        host_only_proof = {"schema_version": 1, "authority": "complete original reached native operation",
+            "analysis_identity": summary["analysis_identity"], "summary_identity": summary["summary_identity"],
+            "structured_identity": summary.get("structured_identity"), "demand_identity": summary.get("demand_identity"),
+            "resources": sorted(host_only_reads), "allocation_changes": False, "calls_or_escapes": False,
+            "device_capture": False, "managed_definitions": False,
+            "lifetime": "original stable native operation; allocation changes close ownership",
+            "range_validation": "allocated guard then undefined BYTE reservation; managed aliases close before native work"}
+        host_only_proof["identity"] = hashlib.sha256(json.dumps(host_only_proof, sort_keys=True,
+            separators=(",", ":")).encode()).hexdigest()
+        host_metadata.update(host_only_reads)
     span = span if span is not None else ((statement_span(nodes[0])[0], statement_span(nodes[-1])[1])
                                         if kind != "condition read" else ())
     sections = analysis.native_sections_for_nodes(builder.entry.qualified, selection, capture_locals=True,
@@ -292,15 +380,16 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     sections = replace(sections, resources=tuple(item for item in sections.resources
                                                 if item.resource not in private_roots))
     return Native(tuple(nodes), effects, set(summary["guaranteed_whole_overwrites"]) - set(private_roots),
-                  bindings, summary, kind, sections, span, private_bindings, host_metadata)
+                  bindings, summary, kind, sections, span, private_bindings, host_metadata,
+                  host_only_reads=host_only_reads, host_only_proof=host_only_proof)
 
 
-def condition_fragment(builder, header):
+def condition_fragment(builder, header, *, native_host_reads=False):
     # The graph authenticates the original header and expression separately;
     # no synthetic assignment may establish source authority.
     condition = header.items[0]
     identity = builder.analysis.structure(builder.entry.qualified).node_id(header, role="condition")
-    result = fragment(builder, (condition,), kind="condition read", selected=(identity,))
+    result = fragment(builder, (condition,), kind="condition read", selected=(identity,), native_host_reads=native_host_reads)
     result.nodes = (condition,)
     result.span = statement_span(header)
     return result
@@ -383,16 +472,18 @@ def renamed(builder, node, parameters, *, lexical_scope=None, native_metadata=Fa
 
 
 class StructuredScope:
-    def __init__(self, builder, nodes, *, condition_only=False, native_metadata=False, lexical_native=False):
+    def __init__(self, builder, nodes, *, condition_only=False, native_metadata=False, lexical_native=False,
+                 native_host_reads=False):
         self.builder, self.nodes = builder, tuple(nodes)
         self.native_metadata = native_metadata
+        self.native_host_reads = native_host_reads
         self.calls, self.native, self.segments = [], [], []
         self.guarded = {}
         self.operation_count = 0
         if condition_only:
             if len(nodes) != 1 or _kind(nodes[0]) not in {"If_Then_Stmt", "If_Stmt"}:
                 raise CompilationError("reached condition publication requires one original IF header")
-            condition = condition_fragment(builder, nodes[0])
+            condition = condition_fragment(builder, nodes[0], native_host_reads=native_host_reads)
             # The original header evaluates its expression once, after this
             # publication. This native operation only establishes host reads.
             operation = replace(condition, nodes=())
@@ -436,7 +527,8 @@ class StructuredScope:
         for node in self.builder.inline.grouped_nodes(nodes):
             if isinstance(node, tuple):
                 flush()
-                operation = fragment(self.builder, node, kind="joined native OpenMP", native_metadata=self.native_metadata)
+                operation = fragment(self.builder, node, kind="joined native OpenMP", native_metadata=self.native_metadata,
+                                     native_host_reads=self.native_host_reads)
                 self.native.append(operation)
                 self.operation_count += len(operation.summary["operations"])
                 result.append(operation)
@@ -475,7 +567,8 @@ class StructuredScope:
                     label = _kind(item)
                     if label in {"If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt"}:
                         if header is not None:
-                            condition = None if _kind(header) == "Else_Stmt" else condition_fragment(self.builder, header)
+                            condition = None if _kind(header) == "Else_Stmt" else condition_fragment(
+                                self.builder, header, native_host_reads=self.native_host_reads)
                             if condition is not None:
                                 self.native.append(condition)
                                 self.operation_count += len(condition.summary["operations"])
@@ -485,7 +578,7 @@ class StructuredScope:
                         body.append(item)
                 result.append(Branch(alternatives, statement_span(node)))
             elif kind == "If_Stmt":
-                condition = condition_fragment(self.builder, node)
+                condition = condition_fragment(self.builder, node, native_host_reads=self.native_host_reads)
                 self.native.append(condition)
                 self.operation_count += len(condition.summary["operations"])
                 action = self.builder.inline.statement_projection(node.items[1], node)
@@ -501,7 +594,8 @@ class StructuredScope:
                 result.append(Association(self.parse(node.content[1:-1], depth + 1),
                                           statement_span(node), record.public()))
             elif kind in {"Assignment_Stmt", "Block_Nonlabel_Do_Construct"}:
-                operation = fragment(self.builder, (node,), native_metadata=self.native_metadata)
+                operation = fragment(self.builder, (node,), native_metadata=self.native_metadata,
+                                     native_host_reads=self.native_host_reads)
                 self.native.append(operation)
                 self.operation_count += len(operation.summary["operations"])
                 result.append(operation)
@@ -513,6 +607,8 @@ class StructuredScope:
     def inputs(self, arrays, scalars, written):
         for operation in self.native:
             for root, binding in operation.bindings.items():
+                if root in operation.host_only_reads:
+                    continue
                 if binding.rank:
                     self.builder.capture(binding)
                     arrays[root] = binding
@@ -551,7 +647,7 @@ class StructuredScope:
                                                or root in cleared):
                     raise CompilationError("unknown native footprint requires complete definitions; ownership boundary: " + root)
         for operation in self.native:
-            require(operation.effects, operation.overwrites, operation.sections.available)
+            require(operation.coherence_effects, operation.overwrites, operation.coherence_sections.available)
         for call in self.calls:
             if not self.builder.closure(call.procedure)[0]:
                 actions, _, overwrites = self.builder.roots_for(call)
@@ -674,6 +770,9 @@ class StructuredScope:
             "native_operations": [{"operation_id": index, "kind": operation.kind,
                                    "first_line": operation.span[0], "last_line": operation.span[1],
                                    "resources": sorted(operation.effects),
+                                   "resource_effects": {root: sorted(actions) for root, actions in sorted(operation.effects.items())},
+                                   "managed_resources": sorted(operation.coherence_effects),
+                                   "host_only_native_reads": operation.host_only_proof or None,
                                    "private_resources": sorted(operation.private_bindings),
                                    "completion": operation.summary["native_completion"],
                                    "sections": operation.sections.public(),
@@ -720,9 +819,9 @@ class StructuredScope:
         def refined(operation, *, query):
             from compiler.scopes.access import build_native_accesses
             try:
-                if operation.sections is None:
+                if operation.coherence_sections is None:
                     return None
-                return build_native_accesses(operation.sections, handles,
+                return build_native_accesses(operation.coherence_sections, handles,
                                              _name("fort_piece_", str(self.native.index(operation))),
                                              parameters={root: parameters[root] if root in parameters else builder.visible(builder.entry, root)
                                                          for root, binding in operation.bindings.items()
@@ -752,7 +851,7 @@ class StructuredScope:
                     lines += [*access.prepare,
                               *_checked(f"fort_scope_host_begin(fort_context, {access.handle}, {access.access_name})")]
                 return lines
-            for root, actions in sorted(operation.effects.items()):
+            for root, actions in sorted(operation.coherence_effects.items()):
                 flags = (["FORT_SCOPE_READ_ALL"] if "read" in actions else [])
                 flags += ["FORT_SCOPE_WRITE_ALL"] if "write" in actions else []
                 flags += ["FORT_SCOPE_OVERWRITE_ALL"] if root in operation.overwrites else []
@@ -762,7 +861,8 @@ class StructuredScope:
 
         def native_end(operation):
             accesses = refined(operation, query=False)
-            roots = [access.handle for access in accesses] if accesses is not None else [handles[root] for root in sorted(operation.effects)]
+            roots = ([access.handle for access in accesses] if accesses is not None
+                     else [handles[root] for root in sorted(operation.coherence_effects)])
             return [*[line for handle in roots for line in _checked(f"fort_scope_host_end(fort_context, {handle})")],
                     *(["end block"] if accesses is not None else [])]
 
@@ -776,14 +876,14 @@ class StructuredScope:
                     lines += [*access.prepare, f"fort_bindings({index}) = fort_scope_plan_binding()",
                               f"fort_bindings({index})%buffer = {access.handle}",
                               f"fort_bindings({index})%access = {access.access_name}"]
-            for index, (root, actions) in enumerate(sorted(operation.effects.items()) if accesses is None else (), 1):
+            for index, (root, actions) in enumerate(sorted(operation.coherence_effects.items()) if accesses is None else (), 1):
                 flags = (["FORT_SCOPE_READ_ALL"] if "read" in actions else [])
                 flags += ["FORT_SCOPE_WRITE_ALL"] if "write" in actions else []
                 flags += ["FORT_SCOPE_OVERWRITE_ALL"] if root in operation.overwrites else []
                 lines += [f"fort_bindings({index}) = fort_scope_plan_binding()",
                           f"fort_bindings({index})%buffer = {handles[root]}",
                           f"fort_bindings({index})%access%flags = " + " + ".join(flags)]
-            count = len(accesses) if accesses is not None else len(operation.effects)
+            count = len(accesses) if accesses is not None else len(operation.coherence_effects)
             lines += ["if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_plan_add( &",
                       "    fort_context, FORT_SCOPE_PLAN_NATIVE, 0_c_int64_t, &",
                       f"    {'c_loc(fort_bindings)' if count else 'c_null_ptr'}, {count}_c_size_t, &",

@@ -195,6 +195,8 @@ def prove_numerical_completion(analysis, procedure, selected):
 
     graph, identities, _executable, private, record = _joined_completion_facts(
         analysis, procedure, selected, call_completion=completed_call)
+    if record.get("native_sections_contract"):
+        raise CompilationError("whole-native OpenMP SECTIONS cannot authorize numerical completion")
     if not top_writes.issubset(private):
         raise CompilationError("joined numerical helper outputs require original private scalar or array storage")
     record.update({"reason": "original joined numerical region and source-proven synchronous pure helper closure",

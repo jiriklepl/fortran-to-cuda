@@ -13,7 +13,7 @@ from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.integers import INTEGER_MAX, INTEGER_MIN, integer_literal
 
-NATIVE_COMPLETION_VERSION = 4
+NATIVE_COMPLETION_VERSION = 5
 
 
 def _kind(node):
@@ -72,7 +72,8 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
     originals = tuple(node for identity in identities for node in graph.source_nodes(identity))
     executable = tuple(identity for identity in identities
                        if any(_kind(node) != "Comment" for node in graph.source_nodes(identity)))
-    private, written, peeled, uniform_reads = set(), set(), {}, {}
+    private, explicit_private, written, peeled, uniform_reads = set(), set(), set(), {}, {}
+    section_count = 0
 
     def content(node):
         return peeled.get(id(node), _children(node))
@@ -100,6 +101,13 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
     # still retains them and all OpenMP directives remain authoritative.
     nodes = [node for node in normalize(originals)
              if _kind(node) != "Comment" or _directive(node) is not None]
+    if worksharing is not None and any(
+            re.match(r"(?:sections|section|end\s+sections)(?:\s|$)", _directive(node) or "")
+            for original in originals for node in walk(original)):
+        # Never return only the ordinary worksharing loops from a larger team
+        # containing sections, even if its END SECTIONS has a barrier. Native
+        # sections remain an indivisible original operation through its join.
+        raise CompilationError("native SECTIONS requires whole original joined-team authority; worksharing cuts are unsupported")
     first = _directive(nodes[0]) if nodes else None
     combined = bool(re.match(r"parallel\s+do(?:\s|$)", first or ""))
     implicit_join = combined and len(nodes) == 2 and _kind(nodes[1]) == "Block_Nonlabel_Do_Construct"
@@ -169,6 +177,7 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                     if kind == "private":
                         local_private(binding)
                         private.add(binding.root)
+                        explicit_private.add(binding.root)
             remainder = remainder[match.end():].lstrip(", ")
 
     def constant_index(scope, node):
@@ -323,12 +332,35 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
         if any(_directive(item) is not None for original in body for item in walk(original)):
             raise CompilationError("nested native OpenMP directives inside a worksharing loop are unsupported")
 
+    def check_section_loop(loop):
+        check_loop(loop)
+        statements = {"Nonlabel_Do_Stmt", "End_Do_Stmt", "Assignment_Stmt", "If_Stmt",
+                      "If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt", "Continue_Stmt"}
+        for nested in walk(loop):
+            if _kind(nested).endswith("_Stmt") and _kind(nested) not in statements:
+                raise CompilationError("native SECTION body has unsupported call, lifetime or exit effects: " + _kind(nested))
+            if _kind(nested) != "Block_Nonlabel_Do_Construct":
+                continue
+            normalize((nested,))
+            original = content(nested)
+            if (not original or _kind(original[0]) != "Nonlabel_Do_Stmt"
+                    or original[0].items[1] is None or original[0].items[1].items[1] is None):
+                raise CompilationError("native SECTION body requires complete ordinary counted DO loops")
+            control = original[0].items[1]
+            binding = analysis._binding(analysis.source_scope_for(control, routine.scope), control.items[1][0])
+            if binding is None or binding.root not in section_private:
+                raise CompilationError("native SECTION counted DO iterator requires explicit original PRIVATE storage")
+
     if first is None or not re.match(r"parallel(?:\s|$)", first):
         raise CompilationError("native operation is not one complete PARALLEL region")
     combined = bool(re.match(r"parallel\s+do(?:\s|$)", first))
     clauses(first[len("parallel do"):] if combined else first[len("parallel"):])
+    # A PRIVATE clause on a preceding worksharing DO ends with that DO; it
+    # cannot establish the ownership of an ordinary loop in a later SECTION.
+    section_private = frozenset(explicit_private)
 
     def body(items, *, branch_depth=0):
+        nonlocal section_count
         items, index = normalize(items), 0
         while index < len(items):
             node, directive = items[index], _directive(items[index])
@@ -350,6 +382,15 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                 if _kind(node) != "Comment":
                     raise CompilationError("native PARALLEL body requires bounded worksharing DO loops")
                 index += 1
+                continue
+            if directive == "sections":
+                from compiler.frontend.native_group_structure import original_section_loops
+                loops, index = original_section_loops(items, index, limit=analysis.operation_limit)
+                for loop in loops:
+                    check_section_loop(loop)
+                section_count += len(loops)
+                if section_count > analysis.operation_limit:
+                    raise CompilationError("native SECTION source-unit budget exhausted")
                 continue
             if not re.match(r"do(?:\s|$)", directive):
                 raise CompilationError("unsupported joined native OpenMP directive: " + directive)
@@ -400,6 +441,11 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
         record.update(deferred_native_group_identity=deferred.identity,
                       native_only=True, internal_cuts_authorized=False,
                       bounded_native_units=len(deferred.units))
+    if section_count:
+        record.update(native_sections_contract="original-explicit-counted-sections-v1",
+                      original_section_count=section_count, native_only=True,
+                      internal_cuts_authorized=False, section_independence_established=False,
+                      gpu_legality_established=False)
     return graph, identities, executable, tuple(sorted(private)), record
 
 

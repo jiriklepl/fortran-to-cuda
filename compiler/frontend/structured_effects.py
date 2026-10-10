@@ -17,7 +17,7 @@ from fparser.two.utils import walk
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.ir import CompilationError
 
-STRUCTURED_EFFECT_VERSION = 4
+STRUCTURED_EFFECT_VERSION = 5
 
 
 def _kind(node):

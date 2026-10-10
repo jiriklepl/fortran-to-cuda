@@ -138,7 +138,7 @@ def test_native_worksharing_corrections_do_not_exhaust_later_generation(tmp_path
     builder, loops, joined = example(tmp_path, source)
     for loop in loops[2:-1]:
         proof = builder.analysis.worksharing_completion(builder.entry.qualified, joined, (loop,))
-        with pytest.raises(CompilationError, match='unsupported intrinsic sum'):
+        with pytest.raises(CompilationError, match='array section requires bounded constant cardinality'):
             builder.inline.prepare_worksharing(loop, proof)
     assert builder.inline.attempts == 0
     proof = builder.analysis.worksharing_completion(builder.entry.qualified, joined, (loops[-1],))

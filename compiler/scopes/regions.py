@@ -715,6 +715,11 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
         prove_completion = (analysis.numerical_joined_completion if helpers
                             else analysis.joined_completion)
         completion = prove_completion(routine.qualified, source_nodes).public()
+    if completion.get("native_sections_contract"):
+        # A final join proves completion of the unchanged concurrent sections.
+        # It does not authorize stripping their directives or serializing
+        # their bodies into a generated numerical implementation.
+        raise CompilationError("whole-native OpenMP SECTIONS cannot authorize numerical extraction")
     vector_reduction = any(_kind(item) == "Intrinsic_Function_Reference"
                            and str(item.items[0]).lower() in {"sum", "dot_product"}
                            for owner, body in [(routine, loop) for loop in loops]

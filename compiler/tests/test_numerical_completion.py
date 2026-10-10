@@ -110,3 +110,43 @@ end module
     helper.scope.bindings["value"] = replace(binding, attributes=binding.attributes | {"volatile"})
     with pytest.raises(CompilationError, match="unchanged original source-backed helper authority"):
         proof.validate(analysis)
+
+
+def test_native_sections_completion_cannot_authorize_numerical_outlining(tmp_path):
+    from compiler.scopes.regions import extract_region
+
+    path = tmp_path / "sections.f90"
+    path.write_text("""module section_authority
+implicit none
+contains
+subroutine step(a,b,n)
+real(8),intent(inout)::a(2,n)
+real(8),intent(in)::b(2,n)
+integer,intent(in)::n
+integer::i
+continue
+!$omp parallel private(i)
+!$omp sections
+!$omp section
+do i=1,n
+a(1,i)=sqrt(b(1,i))
+enddo
+!$omp section
+do i=1,n
+a(2,i)=sqrt(b(2,i))
+enddo
+!$omp end sections nowait
+!$omp end parallel
+end subroutine
+end module
+""")
+    analysis = SourceEffects([path])
+    routine = analysis.routines["section_authority::step"]
+    group = original_joined_group(routine)
+    proof = analysis.joined_completion(routine.qualified, group)
+    assert proof.public()["native_sections_contract"]
+    with pytest.raises(CompilationError, match="whole-native OpenMP SECTIONS"):
+        extract_region(analysis, routine, group)
+    with pytest.raises(CompilationError, match="whole-native OpenMP SECTIONS"):
+        analysis.numerical_joined_completion(routine.qualified, group)
+    assert not analysis._numerical_completions

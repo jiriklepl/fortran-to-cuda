@@ -1145,6 +1145,16 @@ retain their existing limits; unknown calls, allocation/definition changes and
 unsupported exits remain boundaries. The unchanged team executes as one native
 operation, including original `NOWAIT` clauses when its final join proves
 completion; no internal coherence cuts are introduced.
+Plain original `SECTIONS` can remain in such a whole native joined operation
+when every explicit `SECTION` contains one complete counted DO body. Each loop
+iterator must be explicitly PRIVATE in the original PARALLEL, including nested
+counted loops. Matching `END SECTIONS`, its optional `NOWAIT`, and the final
+`END PARALLEL` remain unchanged. Deferred proofs bound each section separately
+and retain original uniform branch guards. No worksharing extraction or internal
+coherence cut is authorized anywhere in a team containing SECTIONS. Nested
+OpenMP constructs, implicit first sections, unsupported section clauses and
+incomplete bodies remain boundaries. This proves native completion and effects
+only; it establishes neither cross-section independence nor GPU legality.
 Exact section refinement deduplicates repeated physical rectangles and preserves
 opposite faces, without inferring whole overwrites. Guarded units with scalar
 bound dependencies retain whole-resource hooks because the scalar may be
@@ -1166,6 +1176,18 @@ alias detection; they are never numerical device captures, and no definition
 coverage is claimed for their bytes or padding. Their original allocation
 guards, field expressions and indexed updates stay in place. Overlap with a
 managed numerical resource closes ownership before the native operation.
+In reached lexical owners, source-complete native reads of module REAL/INTEGER
+allocatable arrays can use the same opaque range reservation without GPU
+capture facts. The original allocation guards and native expressions remain in
+place; SHAPE, LBOUND and C_LOC for the reservation execute only when allocated.
+These bytes acquire no initialized or managed definition coverage. Original
+read effects remain in the manifest, alongside `host_only_native_reads` proof
+identities and separate `managed_resources`. Existing capture facts retain
+managed coherence. Writes, lifetime changes, calls with uncertain effects and
+later conflicting managed uses publish and close before the reached operation;
+they cannot promote an opaque reservation or replay earlier GPU work. Automatic
+placement stays native until reservation preparation has compatible offline
+cost estimates.
 Retained native worksharing corrections can inspect stable INTEGER metadata
 fields to prepare exact read/write sections at their original reached boundary.
 The inspector uses original Fortran field selectors and full-layout coordinates;

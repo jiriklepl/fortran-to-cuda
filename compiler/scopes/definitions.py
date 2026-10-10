@@ -42,10 +42,10 @@ def summarize(scope, *, entry_undefined=()):
         return (whole - kills) | writes, (undefined | kills) - writes
 
     def native(operation, whole, undefined):
-        if not operation.sections.available:
+        if not operation.coherence_sections.available:
             # A whole overwrite removes preservation reads, never explicit RHS
             # reads. The original source must define those before this point.
-            reads = {root for root, actions in operation.effects.items()
+            reads = {root for root, actions in operation.coherence_effects.items()
                      if "read" in actions or root not in operation.overwrites}
             require(reads, whole, undefined)
         return transfer(whole, undefined, set(), operation.overwrites)

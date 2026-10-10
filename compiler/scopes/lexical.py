@@ -124,6 +124,45 @@ class LexicalOwner:
     def handle_numbers(self):
         return sorted(self.forwarded_handles | {number for _, number in self.resources.values()})
 
+    def host_read_roots(self):
+        members = {id(member): member for member in (*self.owner.members.values(), self)}.values()
+        return {member.canonical(binding).root for member in members for unit in member.units
+                for operation in unit.scope.native for binding in operation.host_only_reads.values()}
+
+    def check_host_read_actuals(self, node):
+        """Never pass an opaque handle into a child numeric/formal interface."""
+        if hasattr(node, "fort_inline_region"):
+            return
+        host_reads = self.host_read_roots()
+        if not host_reads:
+            return
+        try:
+            resolved = self.builder.execution_source_call(self.routine, node)
+        except CompilationError:
+            return  # Existing unresolved-call boundaries remain authoritative.
+        actuals = {self.canonical(mapping.binding).root for mapping in resolved.mappings
+                   if mapping.formal_binding.rank and mapping.binding is not None}
+        conflict = actuals & host_reads
+        if conflict:
+            raise CompilationError("host-only native range cannot be forwarded to a managed child formal: "
+                                   + ", ".join(sorted(conflict)))
+
+    def host_read_conflicts(self, scope, arrays):
+        """Opaque and managed roles cannot share one canonical owner resource."""
+        # A module companion scans its body before joining owner.members.
+        # Include that in-progress member so its prior units have authority too.
+        members = {id(member): member for member in (*self.owner.members.values(), self)}.values()
+        host_reads = {self.canonical(binding).root for operation in scope.native
+                      for binding in operation.host_only_reads.values()}
+        managed = {self.canonical(binding).root for binding in arrays.values()}
+        previous_host, previous_managed = set(), set()
+        for member in members:
+            for unit in member.units:
+                previous_host.update(member.canonical(binding).root for operation in unit.scope.native
+                                     for binding in operation.host_only_reads.values())
+                previous_managed.update(member.canonical(binding).root for binding in unit.arrays.values())
+        return (host_reads & (managed | previous_managed)) | (managed & previous_host)
+
     def internal(self, node):
         """Instrument a direct lexical child in place, without copying state.
 
@@ -133,6 +172,7 @@ class LexicalOwner:
         """
         if hasattr(node, "fort_inline_region"):
             return False
+        self.check_host_read_actuals(node)
         from compiler.scopes.native_guard import borrow
         if borrow(self, node):
             return True
@@ -229,11 +269,13 @@ class LexicalOwner:
         before = self.owner.builder.scope_checkpoint()
         joined_rejection = None
         try:
+            if len(nodes) == 1 and _kind(nodes[0]) == "Call_Stmt":
+                self.check_host_read_actuals(nodes[0])
             scope = None
             if len(nodes) > 1 and not condition_only:
                 from compiler.scopes.joined_team import JoinedTeam
                 try:
-                    scope = JoinedTeam(self.builder, nodes)
+                    scope = JoinedTeam(self.builder, nodes, native_host_reads=True)
                 except CompilationError as error:
                     # A joined native group can remain coherent without cuts.
                     # Unsupported participation never grants numerical authority.
@@ -242,7 +284,7 @@ class LexicalOwner:
                     self.refresh()
             if scope is None:
                 scope = StructuredScope(self.builder, nodes, condition_only=condition_only,
-                                        native_metadata=True, lexical_native=True)
+                                        native_metadata=True, lexical_native=True, native_host_reads=True)
             from compiler.scopes.views import view_call
             if any(view_call(call) for call in scope.calls):
                 raise CompilationError("lexical rectangular calls require reached view preflight")
@@ -253,6 +295,13 @@ class LexicalOwner:
                 return
             arrays, scalars, written = self.builder.owner_inputs(scope.calls, reached_definitions=True)
             scope.inputs(arrays, scalars, written)
+            # Opaque reservations cannot later become managed numeric buffers.
+            # Check canonical actual resources across every original owner and
+            # borrowed child before accepting this reached unit. A conflict
+            # closes at this operation; earlier GPU work is never replayed.
+            conflict = self.host_read_conflicts(scope, arrays)
+            if conflict:
+                raise CompilationError("host-only native range conflicts with reached managed use: " + ", ".join(sorted(conflict)))
             # Descriptor lifetime, association, numeric type and initialization
             # evidence are checked before emitting any registration artifact.
             for binding in arrays.values():
@@ -288,6 +337,7 @@ class LexicalOwner:
                 raise
             if source_guard is None and len(nodes) == 1 and _kind(nodes[0]) == "Call_Stmt":
                 try:
+                    self.check_host_read_actuals(nodes[0])
                     from compiler.scopes.module_owner import borrow_module
                     if borrow_module(self, nodes[0]):
                         return
@@ -312,7 +362,7 @@ class LexicalOwner:
                     publication = None
                     for header in group.content:
                         if _kind(header) in {"If_Then_Stmt", "Else_If_Stmt"}:
-                            proof = condition_fragment(self.builder, header)
+                            proof = condition_fragment(self.builder, header, native_host_reads=True)
                             if proof.effects:
                                 if _kind(header) == "Else_If_Stmt":
                                     raise CompilationError("ELSEIF payload publication requires nested original guards")
@@ -351,7 +401,7 @@ class LexicalOwner:
                     self.boundary((group,), str(error))
             elif kind == "If_Stmt":
                 try:
-                    proof = condition_fragment(self.builder, group)
+                    proof = condition_fragment(self.builder, group, native_host_reads=True)
                     if proof.effects:
                         self.admit((group,), condition_only=True)
                     if (self.parent is not None and _kind(group.items[1]) == "Return_Stmt"
@@ -641,6 +691,9 @@ class LexicalOwner:
         if not self.leaves:
             return False
         native_reason = builder.automatic_native_preflight(self.leaves)
+        if builder.config.policy == "auto" and any(operation.host_only_reads
+                for member in self.members.values() for unit in member.units for operation in unit.scope.native):
+            native_reason = "host-only native range preparation lacks compatible offline cost estimates"
         if builder.config.policy == "auto" and any(
                 getattr(operation, "indirect_sections", None) is not None
                 for member in self.members.values() for unit in member.units for operation in unit.scope.native):

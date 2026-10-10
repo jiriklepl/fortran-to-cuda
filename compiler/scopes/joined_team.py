@@ -56,9 +56,10 @@ def declared_names(specification):
 class JoinedTeam(StructuredScope):
     """A scope whose generated hooks surround original team source in place."""
 
-    def __init__(self, builder, nodes):
+    def __init__(self, builder, nodes, *, native_host_reads=False):
         self.builder, self.nodes = builder, tuple(nodes)
         self.native_metadata = True
+        self.native_host_reads = native_host_reads
         self.calls, self.native, self.segments, self.guarded = [], [], [], {}
         self.operation_count, self.numerical_units, self.rejections = 0, [], []
         self.original_nodes = original_roots(builder.inline.original_selection(nodes))
@@ -137,8 +138,8 @@ class JoinedTeam(StructuredScope):
             self.builder.entry.qualified, self.original_nodes, tuple(loops))
         span = self._window(loops)
         operation = fragment(self.builder, tuple(loops), kind='original native worksharing',
-                             native_metadata=True, completion=proof, span=span)
-        if not operation.sections.available:
+                             native_metadata=True, native_host_reads=self.native_host_reads, completion=proof, span=span)
+        if not operation.sections.available and not operation.host_only_reads:
             from compiler.frontend.indirect_sections import analyze_indirect_sections
             from compiler.frontend.native_sections import NativeSections
             indirect = analyze_indirect_sections(self.builder.analysis, self.builder.entry.qualified,
@@ -175,8 +176,9 @@ class JoinedTeam(StructuredScope):
                     kind = _kind(item)
                     if kind in {'If_Then_Stmt', 'Else_If_Stmt', 'Else_Stmt', 'End_If_Stmt'}:
                         if header is not None:
-                            condition = None if _kind(header) == 'Else_Stmt' else condition_fragment(self.builder, header)
-                            if condition is not None and condition.effects:
+                            condition = None if _kind(header) == 'Else_Stmt' else condition_fragment(
+                                self.builder, header, native_host_reads=self.native_host_reads)
+                            if condition is not None and condition.coherence_effects:
                                 raise CompilationError('original team branch requires payload publication')
                             if condition is not None:
                                 self.native.append(condition)
@@ -304,7 +306,7 @@ class JoinedTeam(StructuredScope):
                                                     for binding in indirect.scalars if not binding.rank}},
                         logical_lower_bounds=lowers, on_error=('exit ' + block,))
                 else:
-                    accesses = build_native_accesses(operation.sections, handles, 'fort_t' + str(number),
+                    accesses = build_native_accesses(operation.coherence_sections, handles, 'fort_t' + str(number),
                         parameters=parameters, logical_lower_bounds=lowers, on_error=('exit ' + block,))
             except CompilationError:
                 if getattr(operation, 'indirect_sections', None) is not None and operation.indirect_sections.available:
@@ -324,7 +326,7 @@ class JoinedTeam(StructuredScope):
                     ends += _checked(f'fort_scope_host_end(fort_context, {access.handle})')
                 count = len(accesses)
             else:
-                for index, (root, actions) in enumerate(sorted(operation.effects.items()), 1):
+                for index, (root, actions) in enumerate(sorted(operation.coherence_effects.items()), 1):
                     flags = (['FORT_SCOPE_READ_ALL'] if 'read' in actions else []) + (['FORT_SCOPE_WRITE_ALL'] if 'write' in actions else [])
                     if root in operation.overwrites:
                         flags.append('FORT_SCOPE_OVERWRITE_ALL')
@@ -333,7 +335,7 @@ class JoinedTeam(StructuredScope):
                                 f'fort_bindings({index})%access%flags = ' + ' + '.join(flags)]
                     begins += _checked(f'fort_scope_host_begin(fort_context, {handles[root]}, fort_bindings({index})%access)')
                     ends += _checked(f'fort_scope_host_end(fort_context, {handles[root]})')
-                count = len(operation.effects)
+                count = len(operation.coherence_effects)
             prepare += ['if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_plan_add( &',
                         'fort_context, FORT_SCOPE_PLAN_NATIVE, 0_c_int64_t, &',
                         f'{"c_loc(fort_bindings)" if count else "c_null_ptr"}, {count}_c_size_t, &',
