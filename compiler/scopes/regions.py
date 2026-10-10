@@ -634,6 +634,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
         if not isinstance(worksharing, WorksharingCompletionProof):
             raise CompilationError('inline worksharing requires a compiler-issued participation proof')
         worksharing.validate(analysis, routine.qualified, source_nodes)
+        following = worksharing.following(analysis)
     selected_span = (min(statement_span(item)[0] for item in nodes),
                      max(statement_span(item)[1] for item in nodes))
 

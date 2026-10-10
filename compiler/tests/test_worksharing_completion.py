@@ -122,3 +122,12 @@ def test_private_input_is_not_a_uniform_coordinate_or_scalar_capture(tmp_path):
     proof = analysis.worksharing_completion(PROCEDURE, nodes, (loops[0],))
     with pytest.raises(CompilationError, match='thread-private input'):
         extract_region(analysis, analysis.routines[PROCEDURE], loops[0], worksharing=proof)
+
+
+def test_omitted_suffix_cannot_hide_per_thread_state_needed_by_later_work(tmp_path):
+    body = BODY.replace('a(-2,i)=2*b(1,i)', 'j=i\na(-2,i)=2*b(1,i)').replace(
+        'a(-2,i)=a(-2,i)+b(2,i)', 'a(-2,i)=a(-2,i)+j*b(2,i)')
+    _, analysis, nodes, loops = example(tmp_path, body, opening='parallel private(i,j)')
+    proof = analysis.worksharing_completion(PROCEDURE, nodes, (loops[0],))
+    with pytest.raises(CompilationError, match='loop-written scalar is live after'):
+        extract_region(analysis, analysis.routines[PROCEDURE], loops[0], worksharing=proof)
