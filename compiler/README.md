@@ -1531,15 +1531,40 @@ call or generated reevaluation. These records deny cloning, GPU lowering and
 atomic native callbacks, and are rebuilt rather than restored from persistent
 summary caches. Changed source, resolution maps or kind state invalidate them.
 
-The source-only `prove_reached_window` API transfers separately supplied entry
-facts through complete original prefix effects to an exact contiguous top-level
-window. Branches meet conservatively; definitions retain original ordering.
-The resulting registered proof is conditional on independent admission of its
-entry facts and on future runtime allocation/layout/nonalias guards. It does not
-create an owner or authorize execution. Initial coverage is whole/none; nested
-entry, direct OpenMP groups, incomplete effects, untracked arrays and allocation
-replacement remain boundaries. No address/shape freshness or owner reopening is
-inferred.
+Source summary version 17 carries child `capture_lifetime_requirements` through
+original actual mappings and guards, even when the child remains incomplete.
+Distinct view chains retain their obligations; forwarding does not upgrade an
+authorization or turn partial raw operations into complete ordered effects.
+
+The source-only `prove_descriptor_window` API authenticates descriptor/no-escape
+effects within an exact original interval, separately from entry definitions and
+excluded prefix/tail operations. Numeric allocatable formals and counted headers
+are supported. Unknown calls, allocation replacement and uncertain associations
+inside the interval reject. `segment_summary(..., descriptor_window=proof)` may
+consume that registered token in an isolated projection; the ordinary
+whole-procedure descriptor proof remains unchanged.
+
+The separate `prove_native_prefix` API can establish complete effects of an
+unchanged native call before any context exists. A detached, bounded analysis
+may resolve missing lifetime obligations for original read-only numeric module
+allocations. It neither grants device captures nor changes the ordinary source
+summary or its cache. A distinct completion contract admits complete original
+joined `PARALLEL DO` groups with supported scalar private/reduction clauses;
+the native compiler executes every original reduction. No reduction lowering,
+reassociation or active-owner coherence is authorized.
+
+`prove_reached_window` version 2 transfers separately supplied entry facts through
+these prefix and descriptor proofs to an exact contiguous window, at top level
+or in the first traversal of one top-level serial counted loop. Branches meet
+conservatively and definitions retain original ordering. Hidden read-only native
+prefix allocations require no GPU capture; array dependencies in the selected
+window still do. Its conditional lifecycle is dormant → active → spent, with a
+mandatory close before the excluded tail or any enclosing backedge. Entry facts,
+prior nonescape, allocation presence, layout and alias guards require independent
+admission. These APIs do not create an owner or authorize execution. Whole/none
+coverage, deeper or conditional activation, direct OpenMP cuts, unknown effects,
+module/local allocation ownership and prefix allocation replacement remain
+limitations. No address/shape freshness or owner reopening is inferred.
 
 Optional `--effect-contracts` input has `schema_version: 1` and a `procedures`
 object keyed by a qualified imported call name. Each contract explicitly declares
