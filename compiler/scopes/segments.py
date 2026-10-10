@@ -76,6 +76,8 @@ def _native_analysis(analysis):
     result._native_environments = dict(analysis._native_environments)
     result._native_environment_states = dict(analysis._native_environment_states)
     result._native_predicates = dict(analysis._native_predicates)
+    result._native_functions = dict(analysis._native_functions)
+    result._source_function_used_scopes = set(analysis._source_function_used_scopes)
     result._summary_cache = SummaryCache(max_entries=0)
     return result
 

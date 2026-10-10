@@ -389,7 +389,7 @@ def test_source_object_proofs_are_rebuilt_and_versioned_not_imported_as_cache_au
     after = second.report("clients::step")
     assert before["complete"]
     assert after["complete"]
-    assert after["summary_version"] == SOURCE_SUMMARY_VERSION == 15
+    assert after["summary_version"] == SOURCE_SUMMARY_VERSION == 16
     assert rebuilt  # Unchanged numeric/component leaf summaries may still be cached.
     assert first._summary_authority()["source_object_version"] == SOURCE_OBJECT_VERSION
     assert first.summarize("clients::step")["summary_identity"] == second.summarize("clients::step")["summary_identity"]
