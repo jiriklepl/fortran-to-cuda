@@ -131,3 +131,21 @@ def test_omitted_suffix_cannot_hide_per_thread_state_needed_by_later_work(tmp_pa
     proof = analysis.worksharing_completion(PROCEDURE, nodes, (loops[0],))
     with pytest.raises(CompilationError, match='loop-written scalar is live after'):
         extract_region(analysis, analysis.routines[PROCEDURE], loops[0], worksharing=proof)
+
+
+def test_one_requested_unit_does_not_revalidate_source_for_every_sibling(tmp_path, monkeypatch):
+    counts = []
+    for count in (2, 24):
+        directory = tmp_path / str(count)
+        directory.mkdir()
+        body = '!$omp do\ndo i=1,n\na(-2,i)=b(1,i)\nenddo\n!$omp end do\n'
+        _, analysis, nodes, loops = example(directory, body * count)
+        calls = []
+        original = analysis._selected_source
+        def selected_source(procedure, selected):
+            calls.append(1)
+            return original(procedure, selected)
+        monkeypatch.setattr(analysis, '_selected_source', selected_source)
+        analysis.worksharing_completion(PROCEDURE, nodes, (loops[-1],))
+        counts.append(len(calls))
+    assert counts[0] == counts[1]

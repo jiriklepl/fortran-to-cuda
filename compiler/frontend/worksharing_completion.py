@@ -99,8 +99,11 @@ def prove_worksharing_completion(analysis, procedure, joined, selected):
     if any(_directive(ending) == 'end do nowait' for _, _, ending in units if ending is not None):
         raise CompilationError('worksharing subregions require completion at every original DO; NOWAIT remains native')
     graph, identities = analysis._selected_source(procedure, selected)
+    # The enclosing proof authenticated these original loop objects already.
+    # Revalidating the complete source graph for every possible sibling makes
+    # one requested unit quadratic in the size of a larger original team.
     matches = [(opening, loop, ending) for opening, loop, ending in units
-               if analysis._selected_source(procedure, (loop,))[1] == identities]
+               if (graph.node_id(loop),) == identities]
     if len(matches) != 1:
         raise CompilationError('worksharing selection must be exactly one associated original DO')
     opening, loop, ending = matches[0]
