@@ -20,6 +20,9 @@ module fort_scoped_memory
   integer(c_int32_t), parameter, public :: FORT_SCOPE_PLANNING_ABI_VERSION=1
   integer(c_int32_t), parameter, public :: FORT_SCOPE_PLAN_NATIVE=0, FORT_SCOPE_PLAN_WORKER=1, FORT_SCOPE_PLAN_FORGET=2
   integer(c_int32_t), parameter, public :: FORT_SCOPE_PLAN_DISCARD=3, FORT_SCOPE_VIEW_ABI_VERSION=1
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_COMPUTE_ABI_VERSION=1
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_COMPUTE_NATIVE_FORTRAN=1, FORT_SCOPE_COMPUTE_GENERATED_CPU=2
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_COMPUTE_GPU=4, FORT_SCOPE_COMPUTE_ALL=7
 
   type, bind(C), public :: fort_scope_section
     type(c_ptr) :: lower=c_null_ptr, upper=c_null_ptr
@@ -79,6 +82,10 @@ module fort_scoped_memory
   type, bind(C), public :: fort_scope_plan_binding
     integer(c_int64_t) :: buffer=0
     type(fort_scope_access) :: access
+  end type
+  type, bind(C), public :: fort_scope_compute_costs_v1
+    integer(c_int32_t) :: version=1, known_backends=0
+    real(c_double) :: native_fortran_seconds=0, generated_cpu_seconds=0, gpu_seconds=0
   end type
   type, bind(C), public :: fort_scope_plan_costs
     integer(c_int32_t) :: version=0, valid=0
@@ -195,6 +202,7 @@ module fort_scoped_memory
 
   public :: fort_scope_plan_host_current
   public :: fort_scope_plan_reset, fort_scope_plan_add, fort_scope_plan_select, fort_scope_plan_next
+  public :: fort_scope_plan_add_compute_costs_v3
   public :: fort_scope_plan_validate
   public :: fort_scope_plan_reset_mode, fort_scope_plan_report_v2
   public :: fort_scope_set_team_costs_v1, fort_scope_team_costs_ready_v1, fort_scope_plan_team_entry_v1
@@ -324,6 +332,18 @@ module fort_scoped_memory
       integer(c_size_t), value :: count
       real(c_double), value :: flops, memory_bytes
       integer(c_int), value :: gpu_available
+      integer(c_int) :: status
+    end function
+    function fort_scope_plan_add_compute_costs_v3(context, kind, unit, bindings, count, flops, &
+        memory_bytes, gpu_available, compute) bind(C) result(status)
+      import c_int, c_int32_t, c_int64_t, c_size_t, c_double, c_ptr, fort_scope_compute_costs_v1
+      integer(c_int64_t), value :: context, unit
+      integer(c_int32_t), value :: kind
+      type(c_ptr), value :: bindings
+      integer(c_size_t), value :: count
+      real(c_double), value :: flops, memory_bytes
+      integer(c_int), value :: gpu_available
+      type(fort_scope_compute_costs_v1), intent(in) :: compute
       integer(c_int) :: status
     end function
     function fort_scope_plan_validate(context) bind(C) result(status)

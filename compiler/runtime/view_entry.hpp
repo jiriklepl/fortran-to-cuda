@@ -182,6 +182,11 @@ public:
         if(const int status=seal()) return status;
         return batch_.record(kind,unit,flops,memory,gpu,cpu_numerical_seconds,gpu_numerical_seconds);
     }
+    int record_compute(uint32_t kind,uint64_t unit,double flops,double memory,int gpu,
+                       const fort_scope_compute_costs_v1 &compute) {
+        if(const int status=seal()) return status;
+        return batch_.record_compute(kind,unit,flops,memory,gpu,compute);
+    }
     int decision(uint64_t unit,bool &gpu) { if(const int status=seal()) return status; return batch_.decision(unit,gpu); }
     int begin(bool device) { if(const int status=seal()) return status; return batch_.begin(device); }
     void cancel() noexcept { batch_.cancel(); }

@@ -337,7 +337,10 @@ class ScopeBuilder:
                     function = lower_file(self.analysis.inputs.path(routine.scope.path), procedure)
                 function, plan = prepare_function(function, options=self.options)
                 if plan.regions:
-                    sources = generate_sources(function, plan, offload_config=self.config, memory_model="scoped")
+                    from compiler.offload.source_compute import native_participation
+                    participation = native_participation(self.analysis, procedure)
+                    sources = generate_sources(function, plan,
+                        offload_config=replace(self.config, native_participation=participation), memory_model="scoped")
                     if sources.scoped:
                         result = sources
                         self.numerical_ir[procedure] = (function, plan)
@@ -655,8 +658,10 @@ class ScopeBuilder:
                 raise CompilationError("borrowed numerical views require a prepared serial source leaf")
             if procedure not in self.view_generated:
                 function, plan = self.numerical_ir[procedure]
+                participation = sources.scoped["compute_estimates"]["native_participation"]
                 self.view_generated[procedure] = generate_scoped(
-                    function, plan, self.config, "common_functions.cuh", runtime_id=self.runtime["runtime_id"],
+                    function, plan, replace(self.config, native_participation=participation),
+                    "common_functions.cuh", runtime_id=self.runtime["runtime_id"],
                     root_views=True, root_view_abi=2)
             companion = self.view_generated[procedure]
             public = companion.report
@@ -1675,6 +1680,7 @@ class ScopeBuilder:
         # work and run the original span after the helper association ends.
         native = ["return"] if caller_fallback else [*original, "return"]
         body = [*(["fort_native_required = .true."] if caller_fallback else []), "fort_context = 0"]
+        native_preflight = None
         static_native_reason = self.automatic_native_preflight(leaves)
         if static_native_reason:
             body += ["! Successful static native selection: " + static_native_reason, *native]
@@ -1697,6 +1703,13 @@ class ScopeBuilder:
             if not caller_fallback:
                 native = (structure.original(views) if structure else
                           self.original_calls(calls, views, actuals)) + ["return"]
+            if structure is None and self.config.policy == "auto":
+                from compiler.scopes.native_preflight import source_native_preflight
+                native_preflight = source_native_preflight(self, calls, leaves, scalar_values,
+                                                          original_descriptors=bool(regional))
+                if native_preflight.expression is not None:
+                    imports += list(native_preflight.imports)
+                    body += ["if (" + native_preflight.expression + ") then", *native, "endif"]
             body += ["fort_status = fort_scope_create(0_c_int, fort_context)"]
             body += ["if (fort_status == FORT_SCOPE_OK) &",
                      f"  fort_status = fort_scope_set_device_budget(fort_context, {self.device_budget}_c_size_t)"]
@@ -1790,6 +1803,26 @@ class ScopeBuilder:
                                                       allocated_roots, origin_roots, arrays, caller_guards)
         if structure or borrowed or regional:
             replacement = "\n".join(fortran_lines(replacement.splitlines())) + "\n"
+        compute_identity = None
+        if not static_native_reason and self.config.policy == "auto":
+            from compiler.scopes.compute_identity import compute_identity_guard
+            compute_identity = compute_identity_guard(self, leaves, caller=routine)
+            if not compute_identity.available:
+                planning_available = False
+                planning_reason = compute_identity.reason
+            if compute_identity.required:
+                from compiler.scopes.segments import fortran_lines
+                original_source = "".join(routine.scope.path.read_text().splitlines(keepends=True)[first-1:last])
+                replacement = "\n".join(fortran_lines([
+                    "block", *compute_identity.imports, "if (" + compute_identity.expression + ") then",
+                    *replacement.splitlines(), "else", *original_source.splitlines(), "endif", "end block"])) + "\n"
+        if static_native_reason:
+            # A compile-time all-native decision consumes no caller facts.
+            # Keep the original statement bytes, rather than evaluating GPU
+            # descriptor/IEEE guards or duplicating the native loop in arms
+            # which can never reach a device worker. The unused owning helper
+            # retains its public identity and is not called by this source.
+            replacement = "".join(routine.scope.path.read_text().splitlines(keepends=True)[first-1:last])
         self.add_edit(routine.scope.path, first, last, replacement)
         scope = {"owner": name, "owner_variant": owner_variant.identity,
                 "path": str(routine.scope.path), "first_line": first, "last_line": last,
@@ -1805,9 +1838,9 @@ class ScopeBuilder:
                 "planning_reason": planning_reason,
                 "definition_preflight": {"abi_version": 1, "query_available": query_available,
                                          "reason": query_reason, "position": "when segment is reached" if structure else "before numerical execution"},
-                "cost_estimates": "modeled numerical work and runtime costs; fixed native helper compute is a common excluded term",
+                "cost_estimates": "separate original Fortran, coordinated CPU and GPU compute where calibrated; runtime costs charged separately",
                 "native_estimate": ("original native body; no runtime coherence setup" if static_native_reason else
-                                    "original compute baseline; estimated_seconds for zero-GPU decisions conservatively includes coherent CPU-worker hooks"),
+                                    "original Fortran counterfactual for fresh native fallback; coherent host execution for continuations"),
                 "placement": "forced scoped GPU with native helpers" if self.config.policy == "sections" else
                              "calibrated coherent source scope" if planning_available else
                              "native; " + str(planning_reason),
@@ -1817,6 +1850,10 @@ class ScopeBuilder:
                                                **(self.bounds_preflight_public(origin_roots, "original module allocation descriptor")
                                                   if origin_roots else {})}} if allocated_roots else {}),
                 "mode": self.config.policy, "participation": "serial"}
+        if compute_identity is not None:
+            scope["compute_identity"] = compute_identity.public()
+        if native_preflight is not None:
+            scope["native_preflight"] = native_preflight.public
         if static_native_reason:
             scope["automatic_preflight"] = {
                 "selection": "native", "successful": True, "reason": static_native_reason,
@@ -1824,6 +1861,8 @@ class ScopeBuilder:
                 "position": "before context creation, registration and query construction",
                 "runtime_decision_inputs": [], "contexts_created": 0,
                 "registrations": 0, "queries_constructed": 0,
+                "caller_source_unchanged": True, "caller_guards_evaluated": False,
+                "generated_owner_invoked": False,
                 "execution": "unchanged original source span"}
         if runtime_guards:
             scope["runtime_preflight"] = {

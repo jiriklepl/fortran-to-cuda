@@ -256,15 +256,24 @@ class InlineRegions:
             self._reserve(reservation)
         function, plan = (self.artifact_ir(value, source_name, extraction.source_identity)
                           for value in (function, plan))
-        config = replace(self.builder.config, collective=collective)
+        completion = extraction.completion
+        if collective:
+            native_participation = "existing_team"
+        elif completion.get("has_openmp_in_closure"):
+            from compiler.offload.source_compute import fork_join_participation
+            native_participation = fork_join_participation(extraction.nodes)
+        else:
+            native_participation = "serial" if completion.get("available") else "unknown"
+        config = replace(self.builder.config, collective=collective, native_participation=native_participation)
         generated = generate_sources(function, plan, offload_config=config, memory_model="scoped")
         if generated.scoped is None:
             raise CompilationError("inline numerical candidate has no shared numerical entry")
         procedure = self.builder.entry.qualified + "#region" + str(len(self.regions) + 1)
-        # Team costs and workers have different participation contracts even
-        # when the numerical expressions match a serial entry exactly.
+        # The generated artifact includes its original native counterfactual.
+        # Identical arithmetic cannot share that artifact across serial,
+        # fork/join and existing-team participation contracts.
         computation = sha256("\n".join(extraction.source.splitlines()[1:-1]).encode()).hexdigest()
-        canonical = self.computations.setdefault((collective, computation), procedure)
+        canonical = self.computations.setdefault((collective, native_participation, computation), procedure)
         if canonical != procedure:
             generated, function, plan = self.generated[canonical], *self.ir[canonical]
         self.regions[procedure], self.generated[procedure] = extraction, generated

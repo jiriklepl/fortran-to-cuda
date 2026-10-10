@@ -149,6 +149,23 @@ typedef struct fort_scope_plan_costs {
     double gpu_setup_seconds, cold_driver_startup_seconds, allocation_seconds, release_seconds;
     double wait_seconds, launch_enqueue_seconds, planning_operation_seconds;
 } fort_scope_plan_costs;
+/* Additive, per-operation computation evidence. Each total includes the
+ * backend's arithmetic, numerical primitives, memory throughput and any fixed
+ * execution cost not charged by the scope/team protocol. Transfers, scope
+ * lifetime, GPU enqueue and separately calibrated team costs remain outside.
+ * A zero total is known only when its bit is set; missing bits never borrow
+ * another backend's estimate. Existing plan_costs/v2 callers remain unchanged. */
+#define FORT_SCOPE_COMPUTE_ABI_VERSION 1
+enum fort_scope_compute_backend {
+    FORT_SCOPE_COMPUTE_NATIVE_FORTRAN = 1,
+    FORT_SCOPE_COMPUTE_GENERATED_CPU = 2,
+    FORT_SCOPE_COMPUTE_GPU = 4,
+    FORT_SCOPE_COMPUTE_ALL = 7
+};
+typedef struct fort_scope_compute_costs_v1 {
+    uint32_t version, known_backends;
+    double native_fortran_seconds, generated_cpu_seconds, gpu_seconds;
+} fort_scope_compute_costs_v1;
 /* Existing-team costs are a distinct optional contract: serial fork/join rates
  * cannot justify collective placement. Rates in plan_costs describe generated
  * cyclic workers; these native rates describe the original orphaned workers. */
@@ -299,6 +316,17 @@ int fort_scope_plan_add_costs_v2(fort_scope_t context, uint32_t kind, uint64_t u
                         const fort_scope_plan_binding *bindings, size_t count,
                         double flops, double memory_bytes, int gpu_available,
                         double cpu_numerical_seconds, double gpu_numerical_seconds);
+/* Native Fortran is the original, uninstrumented counterfactual. Generated
+ * CPU is the actual host operation inside the coordinated owner: for WORKER,
+ * its CPU implementation; for NATIVE, its original body plus any generated
+ * inspection/preparation. Unknown preparation must leave that bit unset,
+ * never be excluded as common original-native work. All supplied numbers must
+ * be finite and nonnegative. Missing estimates do not prevent independent
+ * definition validation, but automatic placement remains unavailable. */
+int fort_scope_plan_add_compute_costs_v3(fort_scope_t context, uint32_t kind, uint64_t unit,
+                        const fort_scope_plan_binding *bindings, size_t count,
+                        double flops, double memory_bytes, int gpu_available,
+                        const fort_scope_compute_costs_v1 *compute);
 /* Validate a complete, successfully recorded query's ordered definitions.
  * No calibration, estimates, CUDA, transfers, or live coverage changes. Keeps
  * recording open for selection or further queries. Undefined requirements

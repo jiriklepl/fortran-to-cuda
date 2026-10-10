@@ -27,6 +27,7 @@ from compiler.ir import (
     IntrinsicCall,
     Literal,
     Loop,
+    PrivateArrayOrigin,
     Reference,
     ScalarType,
     Size,
@@ -230,6 +231,7 @@ class _Lowerer:
         self.active_frames: list[tuple] = []
         self.pending: list = []
         self.inline_calls = 0
+        self.private_array_groups = 0
         self.unrolled_values: dict[Symbol, int] = {}
         self.unrolled_iterations = 0
 
@@ -491,9 +493,11 @@ class _Lowerer:
             )
         return result
 
-    def new_symbol(self, declaration: _Declaration, parameter: bool = False) -> Symbol:
+    def new_symbol(self, declaration: _Declaration, parameter: bool = False,
+                   *, private_array_origin: PrivateArrayOrigin | None = None) -> Symbol:
         symbol = Symbol(
-            len(self.symbols), declaration.spelling, declaration.dtype, declaration.rank, declaration.intent, parameter
+            len(self.symbols), declaration.spelling, declaration.dtype, declaration.rank, declaration.intent, parameter,
+            private_array_origin
         )
         self.symbols.append(symbol)
         return symbol
@@ -540,8 +544,13 @@ class _Lowerer:
                     count = 1
                     for lower, upper in declaration.bounds:
                         count *= max(0, upper - lower + 1)
+                    group_id = self.private_array_groups
+                    self.private_array_groups += 1
                     elements = tuple(self.new_symbol(replace(declaration, spelling=f"{declaration.spelling}_{index}",
-                                                             rank=0, intent=None)) for index in range(count))
+                                                             rank=0, intent=None),
+                                                     private_array_origin=PrivateArrayOrigin(
+                                                         group_id, declaration.bounds, index))
+                                     for index in range(count))
                     bindings[declaration.name] = _PrivateArray(declaration.name, declaration.dtype,
                                                                declaration.bounds, elements)
                 else:

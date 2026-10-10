@@ -50,6 +50,14 @@ def test_hidden_numerical_fallback_is_returned_to_original_caller(tmp_path, stru
     assert "call produce(" not in owner.lower()
     assert "call consume(" not in owner.lower()
     caller = text[text.index("subroutine step"):text.index("end subroutine", text.index("subroutine step"))]
+    if policy == "auto":
+        original = source.read_text()
+        original_caller = original[original.index("subroutine step"):original.index("end subroutine", original.index("subroutine step"))]
+        assert caller == original_caller
+        assert scope["automatic_preflight"]["caller_source_unchanged"]
+        assert not scope["automatic_preflight"]["caller_guards_evaluated"]
+        assert not scope["automatic_preflight"]["generated_owner_invoked"]
+        return
     fallback = caller[caller.index("call " + scope["owner"]):]
     assert fallback.index("if (fort_native_") < fallback.index("call produce(")
     assert "logical :: fort_native_" in caller

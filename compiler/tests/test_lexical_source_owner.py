@@ -174,7 +174,7 @@ end module
         'call opaque(x,n)', 'call leaf(x,n,escape)')
 
 
-def emit(directory, source=SOURCE, *, captures=None):
+def emit(directory, source=SOURCE, *, captures=None, policy='sections'):
     directory.mkdir(parents=True, exist_ok=True)
     path = directory/'owner.f90'
     path.write_text(source)
@@ -183,9 +183,24 @@ def emit(directory, source=SOURCE, *, captures=None):
              'captures':{'argument::'+name:FACT for name in ('a','b','out')}}
     facts['captures'].update(captures or {})
     builder = ScopeBuilder([path], 'local_owner::step', facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy='sections',scope_execution='reached'))
+                           config=OffloadConfig(policy=policy,scope_execution='reached'))
     outputs, report = builder.run()
     return path, outputs, report
+
+
+def test_static_native_selection_preserves_original_lexical_storage_and_calls(tmp_path):
+    path, outputs, report = emit(tmp_path, INTERNAL_SOURCE, policy='auto')
+    scope, = report['scopes']
+    text = outputs[report['sources'][str(path)]['replacement']]
+    assert text == path.read_text() == INTERNAL_SOURCE
+    assert scope['owner_variant'] is None
+    assert not scope['estimate_available']
+    assert scope['automatic_preflight']['successful']
+    assert scope['automatic_preflight']['runtime_decision_inputs'] == []
+    assert not scope['automatic_preflight']['caller_guards_evaluated']
+    assert not scope['automatic_preflight']['generated_owner_invoked']
+    assert scope['automatic_preflight']['caller_source_unchanged']
+    assert report['implementation_variants']['generated_count'] == 0
 
 
 def test_inactive_unknown_branch_is_a_reached_close_without_wrapper_copies(tmp_path):

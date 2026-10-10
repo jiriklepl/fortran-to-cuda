@@ -9,8 +9,9 @@ extension; scoped automatic execution requires matching runtime calibration.
 Add --collective-costs to measure the original persistent OpenMP team and its
 generated protocol. It also identifies the actual Fortran compiler and ordered
 semantic flags; defaults are -std=f2018 -O3 -fopenmp.
-Add --numerical-costs for optional transcendental/private-array family costs,
-validated at independent sizes. They do not estimate arbitrary intrinsic mixes.
+Add --numerical-costs for independently validated native Fortran, generated CPU
+and GPU compute models. Rejected families retain their raw evidence. Version 1
+is available explicitly for legacy C++/CUDA consumers.
 """
 from __future__ import annotations
 
@@ -530,10 +531,13 @@ def calibrate(args: argparse.Namespace) -> dict:
         except ValueError as error:
             raise CalibrationError(str(error)) from error
     if getattr(args, "numerical_costs", False):
-        from .numerical_calibration import NumericalCalibrationError, calibrate_numerical
-        print("Measuring exact numerical families and independent holdouts...", file=sys.stderr, flush=True)
+        from .numerical_calibration import NumericalCalibrationError, calibrate_numerical, calibrate_numerical_v2
+        print("Measuring independent numerical families and backends...", file=sys.stderr, flush=True)
         try:
-            profile = calibrate_numerical(profile, args, directory, nvcc, host, run=_run)
+            if getattr(args, "numerical_version", 2) == 1:
+                profile = calibrate_numerical(profile, args, directory, nvcc, host, run=_run)
+            else:
+                profile = calibrate_numerical_v2(profile, args, directory, nvcc, host, run=_run, tool=_tool)
         except NumericalCalibrationError as error:
             raise CalibrationError(str(error)) from error
     with tempfile.NamedTemporaryFile(mode="w", dir=output.parent, prefix=output.name + ".", delete=False) as stream:
@@ -567,8 +571,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--collective-costs", action="store_true",
                         help="also measure the actual generated persistent-team protocol; requires --scoped-costs")
     parser.add_argument("--numerical-costs", action="store_true",
-                        help="also validate exact generic transcendental/private-array costs on independent sizes")
-    parser.add_argument("--fortran", help="Fortran compiler for collective calibration (default gfortran-15, gfortran-14 or gfortran)")
+                        help="also validate generic numerical costs for native Fortran, generated CPU and GPU")
+    parser.add_argument("--numerical-version", type=int, choices=(1, 2), default=2,
+                        help="numerical evidence schema (default 2; version 1 supports legacy C++ consumers only)")
+    parser.add_argument("--cpu-affinity", help="fixed comma-separated CPU indices for numerical v2 (default first allowed CPUs matching --threads)")
+    parser.add_argument("--fortran", help="Fortran compiler for numerical/collective calibration (default gfortran-15, gfortran-14 or gfortran)")
     parser.add_argument("--fortran-flag", action="append", default=[],
                         help="repeat to replace Fortran defaults in order; include -fopenmp "
                              "(defaults: -std=f2018 -O3 -fopenmp)")
