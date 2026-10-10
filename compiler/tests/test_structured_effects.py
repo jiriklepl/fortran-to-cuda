@@ -32,7 +32,7 @@ def test_unknown_else_does_not_poison_reached_then(tmp_path):
     assert {node.kind for node in graph.nodes.values()} >= {"sequence", "branch", "boundary", "entry", "operation"}
     summary = analysis.segment_summary("varied::advance", assignments(analysis))
     assert summary["complete"], summary["reasons"]
-    assert summary["summary_version"] == SOURCE_SUMMARY_VERSION == 11
+    assert summary["summary_version"] == SOURCE_SUMMARY_VERSION == 12
     assert summary["structured_identity"] == graph.identity
     assert summary["includes_entry"] is False
     assert summary["definition_changes"] == []
@@ -57,7 +57,7 @@ def test_structural_containers_do_not_spend_the_source_operation_budget(tmp_path
     _, analysis = source(tmp_path, body*3, operations=12)
     graph = analysis.structure('varied::advance')
     assert graph.available, graph.reasons
-    assert graph.version == 3
+    assert graph.version == 4
     assert graph.operation_count == 9
     assert graph.operation_limit == 12
     assert len(graph.nodes) > analysis.operation_limit+2

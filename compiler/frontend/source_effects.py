@@ -26,7 +26,7 @@ from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
 # Bump when source-effect, call-composition or summary semantics change.
-SOURCE_SUMMARY_VERSION = 11
+SOURCE_SUMMARY_VERSION = 12
 _DEFAULT_SUMMARY_CACHE = SummaryCache()
 
 
@@ -1746,6 +1746,9 @@ class SourceEffects:
             raise CompilationError("structured source skeleton unavailable: " + "; ".join(graph.reasons))
         if isinstance(selected, str) or not isinstance(selected, (tuple, list)):
             selected = (selected,)
+        group = graph.native_group_for_selection(selected)
+        if group is not None:
+            return graph, (group.node_id,)
         identities, original_node_ids = [], None
         for item in selected:
             if _kind(item) == "Comment" and not str(item).lstrip().lower().startswith("!$omp"):
@@ -1789,10 +1792,11 @@ class SourceEffects:
                 raise CompilationError("selected effect nodes must retain original source order")
         return graph, tuple(identities)
 
-    def _segment_projection(self, requested, identities, *, include_entry=False, capture_locals=False):
+    def _segment_projection(self, requested, identities, *, include_entry=False, capture_locals=False,
+                            _graph=None):
         """Create a private proof projection only after original-node checks."""
         from fparser.two import Fortran2003 as F
-        graph = self.structure(requested)
+        graph = self.structure(requested) if _graph is None else _graph
         # The immediately preceding structure() call already authenticated
         # the original routine, provenance and current analysis authority.
         original = self.routines[requested]
@@ -1866,6 +1870,8 @@ class SourceEffects:
         child as one opaque native operation. No guard or bound is evaluated.
         """
         graph, identities = self._selected_source(requested, selected)
+        if graph.deferred_native_descendants(identities):
+            raise CompilationError("deferred native group requires whole original native completion authority")
         key = graph.identity, identities, bool(include_entry), bool(capture_locals)
         if key in self._segments:
             return deepcopy(self._segments[key])
@@ -1895,6 +1901,36 @@ class SourceEffects:
             self._segments.pop(next(iter(self._segments)))
         self._segments[key] = deepcopy(summary)
         return summary
+
+    def native_group_summaries(self, requested, selected, completion):
+        """Demand bounded units only after authenticating a complete native group.
+
+        These projections do not grant standalone execution, numerical outlining
+        or a cut inside the retained original team. Generic segment consumers
+        continue to see an explicit source boundary.
+        """
+        graph, identities = self._selected_source(requested, selected)
+        group = graph.native_group_for_selection(selected)
+        if group is None or not group.available:
+            raise CompilationError("native group lacks an available exact original source selection")
+        from compiler.frontend.native_completion import NativeCompletionProof
+        if not isinstance(completion, NativeCompletionProof):
+            raise CompilationError("deferred native group requires its registered whole completion proof")
+        completion.validate(self, requested, identities)
+        summaries = []
+        for unit in group.units:
+            analysis, _routine, guard = self._segment_projection(requested, unit.selected_node_ids,
+                capture_locals=True, _graph=unit.structure)
+            summary = analysis.summarize(requested)
+            for operation in summary["operations"]:
+                operation["guard"] = tuple(dict.fromkeys((*unit.guard, *guard, *operation.get("guard", ()))))
+            summary.update(structured_identity=graph.identity, selected_node_ids=list(identities),
+                           summary_role="complete_native_group_unit",
+                           demand_identity=unit.id, native_group_identity=group.identity)
+            summary["summary_identity"] = sha256(_canonical({key: value for key, value in summary.items()
+                                                             if key != "summary_identity"}).encode()).hexdigest()
+            summaries.append(summary)
+        return graph, identities, group, tuple(summaries)
 
     def joined_completion(self, requested, selected):
         """Issue a compiler-proved token for one whole original joined group."""
@@ -1981,13 +2017,18 @@ class SourceEffects:
     def native_sections_for_nodes(self, requested, selected, *, include_entry=False, capture_locals=False,
                                  completion=None):
         """Typed original-coordinate refinement for a demanded source segment."""
-        _graph, identities = self._selected_source(requested, selected)
+        graph, identities = self._selected_source(requested, selected)
         if completion is not None:
             from compiler.frontend.native_completion import NativeCompletionProof
             from compiler.frontend.worksharing_completion import WorksharingNativeCompletionProof
             if not isinstance(completion, (NativeCompletionProof, WorksharingNativeCompletionProof)):
                 raise CompilationError("native section completion requires a registered original source proof token")
             completion.validate(self, requested, identities)
+        group = graph.native_group_for_selection(selected)
+        if group is not None:
+            return self._native_group_sections(requested, group, completion)
+        if graph.deferred_native_descendants(identities):
+            raise CompilationError("deferred native sections require the exact whole original source selection")
         analysis, routine, _guard = self._segment_projection(requested, identities,
             include_entry=include_entry, capture_locals=capture_locals)
         # The section analyzer needs original descriptor declarations even
@@ -2010,6 +2051,79 @@ class SourceEffects:
                 return NativeSections(False, 'native section footprint depends on thread-private state: '
                                       + ', '.join(sorted(private)))
         return sections
+
+    def _native_group_sections(self, requested, group, completion):
+        """Refine the whole group's union without expanding a flat closure.
+
+        Bounds are evaluated only at the original whole-group boundary. A
+        scalar changed anywhere inside the group cannot supply such a bound.
+        Unknown or oversized unions retain conservative whole-resource hooks.
+        """
+        from dataclasses import replace
+
+        from compiler.frontend.native_completion import NativeCompletionProof
+        from compiler.frontend.native_sections import RECTANGLE_LIMIT, NativeSections
+        if not isinstance(completion, NativeCompletionProof) or not group.available:
+            raise CompilationError("native group sections require whole original completion authority")
+        resources, scalar_writes = {}, set()
+
+        def box_identity(box):
+            return _canonical({key: value for key, value in box.public().items() if key != "source_access"})
+
+        def unique_boxes(boxes):
+            return tuple({box_identity(box): box for box in boxes}.values())
+        for node in group.original_nodes:
+            for statement in walk(node):
+                if _kind(statement) != "Assignment_Stmt":
+                    continue
+                target = statement.items[0]
+                binding = self._binding(self.source_scope_for(statement, self.routines[requested].scope),
+                                        target.items[0] if _kind(target) == "Part_Ref" else target)
+                if binding is not None and not binding.rank:
+                    scalar_writes.add(binding.root)
+        for unit in group.units:
+            analysis, routine, _guard = self._segment_projection(requested, unit.selected_node_ids,
+                capture_locals=True, _graph=unit.structure)
+            specification = _part(self.routines[requested].scope.node, "Specification_Part")
+            routine.scope.node.content = ([specification] if specification is not None else []) + [routine.execution]
+            analysis._native_sections_include_entry = False
+            analysis._native_sections_completion = completion
+            sections = analyze_native_sections(analysis, routine)
+            if not sections.available:
+                return NativeSections(False, sections.reason)
+            for resource in sections.resources:
+                dependencies = {dependency.resource for dependency in resource.dependencies}
+                if dependencies.intersection(set(completion.private_roots) | scalar_writes):
+                    return NativeSections(False, "native group footprint depends on private or internally changed scalar state")
+                if unit.guard and any(dependency.kind == "scalar_read" for dependency in resource.dependencies):
+                    return NativeSections(False, "guarded native group footprint requires an unproved early scalar bound")
+                previous = resources.get(resource.resource)
+                if previous is None:
+                    # A guarded or repeated native writer never establishes a
+                    # whole overwrite or a whole-group definition.
+                    resources[resource.resource] = replace(resource,
+                        reads=unique_boxes(resource.reads),
+                        writes=unique_boxes((*resource.writes, *resource.overwrites)), overwrites=())
+                    previous = resources[resource.resource]
+                else:
+                    if (previous.rank, previous.lower_bounds, previous.lower_bound_expressions,
+                        previous.descriptor_lower_bounds, previous.descriptor_origin) != (
+                        resource.rank, resource.lower_bounds, resource.lower_bound_expressions,
+                        resource.descriptor_lower_bounds, resource.descriptor_origin):
+                        return NativeSections(False, "native group resource descriptors are inconsistent")
+                    merged = {}
+                    for label in ("reads", "writes"):
+                        incoming = (*resource.writes, *resource.overwrites) if label == "writes" else resource.reads
+                        unique = {box_identity(box): box for box in (*getattr(previous, label), *incoming)}
+                        if len(unique) > RECTANGLE_LIMIT:
+                            return NativeSections(False, "native group rectangle union exceeds bounded refinement")
+                        merged[label] = tuple(unique.values())
+                    resources[resource.resource] = replace(previous, **merged)
+                resource = resources[resource.resource]
+                if (len(resources) > self.operation_limit or
+                        len({box_identity(box) for box in (*resource.reads, *resource.writes)}) > RECTANGLE_LIMIT):
+                    return NativeSections(False, "native group section union exceeds bounded refinement")
+        return NativeSections(True, resources=tuple(resources[key] for key in sorted(resources)))
 
     def descriptor_stability(self, requested):
         from compiler.frontend.structured_effects import descriptor_stability
