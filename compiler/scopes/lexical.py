@@ -91,6 +91,7 @@ class LexicalOwner:
         self.control_guard = parent.control_guard if parent else None
         self.forwarded_handles = parent.forwarded_handles if parent else set()
         self.units, self.boundaries, self.patches = [], [], []
+        self.counted_controls = []
         self.lines = self.routine.scope.path.read_text().splitlines(keepends=True)
         check_structured_entry(self.routine)
         statement = _part(self.routine.scope.node, "Subroutine_Stmt")
@@ -320,12 +321,12 @@ class LexicalOwner:
             from compiler.scopes.definitions import summarize
             definitions = summarize(scope)
             leaves = {leaf for call in scope.calls for leaf in self.builder.closure(call.procedure)[0]}
-            if not arrays and not leaves and not metadata:
+            if not arrays and not leaves and not metadata and not any(operation.native_environment for operation in scope.native):
                 return  # Original scalar operations need no runtime context.
             self.builder.scope_budget(scope.calls)
             unit = Unit(tuple(nodes), scope, arrays, scalars, written, leaves, definitions,
                         source_guard, "" if condition_only else native_source, condition_only, metadata)
-            for root, binding in {**arrays, **metadata}.items():
+            for binding in {**arrays, **metadata}.values():
                 self.add_resource(binding)
             self.units.append(unit)
         except CompilationError as error:
@@ -425,7 +426,19 @@ class LexicalOwner:
                     # reached operations inside it. A later failure cannot
                     # restart the association's earlier numerical prefix.
                     self.scan(group.content[1:-1], depth+1)
-            elif kind in {"Assignment_Stmt", "Block_Nonlabel_Do_Construct"}:
+            elif kind == "Block_Nonlabel_Do_Construct":
+                if any(_kind(item) == "Call_Stmt" for item in walk(group)):
+                    try:
+                        from compiler.scopes.counted_loops import reached_counted_body
+                        body = reached_counted_body(self.builder, group)
+                    except CompilationError:
+                        self.admit((group,))
+                    else:
+                        self.counted_controls.append(body.authority)
+                        self.scan(body.nodes, depth+1)
+                else:
+                    self.admit((group,))
+            elif kind == "Assignment_Stmt":
                 self.admit((group,))
             elif kind == "Return_Stmt" and self.parent is not None and str(group).strip().lower() == "return":
                 continue
@@ -477,6 +490,30 @@ class LexicalOwner:
                 f"type(fort_scope_plan_binding), target :: fort_bindings({max(1,len(arrays))})",
                 f"integer(c_int), parameter :: fort_mode = {1 if builder.config.policy == 'sections' else 2}"]
         prepare = ["fort_status = FORT_SCOPE_OK", "fort_can = .true."]
+        element_captures = [capture for call in unit.scope.calls if call.region is not None
+                            for capture in call.region.scalar_element_captures]
+        element_active = None
+        if element_captures:
+            if len(unit.scope.calls) != 1 or unit.scope.native:
+                raise CompilationError("immutable operands require one reached numerical unit")
+            guards = element_captures[0].activation_guards
+            if any(capture.activation_guards != guards for capture in element_captures):
+                raise CompilationError("immutable operands require one complete activation domain")
+            element_active = _name("fort_elements_active_", self.routine.qualified + ":" + str(index))
+            scope = self.routine.scope
+            if (builder.analysis._binding(scope, element_active) is not None
+                    or builder.analysis._candidates(scope, element_active)
+                    or element_active in scope.imports or element_active in scope.ambiguous_imports
+                    or element_active in scope.generics):
+                raise CompilationError("immutable activation flag conflicts with original source")
+            prepare += [f"{element_active} = .true."]
+            prepare += [f"if ({guard}) then" for guard in guards]
+            for _guard in reversed(guards):
+                prepare += ["else", f"{element_active} = .false.", "endif"]
+            # A proved empty complete nest executes its original source, with
+            # no query or VALUE arguments reading dormant inner controls.
+            # Earlier device state remains valid; this is not an owner close.
+            prepare += [f"if (.not. {element_active}) exit {block}"]
         metadata_native = None
         preflight = None
         if builder.config.policy == "auto":
@@ -498,6 +535,17 @@ class LexicalOwner:
                 prepare += [f"if (fort_can) fort_can = allocated({name})"]
             prepare += [f"if (fort_can) fort_can = is_contiguous({name})"]
             prepare += [f"if (fort_can) fort_can = {condition}" for condition in builder.original_bound_conditions(name,binding.rank)]
+        for call in unit.scope.calls:
+            if call.region is None:
+                continue
+            for capture in call.region.scalar_element_captures:
+                # Source-backed operands are read only at this reached unit.
+                # Check nested original domain guards before any index input;
+                # Fortran .AND. cannot establish short-circuit evaluation.
+                prepare += ["if (fort_can) then"]
+                prepare += [f"if ({guard}) then" for guard in capture.activation_guards]
+                prepare += [f"fort_can = {capture.index_guard}"]
+                prepare += ["endif"] * (len(capture.activation_guards) + 1)
         prepare += ["if (.not. fort_can) then", *self.close(), "exit " + block, "endif"]
         from compiler.scopes.segments import Segment
         if builder.config.policy == "auto" and unit.definition_summary.changes:
@@ -663,6 +711,8 @@ class LexicalOwner:
         native_condition = f".not. {self.enabled}"
         if metadata_native is not None:
             native_condition += " .or. " + metadata_native
+        if element_active is not None:
+            native_condition += " .or. .not. " + element_active
         lines = [f"if ({self.enabled}) then", f"associate(fort_context => {self.context})", block + ": block",
                  *dict.fromkeys(imports), *spec, *prepare, *execution, "end block " + block, "end associate", "endif",
                  f"if ({native_condition}) then", *original.splitlines(), "endif"]
@@ -671,6 +721,9 @@ class LexicalOwner:
             # Existing contexts never take this shortcut: their coherent CPU
             # continuation still publishes the sections it actually needs.
             lines = ["block", "logical :: " + metadata_native, metadata_native + " = .false.",
+                     *lines, "end block"]
+        if element_active is not None:
+            lines = ["block", "logical :: " + element_active, element_active + " = .false.",
                      *lines, "end block"]
         if unit.source_guard is not None:
             # Evaluate the original predicate once, before descriptor guards
@@ -694,6 +747,12 @@ class LexicalOwner:
         if builder.config.policy == "auto" and any(operation.host_only_reads
                 for member in self.members.values() for unit in member.units for operation in unit.scope.native):
             native_reason = "host-only native range preparation lacks compatible offline cost estimates"
+        if builder.config.policy == "auto" and any(operation.native_environment
+                for member in self.members.values() for unit in member.units for operation in unit.scope.native):
+            native_reason = "original IEEE environment coordination lacks compatible offline cost estimates"
+        if builder.config.policy == "auto" and any(call.region is not None and call.region.scalar_element_captures
+                for member in self.members.values() for unit in member.units for call in unit.scope.calls):
+            native_reason = "immutable element preparation lacks compatible offline cost estimates"
         if builder.config.policy == "auto" and any(
                 getattr(operation, "indirect_sections", None) is not None
                 for member in self.members.values() for unit in member.units for operation in unit.scope.native):
@@ -780,6 +839,8 @@ class LexicalOwner:
                 if unit.compute_identity is not None and not unit.compute_identity["available"]), None),
             "ownership": {"lifetime": "one original invocation", "planning_mode": "continuation",
                           "retained_resources": list(self.resources), "end_reason": "reached boundary or original invocation end"},
+            "counted_controls": [{"procedure": member.routine.qualified, **control}
+                                 for member in self.members.values() for control in member.counted_controls],
             "resource_bindings": {"schema_version": 1,
                 "identity": "invocation-local canonical registration; matches runtime buffer trace identity",
                 "resources": [{"resource": root, "registration_identity": number,

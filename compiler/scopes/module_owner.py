@@ -17,11 +17,12 @@ from compiler.scopes.source import _call, _name, _span
 
 
 class ModuleOwner(LexicalOwner):
-    def __init__(self, parent, routine, mappings):
+    def __init__(self, parent, routine, mappings, immutable_inputs=None):
         from compiler.scopes.region_dispatch import InlineRegions
 
         proxy = copy(parent.builder)
         proxy.entry = routine
+        proxy.immutable_inputs = dict(immutable_inputs or {})
         proxy.inline = InlineRegions(proxy)
         super().__init__(proxy, parent=parent)
         if any("save" in binding.attributes for binding in routine.scope.bindings.values()):
@@ -49,7 +50,7 @@ class ModuleOwner(LexicalOwner):
         # OUT events also matter for formals unused by admitted numerical work.
         for name in routine.arguments:
             binding = routine.scope.bindings[name]
-            if binding.rank:
+            if binding.rank and binding.root not in proxy.immutable_inputs:
                 self.add_resource(binding)
         self.owner.builder.region_owners[routine.qualified] = proxy.inline
         self.nodes = proxy.inline.prepare(_children(routine.execution))
@@ -110,6 +111,7 @@ class ModuleOwner(LexicalOwner):
                 "native_abi": "original entry; compiler-control arguments are never referenced",
                 "storage": "one original body and declarations; no persistent-state copy",
                 "resource_mappings": {root: binding.root for root, binding in self.canonical_bindings.items()},
+                "immutable_array_inputs": [item.public() for item in self.builder.immutable_inputs.values()],
                 "calls": self.call_sites, "boundaries": self.boundaries,
                 "optional_scalar_formals": [name for name in self.routine.arguments
                     if optional_scalar_input(self.routine.scope.bindings[name])],
@@ -129,7 +131,10 @@ def borrow_module(parent, node):
     routine = parent.builder.analysis.routines[resolved.procedure]
     if routine.source_kind != "module":
         return False
-    parent.builder.check_whole_view_formals(routine)
+    from compiler.scopes.immutable_inputs import immutable_call_inputs
+    immutable_inputs = immutable_call_inputs(parent.builder.analysis, parent.routine, node, resolved,
+                                             getattr(parent.builder, "immutable_inputs", {}))
+    parent.builder.check_whole_view_formals(routine, immutable_inputs=immutable_inputs)
     owner = parent.owner
     if routine.qualified in owner.active or len(owner.active) >= parent.builder.analysis.depth_limit:
         raise CompilationError("recursive or over-depth original module companion")
@@ -158,7 +163,9 @@ def borrow_module(parent, node):
     existing = owner.members.get(routine.qualified)
     if existing is not None and (not isinstance(existing, ModuleOwner)
             or {root: binding.root for root, binding in existing.canonical_bindings.items()}
-            != {root: binding.root for root, binding in mappings.items()}):
+            != {root: binding.root for root, binding in mappings.items()}
+            or {root: item.actual.root for root, item in existing.builder.immutable_inputs.items()}
+            != {root: item.actual.root for root, item in immutable_inputs.items()}):
         raise CompilationError("original module companion requires one canonical mapping per owning invocation")
     if existing is None:
         if len(owner.members) >= parent.builder.analysis.procedure_limit:
@@ -167,12 +174,14 @@ def borrow_module(parent, node):
         members, resources = dict(owner.members), dict(owner.resources)
         owner.active.append(routine.qualified)
         try:
-            existing = ModuleOwner(parent, routine, mappings)
+            existing = ModuleOwner(parent, routine, mappings, immutable_inputs)
             owner.members[routine.qualified] = existing
         except CompilationError:
             owner.builder.restore_scope_checkpoint(checkpoint)
-            owner.members.clear(); owner.members.update(members)
-            owner.resources.clear(); owner.resources.update(resources)
+            owner.members.clear()
+            owner.members.update(members)
+            owner.resources.clear()
+            owner.resources.update(resources)
             parent.refresh()
             raise
         finally:
@@ -199,7 +208,8 @@ def borrow_module(parent, node):
     # A CONTIGUOUS callee dummy can conceal a caller-created temporary. Check
     # actual storage before that association exists, otherwise a retained
     # handle might outlive temporary copyback at the original call return.
-    arrays = [mapping for mapping in resolved.mappings if mapping.formal_binding.rank]
+    arrays = [mapping for mapping in resolved.mappings if mapping.formal_binding.rank
+              and mapping.formal_binding.root not in immutable_inputs]
     preflight = []
     if arrays:
         preflight = ["block", "logical :: fort_actuals_contiguous", "fort_actuals_contiguous = .true."]

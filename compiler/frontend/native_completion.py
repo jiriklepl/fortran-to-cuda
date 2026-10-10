@@ -13,7 +13,7 @@ from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.integers import INTEGER_MAX, INTEGER_MIN, integer_literal
 
-NATIVE_COMPLETION_VERSION = 5
+NATIVE_COMPLETION_VERSION = 6
 
 
 def _kind(node):
@@ -74,6 +74,7 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                        if any(_kind(node) != "Comment" for node in graph.source_nodes(identity)))
     private, explicit_private, written, peeled, uniform_reads = set(), set(), set(), {}, {}
     section_count = 0
+    environment = {}
 
     def content(node):
         return peeled.get(id(node), _children(node))
@@ -128,8 +129,17 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                     private.add(binding.root)
             elif _kind(node) == "Call_Stmt":
                 if call_completion is None:
-                    raise CompilationError("joined native call completion requires a separate complete source-call proof")
-                written.update(call_completion(node))
+                    try:
+                        proof = analysis.native_environment(procedure, node)
+                    except CompilationError as error:
+                        raise CompilationError("joined native call completion requires a separate complete source-call proof: "
+                                               + str(error)) from error
+                    if worksharing is not None:
+                        raise CompilationError("native IEEE environment operations require whole original joined-team authority; worksharing cuts are unsupported")
+                    environment[id(node)] = proof
+                    written.update(proof.written_roots)
+                else:
+                    written.update(call_completion(node))
 
     def local_private(binding):
         if (binding.attributes & {"save", "pointer", "allocatable", "optional", "volatile", "asynchronous", "parameter"}
@@ -137,6 +147,9 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                 or binding.dtype not in {"real", "integer", "logical"} or binding.kind not in {4, 8}):
             raise CompilationError("native PRIVATE requires original fixed numeric local storage")
         if binding.rank:
+            if any(binding.root in proof.state_roots for proof in environment.values()):
+                analysis.native_environment_state(procedure, binding).validate(analysis, procedure, binding)
+                return
             total = 1
             for axis in binding.shape_nodes:
                 if _kind(axis) != "Explicit_Shape_Spec":
@@ -379,6 +392,9 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                 index += 1
                 continue
             if directive is None:
+                if _kind(node) == "Call_Stmt" and id(node) in environment:
+                    index += 1
+                    continue
                 if _kind(node) != "Comment":
                     raise CompilationError("native PARALLEL body requires bounded worksharing DO loops")
                 index += 1
@@ -446,6 +462,11 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                       original_section_count=section_count, native_only=True,
                       internal_cuts_authorized=False, section_independence_established=False,
                       gpu_legality_established=False)
+    if environment:
+        record.update(native_environment_contract="original-ieee-halting-mode-v1",
+                      native_environment_operations=[proof.public() for proof in environment.values()],
+                      native_only=True, internal_cuts_authorized=False,
+                      requires_completed_device_work=True, gpu_legality_established=False)
     return graph, identities, executable, tuple(sorted(private)), record
 
 

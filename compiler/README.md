@@ -1070,6 +1070,30 @@ Copied or fabricated syntax cannot establish this authority; source text,
 configuration, contract, capture, descriptor and original span changes invalidate
 the corresponding proof. The graph itself does not grant GPU eligibility.
 
+Reached serial owners also traverse original counted coordinator loops when
+their headers have complete scalar/descriptor-only effects. Headers and exits
+remain in the original body. Each reached child retains the existing analysis
+and generation limits; a coordinator shell is not charged as one eagerly
+expanded numerical candidate. The owner spans one invocation, without resetting
+handles, assuming fresh host values, or reopening at a backedge. A reached
+unsupported operation publishes and disables it before the original continuation
+runs once. Private values consumed by a later iteration remain native, including
+paths where `CYCLE` bypasses a subsequent definition. This is not cross-timestep
+ownership or proof of independent iterations.
+
+Authenticated intrinsic `IEEE_GET_HALTING_MODE`/`IEEE_SET_HALTING_MODE` calls
+can remain original native operations inside reached ownership. Complete joined
+teams retain every original call, caller and join. Unsaved local default
+`LOGICAL` storage used exclusively by these calls remains in its original owner,
+with its original representation and shared/private arrangement. It is not a
+managed buffer or numerical input. Device completion precedes an environment
+operation without publishing unrelated arrays. Effects retain ordered environment
+reads/writes and typed native-state accesses; unknown exports, escapes, other
+state uses and unproved completion remain boundaries. This grants no GPU IEEE
+legality, worksharing cuts or new per-thread saved-state semantics. AUTO retains
+native execution until this coordination is priced. Source summaries use
+version 14 and original native completion proofs use version 6.
+
 Reached manifests use `SourceEffects.report(entry, materialize=False)` for native
 effect diagnostics. Report schema 2 publishes the authenticated local skeleton,
 already materialized complete source-leaf and reached-segment proofs, and observed
@@ -1639,6 +1663,19 @@ end module example
   lexical constants, original bounds and dependencies, without registering them
   as mutable captures or private arrays. Private `INTENT(OUT)`
   outputs require complete ordered definitions on every reached helper path.
+
+An original rank-one numeric `PARAMETER` can also be forwarded unchanged to a
+required fixed-shape `INTENT(IN)` module companion. This association keeps the
+original argument and native ABI; it adds no `TARGET`, temporary, address or
+device registration for the coefficient array. A serial reached perfect loop
+nest may capture an invariant element as a separate typed scalar operand.
+Ordered nonempty checks precede queries and operand preparation, and the value
+is read from the original formal only after its original guards and a valid
+index check. Empty nests execute their original source without querying or
+reading dormant inner controls. Joined worksharing, uncertain indices or
+activation, and unsupported associations stay native. Original array read
+effects remain public, with an explicit projection for managed coherence.
+Automatic placement remains unavailable until this preparation is calibrated.
 
 An immutable scalar `PARAMETER` whose initializer is outside the outlined
 constant language can supply its original Fortran value as a read-only scalar

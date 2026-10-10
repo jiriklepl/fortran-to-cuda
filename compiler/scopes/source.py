@@ -155,7 +155,7 @@ class ScopeBuilder:
         return {item["resource"] for item in self.analysis.descriptor_stability(procedure)["resources"]
                 if item["stable"] and item["original_descriptor_required"]}
 
-    def check_whole_view_formals(self, callee):
+    def check_whole_view_formals(self, callee, *, immutable_inputs=None):
         """Whole-root hooks require a complete, unreduced assumed-shape view."""
         for declaration in _children(_part(callee.scope.node, "Specification_Part")):
             if _kind(declaration) != "Type_Declaration_Stmt":
@@ -169,6 +169,13 @@ class ScopeBuilder:
                     continue
                 shape = entity.items[1] if entity.items[1] is not None else dimension
                 binding = callee.scope.bindings[name]
+                if immutable_inputs and binding.root in immutable_inputs:
+                    from compiler.scopes.immutable_inputs import ImmutableArrayInput
+                    proof = immutable_inputs[binding.root]
+                    if not isinstance(proof, ImmutableArrayInput) or proof.formal is not binding:
+                        raise CompilationError("explicit immutable formal requires its original association proof")
+                    proof.validate(self.analysis, callee)
+                    continue
                 permitted = {"Assumed_Shape_Spec"}
                 if ("allocatable" in binding.attributes
                         and binding.root in self.stable_descriptors(callee.qualified)):

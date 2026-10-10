@@ -23,6 +23,7 @@ class InlineRegions:
         self.regions, self.nodes, self.generated, self.ir, self.entries = {}, {}, {}, {}, {}
         self.used = set()
         self.bindings = {}
+        self.element_operands = {}
         self.definition_proofs = {}
         self.collective_regions = set()
         self.computations = {}
@@ -130,7 +131,7 @@ class InlineRegions:
 
             spans = [prepared_span(node) for node in sources]
             first, last = min(span[0] for span in spans), max(span[1] for span in spans)
-            before, after = [], []
+            before, after, cyclic = [], [], []
 
             def visit(node):
                 try:
@@ -141,12 +142,24 @@ class InlineRegions:
                     before.append(node)
                 elif low > last:
                     after.append(node)
-                elif _kind(node) == "If_Construct":
+                elif _kind(node) in {"If_Construct", "Block_Nonlabel_Do_Construct"}:
                     for child in node.content:
                         visit(child)
+                    if _kind(node) == "Block_Nonlabel_Do_Construct":
+                        # Prefix reads can also consume this iteration's
+                        # private values on the next backedge. The original
+                        # counted header itself evaluates only once.
+                        for child in node.content:
+                            low, high = prepared_span(child)
+                            if high < first and _kind(child) not in {"Nonlabel_Do_Stmt", "Comment"}:
+                                cyclic.append(child)
             for node in original:
                 visit(node)
-            return tuple(before), tuple(after)
+            # Check next-iteration reads before suffix definitions. EXIT/CYCLE
+            # or RETURN can bypass that suffix, so its assignments cannot kill
+            # a private value's cyclic liveness. This is conservative even for
+            # suffixes that always execute.
+            return tuple(before), (*cyclic, *after)
 
         def prepare_sequence(sequence, depth=0):
             result = []
@@ -183,6 +196,25 @@ class InlineRegions:
                 if not array_operation and not any(_kind(item) == "Block_Nonlabel_Do_Construct" for item in group):
                     result.extend(group)
                     continue
+                if len(group) == 1 and _kind(node) == "Block_Nonlabel_Do_Construct" and depth < 8:
+                    from compiler.scopes.counted_loops import has_coordinator_call, reached_counted_body
+                    if has_coordinator_call(self.builder, node):
+                        try:
+                            body = reached_counted_body(self.builder, node)
+                        except CompilationError:
+                            pass
+                        else:
+                            # A host coordinator is not an eagerly expanded
+                            # numerical candidate. Charge its reached children
+                            # individually under the unchanged shared budget.
+                            clone = copy.copy(node)
+                            start = next(index for index, child in enumerate(node.content)
+                                         if _kind(child) == "Nonlabel_Do_Stmt")
+                            clone.content = [*node.content[:start+1], *prepare_sequence(body.nodes, depth+1),
+                                             node.content[-1]]
+                            register_projection(clone, sources)
+                            result.append(clone)
+                            continue
                 first, last = statement_span(group[0])[0], statement_span(group[-1])[1]
                 before, after = context(sources)
                 try:
@@ -194,14 +226,30 @@ class InlineRegions:
                     else:
                         extraction = extract_region(self.builder.analysis, self.builder.entry,
                                                     sources if len(sources) > 1 else sources[0],
-                                                    preceding=before, following=after)
+                                                    preceding=before, following=after,
+                                                    immutable_inputs=getattr(self.builder, "immutable_inputs", {}))
                     result.append(self._outline(extraction, sources, collective=self.builder.config.collective))
                 except CompilationError as error:
                     self.builder.boundaries.append({"first_line": first, "last_line": last,
                                                     "reason": "inline numerical boundary: " + str(error),
                                                     "kind": "candidate_rejection",
                                                     "phase": "inline_numerical_extraction"})
-                    result.extend(group)
+                    if len(group) == 1 and _kind(node) == "Block_Nonlabel_Do_Construct" and depth < 8:
+                        try:
+                            from compiler.scopes.counted_loops import reached_counted_body
+                            body = reached_counted_body(self.builder, node)
+                        except CompilationError:
+                            result.extend(group)
+                        else:
+                            clone = copy.copy(node)
+                            start = next(index for index, child in enumerate(node.content)
+                                         if _kind(child) == "Nonlabel_Do_Stmt")
+                            clone.content = [*node.content[:start+1], *prepare_sequence(body.nodes, depth+1),
+                                             node.content[-1]]
+                            register_projection(clone, sources)
+                            result.append(clone)
+                    else:
+                        result.extend(group)
             return tuple(result)
 
         return prepare_sequence(original)
@@ -224,11 +272,14 @@ class InlineRegions:
         """
         sources = self.original_selection(loop)
         extraction = extract_region(self.builder.analysis, self.builder.entry, loop,
-                                    preceding=preceding, following=following, worksharing=proof)
+                                    preceding=preceding, following=following, worksharing=proof,
+                                    immutable_inputs=getattr(self.builder, "immutable_inputs", {}))
         return self._outline(extraction, sources, collective=True, reservation=sources)
 
     def _outline(self, extraction, sources, *, collective, reservation=None):
         """Lower an authenticated extraction and register its private facade."""
+        if collective and extraction.scalar_element_captures:
+            raise CompilationError("immutable element preparation requires a serial reached preflight; collective execution remains native")
         for binding in extraction.bindings:
             if binding.rank:
                 self.builder.capture(binding)
@@ -275,6 +326,9 @@ class InlineRegions:
         generated = generate_sources(function, plan, offload_config=config, memory_model="scoped")
         if generated.scoped is None:
             raise CompilationError("inline numerical candidate has no shared numerical entry")
+        if any(item.name in generated.scoped["planning"]["scalar_inputs"]
+               for item in extraction.scalar_element_captures):
+            raise CompilationError("immutable element values cannot affect numerical query metadata")
         procedure = self.builder.entry.qualified + "#region" + str(len(self.regions) + 1)
         # The generated artifact includes its original native counterfactual.
         # Identical arithmetic cannot share that artifact across serial,
@@ -288,6 +342,7 @@ class InlineRegions:
         if collective:
             self.collective_regions.add(procedure)
         self.bindings.update((binding.root, binding) for binding in extraction.bindings)
+        self.element_operands.update((item.resource, item) for item in extraction.scalar_element_captures)
         facade = F.Call_Stmt("call " + self.name + "()")
         facade.item = SimpleNamespace(span=extraction.span, fort_original_span=extraction.span, label=None, name=None)
         facade.fort_inline_region = procedure
@@ -345,7 +400,8 @@ class InlineRegions:
         procedure = node.fort_inline_region
         region = self.regions[procedure]
         bindings = {"argument::" + parameter.name: self.bindings[parameter.resource]
-                    for parameter in region.parameters if parameter.lower_bound_dimension is None}
+                    for parameter in region.parameters if parameter.lower_bound_dimension is None
+                    and parameter.resource not in self.element_operands}
         return Call(node, procedure, tuple(F.Name(binding.name) for binding in bindings.values()), bindings,
                     {"complete": True, "summary_identity": region.source_identity}, region=region)
 
@@ -404,6 +460,8 @@ class InlineRegions:
         return set(self.definition_proofs[call.procedure])
 
     def inputs(self, procedure, mapping, *, estimates):
+        if estimates and self.regions[procedure].scalar_element_captures:
+            raise CompilationError("immutable element preparation is uncalibrated")
         public = self.generated[procedure].scoped
         planning = public["planning"]
         if estimates and (not planning["available"] or not planning["profile_available"]):
@@ -427,6 +485,8 @@ class InlineRegions:
     def parameters(self):
         arrays = {root: "fort_buffer_" + str(index) for index, root in enumerate(self.arrays)}
         scalars = {root: "fort_scalar_" + str(index) for index, root in enumerate(self.scalars)}
+        scalars.update((root, "fort_element_" + str(index))
+                       for index, root in enumerate(sorted(self.element_operands)))
         lowers = {(root, axis): "fort_lower_" + str(index) + "_" + str(axis)
                   for index, (root, binding) in enumerate(self.arrays.items()) for axis in range(1, binding.rank + 1)}
         return arrays, scalars, lowers
@@ -458,9 +518,30 @@ class InlineRegions:
         arguments += [(values[root] if root in values else self.builder.visible(self.builder.entry, root))
                       if root in active else zero[DTYPES[binding.signature()[:2]][0]]
                       for root, binding in self.scalars.items()]
+        captured = {item.resource: item for item in region.scalar_element_captures}
+        arguments += [(captured[root].name if not query and root in captured else
+                       zero[DTYPES[(item.dtype, item.kind)][0]])
+                      for root, item in sorted(self.element_operands.items())]
         arguments += [f"int(lbound({values[root]},{axis},kind=c_int64_t),c_int)" if root in active else "0_c_int"
                       for root, binding in self.arrays.items() for axis in range(1, binding.rank + 1)]
         lines = _fortran_list(status + " = " + alias + "(", arguments, ")", 0)
+        if not query and captured:
+            # Operand preparation is reached work, never part of a future
+            # query. Nested IFs preserve dormant inner bounds and indices;
+            # Fortran logical expressions do not promise short-circuiting.
+            prefix = ["block"]
+            for item in captured.values():
+                dtype = DTYPES[(item.dtype, item.kind)][0]
+                prefix += [f"{dtype} :: {item.name}"]
+            prefix += [f"{status} = FORT_SCOPE_OK"]
+            for item in captured.values():
+                dtype = DTYPES[(item.dtype, item.kind)][0]
+                prefix += [f"{item.name} = {zero[dtype]}", f"if ({status} == FORT_SCOPE_OK) then"]
+                prefix += [f"if ({guard}) then" for guard in item.activation_guards]
+                prefix += [f"if ({item.index_guard}) then", f"{item.name} = {item.expression}", "else",
+                           f"{status} = FORT_SCOPE_BOUNDARY", "endif"]
+                prefix += ["endif"] * (len(item.activation_guards) + 1)
+            lines = [*prefix, f"if ({status} == FORT_SCOPE_OK) then", *lines, "endif", "end block"]
         if not query and check_status:
             lines += [f"if ({status} /= FORT_SCOPE_OK) error stop 'inline numerical region failed'"]
         return lines
@@ -500,6 +581,9 @@ class InlineRegions:
             self.builder.outputs["regions/" + region.source_identity[:16] + ".source"] = region.source
         lines = ["module " + self.name, "use iso_c_binding", "use fort_scoped_memory", *dict.fromkeys(imports),
                  "implicit none", "private", "public :: run, query" + (", run_team" if cases["run_team"] else ""), "contains"]
+        scalar_types = {root: DTYPES[(self.element_operands[root].dtype, self.element_operands[root].kind)
+                                    if root in self.element_operands else self.scalars[root].signature()[:2]][0]
+                        for root in scalars}
         for name in ("query", "run", *(("run_team",) if cases["run_team"] else ())):
             query = name == "query"
             parameters = ["context", *([] if query else ["mode"]), "region", *arrays.values(), *scalars.values(), *lowers.values()]
@@ -507,7 +591,8 @@ class InlineRegions:
             lines += ["integer(c_int64_t), intent(in) :: context", "integer(c_int), intent(in) :: region",
                       *([] if query else ["integer(c_int), intent(in) :: mode"]), "integer(c_int) :: status"]
             lines += [f"integer(c_int64_t), intent(in) :: {name}" for name in arrays.values()]
-            lines += [f"{DTYPES[self.scalars[root].signature()[:2]][0]}, intent(in) :: {name}" for root, name in scalars.items()]
+            lines += [f"{scalar_types[root]}, intent(in) :: {name}"
+                      for root, name in scalars.items()]
             lines += [f"integer(c_int), intent(in) :: {name}" for name in lowers.values()]
             lines += ["select case (region)", *cases[name], "case default", "status = FORT_SCOPE_BOUNDARY",
                       "end select", "end function " + name]

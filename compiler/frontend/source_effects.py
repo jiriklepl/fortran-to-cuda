@@ -26,7 +26,7 @@ from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
 # Bump when source-effect, call-composition or summary semantics change.
-SOURCE_SUMMARY_VERSION = 13
+SOURCE_SUMMARY_VERSION = 14
 _DEFAULT_SUMMARY_CACHE = SummaryCache()
 
 
@@ -284,6 +284,7 @@ class Scope:
     procedures: dict[str, str] = field(default_factory=dict)
     intrinsic_procedures: dict[str, str] = field(default_factory=dict)
     intrinsic_wildcards: set[str] = field(default_factory=set)
+    intrinsic_exclusions: dict[str, set[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -315,6 +316,7 @@ class SourceEffects:
         self._native_sections = {}
         self._structures, self._segments, self._descriptor_proofs = {}, {}, {}
         self._joined_completions = {}
+        self._native_environments, self._native_environment_states = {}, {}
         self._numerical_completions = {}
         self._worksharing_completions = {}
         self._worksharing_native_completions = {}
@@ -485,6 +487,8 @@ class SourceEffects:
                            "lexical_procedures": dict(routine.scope.procedures),
                            "intrinsic_procedures": dict(routine.scope.intrinsic_procedures),
                            "intrinsic_wildcards": sorted(routine.scope.intrinsic_wildcards),
+                           "intrinsic_exclusions": {module: sorted(names) for module, names in
+                                                    routine.scope.intrinsic_exclusions.items()},
                            "imports": routine.scope.imports,
                            "wildcard_exclusions": {module: sorted(names) for module, names in
                                                    routine.scope.wildcard_exclusions.items()},
@@ -586,7 +590,10 @@ class SourceEffects:
                 if name in selected:
                     return True
                 summary = closure.summaries.get(name)
-                if summary is None or not summary["complete"]:
+                if (summary is None or not summary["complete"]
+                        or any(operation["kind"] == "native_environment" for operation in summary["operations"])):
+                    # Registered native-state/environment authority is rebuilt
+                    # from original calls; serialized summaries never issue it.
                     return False
                 selected[name] = summary
                 return all(visit(op["procedure"]) for op in summary["operations"] if op["kind"] == "call")
@@ -690,13 +697,28 @@ class SourceEffects:
                     # Standard intrinsic modules do not export mutable user
                     # storage which could shadow a host capture. Their calls
                     # still require explicit numerical/effect support below.
-                    if symbols is None or str(only).upper().replace(" ", "") != ",ONLY:":
-                        scope.intrinsic_wildcards.add(module)
+                    unrestricted = symbols is None or str(only).upper().replace(" ", "") != ",ONLY:"
+                    renamed = set()
                     if symbols is not None:
                         for item in symbols.items:
                             local, remote = ((str(item.items[1]).lower(), str(item.items[2]).lower())
                                              if _kind(item) == "Rename" else (str(item).lower(), str(item).lower()))
-                            scope.intrinsic_procedures[local] = "$intrinsic::" + module + "::" + remote
+                            if _kind(item) == "Rename":
+                                renamed.add(remote)
+                            identity = "$intrinsic::" + module + "::" + remote
+                            previous = scope.intrinsic_procedures.get(local)
+                            if previous is not None and previous != identity:
+                                from compiler.frontend.native_environment import canonical_intrinsic_export
+                                if (canonical_intrinsic_export(previous) is None
+                                        or canonical_intrinsic_export(previous) != canonical_intrinsic_export(identity)):
+                                    scope.ambiguous_imports.add(local)
+                            scope.intrinsic_procedures[local] = identity
+                    if unrestricted:
+                        scope.intrinsic_wildcards.add(module)
+                        if module in scope.intrinsic_exclusions:
+                            scope.intrinsic_exclusions[module].intersection_update(renamed)
+                        else:
+                            scope.intrinsic_exclusions[module] = renamed
                     continue
                 if module in _KindScope.intrinsic_kinds and str(nature).lower() != "non_intrinsic":
                     continue
@@ -1198,6 +1220,12 @@ class SourceEffects:
             scope = self.source_scope_for(node, routine.scope)
             if name == "Name":
                 binding = self._binding(scope, node)
+                if binding is None and metadata:
+                    from compiler.frontend.native_environment import intrinsic_export
+                    if intrinsic_export(self, scope, node) == "$intrinsic::ieee_exceptions::ieee_all":
+                        # The original intrinsic constant supplies its shape;
+                        # neither its value nor an assumed extent is evaluated.
+                        return
                 effect(binding, "descriptor_read" if metadata else "read", guard, str(node))
             elif name == "Part_Ref":
                 base, indices = node.items
@@ -1245,6 +1273,20 @@ class SourceEffects:
                 return
             actuals = tuple(_children(actuals))
             candidates = self._candidates(scope, target)
+            from compiler.frontend.native_environment import intrinsic_export
+            intrinsic = intrinsic_export(self, scope, target)
+            if intrinsic in {"$intrinsic::ieee_exceptions::ieee_get_halting_mode",
+                             "$intrinsic::ieee_exceptions::ieee_set_halting_mode"}:
+                try:
+                    proof = self.native_environment(requested, node)
+                except CompilationError as error:
+                    reasons.append(str(error))
+                    emit({"kind": "boundary", "call": str(node), "guard": guard, "reason": reasons[-1]})
+                    return
+                emit({"kind": "native_environment", "intrinsic": intrinsic, "proof_identity": proof.identity,
+                      "proof": proof.public(), "effects": proof.public()["effects"], "guard": guard,
+                      "source_access": str(node)})
+                return
             if any(candidate in self.routines for candidate in candidates):
                 try:
                     resolved = resolve_source_call(self, scope, node)
@@ -1495,7 +1537,9 @@ class SourceEffects:
                       if _kind(node) == "Comment" and str(node).lstrip().lower().startswith("!$omp")]
         summary["openmp_directives"] = directives
         summary["native_completion"] = self._native_completion(routine, summary, _closure)
-        summary["cloneable"] = routine.source_kind == "module" and summary["complete"] and not persistent and not directives
+        summary["cloneable"] = (routine.source_kind == "module" and summary["complete"] and not persistent
+                                and not directives and not any(effect["kind"] in {"environment_read", "environment_write"}
+                                                              for effect in summary["ordered_effects"]))
         sections = self.native_sections(requested)
         summary["native_sections"] = sections.public()
         summary["section_precision"] = ("typed bounded native rectangles; checked physical mapping required"
@@ -1569,6 +1613,12 @@ class SourceEffects:
                         "contract_identity": operation["identity"], "contract_sha256": operation["contract_sha256"],
                         "view_chain": [], "guard_frames": frame(operation),
                         "coverage": "whole_contracted_resource"}):
+                        return result
+            elif operation["kind"] == "native_environment":
+                for effect in operation["effects"]:
+                    if not append({**deepcopy(effect), "source_procedure": summary["procedure"],
+                                   "native_environment_identity": operation["proof_identity"],
+                                   "view_chain": [], "guard_frames": frame(operation)}):
                         return result
             elif operation["kind"] in {"read", "write", "overwrite", "descriptor_read"}:
                 if not append({**deepcopy(operation), "source_procedure": summary["procedure"],
@@ -1941,6 +1991,16 @@ class SourceEffects:
                 self._joined_completions.pop(next(iter(self._joined_completions)))
             self._joined_completions[proof.identity] = proof
         return self._joined_completions[proof.identity]
+
+    def native_environment(self, requested, original_call):
+        """Authenticate an unchanged native IEEE environment operation."""
+        from compiler.frontend.native_environment import prove_native_environment
+        return prove_native_environment(self, requested, original_call)
+
+    def native_environment_state(self, requested, binding):
+        """Prove invocation-local LOGICAL storage remains exclusively native."""
+        from compiler.frontend.native_environment import prove_native_state
+        return prove_native_state(self, requested, binding)
 
     def numerical_joined_completion(self, requested, selected):
         """Prove source-helper completion for numerical outlining only.

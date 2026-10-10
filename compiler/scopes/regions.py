@@ -46,6 +46,8 @@ class RegionExtraction:
     numerical_environment_required: bool = False
     immutable_constants: tuple[str, ...] = ()
     immutable_scalar_captures: tuple[str, ...] = ()
+    scalar_element_captures: tuple = ()
+    immutable_array_reads: tuple[str, ...] = ()
 
     @property
     def requires_numerical_environment(self):
@@ -75,6 +77,11 @@ class RegionExtraction:
                 "private_arrays": list(self.private_arrays),
                 "immutable_constants": list(self.immutable_constants),
                 "immutable_scalar_captures": list(self.immutable_scalar_captures),
+                "scalar_element_captures": [item.public() for item in self.scalar_element_captures],
+                "immutable_array_reads": list(self.immutable_array_reads),
+                "managed_projection": {"excluded_immutable_array_reads": list(self.immutable_array_reads),
+                    "proof_identities": sorted({item.association_identity for item in self.scalar_element_captures}),
+                    "original_effects": "unchanged original source summary; excluded reads use original immutable Fortran storage"},
                 "numerical_environment": ({"required": True, "rounding": "round to nearest",
                                             "exceptions": "host traps disabled", "check": "at the original reached region",
                                             "fallback": "unchanged original native span"} if self.requires_numerical_environment else {"required": False}),
@@ -608,7 +615,7 @@ def allocation_guard(analysis, routine, binding, preceding):
             "lifetime": "reached bounded region; allocation changes and unknown effects end ownership"}
 
 
-def extract_region(analysis, routine, node, *, preceding=(), following=(), worksharing=None):
+def extract_region(analysis, routine, node, *, preceding=(), following=(), worksharing=None, immutable_inputs=None):
     """Construct a bounded loop candidate with its original participation proof."""
     analysis.inputs.verify()
     role = analysis._source_roles.get(routine.qualified)
@@ -867,11 +874,43 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
     private = {root: used[root] for root in scalar_writes | local_arrays}
     occupied = {binding.name for binding in used.values()}
     occupied.update(name for helper in helpers.values() for name in helper.scope.bindings)
+    from compiler.scopes.immutable_inputs import scalar_element_captures
+    immutable_inputs = immutable_inputs or {}
+    elements = scalar_element_captures(analysis, routine, loops, immutable_inputs, occupied)
+    if elements and joined:
+        raise CompilationError("immutable element preparation requires a serial reached preflight; joined worksharing remains native")
+    immutable_reads = {item.formal_resource for item in elements}
+    if immutable_reads & writes:
+        raise CompilationError("immutable input cannot acquire numerical writes")
+    element_references = {id(reference): item for item in elements for reference in item.original_references}
+    if helpers and any(binding.root in immutable_inputs
+                       for helper in helpers.values() for binding, _ in references(analysis, helper.scope, helper.execution)):
+        raise CompilationError("immutable helper payload requires an original reached argument evaluation proof")
     from compiler.scopes.constant_parameters import outline_constants
     constants = outline_constants(analysis, routine, used.values(), occupied, _fixed_shape)
     captures = {root: binding for root, binding in used.items()
-                if root not in private and "parameter" not in binding.attributes}
+                if root not in private and root not in immutable_reads and "parameter" not in binding.attributes}
     captures.update((binding.root, binding) for binding in constants.scalar_captures)
+    if elements:
+        remaining = set()
+
+        def remaining_reads(value, owner):
+            if isinstance(value, (tuple, list)):
+                for child in value:
+                    remaining_reads(child, owner)
+                return
+            if id(value) in element_references:
+                return
+            if _kind(value) == "Name":
+                binding = analysis._binding(owner.scope, value)
+                if binding is not None:
+                    remaining.add(binding.root)
+            for child in _children(value):
+                remaining_reads(child, owner)
+
+        for owner, body in bodies:
+            remaining_reads(body, owner)
+        captures = {root: binding for root, binding in captures.items() if root in remaining}
     if worksharing is not None and set(captures) & set(worksharing.private_roots):
         raise CompilationError('inline worksharing cannot borrow a thread-private input value')
     guards = []
@@ -948,6 +987,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
         if not isinstance(value, Base):
             return value
         kind = _kind(value)
+        if id(value) in element_references:
+            return F.Name(element_references[id(value)].name)
         if kind == "Assignment_Stmt" and owner is routine:
             target = value.items[0]
             base = target.items[0] if _kind(target) == "Part_Ref" else target
@@ -1069,7 +1110,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
                                   for qualified, helper in sorted(helpers.items()))
     identity = sha256((analysis.sources[str(routine.scope.path)] + "\0" + routine.qualified + "\0" +
                        str(span) + "\0" + "\n".join(map(str, nodes)) + "\0" + helper_identity
-                       + ("\0" + constants.identity if constants.identity else "")).encode()).hexdigest()
+                       + ("\0" + constants.identity if constants.identity else "")
+                       + ("\0" + "\0".join(item.identity for item in elements) if elements else "")).encode()).hexdigest()
     module, procedure = "fort_inline_" + identity[:12], "region"
     parameters, declarations = [], list(constants.declarations)
 
@@ -1091,6 +1133,10 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
                 lower = lowers[name, axis]
                 parameters.append(Parameter(lower, binding.root, 0, axis, True))
                 declarations.append(f"integer, intent(in) :: {lower}")
+    for item in elements:
+        parameters.append(Parameter(item.name, item.resource, 0))
+        dtype = "integer" if item.dtype == "integer" else f"real({item.kind})"
+        declarations.append(f"{dtype}, intent(in) :: {item.name}")
     declarations += [f"{numerical_type(binding)} :: {binding.name}" +
                      ("(" + ",".join(_fixed_shape(routine, binding)) + ")" if binding.rank else "")
                      for binding in sorted(private.values(), key=lambda item: item.name)]
@@ -1146,4 +1192,5 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
                             private_arrays=tuple(binding.name for binding in private.values() if binding.rank),
                             numerical_environment_required=vector_reduction,
                             immutable_constants=constants.resources,
-                            immutable_scalar_captures=tuple(binding.root for binding in constants.scalar_captures))
+                            immutable_scalar_captures=tuple(binding.root for binding in constants.scalar_captures),
+                            scalar_element_captures=elements, immutable_array_reads=tuple(sorted(immutable_reads)))

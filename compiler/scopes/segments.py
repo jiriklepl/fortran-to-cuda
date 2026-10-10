@@ -37,18 +37,24 @@ class Native:
     preserve_original: bool = False
     host_only_reads: dict = field(default_factory=dict)
     host_only_proof: dict = field(default_factory=dict)
+    native_states: dict = field(default_factory=dict)
+    native_environment: tuple = ()
+    proof_analysis: object = field(default=None, repr=False, compare=False)
+    immutable_inputs: dict = field(default_factory=dict)
 
     @property
     def coherence_effects(self):
         """Managed obligations only; ``effects`` still reports original reads."""
-        return {root: actions for root, actions in self.effects.items() if root not in self.host_only_reads}
+        return {root: actions for root, actions in self.effects.items()
+                if root not in self.host_only_reads and root not in self.immutable_inputs}
 
     @property
     def coherence_sections(self):
-        if self.sections is None or not self.host_only_reads:
+        if self.sections is None or not (self.host_only_reads or self.immutable_inputs):
             return self.sections
         return replace(self.sections, resources=tuple(section for section in self.sections.resources
-                                                     if section.resource not in self.host_only_reads))
+                                                     if section.resource not in self.host_only_reads
+                                                     and section.resource not in self.immutable_inputs))
 
 
 def _native_analysis(analysis):
@@ -67,6 +73,8 @@ def _native_analysis(analysis):
                  "_reduction_candidates", "_omp_reduction_proofs", "_source_scopes", "_associate_scopes",
                  "_source_provenance", "_allocation_authorizations"):
         setattr(result, name, dict(getattr(analysis, name)))
+    result._native_environments = dict(analysis._native_environments)
+    result._native_environment_states = dict(analysis._native_environment_states)
     result._summary_cache = SummaryCache(max_entries=0)
     return result
 
@@ -247,7 +255,7 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     """Demand effects from exact original nodes, excluding owner entry events."""
     original = original_roots(builder.inline.original_selection(nodes)) if selected is None else ()
     full_original = original
-    analysis = _native_analysis(builder.analysis) if native_host_reads else copy.copy(builder.analysis)
+    analysis = _native_analysis(builder.analysis)
     analysis._native_metadata = native_metadata
     joined = kind == "joined native OpenMP" or (
         kind == "guarded original numerical fallback"
@@ -276,6 +284,21 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     analysis._segments = {}
     bindings, private_bindings = {}, {}
     examined = original if selected is None else nodes
+    native_environment, native_states = {}, {}
+    from compiler.frontend.native_environment import intrinsic_export
+    for root in examined:
+        for call in walk(root):
+            if _kind(call) != "Call_Stmt" or _kind(call.items[0]) != "Name":
+                continue
+            scope = analysis.source_scope_for(call, builder.entry.scope)
+            intrinsic = intrinsic_export(analysis, scope, call.items[0])
+            if intrinsic not in {"$intrinsic::ieee_exceptions::ieee_get_halting_mode",
+                                 "$intrinsic::ieee_exceptions::ieee_set_halting_mode"}:
+                continue
+            proof = analysis.native_environment(builder.entry.qualified, call)
+            proof.validate(analysis, builder.entry.qualified, call)
+            native_environment[proof.identity] = proof
+            native_states.update((state.binding.root, state) for state in proof.native_states)
     descriptor_references = set()
     for node in examined:
         for expression in walk(node):
@@ -296,9 +319,22 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     host_metadata = {binding.native_metadata_object.root: binding.native_metadata_object
                      for binding, _ in referenced if hasattr(binding, 'native_metadata_object')}
     payload_roots = {binding.root for binding, reference in referenced if id(reference) not in descriptor_references}
-    host_only_reads = {}
+    host_only_reads, immutable_inputs = {}, {}
     for binding, _ in referenced:
         if hasattr(binding, 'native_metadata_object') or binding.root in host_metadata:
+            continue
+        if binding.root in native_states:
+            native_states[binding.root].validate(analysis, builder.entry.qualified, binding)
+            continue
+        if binding.root in getattr(builder, "immutable_inputs", {}):
+            from compiler.scopes.immutable_inputs import ImmutableArrayInput
+            proof = builder.immutable_inputs[binding.root]
+            if not isinstance(proof, ImmutableArrayInput):
+                raise CompilationError("native immutable input lacks its original association proof")
+            proof.validate(analysis, builder.entry)
+            if proof.formal is not binding:
+                raise CompilationError("native immutable input differs from original formal storage")
+            immutable_inputs[binding.root] = proof
             continue
         if binding.root in private_roots:
             private_bindings[binding.root] = binding
@@ -350,6 +386,10 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     for operation in summary["operations"]:
         if operation["kind"] in {"call", "native_contract"}:
             raise CompilationError("inline native calls require a separately mapped source operation")
+        if operation["kind"] == "native_environment":
+            proof = native_environment.get(operation.get("proof_identity"))
+            if proof is None or proof.public() != operation.get("proof"):
+                raise CompilationError("native environment summary lacks its registered original operation")
         if operation["kind"] in {"read", "write", "overwrite"} and operation["rank"]:
             if operation["resource"] in private_roots:
                 continue
@@ -361,6 +401,10 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
             raise CompilationError("host-only native storage requires read-only complete effects: " + root)
         if "write" in effects.get(root, ()) or root in summary["guaranteed_whole_overwrites"]:
             raise CompilationError("host-only native storage cannot acquire a managed write: " + root)
+    for root in immutable_inputs:
+        if any(operation.get("resource") == root and operation["kind"] not in {"read", "descriptor_read"}
+               for operation in summary["operations"]) or "write" in effects.get(root, ()):
+            raise CompilationError("native immutable input requires original read-only effects: " + root)
     host_only_proof = {}
     if host_only_reads:
         host_only_proof = {"schema_version": 1, "authority": "complete original reached native operation",
@@ -378,10 +422,14 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     sections = analysis.native_sections_for_nodes(builder.entry.qualified, selection, capture_locals=True,
                                                   completion=completion_proof)
     sections = replace(sections, resources=tuple(item for item in sections.resources
-                                                if item.resource not in private_roots))
+                                                if item.resource not in private_roots
+                                                and item.resource not in native_states))
     return Native(tuple(nodes), effects, set(summary["guaranteed_whole_overwrites"]) - set(private_roots),
                   bindings, summary, kind, sections, span, private_bindings, host_metadata,
-                  host_only_reads=host_only_reads, host_only_proof=host_only_proof)
+                  preserve_original=bool(native_environment),
+                  host_only_reads=host_only_reads, host_only_proof=host_only_proof,
+                  native_states=native_states, native_environment=tuple(native_environment.values()),
+                  proof_analysis=analysis if native_environment else None, immutable_inputs=immutable_inputs)
 
 
 def condition_fragment(builder, header, *, native_host_reads=False):
@@ -537,6 +585,18 @@ class StructuredScope:
             if kind == "Comment" and not str(node).lstrip().lower().startswith("!$omp"):
                 continue
             if kind == "Call_Stmt":
+                if self.builder.config.scope_execution == "reached" and not hasattr(node, "fort_inline_region"):
+                    from compiler.frontend.native_environment import intrinsic_export
+                    scope = self.builder.analysis.source_scope_for(node, self.builder.entry.scope)
+                    if intrinsic_export(self.builder.analysis, scope, node.items[0]) in {
+                            "$intrinsic::ieee_exceptions::ieee_get_halting_mode",
+                            "$intrinsic::ieee_exceptions::ieee_set_halting_mode"}:
+                        flush()
+                        operation = fragment(self.builder, (node,), kind="original native environment")
+                        self.native.append(operation)
+                        self.operation_count += len(operation.summary["operations"])
+                        result.append(operation)
+                        continue
                 call = self.builder.resolve(self.builder.entry, node)
                 coordinator = self.builder.coordinator(call.procedure) if call.region is None else None
                 if coordinator is not None:
@@ -607,7 +667,7 @@ class StructuredScope:
     def inputs(self, arrays, scalars, written):
         for operation in self.native:
             for root, binding in operation.bindings.items():
-                if root in operation.host_only_reads:
+                if root in operation.host_only_reads or root in operation.immutable_inputs:
                     continue
                 if binding.rank:
                     self.builder.capture(binding)
@@ -773,6 +833,9 @@ class StructuredScope:
                                    "resource_effects": {root: sorted(actions) for root, actions in sorted(operation.effects.items())},
                                    "managed_resources": sorted(operation.coherence_effects),
                                    "host_only_native_reads": operation.host_only_proof or None,
+                                   "native_environment": [proof.public() for proof in operation.native_environment],
+                                   "native_local_state": [proof.public() for proof in operation.native_states.values()],
+                                   "immutable_inputs": [proof.public() for proof in operation.immutable_inputs.values()],
                                    "private_resources": sorted(operation.private_bindings),
                                    "completion": operation.summary["native_completion"],
                                    "sections": operation.sections.public(),
@@ -844,6 +907,12 @@ class StructuredScope:
             implementation = source_id(builder, "implementation", span=operation.span or (self.first, self.last),
                                        backend="original_native")
             lines = position(builder, segment=trace_segment, operation=identity, implementation=implementation)
+            if operation.native_environment:
+                for proof in operation.native_environment:
+                    proof.validate(operation.proof_analysis, builder.entry.qualified, proof._call)
+                # Environment changes execute on the original callers after
+                # device completion, without publishing unrelated arrays.
+                lines += _checked("fort_scope_wait(fort_context)")
             accesses = refined(operation, query=False)
             if accesses is not None:
                 lines += ["block", *[line for access in accesses for line in access.specification]]

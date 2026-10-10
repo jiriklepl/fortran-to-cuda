@@ -56,7 +56,7 @@ def test_whole_original_sections_retains_join_and_exact_opposite_faces(tmp_path,
     before = path.read_bytes()
     proof = analysis.joined_completion(ENTRY, selected)
     public = proof.public()
-    assert public["schema_version"] == 5
+    assert public["schema_version"] == 6
     assert public["original_section_count"] == 2
     assert public["retains_original_team_and_directives"]
     assert public["native_only"]
