@@ -10,6 +10,7 @@ from hashlib import sha256
 import pytest
 
 from compiler.numerical_contract import require_numerical_build_contract
+from compiler.tests.test_module_reached_windows import MODULE_BOUNDARY_SOURCE, module_fixture
 from compiler.tests.test_reached_window_discovery import discovery_fixture
 from compiler.tests.test_reached_window_owner import SOURCE, emit_window
 from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
@@ -44,6 +45,8 @@ end program
 
 @pytest.fixture(scope="module", params=(("explicit", False), ("explicit", True),
                                       ("discovered", False), ("discovered", True),
+                                      ("module_discovered", False), ("module_discovered", True),
+                                      ("module_native_boundary", False),
                                       ("explicit_live_iterator", False)))
 def window_binaries(tmp_path_factory, request):
     nvcc = shutil.which("nvcc")
@@ -54,7 +57,13 @@ def window_binaries(tmp_path_factory, request):
     directory = tmp_path_factory.mktemp("one_shot_window")
     architecture = actual_profile(directory, nvcc, host)["hardware"]["compute_capability"].replace(".", "")
     emission, resource_fallback = request.param
-    if emission == "discovered":
+    if emission in {"module_discovered", "module_native_boundary"}:
+        options = {"source": MODULE_BOUNDARY_SOURCE} if emission == "module_native_boundary" else {}
+        original, builder = module_fixture(directory, device_budget=0 if resource_fallback else None, **options)
+        outputs, report = builder.run()
+        assert report["reached_window_discovery"]["selected"]
+        assert builder.analysis.stable_module_allocatables == frozenset()
+    elif emission == "discovered":
         original, builder = discovery_fixture(directory, device_budget=0 if resource_fallback else None)
         outputs, report = builder.run()
         assert report["reached_window_discovery"]["selected"]
@@ -90,7 +99,12 @@ def window_binaries(tmp_path_factory, request):
                                      "numerical_contract": item.get("numerical_contract")})
             objects.append(str(target))
     driver = directory / "driver.f90"
-    driver.write_text(DRIVER)
+    driver_text = DRIVER
+    if emission.startswith("module_"):
+        driver_text = driver_text.replace("tail_visits,prefix_total", "tail_visits,prefix_total,a,b").replace(
+            "real(8),allocatable::a(:),b(:)\n", "").replace("call step(a,b,n,counts(stages))",
+                                                           "call step(n,counts(stages))")
+    driver.write_text(driver_text)
     candidate, native = directory / "candidate", directory / "native"
     cuda_root = os.path.dirname(os.path.dirname(os.path.realpath(nvcc)))
     cuda_lib = os.path.join(cuda_root, "lib64")

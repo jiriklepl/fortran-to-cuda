@@ -3,8 +3,8 @@
 Discovery supplies neither storage facts nor numerical authority. Each attempt
 uses the registered source-position proof and ordinary reached emission in an
 isolated generation transaction. Failed attempts leave ordinary generation
-unchanged. This first discovery policy handles unstable original allocatable
-formals; module/local allocation admission remains a separate source proof.
+unchanged. Original module allocations require explicit selected-window facts
+and a separate registered descriptor proof; local allocations remain native.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from compiler.ir import CompilationError
 from compiler.scopes.generation_transaction import GenerationTransaction
 from compiler.scopes.reached_owner import ReachedWindowOwner
 
-DISCOVERY_VERSION = 1
+DISCOVERY_VERSION = 2
 MAX_ADJACENT_UNITS = 4
 MAX_ATTEMPTS = 16
 
@@ -56,17 +56,22 @@ def discover_reached_window(builder):
     """
     formals = {binding.root for binding in builder.entry.scope.bindings.values()
                if binding.name in builder.entry.arguments and binding.rank and "allocatable" in binding.attributes}
-    if not formals:
+    modules = sorted(binding.root for module in builder.analysis.modules.values()
+                     for binding in module.bindings.values() if binding.rank and "allocatable" in binding.attributes
+                     and isinstance(fact := builder.facts["captures"].get(binding.root), dict)
+                     and fact.get("lifetime") == "selected_window")
+    if not formals and not modules:
         return False
     descriptor = builder.analysis.descriptor_stability(builder.entry.qualified)
     stable = {item["resource"] for item in descriptor["resources"] if item["stable"]}
     unstable = sorted(formals - stable)
-    if not unstable:
+    if not unstable and not modules:
         return False
     record = {
         "schema_version": DISCOVERY_VERSION,
         "policy": "bounded original immediate windows; one first traversal; no reopening",
-        "trigger": {"whole_entry_unstable_allocatable_formals": unstable},
+        "trigger": {"whole_entry_unstable_allocatable_formals": unstable,
+                    "selected_window_module_resources": modules},
         "limits": {"adjacent_source_units": MAX_ADJACENT_UNITS, "attempts": MAX_ATTEMPTS,
                    "minimum_numerical_invocations": 2},
         "selected": False, "attempts": [],
@@ -83,7 +88,7 @@ def discover_reached_window(builder):
         try:
             binding = builder.visible_binding(builder.entry, root)
             if binding.rank:
-                builder.capture(binding)
+                builder.capture_fact(binding)
                 roots.append(root)
         except CompilationError:
             # This cannot hide a dependency: the source-position provider

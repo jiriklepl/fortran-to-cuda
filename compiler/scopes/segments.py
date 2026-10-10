@@ -356,8 +356,9 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
             analysis._stable_module_allocatables = analysis._stable_module_allocatables | {binding.root}
             continue
         if binding.rank and "allocatable" in binding.attributes and binding.root in payload_roots:
-            builder.capture(binding)
-            analysis._stable_module_allocatables = analysis._stable_module_allocatables | {binding.root}
+            fact = builder.capture(binding)
+            if fact.get("lifetime") != "selected_window":
+                analysis._stable_module_allocatables = analysis._stable_module_allocatables | {binding.root}
     if completion_proof is not None:
         # Verified local capture facts participate in graph authority. Issue
         # the token against the same reached proof used for materialization.
@@ -430,8 +431,10 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
         host_metadata.update(host_only_reads)
     span = span if span is not None else ((statement_span(nodes[0])[0], statement_span(nodes[-1])[1])
                                         if kind != "condition read" else ())
+    descriptor = (builder.descriptor_window_for(analysis, builder.entry.qualified, selection)
+                  if hasattr(builder, "descriptor_window_for") else None)
     sections = analysis.native_sections_for_nodes(builder.entry.qualified, selection, capture_locals=True,
-                                                  completion=completion_proof)
+                                                  completion=completion_proof, descriptor_window=descriptor)
     sections = replace(sections, resources=tuple(item for item in sections.resources
                                                 if item.resource not in private_roots
                                                 and item.resource not in native_states))

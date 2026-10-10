@@ -622,6 +622,11 @@ to `storage: "stable"`, `escapes: false`, `allocation_changes: false`, and
 `sections`, a bounded list of `lower`/exclusive `upper` physical coordinates.
 These are storage and source-definition assertions; they do not specify GPU
 leaves or transfer recipes. An optional `device_budget_bytes` defaults to 256 MiB.
+An optional capture `lifetime: "selected_window"` limits those assertions to a
+registered reached window. Such a capture cannot authorize invocation-wide
+module stability or be registered before that window's fresh allocation,
+original-bound, layout and alias guards. The default remains `"invocation"`.
+Neither lifetime choice derives initialized payload from allocation presence.
 
 The compiler selects bounded source spans, generates source helpers in their
 original modules, and passes explicit context/root handles down call-only helper
@@ -1531,10 +1536,12 @@ call or generated reevaluation. These records deny cloning, GPU lowering and
 atomic native callbacks, and are rebuilt rather than restored from persistent
 summary caches. Changed source, resolution maps or kind state invalidate them.
 
-Source summary version 17 carries child `capture_lifetime_requirements` through
+Source summary version 18 carries child `capture_lifetime_requirements` through
 original actual mappings and guards, even when the child remains incomplete.
 Distinct view chains retain their obligations; forwarding does not upgrade an
 authorization or turn partial raw operations into complete ordered effects.
+Selected descriptor capabilities also participate in summary/cache identity;
+an admitted private child cannot populate an ordinary summary cache entry.
 
 The source-only `prove_descriptor_window` API authenticates descriptor/no-escape
 effects within an exact original interval, separately from entry definitions and
@@ -1551,6 +1558,13 @@ tokens establish GPU legality or initialized payloads.
 Resolution authentication visits each original procedure's own specification
 and execution; unrelated internal siblings do not consume its resolution
 budget. Every reached child remains separately authenticated and bounded.
+Version 3 accepts explicit `module_roots` for original numeric module
+allocations. Their authority stays inside the exact private projection and its
+checked call closure, with separate cache identities; ordinary summaries and
+global module authorizations remain unchanged. Public or renamed module storage
+still requires original visibility and fresh descriptor guards. TARGET,
+THREADPRIVATE, uncertain associations and selected allocation changes reject.
+Depth limits count source controls rather than synthetic sequence containers.
 
 The separate `prove_native_prefix` API can establish complete effects of an
 unchanged native call before any context exists. A detached, bounded analysis
@@ -1561,7 +1575,7 @@ joined `PARALLEL DO` groups with supported scalar private/reduction clauses;
 the native compiler executes every original reduction. No reduction lowering,
 reassociation or active-owner coherence is authorized.
 
-`prove_reached_window` version 2 transfers separately supplied entry facts through
+`prove_reached_window` version 3 transfers separately supplied entry facts through
 these prefix and descriptor proofs to an exact contiguous window, at top level
 or in the first traversal of one top-level serial counted loop. Branches meet
 conservatively and definitions retain original ordering. Hidden read-only native
@@ -1571,7 +1585,7 @@ mandatory close before the excluded tail or any enclosing backedge. Entry facts,
 prior nonescape, allocation presence, layout and alias guards require independent
 admission. These APIs do not create an owner or authorize execution. Whole/none
 coverage, deeper or conditional activation, direct OpenMP cuts, unknown effects,
-module/local allocation ownership and prefix allocation replacement remain
+local allocation ownership and prefix allocation replacement remain
 limitations. No address/shape freshness or owner reopening is inferred.
 
 The internal `ReachedWindowOwner` emitter consumes an exact registered window
@@ -1586,8 +1600,9 @@ descriptor proofs. Per-unit native summaries reissue descriptor tokens in their
 own analysis, and managed captures require exact original bindings. Numerical
 lowering and existing native coherence/failure checks remain separate gates.
 In opt-in serial `--scope-execution reached` mode, incomplete whole-entry
-descriptor stability for original allocatable formals triggers compiler-owned
-window discovery before inline preparation. It considers at most four adjacent
+descriptor stability for original allocatable formals, or explicit selected-window
+module captures, triggers compiler-owned window discovery before inline
+preparation. It considers at most four adjacent
 original units at entry or inside one top-level counted loop, with at most 16
 attempts. A selected window must admit two numerical invocations without an
 internal ownership-ending operation. Failed attempts run in isolated generation
@@ -1596,13 +1611,27 @@ while rejected artifacts, variants, coordinators, edits and analysis caches do
 not leak into existing fallback generation. The manifest's additive
 `reached_window_discovery` record reports original selections, limits, proof
 identities and rejection reasons. AUTO with unavailable estimates retains the
-original native path. Discovery neither invents capture facts nor admits saved
-module allocations, partial definitions or whole-stage residency.
+original native path. Module captures consume separate descriptor-window proofs
+at every reached consumer, without globally blessing their allocations.
+Discovery neither invents capture facts nor proves partial definitions or
+whole-stage residency. One-shot module owners close before excluded allocation
+swaps and do not retain state across backedges or invocations.
 Numerical extraction checks liveness against the complete original lexical
 body even when preparing only a window. Current native suffixes and possible
 next-iteration prefixes are checked as separate paths, so one path's definitions
 cannot hide another path's scalar or fixed private-array reads. Original DO
 final values remain native when observable outside their numerical region.
+
+The source-only `prove_native_definitions` API retains ordered original
+assignments, IF alternatives and single-assignment affine DO nests. Its transfer
+reports exact symbolic defined rectangles and guarded unmet read obligations;
+only must-definitions from reached leaves contribute, and branch guarantees
+meet all alternatives, including a missing ELSE. Opposite faces stay separate,
+empty-loop requirements remain attached, and scalar changes invalidate dependent
+rectangles. Supplied entry rectangles require independent admission. Calls,
+OpenMP, allocation changes and complex loop bodies remain unsupported. This
+proof does not register storage, execute numerical work, or yet enable partial
+definitions in reached-window owners.
 
 Optional `--effect-contracts` input has `schema_version: 1` and a `procedures`
 object keyed by a qualified imported call name. Each contract explicitly declares

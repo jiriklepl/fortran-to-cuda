@@ -26,7 +26,7 @@ from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
 # Bump when source-effect, call-composition or summary semantics change.
-SOURCE_SUMMARY_VERSION = 17
+SOURCE_SUMMARY_VERSION = 18
 _DEFAULT_SUMMARY_CACHE = SummaryCache()
 
 
@@ -404,6 +404,8 @@ class SourceEffects:
         for routine in self.numerical_helpers.values():
             register_associates(self, routine)
         self._source_module_roles = {name: (scope.node, str(scope.node)) for name, scope in self.modules.items()}
+        self._source_module_bindings = {binding.root: (binding, _canonical(binding.public()))
+                                        for scope in self.modules.values() for binding in scope.bindings.values()}
         from compiler.frontend.source_objects import register_source_object_authority
         register_source_object_authority(self)
         from compiler.frontend.source_functions import register_source_function_authority
@@ -518,6 +520,7 @@ class SourceEffects:
                                                    for name, binding in routine.scope.bindings.items()}})
 
     def _summary_authority(self):
+        from compiler.frontend.descriptor_windows import DESCRIPTOR_WINDOW_VERSION
         from compiler.frontend.native_intrinsics import NATIVE_PREDICATE_VERSION
         from compiler.frontend.source_functions import SOURCE_FUNCTION_VERSION, resolution_changes
         from compiler.frontend.source_objects import SOURCE_OBJECT_VERSION
@@ -540,8 +543,12 @@ class SourceEffects:
                 projections.append({"procedure": name, "signature": signature,
                                     "function_source": str(routine.scope.node)})
         projections.extend(resolution_changes(self))
+        window = getattr(self, "_selected_descriptor_window", None)
         return {"summary_version": SOURCE_SUMMARY_VERSION, "sources": self.inputs.identity(),
                 "structured_version": STRUCTURED_EFFECT_VERSION,
+                "descriptor_window_version": DESCRIPTOR_WINDOW_VERSION,
+                "selected_descriptor_window": ({"procedure": window[1], "selected_node_ids": list(window[2]),
+                                                "proof_identity": window[3].identity} if window is not None else None),
                 "source_object_version": SOURCE_OBJECT_VERSION,
                 "native_predicate_version": NATIVE_PREDICATE_VERSION,
                 "source_function_version": SOURCE_FUNCTION_VERSION,
@@ -1204,7 +1211,8 @@ class SourceEffects:
         summary["descriptor_requirements"] = [b.public() for b in routine.scope.bindings.values()
                                                if b.name in routine.arguments
                                                and b.attributes & {"optional", "allocatable", "pointer"}]
-        descriptor_proof = (self.descriptor_stability(requested) if any(
+        window_modules = self.window_module_allocatables(requested)
+        descriptor_proof = (self.descriptor_stability(requested) if window_modules or any(
             "allocatable" in binding.attributes
             for binding in routine.scope.bindings.values()) else {"resources": []})
         stable_descriptors = {item["resource"] for item in descriptor_proof["resources"] if item["stable"]}
@@ -1246,6 +1254,11 @@ class SourceEffects:
                         "execution_requires_runtime_guard": True} if readonly_descriptor else
                        {"requirement": "original_stable_allocatable_descriptor",
                         "execution_requires_runtime_guard": True} if stable_descriptor else {})}
+                if stable_descriptor and binding.root in window_modules:
+                    lifetime_requirements[binding.root].update({
+                        "requirement": "original_module_allocation_window",
+                        "descriptor_window_identity": descriptor_proof["descriptor_window_identity"],
+                        "execution_requires_runtime_guard": True, "entry_definition_authority": False})
                 if not authorized and not readonly_descriptor and not stable_descriptor:
                     reasons.append(f"storage lifetime requires capture proof: {binding.root}")
                 elif action == "overwrite":
@@ -1984,6 +1997,14 @@ class SourceEffects:
                 matches = [graph._ids[key] for key in ((id(item), "statement"), (id(item), "condition"),
                                                      (id(item), "header"), (id(item), "selector"))
                            if key in graph._ids]
+                if _kind(item) == "If_Stmt" and len(set(matches)) == 2:
+                    statement = graph._ids.get((id(item), "statement"))
+                    condition = graph._ids.get((id(item), "condition"))
+                    branch = graph.nodes.get(statement)
+                    if (branch is not None and branch.kind == "branch" and graph.source_nodes(statement) == (item,)
+                            and len(branch.alternatives) == 1 and branch.alternatives[0][0] == condition
+                            and graph.source_nodes(condition) == (item.items[0],)):
+                        matches = [statement]
                 if len(set(matches)) != 1:
                     raise CompilationError("selected effect node lacks unambiguous original source authority")
                 identity = matches[0]
@@ -2013,11 +2034,17 @@ class SourceEffects:
         # The immediately preceding structure() call already authenticated
         # the original routine, provenance and current analysis authority.
         original = self.routines[requested]
+        if descriptor_window is not None:
+            self._validate_descriptor_window(requested, identities, descriptor_window)
         analysis = copy(self)
         analysis.routines = dict(self.routines)
         analysis.summaries, analysis._closures, analysis._native_sections = {}, {}, {}
         analysis._structures, analysis._segments, analysis._descriptor_proofs = {}, {}, {}
-        analysis._descriptor_source = self
+        analysis._descriptor_source = (getattr(self, "_descriptor_source", self)
+                                       if getattr(self, "_selected_descriptor_window", None) is not None
+                                       and descriptor_window is None else self)
+        analysis.__dict__.pop("_selected_descriptor_window", None)
+        analysis.__dict__.pop("_descriptor_window_projection", None)
         if descriptor_window is not None:
             analysis._selected_descriptor_window = self, requested, identities, descriptor_window
         routine = copy(original)
@@ -2075,6 +2102,9 @@ class SourceEffects:
             routine.arguments = tuple(name for name, binding in routine.scope.bindings.items()
                                       if not name.startswith("fort_effect_") and "allocatable" not in binding.attributes)
         analysis.routines[requested] = routine
+        if descriptor_window is not None:
+            analysis._descriptor_window_projection = (
+                routine, routine.execution, str(routine.execution), analysis._routine_signature(routine))
         return analysis, routine, tuple(dict.fromkeys(guards))
 
     def segment_summary(self, requested, selected, *, include_entry=False, capture_locals=False,
@@ -2088,10 +2118,7 @@ class SourceEffects:
         graph, identities = self._selected_source(requested, selected)
         descriptor_identity = None
         if descriptor_window is not None:
-            from compiler.frontend.descriptor_windows import DescriptorWindowProof
-            if not isinstance(descriptor_window, DescriptorWindowProof):
-                raise CompilationError("selected descriptor effects require a registered original window proof")
-            descriptor_window.validate(self, requested, identities)
+            self._validate_descriptor_window(requested, identities, descriptor_window)
             descriptor_identity = descriptor_window.identity
         if graph.deferred_native_descendants(identities):
             raise CompilationError("deferred native group requires whole original native completion authority")
@@ -2263,9 +2290,11 @@ class SourceEffects:
         return analyze_openmp_reduction(self, requested, selected)
 
     def native_sections_for_nodes(self, requested, selected, *, include_entry=False, capture_locals=False,
-                                 completion=None):
+                                 completion=None, descriptor_window=None):
         """Typed original-coordinate refinement for a demanded source segment."""
         graph, identities = self._selected_source(requested, selected)
+        if descriptor_window is not None:
+            self._validate_descriptor_window(requested, identities, descriptor_window)
         if completion is not None:
             from compiler.frontend.native_completion import NativeCompletionProof
             from compiler.frontend.worksharing_completion import WorksharingNativeCompletionProof
@@ -2274,11 +2303,13 @@ class SourceEffects:
             completion.validate(self, requested, identities)
         group = graph.native_group_for_selection(selected)
         if group is not None:
+            if descriptor_window is not None:
+                raise CompilationError("deferred native group descriptor windows require separate per-unit authority")
             return self._native_group_sections(requested, group, completion)
         if graph.deferred_native_descendants(identities):
             raise CompilationError("deferred native sections require the exact whole original source selection")
         analysis, routine, _guard = self._segment_projection(requested, identities,
-            include_entry=include_entry, capture_locals=capture_locals)
+            include_entry=include_entry, capture_locals=capture_locals, descriptor_window=descriptor_window)
         # The section analyzer needs original descriptor declarations even
         # though this inner operation does not execute their entry expressions.
         specification = _part(self.routines[requested].scope.node, "Specification_Part")
@@ -2373,12 +2404,44 @@ class SourceEffects:
                     return NativeSections(False, "native group section union exceeds bounded refinement")
         return NativeSections(True, resources=tuple(resources[key] for key in sorted(resources)))
 
+    def _validate_descriptor_window(self, requested, identities, proof):
+        from compiler.frontend.descriptor_windows import DescriptorWindowProof
+        if not isinstance(proof, DescriptorWindowProof):
+            raise CompilationError("selected descriptor effects require a registered original window proof")
+        return proof.validate(self, requested, identities)
+
+    def _window_descriptor_proof(self, requested):
+        """Authenticate a private root interval or its complete scanned child."""
+        selected = getattr(self, "_selected_descriptor_window", None)
+        if selected is None:
+            return None
+        original, procedure, identities, proof = selected
+        projection = getattr(self, "_descriptor_window_projection", None)
+        routine = self.routines.get(procedure)
+        if (self is original or getattr(self, "_descriptor_source", None) is not original or projection is None
+                or routine is not projection[0] or routine.execution is not projection[1]
+                or str(routine.execution) != projection[2] or self._routine_signature(routine) != projection[3]):
+            raise CompilationError("descriptor window requires its unchanged private original-source projection")
+        original._validate_descriptor_window(procedure, identities, proof)
+        if requested == procedure:
+            return proof
+        closure = proof.public()["source_call_closure"]
+        if (requested not in closure or self.routines.get(requested) is not original.routines.get(requested)
+                or original.structure(requested).identity != closure[requested]):
+            return None
+        return proof
+
+    def window_module_allocatables(self, requested):
+        """Exact private descriptor capability; never global capture admission."""
+        proof = self._window_descriptor_proof(requested)
+        return frozenset(proof.module_roots) if proof is not None else frozenset()
+
     def descriptor_stability(self, requested):
         from compiler.frontend.structured_effects import descriptor_stability
+        proof = self._window_descriptor_proof(requested)
         selected = getattr(self, "_selected_descriptor_window", None)
-        if selected is not None and selected[1] == requested:
+        if proof is not None and selected[1] == requested:
             original, procedure, identities, proof = selected
-            proof.validate(original, procedure, identities)
             result = proof.public()
             return {"procedure": procedure, "structured_identity": result["structured_identity"],
                     "analysis_identity": result["analysis_identity"], "complete": True,
@@ -2386,7 +2449,15 @@ class SourceEffects:
                     "requirements": ["registered exact original source window", "close before excluded tail",
                                      "independent entry/prefix definitions and runtime descriptor/alias guards"]}
         if hasattr(self, "_descriptor_source"):
-            return self._descriptor_source.descriptor_stability(requested)
+            result = self._descriptor_source.descriptor_stability(requested)
+            if proof is not None and proof.module_roots:
+                result = deepcopy(result)
+                resources = {item["resource"]: item for item in result["resources"]}
+                resources.update((item["resource"], item) for item in proof.public()["resources"]
+                                 if item["resource"] in proof.module_roots)
+                result.update({"resources": list(resources.values()), "descriptor_window_identity": proof.identity,
+                               "module_descriptor_authority": "complete original child within selected source window"})
+            return result
         graph = self.structure(requested)
         if graph.identity not in self._descriptor_proofs:
             result = descriptor_stability(self, requested)

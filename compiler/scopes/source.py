@@ -173,7 +173,7 @@ class ScopeBuilder:
             raise CompilationError("reached owner entry facts differ from independently admitted captures")
         for state in record["states"]:
             binding = self.visible_binding(self.entry, state["resource"])
-            self.capture(binding)
+            self.capture_fact(binding)
         result = copy(self)
         result._reached_window_binding = proof, original_selection
         # Inline source authority stays original, but summary consumers must
@@ -197,8 +197,8 @@ class ScopeBuilder:
             raise CompilationError("reached owner admitted entry facts changed")
         return proof
 
-    def segment_summary(self, analysis, procedure, selection, **options):
-        """Consume interval descriptor proofs only inside a bound window."""
+    def descriptor_window_for(self, analysis, procedure, selection):
+        """Issue exact per-consumer authority inside an authenticated owner."""
         proof = self.validate_reached_window()
         descriptor = None
         if proof is not None:
@@ -226,11 +226,18 @@ class ScopeBuilder:
             if not selected or not set(selected) <= covered:
                 raise CompilationError("reached owner summary escapes its original selected window")
             roots = tuple(state["resource"] for state in proof.public()["states"]
-                          if state["requires_original_allocation_presence_guard"])
-            if roots:
+                          if state["requires_original_allocation_presence_guard"]
+                          and state["resource_kind"] != "original_module_allocatable")
+            modules = tuple(proof.public()["module_descriptor_resources"])
+            if roots or modules:
                 from compiler.frontend.descriptor_windows import prove_descriptor_window
 
-                descriptor = prove_descriptor_window(analysis, procedure, selected, roots)
+                descriptor = prove_descriptor_window(analysis, procedure, selected, roots, module_roots=modules)
+        return descriptor
+
+    def segment_summary(self, analysis, procedure, selection, **options):
+        """Consume interval descriptor proofs only inside a bound window."""
+        descriptor = self.descriptor_window_for(analysis, procedure, selection)
         return analysis.segment_summary(procedure, selection, descriptor_window=descriptor, **options)
 
     def stable_descriptors(self, procedure):
@@ -707,7 +714,8 @@ class ScopeBuilder:
         name = self.visible(routine, root)
         return self.analysis._binding(routine.scope, F.Data_Ref(name) if "%" in name else name)
 
-    def capture(self, binding):
+    def capture_fact(self, binding):
+        """Validate supplied facts without granting a lifetime or reading data."""
         if (binding.dtype, binding.kind) not in DTYPES:
             raise CompilationError("unsupported scoped capture type: " + binding.name)
         if {"pointer", "optional", "volatile", "asynchronous", "value"} & binding.attributes:
@@ -718,6 +726,9 @@ class ScopeBuilder:
                 or not isinstance(fact.get("initialized"),str)
                 or fact.get("initialized") not in {"whole", "none", "sections"}):
             raise CompilationError("missing stable storage/definition facts: " + binding.root)
+        lifetime = fact.get("lifetime", "invocation")
+        if not isinstance(lifetime, str) or lifetime not in {"invocation", "selected_window"}:
+            raise CompilationError("unsupported scoped capture lifetime: " + binding.root)
         if fact["initialized"] == "sections":
             boxes = fact.get("sections")
             if not isinstance(boxes,list) or len(boxes) > 32:
@@ -731,12 +742,18 @@ class ScopeBuilder:
                         or any(type(v) is not int or not 0 <= v < 2**63 for v in [*lower,*upper])
                         or any(lo > hi for lo,hi in zip(lower,upper,strict=True))):
                     raise CompilationError("invalid initialized physical capture section")
+        return fact
+
+    def capture(self, binding):
+        fact = self.capture_fact(binding)
         proof = self.validate_reached_window()
         if proof is not None:
             if self.visible_binding(self.entry, binding.root) is not binding:
                 raise CompilationError("reached owner capture requires its exact original storage binding")
             state = proof.capture_state(binding.root)
             return {**fact, "initialized": state["initialized"]}
+        if fact.get("lifetime") == "selected_window":
+            raise CompilationError("capture requires a registered selected-position lifetime proof: " + binding.root)
         return fact
 
     def add_edit(self, path, first, last, replacement, *, prepend=False):

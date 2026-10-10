@@ -17,6 +17,7 @@ from fparser.two.utils import Base
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.frontend.component_bindings import component_access
 from compiler.frontend.native_completion import NativeCompletionProof
+from compiler.frontend.native_intrinsics import NativePredicateProof
 from compiler.frontend.native_prefix import NativePrefixProof
 from compiler.frontend.source_functions import _validate_resolution, _walk
 from compiler.frontend.source_objects import _TypeBuilder
@@ -24,7 +25,7 @@ from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
-DESCRIPTOR_WINDOW_VERSION = 2
+DESCRIPTOR_WINDOW_VERSION = 3
 _UNSAFE = {"pointer", "optional", "volatile", "asynchronous", "value"}
 _INTRINSICS = set(INTRINSICS) | ARRAY_INQUIRIES | MODEL_INQUIRIES | {
     "allocated", "present", "sum", "product", "any", "all", "count", "minval", "maxval"}
@@ -48,6 +49,7 @@ class _Check:
         self.nodes = self.operations = 0
         self.active, self.checked = [], {}
         self.functions = {}
+        self.predicates = {}
         self.prefix_scopes, self.prefixes = {}, {}
         self.joined_directives, self.joins = {}, {}
         self.object_builder = _TypeBuilder(analysis)
@@ -150,6 +152,17 @@ class _Check:
         if kind in {"Part_Ref", "Function_Reference", "Intrinsic_Function_Reference", "Structure_Constructor"}:
             name, args = node.items
             binding = self.analysis._binding(scope, name)
+            predicates = [proof for proof in self.analysis._native_predicates.values()
+                          if isinstance(proof, NativePredicateProof) and proof.procedure == routine.qualified
+                          and proof._expression is node]
+            if predicates:
+                if len(predicates) != 1:
+                    raise CompilationError("descriptor window requires unique registered original native predicate proof")
+                proof = predicates[0].validate(self.analysis, routine.qualified, node)
+                self.predicates[proof.identity] = proof.public()
+                for actual in proof.actuals:
+                    self.expression(routine, actual, depth + 1)
+                return
             if kind == "Part_Ref" and binding is not None and binding.rank:
                 self.expression(routine, name, depth + 1)
                 self.expression(routine, args, depth + 1)
@@ -179,7 +192,9 @@ class _Check:
         for identity in identities:
             self.tick()
             node = graph.nodes[identity]
-            if node.kind in {"sequence", "loop"}:
+            if node.kind == "sequence":
+                self.visit(routine, graph, node.children, depth)
+            elif node.kind == "loop":
                 self.visit(routine, graph, node.children, depth + 1)
             elif node.kind == "branch":
                 for condition, body in node.alternatives:
@@ -281,7 +296,48 @@ class _Check:
         self.checked[name] = graph.identity
 
 
-def _derive(analysis, procedure, identities, roots):
+def _module_binding(analysis, routine, root):
+    """Authenticate original visible allocation storage, never its contents."""
+    parts = root.split("::")
+    module = analysis.modules.get(parts[0]) if len(parts) == 2 and parts[0] != "argument" else None
+    binding = module.bindings.get(parts[1]) if module is not None else None
+    original = getattr(analysis, "_source_module_bindings", {}).get(root)
+    if (binding is None or binding.root != root or "allocatable" not in binding.attributes
+            or original is None or binding is not original[0]
+            or _hash(binding.public()) != sha256(original[1].encode()).hexdigest()
+            or binding.attributes & (_UNSAFE | {"target", "parameter"})
+            or binding.dtype not in {"real", "integer"} or binding.kind not in {4, 8}
+            or not 1 <= binding.rank <= 4):
+        raise CompilationError("descriptor window requires original numeric module allocations: " + root)
+    specification = next((part for part in _children(module.node)
+                          if _kind(part) == "Specification_Part"), None)
+    if any(_kind(node) in {"Common_Stmt", "Equivalence_Stmt", "Codimension_Attr_Spec"}
+           or _kind(node) == "Comment" and str(node).lstrip().lower().startswith("!$omp")
+           for node in _walk(specification)):
+        raise CompilationError("descriptor window module association or OpenMP storage requires separate authority")
+    if any(_kind(node) == "Entity_Decl" and str(node.items[0]).lower() == binding.name
+           and node.items[2] is not None for node in _walk(specification)):
+        raise CompilationError("descriptor window coarray module allocation requires separate authority")
+    names, visited = set(), set()
+
+    def collect(scope):
+        if scope is None or id(scope) in visited:
+            return
+        visited.add(id(scope))
+        names.update(scope.bindings)
+        names.update(scope.imports)
+        for imported in scope.wildcards:
+            collect(analysis.modules.get(imported))
+        collect(scope.parent)
+
+    collect(routine.scope)
+    visible = [name for name in sorted(names) if analysis._binding(routine.scope, name) is binding]
+    if not visible:
+        raise CompilationError("descriptor window module allocation is not originally visible: " + root)
+    return binding, visible[0], module
+
+
+def _derive(analysis, procedure, identities, roots, module_roots=()):
     routine = analysis._require_original(procedure)
     graph = analysis.structure(procedure)
     if not graph.available:
@@ -301,10 +357,15 @@ def _derive(analysis, procedure, identities, roots):
     headers = [node.id for node in graph.nodes.values() if node.kind == "loop"
                and len(selected) == 1 and selected[0] in node.children
                and graph.nodes[selected[0]].details.get("evaluation") == "loop_header"]
-    if len(sequences) != 1 and len(headers) != 1:
+    conditions = [node.id for node in graph.nodes.values() if node.kind == "branch"
+                  and len(selected) == 1 and any(condition == selected[0] for condition, _body in node.alternatives)
+                  and graph.nodes[selected[0]].details.get("evaluation") == "condition"]
+    if len(sequences) != 1 and len(headers) != 1 and len(conditions) != 1:
         raise CompilationError("descriptor window requires one contiguous original immediate sequence")
-    if (not isinstance(roots, tuple) or not roots or len(roots) > analysis.operation_limit
-            or any(not isinstance(root, str) for root in roots) or len(set(roots)) != len(roots)):
+    if (not isinstance(roots, tuple) or not isinstance(module_roots, tuple)
+            or not (roots or module_roots) or len(roots) + len(module_roots) > analysis.operation_limit
+            or any(not isinstance(root, str) for root in (*roots, *module_roots))
+            or len(set((*roots, *module_roots))) != len(roots) + len(module_roots)):
         raise CompilationError("descriptor window requires bounded unique original formal roots")
     bindings = {binding.root: binding for binding in routine.scope.bindings.values() if binding.name in routine.arguments}
     states = []
@@ -314,13 +375,26 @@ def _derive(analysis, procedure, identities, roots):
                 or binding.dtype not in {"real", "integer"} or binding.kind not in {4, 8}
                 or not 1 <= binding.rank <= 4):
             raise CompilationError("descriptor window requires original numeric allocatable formals: " + root)
-        states.append({"resource": root, "original_binding": binding.public(),
+        states.append({"resource": root, "resource_kind": "original_allocatable_formal",
+                       "original_binding": binding.public(),
                        "stable": True, "original_descriptor_required": True,
                        "descriptor_changes_within_selection": False, "escapes_within_selection": False,
                        "requires_prior_noescape_and_current_allocation_proof": True,
                        "requires_original_allocation_presence_and_alias_guards": True,
                        "execution_requires_runtime_guard": True,
                        "entry_definition_authority": False})
+    for root in module_roots:
+        binding, spelling, module = _module_binding(analysis, routine, root)
+        states.append({"resource": root, "resource_kind": "original_module_allocatable",
+                       "original_binding": binding.public(), "original_visible_spelling": spelling,
+                       "declaration_source": str(module.path),
+                       "declaration_source_sha256": analysis.sources[str(module.path)],
+                       "stable": True, "original_descriptor_required": True,
+                       "descriptor_changes_within_selection": False, "escapes_within_selection": False,
+                       "requires_prior_noescape_and_current_allocation_proof": True,
+                       "requires_original_allocation_presence_and_alias_guards": True,
+                       "requires_original_runtime_bounds": True,
+                       "execution_requires_runtime_guard": True, "entry_definition_authority": False})
     check = _Check(analysis)
     check.active.append(procedure)
     check.joined_groups(routine, graph, selected)
@@ -329,11 +403,13 @@ def _derive(analysis, procedure, identities, roots):
             "source_identity": analysis.inputs.identity(), "structured_identity": graph.identity,
             "analysis_identity": graph.authority_identity, "selected_node_ids": list(selected),
             "parent_sequence": sequences[0] if sequences else None,
-            "parent_node": sequences[0] if sequences else headers[0],
-            "selection_role": "original contiguous sequence" if sequences else "original counted header",
+            "parent_node": sequences[0] if sequences else headers[0] if headers else conditions[0],
+            "selection_role": ("original contiguous sequence" if sequences else
+                               "original counted header" if headers else "original condition"),
             "original_guard": list(graph.nodes[selected[0]].guard),
-            "resources": states, "source_call_closure": check.checked,
+            "resources": states, "module_roots": list(module_roots), "source_call_closure": check.checked,
             "native_source_function_requirements": list(check.functions.values()),
+            "native_predicate_requirements": list(check.predicates.values()),
             "native_prefix_descriptor_requirements": list(check.prefixes.values()),
             "native_joined_descriptor_requirements": list(check.joins.values()),
             "fixed_source_object_requirements": list(check.objects.values()),
@@ -342,7 +418,9 @@ def _derive(analysis, procedure, identities, roots):
             "prefix_effects_proved": False, "entry_definition_authority": False,
             "reachability_authority": False, "execution_authorized": False, "gpu_legality_established": False,
             "requires_close_before_excluded_tail": True, "freshness_by_address_or_shape": False,
-            "limits": ["numeric allocatable original formals only", "no deferred groups or whole derived-object effects",
+            "limits": ["explicit original numeric formals/module allocations only",
+                       "module allocation authority is conditional and exact to this selection and checked calls",
+                       "no deferred groups or whole derived-object effects",
                        "fixed object mappings prove original storage/type only, never native continuation or numeric ABI",
                        "OpenMP requires registered whole joined-group or native-prefix proof and full descriptor rescan",
                        "excluded prefix and tail have no lifetime or definition authority",
@@ -357,6 +435,7 @@ class DescriptorWindowProof:
     _analysis: object = field(repr=False, compare=False)
     _selected: tuple[str, ...] = field(repr=False, compare=False)
     _roots: tuple[str, ...] = field(repr=False, compare=False)
+    _module_roots: tuple[str, ...] = field(repr=False, compare=False)
     _record: object = field(repr=False, compare=False)
 
     def public(self):
@@ -367,9 +446,13 @@ class DescriptorWindowProof:
                 or not isinstance(selected_node_ids, tuple) or selected_node_ids != self._selected
                 or getattr(analysis, "_descriptor_window_proofs", {}).get(self.identity) is not self):
             raise CompilationError("descriptor window lacks registered original interval authority")
-        if _freeze(_derive(analysis, procedure, self._selected, self._roots)) != self._record:
+        if _freeze(_derive(analysis, procedure, self._selected, self._roots, self._module_roots)) != self._record:
             raise CompilationError("descriptor window original source authority changed")
         return self
+
+    @property
+    def module_roots(self):
+        return self._module_roots
 
     def resource_state(self, root):
         self.validate(self._analysis, self.procedure, self._selected)
@@ -379,9 +462,9 @@ class DescriptorWindowProof:
         return states[root]
 
 
-def prove_descriptor_window(analysis, procedure, selected_node_ids, requested_roots):
+def prove_descriptor_window(analysis, procedure, selected_node_ids, requested_roots=(), *, module_roots=()):
     """Register selected-span stability, never prefix freshness or definitions."""
-    record = _derive(analysis, procedure, selected_node_ids, requested_roots)
+    record = _derive(analysis, procedure, selected_node_ids, requested_roots, module_roots)
     identity = _hash(record)
     registry = getattr(analysis, "_descriptor_window_proofs", None)
     if registry is None:
@@ -390,6 +473,7 @@ def prove_descriptor_window(analysis, procedure, selected_node_ids, requested_ro
         return registry[identity].validate(analysis, procedure, selected_node_ids)
     if len(registry) >= analysis.procedure_limit:
         raise CompilationError("descriptor window proof registry budget exhausted")
-    proof = DescriptorWindowProof(procedure, identity, analysis, selected_node_ids, requested_roots, _freeze(record))
+    proof = DescriptorWindowProof(procedure, identity, analysis, selected_node_ids, requested_roots,
+                                  module_roots, _freeze(record))
     registry[identity] = proof
     return proof
