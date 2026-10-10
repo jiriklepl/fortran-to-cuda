@@ -16,6 +16,12 @@ from pathlib import Path
 import re
 import statistics
 
+from compiler.numerical_contract import (
+    cuda_compile_options,
+    numerical_build_contract,
+    require_explicit_cuda_environment,
+)
+
 SCHEMA_VERSION = 1
 BACKEND_ID = "standalone-cuda-openmp-cxx17-v1"
 INTRINSIC_BACKEND_ID = "cxx17-scalar-real-math-v1"
@@ -34,6 +40,15 @@ TOOLCHAIN_FIELDS = ("nvcc_version", "host_cxx_version", "cuda_runtime_version", 
 
 class NumericalCalibrationError(ValueError):
     """Missing, incompatible or unvalidated numerical measurements."""
+
+
+def require_numerical_profile_contract(profile) -> None:
+    """Keep historical observations readable without pricing new arithmetic."""
+    from .profile import ProfileError, require_profile_numerical_contract
+    try:
+        require_profile_numerical_contract(profile)
+    except ProfileError as error:
+        raise NumericalCalibrationError(str(error)) from error
 
 
 def apply_numerical_costs(analysis, profile):
@@ -59,7 +74,8 @@ def generator_identity() -> str:
     """Identify both the fixture implementation and its fitting protocol."""
     root = Path(__file__).parent
     return sha256(b"\n".join((root / name).read_bytes() for name in
-                             ("numerical_calibration.py", "numerical_calibration.cu"))).hexdigest()
+                             ("numerical_calibration.py", "numerical_calibration.cu"))
+                  + numerical_build_contract()["identity"].encode()).hexdigest()
 
 
 def recipe_identity(family: str, *, generator_id: str | None = None) -> str:
@@ -270,6 +286,7 @@ def _validate_numerical_profile_v1(section: dict, profile: dict) -> None:
 
 def numerical_costs(profile: dict, family: str, *, backend_id: str, generator_id: str, recipe_id: str) -> dict:
     """Expose a cost only to the exact implementation whose work was measured."""
+    require_numerical_profile_contract(profile)
     section = profile.get("numerical")
     if section is None:
         raise NumericalCalibrationError("no numerical calibration")
@@ -289,6 +306,7 @@ def numerical_intrinsic_costs(profile: dict, counts, *, backend_id: str, generat
     this API accepts only statically proved counts of the named scalar math
     primitives. A C++/CUDA scalar-math backend must explicitly identify itself.
     """
+    require_numerical_profile_contract(profile)
     section = profile.get("numerical")
     if section is None:
         raise NumericalCalibrationError("no numerical calibration; intrinsic estimate unavailable")
@@ -309,11 +327,13 @@ def numerical_intrinsic_costs(profile: dict, counts, *, backend_id: str, generat
 
 
 def calibrate_numerical(profile, args, directory: Path, nvcc: str, host: str, *, run) -> dict:
+    require_explicit_cuda_environment()
+    require_numerical_profile_contract(profile)
     target = directory / "numerical"
     target.mkdir(exist_ok=True)
     source = Path(__file__).with_suffix(".cu")
     binary = target / "numerical-calibration"
-    command = [nvcc, "-O3", "-std=c++17", "-arch=" + args.arch, "-ccbin", host,
+    command = [nvcc, "-O3", *cuda_compile_options(), "-std=c++17", "-arch=" + args.arch, "-ccbin", host,
                "-Xcompiler=-fopenmp", "-DCALIBRATION_PRECISION=" + str(args.precision), str(source), "-o", str(binary)]
     run(command, target, target / "build.log", timeout=180)
     environment = {name: value for name, value in os.environ.items()
@@ -375,7 +395,8 @@ COMPUTE_PRIVATE_LIMITS = {"private_array_elements": 64, "max_private_array_eleme
 def compute_generator_identity() -> str:
     root = Path(__file__).parent
     return sha256(b"\n".join((root / name).read_bytes() for name in
-        ("numerical_calibration.py", "numerical_calibration.cu", "numerical_calibration.f90"))).hexdigest()
+        ("numerical_calibration.py", "numerical_calibration.cu", "numerical_calibration.f90"))
+        + numerical_build_contract()["identity"].encode()).hexdigest()
 
 
 def native_fixture_source(precision: int) -> str:
@@ -815,6 +836,7 @@ def numerical_compute_model(profile, counts, *, workload_class="scalar_expressio
     semantics/participation, selected device and process affinity before use.
     Fixed execution costs exclude runtime coordination, transfers and launches.
     """
+    require_numerical_profile_contract(profile)
     section = profile.get("numerical")
     if not isinstance(section, dict) or section.get("schema_version") != 2:
         raise NumericalCalibrationError("native Fortran compute requires numerical calibration v2")
@@ -871,6 +893,8 @@ def numerical_compute_model(profile, counts, *, workload_class="scalar_expressio
 
 def calibrate_numerical_v2(profile, args, directory: Path, nvcc: str, host: str, *, run, tool) -> dict:
     """Measure all predetermined components once, retaining rejected evidence."""
+    require_explicit_cuda_environment()
+    require_numerical_profile_contract(profile)
     from .collective_calibration import FORTRAN_FLAGS, normalize_fortran_options
     target = directory / "numerical-v2"
     target.mkdir(exist_ok=True)
@@ -894,7 +918,7 @@ def calibrate_numerical_v2(profile, args, directory: Path, nvcc: str, host: str,
     run(compile_native, target, target / "native-build.log", timeout=180)
     # Link the Fortran runtime explicitly rather than relying on a host ABI
     # path. GNU Fortran is the currently supported native toolchain contract.
-    command = [nvcc, "-O3", "-std=c++17", "-arch=" + args.arch, "-ccbin", host,
+    command = [nvcc, "-O3", *cuda_compile_options(), "-std=c++17", "-arch=" + args.arch, "-ccbin", host,
                "-Xcompiler=-fopenmp", "-DCALIBRATION_V2=1", "-DCALIBRATION_PRECISION=" + str(args.precision),
                str(source), str(obj), "-lgfortran", "-o", str(binary)]
     run(command, target, target / "build.log", timeout=180)

@@ -15,12 +15,15 @@ from copy import deepcopy
 from hashlib import sha256
 from importlib.resources import files
 
+from compiler.numerical_contract import cuda_compile_options, require_explicit_cuda_environment
+
 from .profile import (
     SCOPED_TEAM_COST_NAMES,
     SCOPED_TEAM_PROTOCOL_ID,
     SCOPED_TEAM_RATE_NAMES,
     ProfileError,
     collective_protocol_identity,
+    require_profile_numerical_contract,
     validate_profile,
 )
 
@@ -348,6 +351,8 @@ end program
 
 def calibrate_collective(profile, args, directory, nvcc, host, *, run, tool):
     """Build public artifacts sequentially and fit explicit offline costs."""
+    require_explicit_cuda_environment()
+    require_profile_numerical_contract(profile)
     from compiler.driver.options import CompilerOptions
     from compiler.offload.config import OffloadConfig
     from compiler.scopes.source import form_source_scopes
@@ -409,6 +414,7 @@ def calibrate_collective(profile, args, directory, nvcc, host, *, run, tool):
                     command = [
                         nvcc,
                         "-O3",
+                        *cuda_compile_options(),
                         "-std=c++17",
                         "-arch=" + args.arch,
                         "-ccbin",
@@ -631,6 +637,7 @@ def _validate_auto_holdout(profile, args, root, nvcc, host, fortran, flags, envi
                     [
                         nvcc,
                         "-O3",
+                        *cuda_compile_options(),
                         "-std=c++17",
                         "-arch=" + args.arch,
                         "-ccbin",

@@ -26,6 +26,7 @@ from compiler.emission.common.resources import read_common_header
 from compiler.emission.cuda.offload import _cpu_worker
 from compiler.frontend import lower_source
 from compiler.ir import ParallelRegion
+from compiler.numerical_contract import HOST_OPTIONS, numerical_build_contract
 
 from .analysis import Unit
 from .calibrate import CalibrationError, _run, _tool
@@ -43,6 +44,7 @@ from .numerical_calibration import (
     _compute_samples,
     memory_compute_seconds,
     native_fixture_source,
+    require_numerical_profile_contract,
     validate_numerical_profile,
 )
 from .schedule_calibrate import measurement_environment
@@ -51,12 +53,13 @@ CPU_PROTOCOL_ID = "empty-fork-join-cyclic-memory-v2"
 CPU_BACKENDS = ("native_serial", "native_fork_join", "generated_cpu")
 MEASURED_BACKENDS = CPU_BACKENDS[1:]
 STARTUP_SIZES = (0, 1, 8)
-HOST_FLAGS = ("-O3", "-std=c++17", "-fopenmp")
+HOST_FLAGS = ("-O3", "-std=c++17", "-fopenmp", *HOST_OPTIONS)
 FIXED_COVERAGE = "one original fork/join; outside max(compute,variable_memory)"
 MEMORY_ACCESS_CLASS = "pointwise_three_array_v1"
 OPENMP_ENVIRONMENT_LIMIT = 128
 GENERATED_CONTROL_HEADER = "cpu_protocol_generated.hpp"
 WORKER_RENDERER_DEPENDENCIES = (
+    "numerical_contract.py",
     "emission/cuda/offload.py", "emission/common/loops.py", "emission/common/c_family.py",
     "emission/common/abi.py", "emission/common/symbols.py", "emission/common/schedules.py",
     "emission/c/declarations.py",
@@ -166,6 +169,7 @@ def cpu_protocol_identity():
     source = Path(__file__)
     try:
         return sha256(source.read_bytes() + source.with_suffix(".cpp").read_bytes() +
+                      numerical_build_contract()["identity"].encode() +
                       TEAM_PROOF_SOURCE.encode() + _hash(worker_renderer_identities()).encode() +
                       generated_cpu_control_source(32).encode() + generated_cpu_control_source(64).encode()).hexdigest()
     except OSError as error:
@@ -467,6 +471,7 @@ def validate_cpu_protocol(profile):
 
 def cpu_protocol_costs(profile, backend, *, access_class):
     """Return startup+memory independently from unvalidated compute classes."""
+    require_numerical_profile_contract(profile)
     if access_class != MEMORY_ACCESS_CLASS:
         raise NumericalCalibrationError("CPU memory access class has no independent validation")
     if backend not in CPU_BACKENDS:
@@ -513,6 +518,7 @@ def parse_cpu_protocol_measurements(text):
 
 def calibrate_cpu_protocol(profile, args, *, run=_run):
     """Compile once, prove the linked objects untimed, then measure once."""
+    require_numerical_profile_contract(profile)
     section = _base(profile)
     flags = list(args.fortran_flag or [])
     if (not flags or "-fopenmp" not in flags or

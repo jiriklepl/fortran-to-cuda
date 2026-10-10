@@ -18,6 +18,8 @@ from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from pathlib import Path
 
+from compiler.numerical_contract import numerical_build_contract
+
 from compiler.offload.calibrate import CalibrationError, _run, _tool
 from compiler.offload.collective_calibration import normalize_fortran_options
 from compiler.offload.cpu_dependency_model import (
@@ -42,6 +44,7 @@ from compiler.offload.numerical_calibration import (
     NumericalCalibrationError,
     _compute_samples,
     memory_compute_seconds,
+    require_numerical_profile_contract,
 )
 from compiler.offload.schedule_calibrate import measurement_environment
 
@@ -67,6 +70,7 @@ def dependency_generator_identity():
     try:
         sources = b"".join(name.encode() + (directory / name).read_bytes() for name in names)
         sources += (directory.parent / "runtime" / "numeric.hpp").read_bytes()
+        sources += numerical_build_contract()["identity"].encode()
         sources += _hash_json(worker_renderer_identities()).encode()
         return sha256(sources).hexdigest()
     except OSError as error:
@@ -290,6 +294,7 @@ def validate_dependency_profile(profile):
 def cpu_dependency_costs(profile, graph, backend, *, workload_class, workload_features,
                          primitive_domains, access_class):
     """Return cost-only coefficients after every required independent proof."""
+    require_numerical_profile_contract(profile)
     if backend not in CPU_BACKENDS or access_class != ACCESS_CLASS:
         raise NumericalCalibrationError("CPU dependency execution/access class unavailable")
     section = validate_dependency_profile(profile)
@@ -398,6 +403,7 @@ def calibrate_dependency(profile, args, *, run=_run):
         write_dependency_registry,
     )
 
+    require_numerical_profile_contract(profile)
     protocol = validate_cpu_protocol(profile)
     available_memory = []
     for backend in CPU_BACKENDS:

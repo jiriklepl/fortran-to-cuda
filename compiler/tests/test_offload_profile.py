@@ -5,6 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from compiler.numerical_contract import numerical_build_contract
+
 from compiler.offload.calibrate import (
     CalibrationError,
     fit_transfer,
@@ -48,7 +50,8 @@ def observations(threads=4):
 
 def profile(threads=4):
     return profile_from_measurements(observations(threads), precision_bits=64, cpu_threads=threads,
-                                     cpu_name="Test CPU", nvcc_version="NVCC 13.4", host_cxx_version="GCC 14.4")
+                                     cpu_name="Test CPU", nvcc_version="NVCC 13.4", host_cxx_version="GCC 14.4",
+                                     numerical_contract=numerical_build_contract())
 
 
 def test_parse_and_fit_retains_raw_samples_and_uses_medians():

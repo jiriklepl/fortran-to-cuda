@@ -4,6 +4,24 @@ The compiler lowers selected Fortran procedures into immutable computation IR, v
 types and definite definitions, proves loop independence with `islpy`, and emits C++, CUDA,
 and a Fortran bridge from checked execution, scheduling, addressing, and memory plans.
 
+Generated numerical code publishes a versioned `numerical_contract` in the public
+JSON `build_sources`, library generation metadata and scoped runtime descriptors.
+The `separate-arithmetic-v1` contract requires CUDA `--fmad=false --ftz=false
+--prec-div=true --prec-sqrt=true` and host C++ `-ffp-contract=off`; NVCC receives
+the host requirement through `-Xcompiler`. Its SHA-256 covers the canonical
+contract, and generated source/runtime hashes retain that identity. Independent
+consumers must apply these options and record the actual command: NVCC does not
+expose a verified predefined macro for every option. Original native Fortran
+flags remain unchanged. This contract does not promise bitwise agreement for
+all arithmetic, authorize IEEE flag observers, or change numerical tolerances.
+
+Offline CUDA and generated-CPU calibration uses the same requirements and binds
+them into its identities. Nonempty `NVCC_PREPEND_FLAGS` or `NVCC_APPEND_FLAGS`
+is rejected before calibration work because hidden options can override the
+recorded command. Historical profiles without the contract remain readable as
+evidence; they cannot price the changed backend, and automatic placement uses
+native execution until compatible calibration is supplied.
+
 ```mermaid
 flowchart LR
     F[Fortran procedures] --> P[fparser frontend]

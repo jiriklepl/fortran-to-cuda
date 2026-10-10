@@ -19,6 +19,7 @@ from compiler.emission.common.symbols import host_symbols
 from compiler.emission.cuda.kernels import generate_kernel, generate_launch
 from compiler.ir import ExecutionPlan, FunctionIR, HostBlock, ParallelRegion, SequentialRegion
 from compiler.memory import MemoryPlan, plan_memory, validate_memory
+from compiler.numerical_contract import numerical_source_prologue
 
 
 def _numerical_environment_guard(function, *, collective=False, query=False):
@@ -84,6 +85,7 @@ def generate_cuda(
     arrays = tuple(symbol for symbol in function.parameters if symbol.rank)
     scalars = tuple(symbol for symbol in function.parameters if not symbol.rank)
     lines = [
+        numerical_source_prologue().rstrip(),
         "#include <cuda_runtime.h>",
         "#include <cstddef>",
         "#include <cstdio>",

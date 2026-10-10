@@ -3,6 +3,8 @@
 from hashlib import sha256
 from importlib.resources import files
 
+from compiler.numerical_contract import numerical_build_contract, numerical_source_prologue
+
 
 def read_common_header() -> str:
     """Keep a single distributable support header with separately maintained units."""
@@ -24,7 +26,7 @@ def read_common_header() -> str:
                     for name in ("offload.hpp", "hybrid.hpp") if runtime.joinpath(name).is_file()]
     units += "\n" + floating_environment
     units += "\n#ifdef FORT_OFFLOAD_ENABLED\n" + "\n".join(experimental) + "\n#endif\n"
-    return base.replace("// FORT_RUNTIME_UNITS", units)
+    return numerical_source_prologue() + base.replace("// FORT_RUNTIME_UNITS", units)
 
 
 def read_scoped_runtime() -> tuple[dict[str, str], dict]:
@@ -41,7 +43,7 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
         "staging.hpp": runtime.joinpath("staging.hpp").read_text(encoding="utf-8"),
         "scoped_regions.hpp": runtime.joinpath("scoped_regions.hpp").read_text(encoding="utf-8"),
         "scoped_planning.hpp": runtime.joinpath("scoped_planning.hpp").read_text(encoding="utf-8"),
-        "scoped_runtime.cu": runtime.joinpath("scoped_runtime.cu").read_text(encoding="utf-8"),
+        "scoped_runtime.cu": numerical_source_prologue() + runtime.joinpath("scoped_runtime.cu").read_text(encoding="utf-8"),
         "fort_scoped_memory.f90": runtime.joinpath("scoped_memory.f90").read_text(encoding="utf-8"),
     }
     hashes = {name: sha256(content.encode()).hexdigest() for name, content in outputs.items()}
@@ -51,6 +53,7 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
         "abi_version": 1,
         "runtime_id": identity,
         "link_once": True,
+        "numerical_contract": numerical_build_contract(),
         "headers": ["scoped_runtime.h", "floating_environment.hpp", "scoped_entry.hpp", "scoped_team_observer.hpp", "view_entry.hpp", "section_copy.hpp", "staging.hpp", "scoped_regions.hpp", "scoped_planning.hpp"],
         "borrowed_views": {
             "abi_version": 1, "validate": "fort_scope_view_get_v1",
@@ -109,7 +112,8 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
             "native_selection": "execute reached segment with coherence hooks; retain owning context",
         },
         "sources": [
-            {"path": "scoped_runtime.cu", "language": "cuda", "standard": "c++17", "host_openmp": True},
+            {"path": "scoped_runtime.cu", "language": "cuda", "standard": "c++17", "host_openmp": True,
+             "numerical_contract": numerical_build_contract()},
             {"path": "fort_scoped_memory.f90", "language": "fortran", "module": "fort_scoped_memory"},
             {"path": "fort_scoped_team_observer.f90", "language": "fortran", "module": "fort_scoped_team_observer"},
         ],

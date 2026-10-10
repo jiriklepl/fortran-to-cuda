@@ -13,6 +13,7 @@ from compiler.emission.cuda.generator import generate_cuda
 from compiler.emission.fortran.generator import generate_fortran
 from compiler.ir import CompilationError, FunctionIR, SourceLocation
 from compiler.memory import plan_memory
+from compiler.numerical_contract import numerical_build_contract
 
 if TYPE_CHECKING:
     from compiler.ir import ExecutionPlan
@@ -26,6 +27,7 @@ class GeneratedSources:
     offload: dict | None = None
     artifacts: dict[str, str] = field(default_factory=dict)
     scoped: dict | None = None
+    numerical_contract: dict = field(default_factory=numerical_build_contract)
 
 
 def generate_sources(
@@ -58,7 +60,7 @@ def generate_sources(
         shared = generate_scoped(function, plan, offload_config, common_header, runtime_id=runtime["runtime_id"])
         artifacts.update({"shared_entry.cu": shared.cuda, "shared_interface.f90": shared.fortran,
                           "scoped-runtime.json": json.dumps(runtime, indent=2) + "\n"})
-        scoped = {**shared.report, "runtime": runtime}
+        scoped = {**shared.report, "runtime": runtime, "numerical_contract": numerical_build_contract()}
     abi = abi_arguments(function.parameters)
     memory = plan_memory(plan, function.parameters, acquisition_policy="dedicated")
     ordinary_memory = plan_memory(plan, function.parameters, acquisition_policy="pooled")
@@ -66,6 +68,7 @@ def generate_sources(
     if offload_config is not None and offload_config.policy != "always":
         from compiler.emission.cuda.offload import generate_offload
         offload = generate_offload(function, plan, offload_config)
+        offload.report["numerical_contract"] = numerical_build_contract()
     cpp = generate_cpp(function, plan, abi, common_header) + append_cpu_sessions(function, plan, memory=memory)
     if offload is not None:
         from compiler.emission.c.declarations import cpp_declaration

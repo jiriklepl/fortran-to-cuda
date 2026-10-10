@@ -36,6 +36,7 @@ from compiler.offload.analysis import (
     scope_slab_candidates,
 )
 from compiler.offload.codegen import profile_expression, query_expression
+from compiler.numerical_contract import numerical_build_contract, numerical_source_prologue
 from compiler.offload.preparation import prepare_offload
 from compiler.offload.profile import (
     ProfileError,
@@ -957,6 +958,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                 *native_preflight.fortran, "  end interface", f"end module {name}", ""]
     report = {
         "schema_version": 1, "abi_version": 1, "entry_abi_version": ENTRY_ABI_VERSION,
+        "numerical_contract": numerical_build_contract(),
         "entry": c_name, "fortran_module": name, "fortran_procedure": "run",
         "cuda_source": "shared_entry.cu", "fortran_source": "shared_interface.f90",
         "array_parameters": [{"name": s.name, "rank": s.rank, "dtype": s.dtype.value,
@@ -1102,4 +1104,4 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
             "calibration_protocol_id": "0x4654434f4c4c0001",
             "calibration": "offline original persistent team and emitted coordination; serial rates are not substituted",
         }
-    return ScopedEmission("\n".join(lines), "\n".join(fortran), report)
+    return ScopedEmission(numerical_source_prologue() + "\n".join(lines), "\n".join(fortran), report)
