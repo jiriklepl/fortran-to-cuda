@@ -151,7 +151,7 @@ def test_explicit_fortran_flags_replace_defaults_and_require_openmp(tmp_path):
 
     with pytest.raises(ValueError, match="include -fopenmp"):
         calibrate_collective(
-            {},
+            profile(),
             SimpleNamespace(fortran_flag=["-O2"]),
             tmp_path,
             "nvcc",

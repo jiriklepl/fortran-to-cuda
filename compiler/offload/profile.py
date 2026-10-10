@@ -16,6 +16,8 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
+from compiler.numerical_contract import require_numerical_build_contract
+
 SCHEMA_VERSION = 1
 TRANSFER_KINDS = ("h2d_pageable", "d2h_pageable", "h2d_pinned", "d2h_pinned")
 THROUGHPUT_RATES = (
@@ -53,6 +55,7 @@ def collective_protocol_identity() -> dict:
     """Conservatively identify source that emits the measured team protocol."""
     sources = {}
     for package, names in (
+        ("compiler", ("numerical_contract.py",)),
         ("compiler.scopes", ("collective.py", "collective_roles.py", "source.py")),
         ("compiler.emission.cuda", ("scoped.py", "offload.py")),
         ("compiler.runtime", ("scoped_team_observer.hpp", "scoped_team_observer.f90")),
@@ -67,6 +70,14 @@ class ProfileError(ValueError):
     """An absent, invalid, or mismatched hardware profile cannot guide offload."""
 
 
+def require_profile_numerical_contract(profile: dict) -> None:
+    """Legacy profiles remain readable, but cannot price changed arithmetic."""
+    try:
+        require_numerical_build_contract(profile.get("numerical_contract") if isinstance(profile, dict) else None)
+    except ValueError as error:
+        raise ProfileError("hardware profile " + str(error)) from error
+
+
 def compiler_identity(profile: dict) -> dict[str, str | int]:
     """Extract identities that the emitted CUDA translation unit can verify.
 
@@ -74,6 +85,7 @@ def compiler_identity(profile: dict) -> dict[str, str | int]:
     and GCC version triples can be matched to compiler predefined macros;
     unknown banners do not make an automatic policy eligible for execution.
     """
+    require_profile_numerical_contract(profile)
     toolchain = profile["toolchain"]
     cuda = re.search(r"\bV(\d+\.\d+\.\d+)\b", toolchain["nvcc_version"])
     host_banner = toolchain["host_cxx_version"].splitlines()[0]
@@ -117,6 +129,8 @@ def validate_profile(
         raise ProfileError("profile must be an object with integer schema_version")
     if profile["schema_version"] != SCHEMA_VERSION:
         raise ProfileError(f"unsupported hardware profile schema: {profile['schema_version']}")
+    if "numerical_contract" in profile:
+        require_profile_numerical_contract(profile)
     if type(profile.get("precision_bits")) is not int or profile["precision_bits"] not in (32, 64):
         raise ProfileError("precision_bits must be 32 or 64")
     if type(profile.get("cpu_threads")) is not int or profile["cpu_threads"] < 1:

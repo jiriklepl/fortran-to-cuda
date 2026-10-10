@@ -364,6 +364,20 @@ def main() -> None:
                                     "Ordinary-call policy " + sources.offload["policy"] +
                                     "; runtime footprints and choices are described by offload.analysis and FORT_OFFLOAD_TRACE."),
                     "outputs": list(outputs),
+                    "numerical_contract": sources.numerical_contract,
+                    "build_sources": [
+                        {"path": args.cuda_output, "language": "cuda", "role": "numerical_entry",
+                         "numerical_contract": sources.numerical_contract},
+                        {"path": args.cpp_output, "language": "c++", "role": "numerical_entry",
+                         "numerical_contract": sources.numerical_contract},
+                        {"path": args.fortran_output, "language": "fortran", "role": "numerical_entry"},
+                        *[{**item, "role": "common_runtime"} for item in
+                          (sources.scoped["runtime"]["sources"] if sources.scoped is not None else [])],
+                        *([{"path": "shared_entry.cu", "language": "cuda", "role": "shared_entry",
+                             "numerical_contract": sources.numerical_contract},
+                            {"path": "shared_interface.f90", "language": "fortran", "role": "shared_entry"}]
+                          if sources.scoped is not None else []),
+                    ],
                     **({"offload": sources.offload} if sources.offload is not None else {}),
                     **({"scoped": sources.scoped} if sources.scoped is not None else {}),
                 },

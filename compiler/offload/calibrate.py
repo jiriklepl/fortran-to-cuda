@@ -31,6 +31,11 @@ from pathlib import Path
 from typing import Any
 
 from compiler.emission.common.resources import read_scoped_runtime
+from compiler.numerical_contract import (
+    cuda_compile_options,
+    numerical_build_contract,
+    require_explicit_cuda_environment,
+)
 
 from .profile import (
     LATENCY_RATES,
@@ -42,6 +47,7 @@ from .profile import (
     TRANSFER_KINDS,
     WORKER_RATES,
     ProfileError,
+    require_profile_numerical_contract,
     validate_profile,
 )
 
@@ -124,6 +130,7 @@ def profile_from_measurements(
     cpu_name: str,
     nvcc_version: str,
     host_cxx_version: str,
+    numerical_contract: dict | None = None,
 ) -> dict:
     """Build a validated profile; missing measurements never get default rates."""
     devices = [record for record in records if record["kind"] == "device"]
@@ -182,6 +189,8 @@ def profile_from_measurements(
         },
         "measurements": records,
     }
+    if numerical_contract is not None:
+        profile["numerical_contract"] = numerical_contract
     try:
         return validate_profile(profile)
     except ProfileError as error:
@@ -428,6 +437,7 @@ def _tool(path: str | None, candidates: tuple[str, ...]) -> str:
 
 
 def _calibrate_scoped(profile: dict, args: argparse.Namespace, directory: Path, nvcc: str, host: str) -> dict:
+    require_explicit_cuda_environment()
     scoped_directory = directory / "scoped"
     scoped_directory.mkdir(exist_ok=True)
     sources, manifest = read_scoped_runtime()
@@ -435,7 +445,7 @@ def _calibrate_scoped(profile: dict, args: argparse.Namespace, directory: Path, 
         (scoped_directory / name).write_text(content)
     source = Path(__file__).with_name("scoped_calibration.cu")
     binary = scoped_directory / "scoped-calibration"
-    command = [nvcc, "-O3", "-std=c++17", "-arch=" + args.arch, "-ccbin", host,
+    command = [nvcc, "-O3", *cuda_compile_options(), "-std=c++17", "-arch=" + args.arch, "-ccbin", host,
                "-Xcompiler=-fopenmp", "-DCALIBRATION_PRECISION=" + str(args.precision),
                "-I" + str(scoped_directory), str(source), str(scoped_directory / "scoped_runtime.cu"),
                "-o", str(binary)]
@@ -474,6 +484,7 @@ def _calibrate_scoped(profile: dict, args: argparse.Namespace, directory: Path, 
 
 
 def calibrate(args: argparse.Namespace) -> dict:
+    require_explicit_cuda_environment()
     output = Path(args.output).resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     directory = Path(args.build_dir).resolve() if args.build_dir else output.with_suffix(".build")
@@ -492,12 +503,13 @@ def calibrate(args: argparse.Namespace) -> dict:
             profile = validate_profile(json.loads(base_profile_bytes), precision_bits=args.precision, cpu_threads=args.threads,
                                        hardware={"cpu_name": cpu_identity()},
                                        toolchain={"nvcc_version": nvcc_version, "host_cxx_version": host_version})
+            require_profile_numerical_contract(profile)
         except (ProfileError, ValueError) as error:
             raise CalibrationError(str(error)) from error
     else:
         source = Path(__file__).with_name("calibration.cu")
         binary = directory / "calibration"
-        command = [nvcc, "-O3", "-std=c++17", "-arch=" + args.arch, "-ccbin", host,
+        command = [nvcc, "-O3", *cuda_compile_options(), "-std=c++17", "-arch=" + args.arch, "-ccbin", host,
                    "-Xcompiler=-fopenmp", "-DCALIBRATION_PRECISION=" + str(args.precision),
                    str(source), "-o", str(binary)]
         print("Building standalone CUDA calibration...", file=sys.stderr, flush=True)
@@ -507,7 +519,8 @@ def calibrate(args: argparse.Namespace) -> dict:
         observations = _run(run_command, directory, directory / "measurements.jsonl", timeout=180)
         profile = profile_from_measurements(parse_measurements(observations), precision_bits=args.precision,
                                             cpu_threads=args.threads, cpu_name=cpu_identity(),
-                                            nvcc_version=nvcc_version, host_cxx_version=host_version)
+                                            nvcc_version=nvcc_version, host_cxx_version=host_version,
+                                            numerical_contract=numerical_build_contract())
         profile["calibration"] = {"build_command": command, "run_command": run_command,
                                   "benchmark_source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
                                   "max_transfer_bytes": args.max_mib * 1024 * 1024,

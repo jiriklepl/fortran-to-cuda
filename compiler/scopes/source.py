@@ -26,6 +26,7 @@ from compiler.frontend.component_bindings import references
 from compiler.frontend.source_effects import SourceEffects, _children, _kind, _part
 from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.integers import integer_literal
+from compiler.numerical_contract import numerical_build_contract
 from compiler.scopes.access import build_native_accesses, build_native_view_accesses
 from compiler.scopes.numerical import load_numerical_sources, resource_binding
 from compiler.scopes.variants import VariantRegistry
@@ -2360,6 +2361,7 @@ class ScopeBuilder:
                       "native_rectangles_per_resource":32},
             "build_sources":[
                 {"path":name,"language":"cuda" if name.endswith(".cu") else "fortran",
+                 **({"numerical_contract": numerical_build_contract()} if name.endswith(".cu") else {}),
                  "role":"common_runtime" if name in self.runtime_outputs else
                         "original_source" if name.startswith("sources/") else "shared_entry"}
                 for name in self.outputs if name.endswith((".cu",".f90"))
