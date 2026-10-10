@@ -515,3 +515,54 @@ def test_joined_token_does_not_authorize_partial_original_group_selection(tmp_pa
     opening = graph.node_id(group[0])
     with pytest.raises(CompilationError, match="registered whole-closure"):
         prove(analysis, (opening,))
+
+
+def large_unrelated_internal(*, reached=False):
+    declarations = "\n".join(f"real(8)::unused_{index}" for index in range(300))
+    return ("call inactive()" if reached else "a(1)=a(1)+1.0_8") + f"""
+contains
+subroutine inactive()
+{declarations}
+call unknown_inactive()
+end subroutine
+"""
+
+
+def test_unreached_contains_sibling_does_not_spend_reached_descriptor_resolution_budget(tmp_path):
+    _path, analysis, _graph, ids = fixture(tmp_path, child=large_unrelated_internal())
+    assert analysis.operation_limit == 256
+    assert analysis.depth_limit == 8
+    public = prove(analysis, ids).public()
+    assert set(public["source_call_closure"]) == {"intervals::read_modify"}
+    assert public["source_operations"] == 2
+    assert public["resources"][0]["stable"]
+
+
+def test_reached_internal_child_still_spends_original_resolution_budget(tmp_path):
+    _path, analysis, _graph, ids = fixture(tmp_path, child=large_unrelated_internal(reached=True))
+    with pytest.raises(CompilationError, match="resolution budget exhausted"):
+        prove(analysis, ids)
+    assert analysis.operation_limit == 256
+    assert not getattr(analysis, "_descriptor_window_proofs", {})
+
+
+@pytest.mark.parametrize("mutation", ["imports", "kinds", "binding"])
+def test_own_original_resolution_mutations_still_reject_with_large_inactive_child(tmp_path, mutation):
+    _path, analysis, _graph, ids = fixture(tmp_path, child=large_unrelated_internal())
+    proof = prove(analysis, ids)
+    scope = analysis.routines["intervals::read_modify"].scope
+    if mutation == "imports":
+        scope.imports["missing"] = ("foreign", "name")
+    elif mutation == "kinds":
+        scope.kinds.values["rk"] = 4
+    else:
+        scope.bindings["a"].intent = "out"
+    with pytest.raises(CompilationError, match="original.*authority"):
+        proof.resource_state(ROOT)
+
+
+def test_own_automatic_specification_effects_are_not_skipped_with_inactive_child(tmp_path):
+    declaration = "real(8),intent(inout)::a(:)\nreal(8)::scratch(unknown_bound())"
+    _path, analysis, _graph, ids = fixture(tmp_path, child=large_unrelated_internal(), child_decl=declaration)
+    with pytest.raises(CompilationError, match="unknown function/escape"):
+        prove(analysis, ids)

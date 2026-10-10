@@ -243,7 +243,13 @@ class _Check:
         if len(self.active) >= self.analysis.depth_limit or len(self.checked) + len(self.active) >= self.analysis.procedure_limit:
             raise CompilationError("descriptor window direct call closure budget exhausted")
         routine = self.analysis._require_original(name)
-        _validate_resolution(self.analysis, routine.scope, _walk(routine.scope.node))
+        # CONTAINS descendants are separate original procedures. Authenticate
+        # this procedure's own declarations/body now; only reached direct calls
+        # spend the bounded transitive descriptor budget on child scopes.
+        own_parts = tuple(part for part in _children(routine.scope.node)
+                          if _kind(part) in {"Subroutine_Stmt", "Specification_Part",
+                                             "Execution_Part", "End_Subroutine_Stmt"})
+        _validate_resolution(self.analysis, routine.scope, _walk(own_parts))
         proofs = [proof for proof in getattr(self.analysis, "_native_prefix_proofs", {}).values()
                   if isinstance(proof, NativePrefixProof) and proof.procedure == name]
         if proofs:

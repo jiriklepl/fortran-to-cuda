@@ -9,7 +9,9 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.tests.test_reached_window_owner import emit_window
+from compiler.numerical_contract import require_numerical_build_contract
+from compiler.tests.test_reached_window_discovery import discovery_fixture
+from compiler.tests.test_reached_window_owner import SOURCE, emit_window
 from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
 from compiler.tests.test_source_scopes import run
 
@@ -40,7 +42,9 @@ end program
 """
 
 
-@pytest.fixture(scope="module", params=("ordinary", "resource_fallback"))
+@pytest.fixture(scope="module", params=(("explicit", False), ("explicit", True),
+                                      ("discovered", False), ("discovered", True),
+                                      ("explicit_live_iterator", False)))
 def window_binaries(tmp_path_factory, request):
     nvcc = shutil.which("nvcc")
     host = shutil.which("g++-14") or shutil.which("g++")
@@ -49,13 +53,22 @@ def window_binaries(tmp_path_factory, request):
         pytest.skip("CUDA, C++ and Fortran toolchain required")
     directory = tmp_path_factory.mktemp("one_shot_window")
     architecture = actual_profile(directory, nvcc, host)["hardware"]["compute_capability"].replace(".", "")
-    resource_fallback = request.param == "resource_fallback"
-    original, outputs, report, _owner = emit_window(directory, device_budget=0 if resource_fallback else None)
+    emission, resource_fallback = request.param
+    if emission == "discovered":
+        original, builder = discovery_fixture(directory, device_budget=0 if resource_fallback else None)
+        outputs, report = builder.run()
+        assert report["reached_window_discovery"]["selected"]
+    elif emission == "explicit_live_iterator":
+        source = SOURCE.replace("tail_visits=tail_visits+1", "tail_visits=tail_visits+i")
+        original, outputs, report, _owner = emit_window(directory, source)
+        assert len(report["scopes"][0]["gpu_leaves"]) == 1
+    else:
+        original, outputs, report, _owner = emit_window(directory, device_budget=0 if resource_fallback else None)
     for name, text in outputs.items():
         artifact = directory / name
         artifact.parent.mkdir(parents=True, exist_ok=True)
         artifact.write_text(text)
-    objects = []
+    objects, compile_commands = [], []
     flags = [fortran, "-O3", "-cpp", "-std=f2018", "-fopenmp", "-fcheck=all,array-temps"]
     for role in ("common_runtime", "shared_entry", "original_source"):
         for item in report["build_sources"]:
@@ -63,9 +76,18 @@ def window_binaries(tmp_path_factory, request):
                 continue
             artifact = directory / item["path"]
             target = artifact.with_suffix(".o")
-            compiler = ([nvcc, "-O2", "-std=c++17", "-ccbin", host, "-arch=sm_" + architecture,
-                         "-Xcompiler=-fopenmp"] if item["language"] == "cuda" else flags)
-            run([*compiler, "-I", str(directory), "-c", str(artifact), "-o", str(target)], cwd=directory)
+            if item["language"] == "cuda":
+                contract = item["numerical_contract"]
+                require_numerical_build_contract(contract)
+                compiler = [nvcc, "-O2", "-std=c++17", "-ccbin", host, "-arch=sm_" + architecture,
+                            "-Xcompiler=-fopenmp", *contract["required_cuda_options"],
+                            *("-Xcompiler=" + option for option in contract["required_host_options"])]
+            else:
+                compiler = flags
+            command = [*compiler, "-I", str(directory), "-c", str(artifact), "-o", str(target)]
+            run(command, cwd=directory)
+            compile_commands.append({"path": item["path"], "language": item["language"], "argv": command,
+                                     "numerical_contract": item.get("numerical_contract")})
             objects.append(str(target))
     driver = directory / "driver.f90"
     driver.write_text(DRIVER)
@@ -77,13 +99,14 @@ def window_binaries(tmp_path_factory, request):
     run([*flags, str(original), str(driver), "-o", str(native)], cwd=directory)
     run([str(native)], cwd=directory)
     expected = (directory / "fields.bin").read_bytes()
-    return directory, candidate, expected, report, resource_fallback
+    (directory / "compile-commands.json").write_text(json.dumps(compile_commands, indent=2) + "\n")
+    return directory, candidate, expected, report, resource_fallback, emission
 
 
 @pytest.mark.cuda
 @pytest.mark.parametrize("disabled", [False, True])
 def test_one_shot_window_matches_complete_native_arrays_and_all_original_visits(window_binaries, disabled):
-    directory, candidate, expected, report, resource_fallback = window_binaries
+    directory, candidate, expected, report, resource_fallback, emission = window_binaries
     env = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "FORT_RUNTIME_TRACE": "1"}
     if disabled:
         env["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -95,7 +118,8 @@ def test_one_shot_window_matches_complete_native_arrays_and_all_original_visits(
     # Extra original stages still execute once, after mandatory publication and
     # MOVE_ALLOC. Zero-trip enclosing loops never activate the window at all.
     launches = result.stderr.count("FORT_SCOPED launch ")
-    assert launches == (0 if disabled or resource_fallback else 16)
+    numerical_launches = 8 if emission == "explicit_live_iterator" else 16
+    assert launches == (0 if disabled or resource_fallback else numerical_launches)
     contexts = result.stderr.count("FORT_SCOPED create ")
     # At most one context may be opened at each first reached traversal. A
     # failed pre-execution resource guard cannot retry on later backedges.
@@ -107,6 +131,8 @@ def test_one_shot_window_matches_complete_native_arrays_and_all_original_visits(
                "complete_arrays_and_halos_equal": True,
                "original_prefix_and_tail_counters_equal": True,
                "reached_window": report["scopes"][0]["reached_window"],
+               "compiler_owned_discovery": report["scopes"][0]["reached_window"]["automatic_discovery"],
+               "emission": emission,
                "performance_sample": False}
     (directory / ("window-disabled.json" if disabled else "window-enabled.json")).write_text(
         json.dumps(receipt, indent=2, sort_keys=True) + "\n")

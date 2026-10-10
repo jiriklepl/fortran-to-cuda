@@ -2390,6 +2390,9 @@ class ScopeBuilder:
                 self.boundaries.append({"procedure": self.entry.qualified, "reason": str(error),
                                         "execution": "unchanged native source"})
                 return self.finish()
+            from compiler.scopes.window_discovery import discover_reached_window
+            if discover_reached_window(self):
+                return self.finish()
         nodes = self.inline.prepare(_children(self.entry.execution)) if not self.config.collective else _children(self.entry.execution)
         self.generated.update(self.inline.generated)
         self.numerical_ir.update(self.inline.ir)
@@ -2445,6 +2448,8 @@ class ScopeBuilder:
             "schema_version":1, "entry":self.entry.qualified,
             "scope_execution": self.config.scope_execution,
             **({"reached_plan_schema_version": 1} if self.config.scope_execution == "reached" else {}),
+            **({"reached_window_discovery": self.reached_window_discovery}
+               if hasattr(self, "reached_window_discovery") else {}),
             "automatic_scope_available":bool(self.scopes), "scope_count":len(self.scopes),
             "scopes":self.scopes, "boundaries":self.boundaries, "source_edits":patches,
             "runtime_provenance": self.runtime_provenance.public(available=bool(self.scopes), additional=[
