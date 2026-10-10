@@ -180,7 +180,8 @@ def statement_span(node):
     return min(span[0] for span in spans), max(span[1] for span in spans)
 
 
-def fragment(builder, nodes, *, kind="native source", selected=None, private_roots=(), native_metadata=False):
+def fragment(builder, nodes, *, kind="native source", selected=None, private_roots=(), native_metadata=False,
+             completion=None, span=None):
     """Demand effects from exact original nodes, excluding owner entry events."""
     original = original_roots(builder.inline.original_selection(nodes)) if selected is None else ()
     full_original = original
@@ -192,7 +193,17 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     # Bounds and tile guards must retain the completion proof of the exact
     # original team. The numerical outlining token alone cannot authorize
     # native effects; issue an independent native joined-group proof here.
-    completion_proof = (analysis.joined_completion(builder.entry.qualified, original) if joined else None)
+    completion_proof = completion
+    if completion_proof is not None:
+        from compiler.frontend.worksharing_completion import WorksharingNativeCompletionProof
+        if not isinstance(completion_proof, WorksharingNativeCompletionProof):
+            raise CompilationError("native subsegment requires a registered native worksharing proof")
+        completion_proof.validate(builder.analysis, builder.entry.qualified, original)
+        # This validated original token supplies private-state facts only.
+        # Issue the copied analysis's authority once, after capture facts have
+        # been established below, rather than proving the same parent twice.
+    elif joined:
+        completion_proof = analysis.joined_completion(builder.entry.qualified, original)
     if completion_proof is not None:
         private_roots = set(private_roots) | set(completion_proof.private_roots)
     original = tuple(node for node in original if _kind(node) != "Comment")
@@ -235,7 +246,14 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     if completion_proof is not None:
         # Verified local capture facts participate in graph authority. Issue
         # the token against the same reached proof used for materialization.
-        completion_proof = analysis.joined_completion(builder.entry.qualified, full_original)
+        if completion is None:
+            completion_proof = analysis.joined_completion(builder.entry.qualified, full_original)
+        else:
+            parent_graph = analysis.structure(builder.entry.qualified)
+            completion_proof = analysis.worksharing_native_completion(
+                builder.entry.qualified,
+                tuple(node for identity in completion.parent.selected_node_ids
+                      for node in parent_graph.source_nodes(identity)), full_original)
     summary = analysis.segment_summary(builder.entry.qualified, selection, capture_locals=True)
     if (not summary["complete"] and completion_proof is not None
             and builder.config.scope_execution == "reached"
@@ -262,7 +280,8 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
                 continue
             effects.setdefault(operation["resource"], set()).add(
                 "read" if operation["kind"] == "read" else "write")
-    span = (statement_span(nodes[0])[0], statement_span(nodes[-1])[1]) if kind != "condition read" else ()
+    span = span if span is not None else ((statement_span(nodes[0])[0], statement_span(nodes[-1])[1])
+                                        if kind != "condition read" else ())
     sections = analysis.native_sections_for_nodes(builder.entry.qualified, selection, capture_locals=True,
                                                   completion=completion_proof)
     sections = replace(sections, resources=tuple(item for item in sections.resources
@@ -595,6 +614,16 @@ class StructuredScope:
     def public(self):
         from compiler.scopes.source import _span
 
+        def reduction_diagnostic(operation):
+            if self.builder.config.scope_execution != "reached":
+                return self.builder.analysis.reduction_candidates(
+                    self.builder.entry.qualified, operation.summary.get("selected_node_ids", ()))
+            # Serialization must not expand another proof search. Explicit
+            # reduction analysis remains a separate source API until execution
+            # requests such a proof at the reached operation.
+            return {"analysis": "not_requested", "execution_supported": False,
+                    "reason": "diagnostic serialization does not request reduction eligibility"}
+
         def tree(items):
             result = []
             for item in items:
@@ -652,8 +681,7 @@ class StructuredScope:
                                        'coherence': 'opaque host-only range; registration rejects managed aliases',
                                        'device_capture': False}
                                        for root, binding in operation.host_metadata.items()},
-                                   "reduction_analysis": self.builder.analysis.reduction_candidates(
-                                       self.builder.entry.qualified, operation.summary.get("selected_node_ids", ())),
+                                   "reduction_analysis": reduction_diagnostic(operation),
                                    "planned_effects": True} for index, operation in enumerate(self.native)],
             "structured_tree": {"branch_depth_limit": 8, "operation_count": self.operation_count,
                                 "nodes": tree(self.tree)},

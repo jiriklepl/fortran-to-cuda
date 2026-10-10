@@ -190,9 +190,22 @@ class LexicalOwner:
     def admit(self, nodes, *, source_guard=None, native_source=None, boundary_nodes=None, condition_only=False):
         self.refresh()
         before = self.owner.builder.scope_checkpoint()
+        joined_rejection = None
         try:
-            scope = StructuredScope(self.builder, nodes, condition_only=condition_only,
-                                    native_metadata=True, lexical_native=True)
+            scope = None
+            if len(nodes) > 1 and not condition_only:
+                from compiler.scopes.joined_team import JoinedTeam
+                try:
+                    scope = JoinedTeam(self.builder, nodes)
+                except CompilationError as error:
+                    # A joined native group can remain coherent without cuts.
+                    # Unsupported participation never grants numerical authority.
+                    joined_rejection = str(error)
+                    self.owner.builder.restore_scope_checkpoint(before)
+                    self.refresh()
+            if scope is None:
+                scope = StructuredScope(self.builder, nodes, condition_only=condition_only,
+                                        native_metadata=True, lexical_native=True)
             from compiler.scopes.views import view_call
             if any(view_call(call) for call in scope.calls):
                 raise CompilationError("lexical rectangular calls require reached view preflight")
@@ -227,6 +240,8 @@ class LexicalOwner:
         except CompilationError as error:
             self.owner.builder.restore_scope_checkpoint(before)
             self.refresh()
+            if joined_rejection is not None:
+                error = CompilationError(str(error) + "; reached original-team split: " + joined_rejection)
             if condition_only:
                 raise
             if source_guard is None and len(nodes) == 1 and _kind(nodes[0]) == "Call_Stmt":
@@ -468,8 +483,19 @@ class LexicalOwner:
         if builder.config.policy == "auto":
             selector, _ = builder.entry_artifacts(sorted(self.owner.leaves)[0])
             imports += [f"use {selector['fortran_module']}, only: fort_choose => {selector['planning']['fortran_selector']}"]
-        preserve_original = any(operation.preserve_original for operation in unit.scope.native)
-        execution = unit.scope.emit(handles, values, actuals, imports, selector=selector,
+        from compiler.scopes.joined_team import JoinedTeam
+        joined_team = isinstance(unit.scope, JoinedTeam)
+        preserve_original = joined_team or any(operation.preserve_original for operation in unit.scope.native)
+        joined_patches = []
+        joined_copyback = []
+        if joined_team:
+            extra, joined_patches, joined_prepare, joined_copyback = unit.scope.emit_original(
+                self, unit, handles, values, imports, spec)
+            spec += extra
+            execution = (joined_prepare, ["fort_status = fort_scope_wait(fort_context)",
+                              "if (fort_status /= FORT_SCOPE_OK) error stop 'original team completion failed'"])
+        else:
+            execution = unit.scope.emit(handles, values, actuals, imports, selector=selector,
                                     terminal_owner=False, preflight_failure=failure,
                                     surround_native=preserve_original,
                                     logical_lower_bounds={root: tuple(
@@ -487,6 +513,8 @@ class LexicalOwner:
             # native ABI of a companion never reads absent control arguments.
             prefix = ["block", *dict.fromkeys(imports), *spec,
                       "logical :: fort_native_ready", "fort_native_ready = .false."]
+            if joined_team:
+                prefix += ["fort_team_run = .false.", "fort_team_native = .false.", "fort_team_owned = .false."]
             if self.control_guard:
                 prefix += [f"if ({self.control_guard}) then"]
             prefix += [f"if ({self.enabled}) then", f"associate(fort_context => {self.context})",
@@ -495,9 +523,9 @@ class LexicalOwner:
             if self.control_guard:
                 prefix += ["endif"]
             suffix = ["if (fort_native_ready) then", f"associate(fort_context => {self.context})",
-                      *after, "end associate", "endif", "end block"]
+                      *after, "end associate", "endif", *joined_copyback, "end block"]
             return [(first, first-1, "\n".join(fortran_lines(prefix))+"\n"),
-                    (last+1, last, "\n".join(fortran_lines(suffix))+"\n")]
+                    (last+1, last, "\n".join(fortran_lines(suffix))+"\n"), *joined_patches]
         original = unit.native_source if unit.native_source is not None else self.original(unit.nodes)
         lines = [f"if ({self.enabled}) then", f"associate(fort_context => {self.context})", block + ": block",
                  *dict.fromkeys(imports), *spec, *prepare, *execution, "end block " + block, "end associate", "endif",

@@ -24,6 +24,9 @@ class InlineRegions:
         self.used = set()
         self.bindings = {}
         self.definition_proofs = {}
+        self.collective_regions = set()
+        self.computations = {}
+        self.attempts = self.operations = 0
         # These identities authorize projections made here, never an arbitrary
         # AST carrying a plausible span or fort_inline_region attribute.
         self.source_selections = {}
@@ -110,7 +113,6 @@ class InlineRegions:
             descendants = {id(child) for node in selected for child in walk(node) if child is not node}
             unique = {id(node): node for node in selected}
             return tuple(node for key, node in unique.items() if key not in descendants)
-        computations, operations, attempts = {}, 0, 0
         lifetime = {"Return_Stmt", "Exit_Stmt", "Cycle_Stmt", "Allocate_Stmt", "Deallocate_Stmt",
                     "Pointer_Assignment_Stmt", "Nullify_Stmt", "Stop_Stmt", "Error_Stop_Stmt"}
 
@@ -147,7 +149,6 @@ class InlineRegions:
             return tuple(before), tuple(after)
 
         def prepare_sequence(sequence, depth=0):
-            nonlocal operations, attempts
             result = []
             try:
                 groups = grouped_nodes(sequence)
@@ -185,12 +186,7 @@ class InlineRegions:
                 first, last = statement_span(group[0])[0], statement_span(group[-1])[1]
                 before, after = context(sources)
                 try:
-                    own_operations = sum(_kind(item) in {"Assignment_Stmt", "Block_Nonlabel_Do_Construct", "If_Stmt", "If_Construct"}
-                                         for root in group for item in walk(root))
-                    if attempts >= 32 or operations + own_operations > 256:
-                        raise CompilationError("bounded inline region/operation budget exhausted")
-                    attempts += 1
-                    operations += own_operations
+                    self._reserve(group)
                     if array_operation:
                         from compiler.scopes.array_operations import extract_array_operation
                         extraction = extract_array_operation(self.builder.analysis, self.builder.entry, node,
@@ -199,60 +195,90 @@ class InlineRegions:
                         extraction = extract_region(self.builder.analysis, self.builder.entry,
                                                     sources if len(sources) > 1 else sources[0],
                                                     preceding=before, following=after)
-                    for binding in extraction.bindings:
-                        if binding.rank:
-                            self.builder.capture(binding)
-                    if hasattr(self.builder, "_coordinator_root"):
-                        # Canonical storage bounds checked by the parent do
-                        # not prove a child's rebased logical INTEGER ABI.
-                        # Inspect that original descriptor only at this reached
-                        # region; failed conversions use its coherent source
-                        # fallback, retaining earlier GPU work.
-                        for intrinsic in ("lbound", "ubound", "size"):
-                            if (self.builder.analysis._binding(self.builder.entry.scope, intrinsic)
-                                    or self.builder.analysis._candidates(self.builder.entry.scope, F.Name(intrinsic))):
-                                raise CompilationError("child region bounds conflict with original " + intrinsic.upper())
-                        guards = tuple(condition for binding in extraction.bindings if binding.rank
-                                       for condition in self.builder.original_bound_conditions(
-                                           self.builder.visible(self.builder.entry, binding.root), binding.rank))
-                        extraction = replace(extraction, runtime_guards=(*guards, *extraction.runtime_guards))
-                    source_name = str(self.builder.entry.scope.path) + "#inline:" + extraction.source_identity
-                    function, plan = prepare_function(lower_source(extraction.source, extraction.entry, source_name=source_name),
-                                                      options=self.builder.options)
-                    if not plan.regions:
-                        raise CompilationError("inline numerical candidate has no proven parallel region")
-                    # The original path remains public provenance, while
-                    # compiler-owned computational identities are stable across
-                    # independent source directories after legality proofs.
-                    function, plan = (self.artifact_ir(value, source_name, extraction.source_identity)
-                                      for value in (function, plan))
-                    generated = generate_sources(function, plan, offload_config=self.builder.config, memory_model="scoped")
-                    if generated.scoped is None:
-                        raise CompilationError("inline numerical candidate has no shared numerical entry")
-                    procedure = self.builder.entry.qualified + "#region" + str(len(self.regions) + 1)
-                    # Module identity/span differences do not require copies of an
-                    # otherwise identical computation within one original owner.
-                    computation = sha256("\n".join(extraction.source.splitlines()[1:-1]).encode()).hexdigest()
-                    canonical = computations.setdefault(computation, procedure)
-                    if canonical != procedure:
-                        generated, function, plan = self.generated[canonical], *self.ir[canonical]
-                    self.regions[procedure], self.generated[procedure] = extraction, generated
-                    self.ir[procedure], self.entries[procedure] = (function, plan), canonical
-                    self.bindings.update((binding.root, binding) for binding in extraction.bindings)
-                    facade = F.Call_Stmt("call " + self.name + "()")
-                    facade.item = SimpleNamespace(span=extraction.span, fort_original_span=extraction.span, label=None, name=None)
-                    facade.fort_inline_region = procedure
-                    self.nodes[procedure] = facade
-                    register_projection(facade, sources)
-                    self.facade_proofs[procedure] = extraction
-                    result.append(facade)
+                    result.append(self._outline(extraction, sources, collective=self.builder.config.collective))
                 except CompilationError as error:
                     self.builder.boundaries.append({"first_line": first, "last_line": last,
-                                                    "reason": "inline numerical boundary: " + str(error)})
+                                                    "reason": "inline numerical boundary: " + str(error),
+                                                    "kind": "candidate_rejection",
+                                                    "phase": "inline_numerical_extraction"})
                     result.extend(group)
             return tuple(result)
 
         return prepare_sequence(original)
+
+    def _reserve(self, nodes):
+        """Charge attempts before extraction, across both participation modes."""
+        operations = sum(_kind(item) in {"Assignment_Stmt", "Block_Nonlabel_Do_Construct", "If_Stmt", "If_Construct"}
+                         for node in nodes for item in walk(node))
+        if self.attempts >= 32 or self.operations + operations > 256:
+            raise CompilationError("bounded inline region/operation budget exhausted")
+        self.attempts += 1
+        self.operations += operations
+
+    def prepare_worksharing(self, loop, proof, *, preceding=(), following=()):
+        """Register one original DO for execution by its complete original team.
+
+        The caller retains the original team and native effects. This method
+        authenticates participation and numerical legality only; its facade
+        cannot be executed through the serial dispatcher.
+        """
+        sources = self.original_selection(loop)
+        extraction = extract_region(self.builder.analysis, self.builder.entry, loop,
+                                    preceding=preceding, following=following, worksharing=proof)
+        return self._outline(extraction, sources, collective=True, reservation=sources)
+
+    def _outline(self, extraction, sources, *, collective, reservation=None):
+        """Lower an authenticated extraction and register its private facade."""
+        for binding in extraction.bindings:
+            if binding.rank:
+                self.builder.capture(binding)
+        if hasattr(self.builder, "_coordinator_root"):
+            # Canonical storage bounds checked by the parent do not prove a
+            # child's rebased logical INTEGER ABI. Read that descriptor only
+            # at the reached original region, after its allocation guards.
+            for intrinsic in ("lbound", "ubound", "size"):
+                if (self.builder.analysis._binding(self.builder.entry.scope, intrinsic)
+                        or self.builder.analysis._candidates(self.builder.entry.scope, F.Name(intrinsic))):
+                    raise CompilationError("child region bounds conflict with original " + intrinsic.upper())
+            guards = tuple(condition for binding in extraction.bindings if binding.rank
+                           for condition in self.builder.original_bound_conditions(
+                               self.builder.visible(self.builder.entry, binding.root), binding.rank))
+            extraction = replace(extraction, runtime_guards=(*guards, *extraction.runtime_guards))
+        source_name = str(self.builder.entry.scope.path) + "#inline:" + extraction.source_identity
+        function, plan = prepare_function(lower_source(extraction.source, extraction.entry, source_name=source_name),
+                                          options=self.builder.options)
+        if not plan.regions:
+            raise CompilationError("inline numerical candidate has no proven parallel region")
+        if reservation is not None:
+            # Original parent/unit analysis is bounded separately. Native
+            # corrections that fail complete numerical legality must not use
+            # the generation budget of a later supported worksharing unit.
+            self._reserve(reservation)
+        function, plan = (self.artifact_ir(value, source_name, extraction.source_identity)
+                          for value in (function, plan))
+        config = replace(self.builder.config, collective=collective)
+        generated = generate_sources(function, plan, offload_config=config, memory_model="scoped")
+        if generated.scoped is None:
+            raise CompilationError("inline numerical candidate has no shared numerical entry")
+        procedure = self.builder.entry.qualified + "#region" + str(len(self.regions) + 1)
+        # Team costs and workers have different participation contracts even
+        # when the numerical expressions match a serial entry exactly.
+        computation = sha256("\n".join(extraction.source.splitlines()[1:-1]).encode()).hexdigest()
+        canonical = self.computations.setdefault((collective, computation), procedure)
+        if canonical != procedure:
+            generated, function, plan = self.generated[canonical], *self.ir[canonical]
+        self.regions[procedure], self.generated[procedure] = extraction, generated
+        self.ir[procedure], self.entries[procedure] = (function, plan), canonical
+        if collective:
+            self.collective_regions.add(procedure)
+        self.bindings.update((binding.root, binding) for binding in extraction.bindings)
+        facade = F.Call_Stmt("call " + self.name + "()")
+        facade.item = SimpleNamespace(span=extraction.span, fort_original_span=extraction.span, label=None, name=None)
+        facade.fort_inline_region = procedure
+        self.nodes[procedure] = facade
+        self._register_projection(facade, sources)
+        self.facade_proofs[procedure] = extraction
+        return facade
 
     def original_selection(self, node):
         """Recover authoritative original nodes from approved preparations.
@@ -389,18 +415,25 @@ class InlineRegions:
                   for index, (root, binding) in enumerate(self.arrays.items()) for axis in range(1, binding.rank + 1)}
         return arrays, scalars, lowers
 
-    def emit_call(self, call, handles, values, imports, *, query, mode="fort_mode"):
+    def emit_call(self, call, handles, values, imports, *, query, mode="fort_mode", collective=False,
+                  status="fort_status", check_status=True):
         from compiler.scopes.source import DTYPES
         procedure, region = call.procedure, call.region
+        if not query and collective != (procedure in self.collective_regions):
+            raise CompilationError("inline numerical execution requires its proven serial or original-team participation")
         self.builder.entry_artifacts(procedure)
         self.used.add(procedure)
         self.builder.variants.register(
             self.builder.entry.qualified, interface="source_inline_dispatch_v1", role="region_dispatcher",
-            name=self.name + "::run", summary_identity=self.builder.analysis.summarize(self.builder.entry.qualified)["summary_identity"],
+            name=self.name + "::run", summary_identity=(
+                self.builder.analysis.structure(self.builder.entry.qualified).identity
+                if self.builder.config.scope_execution == "reached" else
+                self.builder.analysis.summarize(self.builder.entry.qualified)["summary_identity"]),
             requirements=("bounded original region IDs", "original saved storage and guards retained", "mode-bearing CPU/GPU execution"),
             shared_artifacts=(self.path,))
-        alias = "fort_inline_query" if query else "fort_inline_run"
-        imports.append(f"use {self.name}, only: {alias} => {'query' if query else 'run'}")
+        target = "query" if query else "run_team" if collective else "run"
+        alias = "fort_inline_query" if query else "fort_inline_team_run" if collective else "fort_inline_run"
+        imports.append(f"use {self.name}, only: {alias} => {target}")
         active = {binding.root for binding in region.bindings}
         arguments = ["fort_context", *([] if query else [mode]), str(list(self.regions).index(procedure) + 1) + "_c_int"]
         arguments += [handles[root] if root in active else "0_c_int64_t" for root in self.arrays]
@@ -411,9 +444,9 @@ class InlineRegions:
                       for root, binding in self.scalars.items()]
         arguments += [f"int(lbound({values[root]},{axis},kind=c_int64_t),c_int)" if root in active else "0_c_int"
                       for root, binding in self.arrays.items() for axis in range(1, binding.rank + 1)]
-        lines = _fortran_list("fort_status = " + alias + "(", arguments, ")", 0)
-        if not query:
-            lines += ["if (fort_status /= FORT_SCOPE_OK) error stop 'inline numerical region failed'"]
+        lines = _fortran_list(status + " = " + alias + "(", arguments, ")", 0)
+        if not query and check_status:
+            lines += [f"if ({status} /= FORT_SCOPE_OK) error stop 'inline numerical region failed'"]
         return lines
 
     def finish(self):
@@ -422,7 +455,7 @@ class InlineRegions:
         from compiler.scopes.segments import fortran_lines
         from compiler.scopes.source import DTYPES
         arrays, scalars, lowers = self.parameters()
-        imports, cases = [], {True: [], False: []}
+        imports, cases = [], {"query": [], "run": [], "run_team": []}
         for procedure in self.regions:
             if procedure not in self.used:
                 continue
@@ -430,9 +463,14 @@ class InlineRegions:
             region = self.regions[procedure]
             region_id = list(self.regions).index(procedure) + 1
             mapping = {parameter.name: parameter for parameter in region.parameters}
-            for query in (True, False):
-                alias = "fort_entry_" + ("query_" if query else "run_") + str(region_id)
-                target = public["planning"]["fortran_procedure"] if query else public["fortran_procedure"]
+            targets = {"query": public["planning"]["fortran_procedure"]}
+            if procedure in self.collective_regions:
+                targets["run_team"] = public["team"]["fortran_procedure"]
+            else:
+                targets["run"] = public["fortran_procedure"]
+            for operation, target in targets.items():
+                query = operation == "query"
+                alias = "fort_entry_" + operation + "_" + str(region_id)
                 imports.append(f"use {public['fortran_module']}, only: {alias} => {target}")
                 arguments = ["context", *([] if query else ["mode"])]
                 arguments += [arrays[mapping[item["name"].lower()].resource] for item in public["array_parameters"]]
@@ -442,12 +480,12 @@ class InlineRegions:
                     parameter = mapping[item["name"].lower()]
                     arguments.append(lowers[parameter.resource, parameter.lower_bound_dimension]
                                      if parameter.lower_bound_dimension else scalars[parameter.resource])
-                cases[query] += [f"case ({region_id})", *_fortran_list("status = " + alias + "(", arguments, ")", 0)]
+                cases[operation] += [f"case ({region_id})", *_fortran_list("status = " + alias + "(", arguments, ")", 0)]
             self.builder.outputs["regions/" + region.source_identity[:16] + ".source"] = region.source
         lines = ["module " + self.name, "use iso_c_binding", "use fort_scoped_memory", *dict.fromkeys(imports),
-                 "implicit none", "private", "public :: run, query", "contains"]
-        for query in (True, False):
-            name = "query" if query else "run"
+                 "implicit none", "private", "public :: run, query" + (", run_team" if cases["run_team"] else ""), "contains"]
+        for name in ("query", "run", *(("run_team",) if cases["run_team"] else ())):
+            query = name == "query"
             parameters = ["context", *([] if query else ["mode"]), "region", *arrays.values(), *scalars.values(), *lowers.values()]
             lines += _fortran_list("function " + name + "(", parameters, ") result(status)", 0)
             lines += ["integer(c_int64_t), intent(in) :: context", "integer(c_int), intent(in) :: region",
@@ -455,15 +493,17 @@ class InlineRegions:
             lines += [f"integer(c_int64_t), intent(in) :: {name}" for name in arrays.values()]
             lines += [f"{DTYPES[self.scalars[root].signature()[:2]][0]}, intent(in) :: {name}" for root, name in scalars.items()]
             lines += [f"integer(c_int), intent(in) :: {name}" for name in lowers.values()]
-            lines += ["select case (region)", *cases[query], "case default", "status = FORT_SCOPE_BOUNDARY",
+            lines += ["select case (region)", *cases[name], "case default", "status = FORT_SCOPE_BOUNDARY",
                       "end select", "end function " + name]
         lines += ["end module " + self.name, ""]
         self.builder.outputs[self.path] = "\n".join(fortran_lines(lines))
 
     def public(self):
         return {"dispatcher": self.name + "::run" if self.used else None, "variant_interface": "source_inline_dispatch_v1",
+                "team_dispatcher": self.name + "::run_team" if self.used & self.collective_regions else None,
                 "limits": {"regions": 32, "operations": 256},
                 "regions": [{**region.public(), "region_id": index + 1, "used": procedure in self.used,
+                             "execution_participation": "qualified_original_team" if procedure in self.collective_regions else "serial_coordinator",
                              "shared_computation": self.entries[procedure]} for index, (procedure, region) in enumerate(self.regions.items())],
                 "boundaries": ["unknown effects and allocation changes",
                                "saved or live scalar outputs", "unsupported numerical computation"]}

@@ -317,6 +317,7 @@ class SourceEffects:
         self._joined_completions = {}
         self._numerical_completions = {}
         self._worksharing_completions = {}
+        self._worksharing_native_completions = {}
         self._reduction_proofs, self._reduction_candidates = {}, {}
         self._omp_reduction_proofs = {}
         self._source_scopes, self._associate_scopes = {}, {}
@@ -1745,13 +1746,18 @@ class SourceEffects:
             raise CompilationError("structured source skeleton unavailable: " + "; ".join(graph.reasons))
         if isinstance(selected, str) or not isinstance(selected, (tuple, list)):
             selected = (selected,)
-        identities = []
+        identities, original_node_ids = [], None
         for item in selected:
             if _kind(item) == "Comment" and not str(item).lstrip().lower().startswith("!$omp"):
                 # Documentation has no execution identity. It may accompany
                 # an exact original group, but a foreign comment cannot grant
                 # source authority to a projected selection.
-                if not any(item is node for node in walk(self._require_original(requested).execution)):
+                if original_node_ids is None:
+                    # structure() authenticated this exact routine above.
+                    # One selection may contain many documentation comments;
+                    # none needs another global source/AST validation pass.
+                    original_node_ids = {id(node) for node in walk(self.routines[requested].execution)}
+                if id(item) not in original_node_ids:
                     raise CompilationError("selected comment lacks original source authority")
                 continue
             if isinstance(item, str):
@@ -1787,7 +1793,9 @@ class SourceEffects:
         """Create a private proof projection only after original-node checks."""
         from fparser.two import Fortran2003 as F
         graph = self.structure(requested)
-        original = self._require_original(requested)
+        # The immediately preceding structure() call already authenticated
+        # the original routine, provenance and current analysis authority.
+        original = self.routines[requested]
         analysis = copy(self)
         analysis.routines = dict(self.routines)
         analysis.summaries, analysis._closures, analysis._native_sections = {}, {}, {}
@@ -1917,6 +1925,20 @@ class SourceEffects:
             self._worksharing_completions[proof.identity] = proof
         return self._worksharing_completions[proof.identity]
 
+    def worksharing_native_completion(self, requested, joined, selected):
+        """Prove native coherence at bounded original-team worksharing cuts.
+
+        This authority retains the original team, work and synchronization. It
+        cannot authorize a numerical worker or standalone subunit execution.
+        """
+        from compiler.frontend.worksharing_completion import prove_worksharing_native_completion
+        proof = prove_worksharing_native_completion(self, requested, joined, selected)
+        if proof.identity not in self._worksharing_native_completions:
+            if len(self._worksharing_native_completions) >= self.operation_limit:
+                self._worksharing_native_completions.pop(next(iter(self._worksharing_native_completions)))
+            self._worksharing_native_completions[proof.identity] = proof
+        return self._worksharing_native_completions[proof.identity]
+
     def reduction_candidates(self, requested, selected=None, *, limit=32):
         """Lazily prove intrinsic reductions in authenticated reached nodes.
 
@@ -1962,7 +1984,8 @@ class SourceEffects:
         _graph, identities = self._selected_source(requested, selected)
         if completion is not None:
             from compiler.frontend.native_completion import NativeCompletionProof
-            if not isinstance(completion, NativeCompletionProof):
+            from compiler.frontend.worksharing_completion import WorksharingNativeCompletionProof
+            if not isinstance(completion, (NativeCompletionProof, WorksharingNativeCompletionProof)):
                 raise CompilationError("native section completion requires a registered original source proof token")
             completion.validate(self, requested, identities)
         analysis, routine, _guard = self._segment_projection(requested, identities,
@@ -1973,7 +1996,20 @@ class SourceEffects:
         routine.scope.node.content = ([specification] if specification is not None else []) + [routine.execution]
         analysis._native_sections_include_entry = bool(include_entry)
         analysis._native_sections_completion = completion
-        return analyze_native_sections(analysis, routine)
+        sections = analyze_native_sections(analysis, routine)
+        if completion is not None and sections.available:
+            # Counted-loop iterators have already been replaced by their
+            # original ranges. Any remaining PRIVATE dependency is per-thread
+            # state: a coordinator's value cannot describe the complete team's
+            # physical accesses, including state carried from an earlier DO.
+            dependencies = {dependency.resource for resource in sections.resources
+                            for dependency in resource.dependencies}
+            private = dependencies.intersection(completion.private_roots)
+            if private:
+                from compiler.frontend.native_sections import NativeSections
+                return NativeSections(False, 'native section footprint depends on thread-private state: '
+                                      + ', '.join(sorted(private)))
+        return sections
 
     def descriptor_stability(self, requested):
         from compiler.frontend.structured_effects import descriptor_stability
@@ -1998,11 +2034,102 @@ class SourceEffects:
         return {"procedures": len(closure.summaries), "operations": closure.operations,
                 "depth": max((s["closure_depth"] for s in closure.summaries.values()), default=0)}
 
-    def report(self, entry):
+    def report(self, entry, *, materialize=True):
+        """Publish native evidence, optionally without requesting a closure.
+
+        The default retains the legacy complete-closure report and its cache
+        accounting. Reached execution can publish authenticated local structure
+        and already-proved complete leaves/segments without expanding inactive
+        calls merely to construct diagnostics.
+        """
         entry = entry.lower()
         matches = [p for p in self.routines if p == entry or ("::" not in entry and p.split("::")[-1] == entry)]
         if len(matches) != 1:
             raise CompilationError(f"native effect entry {entry!r} is unavailable or ambiguous")
+        if not materialize:
+            self.inputs.verify()
+            authority = self._summary_authority()
+            authority_identity = sha256(_canonical(authority).encode()).hexdigest()
+            if authority["role"] == "source":
+                local_structure = self.structure(matches[0])
+                structured = local_structure.public()
+                requested_reductions = [item for key, item in self._reduction_candidates.items()
+                                        if key[0] == local_structure.identity]
+                requested_omp_reductions = [proof.public() for proof in self._omp_reduction_proofs.values()
+                                           if proof.procedure == matches[0]
+                                           and proof.structured_identity == local_structure.identity]
+            else:
+                structured = {"available": False, "reason": "private projection has no original structural authority"}
+                requested_reductions, requested_omp_reductions = [], []
+            # Every row retains its own complete proof and source/configuration
+            # authority. A local graph alone never grants complete effects.
+            # Projection summaries are excluded; reached segment records have
+            # their own original-graph identity and selected-node evidence.
+            proofs, rejections = {}, {}
+            for item in self.summaries.values():
+                if (item.get("complete") and item.get("summary_role") == "source"
+                        and item.get("analysis_identity") == authority_identity
+                        and not any(operation["kind"] == "call" for operation in item["operations"])):
+                    proofs[item["summary_identity"]] = item
+                elif (not item.get("complete") and item.get("summary_role") == "source"
+                        and item.get("analysis_identity") == authority_identity):
+                    rejections[item["summary_identity"]] = item
+            for item in self._segments.values():
+                if (item.get("complete") and item.get("summary_role") == "reached_source_segment"
+                        and item.get("analysis_identity") == authority_identity):
+                    proofs[item["summary_identity"]] = item
+                elif (not item.get("complete") and item.get("summary_role") == "reached_source_segment"
+                        and item.get("analysis_identity") == authority_identity):
+                    rejections[item["summary_identity"]] = item
+            records = list(proofs.values())
+            cache_stats = self._summary_cache.stats
+            cache_delta = {name: cache_stats[name] - self._cache_started.get(name, 0) for name in cache_stats}
+            cache_delta["rejected"] = cache_delta.get("rejected", 0) + self._cache_rejections
+            graph = {"schema_version": 1, "scope": "already materialized complete proofs only; no entry call closure",
+                     "nodes": [{"procedure": item["procedure"], "summary_identity": item["summary_identity"],
+                                "summary_role": item["summary_role"], "complete": True} for item in records],
+                     "edges": [{"caller": item["procedure"], "callee": operation["procedure"], "operation": index,
+                                "summary_identity": operation.get("summary_identity"),
+                                "guard": operation["guard"],
+                                "resource_mappings": operation.get("resource_mappings", [])}
+                               for item in records for index, operation in enumerate(item["operations"])
+                               if operation["kind"] == "call"]}
+            self.inputs.verify()
+            return deepcopy({"schema_version": 2, "summary_version": SOURCE_SUMMARY_VERSION,
+                    "entry": matches[0], "complete": False, "closure_complete_available": False,
+                    "closure_materialization": "not_requested",
+                    "compatibility": "complete describes the unrequested whole-entry closure, not reached eligibility; "
+                        "materialize=True retains the legacy complete-closure report and counters",
+                    "effect_authority": "individual complete proof records and compiler-owned reached scopes; "
+                        "local structure alone does not prove transitive effects",
+                    "proof_scope": "already materialized complete source leaves and original reached segments",
+                    "sources": self.sources, "procedures": records,
+                    "materialized_rejections": [{"procedure": item["procedure"], "complete": False,
+                        "summary_identity": item["summary_identity"], "summary_role": item["summary_role"],
+                        "reasons": item.get("reasons", []),
+                        "selected_original_nodes": item.get("selected_node_ids", []),
+                        "observed_operations": len(item["operations"])} for item in rejections.values()],
+                    "analysis_sources": self.inputs.public(),
+                    "capture_lifetime_authorizations": list(self._allocation_authorizations.values()),
+                    "budgets": {"depth": self.depth_limit, "procedures": self.procedure_limit,
+                                "operations": self.operation_limit},
+                    "summarized_operations": sum(len(item["operations"]) for item in records),
+                    "summary_cache": cache_delta, "call_graph": graph, "structured_effects": structured,
+                    "source_reductions": {"analysis": "requested" if requested_reductions else "not_requested",
+                        "source_analysis_available": bool(requested_reductions) and
+                            all(item["source_analysis_available"] for item in requested_reductions),
+                        "execution_supported": False,
+                        "reason": "generated reduction execution is not implemented" if requested_reductions else
+                            "source analysis is lazy; request original reached reduction candidates",
+                        "requests": requested_reductions},
+                    "openmp_reductions": {"analysis": "requested" if requested_omp_reductions else "not_requested",
+                        "source_analysis_available": bool(requested_omp_reductions) and
+                            all(item["source_analysis_available"] for item in requested_omp_reductions),
+                        "execution_supported": False,
+                        "execution_reason": "original source contracts only; generated OpenMP reduction execution is not implemented",
+                        "records": requested_omp_reductions},
+                    "automatic_scope_available": False,
+                    "effect_coordinate_system": "logical source evidence; original reached native sections define physical transfers"})
         summary = self.summarize(matches[0])
         closure = self._closures.get(matches[0])
         if closure is None:
