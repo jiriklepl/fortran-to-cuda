@@ -19,7 +19,7 @@ from fparser.two.utils import Base
 
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
-from compiler.frontend.source_functions import _original, _resolution
+from compiler.frontend.source_functions import _original, _validate_scope
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.frontend.summary_cache import SummaryCache
 from compiler.ir import CompilationError
@@ -69,9 +69,11 @@ def _source_state(analysis, procedure):
         raise CompilationError("native prefix original scope budget exhausted")
     # Imports, kind state and generic maps are mutable compiler structures,
     # separate from source text. Authenticate them against the parsed snapshot.
-    for scope, node, parent, state in scopes.values():
-        if scope.node is not node or scope.parent is not parent or _resolution(scope) != state:
-            raise CompilationError("native prefix original binding resolution changed")
+    for scope, *_rest in scopes.values():
+        try:
+            _validate_scope(analysis, scope, track=False)
+        except CompilationError as error:
+            raise CompilationError("native prefix original binding resolution changed") from error
     if any(id(scope) not in scopes for scope in analysis.modules.values()) or any(
             id(routine.scope) not in scopes for routine in analysis.numerical_helpers.values()):
         raise CompilationError("native prefix original scope identity changed")

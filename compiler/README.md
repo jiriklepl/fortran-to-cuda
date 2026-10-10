@@ -1524,8 +1524,17 @@ predicate requirements without introducing a generated predicate operation.
 
 Source-backed scalar functions have a separate native read-effect proof. A
 complete bounded closure must be explicitly `PURE` or implicitly pure
-`ELEMENTAL`, with required fixed scalar `INTENT(IN)` arguments, a scalar numeric
-or logical result, fixed private scalars and read-only transitive effects.
+`ELEMENTAL`, with required fixed numeric or logical `INTENT(IN)` arguments,
+a scalar result and read-only transitive effects. Version 2 also accepts bounded
+explicit-shape array arguments and private arrays. Fixed bounds and extents
+must fit the existing INTEGER ABI and analysis budget. Whole fixed actuals
+must conform in every extent; their original lower bounds remain distinct.
+Supported constant in-bounds rectangular sections retain the caller's root
+rank and mapping. Uncertain bounds, array-expression actuals and element sequence
+association remain unsupported, as do descriptor-bearing or uncertain array
+associations. Private scratch reads stay private when helper effects are mapped
+back to their caller. Exact intrinsic `DOT_PRODUCT` expressions contribute
+ordinary read effects; shadowed or unresolved names retain source boundaries.
 Imports, renames, kind-specific generics and internal lexical captures resolve
 against original source. Purity does not authorize unknown calls, hidden storage
 lifetimes, OpenMP or opaque library effects. Public
@@ -1536,12 +1545,15 @@ call or generated reevaluation. These records deny cloning, GPU lowering and
 atomic native callbacks, and are rebuilt rather than restored from persistent
 summary caches. Changed source, resolution maps or kind state invalidate them.
 
-Source summary version 18 carries child `capture_lifetime_requirements` through
+Source summary version 19 carries child `capture_lifetime_requirements` through
 original actual mappings and guards, even when the child remains incomplete.
 Distinct view chains retain their obligations; forwarding does not upgrade an
 authorization or turn partial raw operations into complete ordered effects.
 Selected descriptor capabilities also participate in summary/cache identity;
 an admitted private child cannot populate an ordinary summary cache entry.
+The source-function and summary versions also invalidate older cached function
+mapping semantics. Array-function read effects do not authorize numerical
+lowering, reassociation, IEEE behavior or initialized payloads.
 
 The source-only `prove_descriptor_window` API authenticates descriptor/no-escape
 effects within an exact original interval, separately from entry definitions and

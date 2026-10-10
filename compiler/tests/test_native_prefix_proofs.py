@@ -210,6 +210,27 @@ def test_source_and_resolution_mutations_invalidate_registered_proof(tmp_path, m
         proof.validate(analysis, "original_work::step")
 
 
+@pytest.mark.parametrize("before_issue", [False, True])
+@pytest.mark.parametrize("replace_binding", [False, True])
+def test_all_original_scope_binding_authority_is_checked_without_changing_usage(
+        tmp_path, before_issue, replace_binding):
+    source = "module untouched\nreal(8)::value\nend module\n" + SOURCE
+    analysis = analysis_from(tmp_path, source)
+    used = set(analysis._source_function_used_scopes)
+    proof = None if before_issue else prove_native_prefix(analysis, "original_work::step")
+    assert analysis._source_function_used_scopes == used
+    scope = analysis.modules["untouched"]
+    binding = scope.bindings["value"]
+    if replace_binding:
+        scope.bindings["value"] = copy(binding)
+    else:
+        binding.declaring_scope = copy(scope)
+    action = prove_native_prefix if before_issue else proof.validate
+    with pytest.raises(CompilationError, match="native prefix original binding resolution changed"):
+        action(analysis, "original_work::step")
+    assert analysis._source_function_used_scopes == used
+
+
 def test_native_fork_never_mutates_parent_caches_tokens_or_capture_authority(tmp_path):
     analysis = analysis_from(tmp_path)
     original = analysis.summarize("original_work::step")
