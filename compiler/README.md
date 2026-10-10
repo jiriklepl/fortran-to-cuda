@@ -972,6 +972,31 @@ record. Hypothetical terminal bytes remain separate from observed traffic. The p
 identities to source resources. Evidence is bounded to 4,096 detail records, with
 explicit truncation; tracing adds no CUDA work or synchronization. Keep tracing
 off during performance measurements and compare modeled copies with actual events.
+
+Actual scoped events also append provenance version 1: a process-unique context
+handle, a process-unique buffer handle where applicable, registration identity
+and generation, and full SHA256 owner, procedure, segment, operation,
+implementation and boundary identities. The public `runtime_provenance.records`
+mapping resolves those identities to original source and generated workers.
+Unbound fields say `unknown`; standalone numerical entries do not invent a
+source owner. Borrowed calls restore their caller's attribution. Collective
+entries update tags only in their existing coordinator. Batch callbacks remain
+uninstrumented; individual batch-worker implementation attribution is unavailable.
+Initial context creation precedes owner binding and reports unknown source IDs.
+Execution errors retain their existing reporting and have no new attributed event.
+
+These events describe API submissions and completed coherence commits, rather
+than GPU completion timestamps. A `device_commit` can complete a read-only access
+and does not by itself prove a write. The additive `fort_scope_trace_set_v1` and
+`fort_scope_trace_restore_v1` APIs use fixed caller-owned state and an explicit
+field mask; masked empty fields clear attribution, and unmasked fields remain
+unchanged. They must not be called inside a batch-execute callback. Invalid or
+stale diagnostic handles do not alter numerical errors, coherence or planning
+caches. With tracing disabled, tags return before context lookup or allocation;
+they still perform the environment check. No timers or synchronization are added.
+The changed runtime identity requires refreshed scoped calibration before AUTO
+can use its cost estimates; historical application timings do not price this change.
+
 Fixed native helper computation is an equally omitted common term,
 so estimates are not absolute application wall time. Zero-GPU estimates
 conservatively include coherent CPU-worker hooks, whereas source fallback runs

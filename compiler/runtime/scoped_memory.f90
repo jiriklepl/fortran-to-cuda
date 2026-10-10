@@ -12,6 +12,11 @@ module fort_scoped_memory
   integer(c_int), parameter, public :: FORT_SCOPE_NATIVE=0, FORT_SCOPE_GPU=1, FORT_SCOPE_AUTO=2
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_ABI_VERSION=1
   integer(c_int32_t), parameter, public :: FORT_SCOPE_SCRATCH_ABI_VERSION=1
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRACE_ABI_VERSION=1
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRACE_OWNER=1, FORT_SCOPE_TRACE_PROCEDURE=2
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRACE_SEGMENT=4, FORT_SCOPE_TRACE_OPERATION=8
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRACE_IMPLEMENTATION=16, FORT_SCOPE_TRACE_BOUNDARY=32
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRACE_ALL=63
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFERS_DIRECT=0, FORT_SCOPE_TRANSFERS_PINNED=1
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFERS_PIPELINED=2, FORT_SCOPE_TRANSFERS_AUTO=3
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_NONE=0, FORT_SCOPE_TRANSFER_ESTIMATES_UNAVAILABLE=1
@@ -25,6 +30,10 @@ module fort_scoped_memory
   integer(c_int32_t), parameter, public :: FORT_SCOPE_COMPUTE_NATIVE_FORTRAN=1, FORT_SCOPE_COMPUTE_GENERATED_CPU=2
   integer(c_int32_t), parameter, public :: FORT_SCOPE_COMPUTE_GPU=4, FORT_SCOPE_COMPUTE_ALL=7
 
+  type, bind(C), public :: fort_scope_trace_state_v1
+    integer(c_int32_t) :: version=0, reserved=0
+    character(kind=c_char) :: owner(65), procedure(65), segment(65), operation(65), implementation(65), boundary(65)
+  end type
   type, bind(C), public :: fort_scope_section
     type(c_ptr) :: lower=c_null_ptr, upper=c_null_ptr
   end type
@@ -197,6 +206,7 @@ module fort_scoped_memory
   end type
 
   public :: fort_scope_abi_version, fort_scope_error, fort_scope_create, fort_scope_register
+  public :: fort_scope_trace_set_v1, fort_scope_trace_restore_v1
   public :: fort_scope_register_sections, fort_scope_forget_definition
   public :: fort_scope_view_get_v1, fort_scope_view_get_v2
   public :: fort_scope_forget_sections_v1, fort_scope_plan_forget_sections_v1
@@ -222,6 +232,20 @@ module fort_scoped_memory
   public :: fort_scope_plan_team_native_call_v1
 
   interface
+    subroutine fort_scope_trace_set_v1(context, update_mask, owner, procedure, segment, operation, implementation, boundary, &
+        previous) &
+        bind(C)
+      import c_int64_t, c_int32_t, c_char, c_ptr
+      integer(c_int64_t), value :: context
+      integer(c_int32_t), value :: update_mask
+      character(kind=c_char), intent(in) :: owner(*), procedure(*), segment(*), operation(*), implementation(*), boundary(*)
+      type(c_ptr), value :: previous
+    end subroutine
+    subroutine fort_scope_trace_restore_v1(context, previous) bind(C)
+      import c_int64_t, fort_scope_trace_state_v1
+      integer(c_int64_t), value :: context
+      type(fort_scope_trace_state_v1), intent(in) :: previous
+    end subroutine
 
     function fort_scope_scratch_acquire_v1(context, bytes, lease) bind(C) result(status)
       import c_int, c_int64_t, c_size_t, fort_scope_scratch_lease_v1

@@ -81,6 +81,8 @@ class LexicalOwner:
         self.graph = builder.analysis.structure(self.routine.qualified)
         if not self.graph.available:
             raise CompilationError("lexical owner requires an available bounded source graph")
+        from compiler.scopes.provenance import source_id
+        self.trace_owner = parent.trace_owner if parent else source_id(builder, "owner", lifetime="invocation")
         self.context = parent.context if parent else _name("fort_owner_context_", self.routine.qualified)
         self.enabled = parent.enabled if parent else _name("fort_owner_enabled_", self.routine.qualified)
         self.kind = parent.kind if parent else _name("fort_owner_kind_", self.routine.qualified)
@@ -176,15 +178,23 @@ class LexicalOwner:
                   "execution": "original internal procedure; host-associated owner control"}
         self.internal_calls.append(record)
         self.builder.resolved_calls[(self.routine.qualified, span)] = record
+        from compiler.scopes.provenance import borrowed
+        self.patches.append((*span, "\n".join(fortran_lines(borrowed(self, (node,),
+            self.original((node,)).splitlines()))) + "\n"))
         return True
 
     def original(self, nodes):
         first, last = statement_span(nodes[0])[0], statement_span(nodes[-1])[1]
         return "".join(self.lines[first-1:last])
 
-    def close(self, *, disable=True):
-        lines = ["block", "use iso_c_binding, only: c_int", "use fort_scoped_memory, only: fort_scope_close, FORT_SCOPE_OK",
+    def close(self, *, disable=True, reason=None, span=None):
+        from compiler.scopes.provenance import position, source_id
+        boundary = source_id(self.builder, "boundary", span=span,
+                             reason=reason or "owner cleanup or native fallback at the current source position")
+        lines = ["block", "use iso_c_binding, only: c_int, c_int32_t, c_null_char, c_null_ptr",
+                 "use fort_scoped_memory, only: fort_scope_close, FORT_SCOPE_OK, fort_scope_trace_set_v1",
                  "integer(c_int) :: fort_close_status", f"if ({self.context} /= 0) then",
+                 *position(self.builder, context=self.context, owner=self.trace_owner, boundary=boundary),
                  f"fort_close_status = fort_scope_close({self.context})",
                  "if (fort_close_status /= FORT_SCOPE_OK) error stop 'lexical owner publication failed'",
                  f"{self.context} = 0", "endif"]
@@ -208,10 +218,10 @@ class LexicalOwner:
                                 "conditional_close": reached_guard,
                                 "reopen": False})
         if reached_guard is not None:
-            replacement = "\n".join(fortran_lines([f"if ({reached_guard}) then", *self.close(),
+            replacement = "\n".join(fortran_lines([f"if ({reached_guard}) then", *self.close(reason=reason, span=(first, last)),
                                                    str(nodes[0].items[1]), "endif"])) + "\n"
         else:
-            replacement = "\n".join(fortran_lines(self.close())) + "\n" + self.original(nodes)
+            replacement = "\n".join(fortran_lines(self.close(reason=reason, span=(first, last)))) + "\n" + self.original(nodes)
         self.patches.append((first, last, replacement))
 
     def admit(self, nodes, *, source_guard=None, native_source=None, boundary_nodes=None, condition_only=False):
@@ -397,6 +407,8 @@ class LexicalOwner:
     def emit_unit(self, unit, index):
         self.refresh()
         builder, arrays = self.builder, unit.arrays
+        from compiler.scopes.provenance import position, source_id
+        trace_segment = source_id(builder, "segment", span=(unit.scope.first, unit.scope.last))
         block = "fort_reached_" + str(index)
         handles = {root: "fort_buffer_" + str(self.resources[root][1]) for root in arrays}
         parameters = {root: builder.visible(self.routine, root) for root in (*arrays, *unit.scalars)}
@@ -466,7 +478,9 @@ class LexicalOwner:
         prepare += ["if (fort_context == 0) then", "fort_status = fort_scope_create(0_c_int, fort_context)",
                     "if (fort_status == FORT_SCOPE_OK) &",
                     f"fort_status = fort_scope_set_device_budget(fort_context, {builder.device_budget}_c_size_t)",
-                    *builder.owner_transfer_setup(self.owner.leaves, imports), "endif"]
+                    *builder.owner_transfer_setup(self.owner.leaves, imports), "endif",
+                    "if (fort_context /= 0) then",
+                    *position(builder, owner=self.trace_owner, segment=trace_segment), "endif"]
         for root, binding in arrays.items():
             name, number = parameters[root], self.resources[root][1]
             _, enum, width = DTYPES[binding.signature()[:2]]
@@ -565,6 +579,7 @@ class LexicalOwner:
         else:
             execution = unit.scope.emit(handles, values, actuals, imports, selector=selector,
                                     terminal_owner=False, preflight_failure=failure,
+                                    provenance_segment=trace_segment,
                                     surround_native=preserve_original,
                                     logical_lower_bounds={root: tuple(
                                         f"lbound({parameters[root]}, {axis}, kind=c_int64_t)"
@@ -699,7 +714,8 @@ class LexicalOwner:
                       f"{self.enabled} = " + (".false." if native_reason else "fort_scope_serial_caller() /= 0"), "end block"]
         builder.add_edit(self.routine.scope.path, first,first-1,
                          "\n".join(fortran_lines([*declarations,*initialize]))+"\n", prepend=True)
-        builder.add_edit(self.routine.scope.path, last+1,last,"\n".join(fortran_lines(self.close(disable=False)))+"\n")
+        builder.add_edit(self.routine.scope.path, last+1,last,"\n".join(fortran_lines(self.close(
+            disable=False, reason="original owning invocation end", span=(last, last))))+"\n")
         builder.scopes.append({"owner": self.context, "owner_variant": variant.identity,
             "path": str(self.routine.scope.path), "first_line": first, "last_line": last,
             "gpu_leaves": sorted(self.leaves), "mode": builder.config.policy,

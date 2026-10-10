@@ -28,6 +28,7 @@ from compiler.ir import (
     referenced_symbols,
     walk_expr,
 )
+from compiler.numerical_contract import numerical_build_contract, numerical_source_prologue
 from compiler.offload.analysis import (
     OffloadAnalysis,
     Unit,
@@ -36,7 +37,6 @@ from compiler.offload.analysis import (
     scope_slab_candidates,
 )
 from compiler.offload.codegen import profile_expression, query_expression
-from compiler.numerical_contract import numerical_build_contract, numerical_source_prologue
 from compiler.offload.preparation import prepare_offload
 from compiler.offload.profile import (
     ProfileError,
@@ -85,6 +85,21 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         digest = sha256((digest + f":root-view-v{root_view_abi}").encode()).hexdigest()[:12]
     name = "fort_shared_" + digest
     c_name = "cpp_" + name
+    from compiler.scopes.provenance import Provenance
+    provenance = Provenance()
+    procedure_id = provenance.add("procedure", procedure=f"{function.module.lower()}::{function.name.lower()}",
+                                  source=function.source, numerical_identity=sha256(identity.encode()).hexdigest())
+    implementation_ids = {(region.id, backend): provenance.add("implementation", procedure_id=procedure_id,
+        procedure=f"{function.module.lower()}::{function.name.lower()}", source=function.source,
+        region=region.id, backend=backend, numerical_identity=sha256(identity.encode()).hexdigest())
+        for region in plan.regions for backend in ("cuda", "generated_cpu")}
+
+    def trace_worker(region):
+        return (f'fort_scoped::TracePosition fort_worker_trace(fort_context, "{procedure_id}", '
+                f'fort_gpu ? "{implementation_ids[region.id, "cuda"]}" : "{implementation_ids[region.id, "generated_cpu"]}");')
+
+    def trace_cpu(region):
+        return f'fort_worker_trace.implementation("{implementation_ids[region.id, "generated_cpu"]}");'
     configure_name = c_name + "_configure"
     transfer_modes = {"direct": "FORT_SCOPE_TRANSFERS_DIRECT", "pinned": "FORT_SCOPE_TRANSFERS_PINNED",
                       "pipelined": "FORT_SCOPE_TRANSFERS_PIPELINED", "auto": "FORT_SCOPE_TRANSFERS_AUTO"}
@@ -284,6 +299,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         lines += numerical_batch_helpers(function, plan, batch_candidates, batch_analysis.units, c_name, unit_ids,
                                           config.profile, costs, transfer_costs, config.host_threads, _precision(function))
     lines += [f'extern "C" int {c_name}({", ".join(signature)}) {{',
+              f'    fort_scoped::TracePosition fort_entry_trace(fort_context, "{procedure_id}", "");',
               *(["    bool fort_entry_work_started=false;",
                  "    const int fort_entry_result=[&]() -> int {"] if root_views else []),
               "    if (fort_scope_abi_version() != FORT_SCOPE_ABI_VERSION)",
@@ -490,14 +506,15 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                 body += [f"if (fort_mode == 2) FORT_SHARED_CHECK(fort_access.decision({unit_ids[step.id]}ULL, fort_gpu));"]
                 if protected[step.id]:
                     body += [f'if (fort_gpu_requested) offload::decision_trace("{function.name}", "native-scoped-protected-scalar", 0, 1);']
-                body += [
+                body += [trace_worker(step),
                         "int fort_status = fort_access.begin(fort_gpu);",
                         "if (fort_gpu && (fort_status == FORT_SCOPE_RESOURCE || fort_status == FORT_SCOPE_BOUNDARY)) {",
                         f'    offload::decision_trace("{function.name}", fort_status == FORT_SCOPE_RESOURCE ? "native-scoped-resource" : "native-scoped-boundary", 0, 1);',
-                        "    fort_gpu = false; fort_status = fort_access.begin(false);", "}",
+                        "    fort_gpu = false;", "    " + trace_cpu(step), "    fort_status = fort_access.begin(false);", "}",
                         "FORT_SHARED_CHECK(fort_status);", "fort_scoped::GPUCall fort_gpu_call(fort_context);",
                         "if (fort_gpu) {", "    fort_status = fort_gpu_call.begin();",
                         "    if (fort_status == FORT_SCOPE_RESOURCE) {", "        fort_access.cancel(); fort_gpu = false;",
+                        "        " + trace_cpu(step),
                         f'        offload::decision_trace("{function.name}", "native-scoped-gpu-setup", 0, 1);',
                         "        fort_status = fort_access.begin(false);", "    }", "    FORT_SHARED_CHECK(fort_status);", "}"]
                 for s in arrays:
@@ -609,6 +626,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
             # can publish a failure. Otherwise a late reader could skip the
             # operation's barriers after seeing the newly written status.
             return ["#pragma omp barrier", "#pragma omp master", "{", "    shared->status = [&]() -> int {",
+                    f'        fort_scoped::TracePosition fort_coordinate_trace(fort_context, "{procedure_id}", "");',
                     *indent(body, 2), "        return FORT_SCOPE_OK;", "    }();",
                     "    if (shared->status == FORT_SCOPE_OK && shared->work_started) {",
                     "        int device = -1;",
@@ -652,14 +670,14 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                              f"if (fort_mode == 2) FORT_SHARED_CHECK(fort_access.decision({unit_ids[step.id]}ULL, fort_gpu));"]
                     if protected[step.id]:
                         body += [f'if (fort_gpu_requested) offload::decision_trace("{function.name}", "native-scoped-protected-scalar", 0, 1);']
-                    body += ["int fort_status = fort_access.begin(fort_gpu);",
+                    body += [trace_worker(step), "int fort_status = fort_access.begin(fort_gpu);",
                              "if (fort_gpu && (fort_status == FORT_SCOPE_RESOURCE || fort_status == FORT_SCOPE_BOUNDARY)) {",
                              f'    offload::decision_trace("{function.name}", fort_status == FORT_SCOPE_RESOURCE ? "native-scoped-resource" : "native-scoped-boundary", 0, 1);',
-                             "    fort_gpu = false; fort_status = fort_access.begin(false);", "}",
+                             "    fort_gpu = false;", "    " + trace_cpu(step), "    fort_status = fort_access.begin(false);", "}",
                              "FORT_SHARED_CHECK(fort_status);", "fort_scoped::GPUCall fort_gpu_call(fort_context);",
                              "if (fort_gpu) {", "    fort_status = fort_gpu_call.begin();",
                              "    if (fort_status == FORT_SCOPE_RESOURCE) {",
-                             "        fort_access.cancel(); fort_gpu = false;",
+                             "        fort_access.cancel(); fort_gpu = false;", "        " + trace_cpu(step),
                              f'        offload::decision_trace("{function.name}", "native-scoped-gpu-setup", 0, 1);',
                              "        fort_status = fort_access.begin(false);", "    }",
                              "    FORT_SHARED_CHECK(fort_status);", "}"]
@@ -680,8 +698,9 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                f"        cpu_{step.id}({arguments}, offload::thread_id(), offload::team_size());",
                                "        #pragma omp barrier", "    } else {", "        #pragma omp barrier", "    }",
                                "    #pragma omp master", "    {",
-                               "        if (shared->status == FORT_SCOPE_OK && shared->cpu_active)",
-                               "            shared->status = fort_access.finish();", "    }", "    #pragma omp barrier",
+                               "        if (shared->status == FORT_SCOPE_OK && shared->cpu_active) {",
+                               f'            fort_scoped::TracePosition fort_cpu_commit_trace(fort_context, "{procedure_id}", "{implementation_ids[step.id, "generated_cpu"]}");',
+                               "            shared->status = fort_access.finish();", "        }", "    }", "    #pragma omp barrier",
                                "    fort_worker_observe.record_as(shared->cpu_active ? FORT_SCOPE_TEAM_OBSERVE_CPU_WORKER : FORT_SCOPE_TEAM_OBSERVE_GPU_WORKER);"]
                 else:
                     raise TypeError(step)
@@ -1010,6 +1029,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                             "statistics": ["selected_transfers", "chunk_iterations", "slot_bytes", "prefix_upload_bytes",
                                            "batches", "actual_upload_bytes", "actual_download_bytes", "actual_launches",
                                            "preparation_operations", "execution_seconds", "terminal_delta_seconds"]},
+        "runtime_provenance": provenance.public(),
         "automatic_estimate_available": bool(planning_available and costs is not None),
         "automatic_reason": planning_reason or profile_reason,
         "compute_estimates": {"abi_version": 1 if source_compute else 0,

@@ -10,7 +10,7 @@ from copy import copy
 from compiler.frontend.source_effects import _children, _kind, _part
 from compiler.ir import CompilationError, SourceLocation
 from compiler.scopes.lexical import LexicalOwner
-from compiler.scopes.segments import condition_fragment, statement_span
+from compiler.scopes.segments import condition_fragment, fortran_lines, statement_span
 
 
 def descriptor_loop_body(builder, node):
@@ -189,4 +189,7 @@ def borrow(parent, node):
               'effect_summary_available': False}
     parent.internal_calls.append(record)
     parent.builder.resolved_calls[(parent.routine.qualified, (first, last))] = record
+    from compiler.scopes.provenance import borrowed
+    parent.patches.append((first, last, "\n".join(fortran_lines(borrowed(parent, (node,),
+        parent.original((node,)).splitlines()))) + "\n"))
     return True

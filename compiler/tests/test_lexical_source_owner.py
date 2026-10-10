@@ -1,5 +1,6 @@
 """Original source control continues once after a reached resident escape."""
 
+import re
 from hashlib import sha256
 
 from compiler.driver.options import CompilerOptions
@@ -217,7 +218,7 @@ def test_inactive_unknown_branch_is_a_reached_close_without_wrapper_copies(tmp_p
     assert text.index('if(escape) then') < text.index('call opaque(b,n)')
     between = text[text.index('if(escape) then'):text.index('call opaque(b,n)')]
     assert 'fort_scope_close(' in between
-    assert 'save' not in text.lower()
+    assert not re.search(r'\bsave\b', text, re.IGNORECASE)
     assert 'subroutine fort_scope_owner_' not in text
     assert 'TARGET :: a' in text
     assert 'TARGET :: b(' in text

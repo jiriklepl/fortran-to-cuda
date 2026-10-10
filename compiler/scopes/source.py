@@ -132,6 +132,8 @@ class ScopeBuilder:
         self.batch_chains = {}
         self.numerical_reasons = {}
         self.boundaries, self.scopes = [], []
+        from compiler.scopes.provenance import Provenance
+        self.runtime_provenance = Provenance()
         self.resolved_calls = {}
         self.variants = VariantRegistry()
         self.runtime_outputs, self.runtime = read_scoped_runtime()
@@ -1494,6 +1496,9 @@ class ScopeBuilder:
         first, last = ((structure.first, structure.last) if structure else
                        (_span(calls[0].node)[0], _span(calls[-1].node)[1]))
         digest = f"{routine.qualified}:{first}:{last}"
+        from compiler.scopes.provenance import position, source_id
+        trace_owner = source_id(self, "owner", span=(first, last), lifetime="invocation")
+        trace_segment = source_id(self, "segment", span=(first, last))
         name = _name("fort_scope_owner_", digest)
         caller_kind = _name("fort_scope_i64_", digest)
         if (self.analysis._binding(routine.scope, caller_kind)
@@ -1716,6 +1721,7 @@ class ScopeBuilder:
                     imports += list(native_preflight.imports)
                     body += ["if (" + native_preflight.expression + ") then", *native, "endif"]
             body += ["fort_status = fort_scope_create(0_c_int, fort_context)"]
+            body += ["if (fort_context /= 0) then", *position(self, owner=trace_owner, segment=trace_segment), "endif"]
             body += ["if (fort_status == FORT_SCOPE_OK) &",
                      f"  fort_status = fort_scope_set_device_budget(fort_context, {self.device_budget}_c_size_t)"]
             body += self.owner_transfer_setup(leaves, imports)
@@ -1763,9 +1769,12 @@ class ScopeBuilder:
             if structure:
                 body += structure.emit(handles, views, actuals, imports,
                                        selector=selector if self.config.policy == "auto" else None,
+                                       provenance_segment=trace_segment,
                                        logical_lower_bounds={root: tuple(f"{value}({axis})"
                                                                         for axis in range(1, arrays[root].rank + 1))
                                                              for root, value in bounds.items()})
+                body += position(self, owner=trace_owner, boundary=source_id(self, "boundary", span=(last, last),
+                    reason="end of original owning source span"))
                 body += _checked("fort_scope_close(fort_context)")
             else:
                 body += self.owner_complete_plan(calls, leaves, handles, actuals, imports, native, parameters=views,
@@ -1943,12 +1952,15 @@ class ScopeBuilder:
         if self.config.policy == "auto":
             body += ["if (fort_status == FORT_SCOPE_OK) fort_status = fort_choose(fort_context, fort_decision)"]
             fallback_condition += " .or. fort_decision%gpu_units == 0"
+        from compiler.scopes.provenance import position, source_id
         body += ["if (" + fallback_condition + ") then",
+                 *position(self, boundary=source_id(self, "boundary", reason="whole original native selection or planning failure")),
                  "fort_cleanup = fort_scope_close(fort_context)",
                  "if (fort_cleanup /= FORT_SCOPE_OK) error stop 'shared scope planning cleanup failed'",
                  *native, "endif"]
         body += self.owner_calls(calls, "fort_mode", handles, parameters or {}, actuals, imports, terminal=True,
                                  view_codes=view_codes)
+        body += position(self, boundary=source_id(self, "boundary", reason="end of original owning source span"))
         body += _checked("fort_scope_close(fort_context)")
         return body
 
@@ -1986,6 +1998,7 @@ class ScopeBuilder:
         routine = self.entry
         body = []
         for call in calls:
+            begin = len(body)
             child_leaves, _ = self.closure(call.procedure)
             if call.region is not None:
                 body += self.inline.emit_call(call, handles, parameters, imports, query=False, mode=mode)
@@ -2008,6 +2021,11 @@ class ScopeBuilder:
                 body += self.native_call(call, actions, definitions, overwrites, native_handles,
                                          actuals=actuals(call),
                                          view_codes=view_codes.get(id(call.node)) if view_codes else None)
+            from compiler.scopes.provenance import call_frame, source_id
+            operation = source_id(self, "source_call", span=_span(call.node), target=call.procedure)
+            implementation = (source_id(self, "implementation", span=_span(call.node), backend="original_native",
+                                        target=call.procedure) if not child_leaves else "")
+            body[begin:] = call_frame(self, "fort_context", operation, body[begin:], implementation=implementation)
         return body
 
     def original_calls(self, calls, parameters, actuals, *, shared=True):
@@ -2144,12 +2162,15 @@ class ScopeBuilder:
                 dict(self.clones), dict(self.queries), dict(self.generated), dict(self.numerical_reasons),
                 dict(self.numerical_ir), dict(self.batch_chains), self.variants.checkpoint(), dict(self.view_generated),
                 dict(self.view_clones), dict(self.view_queries),
-                {procedure: set(registry.used) for procedure, registry in self.region_owners.items()})
+                {procedure: set(registry.used) for procedure, registry in self.region_owners.items()},
+                dict(self.runtime_provenance.records))
 
     def restore_scope_checkpoint(self, checkpoint):
         (self.outputs, self.edits, self.clones, self.queries,
          self.generated, self.numerical_reasons, self.numerical_ir, self.batch_chains, variants, self.view_generated,
-         self.view_clones, self.view_queries, used) = checkpoint
+         self.view_clones, self.view_queries, used, provenance) = checkpoint
+        self.runtime_provenance.records.clear()
+        self.runtime_provenance.records.update(provenance)
         self.variants.restore(variants)
         for procedure, registry in self.region_owners.items():
             registry.used = set(used.get(procedure, ()))
@@ -2330,6 +2351,9 @@ class ScopeBuilder:
             **({"reached_plan_schema_version": 1} if self.config.scope_execution == "reached" else {}),
             "automatic_scope_available":bool(self.scopes), "scope_count":len(self.scopes),
             "scopes":self.scopes, "boundaries":self.boundaries, "source_edits":patches,
+            "runtime_provenance": self.runtime_provenance.public(available=bool(self.scopes), additional=[
+                *[item.scoped.get("runtime_provenance", {}) for item in self.generated.values() if item],
+                *[item.report.get("runtime_provenance", {}) for item in self.view_generated.values()]]),
             "sources":provenance, "runtime":self.runtime if self.scopes else None,
             "native_effects":self.analysis.report(self.entry.qualified,
                 materialize=self.config.scope_execution != "reached"),

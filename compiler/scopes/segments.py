@@ -710,9 +710,12 @@ class StructuredScope:
             (reason for available, reason in statuses if not available), None)
 
     def emit(self, handles, parameters, actuals, imports, *, selector, execution_mode=None, terminal_owner=True,
-             logical_lower_bounds=None, selector_name="fort_choose", preflight_failure=None, surround_native=False):
+             logical_lower_bounds=None, selector_name="fort_choose", preflight_failure=None, surround_native=False,
+             provenance_segment=None):
+        from compiler.scopes.provenance import position, source_id
         from compiler.scopes.source import _call, _checked, _name, _span
         builder = self.builder
+        trace_segment = provenance_segment or source_id(builder, "segment", span=(self.first, self.last))
 
         def refined(operation, *, query):
             from compiler.scopes.access import build_native_accesses
@@ -737,7 +740,11 @@ class StructuredScope:
             return lines
 
         def native_hooks(operation):
-            lines = []
+            identity = source_id(builder, "native_operation", span=operation.span or (self.first, self.last),
+                                 operation_kind=operation.kind)
+            implementation = source_id(builder, "implementation", span=operation.span or (self.first, self.last),
+                                       backend="original_native")
+            lines = position(builder, segment=trace_segment, operation=identity, implementation=implementation)
             accesses = refined(operation, query=False)
             if accesses is not None:
                 lines += ["block", *[line for access in accesses for line in access.specification]]
@@ -837,9 +844,11 @@ class StructuredScope:
             return lines
 
         def segment_impl(item, *, terminal=False):
+            tag = position(builder, segment=trace_segment, operation=source_id(builder, "numerical_segment",
+                span=(_span(item.calls[0].node)[0], _span(item.calls[-1].node)[1]), segment_id=item.identity))
             if execution_mode is None:
-                return record_segment(item, terminal=terminal)
-            return ["if (" + execution_mode + " == 0_c_int) then",
+                return [*tag, *record_segment(item, terminal=terminal)]
+            return [*tag, "if (" + execution_mode + " == 0_c_int) then",
                     *_checked("fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"),
                     *execute(item.calls, "0_c_int", terminal=terminal), *_checked("fort_scope_wait(fort_context)"),
                     "else", *record_segment(item, terminal=terminal), "endif"]
@@ -880,8 +889,8 @@ class StructuredScope:
 
         def emit(items, *, terminal=False):
             lines = []
-            for position, item in enumerate(items):
-                closing = terminal and position == len(items)-1
+            for index, item in enumerate(items):
+                closing = terminal and index == len(items)-1
                 if isinstance(item, Segment):
                     lines += segment(item, terminal=closing)
                 elif isinstance(item, Branch):
