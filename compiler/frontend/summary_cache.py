@@ -94,7 +94,7 @@ def _payload(payload, requested):
     if type(payload) is dict and set(payload) == {"structure"}:
         structure = payload["structure"]
         if (type(structure) is not dict or structure.get("procedure") != requested
-                or type(structure.get("schema_version")) is not int or structure["schema_version"] != 5
+                or type(structure.get("schema_version")) is not int or structure["schema_version"] != 6
                 or type(structure.get("nodes")) is not list or type(structure.get("available")) is not bool
                 or type(structure.get("structured_identity")) is not str
                 or type(structure.get("analysis_identity")) is not str

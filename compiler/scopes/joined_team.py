@@ -346,11 +346,20 @@ class JoinedTeam(StructuredScope):
                                           implementation=native_implementation),
                         *begins, 'fort_team_native = .true.', 'endif']
             lines = []
+            environment_preflight = []
             if call is not None:
-                guards = (*call.region.runtime_guards,
-                          *(("fort_scope_numerical_environment_supported() /= 0",)
-                            if call.region.requires_numerical_environment else ()))
-                lines += ['fort_numerical_guard = .true.']
+                guards = call.region.runtime_guards
+                if call.region.requires_numerical_environment:
+                    # Every original participant may have a different trap
+                    # mask. Decide uniformly before the master queries work;
+                    # rejection retains the original whole-team native DO.
+                    environment_preflight = [
+                        '!$omp master', 'fort_numerical_guard = .true.', '!$omp end master', '!$omp barrier',
+                        'if (fort_native_ready) then',
+                        'if (fort_scope_numerical_environment_supported() == 0) then',
+                        '!$omp atomic write', 'fort_numerical_guard = .false.', 'endif', 'endif', '!$omp barrier']
+                else:
+                    lines += ['fort_numerical_guard = .true.']
                 lines += ['if (fort_numerical_guard) fort_numerical_guard = ' + guard for guard in guards]
                 lines += ['if (fort_numerical_guard) then',
                           'fort_status = fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)',
@@ -366,7 +375,8 @@ class JoinedTeam(StructuredScope):
                           'if (fort_native_ready .and. .not. fort_team_run) then', *prepare, 'endif']
             else:
                 lines += prepare
-            prefix = coordinated([*position(builder, segment=trace_segment, operation=trace_operation), *lines], reset=True)
+            prefix = [*environment_preflight,
+                      *coordinated([*position(builder, segment=trace_segment, operation=trace_operation), *lines], reset=True)]
             # A collective worker may return while its numerical execution is
             # still pending in the context. Complete that execution before the
             # next reached query validates definitions, without publishing any

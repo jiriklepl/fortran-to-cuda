@@ -13,7 +13,7 @@ from fparser.two.utils import walk
 
 from compiler.frontend.source_effects import _children, _kind, _part
 from compiler.ir import CompilationError
-from compiler.scopes.segments import StructuredScope, condition_fragment, fortran_lines, statement_span
+from compiler.scopes.segments import Segment, StructuredScope, condition_fragment, fortran_lines, statement_span
 from compiler.scopes.source import DTYPES, _name, _span
 
 
@@ -47,6 +47,18 @@ def original_optional_scalar_operation(scope, routine):
             optional_scalar_input(binding) and binding.name in routine.arguments
             and routine.scope.bindings.get(binding.name) is binding))
         for binding in bindings.values())
+
+
+def immutable_numerical_unit(scope):
+    """Only one reached call and its own authenticated native alternative."""
+    if (len(scope.calls) != 1 or len(scope.tree) != 1 or not isinstance(scope.tree[0], Segment)
+            or len(scope.tree[0].calls) != 1 or scope.tree[0].calls[0] is not scope.calls[0]):
+        return False
+    if not scope.native:
+        return not scope.guarded
+    fallback = scope.guarded.get(id(scope.calls[0].node))
+    return (len(scope.native) == 1 and len(scope.guarded) == 1 and scope.native[0] is fallback
+            and fallback.kind == "guarded original numerical fallback")
 
 
 @dataclass
@@ -494,7 +506,7 @@ class LexicalOwner:
                             for capture in call.region.scalar_element_captures]
         element_active = None
         if element_captures:
-            if len(unit.scope.calls) != 1 or unit.scope.native:
+            if not immutable_numerical_unit(unit.scope):
                 raise CompilationError("immutable operands require one reached numerical unit")
             guards = element_captures[0].activation_guards
             if any(capture.activation_guards != guards for capture in element_captures):
@@ -794,14 +806,32 @@ class LexicalOwner:
             for unit in member.units:
                 for binding in {**unit.arrays, **(unit.host_metadata or {})}.values():
                     owner, declaration = member.declaration(binding)
-                    target_declarations[owner.path, _span(declaration)] = declaration
-        for (path, (first,last)), declaration in target_declarations.items():
+                    key = owner.path, _span(declaration)
+                    if key not in target_declarations:
+                        target_declarations[key] = declaration, set()
+                    target_declarations[key][1].add(getattr(binding, "component_object", binding).name)
+        for (path, (first,last)), (declaration, selected) in target_declarations.items():
             dtype, attributes, entities = declaration.items
             flags = list(map(str, _children(attributes)))
             if any(flag.lower() == "target" for flag in flags):
                 continue
-            text = str(dtype) + ", " + ", ".join([*flags, "TARGET"]) + " :: " + str(entities)
-            builder.add_edit(path, first,last, "\n".join(fortran_lines([text])) + "\n")
+            # A shared declaration can also contain immutable coefficient
+            # formals or other storage that never participates in C address
+            # association. Add TARGET only to the proved borrowed entities,
+            # retaining original entity order and all original attributes.
+            declarations = []
+            for entity in _children(entities):
+                target = str(entity.items[0]).lower() in selected
+                if declarations and declarations[-1][0] == target:
+                    declarations[-1][1].append(str(entity))
+                else:
+                    declarations.append((target, [str(entity)]))
+            lines = []
+            for target, names in declarations:
+                qualifiers = [*flags, "TARGET"] if target else flags
+                prefix = str(dtype) + (", " + ", ".join(qualifiers) if qualifiers else "")
+                lines += fortran_lines([prefix + " :: " + ", ".join(names)])
+            builder.add_edit(path, first,last, "\n".join(lines) + "\n")
         for member in self.members.values():
             edits = [edit for index,unit in enumerate(member.units) for edit in member.emit_unit(unit,index)]
             for first,last,text in [*member.patches, *edits]:

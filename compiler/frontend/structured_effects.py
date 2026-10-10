@@ -17,7 +17,7 @@ from fparser.two.utils import walk
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.ir import CompilationError
 
-STRUCTURED_EFFECT_VERSION = 5
+STRUCTURED_EFFECT_VERSION = 6
 
 
 def _kind(node):
@@ -244,18 +244,24 @@ def _build_structure(analysis, routine, authority_identity, *, defer_native_grou
                 # comments to this next loop. They retain distinct original
                 # identities so a complete earlier team can select its join
                 # without selecting or replaying the following loop.
-                directives = tuple(add(child_path + "/directive" + str(index), "operation", (item,), guard,
-                                       evaluation="directive", completion="original joined source group required")
-                                   for index, item in enumerate(peeled.get(id(original), original.content))
-                                   if _kind(item) == "Comment" and str(item).lstrip().lower().startswith("!$omp"))
-                body = [item for item in peeled.get(id(original), original.content) if _kind(item) != "Comment"]
-                if not body:
+                content = tuple(peeled.get(id(original), original.content))
+                syntax = [index for index, item in enumerate(content) if _kind(item) != "Comment"]
+                if not syntax:
                     children.append(add(child_path, "boundary", (original,), guard, reason="empty loop syntax"))
                     continue
-                header = body[0]
+                first, last = syntax[0], syntax[-1]
+                directives = tuple(add(child_path + "/directive" + str(index), "operation", (item,), guard,
+                                       evaluation="directive", completion="original joined source group required")
+                                   for index, item in enumerate(content)
+                                   if (index < first or index > last) and _kind(item) == "Comment"
+                                   and str(item).lstrip().lower().startswith("!$omp"))
+                header = content[first]
                 header_id = add(child_path + "/header", "operation", (header,), guard,
                                 role="header", evaluation="loop_header")
-                body_id = sequence(body[1:-1], child_path + "/body", (*guard, str(header)), depth + 1)
+                # Directives inside the original header/end belong to this
+                # reached loop body. Only attached outside comments retain the
+                # enclosing guard (including a previous team's closing join).
+                body_id = sequence(content[first+1:last], child_path + "/body", (*guard, str(header)), depth + 1)
                 children.append(add(child_path, "loop", (original,), guard,
                                     children=(*directives, header_id, body_id), control=str(header)))
             elif kind == "Associate_Construct":

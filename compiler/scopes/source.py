@@ -101,6 +101,8 @@ class ScopeBuilder:
         if len(names) != 1:
             raise CompilationError("source scope entry is unavailable or ambiguous")
         self.entry = self.analysis.routines[names[0]]
+        # Copies for borrowed bodies keep the original invocation's call graph.
+        self._numerical_environment_root = self.entry.qualified
         self.facts, self.options, self.config = facts, options, config
         # Lifetime assertions authorize only exact defining-module roots. They
         # cannot bless a formal/local allocation or change a default effect

@@ -57,7 +57,7 @@ def test_structural_containers_do_not_spend_the_source_operation_budget(tmp_path
     _, analysis = source(tmp_path, body*3, operations=12)
     graph = analysis.structure('varied::advance')
     assert graph.available, graph.reasons
-    assert graph.version == 5
+    assert graph.version == 6
     assert graph.operation_count == 9
     assert graph.operation_limit == 12
     assert len(graph.nodes) > analysis.operation_limit+2
@@ -71,6 +71,37 @@ def test_structural_accounting_keeps_the_operation_limit(tmp_path):
     graph = analysis.structure('varied::advance')
     assert not graph.available
     assert any('operation budget exhausted' in reason for reason in graph.reasons)
+
+
+def test_counted_body_directives_keep_loop_guard_and_previous_join_stays_outside(tmp_path):
+    body = """!$omp parallel private(i)
+!$omp do
+do i=1,n
+a(i)=b(i)
+enddo
+!$omp end do
+!$omp end parallel
+do stage=1,3
+!$omp parallel private(i)
+!$omp do
+do i=1,n
+a(i)=b(i)
+enddo
+!$omp end do
+!$omp end parallel
+enddo
+"""
+    _, analysis = source(tmp_path, body, specification="integer::stage")
+    routine = analysis.routines["varied::advance"]
+    graph = analysis.structure(routine.qualified)
+    stage = next(header for header in walk(routine.execution, F.Nonlabel_Do_Stmt)
+                 if str(header.items[1].items[1][0]).lower() == "stage")
+    stage_line = stage.item.span[0]
+    directives = [node for node in graph.nodes.values() if node.details.get("evaluation") == "directive"]
+    assert len(directives) == 8
+    for node in directives:
+        original, = graph.source_nodes(node.id)
+        assert node.guard == (() if original.item.span[0] < stage_line else (str(stage),))
 
 
 def test_condition_and_loop_header_ids_preserve_original_protected_expressions(tmp_path):
@@ -261,20 +292,25 @@ def test_structural_cache_is_rebound_to_original_ast_and_invalidates_contracts(t
     assert changed._summary_cache.stats["disk_hits"] == 0
 
 
-def test_structural_cache_tampering_is_rejected_even_with_fresh_payload_digest(tmp_path):
+@pytest.mark.parametrize("change", ["effects", "old_structure_version"])
+def test_structural_cache_tampering_is_rejected_even_with_fresh_payload_digest(tmp_path, change):
     from hashlib import sha256
     cache = tmp_path / "cache"
     path, analysis = source(tmp_path, "a(1)=b(1)", cache=cache)
     original = analysis.structure("varied::advance")
     record_path, = cache.glob("fort_source_summary_v2_*.json")
     record = json.loads(record_path.read_text())
-    record["payload"]["structure"]["nodes"][0]["definition_changes"] = ["argument::b"]
+    if change == "effects":
+        record["payload"]["structure"]["nodes"][0]["definition_changes"] = ["argument::b"]
+    else:
+        record["payload"]["structure"]["schema_version"] = 5
     record["payload_sha256"] = sha256(json.dumps(record["payload"], ensure_ascii=True, allow_nan=False,
         sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     record_path.write_text(json.dumps(record))
     fresh = SourceEffects([path], summary_cache=cache)
     assert fresh.structure("varied::advance").identity == original.identity
-    assert fresh._cache_rejections == 1
+    assert fresh._cache_rejections == (1 if change == "effects" else 0)
+    assert fresh._summary_cache.stats["disk_hits"] == (1 if change == "effects" else 0)
 
 
 def test_diamond_graph_reuses_leaves_but_counts_each_reached_call(tmp_path):

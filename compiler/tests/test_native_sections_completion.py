@@ -76,7 +76,7 @@ def test_large_guarded_groups_demand_bounded_section_units_without_flat_expansio
     assert group is not None
     assert group.available, group.reason
     assert group.public()["schema_version"] == 2
-    assert graph.version == 5
+    assert graph.version == 6
     assert len(group.units) == 97
     assert [unit.kind for unit in group.units] == ["condition"] + ["section"] * 96
     assert group.units[1].guard == ("flag",)
