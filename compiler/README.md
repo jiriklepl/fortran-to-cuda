@@ -1567,9 +1567,16 @@ object mappings. Existing registered whole-group completion tokens may
 authenticate original OpenMP directives; the complete descriptor/escape scan
 still checks every group statement. Neither object mappings nor completion
 tokens establish GPU legality or initialized payloads.
-Resolution authentication visits each original procedure's own specification
-and execution; unrelated internal siblings do not consume its resolution
-budget. Every reached child remains separately authenticated and bounded.
+Version 5 authenticates resolution at original semantic units: each assignment,
+condition, counted-loop header and call retains the existing lookup and depth
+limits. All operands of one unit share its lookup budget. Declaration
+dependencies and requested module-storage visibility retain original namespace
+authority. Syntax and lookup work also spend the existing aggregate source-scan
+budget; public diagnostics report both counts and the configured limits.
+Every reached native child still receives a complete descriptor/escape scan,
+and registered readonly functions retain their complete body proof. Unrelated
+internal siblings and declaration/import spellings are not executable lookup
+units. These checks do not establish reached-path effects or entry definitions.
 Version 4 accepts explicit `module_roots` for original numeric module
 allocations. Their authority stays inside the exact private projection and its
 checked call closure, with separate cache identities; ordinary summaries and

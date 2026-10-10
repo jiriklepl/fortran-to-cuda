@@ -184,7 +184,7 @@ def test_expression_limit_counts_calls_without_argument_container_wrappers(tmp_p
 def test_parentheses_and_keyword_labels_do_not_spend_expression_depth(tmp_path):
     expression = "real(a=sqrt(max(1.0_8-x*cos(1.0_8+x),0.0_8)),kind=8)"
     _path, analysis, selected = fixture(tmp_path, helper="g(1,1)=" + "(" * 12 + expression + ")" * 12)
-    assert prove(analysis, selected).public()["schema_version"] == 4
+    assert prove(analysis, selected).public()["schema_version"] == 5
 
 
 def test_original_native_environment_calls_retain_all_thread_and_execution_requirements(tmp_path):

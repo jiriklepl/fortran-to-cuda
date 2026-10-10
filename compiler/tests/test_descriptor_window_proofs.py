@@ -538,9 +538,9 @@ def test_unreached_contains_sibling_does_not_spend_reached_descriptor_resolution
     assert public["resources"][0]["stable"]
 
 
-def test_reached_internal_child_still_spends_original_resolution_budget(tmp_path):
+def test_reached_internal_child_still_rejects_unknown_original_effects(tmp_path):
     _path, analysis, _graph, ids = fixture(tmp_path, child=large_unrelated_internal(reached=True))
-    with pytest.raises(CompilationError, match="resolution budget exhausted"):
+    with pytest.raises(CompilationError, match="unknown selected storage effects: boundary:.*unknown_inactive"):
         prove(analysis, ids)
     assert analysis.operation_limit == 256
     assert not getattr(analysis, "_descriptor_window_proofs", {})
