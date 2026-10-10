@@ -113,6 +113,33 @@ def test_original_parameter_array_is_an_association_not_a_binding_capture(tmp_pa
     assert region.public()["scalar_element_captures"][0]["query"].startswith("typed zero")
 
 
+@pytest.mark.parametrize("precision", [4, 8])
+@pytest.mark.parametrize("coefficient_first", [False, True])
+def test_grouped_managed_array_declaration_does_not_add_target_to_immutable_formal(
+        tmp_path, precision, coefficient_first):
+    _, _, _, _, _, paths = source_fixture(tmp_path, precision=precision)
+    child = paths[1]
+    entities = ["weights(-1:1)", "a(-2:)"] if coefficient_first else ["a(-2:)", "weights(-1:1)"]
+    grouped = f"real({precision}),intent(in)::" + ",".join(entities)
+    child.write_text(child.read_text().replace(f"real({precision}),intent(in)::a(-2:)\n", "")
+                     .replace(f"real({precision}),intent(in)::weights(-1:1)", grouped))
+    original = child.read_bytes()
+    outputs, report = emit(paths)
+    assert report["scope_count"] == 1
+    owner, = report["scopes"]
+    companion, = owner["module_coordinators"]
+    assert companion["immutable_array_inputs"][0]["formal_resource"] == "argument::weights"
+    text = outputs[report["sources"][str(child)]["replacement"]]
+    declarations = [line for line in text.splitlines() if "::" in line]
+    coefficient_declaration, = [line for line in declarations if re.search(r"\bweights\s*\(", line, re.I)]
+    managed_declaration, = [line for line in declarations if re.search(r"\ba\s*\(", line, re.I)]
+    assert "target" not in coefficient_declaration.lower()
+    assert "target" in managed_declaration.lower()
+    assert "intent(in)" in coefficient_declaration.lower().replace(" ", "")
+    assert (text.index(coefficient_declaration) < text.index(managed_declaration)) == coefficient_first
+    assert child.read_bytes() == original
+
+
 def test_original_outer_guard_is_preserved_and_empty_inner_domain_not_speculated(tmp_path):
     body = """if(stage>1) then
 do j=1,n

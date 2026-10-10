@@ -39,7 +39,7 @@ def graph_group(analysis):
 def test_only_raw_budget_failure_defers_complete_original_groups(tmp_path):
     _, analysis = fixture(tmp_path, team("if(flag) then\n" + worksharing() * 6 + "endif\n"))
     graph, group = graph_group(analysis)
-    assert graph.version == 5
+    assert graph.version == 6
     assert graph.raw_structure_rejection == ("bounded structured source operation budget exhausted",)
     assert group.available, group.reason
     assert [unit.kind for unit in group.units] == ["condition"] + ["worksharing"] * 6

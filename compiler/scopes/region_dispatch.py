@@ -32,8 +32,52 @@ class InlineRegions:
         # AST carrying a plausible span or fort_inline_region attribute.
         self.source_selections = {}
         self.facade_proofs = {}
+        self._native_environment_required = None
         self.name = "fort_regions_" + sha256(builder.entry.qualified.encode()).hexdigest()[:12]
         self.path = "regions/" + self.name + ".f90"
+
+    def native_environment_required(self):
+        """Guard original invocation descendants that can use IEEE state.
+
+        A parent's regions can be outlined before a borrowed child is scanned.
+        Resolve bounded original direct calls from the configured entry up
+        front. This only restricts execution, never issues native authority.
+        """
+        if self._native_environment_required is None:
+            from compiler.frontend.native_environment import intrinsic_export
+            analysis = self.builder.analysis
+            pending = [self.builder._numerical_environment_root]
+            visited, calls = set(), 0
+            required = False
+            while pending and not required:
+                procedure = pending.pop()
+                if procedure in visited:
+                    continue
+                if len(visited) >= analysis.procedure_limit:
+                    required = True
+                    break
+                analysis._require_original(procedure)
+                routine = analysis.routines[procedure]
+                visited.add(procedure)
+                for call in walk(routine.execution, F.Call_Stmt):
+                    calls += 1
+                    if calls > analysis.operation_limit:
+                        required = True
+                        break
+                    if _kind(call.items[0]) != "Name":
+                        continue  # Unknown calls already end reached ownership.
+                    scope = analysis.source_scope_for(call, routine.scope)
+                    if intrinsic_export(analysis, scope, call.items[0]) in {
+                            "$intrinsic::ieee_exceptions::ieee_get_halting_mode",
+                            "$intrinsic::ieee_exceptions::ieee_set_halting_mode"}:
+                        required = True
+                        break
+                    # Traverse all source-backed generic candidates; unknown
+                    # calls grant no borrowed/native continuation authority.
+                    pending.extend(target for target in analysis._candidates(scope, call.items[0])
+                                   if target in analysis.routines and target not in visited)
+            self._native_environment_required = required
+        return self._native_environment_required
 
     def refresh(self, root):
         """Retain lexical authority while rebinding rolled-back artifact maps."""
@@ -280,6 +324,11 @@ class InlineRegions:
         """Lower an authenticated extraction and register its private facade."""
         if collective and extraction.scalar_element_captures:
             raise CompilationError("immutable element preparation requires a serial reached preflight; collective execution remains native")
+        native_environment = self.native_environment_required()
+        if native_environment and not collective and extraction.completion.get("has_openmp_in_closure"):
+            # A serial caller's mask cannot establish the original workers'
+            # masks. Keep the team for JoinedTeam's uniform reached preflight.
+            raise CompilationError("original IEEE environment requires an original-team numerical preflight")
         for binding in extraction.bindings:
             if binding.rank:
                 self.builder.capture(binding)
@@ -298,6 +347,8 @@ class InlineRegions:
         source_name = str(self.builder.entry.scope.path) + "#inline:" + extraction.source_identity
         function, plan = prepare_function(lower_source(extraction.source, extraction.entry, source_name=source_name),
                                           options=self.builder.options)
+        if native_environment:
+            function = replace(function, requires_numerical_environment=True)
         if function.requires_numerical_environment:
             # Numerical lowering is authoritative: vector expressions can lose
             # their source syntax when expanded into ordinary scalar IR.

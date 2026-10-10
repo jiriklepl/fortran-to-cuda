@@ -1094,6 +1094,20 @@ legality, worksharing cuts or new per-thread saved-state semantics. AUTO retains
 native execution until this coordination is priced. Source summaries use
 version 14 and original native completion proofs use version 6.
 
+Source-resolved halting-mode calls reachable from the original configured entry
+also require numerical-environment checks for ordinary reached arithmetic,
+including parent regions outlined before a borrowed child is discovered.
+A restored host trap selects the coherent original
+native operation at that point. Joined numerical teams check every original
+participant before making one uniform decision; the master's environment alone
+is insufficient. Unsupported environments retain the original worksharing body.
+This conservative restriction does not establish GPU legality or price
+the additional checks for automatic placement.
+
+Structured effect schema 6 keeps OpenMP directives inside counted loops under
+the loop's original guard. Attached joins outside the loop keep their enclosing
+guard; cached schema 5 structures cannot authorize these source selections.
+
 Reached manifests use `SourceEffects.report(entry, materialize=False)` for native
 effect diagnostics. Report schema 2 publishes the authenticated local skeleton,
 already materialized complete source-leaf and reached-segment proofs, and observed
@@ -1676,6 +1690,8 @@ reading dormant inner controls. Joined worksharing, uncertain indices or
 activation, and unsupported associations stay native. Original array read
 effects remain public, with an explicit projection for managed coherence.
 Automatic placement remains unavailable until this preparation is calibrated.
+When managed and immutable entities share a declaration, only the managed
+entities receive `TARGET`; the original entity order and attributes are retained.
 
 An immutable scalar `PARAMETER` whose initializer is outside the outlined
 constant language can supply its original Fortran value as a read-only scalar
