@@ -1796,7 +1796,26 @@ memory observations remain diagnostics and cannot establish this new protocol.
 Startup is charged once outside the compute/memory maximum. Failed startup or
 memory validation makes the affected backend unavailable.
 
-Second, `python -m compiler.offload.cpu_dependency_calibration` adds
+The explicit `--numerical-costs --numerical-version 3` calibration path records
+the repaired CPU protocol in a separate `numerical_execution` section. It uses
+the original Fortran serial/static-team bodies and production generated cyclic
+workers with four host threads, independent zero-item startup controls, and
+seven complete global rounds of at least 200 ms per cell. Size, expression,
+helper and domain holdouts never fit coefficients. Fresh memory observations remove the measured startup;
+the model adds that startup once outside the compute/memory maximum. The raw
+batch file is created exclusively and flushed as each batch completes, so an
+interrupted attempt remains evidence rather than being overwritten.
+This initial section is CPU-only: it does not supply GPU costs or authorize
+automatic SGS placement. If supplied for source placement, incomplete or
+rejected new evidence keeps execution native; it cannot borrow older numerical
+coefficients. Versions 1 and 2 retain their existing defaults and interpretation.
+The standalone `python -m compiler.offload.numerical_execution_calibration`
+adds this evidence to a preserved compatible base profile using `--profile`,
+a new `--output`, a new `--build-dir`, and explicit original
+`--fortran-flag=...` arguments. Its `--preflight-only` mode builds and checks
+the workers without sampling or adding cost evidence.
+
+The other existing producer, `python -m compiler.offload.cpu_dependency_calibration`, adds
 `cpu_dependency`, without changing the numerical-v2 section. Its 26 predefined
 generic recipes distinguish ordinary operations, constant/dynamic division and
 selected transcendental families. One-chain and four-chain bases identify a

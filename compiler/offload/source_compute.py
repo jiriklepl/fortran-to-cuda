@@ -126,7 +126,12 @@ def apply_source_compute_costs(analysis, profile, native_participation, *, array
             primitives = dict(unit.intrinsic_work_per_iteration)
             if unit.compute_runtime_divisions_per_iteration:
                 primitives["divide"] = unit.compute_runtime_divisions_per_iteration
-            if "cpu_dependency" in profile:
+            if "numerical_execution" in profile:
+                from compiler.offload.numerical_execution import execution_compute_model
+                model = execution_compute_model(profile, tuple(sorted(primitives.items())),
+                    workload_class=unit.workload_class, workload_features=unit.workload_features,
+                    native_participation="fork_join" if native_participation == "fork_join_runtime" else native_participation)
+            elif "cpu_dependency" in profile:
                 from compiler.offload.dependency_source import dependency_source_model
                 model = dependency_source_model(unit, profile, native_participation)
             else:
