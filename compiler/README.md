@@ -1069,7 +1069,7 @@ top-level `boundaries` list with their original reasons, labeled
 `kind: candidate_rejection` and `phase: inline_numerical_extraction`. A later
 reached owner can still cover that source; its own `boundaries` describe actual
 ownership breaks.
-Structured representation version 3 accounts for source operations separately
+Structured representation version 4 accounts for source operations separately
 from sequence, branch and loop containers. It retains the 256-operation limit
 and a derived structural-node bound; container bookkeeping cannot exhaust the
 work budget by itself. Changed representation identities invalidate dependent
@@ -1108,6 +1108,26 @@ can compose separately bounded original worksharing units. Their conservative
 access union is bounded too; calls, allocation/definition events and inferred
 whole overwrites are excluded. The original team still executes once, and this
 proof does not authorize an ordered child-call summary or GPU scatter writes.
+If the original flat skeleton exhausts its raw operation budget, reached mode
+can instead retain a complete native joined group as an explicit boundary with
+separately bounded condition and worksharing units. Generic descriptor,
+reduction and numerical consumers still treat that boundary conservatively.
+Only an exact selection of the whole original group and its registered native
+completion proof can demand those units. No member loop, opening or join grants
+the same authority. Selecting an enclosing sequence or branch cannot bypass
+the deferred native boundary. Units, original control depth, effects and rectangle unions
+retain their existing limits; unknown calls, allocation/definition changes and
+unsupported exits remain boundaries. The unchanged team executes as one native
+operation, including original `NOWAIT` clauses when its final join proves
+completion; no internal coherence cuts are introduced.
+Exact section refinement deduplicates repeated physical rectangles and preserves
+opposite faces, without inferring whole overwrites. Guarded units with scalar
+bound dependencies retain whole-resource hooks because the scalar may be
+undefined in an inactive branch. Private or internally changed bounds also
+decline refinement. Constant bounds and supported same-resource descriptor
+inquiries can refine sections; the current access emitter cannot prepare a
+resource's section using another array's descriptor. Such cases also retain
+conservative whole-resource communication.
 For a hash-bound configured source package, a complete native joined group can
 retain its original includes and preprocessor directives. The lexical owner
 inserts coherence hooks around that unchanged group, which appears once in the

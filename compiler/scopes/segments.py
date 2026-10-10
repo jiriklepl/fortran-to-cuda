@@ -14,8 +14,8 @@ from dataclasses import dataclass, field, replace
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import Base, walk
 
-from compiler.frontend.source_effects import Binding, _kind
 from compiler.frontend.component_bindings import references
+from compiler.frontend.source_effects import _kind
 from compiler.ir import CompilationError
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, MODEL_INQUIRIES
 
@@ -207,7 +207,8 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     if completion_proof is not None:
         private_roots = set(private_roots) | set(completion_proof.private_roots)
     original = tuple(node for node in original if _kind(node) != "Comment")
-    selection = original if selected is None else selected
+    deferred = analysis.structure(builder.entry.qualified).native_group_for_selection(full_original) if joined else None
+    selection = (full_original if deferred is not None else original) if selected is None else selected
     # Validated capture facts borrow only the reached local descriptor. They
     # neither alter original source authority nor authorize allocation changes.
     analysis._segments = {}
@@ -254,8 +255,12 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
                 builder.entry.qualified,
                 tuple(node for identity in completion.parent.selected_node_ids
                       for node in parent_graph.source_nodes(identity)), full_original)
-    summary = analysis.segment_summary(builder.entry.qualified, selection, capture_locals=True)
-    if (not summary["complete"] and completion_proof is not None
+    if deferred is not None:
+        from compiler.scopes.native_atomic import summarize
+        summary = summarize(analysis, builder.entry.qualified, selection, completion_proof)
+    else:
+        summary = analysis.segment_summary(builder.entry.qualified, selection, capture_locals=True)
+    if (deferred is None and not summary["complete"] and completion_proof is not None
             and builder.config.scope_execution == "reached"
             and any('budget exhausted' in reason for reason in summary['reasons'])):
         from compiler.scopes.native_atomic import summarize

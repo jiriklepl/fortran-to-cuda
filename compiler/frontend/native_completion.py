@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from hashlib import sha256
 import json
 import re
+from dataclasses import dataclass, field
+from hashlib import sha256
 
 from fparser.two.utils import walk
 
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError, SourceLocation
-from compiler.ir.integers import INTEGER_MIN, INTEGER_MAX
+from compiler.ir.integers import INTEGER_MAX, INTEGER_MIN
 
-NATIVE_COMPLETION_VERSION = 2
+NATIVE_COMPLETION_VERSION = 3
 
 
 def _kind(node):
@@ -63,6 +63,11 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
     outside its enclosing complete region or creates a generated OpenMP team.
     """
     graph, identities = analysis._selected_source(procedure, selected)
+    deferred = graph.native_group_for_selection(selected)
+    if deferred is None and graph.deferred_native_descendants(identities):
+        raise CompilationError("deferred native completion requires the exact whole original source selection")
+    if deferred is not None and not deferred.available:
+        raise CompilationError("deferred native group completion unavailable: " + str(deferred.reason))
     routine = analysis.routines[procedure]
     originals = tuple(node for identity in identities for node in graph.source_nodes(identity))
     executable = tuple(identity for identity in identities
@@ -265,6 +270,10 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
               "has_openmp_in_closure": True, "has_opaque_calls_in_closure": False,
               "join": "implicit combined-loop completion" if implicit_join else "explicit original parallel end",
               "retains_original_team_and_directives": True}
+    if deferred is not None:
+        record.update(deferred_native_group_identity=deferred.identity,
+                      native_only=True, internal_cuts_authorized=False,
+                      bounded_native_units=len(deferred.units))
     return graph, identities, executable, tuple(sorted(private)), record
 
 

@@ -7,9 +7,9 @@ an arbitrary original call can execute within a resident owner.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from hashlib import sha256
-import json
 from types import MappingProxyType
 
 from fparser.two.utils import walk
@@ -17,7 +17,7 @@ from fparser.two.utils import walk
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.ir import CompilationError
 
-STRUCTURED_EFFECT_VERSION = 3
+STRUCTURED_EFFECT_VERSION = 4
 
 
 def _kind(node):
@@ -88,6 +88,8 @@ class StructuredSummary:
     _originals: dict = field(compare=False, repr=False)
     _ids: dict = field(compare=False, repr=False)
     version: int = STRUCTURED_EFFECT_VERSION
+    native_groups: object = field(default_factory=lambda: MappingProxyType({}), compare=False, repr=False)
+    raw_structure_rejection: tuple[str, ...] = ()
 
     def node_id(self, original_node, role="statement"):
         key = (id(original_node), role)
@@ -100,17 +102,49 @@ class StructuredSummary:
             raise CompilationError("structured effect node is unavailable")
         return self._originals[node_id]
 
+    def native_group_for_selection(self, selected):
+        """Recognize only one complete original selection, never a member."""
+        return next((group for group in self.native_groups.values() if group.matches(selected)), None)
+
+    def deferred_native_descendants(self, identities):
+        """Find deferred boundaries in a selection without expanding effects.
+
+        A sequence or branch containing a deferred group cannot grant the
+        group's native-only authority through its ancestor ID. Every original
+        graph node is visited at most once under the existing node budget.
+        """
+        pending, visited, found = list(reversed(tuple(identities))), set(), []
+        while pending:
+            identity = pending.pop()
+            if identity in visited:
+                continue
+            if identity not in self.nodes:
+                raise CompilationError("structured effect node lacks original source authority")
+            visited.add(identity)
+            if len(visited) > self.node_limit:
+                raise CompilationError("bounded structured descendant budget exhausted")
+            if identity in self.native_groups:
+                found.append(identity)
+            node = self.nodes[identity]
+            children = (*node.children, *(child for condition, body in node.alternatives
+                                          for child in (condition, body) if child is not None))
+            pending.extend(reversed(children))
+        return tuple(found)
+
     def public(self):
         return {"schema_version": self.version, "procedure": self.procedure,
                 "structured_identity": self.identity, "analysis_identity": self.authority_identity,
                 "root": self.root_id, "entry": self.entry_id, "available": self.available,
                 "reasons": list(self.reasons), "node_limit": self.node_limit,
                 "operation_limit": self.operation_limit, "operation_count": self.operation_count,
+                "raw_structure_rejection": list(self.raw_structure_rejection),
                 "nodes": [node.public() for node in self.nodes.values()]}
 
 
-def build_structure(analysis, routine, authority_identity):
+def _build_structure(analysis, routine, authority_identity, *, defer_native_groups=False,
+                     selection=None, condition_header=None, guard=(), path="body", raw_rejection=()):
     nodes, originals, ids, reasons = {}, {}, {}, []
+    native_groups, peeled = {}, {}
     # Conditions, headers, directives, calls and ordinary operations consume
     # the existing operation budget. Sequence/branch/loop containers describe
     # their structure, not additional work. A branch with an empty ELSE needs
@@ -118,7 +152,7 @@ def build_structure(analysis, routine, authority_identity):
     limit = 4 * analysis.operation_limit + 2
     operation_count = 0
 
-    def add(path, kind, source=(), guard=(), *, role="statement", aliases=(), **values):
+    def add(path, kind, source=(), guard=(), *, role="statement", aliases=(), register_source=True, **values):
         nonlocal operation_count
         identity = routine.qualified + "/" + path
         if len(nodes) >= limit:
@@ -134,7 +168,7 @@ def build_structure(analysis, routine, authority_identity):
                            if source and _span(source[0]) and _span(source[-1]) else ()),
                           tuple(values.pop("children", ())), tuple(values.pop("alternatives", ())), _freeze(values))
         nodes[identity], originals[identity] = node, source
-        for original in (*source, *aliases):
+        for original in ((*source, *aliases) if register_source else ()):
             key = id(original), role
             if key in ids and ids[key] != identity:
                 raise CompilationError("structured source node has ambiguous original identity")
@@ -146,8 +180,30 @@ def build_structure(analysis, routine, authority_identity):
             return add(path, "boundary", items, guard,
                        reason="bounded structured source control depth exhausted")
         children = []
+        if defer_native_groups:
+            from compiler.frontend.native_group_structure import (
+                NativeGroupCandidate,
+                build_native_group,
+                grouped_original_sequence,
+            )
+            items = grouped_original_sequence(items, peeled)
         for index, original in enumerate(items):
             kind, child_path = _kind(original), path + "/" + str(index)
+            if defer_native_groups and isinstance(original, NativeGroupCandidate):
+                identity = routine.qualified + "/" + child_path
+
+                def unit_builder(unit_id, sources, unit_guard, header):
+                    return _build_structure(analysis, routine, authority_identity, selection=sources,
+                        condition_header=header, guard=unit_guard,
+                        path=unit_id.removeprefix(routine.qualified + "/"))
+
+                group = build_native_group(analysis, routine, authority_identity, identity,
+                                           original, guard, peeled, unit_builder)
+                native_groups[identity] = group
+                children.append(add(child_path, "boundary", group.original_nodes, guard,
+                    register_source=False, reason="complete original native group requires deferred effect proof",
+                    deferred_native_group=group.public()))
+                continue
             if kind == "Comment":
                 if str(original).lstrip().lower().startswith("!$omp"):
                     children.append(add(child_path, "operation", (original,), guard,
@@ -155,7 +211,7 @@ def build_structure(analysis, routine, authority_identity):
                 continue
             if kind == "If_Construct":
                 alternatives, current, header, previous = [], [], None, []
-                for item in original.content:
+                for item in peeled.get(id(original), original.content):
                     label = _kind(item)
                     if label in {"If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt"}:
                         if header is not None:
@@ -190,9 +246,9 @@ def build_structure(analysis, routine, authority_identity):
                 # without selecting or replaying the following loop.
                 directives = tuple(add(child_path + "/directive" + str(index), "operation", (item,), guard,
                                        evaluation="directive", completion="original joined source group required")
-                                   for index, item in enumerate(original.content)
+                                   for index, item in enumerate(peeled.get(id(original), original.content))
                                    if _kind(item) == "Comment" and str(item).lstrip().lower().startswith("!$omp"))
-                body = [item for item in original.content if _kind(item) != "Comment"]
+                body = [item for item in peeled.get(id(original), original.content) if _kind(item) != "Comment"]
                 if not body:
                     children.append(add(child_path, "boundary", (original,), guard, reason="empty loop syntax"))
                     continue
@@ -208,10 +264,11 @@ def build_structure(analysis, routine, authority_identity):
                     children.append(add(child_path, "boundary", (original,), guard,
                                         reason=getattr(record, "reason", None) or "unproved lexical ASSOCIATE selector"))
                 else:
-                    header = original.content[0]
+                    contents = peeled.get(id(original), original.content)
+                    header = contents[0]
                     selector_id = add(child_path + "/selector", "operation", (header,), guard,
                                       role="selector", evaluation="associate_selector")
-                    body_id = sequence(original.content[1:-1], child_path + "/body", guard, depth + 1)
+                    body_id = sequence(contents[1:-1], child_path + "/body", guard, depth + 1)
                     children.append(add(child_path, "associate", (original,), guard,
                                         children=(selector_id, body_id), association=record.public()))
             elif kind == "Call_Stmt":
@@ -244,7 +301,13 @@ def build_structure(analysis, routine, authority_identity):
             else:
                 children.append(add(child_path, "boundary", (original,), guard,
                                     reason="native ordering/effects unavailable: " + kind))
-        return add(path, "sequence", tuple(items), guard, children=children, role="sequence")
+        # Group candidates are private discovery records, never source ASTs.
+        # Ancestor selections retain authentic original parser roots, while
+        # consumers must respect the explicit deferred boundary below them.
+        sources = tuple(node for item in items for node in
+                        (item.original_nodes if defer_native_groups and isinstance(item, NativeGroupCandidate)
+                         else (item,)))
+        return add(path, "sequence", sources, guard, children=children, role="sequence")
 
     specification = next((node for node in _children(routine.scope.node)
                           if _kind(node) == "Specification_Part"), None)
@@ -252,24 +315,46 @@ def build_structure(analysis, routine, authority_identity):
                    role="entry", definition_changes=[binding.root for binding in routine.scope.bindings.values()
                        if binding.name in routine.arguments and binding.intent == "out"])
     try:
-        root_id = sequence(_children(routine.execution), "body")
+        if condition_header is not None:
+            condition_id = add(path + "/condition", "operation", selection, guard,
+                role="condition", aliases=(condition_header,), evaluation="condition")
+            root_id = add(path, "sequence", selection, guard, children=(condition_id,), role="sequence")
+        else:
+            root_id = sequence(_children(routine.execution) if selection is None else selection, path, guard)
     except CompilationError as error:
         reasons.append(str(error))
         # A truncated graph is never advertised as an executable skeleton.
-        nodes, originals, ids = {entry_id: nodes[entry_id]}, {entry_id: originals[entry_id]}, {}
+        nodes, originals, ids, native_groups = {entry_id: nodes[entry_id]}, {entry_id: originals[entry_id]}, {}, {}
         operation_count = 0
-        root_id = add("body", "boundary", _children(routine.execution),
+        root_id = add(path, "boundary", _children(routine.execution) if selection is None else selection,
                       reason=str(error))
     public = {"version": STRUCTURED_EFFECT_VERSION, "procedure": routine.qualified,
               "analysis_identity": authority_identity, "entry": entry_id, "root": root_id,
               "available": not reasons, "reasons": reasons,
               "operation_limit": analysis.operation_limit, "operation_count": operation_count,
+              "raw_structure_rejection": list(raw_rejection),
               "nodes": [node.public() for node in nodes.values()]}
     identity = sha256(_canonical(public).encode()).hexdigest()
     return StructuredSummary(routine.qualified, identity, authority_identity, root_id, entry_id,
                              MappingProxyType(nodes), not reasons, tuple(reasons), limit,
                              analysis.operation_limit, operation_count,
-                             MappingProxyType(originals), MappingProxyType(ids))
+                             MappingProxyType(originals), MappingProxyType(ids),
+                             native_groups=MappingProxyType(native_groups), raw_structure_rejection=tuple(raw_rejection))
+
+
+def build_structure(analysis, routine, authority_identity):
+    """Retain small graphs; retry oversized native groups as explicit boundaries.
+
+    A deferred boundary makes no effect/completion claim. Its original group
+    and independently bounded units are available only to a native consumer
+    that authenticates completion and every unit's complete effects.
+    """
+    ordinary = _build_structure(analysis, routine, authority_identity)
+    if ordinary.available or ordinary.reasons != ("bounded structured source operation budget exhausted",):
+        return ordinary
+    deferred = _build_structure(analysis, routine, authority_identity, defer_native_groups=True,
+                                raw_rejection=ordinary.reasons)
+    return deferred if deferred.native_groups else ordinary
 
 
 def admit_cached_structure(public, expected):
