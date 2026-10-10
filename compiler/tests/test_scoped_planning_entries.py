@@ -140,7 +140,9 @@ def test_selector_previews_complete_plan_before_hardware_compatibility(tmp_path)
     assert emitted.report["automatic_estimate_available"]
     text = emitted.cuda.split('extern "C" int ' + emitted.report["planning"]["selector"], 1)[1]
     assert text.index("&costs, -1, &preview") < text.index("offload::compatible")
-    assert "!preview.available || (scoped_host_compatible(profile) && (!preview.gpu_units ||" in text
+    assert ("!preview.available || (scoped_host_compatible(profile) && "
+            "scoped_compute_placement_compatible() && (!preview.gpu_units ||") in text
+    assert text.index("&costs, -1, &preview") < text.index("scoped_compute_placement_compatible()")
     assert text.index("fort_scope_device_get") < text.index("&costs, -1, &preview")
     assert "cudaGetDevice(&fort_current_device) == cudaSuccess" in text
     assert text.index("fort_current_device == fort_scope_device") < text.index("offload::compatible")

@@ -18,8 +18,8 @@ from pathlib import Path
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import Base, walk
 
-from compiler.frontend.source_effects import Binding, _children, _kind, _part
 from compiler.frontend.component_bindings import component_access, references, source_scope_for
+from compiler.frontend.source_effects import Binding, _children, _kind, _part
 from compiler.ir import CompilationError
 from compiler.scopes.numerical import Parameter
 from compiler.scopes.segments import directive, fortran_lines, grouped_nodes, statement_span
@@ -44,6 +44,7 @@ class RegionExtraction:
     private_arrays: tuple[str, ...] = ()
     operation_kind: str = "numerical_loop"
     numerical_environment_required: bool = False
+    immutable_constants: tuple[str, ...] = ()
 
     @property
     def requires_numerical_environment(self):
@@ -71,6 +72,7 @@ class RegionExtraction:
                 "runtime_guards": list(self.runtime_guards), "numerical_helpers": list(self.numerical_helpers),
                 "tile_domains": list(self.tile_domains),
                 "private_arrays": list(self.private_arrays),
+                "immutable_constants": list(self.immutable_constants),
                 "numerical_environment": ({"required": True, "rounding": "round to nearest",
                                             "exceptions": "host traps disabled", "check": "at the original reached region",
                                             "fallback": "unchanged original native span"} if self.requires_numerical_environment else {"required": False}),
@@ -330,18 +332,21 @@ def _fixed_shape(routine, binding):
     if not binding.rank or len(binding.shape_nodes) != binding.rank:
         raise CompilationError("inline private arrays require constant explicit bounds")
     result, elements = [], 1
+    scope = binding.declaring_scope or routine.scope
     for axis in binding.shape_nodes:
         if _kind(axis) != "Explicit_Shape_Spec" or axis.items[1] is None:
             raise CompilationError("inline private arrays require constant explicit bounds")
         try:
-            lower = routine.scope.kinds.integer(axis.items[0], SourceLocation(str(routine.scope.path))) if axis.items[0] is not None else 1
-            upper = routine.scope.kinds.integer(axis.items[1], SourceLocation(str(routine.scope.path)))
+            lower = scope.kinds.integer(axis.items[0], SourceLocation(str(scope.path))) if axis.items[0] is not None else 1
+            upper = scope.kinds.integer(axis.items[1], SourceLocation(str(scope.path)))
         except CompilationError as error:
             raise CompilationError("inline private arrays require constant explicit bounds") from error
         if not -(2**31) <= lower < 2**31 or not -(2**31) <= upper < 2**31:
             raise CompilationError("inline private array bounds exceed the INTEGER ABI")
         elements *= max(0, upper - lower + 1)
-        result.append(f"{lower}:{upper}")
+        def integer_spelling(value):
+            return "(-2147483647 - 1)" if value == -(2**31) else str(value)
+        result.append(f"{integer_spelling(lower)}:{integer_spelling(upper)}")
     if elements > 256:
         raise CompilationError("inline private array exceeds the bounded element budget")
     return tuple(result)
@@ -708,14 +713,19 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
         prove_completion = (analysis.numerical_joined_completion if helpers
                             else analysis.joined_completion)
         completion = prove_completion(routine.qualified, source_nodes).public()
-    if helpers and (observers := _exception_observers(analysis)):
+    vector_reduction = any(_kind(item) == "Intrinsic_Function_Reference"
+                           and str(item.items[0]).lower() in {"sum", "dot_product"}
+                           for owner, body in [(routine, loop) for loop in loops]
+                           + [(helper, helper.execution) for helper in helpers.values()]
+                           for item in walk(body))
+    if (helpers or vector_reduction) and (observers := _exception_observers(analysis)):
         raise CompilationError("source-observable floating-point exception flags prevent GPU helper closure: "
                                + "; ".join(observers))
     admitted = {"Execution_Part", "Block_Nonlabel_Do_Construct", "Nonlabel_Do_Stmt", "End_Do_Stmt", "Assignment_Stmt", "Call_Stmt",
                 "If_Stmt", "If_Construct", "If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt", "Comment"}
     bodies = [(routine, loop) for loop in loops] + [(helper, helper.execution) for helper in helpers.values()]
     for owner, loop in bodies:
-        if helpers:
+        if helpers or vector_reduction:
             _validate_real_varargs(analysis, owner, loop)
         for item in walk(loop):
             if ((hasattr(item, "content") or _kind(item).endswith("_Stmt")
@@ -726,8 +736,9 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
 
     used = {}
     for owner, loop in bodies:
-        for binding, reference in references(analysis, owner.scope, loop):
-            if owner is not routine and any(binding is own for own in owner.scope.bindings.values()):
+        for binding, _reference in references(analysis, owner.scope, loop):
+            if (owner is not routine and "parameter" not in binding.attributes
+                    and any(binding is own for own in owner.scope.bindings.values())):
                 continue  # Helper dummies/private storage belong to its worker.
             boundary = analysis.resource_identity_boundary(binding)
             if boundary:
@@ -737,6 +748,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
     def write(binding, target):
         if binding is None:
             raise CompilationError("unresolved inline assignment target")
+        if "parameter" in binding.attributes:
+            raise CompilationError("inline region cannot write original PARAMETER storage")
         if (binding.root.startswith(routine.qualified + "::") and binding.rank
                 and not hasattr(binding, "component_object")
                 and not binding.attributes & {"save", "allocatable", "pointer", "target"}):
@@ -832,7 +845,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
     local_arrays |= {root for root, binding in used.items()
                      if root.startswith(routine.qualified + "::") and binding.rank
                      and not hasattr(binding, "component_object")
-                     and not binding.attributes & {"save", "allocatable", "pointer", "target"}}
+                     and not binding.attributes & {"save", "allocatable", "pointer", "target", "parameter"}}
     for root in local_arrays:
         binding = used[root]
         _fixed_shape(routine, binding)
@@ -846,7 +859,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
             raise CompilationError("inline OpenMP array writes need proven PRIVATE storage")
     private = {root: used[root] for root in scalar_writes | local_arrays}
     captures = {root: binding for root, binding in used.items()
-                if root not in private and not ("parameter" in binding.attributes and binding.dtype == "integer")}
+                if root not in private and "parameter" not in binding.attributes}
     if worksharing is not None and set(captures) & set(worksharing.private_roots):
         raise CompilationError('inline worksharing cannot borrow a thread-private input value')
     guards = []
@@ -863,6 +876,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
         raise CompilationError("inline numerical capture budget exceeded")
     capture_names = {root: binding.name for root, binding in captures.items()}
     occupied = {binding.name for binding in used.values()}
+    occupied.update(name for helper in helpers.values() for name in helper.scope.bindings)
     for index, (root, binding) in enumerate(sorted(captures.items())):
         if hasattr(binding, "component_object"):
             name = "fort_region_field_" + str(index)
@@ -870,18 +884,54 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
                 raise CompilationError("inline field parameter namespace conflicts")
             occupied.add(name)
             capture_names[root] = name
+    from compiler.scopes.constant_parameters import outline_constants
+    constants = outline_constants(analysis, routine, used.values(), occupied, _fixed_shape)
     arrays = {capture_names[root]: binding for root, binding in captures.items() if binding.rank}
-    names = {binding.name for binding in used.values()}
     lowers = {}
     for name, binding in arrays.items():
         for axis in range(1, binding.rank + 1):
             lower = f"fort_region_lb_{name}_{axis}"
-            if lower in names:
+            if lower in occupied:
                 raise CompilationError("inline lower-bound parameter namespace conflicts")
+            occupied.add(lower)
             lowers[name, axis] = lower
 
     helper_names = {name: "fort_helper_" + str(index) for index, name in enumerate(helpers)}
+    if any(name in occupied for name in helper_names.values()):
+        raise CompilationError("inline helper entry namespace conflicts with original source")
+    occupied.update(helper_names.values())
     section_variables, section_guards = [], []
+
+    def normalized_indices(name, indices, owner):
+        if len(indices) != arrays[name].rank:
+            raise CompilationError("inline numerical array accesses require rank-preserving indices")
+        rendered = []
+        for axis, index in enumerate(indices, 1):
+            lower = lowers[name, axis]
+
+            if _kind(index) != "Subscript_Triplet":
+                rendered.append(f"({transformed(index, owner)}) - {lower} + 1")
+                continue
+            from compiler.ir import SourceLocation
+            start, stop, step = index.items
+            try:
+                stride = 1 if step is None else owner.scope.kinds.integer(step, SourceLocation(str(owner.scope.path)))
+            except CompilationError as error:
+                raise CompilationError("inline array slices require a constant nonzero stride") from error
+            if not -(2**31) <= stride < 2**31 or not stride:
+                raise CompilationError("inline array slices require a constant nonzero INTEGER stride")
+            original_lower = F.Name(lower)
+            original_upper = F.Level_2_Expr(f"({lower} + (SIZE({name},{axis}) - 1))")
+            # Fortran uses declared bounds for omitted endpoints regardless of
+            # stride. In particular, a(::-1) need not denote a reversed array.
+            start = original_lower if start is None else start
+            stop = original_upper if stop is None else stop
+            # Omitted endpoints above already use normalized descriptor names;
+            # transform only original expressions, never synthetic source names.
+            first = (str(start) if start is original_lower or start is original_upper else str(transformed(start, owner)))
+            last = (str(stop) if stop is original_lower or stop is original_upper else str(transformed(stop, owner)))
+            rendered.append(f"({first}) - {lower} + 1 : ({last}) - {lower} + 1 : {stride}")
+        return rendered
 
     def transformed(value, owner=routine):
         if isinstance(value, (tuple, list)):
@@ -890,10 +940,16 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
             return value
         kind = _kind(value)
         if kind == "Assignment_Stmt" and owner is routine:
-            from compiler.scopes.section_operations import expand_full_sections
-            expanded = expand_full_sections(analysis, routine, value, section_variables, section_guards)
-            if expanded is not None:
-                return transformed(expanded, owner)
+            target = value.items[0]
+            base = target.items[0] if _kind(target) == "Part_Ref" else target
+            target_binding = analysis._binding(owner.scope, base)
+            bounded = (_kind(target) == "Part_Ref" and any(_kind(index) == "Subscript_Triplet"
+                       and any(child is not None for child in index.items) for index in _children(target.items[1])))
+            if not bounded and not (target_binding and target_binding.root in private):
+                from compiler.scopes.section_operations import expand_full_sections
+                expanded = expand_full_sections(analysis, routine, value, section_variables, section_guards)
+                if expanded is not None:
+                    return transformed(expanded, owner)
         if kind == "Data_Ref":
             access = component_access(analysis, source_scope_for(analysis, value, owner.scope), value)
             binding = access.binding
@@ -902,10 +958,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
             name = capture_names[binding.root]
             if not access.indices:
                 return F.Name(name)
-            if any(_kind(index) == "Subscript_Triplet" for index in access.indices):
-                raise CompilationError("inline field array accesses require scalar indices")
-            rendered = [f"({transformed(index, owner)}) - {lowers[name,axis]} + 1"
-                        for axis, index in enumerate(access.indices, 1)]
+            rendered = normalized_indices(name, access.indices, owner)
             return F.Part_Ref(name + "(" + ",".join(rendered) + ")")
         if kind == "Comment":
             return value
@@ -930,7 +983,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
             return result
         binding = analysis._binding(owner.scope, value.items[0]) if kind == "Part_Ref" else None
         captured_array = (binding is not None and binding.root in captures and binding.rank)
-        private_array = binding is not None and binding.rank and (binding.root in private or binding is owner.scope.bindings.get(binding.name))
+        private_array = binding is not None and binding.rank and (binding.root in private
+                        or binding.root in constants.names or binding is owner.scope.bindings.get(binding.name))
         if kind == "Part_Ref" and not captured_array and not private_array:
             name = str(value.items[0]).lower()
             if _intrinsic_shadowed(analysis, owner, name):
@@ -938,10 +992,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
         if kind == "Part_Ref" and captured_array:
             name = capture_names[binding.root]
             indices = _children(value.items[1])
-            if len(indices) != arrays[name].rank or any(_kind(index) == "Subscript_Triplet" for index in indices):
-                raise CompilationError("inline numerical array accesses require scalar rank-preserving indices")
-            rendered = [f"({transformed(index, owner)}) - {lowers[name, axis]} + 1"
-                        for axis, index in enumerate(indices, 1)]
+            rendered = normalized_indices(name, indices, owner)
             return F.Part_Ref(name + "(" + ",".join(rendered) + ")")
         if kind == "Intrinsic_Function_Reference" and str(value.items[0]).lower() in {"lbound", "ubound", "size"}:
             intrinsic = str(value.items[0]).lower()
@@ -976,6 +1027,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
                 return F.Name(helper_names[owner.qualified])
             binding = analysis._binding(owner.scope, value)
             if binding and "parameter" in binding.attributes:
+                if binding.root in constants.names:
+                    return F.Name(constants.names[binding.root])
                 if (owner is not routine and binding is owner.scope.bindings.get(binding.name)) or binding.dtype == "real":
                     return copy.copy(value)
                 # Resolve kinds/constants in the original lexical scope; a new
@@ -1004,9 +1057,10 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
     helper_identity = "\0".join(qualified + "\0" + analysis.sources[str(helper.scope.path)]
                                   for qualified, helper in sorted(helpers.items()))
     identity = sha256((analysis.sources[str(routine.scope.path)] + "\0" + routine.qualified + "\0" +
-                       str(span) + "\0" + "\n".join(map(str, nodes)) + "\0" + helper_identity).encode()).hexdigest()
+                       str(span) + "\0" + "\n".join(map(str, nodes)) + "\0" + helper_identity
+                       + ("\0" + constants.identity if constants.identity else "")).encode()).hexdigest()
     module, procedure = "fort_inline_" + identity[:12], "region"
-    parameters, declarations = [], []
+    parameters, declarations = [], list(constants.declarations)
 
     def numerical_type(binding):
         # The numerical ABI uses default INTEGER and its C-bool LOGICAL model.
@@ -1050,6 +1104,12 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
             if _kind(declaration) != "Type_Declaration_Stmt":
                 raise CompilationError("unsupported inline numerical helper specification: " + _kind(declaration))
             dtype, attributes, entities = declaration.items
+            retained = [entity for entity in _children(entities)
+                        if helper.scope.bindings[str(entity.items[0]).lower()].root not in constants.names]
+            if not retained:
+                continue
+            entities = copy.copy(entities)
+            entities.items = tuple(retained)
             own = [helper.scope.bindings[str(entity.items[0]).lower()] for entity in _children(entities)]
             if any(binding.attributes & {"save", "allocatable", "pointer", "optional", "target", "volatile", "asynchronous"} for binding in own):
                 raise CompilationError("inline numerical helper storage association is unsupported")
@@ -1072,4 +1132,6 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
                             tuple(sorted(captures.values(), key=lambda item: item.root)), frozenset(writes),
                             tuple(binding.name for binding in private.values() if not binding.rank), tuple(guards), identity, completion,
                             runtime_guards=runtime_guards, numerical_helpers=tuple(helpers), tile_domains=tile_domains,
-                            private_arrays=tuple(binding.name for binding in private.values() if binding.rank))
+                            private_arrays=tuple(binding.name for binding in private.values() if binding.rank),
+                            numerical_environment_required=vector_reduction,
+                            immutable_constants=constants.resources)

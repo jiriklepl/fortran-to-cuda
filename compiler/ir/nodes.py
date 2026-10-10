@@ -157,6 +157,9 @@ class FunctionIR:
     symbols: tuple[Symbol, ...]
     body: Block
     source: str
+    # Lowering can erase short real reductions into ordinary scalar operators.
+    # Preserve their host-environment precondition independently of that IR.
+    requires_numerical_environment: bool = False
 
 
 def walk_expr(expression: Expr):

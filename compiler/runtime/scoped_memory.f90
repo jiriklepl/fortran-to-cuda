@@ -11,6 +11,7 @@ module fort_scoped_memory
   integer(c_int32_t), parameter, public :: FORT_SCOPE_INTEGER32=3, FORT_SCOPE_LOGICAL=4
   integer(c_int), parameter, public :: FORT_SCOPE_NATIVE=0, FORT_SCOPE_GPU=1, FORT_SCOPE_AUTO=2
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_ABI_VERSION=1
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_SCRATCH_ABI_VERSION=1
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFERS_DIRECT=0, FORT_SCOPE_TRANSFERS_PINNED=1
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFERS_PIPELINED=2, FORT_SCOPE_TRANSFERS_AUTO=3
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_NONE=0, FORT_SCOPE_TRANSFER_ESTIMATES_UNAVAILABLE=1
@@ -68,6 +69,17 @@ module fort_scoped_memory
     integer(c_int64_t) :: uploads=0, downloads=0, upload_bytes=0, download_bytes=0
     integer(c_int64_t) :: allocations=0, allocated_bytes=0, peak_device_bytes=0
     integer(c_int64_t) :: launches=0, waits=0, reconciliations=0
+  end type
+  type, bind(C), public :: fort_scope_scratch_lease_v1
+    integer(c_int32_t) :: version=0, reserved=0
+    integer(c_int64_t) :: token=0
+    type(c_ptr) :: device=c_null_ptr
+    integer(c_size_t) :: bytes=0, capacity=0
+  end type
+  type, bind(C), public :: fort_scope_scratch_stats_v1
+    integer(c_int32_t) :: version=1, active=0
+    integer(c_int64_t) :: acquisitions=0, allocations=0, reuses=0, releases=0, grows=0
+    integer(c_int64_t) :: capacity_bytes=0, active_bytes=0, peak_scratch_bytes=0, peak_total_device_bytes=0
   end type
   type, bind(C), public :: fort_scope_transfer_stats
     integer(c_int32_t) :: version=1, requested_mode=0, effective_mode=0, fallback_reason=0
@@ -189,6 +201,7 @@ module fort_scoped_memory
   public :: fort_scope_view_get_v1, fort_scope_view_get_v2
   public :: fort_scope_forget_sections_v1, fort_scope_plan_forget_sections_v1
   public :: fort_scope_set_device_budget
+  public :: fort_scope_scratch_acquire_v1, fort_scope_scratch_release_v1, fort_scope_scratch_stats_get_v1
   public :: fort_scope_set_transfers, fort_scope_transfer_stats_get_v1
   public :: fort_scope_set_transfer_costs_v1, fort_scope_batch_execute_v1, fort_scope_batch_report_get_v1
   public :: fort_scope_device_get
@@ -209,6 +222,25 @@ module fort_scoped_memory
   public :: fort_scope_plan_team_native_call_v1
 
   interface
+
+    function fort_scope_scratch_acquire_v1(context, bytes, lease) bind(C) result(status)
+      import c_int, c_int64_t, c_size_t, fort_scope_scratch_lease_v1
+      integer(c_int64_t), value :: context
+      integer(c_size_t), value :: bytes
+      type(fort_scope_scratch_lease_v1), intent(out) :: lease
+      integer(c_int) :: status
+    end function
+    function fort_scope_scratch_release_v1(context, token) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: context, token
+      integer(c_int) :: status
+    end function
+    function fort_scope_scratch_stats_get_v1(context, stats) bind(C) result(status)
+      import c_int, c_int64_t, fort_scope_scratch_stats_v1
+      integer(c_int64_t), value :: context
+      type(fort_scope_scratch_stats_v1), intent(out) :: stats
+      integer(c_int) :: status
+    end function
 
     function fort_scope_set_team_costs_v1(context, costs, compatible) bind(C) result(status)
       import c_int, c_int64_t, c_ptr

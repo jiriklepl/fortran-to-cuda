@@ -14,7 +14,7 @@ from compiler.emission.fortran.formatting import _fortran_list
 from compiler.frontend import lower_source
 from compiler.frontend.source_effects import _kind
 from compiler.ir import CompilationError
-from compiler.scopes.regions import extract_region
+from compiler.scopes.regions import _exception_observers, extract_region
 
 
 class InlineRegions:
@@ -247,6 +247,13 @@ class InlineRegions:
         source_name = str(self.builder.entry.scope.path) + "#inline:" + extraction.source_identity
         function, plan = prepare_function(lower_source(extraction.source, extraction.entry, source_name=source_name),
                                           options=self.builder.options)
+        if function.requires_numerical_environment:
+            # Numerical lowering is authoritative: vector expressions can lose
+            # their source syntax when expanded into ordinary scalar IR.
+            if observers := _exception_observers(self.builder.analysis):
+                raise CompilationError("source-observable floating-point exception flags prevent GPU numerical closure: "
+                                       + "; ".join(observers))
+            extraction = replace(extraction, numerical_environment_required=True)
         if not plan.regions:
             raise CompilationError("inline numerical candidate has no proven parallel region")
         if reservation is not None:

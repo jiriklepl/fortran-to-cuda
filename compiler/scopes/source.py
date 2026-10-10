@@ -256,12 +256,15 @@ class ScopeBuilder:
         if procedure in active or len(active) >= 8:
             return False
         routine = self.analysis.routines[procedure]
-        summary = self.analysis.summarize(procedure)
         nodes = [node for node in _children(routine.execution) if _kind(node) != "Comment"]
-        if (routine.source_kind != "module" or not summary["complete"] or not summary["cloneable"]
-                or not nodes or any(_kind(node) != "Call_Stmt" for node in nodes)
+        if (routine.source_kind != "module" or not nodes or any(_kind(node) != "Call_Stmt" for node in nodes)
                 or any(routine.scope.bindings[name].attributes & {"optional", "allocatable", "contiguous"}
                        for name in routine.arguments)):
+            return False
+        # Obvious syntax/descriptor boundaries do not need a transitive effect
+        # closure. Keep the same proof requirements for candidates that remain.
+        summary = self.analysis.summarize(procedure)
+        if not summary["complete"] or not summary["cloneable"]:
             return False
         borrowed = False
         try:
@@ -280,11 +283,12 @@ class ScopeBuilder:
 
     def view_native_supported(self, procedure):
         routine = self.analysis.routines[procedure]
-        summary = self.analysis.summarize(procedure)
-        if (not summary["complete"] or not summary["native_completion"]["available"]
-                or any(_kind(node) == "Call_Stmt" for node in walk(routine.execution))
+        if (any(_kind(node) == "Call_Stmt" for node in walk(routine.execution))
                 or any(routine.scope.bindings[name].attributes & {"optional", "allocatable", "contiguous"}
                        for name in routine.arguments)):
+            return False
+        summary = self.analysis.summarize(procedure)
+        if not summary["complete"] or not summary["native_completion"]["available"]:
             return False
         sections = self.analysis.native_sections(procedure)
         return sections.available and all(resource.resource.startswith("argument::") for resource in sections.resources)

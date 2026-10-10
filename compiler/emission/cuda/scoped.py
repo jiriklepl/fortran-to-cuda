@@ -76,7 +76,10 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
     scalars = tuple(s for s in function.parameters if not s.rank)
     if any(s.intent != "in" for s in scalars):
         raise CompilationError("shared numerical entries require read-only scalar parameters")
-    digest = sha256(f"entry-abi:{ENTRY_ABI_VERSION}:{function.module.lower()}::{function.name.lower()}:{plan!r}".encode()).hexdigest()[:12]
+    identity = f"entry-abi:{ENTRY_ABI_VERSION}:{function.module.lower()}::{function.name.lower()}:{plan!r}"
+    if function.requires_numerical_environment:
+        identity += ":numerical-environment:nearest-nontrapping-v1"
+    digest = sha256(identity.encode()).hexdigest()[:12]
     if root_views:
         digest = sha256((digest + f":root-view-v{root_view_abi}").encode()).hexdigest()[:12]
     name = "fort_shared_" + digest
@@ -146,6 +149,10 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
     if prep.analysis.available and any(u.work_per_iteration is None or u.work_is_upper_bound for u in units.values()):
         planning_reason = "; ".join(dict.fromkeys(u.work_estimate_reason or "work estimate is unknown or conditional"
             for u in units.values() if u.work_per_iteration is None or u.work_is_upper_bound))
+    if function.requires_numerical_environment:
+        # The current protocol fixtures do not include flagged entry guards or
+        # their collective barriers. A source hash alone cannot price them.
+        planning_reason = "numerical_environment_protocol_calibration_unavailable"
     planning_available = prep.analysis.available and planning_reason is None
     compute_models = [unit.compute_model for unit in units.values() if unit.compute_model is not None]
     source_compute = config.native_participation is not None
@@ -209,6 +216,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         except ProfileError as error:
             costs = None
             profile_reason = str(error)
+        if function.requires_numerical_environment:
+            team_costs = None
     team_configure_name = c_name + "_configure_team_v1"
     if config.collective:
         lines.insert(5, '#include "scoped_team_observer.hpp"')
@@ -280,6 +289,9 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
               '        return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "incompatible shared runtime ABI");',
               "    if (fort_mode < 0 || fort_mode > 2)",
               '        return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "unknown shared execution mode");']
+    if function.requires_numerical_environment:
+        lines += ["    if (!fort_runtime::numerical_environment_supported())",
+                  '        return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "unsupported numerical environment for real short reduction");']
     setup = []
     for s in scalars:
         setup += [f"    if (!fort_scalar_{s.cpp_name})",
@@ -530,6 +542,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         state_name = name + "_team_state"
         lines += [f"struct {state_name} {{", "    int status = FORT_SCOPE_OK;",
                   "    bool cpu_active = false;", "    bool work_started = false;"]
+        if function.requires_numerical_environment:
+            lines += ["    bool environment_supported = true;"]
         lines += [f"    bool {field} = false;" for field in conditions.values()]
         for s in arrays:
             lines += [f"    {cpp_type(s)} *{s.cpp_name} = nullptr;"]
@@ -544,8 +558,16 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                   "#endif",
                   "    fort_scoped::TeamObservation fort_entry_observe(FORT_SCOPE_TEAM_OBSERVE_ENTRY);",
                   f"    {state_name} local_state{{}};", f"    {state_name} *shared = nullptr;",
-                  "    #pragma omp single copyprivate(shared)", "    { shared = &local_state; }",
-                  "    #pragma omp master", "    {", "        shared->status = [&]() -> int {",
+                  "    #pragma omp single copyprivate(shared)", "    { shared = &local_state; }"]
+        if function.requires_numerical_environment:
+            lines += ["    if (!fort_runtime::numerical_environment_supported()) {",
+                      "        #pragma omp atomic write", "        shared->environment_supported = false;", "    }",
+                      "    #pragma omp barrier"]
+        lines += ["    #pragma omp master", "    {", "        shared->status = [&]() -> int {"]
+        if function.requires_numerical_environment:
+            lines += ["            if (!shared->environment_supported)",
+                      '                return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "unsupported team numerical environment for real short reduction");']
+        lines += [
                   "            if (fort_scope_abi_version() != FORT_SCOPE_ABI_VERSION)",
                   '                return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "incompatible shared runtime ABI");',
                   "            if (fort_mode < 0 || fort_mode > 2)",
@@ -750,6 +772,9 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         planning_available=planning_available, profile_available=costs is not None, protected=protected)
     lines += native_preflight.cpp
     lines += [f'extern "C" int {plan_name}({", ".join(planning_signature)}) {{']
+    if function.requires_numerical_environment:
+        lines += ["    if (!fort_runtime::numerical_environment_supported())",
+                  '        return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "unsupported planning numerical environment for real short reduction");']
     if not query_available:
         lines += [f"    return fort_scope_report_error(FORT_SCOPE_BOUNDARY, {json.dumps(query_reason)});"]
     else:
@@ -804,10 +829,12 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                "    if (d.valid && branch) {", *indent(project(step.then_plan), 2),
                                "    } else if (d.valid) {", *indent(project(step.else_plan), 2), "    }", "}"]
                 elif isinstance(step, ParallelRegion):
-                    known_work = units[step.id].work_per_iteration is not None and not units[step.id].work_is_upper_bound
+                    known_work = (units[step.id].work_per_iteration is not None
+                                  and not units[step.id].work_is_upper_bound
+                                  and not function.requires_numerical_environment)
                     flops = "unit.units[0].flops" if known_work else "0.0"
                     memory_bytes = "unit.units[0].memory_bytes" if known_work else "0.0"
-                    model = units[step.id].compute_model
+                    model = units[step.id].compute_model if not function.requires_numerical_environment else None
                     record = [f"        FORT_SHARED_CHECK(fort_access.record(FORT_SCOPE_PLAN_WORKER, {unit_ids[step.id]}ULL, {flops}, {memory_bytes}, {'true' if known_work and not protected[step.id] else 'false'}, unit.units[0].cpu_numerical_seconds, unit.units[0].gpu_numerical_seconds));"]
                     if source_compute:
                         record = ["        fort_scope_compute_costs_v1 fort_compute{};",
@@ -879,8 +906,11 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
     choose_team_guard = (["    int fort_team_ready=0;",
                          "    FORT_SHARED_CHECK(fort_scope_team_costs_ready_v1(fort_context, &fort_team_ready));",
                          "    if (!fort_team_ready) costs.valid=0;"] if config.collective else [])
-    lines += [f'extern "C" int {choose_name}(fort_scope_t fort_context, fort_scope_plan_decision *decision) {{',
-              '    if (!decision) return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "null planning decision");',
+    lines += [f'extern "C" int {choose_name}(fort_scope_t fort_context, fort_scope_plan_decision *decision) {{']
+    if function.requires_numerical_environment:
+        lines += ["    if (!fort_runtime::numerical_environment_supported())",
+                  '        return fort_scope_report_error(FORT_SCOPE_BOUNDARY, "unsupported selection numerical environment for real short reduction");']
+    lines += ['    if (!decision) return fort_scope_report_error(FORT_SCOPE_ARGUMENT, "null planning decision");',
               *indent(cost_lines), *choose_team_guard, f"    static const auto profile = {profile_expression(config.profile if costs is not None else None)};",
               "    int fort_scope_device = -1, fort_current_device = -1;",
               "    FORT_SHARED_CHECK(fort_scope_device_get(fort_context, &fort_scope_device));",
@@ -934,6 +964,15 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         "scalar_parameters": [{"name": s.name, "dtype": s.dtype.value, "passing": "reference"} for s in scalars],
         "argument_order": ["context", "mode", *[s.name for s in arrays], *[s.name for s in scalars]],
         "modes": {"native": 0, "gpu": 1, "automatic": 2},
+        "numerical_environment": {
+            "required": function.requires_numerical_environment,
+            "check": "fort_scope_numerical_environment_supported",
+            "rounding": "round to nearest", "exceptions": "host traps disabled",
+            "caller_contract": "floating-point exception flags are not observed",
+            "check_position": "before entry work and planning; every run, all collective participants",
+            "unsupported": "pre-work boundary; original-source caller executes its coherent native operation",
+            "generated_cpu_fallback": "does not replace the original source for unsupported environments",
+        },
         "transfer_configuration": {"abi_version": 1, "requested": config.scope_transfers,
                                    "selected": "pinned" if config.scope_transfers == "pinned" else "direct",
                                    "reason": transfer_reason, "available_modes": ["direct", "pinned"],

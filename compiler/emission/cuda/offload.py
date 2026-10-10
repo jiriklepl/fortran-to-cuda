@@ -13,9 +13,9 @@ from compiler.emission.common.symbols import host_symbols, region_body
 from compiler.emission.cuda.kernels import generate_launch
 from compiler.ir import ScalarType, referenced_symbols
 from compiler.offload.analysis import analyze_offload
-from compiler.offload.numerical_calibration import apply_numerical_costs
 from compiler.offload.codegen import profile_expression
 from compiler.offload.codegen import query_expression as _value
+from compiler.offload.numerical_calibration import apply_numerical_costs
 
 
 @dataclass(frozen=True)
@@ -169,7 +169,10 @@ def generate_offload(function, plan, config):
               "collective_entry": config.collective, "host_threads": config.host_threads,
               "profile_available": config.profile is not None, "profile_reason": config.profile_reason}
     known = analysis.available and all(u.work_per_iteration is not None and not u.work_is_upper_bound for u in analysis.units)
-    report["estimate_available"] = bool(known and config.profile is not None)
+    report["estimate_available"] = bool(known and config.profile is not None
+                                        and not function.requires_numerical_environment)
+    if function.requires_numerical_environment:
+        report["estimate_reason"] = "numerical_environment_protocol_calibration_unavailable"
     report["work_per_iteration"] = [u.work_per_iteration for u in analysis.units]
     report["launches_max"] = len(analysis.units)
     report["transfer_volume"] = "runtime union of physical sections; unknown accesses use full arrays"
@@ -225,6 +228,10 @@ def generate_offload(function, plan, config):
     if config.policy == "sections":
         ready = context
         compatible = "true"
+    elif function.requires_numerical_environment:
+        # Existing calibration does not measure this entry's check/save/restore
+        # or collective readiness barriers. Forced controls remain available.
+        ready = "false"
     elif not known:
         ready = "false"
         report["estimate_reason"] = "work estimate is unknown or conditional"

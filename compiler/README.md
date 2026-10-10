@@ -414,7 +414,8 @@ separate reads, possible writes, and proven overwrites.
 `fort_scope_forget_definition` discards old defined/current coverage while
 retaining the device allocation, preserving procedure-entry `INTENT(OUT)` events.
 Neither re-registering a pointer nor keeping its allocation defines its contents.
-`fort_scope_set_device_budget` limits live full-layout device payload bytes; set
+`fort_scope_set_device_budget` limits live full-layout fields and cached scratch
+payload bytes; set
 it before CUDA initialization. Resource exhaustion before an operation starts
 permits native continuation, including after earlier completed operations.
 
@@ -426,6 +427,13 @@ lazily, use one non-default stream and private pool where supported, and wait at
 host boundaries. All-native and empty accesses initialize no CUDA resources.
 Execution failures poison the context, preventing unsafe replay; abandoning a
 failed context releases resources without claiming valid host results.
+
+The additive [scratch ABI](runtime/SCOPED_SCRATCH_ABI.md) supplies one reusable,
+context-owned device arena. Leases carry unique tokens, share the context stream,
+and cannot publish host data. Zero-byte leases initialize no CUDA resources;
+cached capacity counts against the device budget. Separate statistics expose
+allocation reuse and combined field/scratch peaks. This storage interface does
+not itself implement runtime snapshots or establish automatic placement costs.
 
 Scoped transfers default to `direct`. The opt-in `pinned` control packs exact
 sections into reusable pinned staging, copies against the existing full-layout
@@ -1505,15 +1513,46 @@ end module example
   has at most 256 elements. Constant indexing loops are unrolled with a shared
   256-iteration budget; unknown private subscripts remain boundaries. Array
   arguments retain Fortran element-order association and dummy-bound rebasing.
-  Explicit-shape helper arrays currently require private fixed array actuals.
-- Rank-one constant sections of private arrays support `DOT_PRODUCT`, including
-  nonzero constant strides and empty vectors. Products accumulate in logical
-  element order from a typed zero. Private `SIZE`, `LBOUND` and `UBOUND` inquiries
+  Explicit-shape helper arrays require private fixed array actuals or read-only
+  fixed `PARAMETER` vectors.
+- Fixed-cardinality sections with one varying axis support elementwise
+  expressions, private array assignments, short serial `SUM` and `DOT_PRODUCT`.
+  Captured-array section origins can depend on the mapped coordinates when the
+  endpoint difference is provably constant. Each vector has at most 256 elements,
+  with at most 4096 expanded elements per numerical closure. Nonzero constant
+  strides and empty vectors retain Fortran order; omitted endpoints use declared
+  lower/upper bounds regardless of stride. Right-hand-side values are captured
+  before overlapping private-array writes, and scalar broadcasts evaluate once.
+  Sums/products accumulate in logical element order from a typed zero under the
+  supported native numerical contract; this grants no parallel reduction contract.
+  Private `SIZE`, `LBOUND` and `UBOUND` inquiries
   preserve original bounds and empty-array semantics. Scalar real `PARAMETER`
-  declarations preserve their initializer expressions. Private `INTENT(OUT)`
+  declarations and rank-one numeric `PARAMETER` vectors preserve typed initializer
+  expressions. Outlined source regions retain a bounded closure of imported and
+  lexical constants, original bounds and dependencies, without registering them
+  as mutable captures or private arrays. Private `INTENT(OUT)`
   outputs require complete ordered definitions on every reached helper path.
 
-Logical arrays, writable scalar entry arguments, recursion, general slices,
+Real fixed-vector work, including short `SUM`/`DOT_PRODUCT`, carries a
+numerical-environment requirement through lowering, preparation and emitted entries.
+Source-integrated execution checks
+the original thread environment and retains the unchanged native span when
+rounding is not nearest or host traps are enabled. Configured source that
+observes IEEE exception flags remains native. Forced standalone CUDA entries
+and session runs have no original Fortran body: they diagnose unsupported
+environments before numerical work. Their caller must not observe newly raised
+host floating-point flags; a runtime check cannot prove future observations.
+Runtime setup and profiling preserve pre-existing flags, rounding and trap masks.
+Short serial reduction semantics were checked against the supported native
+gfortran 15 backend and semantic flags in both precisions; a different native
+backend needs independent conformance evidence, not an assumed parallel contract.
+Automatic estimates for these guarded numerical entries remain unavailable until
+offline calibration measures their extra entry/session checks and collective
+coordination. Forced controls remain available for correctness and measurement;
+an unchanged profile hash alone cannot price the added protocol.
+
+Logical arrays, writable scalar entry arguments, recursion, runtime-cardinality
+slices and snapshots,
 non-pure expression call arguments, other intrinsics/operators, explicit lower
 dummy array bounds, and
 unsupported specification statements reject with a source location.

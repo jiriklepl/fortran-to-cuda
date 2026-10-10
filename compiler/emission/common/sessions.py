@@ -43,14 +43,22 @@ def session_names(function: FunctionIR) -> SessionNames:
 
 
 def _signature(
-    name: str, parameters: list[str], result: str = "void", *, linkage: str = 'extern "C"', profiled: bool = False
+    name: str, parameters: list[str], result: str = "void", *, linkage: str = 'extern "C"', profiled: bool = False,
+    preserve_environment: bool = False,
 ) -> list[str]:
     return [
         f"{linkage} {result} {name}(",
         *indent([p + ("," if i + 1 < len(parameters) else "") for i, p in enumerate(parameters)]),
         ") {",
+        *(_preserve_numerical_environment() if preserve_environment else []),
         *(["    timing::ProfiledCallGuard fort_internal_profile;"] if profiled else []),
     ]
+
+
+def _preserve_numerical_environment():
+    return ["    fort_runtime::HostFloatingEnvironment fort_internal_floating_environment;",
+            "    if (!fort_internal_floating_environment.valid())",
+            '        storage::fail("cannot preserve the caller numerical environment");']
 
 
 def workspace_registry_name(function: FunctionIR) -> str:
@@ -124,6 +132,7 @@ def session_definitions(function: FunctionIR, *, run_body: list[str], device: bo
     dimensions = tuple(argument for argument in array_abi if argument.dimension is not None)
     state_type = workspace_state_name(function)
     registry = workspace_registry_name(function)
+    preserve_environment = device and function.requires_numerical_environment
     lines = [f"struct {state_type} {{"]
     lines.extend(indent([f"storage::BufferSlot<{cpp_type(symbol)}> {symbol.cpp_name};" for symbol in arrays]))
     lines.extend(indent([f"const std::size_t {argument.name};" for argument in dimensions]))
@@ -140,6 +149,7 @@ def session_definitions(function: FunctionIR, *, run_body: list[str], device: bo
             [cpp_declaration(argument) for argument in array_abi],
             "std::int64_t",
             profiled=device,
+            preserve_environment=preserve_environment,
         )
     )
     lines.append(f"    const auto fort_internal_token = {registry}.create({', '.join(a.name for a in dimensions)});")
@@ -152,13 +162,21 @@ def session_definitions(function: FunctionIR, *, run_body: list[str], device: bo
         _signature(
             "cpp_" + names.run,
             ["std::int64_t fort_internal_token", *[cpp_declaration(AbiArgument(s)) for s in scalars]],
-            profiled=device,
+            profiled=device and not preserve_environment,
         )
     )
+    if device and function.requires_numerical_environment:
+        # A workspace can outlive changes to the caller's IEEE environment.
+        # Recheck each run before registry access or any numerical operation.
+        lines += ["    if (!fort_runtime::numerical_environment_supported())",
+                  '        storage::fail("unsupported numerical environment for real short reduction; requires round-to-nearest with host traps disabled");']
+        lines += _preserve_numerical_environment()
+        lines += ["    timing::ProfiledCallGuard fort_internal_profile;"]
     lines.append(f"    auto& fort_internal_state = {registry}.get(fort_internal_token);")
     arguments = ", ".join(["fort_internal_state", *[symbol.cpp_name for symbol in scalars]])
     lines.extend([f"    {execution_name(function)}({arguments});", "}", ""])
-    lines.extend(_signature(f"cpp_{names.workspace}_validate", ["std::int64_t fort_internal_token"], profiled=device))
+    lines.extend(_signature(f"cpp_{names.workspace}_validate", ["std::int64_t fort_internal_token"], profiled=device,
+                            preserve_environment=preserve_environment))
     lines.append(f"    {registry}.get(fort_internal_token);")
     lines.extend(indent(render_memory((MemoryOperation("sync"),), device=device)))
     lines.extend(["}", ""])
@@ -170,14 +188,16 @@ def session_definitions(function: FunctionIR, *, run_body: list[str], device: bo
             ]
             arguments.extend(cpp_declaration(AbiArgument(symbol, axis)) for axis in range(1, symbol.rank + 1))
             lines.extend(
-                _signature(f"cpp_{getattr(names, 'update_' + direction)}_{symbol.id}", arguments, profiled=device)
+                _signature(f"cpp_{getattr(names, 'update_' + direction)}_{symbol.id}", arguments, profiled=device,
+                           preserve_environment=preserve_environment)
             )
             lines.append(f"    auto& fort_internal_state = {registry}.get(fort_internal_token);")
             lines.extend(
                 indent(render_memory((MemoryOperation(kind, (symbol,)), MemoryOperation("sync")), device=device))
             )
             lines.extend(["}", ""])
-    lines.extend(_signature("cpp_" + names.destroy, ["std::int64_t fort_internal_token"], profiled=device))
+    lines.extend(_signature("cpp_" + names.destroy, ["std::int64_t fort_internal_token"], profiled=device,
+                            preserve_environment=preserve_environment))
     lines.extend(
         [
             "    if (!fort_internal_token) return;",
@@ -188,7 +208,8 @@ def session_definitions(function: FunctionIR, *, run_body: list[str], device: bo
             "",
         ]
     )
-    lines.extend(_signature("cpp_" + names.trim_cache, [], profiled=device))
+    lines.extend(_signature("cpp_" + names.trim_cache, [], profiled=device,
+                            preserve_environment=preserve_environment))
     lines.append("    storage::trim_cache();")
     if device:
         lines.extend(["#ifdef FORT_OFFLOAD_ENABLED", "    hybrid::trim_cache();", "#endif"])

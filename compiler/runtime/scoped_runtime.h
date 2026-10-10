@@ -124,6 +124,25 @@ typedef struct fort_scope_stats {
     uint64_t launches, waits, reconciliations;
 } fort_scope_stats;
 
+/* Context-owned temporary device storage, independent of registered arrays.
+ * A lease is valid only in its owning context until its matching release.
+ * Scratch has no host mirror, definition coverage, or publication operation.
+ * All uses must share the context stream and record launches normally. */
+#define FORT_SCOPE_SCRATCH_ABI_VERSION 1
+typedef struct fort_scope_scratch_lease_v1 {
+    uint32_t version, reserved;
+    uint64_t token;
+    void *device;
+    size_t bytes, capacity;
+} fort_scope_scratch_lease_v1;
+/* Legacy fort_scope_stats remains field-only. This additive record includes
+ * cached scratch capacity and the peak combined field/scratch payload. */
+typedef struct fort_scope_scratch_stats_v1 {
+    uint32_t version, active;
+    uint64_t acquisitions, allocations, reuses, releases, grows;
+    uint64_t capacity_bytes, active_bytes, peak_scratch_bytes, peak_total_device_bytes;
+} fort_scope_scratch_stats_v1;
+
 /* Optional planning API v1. Queries record effects without executing source
  * work or changing coherence. Coordinates and access descriptors match the
  * execution API. Selection compares complete ordered schedules and exports. */
@@ -354,9 +373,20 @@ int fort_scope_serial_caller(void);
 int fort_scope_numerical_environment_supported(void);
 /* Read the context ordinal without initializing or selecting a CUDA device. */
 int fort_scope_device_get(fort_scope_t context, int *device);
-/* Configure before CUDA initialization. Budget counts live payload bytes of
- * full-layout allocations, independently of the sections transferred. */
+/* Configure before CUDA initialization. Budget counts full-layout payloads
+ * plus cached context scratch, independently of the sections transferred. */
 int fort_scope_set_device_budget(fort_scope_t context, size_t bytes);
+/* At most one active lease per context. Empty requests acquire a token with a
+ * null device pointer and do not initialize CUDA. Positive requests reuse the
+ * arena or grow it after completing earlier uses; old capacity is retired
+ * before replacement. Resource failure acquires no lease. Release retains
+ * capacity without waiting, copying, or publishing. Close rejects an active
+ * lease before publication; abandon retires it after execution failure.
+ * Output records are runtime-written; callers need not initialize them. */
+int fort_scope_scratch_acquire_v1(fort_scope_t context, size_t bytes,
+                                  fort_scope_scratch_lease_v1 *lease);
+int fort_scope_scratch_release_v1(fort_scope_t context, uint64_t token);
+int fort_scope_scratch_stats_get_v1(fort_scope_t context, fort_scope_scratch_stats_v1 *stats);
 /* Metadata-only. Configure before registering/querying numerical work.
  * PINNED is synchronous and uses complete costs from the additive setter.
  * AUTO/PIPELINED retain direct placement estimates; approved independent GPU
