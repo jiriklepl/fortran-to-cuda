@@ -45,6 +45,7 @@ class RegionExtraction:
     operation_kind: str = "numerical_loop"
     numerical_environment_required: bool = False
     immutable_constants: tuple[str, ...] = ()
+    immutable_scalar_captures: tuple[str, ...] = ()
 
     @property
     def requires_numerical_environment(self):
@@ -73,6 +74,7 @@ class RegionExtraction:
                 "tile_domains": list(self.tile_domains),
                 "private_arrays": list(self.private_arrays),
                 "immutable_constants": list(self.immutable_constants),
+                "immutable_scalar_captures": list(self.immutable_scalar_captures),
                 "numerical_environment": ({"required": True, "rounding": "round to nearest",
                                             "exceptions": "host traps disabled", "check": "at the original reached region",
                                             "fallback": "unchanged original native span"} if self.requires_numerical_environment else {"required": False}),
@@ -858,8 +860,13 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
         if joined and root not in explicit_private:
             raise CompilationError("inline OpenMP array writes need proven PRIVATE storage")
     private = {root: used[root] for root in scalar_writes | local_arrays}
+    occupied = {binding.name for binding in used.values()}
+    occupied.update(name for helper in helpers.values() for name in helper.scope.bindings)
+    from compiler.scopes.constant_parameters import outline_constants
+    constants = outline_constants(analysis, routine, used.values(), occupied, _fixed_shape)
     captures = {root: binding for root, binding in used.items()
                 if root not in private and "parameter" not in binding.attributes}
+    captures.update((binding.root, binding) for binding in constants.scalar_captures)
     if worksharing is not None and set(captures) & set(worksharing.private_roots):
         raise CompilationError('inline worksharing cannot borrow a thread-private input value')
     guards = []
@@ -875,17 +882,14 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
     if len(captures) > 64:
         raise CompilationError("inline numerical capture budget exceeded")
     capture_names = {root: binding.name for root, binding in captures.items()}
-    occupied = {binding.name for binding in used.values()}
-    occupied.update(name for helper in helpers.values() for name in helper.scope.bindings)
     for index, (root, binding) in enumerate(sorted(captures.items())):
-        if hasattr(binding, "component_object"):
-            name = "fort_region_field_" + str(index)
+        if hasattr(binding, "component_object") or "parameter" in binding.attributes:
+            name = ("fort_region_field_" if hasattr(binding, "component_object")
+                    else "fort_region_parameter_") + str(index)
             if name in occupied:
                 raise CompilationError("inline field parameter namespace conflicts")
             occupied.add(name)
             capture_names[root] = name
-    from compiler.scopes.constant_parameters import outline_constants
-    constants = outline_constants(analysis, routine, used.values(), occupied, _fixed_shape)
     arrays = {capture_names[root]: binding for root, binding in captures.items() if binding.rank}
     lowers = {}
     for name, binding in arrays.items():
@@ -1029,6 +1033,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
             if binding and "parameter" in binding.attributes:
                 if binding.root in constants.names:
                     return F.Name(constants.names[binding.root])
+                if binding.root in captures:
+                    return F.Name(capture_names[binding.root])
                 if (owner is not routine and binding is owner.scope.bindings.get(binding.name)) or binding.dtype == "real":
                     return copy.copy(value)
                 # Resolve kinds/constants in the original lexical scope; a new
@@ -1134,4 +1140,5 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
                             runtime_guards=runtime_guards, numerical_helpers=tuple(helpers), tile_domains=tile_domains,
                             private_arrays=tuple(binding.name for binding in private.values() if binding.rank),
                             numerical_environment_required=vector_reduction,
-                            immutable_constants=constants.resources)
+                            immutable_constants=constants.resources,
+                            immutable_scalar_captures=tuple(binding.root for binding in constants.scalar_captures))

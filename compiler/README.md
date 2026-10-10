@@ -1551,6 +1551,15 @@ end module example
   as mutable captures or private arrays. Private `INTENT(OUT)`
   outputs require complete ordered definitions on every reached helper path.
 
+An immutable scalar `PARAMETER` whose initializer is outside the outlined
+constant language can supply its original Fortran value as a read-only scalar
+argument. Its canonical binding must be visible from the original numerical
+owner, including through imports and renames. The compiler does not recompute
+that initializer on the GPU or fold it with Python. Inaccessible helper-local
+constants remain native, and array `PARAMETER` initializers still require their
+complete compile-time dependency proof. Source and initializer changes invalidate
+the outlined artifact identity.
+
 Real fixed-vector work, including short `SUM`/`DOT_PRODUCT`, carries a
 numerical-environment requirement through lowering, preparation and emitted entries.
 Source-integrated execution checks
