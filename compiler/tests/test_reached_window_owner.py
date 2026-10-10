@@ -149,6 +149,17 @@ def test_static_native_auto_selection_leaves_entire_original_source_unchanged(tm
     assert scope["reached_window"]["proof_identity"]
 
 
+def test_explicit_window_retains_iterator_definition_observed_by_excluded_tail(tmp_path):
+    source = SOURCE.replace("tail_visits=tail_visits+1", "tail_visits=tail_visits+i")
+    path, outputs, report, _owner = emit_window(tmp_path, source)
+    text = replacement(path, outputs, report)
+    scope, = report["scopes"]
+    assert len(scope["gpu_leaves"]) == 1
+    assert "tail_visits=tail_visits+i" in text
+    assert "a(i)=2.0_8*b(i)" in text
+    assert "do i=-2,n-3" in text
+
+
 def test_unregistered_or_foreign_proofs_cannot_emit_controls(tmp_path):
     path, builder, proof, originals = window_fixture(tmp_path)
     for wrong in (copy(proof), object()):

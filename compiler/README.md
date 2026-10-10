@@ -1548,6 +1548,9 @@ object mappings. Existing registered whole-group completion tokens may
 authenticate original OpenMP directives; the complete descriptor/escape scan
 still checks every group statement. Neither object mappings nor completion
 tokens establish GPU legality or initialized payloads.
+Resolution authentication visits each original procedure's own specification
+and execution; unrelated internal siblings do not consume its resolution
+budget. Every reached child remains separately authenticated and bounded.
 
 The separate `prove_native_prefix` API can establish complete effects of an
 unchanged native call before any context exists. A detached, bounded analysis
@@ -1582,8 +1585,24 @@ window-bound builder and does not rewrite entry facts or whole-procedure
 descriptor proofs. Per-unit native summaries reissue descriptor tokens in their
 own analysis, and managed captures require exact original bindings. Numerical
 lowering and existing native coherence/failure checks remain separate gates.
-This explicit internal emitter does not yet discover application windows or
-admit saved module allocations; it does not establish whole-stage residency.
+In opt-in serial `--scope-execution reached` mode, incomplete whole-entry
+descriptor stability for original allocatable formals triggers compiler-owned
+window discovery before inline preparation. It considers at most four adjacent
+original units at entry or inside one top-level counted loop, with at most 16
+attempts. A selected window must admit two numerical invocations without an
+internal ownership-ending operation. Failed attempts run in isolated generation
+transactions: source objects and registered proof identities remain original,
+while rejected artifacts, variants, coordinators, edits and analysis caches do
+not leak into existing fallback generation. The manifest's additive
+`reached_window_discovery` record reports original selections, limits, proof
+identities and rejection reasons. AUTO with unavailable estimates retains the
+original native path. Discovery neither invents capture facts nor admits saved
+module allocations, partial definitions or whole-stage residency.
+Numerical extraction checks liveness against the complete original lexical
+body even when preparing only a window. Current native suffixes and possible
+next-iteration prefixes are checked as separate paths, so one path's definitions
+cannot hide another path's scalar or fixed private-array reads. Original DO
+final values remain native when observable outside their numerical region.
 
 Optional `--effect-contracts` input has `schema_version: 1` and a `procedures`
 object keyed by a qualified imported call name. Each contract explicitly declares

@@ -615,7 +615,8 @@ def allocation_guard(analysis, routine, binding, preceding):
             "lifetime": "reached bounded region; allocation changes and unknown effects end ownership"}
 
 
-def extract_region(analysis, routine, node, *, preceding=(), following=(), worksharing=None, immutable_inputs=None):
+def extract_region(analysis, routine, node, *, preceding=(), following=(), cyclic_following=(),
+                   worksharing=None, immutable_inputs=None):
     """Construct a bounded loop candidate with its original participation proof."""
     analysis.inputs.verify()
     role = analysis._source_roles.get(routine.qualified)
@@ -697,7 +698,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
     if not loops or len(loops) > 32:
         raise CompilationError("inline numerical loop budget exceeded")
     original_nodes = {id(item) for item in walk(routine.execution)}
-    for item in (*nodes, *preceding, *following):
+    for item in (*nodes, *preceding, *following, *cyclic_following):
         if id(item) in original_nodes:
             continue
         related = False
@@ -837,7 +838,9 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
     # without becoming captures or authorizing their own GPU computation.
     following_analysis = copy.copy(analysis)
     following_analysis._native_metadata = True
-    if scalar_writes & _upward_reads(following_analysis, routine, following):
+    live_scalars = (_upward_reads(following_analysis, routine, following)
+                    | _upward_reads(following_analysis, routine, cyclic_following))
+    if scalar_writes & live_scalars:
         raise CompilationError("inline loop-written scalar is live after the region")
     if joined:
         from compiler.scopes.participation import _threadprivate
@@ -867,7 +870,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), works
             raise CompilationError("inline private array association is uncertain: " + root)
         if (binding.dtype, binding.kind) not in {("real", 4), ("real", 8), ("integer", 4)}:
             raise CompilationError("unsupported inline private array type: " + root)
-        if root in _upward_array_reads(following_analysis, routine, following):
+        if root in (_upward_array_reads(following_analysis, routine, following)
+                    | _upward_array_reads(following_analysis, routine, cyclic_following)):
             raise CompilationError("inline private array is live after the region")
         if joined and root not in explicit_private:
             raise CompilationError("inline OpenMP array writes need proven PRIVATE storage")

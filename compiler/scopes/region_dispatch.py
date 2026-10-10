@@ -12,7 +12,7 @@ from compiler.driver.pipeline import prepare_function
 from compiler.emission import generate_sources
 from compiler.emission.fortran.formatting import _fortran_list
 from compiler.frontend import lower_source
-from compiler.frontend.source_effects import _kind
+from compiler.frontend.source_effects import _children, _kind
 from compiler.ir import CompilationError
 from compiler.scopes.regions import _exception_observers, extract_region
 
@@ -197,13 +197,17 @@ class InlineRegions:
                             low, high = prepared_span(child)
                             if high < first and _kind(child) not in {"Nonlabel_Do_Stmt", "Comment"}:
                                 cyclic.append(child)
-            for node in original:
+            # Preparation may target only a proved one-shot source window.
+            # Its excluded native suffix and enclosing next-iteration prefix
+            # still observe original private state. Never trim that liveness
+            # authority to the selected preparation tuple.
+            for node in _children(self.builder.entry.execution):
                 visit(node)
-            # Check next-iteration reads before suffix definitions. EXIT/CYCLE
-            # or RETURN can bypass that suffix, so its assignments cannot kill
-            # a private value's cyclic liveness. This is conservative even for
-            # suffixes that always execute.
-            return tuple(before), (*cyclic, *after)
+            # Current suffix and next-iteration prefix are distinct liveness
+            # paths. Neither path's definitions may kill the other's reads:
+            # a prefix DO can redefine an iterator still read by this suffix,
+            # and EXIT/CYCLE can bypass a suffix definition before a backedge.
+            return tuple(before), tuple(after), tuple(cyclic)
 
         def prepare_sequence(sequence, depth=0):
             result = []
@@ -260,7 +264,7 @@ class InlineRegions:
                             result.append(clone)
                             continue
                 first, last = statement_span(group[0])[0], statement_span(group[-1])[1]
-                before, after = context(sources)
+                before, after, cyclic = context(sources)
                 try:
                     self._reserve(group)
                     if array_operation:
@@ -271,6 +275,7 @@ class InlineRegions:
                         extraction = extract_region(self.builder.analysis, self.builder.entry,
                                                     sources if len(sources) > 1 else sources[0],
                                                     preceding=before, following=after,
+                                                    cyclic_following=cyclic,
                                                     immutable_inputs=getattr(self.builder, "immutable_inputs", {}))
                     result.append(self._outline(extraction, sources, collective=self.builder.config.collective))
                 except CompilationError as error:
