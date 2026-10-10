@@ -23,13 +23,13 @@ from compiler.frontend.native_group_structure import NativeGroupCandidate, group
 from compiler.frontend.native_intrinsics import NativePredicateProof
 from compiler.frontend.native_prefix import NativePrefixProof
 from compiler.frontend.numerical_completion import NumericalCompletionProof
-from compiler.frontend.source_functions import _validate_resolution, _walk
+from compiler.frontend.source_functions import _validate_resolution, _validate_scope, _walk
 from compiler.frontend.source_objects import _TypeBuilder
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
-DESCRIPTOR_WINDOW_VERSION = 4
+DESCRIPTOR_WINDOW_VERSION = 5
 _UNSAFE = {"pointer", "optional", "volatile", "asynchronous", "value"}
 _INTRINSICS = set(INTRINSICS) | ARRAY_INQUIRIES | MODEL_INQUIRIES | {
     "allocated", "present", "sum", "product", "any", "all", "count", "minval", "maxval", "dot_product"}
@@ -52,6 +52,8 @@ class _Check:
     def __init__(self, analysis):
         self.analysis = analysis
         self.nodes = self.operations = 0
+        self.resolution_units = self.resolution_work = 0
+        self.resolution_syntax = self.resolution_lookups = 0
         self.active, self.checked = [], {}
         self.functions = {}
         self.predicates = {}
@@ -167,6 +169,43 @@ class _Check:
         if self.nodes > 65536:
             raise CompilationError("descriptor window original-source traversal budget exhausted")
 
+    def resolution_tick(self, role):
+        self.resolution_work += 1
+        if role == "syntax":
+            self.resolution_syntax += 1
+        else:
+            self.resolution_lookups += 1
+        self.tick()
+
+    def resolution(self, routine, originals, *, names=()):
+        # Each original semantic unit retains the lookup/depth cap. Both its
+        # syntax and resolution transitions spend the existing overall source
+        # scan budget; splitting units cannot hide aggregate unbounded work.
+        self.resolution_units += 1
+        _validate_resolution(self.analysis, routine.scope, _walk(originals), tick=self.resolution_tick, names=names)
+
+    def declaration_resolution(self, routine):
+        specification = next((part for part in _children(routine.scope.node)
+                              if _kind(part) == "Specification_Part"), None)
+        declarations = (declaration for part in _children(specification)
+                        for declaration in (_children(part) if _kind(part) == "Implicit_Part" else (part,)))
+        for declaration in declarations:
+            self.tick()
+            if _kind(declaration) == "Type_Declaration_Stmt":
+                dtype, _attributes, entities = declaration.items
+                selector = dtype.items[1] if _kind(dtype) == "Intrinsic_Type_Spec" else None
+                if selector is not None:
+                    self.resolution(routine, selector)
+                for entity in _children(entities):
+                    self.tick()
+                    if _kind(entity) == "Entity_Decl" and entity.items[3] is not None:
+                        self.resolution(routine, entity.items[3])
+            elif _kind(declaration) == "Parameter_Stmt":
+                for definition in _children(declaration.items[1]):
+                    self.tick()
+                    if _kind(definition) == "Named_Constant_Def":
+                        self.resolution(routine, definition.items[1])
+
     def expression(self, routine, node, depth=0):
         self.tick()
         if not isinstance(node, (Base, tuple, list)):
@@ -219,7 +258,8 @@ class _Check:
                           if proof.procedure == routine.qualified and proof._expression is node]
                 if len(proofs) != 1:
                     raise CompilationError("descriptor window requires registered original readonly source-function proof")
-                proof = proofs[0].validate(self.analysis, routine.qualified, node)
+                proof = proofs[0].validate(self.analysis, routine.qualified, node,
+                                           resolution_tick=self.resolution_tick)
                 self.functions[proof.identity] = proof.public()
                 for mapping in proof.resolved.mappings:
                     self.expression(routine, mapping.actual, depth + 1)
@@ -254,14 +294,17 @@ class _Check:
                     if role == "directive":
                         self.directive(routine, original)
                     elif role == "condition":
+                        self.resolution(routine, original)
                         self.expression(routine, original)
                     elif role == "loop_header":
                         control = original.items[1]
                         if control is None or control.items[1] is None:
                             raise CompilationError("descriptor window requires original counted loop control")
+                        self.resolution(routine, control.items[1])
                         self.expression(routine, control.items[1])
                     elif _kind(original) == "Assignment_Stmt":
                         target, _equals, value = original.items
+                        self.resolution(routine, (target, value))
                         scope = self.analysis.source_scope_for(original, routine.scope)
                         binding = self.analysis._binding(scope, target) if _kind(target) == "Name" else None
                         if binding is not None and "allocatable" in binding.attributes:
@@ -278,6 +321,7 @@ class _Check:
                 if len(originals) != 1 or node.details.get("contract"):
                     raise CompilationError("descriptor window requires original direct source calls")
                 call = originals[0]
+                self.resolution(routine, call)
                 scope = self.analysis.source_scope_for(call, routine.scope)
                 resolved = resolve_source_call(self.analysis, scope, call)
                 for mapping in resolved.mappings:
@@ -302,6 +346,7 @@ class _Check:
                     raise CompilationError("descriptor window unknown selected storage effects: boundary"
                                            + (": " + node.details["reason"] if node.details.get("reason") else ""))
                 proof = candidates[0].validate(self.join_analysis, routine.qualified, originals[0])
+                self.resolution(routine, originals[0])
                 self.operations += 1
                 if self.operations > self.analysis.operation_limit:
                     raise CompilationError("descriptor window source operation budget exhausted")
@@ -319,13 +364,11 @@ class _Check:
         if len(self.active) >= self.analysis.depth_limit or len(self.checked) + len(self.active) >= self.analysis.procedure_limit:
             raise CompilationError("descriptor window direct call closure budget exhausted")
         routine = self.analysis._require_original(name)
-        # CONTAINS descendants are separate original procedures. Authenticate
-        # this procedure's own declarations/body now; only reached direct calls
-        # spend the bounded transitive descriptor budget on child scopes.
-        own_parts = tuple(part for part in _children(routine.scope.node)
-                          if _kind(part) in {"Subroutine_Stmt", "Specification_Part",
-                                             "Execution_Part", "End_Subroutine_Stmt"})
-        _validate_resolution(self.analysis, routine.scope, _walk(own_parts))
+        # Namespace authority is separate from executable references. The
+        # complete original child is still visited below, including every true
+        # declaration bound; USE/definition spellings and unrelated CONTAINS
+        # bodies are not synthetic whole-procedure lookup units.
+        _validate_scope(self.analysis, routine.scope)
         proofs = [proof for proof in getattr(self.analysis, "_native_prefix_proofs", {}).values()
                   if isinstance(proof, NativePrefixProof) and proof.procedure == name]
         if proofs:
@@ -338,6 +381,7 @@ class _Check:
         if not graph.available:
             raise CompilationError("descriptor window child bounded original graph is unavailable")
         self.joined_groups(routine, graph, (graph.root_id,))
+        self.declaration_resolution(routine)
         for binding in routine.scope.bindings.values():
             if binding.dtype.startswith("type("):
                 self.fixed_object(binding)
@@ -354,6 +398,7 @@ class _Check:
                                                           "execution_authorized": False}
             else:
                 for axis in binding.shape_nodes:
+                    self.resolution(routine, _children(axis))
                     self.expression(routine, _children(axis))
         for argument in routine.arguments:
             binding = routine.scope.bindings.get(argument)
@@ -367,7 +412,7 @@ class _Check:
         self.checked[name] = graph.identity
 
 
-def _module_binding(analysis, routine, root):
+def _module_binding(analysis, routine, root, check):
     """Authenticate original visible allocation storage, never its contents."""
     parts = root.split("::")
     module = analysis.modules.get(parts[0]) if len(parts) == 2 and parts[0] != "argument" else None
@@ -394,18 +439,28 @@ def _module_binding(analysis, routine, root):
     def collect(scope):
         if scope is None or id(scope) in visited:
             return
+        check.tick()
+        _validate_scope(analysis, scope)
         visited.add(id(scope))
-        names.update(scope.bindings)
-        names.update(scope.imports)
+        for name in (*scope.bindings, *scope.imports):
+            check.tick()
+            names.add(name)
         for imported in scope.wildcards:
+            collect(analysis.modules.get(imported))
+        for imported, _remote in scope.imports.values():
             collect(analysis.modules.get(imported))
         collect(scope.parent)
 
     collect(routine.scope)
-    visible = [name for name in sorted(names) if analysis._binding(routine.scope, name) is binding]
-    if not visible:
-        raise CompilationError("descriptor window module allocation is not originally visible: " + root)
-    return binding, visible[0], module
+    for name in sorted(names):
+        check.tick()
+        if analysis._binding(routine.scope, name) is binding:
+            # Even an otherwise unused requested root must authenticate the
+            # exact original import/rename/reexport visibility used to bind it.
+            # This is one registration unit, not a synthetic source statement.
+            check.resolution(routine, (), names=(name,))
+            return binding, name, module
+    raise CompilationError("descriptor window module allocation is not originally visible: " + root)
 
 
 def _derive(analysis, procedure, identities, roots, module_roots=()):
@@ -417,8 +472,7 @@ def _derive(analysis, procedure, identities, roots, module_roots=()):
             or any(not isinstance(identity, str) for identity in identities)):
         raise CompilationError("descriptor window requires exact original structured node IDs")
     _graph, selected = analysis._selected_source(procedure, identities)
-    _validate_resolution(analysis, routine.scope, _walk(tuple(
-        node for identity in selected for node in graph.source_nodes(identity))))
+    _validate_scope(analysis, routine.scope)
     sequences = []
     for parent in graph.nodes.values():
         if parent.kind == "sequence" and selected[0] in parent.children:
@@ -440,6 +494,7 @@ def _derive(analysis, procedure, identities, roots, module_roots=()):
         raise CompilationError("descriptor window requires bounded unique original formal roots")
     bindings = {binding.root: binding for binding in routine.scope.bindings.values() if binding.name in routine.arguments}
     states = []
+    check = _Check(analysis)
     for root in roots:
         binding = bindings.get(root)
         if (binding is None or "allocatable" not in binding.attributes or binding.attributes & _UNSAFE
@@ -455,7 +510,7 @@ def _derive(analysis, procedure, identities, roots, module_roots=()):
                        "execution_requires_runtime_guard": True,
                        "entry_definition_authority": False})
     for root in module_roots:
-        binding, spelling, module = _module_binding(analysis, routine, root)
+        binding, spelling, module = _module_binding(analysis, routine, root, check)
         states.append({"resource": root, "resource_kind": "original_module_allocatable",
                        "original_binding": binding.public(), "original_visible_spelling": spelling,
                        "declaration_source": str(module.path),
@@ -466,7 +521,6 @@ def _derive(analysis, procedure, identities, roots, module_roots=()):
                        "requires_original_allocation_presence_and_alias_guards": True,
                        "requires_original_runtime_bounds": True,
                        "execution_requires_runtime_guard": True, "entry_definition_authority": False})
-    check = _Check(analysis)
     check.active.append(procedure)
     check.joined_groups(routine, graph, selected)
     check.visit(routine, graph, selected)
@@ -488,6 +542,14 @@ def _derive(analysis, procedure, identities, roots, module_roots=()):
             "fixed_source_object_requirements": list(check.objects.values()),
             "source_object_mappings": list(check.object_mappings.values()),
             "source_operations": check.operations, "source_traversal_entries": check.nodes,
+            "resolution_validation": {"mode": "original_semantic_units", "units": check.resolution_units,
+                                      "work_entries": check.resolution_work,
+                                      "syntax_entries": check.resolution_syntax,
+                                      "lookup_transitions": check.resolution_lookups,
+                                      "per_unit_lookup_limit": analysis.operation_limit,
+                                      "depth_limit": analysis.depth_limit,
+                                      "procedure_limit": analysis.procedure_limit,
+                                      "aggregate_source_scan_limit": 65536},
             "prefix_effects_proved": False, "entry_definition_authority": False,
             "reachability_authority": False, "execution_authorized": False, "gpu_legality_established": False,
             "requires_close_before_excluded_tail": True, "freshness_by_address_or_shape": False,

@@ -93,13 +93,15 @@ def _validate_scope(analysis, scope, *, track=True):
         analysis._source_function_used_scopes.add(id(scope))
 
 
-def _validate_resolution(analysis, scope, nodes):
+def _validate_resolution(analysis, scope, nodes, *, tick=None, names=()):
     visited, checked = set(), set()
 
     def resolve(current, name, depth=0):
         if current is None or (id(current), name) in visited:
             return
         visited.add((id(current), name))
+        if tick is not None:
+            tick("lookup")
         if len(visited) > analysis.operation_limit or depth >= analysis.depth_limit:
             raise CompilationError("native source function resolution budget exhausted")
         if id(current) not in checked:
@@ -115,7 +117,14 @@ def _validate_resolution(analysis, scope, nodes):
                 resolve(imported, remote, depth + 1)
         resolve(current.parent, name, depth + 1)
 
+    # Explicit names are semantic lookup obligations such as registering a
+    # visible module allocation. They never stand in for executable source or
+    # grant expression authority; the same original namespace checks apply.
+    for name in names:
+        resolve(scope, name)
     for node in nodes:
+        if tick is not None:
+            tick("syntax")
         if type(node).__name__ in {"Name", "Type_Name", "Intrinsic_Name"}:
             resolve(analysis.source_scope_for(node, scope), str(node).lower())
 
@@ -220,11 +229,11 @@ class NativeSourceFunctionProof:
                 "source_identity": self.source_identity, "callee_source_identity": self.callee_source_identity,
                 **_thaw(self._record)}
 
-    def validate(self, analysis, procedure, expression):
+    def validate(self, analysis, procedure, expression, *, resolution_tick=None):
         origin = _origin(analysis)
         caller, callee = _original(origin, procedure), _original(origin, self.callee)
-        _validate_resolution(origin, caller.scope, _walk(expression))
-        _validate_resolution(origin, callee.scope, _walk(callee.execution))
+        _validate_resolution(origin, caller.scope, _walk(expression), tick=resolution_tick)
+        _validate_resolution(origin, callee.scope, _walk(callee.execution), tick=resolution_tick)
         if (procedure != self.procedure or expression is not self._expression
                 or origin._native_functions.get(self.identity) is not self
                 or _source_identity(origin, caller) != self.source_identity
