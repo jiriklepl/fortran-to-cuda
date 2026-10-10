@@ -24,6 +24,31 @@ def check_structured_entry(routine):
         raise CompilationError('reached ownership requires structured entry; source statement labels remain native')
 
 
+def optional_scalar_input(binding):
+    """An original optional reference may pass through without being read."""
+    return (not binding.rank and binding.intent == "in" and "optional" in binding.attributes
+            and binding.kind in {"real": {4, 8}, "integer": {4, 8}, "logical": {1, 4}}.get(binding.dtype, set())
+            and not binding.attributes & {"allocatable", "pointer", "volatile", "asynchronous", "value"})
+
+
+def original_optional_scalar_operation(scope, routine):
+    """Leave proved scalar work in its original body, under its original guards.
+
+    No generated call or query receives these values. In particular, PRESENT
+    never becomes an unconditional read of an optional dummy's payload.
+    """
+    if scope.calls or any(operation.effects or operation.host_metadata for operation in scope.native):
+        return False
+    bindings = {root: binding for operation in scope.native for root, binding in operation.bindings.items()}
+    optional = [binding for binding in bindings.values() if "optional" in binding.attributes]
+    return bool(optional) and all(
+        not binding.rank and not binding.attributes & {"allocatable", "pointer", "volatile", "asynchronous", "value"}
+        and ("optional" not in binding.attributes or (
+            optional_scalar_input(binding) and binding.name in routine.arguments
+            and routine.scope.bindings.get(binding.name) is binding))
+        for binding in bindings.values())
+
+
 @dataclass
 class Unit:
     nodes: tuple
@@ -211,6 +236,11 @@ class LexicalOwner:
             from compiler.scopes.views import view_call
             if any(view_call(call) for call in scope.calls):
                 raise CompilationError("lexical rectangular calls require reached view preflight")
+            if original_optional_scalar_operation(scope, self.routine):
+                # Source completion/effects were authenticated above. There is
+                # no managed payload to publish, register or plan, and no reason
+                # to associate an absent optional with a synthetic dummy.
+                return
             arrays, scalars, written = self.builder.owner_inputs(scope.calls, reached_definitions=True)
             scope.inputs(arrays, scalars, written)
             # Descriptor lifetime, association, numeric type and initialization

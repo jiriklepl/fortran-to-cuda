@@ -1146,6 +1146,13 @@ ownership. Child descriptors are registered only at reached uses; an
 `INTENT(OUT)` entry event invalidates existing coverage and cannot initialize a
 new registration from old caller values. Nested companions forward handles for
 their hidden resources without copying persistent objects.
+Read-only optional numeric scalar formals retain their original `OPTIONAL`
+association and `PRESENT` guards. Omitted arguments and original keyword order
+are preserved; compiler controls are passed by keyword. Proved scalar-only
+operations remain in the original body without capturing optional values.
+Optional arrays, writable optionals, and allocation- or association-dependent
+optional actuals remain boundaries, as do optional values needed by an unproved
+numerical capture or planning query.
 Caller contiguity guards run before a callee can create an array temporary.
 Original child returns retain the outer context; only an owning return closes
 it. Descriptor-only guards such as `ALLOCATED` remain at their original source
