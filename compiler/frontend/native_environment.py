@@ -74,7 +74,17 @@ def intrinsic_export(analysis, scope, name):
     Unknown wildcard modules, local procedures/storage and ambiguous exports
     cannot acquire intrinsic authority merely from an IEEE-looking spelling.
     """
+    return _resolve_intrinsic_export(analysis, scope, name, _EXPORTS)
+
+
+def _resolve_intrinsic_export(analysis, scope, name, reviewed_exports):
+    """Share resolution mechanics; each native proof owns its finite exports."""
     name = str(name).lower()
+
+    def canonical(identity):
+        pieces = identity.split("::") if isinstance(identity, str) else ()
+        return (reviewed_exports.get(pieces[1], {}).get(pieces[2])
+                if len(pieces) == 3 and pieces[0] == "$intrinsic" else None)
 
     def resolve(owner, spelling, active):
         if owner is None:
@@ -88,10 +98,10 @@ def intrinsic_export(analysis, scope, name):
             return {"$shadowed"}
         found = set()
         if spelling in owner.intrinsic_procedures:
-            found.add(canonical_intrinsic_export(owner.intrinsic_procedures[spelling]) or "$unreviewed")
+            found.add(canonical(owner.intrinsic_procedures[spelling]) or "$unreviewed")
         for module in owner.intrinsic_wildcards:
             if spelling not in getattr(owner, "intrinsic_exclusions", {}).get(module, ()):
-                value = _EXPORTS.get(module, {}).get(spelling)
+                value = reviewed_exports.get(module, {}).get(spelling)
                 if value is not None:
                     found.add(value)
         sources = analysis.use_sources(owner, spelling)

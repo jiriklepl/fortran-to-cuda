@@ -38,6 +38,66 @@ def trap_source():
                      "call ieee_set_halting_mode(ieee_invalid,.true.)"))
 
 
+@pytest.mark.parametrize("precision", [4, 8])
+@pytest.mark.parametrize("observer", ["ieee_get_flag", "peek"])
+def test_plain_arithmetic_cannot_lose_original_exception_flags(tmp_path, precision, observer):
+    import_name = "ieee_get_flag" if observer == "ieee_get_flag" else "peek=>ieee_get_flag"
+    path = tmp_path / "observed.f90"
+    path.write_text(f"""module observed
+contains
+subroutine step(a,b,out,n,seen)
+use,intrinsic::ieee_exceptions,only:{import_name},ieee_invalid
+real({precision}),intent(in)::a(:),b(:)
+real({precision}),intent(inout)::out(:)
+integer,intent(in)::n
+logical,intent(out)::seen
+integer::i
+do i=1,n
+out(i)=a(i)*b(i)
+enddo
+call {observer}(ieee_invalid,seen)
+end subroutine
+end module
+""")
+    facts = {"schema_version": 1, "participation": "serial",
+             "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
+             "captures": {"argument::"+name: FACT for name in ("a", "b", "out")}}
+    outputs, report = ScopeBuilder([path], "observed::step", facts=facts,
+        options=CompilerOptions(), config=OffloadConfig(policy="sections", scope_execution="reached")).run()
+    assert not numerical_regions(report)
+    assert "source-observable floating-point exception flags" in str(report["boundaries"])
+    assert not any(name.endswith("shared_entry.cu") for name in outputs)
+
+
+def test_plain_arithmetic_user_observer_spelling_is_not_intrinsic_authority(tmp_path):
+    path = tmp_path / "ordinary.f90"
+    path.write_text("""module ordinary
+contains
+subroutine ieee_get_flag(seen)
+logical,intent(out)::seen
+seen=.false.
+end subroutine
+subroutine step(a,out,n,seen)
+real(8),intent(in)::a(:)
+real(8),intent(inout)::out(:)
+integer,intent(in)::n
+logical,intent(out)::seen
+integer::i
+do i=1,n
+out(i)=2*a(i)
+enddo
+call ieee_get_flag(seen)
+end subroutine
+end module
+""")
+    facts = {"schema_version": 1, "participation": "serial",
+             "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
+             "captures": {"argument::"+name: FACT for name in ("a", "out")}}
+    _outputs, report = ScopeBuilder([path], "ordinary::step", facts=facts,
+        options=CompilerOptions(), config=OffloadConfig(policy="sections", scope_execution="reached")).run()
+    assert len(numerical_regions(report)) == 1
+
+
 def test_plain_arithmetic_after_restored_trap_has_reached_native_fallback(tmp_path):
     path, outputs, report = emit(tmp_path, trap_source())
     owner, = report["scopes"]

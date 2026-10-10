@@ -32,7 +32,7 @@ def test_unknown_else_does_not_poison_reached_then(tmp_path):
     assert {node.kind for node in graph.nodes.values()} >= {"sequence", "branch", "boundary", "entry", "operation"}
     summary = analysis.segment_summary("varied::advance", assignments(analysis))
     assert summary["complete"], summary["reasons"]
-    assert summary["summary_version"] == SOURCE_SUMMARY_VERSION == 14
+    assert summary["summary_version"] == SOURCE_SUMMARY_VERSION == 15
     assert summary["structured_identity"] == graph.identity
     assert summary["includes_entry"] is False
     assert summary["definition_changes"] == []

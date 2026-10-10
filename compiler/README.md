@@ -1092,7 +1092,7 @@ reads/writes and typed native-state accesses; unknown exports, escapes, other
 state uses and unproved completion remain boundaries. This grants no GPU IEEE
 legality, worksharing cuts or new per-thread saved-state semantics. AUTO retains
 native execution until this coordination is priced. Source summaries use
-version 14 and original native completion proofs use version 6.
+version 15 and original native completion proofs use version 6.
 
 Source-resolved halting-mode calls reachable from the original configured entry
 also require numerical-environment checks for ordinary reached arithmetic,
@@ -1489,6 +1489,33 @@ identify `operation_kind`, canonical fields, original source selections, semanti
 guards and native fallback requirements. New real array math preserves the
 reached floating-point environment check and rejects unproved observable
 exception behavior or real multi-operand extrema ordering.
+
+Source-call effect mapping also accepts original whole scalar derived objects
+with `INTENT(IN)` or `INTENT(INOUT)`, when both declarations resolve to the same
+original declaring type. Renamed imports and repeated reexports preserve that
+identity; identical type names in different modules do not. The bounded proof
+checks the entire type, including fixed numeric fields, fixed arrays and nested
+scalar types. Polymorphic, extended, parameterized, finalizable, type-bound or
+descriptor-bearing types and uncertain object associations remain boundaries.
+Original calls, keyword order, objects and declarations stay unchanged. Public
+`source_object` records authorize only source effect mapping of component
+suffixes; they do not authorize object copies, a numerical ABI, capture, cloning
+or native continuation. Whole-object assignments and reads still require their
+own assignment/operator proof, and object mapping proofs are rebuilt rather
+than imported from cached summaries.
+
+Exact intrinsic `IEEE_ARITHMETIC::IEEE_IS_NAN` imports, including source-proved
+renames and reexports, can describe original native predicate reads. Public
+`native_predicate_requirements` retain the original expression, actual ordering
+and surrounding guards; ordinary read effects still require their own storage
+proof. This metadata does not evaluate the predicate, authorize numerical
+cloning or GPU execution, or admit exception observers. These source tokens
+are reissued from original syntax rather than cached as authority.
+Configured intrinsic exception-flag observers also prevent ordinary reached
+arithmetic loops from being outlined: closing a device context cannot recreate
+CPU exception flags. Same-spelling user procedures do not establish intrinsic
+observer authority. Complete native OpenMP operations retain every unit's
+predicate requirements without introducing a generated predicate operation.
 
 Optional `--effect-contracts` input has `schema_version: 1` and a `procedures`
 object keyed by a qualified imported call name. Each contract explicitly declares

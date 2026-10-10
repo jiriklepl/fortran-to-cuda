@@ -75,6 +75,7 @@ def _native_analysis(analysis):
         setattr(result, name, dict(getattr(analysis, name)))
     result._native_environments = dict(analysis._native_environments)
     result._native_environment_states = dict(analysis._native_environment_states)
+    result._native_predicates = dict(analysis._native_predicates)
     result._summary_cache = SummaryCache(max_entries=0)
     return result
 

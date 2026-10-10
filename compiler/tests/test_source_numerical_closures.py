@@ -197,9 +197,10 @@ def test_guard_kind_import_keeps_original_c_int64_t_binding_visible_to_native_fa
                                   options=CompilerOptions(), config=OffloadConfig(policy="sections")).run()
     assert report["scope_count"] == 1, report["boundaries"]
     text = outputs[report["sources"][str(path)]["replacement"]]
-    for line in text.splitlines():
-        if line.startswith("use iso_c_binding, only:"):
-            assert "=> c_int64_t" in line
+    imports = [line for line in re.sub(r"&\s*\n\s*&?", "", text).splitlines()
+               if line.startswith("use iso_c_binding, only:") and "c_int64_t" in line]
+    assert imports
+    assert all("=> c_int64_t" in line for line in imports)
     assert "a(i)=s+c_int64_t+real(i,8)" in text  # Unchanged native caller fallback.
 
 
