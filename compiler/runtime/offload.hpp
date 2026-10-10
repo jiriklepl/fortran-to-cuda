@@ -452,10 +452,10 @@ inline void plan_trace(const char *entry, const Data &data, const Profile &p, co
     const char *enabled = std::getenv("FORT_OFFLOAD_TRACE");
     if (!enabled || !std::strcmp(enabled, "0")) return;
     if (data.guarded_inputs_checked) {
-        std::fprintf(stderr, "FORT_OFFLOAD_ACTIVE entry=%s regions=", entry);
+        std::string regions;
         for (std::size_t i=0; i<data.units.size(); ++i)
-            std::fprintf(stderr, "%s%zu", i ? "," : "", data.units[i].source_region);
-        std::fprintf(stderr, "\n");
+            regions += (i ? "," : "") + std::to_string(data.units[i].source_region);
+        std::fprintf(stderr, "FORT_OFFLOAD_ACTIVE entry=%s regions=%s\n", entry, regions.c_str());
     }
     for (const auto &choice : plan.choices) {
         std::size_t upload=0, download=0, launches=0;
