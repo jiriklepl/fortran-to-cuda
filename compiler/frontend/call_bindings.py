@@ -309,10 +309,11 @@ def _actual(analysis, scope, node):
     return analysis._signature(scope, node), None, None
 
 
-def _arrange(callee, original):
+def _arrange(callee, original, *, function=False):
     values, arguments, keyword_seen, position = {}, [], False, 0
     for original_position, item in enumerate(original):
-        keyword = str(item.items[0]) if _kind(item) == "Actual_Arg_Spec" else None
+        keyword = str(item.items[0]) if _kind(item) in ({"Actual_Arg_Spec", "Component_Spec"}
+                                                       if function else {"Actual_Arg_Spec"}) else None
         actual = item.items[1] if keyword is not None else item
         if keyword is not None:
             keyword_seen = True
@@ -341,17 +342,28 @@ def _arrange(callee, original):
 
 def resolve_source_call(analysis, scope, call_node):
     """Resolve signatures, keywords and source rectangles without evaluating them."""
+    return _resolve_source_invocation(analysis, scope, call_node)
+
+
+def resolve_source_function(analysis, scope, expression):
+    """Associate an original scalar function expression, without granting GPU legality."""
+    return _resolve_source_invocation(analysis, scope, expression, function=True)
+
+
+def _resolve_source_invocation(analysis, scope, call_node, *, function=False):
     target, arguments = call_node.items
-    if _kind(target) != "Name":
+    if _kind(target) not in ({"Name", "Type_Name"} if function else {"Name"}):
         raise CompilationError("indirect calls are scope boundaries")
     original = tuple(_children(arguments))
     matches, errors = [], []
     candidates = analysis._candidates(scope, target)
-    unavailable = [procedure for procedure in candidates if procedure not in analysis.routines]
+    pool = ({name: routine for name, routine in analysis.numerical_helpers.items()
+             if routine.source_kind in {"function", "internal_function"}} if function else analysis.routines)
+    unavailable = [procedure for procedure in candidates if procedure not in pool]
     if unavailable:
         raise CompilationError("source call interface closure unavailable: " + ", ".join(unavailable))
     for procedure in candidates:
-        callee = analysis.routines[procedure]
+        callee = pool[procedure]
         try:
             if callee.source_kind == "external":
                 interface = analysis.external_interface(callee)
@@ -359,12 +371,18 @@ def resolve_source_call(analysis, scope, call_node):
                     raise CompilationError(interface["reason"] + ": " + procedure)
                 if any(_kind(item) == "Actual_Arg_Spec" for item in original):
                     raise CompilationError("external keyword arguments require a proven explicit interface: " + procedure)
-            actuals, original_arguments = _arrange(callee, original)
+            actuals, original_arguments = _arrange(callee, original, function=function)
             mappings = []
             for formal, actual in zip(callee.arguments, actuals, strict=True):
                 declaration = callee.scope.bindings[formal]
                 from compiler.frontend.component_bindings import _typename
                 derived = _typename(declaration.dtype) is not None
+                if function and (derived or declaration.rank or declaration.intent != "in"
+                                 or declaration.dtype not in {"real", "integer", "logical"}
+                                 or declaration.kind not in {4, 8}
+                                 or declaration.attributes & {"optional", "pointer", "allocatable", "value",
+                                                              "volatile", "asynchronous"}):
+                    raise CompilationError("native source function requires fixed scalar INTENT(IN) arguments")
                 if actual is None:
                     if derived:
                         raise CompilationError("source object requires fixed nonoptional scalar original storage")

@@ -29,6 +29,8 @@ def summarize(analysis, procedure, selected, completion):
     for proof in summaries:
         if not proof['complete'] or proof.get('definition_changes') or proof.get('definition_diagnostics'):
             raise CompilationError("native atomic unit lacks complete effects: " + '; '.join(proof['reasons']))
+        if proof.get('native_function_requirements'):
+            raise CompilationError("native source function effects do not authorize an atomic native callback")
         for requirement in proof.get('native_predicate_requirements', ()):
             token = analysis._native_predicates.get(requirement.get('proof_identity'))
             if token is None:

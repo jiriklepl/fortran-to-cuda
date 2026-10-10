@@ -1517,6 +1517,30 @@ CPU exception flags. Same-spelling user procedures do not establish intrinsic
 observer authority. Complete native OpenMP operations retain every unit's
 predicate requirements without introducing a generated predicate operation.
 
+Source-backed scalar functions have a separate native read-effect proof. A
+complete bounded closure must be explicitly `PURE` or implicitly pure
+`ELEMENTAL`, with required fixed scalar `INTENT(IN)` arguments, a scalar numeric
+or logical result, fixed private scalars and read-only transitive effects.
+Imports, renames, kind-specific generics and internal lexical captures resolve
+against original source. Purity does not authorize unknown calls, hidden storage
+lifetimes, OpenMP or opaque library effects. Public
+`native_function_requirements` preserve original expressions, keywords, source
+identities and guards. Functions stay outside the public subroutine/structured
+entry registry; an isolated private view supplies effects without a synthetic
+call or generated reevaluation. These records deny cloning, GPU lowering and
+atomic native callbacks, and are rebuilt rather than restored from persistent
+summary caches. Changed source, resolution maps or kind state invalidate them.
+
+The source-only `prove_reached_window` API transfers separately supplied entry
+facts through complete original prefix effects to an exact contiguous top-level
+window. Branches meet conservatively; definitions retain original ordering.
+The resulting registered proof is conditional on independent admission of its
+entry facts and on future runtime allocation/layout/nonalias guards. It does not
+create an owner or authorize execution. Initial coverage is whole/none; nested
+entry, direct OpenMP groups, incomplete effects, untracked arrays and allocation
+replacement remain boundaries. No address/shape freshness or owner reopening is
+inferred.
+
 Optional `--effect-contracts` input has `schema_version: 1` and a `procedures`
 object keyed by a qualified imported call name. Each contract explicitly declares
 an `identity`, `complete: true`, `lifetime: "stable"`, `escapes: false`,
