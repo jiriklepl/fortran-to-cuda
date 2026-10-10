@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from compiler.ir import CompilationError, SourceLocation
-from compiler.ir.integers import integer_literal
+from compiler.ir.integers import INTEGER_MAX, INTEGER_MIN, integer_literal
 
 
 def _kind(node):
@@ -350,6 +350,86 @@ def resolve_source_function(analysis, scope, expression):
     return _resolve_source_invocation(analysis, scope, expression, function=True)
 
 
+def _fixed_array_bounds(analysis, binding):
+    """Prove bounded original explicit shape; never evaluate runtime bounds."""
+    from compiler.frontend.source_functions import _validate_scope
+
+    scope = binding.declaring_scope
+    if (scope is None or scope.bindings.get(binding.name) is not binding
+            or len(binding.shape_nodes) != binding.rank):
+        raise CompilationError("native source array requires its original fixed shape")
+    _validate_scope(analysis, scope)
+    location, bounds, total = SourceLocation(str(scope.path)), [], 1
+    for axis in binding.shape_nodes:
+        if _kind(axis) != "Explicit_Shape_Spec":
+            raise CompilationError("native source array requires original constant explicit bounds")
+        try:
+            lower = 1 if axis.items[0] is None else scope.kinds.integer(axis.items[0], location)
+            upper = scope.kinds.integer(axis.items[1], location)
+        except CompilationError as error:
+            raise CompilationError("native source array requires original constant explicit bounds") from error
+        extent = max(0, upper - lower + 1)
+        if not (INTEGER_MIN <= lower <= INTEGER_MAX and INTEGER_MIN <= upper <= INTEGER_MAX
+                and extent <= INTEGER_MAX):
+            raise CompilationError("native source array bounds exceed the INTEGER ABI")
+        total *= extent
+        if total > 256:
+            raise CompilationError("native source array exceeds the 256-element fixed storage budget")
+        bounds.append((lower, upper))
+    return tuple(bounds)
+
+
+def _function_array_mapping(analysis, declaration, binding, section):
+    formal_bounds = _fixed_array_bounds(analysis, declaration)
+    if binding is None or binding.attributes & {
+            "optional", "pointer", "allocatable", "target", "value", "volatile", "asynchronous"}:
+        raise CompilationError("native source function array actual requires original fixed unaliased storage")
+    actual_bounds = _fixed_array_bounds(analysis, binding)
+    if section is not None:
+        # The existing rectangular mapping retains caller coordinates and
+        # rank-reducing axes. Only a fully constant, in-bounds view is admitted;
+        # no temporary, sequence association or runtime bound is invented.
+        def constant(bound):
+            if bound.kind == "literal":
+                value = bound.value
+            else:
+                values = tuple(constant(child) for child in bound.children)
+                if bound.kind == "parenthesis":
+                    value = values[0]
+                elif bound.kind == "unary":
+                    value = -values[0] if bound.operator == "-" else values[0]
+                else:
+                    left, right = values
+                    value = {"+": left + right, "-": left - right, "*": left * right}[bound.operator]
+            return integer_literal(str(value), SourceLocation(str(binding.declaring_scope.path)))
+
+        selected = []
+        for axis, (lower, upper) in zip(section.axes, actual_bounds, strict=True):
+            values = []
+            for bound in (axis.lower, axis.upper):
+                if bound.kind in {"lbound", "ubound"} and bound.node is None:
+                    value = lower if bound.kind == "lbound" else upper
+                elif bound.node is not None and _constant_bound(bound):
+                    # A PARAMETER belongs to the caller's lexical scope, which
+                    # may differ from the array's defining module. _bound has
+                    # already resolved it there; do not rebind its spelling.
+                    value = constant(bound)
+                else:
+                    raise CompilationError("native source function array section requires fixed bounds")
+                if not INTEGER_MIN <= value <= INTEGER_MAX:
+                    raise CompilationError("native source function section bounds exceed the INTEGER ABI")
+                values.append(value)
+            lo, hi = values
+            if lo < lower or lo > upper or hi < lower or hi > upper:
+                raise CompilationError("native source function array section is outside original bounds")
+            if not axis.scalar:
+                selected.append((lo, hi))
+        actual_bounds = tuple(selected)
+    if tuple(max(0, hi - lo + 1) for lo, hi in formal_bounds) != tuple(
+            max(0, hi - lo + 1) for lo, hi in actual_bounds):
+        raise CompilationError("native source function array shape mismatch")
+
+
 def _resolve_source_invocation(analysis, scope, call_node, *, function=False):
     target, arguments = call_node.items
     if _kind(target) not in ({"Name", "Type_Name"} if function else {"Name"}):
@@ -377,12 +457,13 @@ def _resolve_source_invocation(analysis, scope, call_node, *, function=False):
                 declaration = callee.scope.bindings[formal]
                 from compiler.frontend.component_bindings import _typename
                 derived = _typename(declaration.dtype) is not None
-                if function and (derived or declaration.rank or declaration.intent != "in"
+                if function and (derived or declaration.intent != "in"
                                  or declaration.dtype not in {"real", "integer", "logical"}
                                  or declaration.kind not in {4, 8}
                                  or declaration.attributes & {"optional", "pointer", "allocatable", "value",
-                                                              "volatile", "asynchronous"}):
-                    raise CompilationError("native source function requires fixed scalar INTENT(IN) arguments")
+                                                              "volatile", "asynchronous"}
+                                 or declaration.rank and "target" in declaration.attributes):
+                    raise CompilationError("native source function requires fixed INTENT(IN) arguments")
                 if actual is None:
                     if derived:
                         raise CompilationError("source object requires fixed nonoptional scalar original storage")
@@ -396,6 +477,8 @@ def _resolve_source_invocation(analysis, scope, call_node, *, function=False):
                 elif (signature is None or None in (declaration.kind, signature[1])
                         or declaration.signature() != signature):
                     raise CompilationError("source-call type, kind or rank mismatch: " + formal)
+                if function and declaration.rank:
+                    _function_array_mapping(analysis, declaration, binding, section)
                 if binding is None and (declaration.intent in {"out", "inout"} or "allocatable" in declaration.attributes):
                     raise CompilationError("source-call writable or descriptor actual requires original storage: " + formal)
                 presence = ("forwarded_optional" if binding is not None and section is None

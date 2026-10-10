@@ -1,4 +1,4 @@
-"""Read effects of unchanged, source-backed scalar function expressions.
+"""Read effects of unchanged, source-backed scalar-result functions.
 
 This deliberately grants no numerical lowering or callback authority. Functions
 keep their original Fortran implementation, argument evaluation and IEEE effects.
@@ -14,13 +14,13 @@ from hashlib import sha256
 
 from fparser.two.utils import Base
 
-from compiler.frontend.call_bindings import resolve_source_function
+from compiler.frontend.call_bindings import _fixed_array_bounds, resolve_source_function
 from compiler.frontend.source_objects import _kind_state
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.frontend.summary_cache import SummaryCache
 from compiler.ir import CompilationError
 
-SOURCE_FUNCTION_VERSION = 1
+SOURCE_FUNCTION_VERSION = 2
 
 
 def _walk(node):
@@ -62,7 +62,9 @@ def _resolution(scope):
 def register_source_function_authority(analysis):
     scopes = {id(scope): scope for scope in analysis.modules.values()}
     scopes.update((id(routine.scope), routine.scope) for routine in analysis.numerical_helpers.values())
-    analysis._source_function_scopes = {key: (scope, scope.node, scope.parent, _resolution(scope))
+    analysis._source_function_scopes = {key: (scope, scope.node, scope.parent, _resolution(scope),
+                                            {name: (binding, binding.declaring_scope)
+                                             for name, binding in scope.bindings.items()})
                                         for key, scope in scopes.items()}
     analysis._source_function_used_scopes = set()
 
@@ -70,12 +72,25 @@ def register_source_function_authority(analysis):
 def resolution_changes(analysis):
     changes = []
     for key in sorted(analysis._source_function_used_scopes):
-        scope, node, parent, state = analysis._source_function_scopes[key]
+        scope, node, parent, state, bindings = analysis._source_function_scopes[key]
         current = _resolution(scope)
-        if scope.node is not node or scope.parent is not parent or current != state:
+        changed_bindings = any(scope.bindings.get(name) is not binding or binding.declaring_scope is not owner
+                               for name, (binding, owner) in bindings.items())
+        if scope.node is not node or scope.parent is not parent or current != state or changed_bindings:
             changes.append({"module": scope.module, "scope": getattr(scope, "qualified", scope.module),
-                            "resolution": current})
+                            "resolution": current, "original_binding_authority_changed": changed_bindings})
     return changes
+
+
+def _validate_scope(analysis, scope, *, track=True):
+    original = analysis._source_function_scopes.get(id(scope))
+    if (original is None or original[0] is not scope or original[1] is not scope.node
+            or original[2] is not scope.parent or original[3] != _resolution(scope)
+            or any(scope.bindings.get(name) is not binding or binding.declaring_scope is not owner
+                   for name, (binding, owner) in original[4].items())):
+        raise CompilationError("native source function original resolution authority changed")
+    if track:
+        analysis._source_function_used_scopes.add(id(scope))
 
 
 def _validate_resolution(analysis, scope, nodes):
@@ -88,12 +103,8 @@ def _validate_resolution(analysis, scope, nodes):
         if len(visited) > analysis.operation_limit or depth >= analysis.depth_limit:
             raise CompilationError("native source function resolution budget exhausted")
         if id(current) not in checked:
-            original = analysis._source_function_scopes.get(id(current))
-            if (original is None or original[0] is not current or original[1] is not current.node
-                    or original[2] is not current.parent or original[3] != _resolution(current)):
-                raise CompilationError("native source function original resolution authority changed")
+            _validate_scope(analysis, current)
             checked.add(id(current))
-            analysis._source_function_used_scopes.add(id(current))
         if (name in current.bindings or name in current.procedures or name in current.procedure_arguments
                 or name in current.intrinsic_procedures or name in current.generics):
             return
@@ -147,7 +158,7 @@ def _source_identity(analysis, routine):
                   "source": str(routine.scope.node)})
 
 
-def _contract(routine):
+def _contract(analysis, routine):
     statement = next(node for node in routine.scope.node.content if type(node).__name__ == "Function_Stmt")
     prefix = {str(item).lower() for item in getattr(statement.items[0], "items", ()) or ()}
     if "impure" in prefix or not prefix.intersection({"pure", "elemental"}):
@@ -158,11 +169,18 @@ def _contract(routine):
             or binding.kind not in {4, 8}):
         raise CompilationError("native source function requires a fixed numeric or logical scalar result")
     forbidden = {"pointer", "allocatable", "optional", "value", "save", "volatile", "asynchronous"}
-    if any(item.rank or item.attributes & forbidden
+    if any(item.attributes & forbidden
+           or item.rank and "target" in item.attributes
            or item.dtype not in {"real", "integer", "logical"} or item.kind not in {4, 8}
            for item in routine.scope.bindings.values()):
         raise CompilationError("native source function requires fixed private scalars and stable required arguments")
-    return binding.public(), "pure" if "pure" in prefix else "implicitly pure elemental"
+    arrays = []
+    for item in routine.scope.bindings.values():
+        if item.rank:
+            bounds = _fixed_array_bounds(analysis, item)
+            arrays.append({"resource": item.root, "rank": item.rank, "bounds": [list(axis) for axis in bounds],
+                           "role": "readonly_argument" if item.name in routine.arguments else "private_local"})
+    return binding.public(), "pure" if "pure" in prefix else "implicitly pure elemental", arrays
 
 
 def _projection(analysis, routine):
@@ -228,7 +246,7 @@ def prove_native_source_function(analysis, procedure, expression, active, closur
     _validate_resolution(origin, caller.scope, _walk(expression))
     resolved = resolve_source_function(origin, origin.source_scope_for(expression, caller.scope), expression)
     callee = _original(origin, resolved.procedure)
-    result, purity = _contract(callee)
+    result, purity, arrays = _contract(origin, callee)
     _validate_resolution(origin, callee.scope, _walk(callee.execution))
     syntax = [node for part in callee.scope.node.content
               if type(part).__name__ in {"Specification_Part", "Execution_Part"}
@@ -249,7 +267,7 @@ def prove_native_source_function(analysis, procedure, expression, active, closur
         raise CompilationError("native source function transitive effects are not read-only: " + callee.qualified)
     record = {"source_expression": str(expression), "source_position": position,
               "source_call": resolved.public(), "summary_identity": child["summary_identity"],
-              "result": result, "purity": purity, "complete_transitive_effects": True,
+              "result": result, "purity": purity, "fixed_arrays": arrays, "complete_transitive_effects": True,
               "native_only": True, "requires_original_execution": True,
               "argument_evaluation": "original expression position, keyword order and guards",
               "gpu_legality_established": False, "numerical_lowering_authorized": False,

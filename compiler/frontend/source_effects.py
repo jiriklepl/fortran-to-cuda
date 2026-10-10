@@ -26,7 +26,7 @@ from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
 # Bump when source-effect, call-composition or summary semantics change.
-SOURCE_SUMMARY_VERSION = 18
+SOURCE_SUMMARY_VERSION = 19
 _DEFAULT_SUMMARY_CACHE = SummaryCache()
 
 
@@ -1230,6 +1230,10 @@ class SourceEffects:
             operations.append(operation)
             return True
 
+        def external_resource(binding):
+            return (binding.name in routine.arguments or not binding.root.startswith(requested + "::")
+                    or "save" in binding.attributes or binding.root in getattr(self, "_captured_local_roots", ()))
+
         def effect(binding, action, guard, spelling):
             if binding is None:
                 reasons.append(f"unresolved storage: {spelling}")
@@ -1266,9 +1270,7 @@ class SourceEffects:
                     # without an explicit ALLOCATE statement. Element/section
                     # assignments do not perform that association change.
                     reasons.append(f"whole allocatable assignment may change storage: {binding.root}")
-            external = (binding.name in routine.arguments or not binding.root.startswith(requested + "::")
-                        or "save" in binding.attributes or binding.root in getattr(self, "_captured_local_roots", ()))
-            if external:
+            if external_resource(binding):
                 emit({"kind": action, "resource": binding.root, "rank": binding.rank,
                       "section": "whole", "guard": guard, "source_access": spelling})
 
@@ -1310,11 +1312,16 @@ class SourceEffects:
                 if mapped is not None and mapped.binding is None:
                     continue  # Actual-expression reads were collected above.
                 resource = mapped.binding.root if mapped is not None else original["resource"]
-                projected = {**deepcopy(original), "resource": resource}
+                binding = mapped.binding if mapped is not None else next(
+                    (item for item in routine.scope.bindings.values() if item.root == resource), None)
+                if binding is not None and not external_resource(binding):
+                    continue  # Caller-private scratch is not an owner capture.
+                rank = binding.rank if binding is not None else original["rank"]
+                projected = {**deepcopy(original), "resource": resource, "rank": rank}
                 if mapped is not None:
                     projected["view_chain"] = [{"caller": requested, "callee": proof.callee,
                                                 **mapped.public()}, *projected["view_chain"]]
-                emit({"kind": original["kind"], "resource": resource, "rank": original["rank"],
+                emit({"kind": original["kind"], "resource": resource, "rank": rank,
                       "section": "whole", "guard": guard, "source_access": str(node),
                       "source_function_effect": projected, "source_function_identity": proof.identity})
 
@@ -1364,7 +1371,7 @@ class SourceEffects:
                 # A declared/imported name may shadow the intrinsic.
                 shadowed = self._binding(scope, intrinsic) or self._candidates(scope, intrinsic)
                 if shadowed or self._unknown_exports(scope) or intrinsic not in set(INTRINSICS) | ARRAY_INQUIRIES | MODEL_INQUIRIES | {
-                    "allocated", "present", "sum", "product", "any", "all", "count", "minval", "maxval"}:
+                    "allocated", "present", "sum", "product", "any", "all", "count", "minval", "maxval", "dot_product"}:
                     reasons.append(f"unresolved function effects: {function}")
                 for index, argument in enumerate(_children(args)):
                     if _kind(argument) == "Actual_Arg_Spec":

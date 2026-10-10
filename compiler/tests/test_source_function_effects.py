@@ -113,7 +113,7 @@ end module
     ("pure", "real(8),intent(inout)::x", "r=x/=x", "INTENT(IN)"),
     ("pure", "real(8),optional,intent(in)::x", "r=x/=x", "INTENT(IN)"),
     ("pure", "real(8),pointer,intent(in)::x", "r=x/=x", "INTENT(IN)"),
-    ("pure", "real(8),intent(in)::x\nreal(8)::a(2)", "r=x/=x", "fixed private scalars"),
+    ("pure", "real(8),intent(in)::x\nreal(8)::a(257)", "r=x/=x", "fixed storage budget"),
     ("pure", "real(8),intent(in)::x\nreal(8),save::a", "r=x/=x", "fixed private scalars"),
     ("pure", "real(8),intent(in)::x", "print *,x\nr=x/=x", "effects incomplete"),
     ("pure", "real(8),intent(in)::x", "call unknown(x)\nr=x/=x", "effects incomplete"),
