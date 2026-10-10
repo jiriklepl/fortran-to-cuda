@@ -1558,13 +1558,18 @@ tokens establish GPU legality or initialized payloads.
 Resolution authentication visits each original procedure's own specification
 and execution; unrelated internal siblings do not consume its resolution
 budget. Every reached child remains separately authenticated and bounded.
-Version 3 accepts explicit `module_roots` for original numeric module
+Version 4 accepts explicit `module_roots` for original numeric module
 allocations. Their authority stays inside the exact private projection and its
 checked call closure, with separate cache identities; ordinary summaries and
 global module authorizations remain unchanged. Public or renamed module storage
 still requires original visibility and fresh descriptor guards. TARGET,
 THREADPRIVATE, uncertain associations and selected allocation changes reject.
-Depth limits count source controls rather than synthetic sequence containers.
+Depth limits count source controls and semantic expressions rather than synthetic
+sequence and argument-list containers. Exact original joined groups may use
+registered native or numerical completion proofs for descriptor/noescape checks;
+the checker retains every original statement and keeps its proof registries
+private. Original IEEE environment calls require their own registered source
+proof. These descriptor checks grant no GPU execution or numerical semantics.
 
 The separate `prove_native_prefix` API can establish complete effects of an
 unchanged native call before any context exists. A detached, bounded analysis
@@ -1575,7 +1580,7 @@ joined `PARALLEL DO` groups with supported scalar private/reduction clauses;
 the native compiler executes every original reduction. No reduction lowering,
 reassociation or active-owner coherence is authorized.
 
-`prove_reached_window` version 3 transfers separately supplied entry facts through
+`prove_reached_window` version 4 transfers separately supplied entry facts through
 these prefix and descriptor proofs to an exact contiguous window, at top level
 or in the first traversal of one top-level serial counted loop. Branches meet
 conservatively and definitions retain original ordering. Hidden read-only native
@@ -1583,8 +1588,14 @@ prefix allocations require no GPU capture; array dependencies in the selected
 window still do. Its conditional lifecycle is dormant → active → spent, with a
 mandatory close before the excluded tail or any enclosing backedge. Entry facts,
 prior nonescape, allocation presence, layout and alias guards require independent
-admission. These APIs do not create an owner or authorize execution. Whole/none
-coverage, deeper or conditional activation, direct OpenMP cuts, unknown effects,
+admission. Within the selected window, exact original assignments and
+single-assignment affine loops can establish bounded partial definitions. Later
+reads must be covered, conditional paths meet conservatively, and scalar changes
+invalidate rectangles that used the old bound. These return rectangles are
+conditional diagnostics; they never seed registration or whole-return facts.
+Runtime workers still validate actual physical coverage before numerical work.
+These APIs do not create an owner or authorize execution. Partial definitions
+before activation, deeper or conditional activation, direct OpenMP cuts, unknown effects,
 local allocation ownership and prefix allocation replacement remain
 limitations. No address/shape freshness or owner reopening is inferred.
 
@@ -1613,8 +1624,9 @@ not leak into existing fallback generation. The manifest's additive
 identities and rejection reasons. AUTO with unavailable estimates retains the
 original native path. Module captures consume separate descriptor-window proofs
 at every reached consumer, without globally blessing their allocations.
-Discovery neither invents capture facts nor proves partial definitions or
-whole-stage residency. One-shot module owners close before excluded allocation
+Discovery neither invents capture facts nor proves whole-stage residency.
+Original descriptor and partial-definition proofs remain separate gates.
+One-shot module owners close before excluded allocation
 swaps and do not retain state across backedges or invocations.
 Numerical extraction checks liveness against the complete original lexical
 body even when preparing only a window. Current native suffixes and possible
@@ -1622,7 +1634,7 @@ next-iteration prefixes are checked as separate paths, so one path's definitions
 cannot hide another path's scalar or fixed private-array reads. Original DO
 final values remain native when observable outside their numerical region.
 
-The source-only `prove_native_definitions` API retains ordered original
+The `prove_native_definitions` source API retains ordered original
 assignments, IF alternatives and single-assignment affine DO nests. Its transfer
 reports exact symbolic defined rectangles and guarded unmet read obligations;
 only must-definitions from reached leaves contribute, and branch guarantees
@@ -1630,8 +1642,10 @@ meet all alternatives, including a missing ELSE. Opposite faces stay separate,
 empty-loop requirements remain attached, and scalar changes invalidate dependent
 rectangles. Supplied entry rectangles require independent admission. Calls,
 OpenMP, allocation changes and complex loop bodies remain unsupported. This
-proof does not register storage, execute numerical work, or yet enable partial
-definitions in reached-window owners.
+proof does not register storage or execute numerical work. Version 2 accepts an
+exact descriptor-window token and reissues exact per-leaf tokens. Reached-window
+owners consume this proof for selected assignments and affine loops; calls and
+unsupported footprints keep their conservative whole-definition requirements.
 
 Optional `--effect-contracts` input has `schema_version: 1` and a `procedures`
 object keyed by a qualified imported call name. Each contract explicitly declares

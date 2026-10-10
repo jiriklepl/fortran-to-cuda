@@ -11,6 +11,7 @@ import pytest
 
 from compiler.numerical_contract import require_numerical_build_contract
 from compiler.tests.test_module_reached_windows import MODULE_BOUNDARY_SOURCE, module_fixture
+from compiler.tests.test_reached_partial_definitions import PARTIAL_BOUNDARY_SOURCE, partial_fixture
 from compiler.tests.test_reached_window_discovery import discovery_fixture
 from compiler.tests.test_reached_window_owner import SOURCE, emit_window
 from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
@@ -43,11 +44,14 @@ end program
 """
 
 
-@pytest.fixture(scope="module", params=(("explicit", False), ("explicit", True),
-                                      ("discovered", False), ("discovered", True),
-                                      ("module_discovered", False), ("module_discovered", True),
-                                      ("module_native_boundary", False),
-                                      ("explicit_live_iterator", False)))
+@pytest.fixture(scope="module", params=(
+    *((name, fallback, 8) for name, fallback in (
+        ("explicit", False), ("explicit", True), ("discovered", False), ("discovered", True),
+        ("module_discovered", False), ("module_discovered", True), ("module_native_boundary", False),
+        ("explicit_live_iterator", False))),
+    *((name, fallback, precision) for precision in (4, 8) for name, fallback in (
+        ("module_partial", False), ("module_partial", True), ("module_partial_boundary", False))),
+))
 def window_binaries(tmp_path_factory, request):
     nvcc = shutil.which("nvcc")
     host = shutil.which("g++-14") or shutil.which("g++")
@@ -56,8 +60,14 @@ def window_binaries(tmp_path_factory, request):
         pytest.skip("CUDA, C++ and Fortran toolchain required")
     directory = tmp_path_factory.mktemp("one_shot_window")
     architecture = actual_profile(directory, nvcc, host)["hardware"]["compute_capability"].replace(".", "")
-    emission, resource_fallback = request.param
-    if emission in {"module_discovered", "module_native_boundary"}:
+    emission, resource_fallback, precision = request.param
+    if emission in {"module_partial", "module_partial_boundary"}:
+        options = {"source": PARTIAL_BOUNDARY_SOURCE} if emission == "module_partial_boundary" else {}
+        original, builder = partial_fixture(directory, device_budget=0 if resource_fallback else None,
+                                            precision=precision, **options)
+        outputs, report = builder.run()
+        assert report["reached_window_discovery"]["selected"]
+    elif emission in {"module_discovered", "module_native_boundary"}:
         options = {"source": MODULE_BOUNDARY_SOURCE} if emission == "module_native_boundary" else {}
         original, builder = module_fixture(directory, device_budget=0 if resource_fallback else None, **options)
         outputs, report = builder.run()
@@ -77,7 +87,7 @@ def window_binaries(tmp_path_factory, request):
         artifact = directory / name
         artifact.parent.mkdir(parents=True, exist_ok=True)
         artifact.write_text(text)
-    objects, compile_commands = [], []
+    objects, compile_commands, build_commands = [], [], []
     flags = [fortran, "-O3", "-cpp", "-std=f2018", "-fopenmp", "-fcheck=all,array-temps"]
     for role in ("common_runtime", "shared_entry", "original_source"):
         for item in report["build_sources"]:
@@ -95,6 +105,7 @@ def window_binaries(tmp_path_factory, request):
                 compiler = flags
             command = [*compiler, "-I", str(directory), "-c", str(artifact), "-o", str(target)]
             run(command, cwd=directory)
+            build_commands.append({"role": role, "argv": command})
             compile_commands.append({"path": item["path"], "language": item["language"], "argv": command,
                                      "numerical_contract": item.get("numerical_contract")})
             objects.append(str(target))
@@ -104,23 +115,34 @@ def window_binaries(tmp_path_factory, request):
         driver_text = driver_text.replace("tail_visits,prefix_total", "tail_visits,prefix_total,a,b").replace(
             "real(8),allocatable::a(:),b(:)\n", "").replace("call step(a,b,n,counts(stages))",
                                                            "call step(n,counts(stages))")
+    if precision == 4:
+        driver_text = driver_text.replace("real(8)", "real(4)").replace("_8", "_4").replace(",8)", ",4)")
     driver.write_text(driver_text)
     candidate, native = directory / "candidate", directory / "native"
     cuda_root = os.path.dirname(os.path.dirname(os.path.realpath(nvcc)))
     cuda_lib = os.path.join(cuda_root, "lib64")
-    run([*flags, str(driver), *objects, "-L" + cuda_lib, "-Wl,-rpath," + cuda_lib,
-         "-lcudart", "-lstdc++", "-o", str(candidate)], cwd=directory)
-    run([*flags, str(original), str(driver), "-o", str(native)], cwd=directory)
-    run([str(native)], cwd=directory)
+    command = [*flags, str(driver), *objects, "-L" + cuda_lib, "-Wl,-rpath," + cuda_lib,
+               "-lcudart", "-lstdc++", "-o", str(candidate)]
+    run(command, cwd=directory)
+    build_commands.append({"role": "candidate-link", "argv": command})
+    command = [*flags, str(original), str(driver), "-o", str(native)]
+    run(command, cwd=directory)
+    build_commands.append({"role": "native-compile-link", "argv": command})
+    native_env = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE"}
+    run([str(native)], cwd=directory, env=native_env)
+    build_commands.append({"role": "native-reference", "argv": [str(native)],
+                           "environment": {"OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE"}})
     expected = (directory / "fields.bin").read_bytes()
+    (directory / "native-fields.bin").write_bytes(expected)
     (directory / "compile-commands.json").write_text(json.dumps(compile_commands, indent=2) + "\n")
-    return directory, candidate, expected, report, resource_fallback, emission
+    (directory / "build-commands.json").write_text(json.dumps(build_commands, indent=2) + "\n")
+    return directory, candidate, expected, report, resource_fallback, emission, precision
 
 
 @pytest.mark.cuda
 @pytest.mark.parametrize("disabled", [False, True])
 def test_one_shot_window_matches_complete_native_arrays_and_all_original_visits(window_binaries, disabled):
-    directory, candidate, expected, report, resource_fallback, emission = window_binaries
+    directory, candidate, expected, report, resource_fallback, emission, precision = window_binaries
     env = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "FORT_RUNTIME_TRACE": "1"}
     if disabled:
         env["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -147,6 +169,7 @@ def test_one_shot_window_matches_complete_native_arrays_and_all_original_visits(
                "reached_window": report["scopes"][0]["reached_window"],
                "compiler_owned_discovery": report["scopes"][0]["reached_window"]["automatic_discovery"],
                "emission": emission,
+               "precision_bytes": precision,
                "performance_sample": False}
     (directory / ("window-disabled.json" if disabled else "window-enabled.json")).write_text(
         json.dumps(receipt, indent=2, sort_keys=True) + "\n")

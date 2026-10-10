@@ -10,15 +10,17 @@ runtime alias checks, mandatory closure and numerical legality remain separate.
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from dataclasses import dataclass, field
 from hashlib import sha256
 
 from fparser.two.utils import walk
 
+from compiler.frontend.native_sections import NativeAxis, NativeRectangle
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 
-REACHED_WINDOW_VERSION = 3
+REACHED_WINDOW_VERSION = 4
 _EFFECTS = {"read", "write", "overwrite", "descriptor_read", "definition_change"}
 _FORBIDDEN = {"pointer", "optional", "volatile", "asynchronous", "value"}
 
@@ -52,6 +54,18 @@ def _whole_view(effect):
                 or len(descriptor.get("shape", ())) != descriptor.get("rank")):
             return False
     return True
+
+
+def _coverage_kind(rectangles):
+    if any(not box.iterations and all(axis.lower is None and axis.upper is None for axis in box.axes)
+           for box in rectangles):
+        return "whole"
+    return "sections" if rectangles else "none"
+
+
+def _whole_coverage(binding):
+    # Geometry only: invocation facts retain their independent admission.
+    return (NativeRectangle(tuple(NativeAxis() for _ in range(binding.rank)), binding.name),)
 
 
 def _position(analysis, procedure, selection):
@@ -134,14 +148,16 @@ def _derive(analysis, procedure, selection, roots, facts):
             if len(defining) != 1:
                 raise CompilationError("reached window local allocation requires separate selected-position lifetime authority: " + root)
             module_roots.append(root)
-        bindings[root], coverage[root] = binding, fact["initialized"]
+        bindings[root] = binding
+        coverage[root] = _whole_coverage(binding) if fact["initialized"] == "whole" else ()
     descriptor_roots = tuple(root for root, binding in bindings.items()
                              if "allocatable" in binding.attributes and root not in module_roots)
     module_roots = tuple(module_roots)
     for root in graph.nodes[graph.entry_id].details.get("definition_changes", ()):
         if root in coverage:
-            coverage[root] = "none"
-    demands, descriptor_demands, native_prefix_demands, visits, effects = [], [], [], 0, 0
+            coverage[root] = ()
+    demands, descriptor_demands, native_prefix_demands, definition_demands = [], [], [], []
+    visits, effects = 0, 0
 
     def leaf(identity, state, *, before_owner=False):
         nonlocal effects
@@ -182,6 +198,7 @@ def _derive(analysis, procedure, selection, roots, facts):
                                    + "; ".join(summary.get("reasons", ())))
         demands.append(summary["summary_identity"])
         outer = set(graph.nodes[identity].guard)
+        scalar_writes = set()
         for effect in summary["ordered_effects"]:
             effects += 1
             if effects > analysis.operation_limit:
@@ -198,19 +215,56 @@ def _derive(analysis, procedure, selection, roots, facts):
                     for view in effect.get("view_chain", ()) if view.get("actual_descriptor") is not None)
                 if array:
                     raise CompilationError("reached window untracked array needs definition/alias authority: " + root)
+                if effect["kind"] in {"write", "overwrite", "definition_change"}:
+                    scalar_writes.add(root)
                 continue  # Complete source evidence for distinct scalar state.
-            if effect["kind"] == "definition_change":
-                state[root] = "none"
-            elif effect["kind"] == "read" and state[root] != "whole":
-                raise CompilationError("reached window whole read follows incomplete definition: " + root)
-            elif effect["kind"] == "overwrite":
-                guarded = any(frame["procedure"] != procedure or frame["condition"] not in outer
-                              for frame in effect.get("guard_frames", ()))
-                if not guarded and _whole_view(effect):
-                    state[root] = "whole"
+
+        # Exact assignment/affine-loop effects retain physical source sections
+        # and ordering. Calls and unsupported native syntax keep the original
+        # conservative whole-definition contract below.
+        from compiler.frontend.native_definitions import (
+            invalidate_rectangles,
+            prove_native_definitions,
+        )
+        definition = None
+        needs_sections = any(effect["resource"] in state
+                             and _coverage_kind(state[effect["resource"]]) != "whole"
+                             and effect["kind"] in {"read", "write", "overwrite"}
+                             for effect in summary["ordered_effects"])
+        if not before_owner and needs_sections and graph.nodes[identity].kind in {"operation", "loop"}:
+            with suppress(CompilationError):
+                definition = prove_native_definitions(selected_analysis, procedure, graph.source_nodes(identity),
+                                                      descriptor_window=descriptor)
+        if definition is not None:
+            definition_demands.append(definition.identity)
+            resources = {item["resource"] for item in definition.public()["resources"]}
+            transferred = definition.transfer({root: state[root] for root in resources})
+            if transferred.uncovered_reads:
+                raise CompilationError("reached window section read follows incomplete definition: "
+                                       + transferred.uncovered_reads[0].resource)
+            state.update(transferred.definitions)
+        else:
+            for effect in summary["ordered_effects"]:
+                root = effect["resource"]
+                if root not in state:
+                    continue
+                if effect["kind"] == "definition_change":
+                    state[root] = ()
+                elif effect["kind"] == "read" and _coverage_kind(state[root]) != "whole":
+                    raise CompilationError("reached window whole read follows incomplete definition: " + root)
+                elif effect["kind"] == "overwrite":
+                    guarded = any(frame["procedure"] != procedure or frame["condition"] not in outer
+                                  for frame in effect.get("guard_frames", ()))
+                    if not guarded and _whole_view(effect):
+                        state[root] = _whole_coverage(bindings[root])
         for root in summary["guaranteed_whole_overwrites"]:
             if root in state:
-                state[root] = "whole"
+                state[root] = _whole_coverage(bindings[root])
+        # A later value of a bound does not describe the points written using
+        # its earlier value. This applies even to arrays not accessed here.
+        if scalar_writes:
+            state = {root: invalidate_rectangles(boxes, tuple(sorted(scalar_writes)))
+                     for root, boxes in state.items()}
         return state
 
     def transfer(identity, state, depth=0, *, before_owner=False):
@@ -232,7 +286,11 @@ def _derive(analysis, procedure, selection, roots, facts):
                 paths.append(transfer(body, path, depth + 1, before_owner=before_owner))
             if not node.alternatives or node.alternatives[-1][0] is not None:
                 paths.append(dict(state))
-            return {root: "whole" if all(path[root] == "whole" for path in paths) else "none" for root in state}
+            from compiler.frontend.native_definitions import intersect_rectangles
+            joined = dict(paths[0])
+            for path in paths[1:]:
+                joined = {root: intersect_rectangles(boxes, path[root]) for root, boxes in joined.items()}
+            return joined
         if node.kind == "boundary":
             raise CompilationError("reached window unknown effects or deferred native group lacks window authority")
         if node.kind not in {"operation", "call", "loop", "associate"}:
@@ -242,10 +300,16 @@ def _derive(analysis, procedure, selection, roots, facts):
     for identity in prefix:
         coverage = transfer(identity, coverage, before_owner=True)
     at_entry = dict(coverage)
+    if any(_coverage_kind(boxes) == "sections" for boxes in at_entry.values()):
+        raise CompilationError("reached prefix partial definitions require source-position section registration")
     for identity in selected:
         coverage = transfer(identity, coverage)
-    states = [{"resource": root, "initialized": at_entry[root], "definition_coverage": at_entry[root],
-               "coverage_on_return": coverage[root], "storage": "original current binding",
+    states = [{"resource": root, "initialized": _coverage_kind(at_entry[root]),
+               "definition_coverage": _coverage_kind(at_entry[root]),
+               "coverage_on_return": _coverage_kind(coverage[root]),
+               "defined_sections_on_return": [box.public() for box in coverage[root]]
+                   if _coverage_kind(coverage[root]) == "sections" else [],
+               "storage": "original current binding",
                "escapes": False, "allocation_changes": False,
                "descriptor_authority": "registered source-relative prefix/window proofs; excluded tail requires close",
                "requires_original_allocation_presence_guard": "allocatable" in bindings[root].attributes,
@@ -259,6 +323,7 @@ def _derive(analysis, procedure, selection, roots, facts):
             "descriptor_window_identities": descriptor_demands, "entry_facts_identity": _hash(facts),
             "module_descriptor_resources": list(module_roots),
             "native_prefix_proof_identities": native_prefix_demands,
+            "native_definition_proof_identities": definition_demands,
             "entry_facts_authority": "conditional on supplied invocation-entry facts; independent admission required",
             "source_demands": demands, "control_visits": visits, "ordered_effects": effects,
             "states": states, "lifecycle": "one invocation; dormant -> active -> spent; no reopening",
@@ -267,7 +332,10 @@ def _derive(analysis, procedure, selection, roots, facts):
             "requires_original_serial_caller_guard": True,
             "mandatory_close": "before the first excluded operation; before any enclosing loop backedge",
             "activation": "first traversal only; no live context during the native prefix",
-            "limits": ["one original immediate sequence at top level or first traversal of one top-level counted loop", "whole/none coverage only",
+            "limits": ["one original immediate sequence at top level or first traversal of one top-level counted loop",
+                       "exact original assignment/perfect affine-loop partial definitions within the selected window",
+                       "partial prefix definitions require separate source-position registration",
+                       "calls and unsupported native footprints retain conservative whole-definition requirements",
                        "direct OpenMP groups require a separate complete-group selection contract",
                        "every payload array dependency must be included; runtime nonalias guards remain required",
                        "allocation replacement within prefix/window and incomplete closures rejected",

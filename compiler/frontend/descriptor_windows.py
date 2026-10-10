@@ -9,6 +9,7 @@ separate obligations before any owner may open.
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from dataclasses import dataclass, field
 from hashlib import sha256
 
@@ -17,18 +18,22 @@ from fparser.two.utils import Base
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.frontend.component_bindings import component_access
 from compiler.frontend.native_completion import NativeCompletionProof
+from compiler.frontend.native_environment import NativeEnvironmentProof, NativeLocalStateProof
+from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
 from compiler.frontend.native_intrinsics import NativePredicateProof
 from compiler.frontend.native_prefix import NativePrefixProof
+from compiler.frontend.numerical_completion import NumericalCompletionProof
 from compiler.frontend.source_functions import _validate_resolution, _walk
 from compiler.frontend.source_objects import _TypeBuilder
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
-DESCRIPTOR_WINDOW_VERSION = 3
+DESCRIPTOR_WINDOW_VERSION = 4
 _UNSAFE = {"pointer", "optional", "volatile", "asynchronous", "value"}
 _INTRINSICS = set(INTRINSICS) | ARRAY_INQUIRIES | MODEL_INQUIRIES | {
-    "allocated", "present", "sum", "product", "any", "all", "count", "minval", "maxval"}
+    "allocated", "present", "sum", "product", "any", "all", "count", "minval", "maxval", "dot_product"}
+_EXPRESSION_CONTAINERS = {"Actual_Arg_Spec_List", "Section_Subscript_List", "Actual_Arg_Spec", "Parenthesis"}
 
 
 def _kind(node):
@@ -52,6 +57,17 @@ class _Check:
         self.predicates = {}
         self.prefix_scopes, self.prefixes = {}, {}
         self.joined_directives, self.joins = {}, {}
+        # Register source-derived group tokens only in this private view. Its
+        # original procedures, bindings and parser nodes retain their exact
+        # authority; no default summary or caller-owned proof registry changes.
+        from compiler.scopes.segments import _native_analysis
+
+        self.join_analysis = _native_analysis(analysis)
+        # Proof builders must register in this view, not follow a projection
+        # backlink and mutate its original analysis. Every accepted procedure
+        # still passes _require_original against the retained source roles.
+        self.join_analysis.__dict__.pop("_descriptor_source", None)
+        self.environments, self.environment_states = {}, {}
         self.object_builder = _TypeBuilder(analysis)
         self.objects, self.object_schemas, self.object_mappings = {}, {}, {}
 
@@ -68,14 +84,38 @@ class _Check:
         return self.objects[id(binding)]
 
     def joined_groups(self, routine, graph, selected):
+        roots = tuple(node for identity in selected for node in graph.source_nodes(identity))
         present = set()
-        for original in _walk(tuple(node for identity in selected for node in graph.source_nodes(identity))):
+        for original in _walk(roots):
             self.tick()
             present.add(id(original))
-        for proof in getattr(self.analysis, "_joined_completions", {}).values():
-            if not isinstance(proof, NativeCompletionProof) or proof.procedure != routine.qualified:
+
+        def discover(items, peeled):
+            for item in grouped_original_sequence(items, peeled):
+                self.tick()
+                if isinstance(item, NativeGroupCandidate):
+                    try:
+                        self.join_analysis.joined_completion(routine.qualified, item.original_nodes)
+                    except CompilationError:
+                        # Missing authority remains an error when its
+                        # original directive is visited; an independently
+                        # registered native-prefix proof remains usable.
+                        with suppress(CompilationError):
+                            self.join_analysis.numerical_joined_completion(routine.qualified, item.original_nodes)
+                elif _kind(item) in {"Execution_Part", "If_Construct", "Block_Nonlabel_Do_Construct",
+                                     "Associate_Construct"}:
+                    discover(peeled.get(id(item), _children(item)), peeled)
+
+        discover(roots, {})
+        proofs = (*self.join_analysis._joined_completions.values(),
+                  *self.join_analysis._numerical_completions.values())
+        for proof in proofs:
+            if not isinstance(proof, (NativeCompletionProof, NumericalCompletionProof)) or proof.procedure != routine.qualified:
                 continue
-            proof.validate(self.analysis, routine.qualified, proof.selected_node_ids)
+            if isinstance(proof, NativeCompletionProof):
+                proof.validate(self.join_analysis, routine.qualified, proof.selected_node_ids)
+            else:
+                proof.validate(self.join_analysis)
             originals = tuple(node for identity in proof.selected_node_ids for node in graph.source_nodes(identity))
             if not all(id(node) in present for node in originals):
                 continue
@@ -87,11 +127,16 @@ class _Check:
     def directive(self, routine, original):
         proof = self.joined_directives.get((routine.qualified, id(original)))
         if proof is not None:
-            proof.validate(self.analysis, routine.qualified, proof.selected_node_ids)
+            if isinstance(proof, NativeCompletionProof):
+                proof.validate(self.join_analysis, routine.qualified, proof.selected_node_ids)
+            else:
+                proof.validate(self.join_analysis)
             self.joins[proof.identity] = {
                 "proof_identity": proof.identity, "procedure": proof.procedure,
                 "structured_identity": proof.structured_identity,
                 "selected_node_ids": list(proof.selected_node_ids),
+                "proof_role": ("native_joined_completion" if isinstance(proof, NativeCompletionProof)
+                               else "numerical_source_completion"),
                 "descriptor_evidence_only": True, "whole_original_group_scanned": True,
                 "retains_original_team_and_directives": True,
                 "internal_cuts_authorized": False, "execution_authorized": False,
@@ -124,11 +169,12 @@ class _Check:
 
     def expression(self, routine, node, depth=0):
         self.tick()
-        if depth > self.analysis.depth_limit:
-            raise CompilationError("descriptor window expression depth exhausted")
         if not isinstance(node, (Base, tuple, list)):
             return
+        if depth > self.analysis.depth_limit:
+            raise CompilationError("descriptor window expression depth exhausted")
         kind = _kind(node)
+        child_depth = depth if isinstance(node, (tuple, list)) or kind in _EXPRESSION_CONTAINERS else depth + 1
         scope = self.analysis.source_scope_for(node, routine.scope)
         if (kind in {"Proc_Component_Ref", "Coindexed_Named_Object"}
                 or kind.startswith("Defined_") and kind.endswith("_Op")):
@@ -142,7 +188,7 @@ class _Check:
                 self.expression(routine, index, depth + 1)
             return
         if kind == "Actual_Arg_Spec":
-            self.expression(routine, node.items[1], depth + 1)
+            self.expression(routine, node.items[1], child_depth)
             return
         if kind == "Name":
             binding = self.analysis._binding(scope, node)
@@ -184,7 +230,7 @@ class _Check:
             self.expression(routine, args, depth + 1)
             return
         for child in _children(node):
-            self.expression(routine, child, depth + 1)
+            self.expression(routine, child, child_depth)
 
     def visit(self, routine, graph, identities, depth=0):
         if depth > self.analysis.depth_limit:
@@ -246,6 +292,21 @@ class _Check:
                     else:
                         self.expression(routine, mapping.actual)
                 self.procedure(resolved.procedure)
+            elif node.kind == "boundary":
+                originals = graph.source_nodes(identity)
+                candidates = [proof for proof in self.join_analysis._native_environments.values()
+                              if isinstance(proof, NativeEnvironmentProof) and len(originals) == 1
+                              and proof.procedure == routine.qualified
+                              and proof._call is originals[0]]
+                if len(candidates) != 1:
+                    raise CompilationError("descriptor window unknown selected storage effects: boundary"
+                                           + (": " + node.details["reason"] if node.details.get("reason") else ""))
+                proof = candidates[0].validate(self.join_analysis, routine.qualified, originals[0])
+                self.operations += 1
+                if self.operations > self.analysis.operation_limit:
+                    raise CompilationError("descriptor window source operation budget exhausted")
+                self.environments[proof.identity] = {**proof.public(), "descriptor_evidence_only": True,
+                                                     "execution_authorized": False}
             else:
                 raise CompilationError("descriptor window unknown selected storage effects: " + node.kind
                                        + (": " + node.details["reason"] if node.details.get("reason") else ""))
@@ -273,23 +334,33 @@ class _Check:
             proof = proofs[0].validate(self.analysis, name)
             for item in proof.public()["closure"]:
                 self.prefix_scopes[item["procedure"]] = proof
+        graph = self.analysis.structure(name)
+        if not graph.available:
+            raise CompilationError("descriptor window child bounded original graph is unavailable")
+        self.joined_groups(routine, graph, (graph.root_id,))
         for binding in routine.scope.bindings.values():
             if binding.dtype.startswith("type("):
                 self.fixed_object(binding)
             elif binding.dtype not in {"real", "integer", "logical"} or binding.attributes & {"pointer", "volatile", "asynchronous"}:
                 raise CompilationError("descriptor window child specification effects require separate authority")
-            for axis in binding.shape_nodes:
-                self.expression(routine, _children(axis))
+            states = [proof for proof in self.join_analysis._native_environment_states.values()
+                      if isinstance(proof, NativeLocalStateProof) and proof.procedure == name
+                      and proof.binding is binding]
+            if states:
+                if len(states) != 1:
+                    raise CompilationError("descriptor window native environment state requires unique original authority")
+                state = states[0].validate(self.join_analysis, name, binding)
+                self.environment_states[state.identity] = {**state.public(), "descriptor_evidence_only": True,
+                                                          "execution_authorized": False}
+            else:
+                for axis in binding.shape_nodes:
+                    self.expression(routine, _children(axis))
         for argument in routine.arguments:
             binding = routine.scope.bindings.get(argument)
             if binding is None or binding.attributes & _UNSAFE:
                 raise CompilationError("descriptor window child formal storage is unproved")
             if "allocatable" in binding.attributes and binding.intent not in {"in", "inout"}:
                 raise CompilationError("descriptor window allocatable OUT/unspecified entry may replace storage")
-        graph = self.analysis.structure(name)
-        if not graph.available:
-            raise CompilationError("descriptor window child bounded original graph is unavailable")
-        self.joined_groups(routine, graph, (graph.root_id,))
         self.active.append(name)
         self.visit(routine, graph, (graph.root_id,))
         self.active.pop()
@@ -412,6 +483,8 @@ def _derive(analysis, procedure, identities, roots, module_roots=()):
             "native_predicate_requirements": list(check.predicates.values()),
             "native_prefix_descriptor_requirements": list(check.prefixes.values()),
             "native_joined_descriptor_requirements": list(check.joins.values()),
+            "native_environment_descriptor_requirements": list(check.environments.values()),
+            "native_environment_state_requirements": list(check.environment_states.values()),
             "fixed_source_object_requirements": list(check.objects.values()),
             "source_object_mappings": list(check.object_mappings.values()),
             "source_operations": check.operations, "source_traversal_entries": check.nodes,

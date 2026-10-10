@@ -97,7 +97,7 @@ def test_module_window_is_explicit_source_local_and_definition_free(tmp_path):
     assert proof is prove(analysis, selected)
     public = proof.public()
     state = proof.resource_state(ROOT)
-    assert public["schema_version"] == 3
+    assert public["schema_version"] == 4
     assert proof.module_roots == (ROOT,)
     assert state["resource_kind"] == "original_module_allocatable"
     assert state["original_visible_spelling"] == "slot"
@@ -253,7 +253,7 @@ def test_descriptor_depth_counts_original_controls_once(tmp_path, depth, accepte
                  if type(node).__name__ == "Block_Nonlabel_Do_Construct")
     ids = (graph.node_id(first),)
     if accepted:
-        assert prove(analysis, ids).public()["schema_version"] == 3
+        assert prove(analysis, ids).public()["schema_version"] == 4
     else:
         with pytest.raises(CompilationError, match="depth|bounded|unavailable"):
             prove(analysis, ids)

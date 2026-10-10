@@ -470,12 +470,12 @@ def register_joined(analysis, procedure="intervals::read_modify"):
 def test_existing_exact_whole_joined_token_supplies_directive_evidence_only(tmp_path):
     declaration = "real(8),intent(inout)::a(:)\ninteger::i"
     _path, analysis, _graph, ids = fixture(tmp_path, child=JOINED_BODY, child_decl=declaration)
-    with pytest.raises(CompilationError, match="registered whole-closure"):
-        prove(analysis, ids)
+    discovered = prove(analysis, ids).public()
     assert not analysis._joined_completions
     token = register_joined(analysis)
     public = prove(analysis, ids).public()
     join, = public["native_joined_descriptor_requirements"]
+    assert discovered["native_joined_descriptor_requirements"] == public["native_joined_descriptor_requirements"]
     assert join["proof_identity"] == token.identity
     assert join["whole_original_group_scanned"]
     assert join["retains_original_team_and_directives"]

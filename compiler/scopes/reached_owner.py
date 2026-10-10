@@ -87,6 +87,7 @@ class ReachedWindowOwner(LexicalOwner):
             for scope in self.builder.scopes[before:]:
                 scope["reached_window"] = {
                     "schema_version": 1, "proof_identity": self.window_proof.identity,
+                    "source_proof_version": public["schema_version"],
                     "selected_node_ids": public["selected_node_ids"],
                     "prefix_node_ids": public["prefix_node_ids"],
                     "first_traversal_controls": public["first_traversal_controls"],
@@ -95,6 +96,12 @@ class ReachedWindowOwner(LexicalOwner):
                     "activation": "first reached selected source point; spend before every guard",
                     "mandatory_close": public["mandatory_close"],
                     "managed_resources": [state["resource"] for state in public["states"]],
+                    "definition_proof_identities": public["native_definition_proof_identities"],
+                    "defined_coverage": [{"resource": state["resource"],
+                        "on_activation": state["initialized"], "on_return": state["coverage_on_return"],
+                        "return_sections": state["defined_sections_on_return"],
+                        "authority": "conditional original reached transfer; return sections never seed registration"}
+                        for state in public["states"]],
                     "prefix_execution": "unchanged original native source before any active context",
                     "allocation_and_alias_authority": "independent admitted facts and reached runtime guards",
                     "automatic_discovery": False,
