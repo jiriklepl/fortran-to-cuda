@@ -60,7 +60,7 @@ def test_original_constant_point_uniformity_has_explicit_runtime_requirements(tm
     before = path.read_bytes()
     proof = analysis.joined_completion(ENTRY, group)
     public = proof.public()
-    assert public["schema_version"] == 4
+    assert public["schema_version"] == 5
     assert public["uniform_array_read_contract"] == "fixed-rank-one-shared-constant-point-v1"
     fact, = public["uniform_array_reads"]
     assert fact["resource"] == "argument::gate"

@@ -11,7 +11,8 @@ def test_fixed_private_native_array_requires_no_capture_fact(tmp_path):
 do i=1,n
 scratch(1)=a(i)
 scratch(2)=2*a(i)
-b(i)=b(i)+sum(scratch)
+! Keep this an original native operation: short fixed SUM is now numerical.
+b(i)=b(i)+sum(scratch)+sum(a)
 enddo
 !$omp end do
 !$omp end parallel

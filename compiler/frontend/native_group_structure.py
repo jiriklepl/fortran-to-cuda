@@ -14,7 +14,7 @@ from hashlib import sha256
 
 from compiler.ir import CompilationError
 
-NATIVE_GROUP_STRUCTURE_VERSION = 1
+NATIVE_GROUP_STRUCTURE_VERSION = 2
 NATIVE_GROUP_SCAN_LIMIT = 65536
 _CONSTRUCTS = {"Block_Nonlabel_Do_Construct", "If_Construct", "Associate_Construct"}
 
@@ -93,6 +93,43 @@ def original_sequence(items, peeled, scan=None):
             result.extend(prefix)
         result.append(node)
     return tuple(result)
+
+
+def original_section_loops(items, index, *, visit=None, limit=256):
+    """Select complete explicit SECTION bodies, retaining their original DOs.
+
+    The caller must expose attached original directives first. This narrow
+    syntax contract grants neither completion nor section independence: only
+    a whole original joined-team proof may consume the returned selections.
+    """
+    if directive(items[index]) != "sections":
+        raise CompilationError("native SECTIONS requires a plain original SECTIONS directive")
+    loops, index = [], index + 1
+    while index < len(items):
+        if visit is not None:
+            visit()
+        node, text = items[index], directive(items[index])
+        if _kind(node) == "Comment" and text is None:
+            index += 1
+            continue
+        if text in {"end sections", "end sections nowait"}:
+            if not loops:
+                raise CompilationError("native SECTIONS requires at least one explicit SECTION body")
+            return tuple(loops), index + 1
+        if text != "section":
+            raise CompilationError("native SECTIONS requires explicit SECTION and one complete counted DO body")
+        index += 1
+        while index < len(items) and _kind(items[index]) == "Comment" and directive(items[index]) is None:
+            if visit is not None:
+                visit()
+            index += 1
+        if index >= len(items) or _kind(items[index]) != "Block_Nonlabel_Do_Construct":
+            raise CompilationError("native SECTION requires one complete original counted DO body")
+        if len(loops) >= limit:
+            raise CompilationError("native SECTION source-unit budget exhausted")
+        loops.append(items[index])
+        index += 1
+    raise CompilationError("native SECTIONS requires a matching original END SECTIONS")
 
 
 @dataclass(frozen=True)
@@ -273,6 +310,11 @@ def build_native_group(analysis, routine, authority_identity, node_id, candidate
                     else:
                         branch.append(item)
                 index += 1
+                continue
+            if text == "sections":
+                loops, index = original_section_loops(items, index, visit=scan.visit, limit=limit)
+                for loop in loops:
+                    add("section", loop, guards)
                 continue
             if text is None or not re.match(r"do(?:\s|$)", text):
                 raise CompilationError("deferred native group requires complete worksharing DO units: " + (text or kind))
