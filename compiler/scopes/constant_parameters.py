@@ -1,8 +1,9 @@
 """Carry immutable source constants into an outlined numerical region.
 
-Initializers retain their Fortran types and expressions. They are neither live
-array captures nor per-work-item private storage, and are never folded using
-Python floating-point arithmetic.
+Initializers retain their Fortran types and expressions. Unsupported scalar
+initializers can instead supply their original Fortran value through a visible,
+read-only scalar capture. Array initializers retain the complete constant proof.
+Values are never folded using Python floating-point arithmetic.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from hashlib import sha256
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import Base
 
-from compiler.frontend.source_effects import _children, _kind, _part
+from compiler.frontend.source_effects import Binding, _children, _kind, _part
 from compiler.ir import CompilationError, SourceLocation
 
 
@@ -24,16 +25,36 @@ class ConstantParameters:
     declarations: tuple[str, ...]
     resources: tuple[str, ...]
     identity: str
+    scalar_captures: tuple[Binding, ...] = ()
+
+
+class _UnsupportedInitializer(CompilationError):
+    """An original initializer is outside the outlined constant language."""
 
 
 def outline_constants(analysis, routine, bindings, occupied, fixed_shape):
     """Resolve a bounded declaration closure through original lexical imports."""
-    selected = [binding for binding in bindings if "parameter" in binding.attributes
-                and (binding.rank or binding.dtype != "integer")]
+    selected = []
+    for binding in bindings:
+        if "parameter" not in binding.attributes:
+            continue
+        if not binding.rank and binding.dtype == "integer" and binding.kind == 4:
+            # Retain the existing exact INTEGER substitution where available.
+            # Other original scalar initializers need the same capture proof
+            # as REAL constants; they are not evaluated by a Python fallback.
+            scope = binding.declaring_scope
+            try:
+                if scope is not None:
+                    scope.kinds.integer(F.Name(binding.name), SourceLocation(str(scope.path)))
+                    continue
+            except CompilationError:
+                pass
+        selected.append(binding)
     if not selected:
         return ConstantParameters({}, (), (), "")
     analysis._require_original(routine.qualified)
     names, ordered, active = {}, [], set()
+    captures, capture_authority = [], []
     visits = 0
 
     def integer(scope, value):
@@ -127,12 +148,12 @@ def outline_constants(analysis, routine, bindings, occupied, fixed_shape):
                 return integer(scope, value)
             return F.Name(require(binding, depth))
         if kind in {"Ac_Implied_Do", "Function_Reference", "Structure_Constructor", "Data_Ref"}:
-            raise CompilationError("inline constant initializer requires bounded numeric expressions")
+            raise _UnsupportedInitializer("inline constant initializer requires bounded numeric expressions")
         if kind == "Intrinsic_Function_Reference":
             name = str(value.items[0]).lower()
             if (name not in {"real", "int"} or analysis._binding(scope, name)
                     or analysis._candidates(scope, F.Name(name)) or analysis._unknown_exports(scope)):
-                raise CompilationError("inline constant initializer requires proved numeric conversions")
+                raise _UnsupportedInitializer("inline constant initializer requires proved numeric conversions")
         if kind == "Actual_Arg_Spec":
             result = copy.copy(value)
             result.items = (value.items[0], normalize(value.items[1], scope, depth))
@@ -150,10 +171,38 @@ def outline_constants(analysis, routine, bindings, occupied, fixed_shape):
         return result
 
     for binding in sorted(selected, key=lambda item: item.root):
-        require(binding, 0)
+        previous_names, previous_ordered = dict(names), list(ordered)
+        previous_active, previous_occupied = set(active), set(occupied)
+        try:
+            require(binding, 0)
+        except _UnsupportedInitializer:
+            if binding.rank:
+                raise  # An array PARAMETER cannot depend on a runtime dummy.
+            # Discard the entire attempted declaration closure. In particular,
+            # no partially outlined dependency may survive an unsupported use.
+            names.clear()
+            names.update(previous_names)
+            ordered[:] = previous_ordered
+            active.clear()
+            active.update(previous_active)
+            occupied.clear()
+            occupied.update(previous_occupied)
+            from compiler.scopes.numerical import resource_binding
+
+            try:
+                visible = resource_binding(analysis, routine, binding.root)
+            except CompilationError as error:
+                raise CompilationError("inline scalar PARAMETER is unavailable in the original owner: "
+                                       + binding.root) from error
+            if visible is not binding:
+                raise CompilationError("inline scalar PARAMETER requires its original visible binding") from None
+            scope, initializer = declaration(binding)
+            captures.append(binding)
+            capture_authority.append(binding.root + "\0" + str(initializer) + "\0"
+                                     + analysis.sources[str(scope.path)])
     # Include original dependency files and normalized declarations: configured
     # initializers can differ even when their original edit target is unchanged.
-    authority = "\0".join(root + "\0" + text for root, text in ordered)
+    authority = "\0".join([*(root + "\0" + text for root, text in ordered), *capture_authority])
     identity = sha256(authority.encode()).hexdigest()
     return ConstantParameters(names, tuple(text for _, text in ordered),
-                              tuple(root for root, _ in ordered), identity)
+                              tuple(root for root, _ in ordered), identity, tuple(captures))
