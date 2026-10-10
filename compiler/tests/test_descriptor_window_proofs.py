@@ -341,3 +341,177 @@ def test_native_prefix_does_not_suppress_descriptor_specific_replacement_checks(
         prove_native_prefix(analysis, "intervals::read_modify")
     with pytest.raises(CompilationError, match="registered whole-closure"):
         prove(analysis, ids)
+
+
+def object_fixture(tmp_path, *, kind=8, component=None, body=None, actual_attributes="",
+                   selected="call adjusted(control=control,a=a)"):
+    sources = [
+        f"""module object_types
+type::state
+{component or f'real({kind})::value'}
+end type
+end module
+""",
+        f"""module object_helpers
+use object_types,only:formal_type=>state
+contains
+subroutine modify(a,control)
+real({kind}),allocatable,intent(inout)::a(:)
+type(formal_type),intent(inout)::control
+{body or f'control%value=control%value+1.0_{kind}' + chr(10) + 'a(1)=a(1)+control%value'}
+end subroutine
+end module
+""",
+        f"""module intervals
+use object_types,only:actual_type=>state
+use object_helpers,only:adjusted=>modify
+contains
+subroutine advance(a,flag)
+real({kind}),allocatable,intent(inout)::a(:)
+logical,intent(in)::flag
+type(actual_type){actual_attributes}::control
+real({kind}),allocatable::temporary(:)
+integer::stage
+do stage=1,3
+{selected}
+call move_alloc(a,temporary)
+end do
+end subroutine
+end module
+"""]
+    paths = []
+    for index, source in enumerate(sources):
+        path = tmp_path / f"objects{index}.f90"
+        path.write_text(source)
+        paths.append(path)
+    analysis = SourceEffects(paths)
+    graph = analysis.structure(ENTRY)
+    loop = next(node for node in analysis.routines[ENTRY].execution.content
+                if type(node).__name__ == "Block_Nonlabel_Do_Construct")
+    selected_ids = (graph.node_id(next(node for node in loop.content if type(node).__name__ == "Call_Stmt")),)
+    return paths, analysis, graph, selected_ids
+
+
+@pytest.mark.parametrize("kind", [4, 8])
+def test_renamed_original_fixed_object_mapping_does_not_block_numeric_descriptor_proof(tmp_path, kind):
+    _paths, analysis, _graph, ids = object_fixture(tmp_path, kind=kind)
+    public = prove(analysis, ids).public()
+    mapping, = public["source_object_mappings"]
+    assert mapping["declaring_type"] == "object_types::state"
+    assert mapping["source_only"]
+    assert not mapping["numerical_abi"]
+    assert not mapping["native_continuation_authority"]
+    assert public["fixed_source_object_requirements"]
+    assert not public["prefix_effects_proved"]
+    assert not public["execution_authorized"]
+    assert public["resources"][0]["stable"]
+    # Public copies cannot change subsequent source authority.
+    mapping["type_definition"]["fields"].clear()
+    assert prove(analysis, ids).public()["source_object_mappings"][0]["type_definition"]["fields"]
+
+
+@pytest.mark.parametrize("component", ["real(8),pointer::value", "real(8),allocatable::value(:)",
+                                       "real(8)::value\nreal(8),pointer::hidden"])
+def test_fixed_object_mapping_checks_entire_type_including_unused_descriptor_siblings(tmp_path, component):
+    _paths, analysis, _graph, ids = object_fixture(tmp_path, component=component)
+    with pytest.raises(CompilationError, match="source object|source component"):
+        prove(analysis, ids)
+
+
+@pytest.mark.parametrize("actual_attributes", [",pointer", ",allocatable", ",optional"])
+def test_fixed_object_actual_association_remains_original_and_nonoptional(tmp_path, actual_attributes):
+    _paths, analysis, _graph, ids = object_fixture(tmp_path, actual_attributes=actual_attributes)
+    with pytest.raises(CompilationError, match="source object"):
+        prove(analysis, ids)
+
+
+@pytest.mark.parametrize("body", ["a=0.0_8", "deallocate(a)", "call unknown(a)", "control=control"])
+def test_fixed_object_mapping_never_skips_child_descriptor_or_whole_object_effects(tmp_path, body):
+    _paths, analysis, _graph, ids = object_fixture(tmp_path, body=body)
+    with pytest.raises(CompilationError, match="whole allocatable|unknown selected storage|original expression storage"):
+        prove(analysis, ids)
+
+
+def test_fixed_object_schema_mutation_invalidates_interval_token(tmp_path):
+    _paths, analysis, _graph, ids = object_fixture(tmp_path)
+    proof = prove(analysis, ids)
+    schema = analysis.modules["object_types"].component_types["state"]
+    schema.members.clear()
+    with pytest.raises(CompilationError, match="schema changed"):
+        proof.resource_state(ROOT)
+
+
+def test_fixed_object_original_import_mutation_cannot_issue_new_authority(tmp_path):
+    _paths, analysis, _graph, ids = object_fixture(tmp_path)
+    analysis.routines["object_helpers::modify"].scope.imports["formal_type"] = ("foreign", "state")
+    with pytest.raises(CompilationError, match="original.*authority|declaration scope changed"):
+        prove(analysis, ids)
+
+
+JOINED_BODY = """!$omp parallel private(i)
+!$omp do
+do i=1,size(a)
+a(i)=a(i)+1.0_8
+end do
+!$omp end do nowait
+!$omp do
+do i=1,size(a)
+a(i)=a(i)+2.0_8
+end do
+!$omp end do
+!$omp end parallel"""
+
+
+def register_joined(analysis, procedure="intervals::read_modify"):
+    originals = tuple(analysis.routines[procedure].execution.content)
+    return analysis.joined_completion(procedure, originals)
+
+
+def test_existing_exact_whole_joined_token_supplies_directive_evidence_only(tmp_path):
+    declaration = "real(8),intent(inout)::a(:)\ninteger::i"
+    _path, analysis, _graph, ids = fixture(tmp_path, child=JOINED_BODY, child_decl=declaration)
+    with pytest.raises(CompilationError, match="registered whole-closure"):
+        prove(analysis, ids)
+    assert not analysis._joined_completions
+    token = register_joined(analysis)
+    public = prove(analysis, ids).public()
+    join, = public["native_joined_descriptor_requirements"]
+    assert join["proof_identity"] == token.identity
+    assert join["whole_original_group_scanned"]
+    assert join["retains_original_team_and_directives"]
+    assert not join["internal_cuts_authorized"]
+    assert not join["execution_authorized"]
+    assert not public["native_prefix_descriptor_requirements"]
+
+
+@pytest.mark.parametrize("tail", ["a=0.0_8", "deallocate(a)", "call unknown(a)"])
+def test_joined_token_cannot_hide_original_later_child_descriptor_effects(tmp_path, tail):
+    declaration = "real(8),allocatable,intent(inout)::a(:)\ninteger::i"
+    _path, analysis, _graph, ids = fixture(tmp_path, child=JOINED_BODY + "\n" + tail, child_decl=declaration)
+    routine = analysis.routines["intervals::read_modify"]
+    group = tuple(routine.execution.content[:-1])
+    analysis.joined_completion(routine.qualified, group)
+    with pytest.raises(CompilationError, match="whole allocatable|unknown selected storage"):
+        prove(analysis, ids)
+
+
+def test_copied_joined_token_is_not_descriptor_authority(tmp_path):
+    _path, analysis, _graph, ids = fixture(tmp_path, child=JOINED_BODY,
+                                         child_decl="real(8),intent(inout)::a(:)\ninteger::i")
+    token = register_joined(analysis)
+    analysis._joined_completions["copied"] = copy(token)
+    with pytest.raises(CompilationError, match="whole original joined-group authority"):
+        prove(analysis, ids)
+
+
+def test_joined_token_does_not_authorize_partial_original_group_selection(tmp_path):
+    selected = JOINED_BODY.replace("private(i)", "private(counter)").replace("do i=", "do counter=").replace("a(i)", "a(counter)")
+    _path, analysis, graph, _ids = fixture(tmp_path, selected=selected,
+                                         prefix="counter=2", child="continue")
+    routine = analysis.routines[ENTRY]
+    loop = next(node for node in routine.execution.content if type(node).__name__ == "Block_Nonlabel_Do_Construct")
+    group = tuple(loop.content[1:-2])
+    analysis.joined_completion(ENTRY, group)
+    opening = graph.node_id(group[0])
+    with pytest.raises(CompilationError, match="registered whole-closure"):
+        prove(analysis, (opening,))

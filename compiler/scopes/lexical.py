@@ -746,6 +746,24 @@ class LexicalOwner:
                      *([] if unit.publication_only else ["else", *self.original(unit.nodes).splitlines()]), "endif"]
         return [(first, first-1 if unit.publication_only else last, "\n".join(fortran_lines(lines)) + "\n")]
 
+    def emit_control(self, nodes):
+        """Place invocation controls in their original lexical procedure."""
+        builder = self.builder
+        start = _span(_part(self.routine.scope.node, "Subroutine_Stmt"))[1]+1
+        first = statement_span(nodes[0])[0]
+        last = statement_span(nodes[-1])[1]
+        builder.add_edit(self.routine.scope.path, start,start-1,
+                         f"use iso_c_binding, only: {self.kind} => c_int64_t\n")
+        declarations = [f"integer({self.kind}) :: {self.context}", f"logical :: {self.enabled}",
+                        *[f"integer({self.kind}) :: fort_buffer_{number}" for _binding, number in self.resources.values()]]
+        initialize = [f"{self.context} = 0", *[f"fort_buffer_{number} = 0" for _binding,number in self.resources.values()],
+                      "block", "use fort_scoped_memory, only: fort_scope_serial_caller",
+                      f"{self.enabled} = fort_scope_serial_caller() /= 0", "end block"]
+        builder.add_edit(self.routine.scope.path, first,first-1,
+                         "\n".join(fortran_lines([*declarations,*initialize]))+"\n", prepend=True)
+        builder.add_edit(self.routine.scope.path, last+1,last,"\n".join(fortran_lines(self.close(
+            disable=False, reason="original owning invocation end", span=(last, last))))+"\n")
+
     def run(self, nodes):
         builder = self.builder
         checkpoint = builder.scope_checkpoint()
@@ -844,20 +862,9 @@ class LexicalOwner:
                     name=member.routine.qualified, summary_identity=member.graph.identity,
                     requirements=("original internal procedure", "host-associated owning invocation control"),
                     shared_artifacts=("sources/" + _name("source_", str(member.routine.scope.path)) + ".f90",))
-        start = _span(_part(self.routine.scope.node,"Subroutine_Stmt"))[1]+1
         first = statement_span(nodes[0])[0]
         last = statement_span(nodes[-1])[1]
-        builder.add_edit(self.routine.scope.path, start,start-1,
-                         f"use iso_c_binding, only: {self.kind} => c_int64_t\n")
-        declarations = [f"integer({self.kind}) :: {self.context}", f"logical :: {self.enabled}",
-                        *[f"integer({self.kind}) :: fort_buffer_{number}" for _binding, number in self.resources.values()]]
-        initialize = [f"{self.context} = 0", *[f"fort_buffer_{number} = 0" for _binding,number in self.resources.values()],
-                      "block", "use fort_scoped_memory, only: fort_scope_serial_caller",
-                      f"{self.enabled} = " + (".false." if native_reason else "fort_scope_serial_caller() /= 0"), "end block"]
-        builder.add_edit(self.routine.scope.path, first,first-1,
-                         "\n".join(fortran_lines([*declarations,*initialize]))+"\n", prepend=True)
-        builder.add_edit(self.routine.scope.path, last+1,last,"\n".join(fortran_lines(self.close(
-            disable=False, reason="original owning invocation end", span=(last, last))))+"\n")
+        self.emit_control(nodes)
         builder.scopes.append({"owner": self.context, "owner_variant": variant.identity,
             "path": str(self.routine.scope.path), "first_line": first, "last_line": last,
             "gpu_leaves": sorted(self.leaves), "mode": builder.config.policy,

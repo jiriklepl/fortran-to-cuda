@@ -507,8 +507,8 @@ class InlineRegions:
     def whole_definitions(self, call):
         """Must-write coverage authenticated against the original region."""
         if call.procedure not in self.definition_proofs:
-            summary = self.builder.analysis.segment_summary(
-                self.builder.entry.qualified, call.region.nodes, capture_locals=True)
+            summary = self.builder.segment_summary(
+                self.builder.analysis, self.builder.entry.qualified, call.region.nodes, capture_locals=True)
             self.definition_proofs[call.procedure] = frozenset(
                 summary["guaranteed_whole_overwrites"] if summary["complete"] else ())
         return set(self.definition_proofs[call.procedure])

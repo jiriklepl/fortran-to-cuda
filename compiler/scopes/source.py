@@ -9,6 +9,7 @@ control-flow around sibling spans remains in the original source.
 from __future__ import annotations
 
 import json
+from copy import copy
 from dataclasses import dataclass, replace
 from hashlib import sha256
 
@@ -152,6 +153,85 @@ class ScopeBuilder:
     def inline_for(self, procedure):
         owner = self.region_owners.get(procedure.partition("#region")[0])
         return owner if owner is not None and procedure in owner.regions else None
+
+    def bind_reached_window(self, proof, original_selection):
+        """Bind admitted entry facts to one authenticated source-position owner.
+
+        The copy shares artifact registries, but neither rewrites the supplied
+        facts nor changes the original analysis's descriptor authority. Only
+        the proved window may consume the resulting definition coverage.
+        """
+        from compiler.frontend.reached_windows import ReachedWindowProof
+
+        if not isinstance(proof, ReachedWindowProof):
+            raise CompilationError("reached owner requires a registered original window proof")
+        proof.validate(self.analysis, self.entry.qualified, original_selection)
+        record = proof.public()
+        identity = sha256(json.dumps(self.facts, sort_keys=True, separators=(",", ":"),
+                                    allow_nan=False).encode()).hexdigest()
+        if record["entry_facts_identity"] != identity:
+            raise CompilationError("reached owner entry facts differ from independently admitted captures")
+        for state in record["states"]:
+            binding = self.visible_binding(self.entry, state["resource"])
+            self.capture(binding)
+        result = copy(self)
+        result._reached_window_binding = proof, original_selection
+        # Inline source authority stays original, but summary consumers must
+        # use the window-bound builder rather than its invocation-wide parent.
+        result.inline = copy(self.inline)
+        result.inline.builder = result
+        result.inline.definition_proofs = {}
+        result.region_owners = dict(self.region_owners)
+        result.region_owners[self.entry.qualified] = result.inline
+        return result
+
+    def validate_reached_window(self):
+        binding = getattr(self, "_reached_window_binding", None)
+        if binding is None:
+            return None
+        proof, selection = binding
+        proof.validate(self.analysis, self.entry.qualified, selection)
+        identity = sha256(json.dumps(self.facts, sort_keys=True, separators=(",", ":"),
+                                    allow_nan=False).encode()).hexdigest()
+        if proof.public()["entry_facts_identity"] != identity:
+            raise CompilationError("reached owner admitted entry facts changed")
+        return proof
+
+    def segment_summary(self, analysis, procedure, selection, **options):
+        """Consume interval descriptor proofs only inside a bound window."""
+        proof = self.validate_reached_window()
+        descriptor = None
+        if proof is not None:
+            if (analysis.inputs is not self.analysis.inputs
+                    or set(analysis.routines) != set(self.analysis.routines)
+                    or any(analysis.routines[name] is not routine for name, routine in self.analysis.routines.items())
+                    or set(analysis.modules) != set(self.analysis.modules)
+                    or any(analysis.modules[name] is not scope for name, scope in self.analysis.modules.items())):
+                raise CompilationError("reached owner summary requires the exact original source objects")
+            if procedure != self.entry.qualified:
+                raise CompilationError("reached owner child requires separate mapped window authority")
+            graph, selected = analysis._selected_source(procedure, selection)
+            covered, pending = set(), list(proof.public()["selected_node_ids"])
+            while pending:
+                identity = pending.pop()
+                if identity in covered:
+                    continue
+                covered.add(identity)
+                node = graph.nodes[identity]
+                pending.extend(node.children)
+                for condition, body in node.alternatives:
+                    pending.append(body)
+                    if condition is not None:
+                        pending.append(condition)
+            if not selected or not set(selected) <= covered:
+                raise CompilationError("reached owner summary escapes its original selected window")
+            roots = tuple(state["resource"] for state in proof.public()["states"]
+                          if state["requires_original_allocation_presence_guard"])
+            if roots:
+                from compiler.frontend.descriptor_windows import prove_descriptor_window
+
+                descriptor = prove_descriptor_window(analysis, procedure, selected, roots)
+        return analysis.segment_summary(procedure, selection, descriptor_window=descriptor, **options)
 
     def stable_descriptors(self, procedure):
         return {item["resource"] for item in self.analysis.descriptor_stability(procedure)["resources"]
@@ -651,6 +731,12 @@ class ScopeBuilder:
                         or any(type(v) is not int or not 0 <= v < 2**63 for v in [*lower,*upper])
                         or any(lo > hi for lo,hi in zip(lower,upper,strict=True))):
                     raise CompilationError("invalid initialized physical capture section")
+        proof = self.validate_reached_window()
+        if proof is not None:
+            if self.visible_binding(self.entry, binding.root) is not binding:
+                raise CompilationError("reached owner capture requires its exact original storage binding")
+            state = proof.capture_state(binding.root)
+            return {**fact, "initialized": state["initialized"]}
         return fact
 
     def add_edit(self, path, first, last, replacement, *, prepend=False):
@@ -2323,6 +2409,7 @@ class ScopeBuilder:
 
     def finish(self):
         """Publish source edits and build artifacts after approved scope work."""
+        self.validate_reached_window()
         self.analysis.inputs.verify()
         if any(sha256(package.path.read_bytes()).hexdigest() != package.digest for package in self.packages.values()):
             raise CompilationError("normalized source changed while scope artifacts were being prepared")

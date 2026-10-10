@@ -78,6 +78,11 @@ def _native_analysis(analysis):
     result._native_predicates = dict(analysis._native_predicates)
     result._native_functions = dict(analysis._native_functions)
     result._source_function_used_scopes = set(analysis._source_function_used_scopes)
+    # These tokens belong to one exact analysis object. A shallow copy must
+    # reissue selected proofs; sharing their registries would either lend
+    # foreign authority or mutate the original owner's proof state.
+    for name in ("_descriptor_window_proofs", "_native_prefix_proofs", "_reached_window_proofs"):
+        setattr(result, name, {})
     result._summary_cache = SummaryCache(max_entries=0)
     return result
 
@@ -368,7 +373,10 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
         from compiler.scopes.native_atomic import summarize
         summary = summarize(analysis, builder.entry.qualified, selection, completion_proof)
     else:
-        summary = analysis.segment_summary(builder.entry.qualified, selection, capture_locals=True)
+        if hasattr(builder, "segment_summary"):
+            summary = builder.segment_summary(analysis, builder.entry.qualified, selection, capture_locals=True)
+        else:
+            summary = analysis.segment_summary(builder.entry.qualified, selection, capture_locals=True)
     if (deferred is None and not summary["complete"] and completion_proof is not None
             and builder.config.scope_execution == "reached"
             and any('budget exhausted' in reason for reason in summary['reasons'])):
