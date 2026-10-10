@@ -148,6 +148,19 @@ def test_mixed_team_retains_original_work_once_and_reports_separate_authority(tm
     assert 'fort_scope_host_begin' in text and 'fort_scope_host_end' in text
 
 
+def test_team_cuda_entries_ship_their_runtime_headers_without_root_include_paths(tmp_path):
+    _, outputs, report, _ = emit(tmp_path)
+    assert teams(report)
+    for source in report['build_sources']:
+        if source['role'] != 'shared_entry' or source['language'] != 'cuda':
+            continue
+        directory = source['path'].rsplit('/', 1)[0]
+        headers = re.findall(r'^#include "([^"/]+)"', outputs[source['path']], re.M)
+        assert 'scoped_team_observer.hpp' in headers
+        for header in headers:
+            assert directory + '/' + header in outputs
+
+
 def test_reached_team_budgets_local_source_and_each_demand_not_total_expanded_effects(tmp_path):
     # Each branch is a separately reached native demand. Repeated reads of an
     # immutable input increase effect expansion without increasing source work
