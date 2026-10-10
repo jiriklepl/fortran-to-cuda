@@ -11,7 +11,7 @@ from fparser.two.utils import walk
 
 from compiler.frontend.source_effects import _children, _kind, _part
 from compiler.ir import CompilationError
-from compiler.scopes.lexical import LexicalOwner
+from compiler.scopes.lexical import LexicalOwner, optional_scalar_input
 from compiler.scopes.segments import fortran_lines, statement_span
 from compiler.scopes.source import _call, _name, _span
 
@@ -111,10 +111,14 @@ class ModuleOwner(LexicalOwner):
                 "storage": "one original body and declarations; no persistent-state copy",
                 "resource_mappings": {root: binding.root for root, binding in self.canonical_bindings.items()},
                 "calls": self.call_sites, "boundaries": self.boundaries,
+                "optional_scalar_formals": [name for name in self.routine.arguments
+                    if optional_scalar_input(self.routine.scope.bindings[name])],
+                "optional_scalar_association": "original OPTIONAL reference and PRESENT guards; no payload capture",
+                "argument_rendering": "original source arguments; compiler controls appended by keyword",
                 "planning_segments": [{"segment_id": index, "first_line": unit.scope.first,
                     "last_line": unit.scope.last, "operations": unit.scope.public()}
                     for index, unit in enumerate(self.units)],
-                "limits": "ordinary numeric formals; one canonical mapping; original saved locals remain native"}
+                "limits": "ordinary numeric formals and read-only optional scalars; one canonical mapping; original saved locals remain native"}
 
 
 def borrow_module(parent, node):
@@ -129,10 +133,17 @@ def borrow_module(parent, node):
     owner = parent.owner
     if routine.qualified in owner.active or len(owner.active) >= parent.builder.analysis.depth_limit:
         raise CompilationError("recursive or over-depth original module companion")
-    if any(routine.scope.bindings[name].dtype not in {"real", "integer", "logical"}
-           or routine.scope.bindings[name].attributes & {"optional", "allocatable", "pointer", "volatile", "asynchronous", "value"}
-           for name in routine.arguments):
+    if any(binding.dtype not in {"real", "integer", "logical"}
+           or binding.attributes & {"allocatable", "pointer", "volatile", "asynchronous", "value"}
+           or ("optional" in binding.attributes and not optional_scalar_input(binding))
+           for name in routine.arguments for binding in (routine.scope.bindings[name],)):
         raise CompilationError("original module companion requires ordinary numeric arguments")
+    if any("optional" in mapping.formal_binding.attributes
+           and (mapping.presence not in {"supplied", "omitted", "forwarded_optional"}
+                or (mapping.binding is not None and mapping.binding.attributes & {
+                    "allocatable", "pointer", "volatile", "asynchronous", "value"}))
+           for mapping in resolved.mappings):
+        raise CompilationError("original module companion optional scalar requires original supplied or forwarded presence")
     mappings = {}
     for mapping in resolved.mappings:
         if not mapping.formal_binding.rank:
@@ -182,7 +193,9 @@ def borrow_module(parent, node):
             imports.add(key)
     parent.forwarded_handles.update(existing.handle_numbers())
     handles = ["fort_buffer_"+str(number) for number in existing.handle_numbers()]
-    arguments = [str(actual) for actual in resolved.actuals]
+    arguments = resolved.render_original_arguments()
+    controls = [f"{existing.context} = {parent.context}", f"{existing.enabled} = {parent.enabled}",
+                *[f"{handle} = {handle}" for handle in handles]]
     # A CONTIGUOUS callee dummy can conceal a caller-created temporary. Check
     # actual storage before that association exists, otherwise a retained
     # handle might outlive temporary copyback at the original call return.
@@ -197,7 +210,7 @@ def borrow_module(parent, node):
             preflight += [f"if (fort_actuals_contiguous) fort_actuals_contiguous = is_contiguous({name})"]
         preflight += ["if (.not. fort_actuals_contiguous) then", *parent.close(), "endif", "end block"]
     lines = [f"if ({parent.enabled}) then", *preflight, "endif",
-             f"if ({parent.enabled}) then", *_call(existing.entry, [*arguments, parent.context, parent.enabled, *handles]),
+             f"if ({parent.enabled}) then", *_call(existing.entry, [*arguments, *controls]),
              "else", *parent.original((node,)).splitlines(), "endif"]
     if parent.control_guard:
         lines = [f"if ({parent.control_guard}) then", *lines, "else", *parent.original((node,)).splitlines(), "endif"]
