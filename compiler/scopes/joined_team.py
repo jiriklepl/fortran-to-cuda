@@ -248,6 +248,8 @@ class JoinedTeam(StructuredScope):
         from compiler.scopes.source import _checked
 
         builder = self.builder
+        from compiler.scopes.provenance import position, source_id
+        trace_segment = source_id(builder, 'segment', span=(self.first, self.last))
         imports.append('use omp_lib, only: fort_team_omp_level => omp_get_level, fort_team_omp_threads => omp_get_num_threads')
         # ENTRY-only dummies must not even appear in original native SHARED
         # clauses. Always-present local mirrors carry control inside the team.
@@ -284,6 +286,9 @@ class JoinedTeam(StructuredScope):
             if operation.kind == 'condition read':
                 continue
             call = numeric.get(id(operation))
+            trace_operation = source_id(builder, 'numerical_segment' if call is not None else 'native_operation', span=operation.span,
+                                        operation_kind=operation.kind)
+            native_implementation = source_id(builder, 'implementation', span=operation.span, backend='original_native')
             block = 'fort_team_prepare_' + str(number)
             accesses = None
             try:
@@ -335,7 +340,9 @@ class JoinedTeam(StructuredScope):
                         '0.0_c_double, 0.0_c_double, 0_c_int)',
                         'if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_plan_validate(fort_context)',
                         'end block ' + block, 'if (fort_status /= FORT_SCOPE_OK) then', *fail(),
-                        'else', *begins, 'fort_team_native = .true.', 'endif']
+                        'else', *position(builder, segment=trace_segment, operation=trace_operation,
+                                          implementation=native_implementation),
+                        *begins, 'fort_team_native = .true.', 'endif']
             lines = []
             if call is not None:
                 guards = (*call.region.runtime_guards,
@@ -357,7 +364,7 @@ class JoinedTeam(StructuredScope):
                           'if (fort_native_ready .and. .not. fort_team_run) then', *prepare, 'endif']
             else:
                 lines += prepare
-            prefix = coordinated(lines, reset=True)
+            prefix = coordinated([*position(builder, segment=trace_segment, operation=trace_operation), *lines], reset=True)
             # A collective worker may return while its numerical execution is
             # still pending in the context. Complete that execution before the
             # next reached query validates definitions, without publishing any

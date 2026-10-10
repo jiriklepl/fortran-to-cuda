@@ -6,6 +6,33 @@
 #include <utility>
 
 namespace fort_scoped {
+// Fixed caller-owned diagnostic state; no lookup or allocation when disabled.
+// The manifest identifies a worker, while the source coordinator supplies its
+// owner/segment/operation. An independent generic call leaves these unknown.
+class TracePosition {
+    fort_scope_t context_;
+    fort_scope_trace_state_v1 previous_;
+public:
+    TracePosition(fort_scope_t context, const char *procedure, const char *implementation) noexcept
+        : context_(context) {
+        previous_.version = 0;
+        fort_scope_trace_set_v1(context, 0, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, &previous_);
+        if (previous_.version != FORT_SCOPE_TRACE_ABI_VERSION) return;
+        const uint32_t mask = FORT_SCOPE_TRACE_IMPLEMENTATION | FORT_SCOPE_TRACE_BOUNDARY |
+            (previous_.procedure[0] ? 0 : FORT_SCOPE_TRACE_PROCEDURE);
+        fort_scope_trace_set_v1(context, mask, nullptr, procedure, nullptr, nullptr, implementation, "", nullptr);
+    }
+    TracePosition(const TracePosition &) = delete;
+    void implementation(const char *identity) noexcept {
+        if (previous_.version == FORT_SCOPE_TRACE_ABI_VERSION)
+            fort_scope_trace_set_v1(context_, FORT_SCOPE_TRACE_IMPLEMENTATION,
+                                    nullptr, nullptr, nullptr, nullptr, identity, nullptr, nullptr);
+    }
+    ~TracePosition() {
+        if (previous_.version == FORT_SCOPE_TRACE_ABI_VERSION)
+            fort_scope_trace_restore_v1(context_, &previous_);
+    }
+};
 // Window launchers borrow validated full-root views. No context call is legal
 // inside the batch callback, whose executor owns the context mutex/coherence.
 inline const fort_scope_batch_view *batch_view(const fort_scope_batch_window &window, fort_buffer_t handle) noexcept {

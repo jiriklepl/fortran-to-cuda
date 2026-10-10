@@ -214,6 +214,8 @@ def borrow_module(parent, node):
              "else", *parent.original((node,)).splitlines(), "endif"]
     if parent.control_guard:
         lines = [f"if ({parent.control_guard}) then", *lines, "else", *parent.original((node,)).splitlines(), "endif"]
+    from compiler.scopes.provenance import borrowed
+    lines = borrowed(parent, (node,), lines)
     parent.patches.append((first, last, "\n".join(fortran_lines(lines))+"\n"))
     existing.call_sites.append({"caller": parent.routine.qualified, "first_line": first, "last_line": last})
     parent.builder.resolved_calls[(parent.routine.qualified, (first, last))] = resolved.public()

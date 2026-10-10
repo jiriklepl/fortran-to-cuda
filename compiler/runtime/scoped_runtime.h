@@ -14,6 +14,30 @@ extern "C" {
 #define FORT_SCOPE_ABI_VERSION 1
 typedef uint64_t fort_scope_t;
 typedef uint64_t fort_buffer_t;
+/* Optional submission provenance. Full SHA256 identities resolve through the
+ * compiler manifest. Unbound fields are explicitly unknown. Diagnostic calls
+ * never change numerical status, coherence or scheduling; tracing disabled
+ * returns before a context lookup. Masked fields are updated; null/empty IDs
+ * clear them. Unmasked fields are preserved. Mask zero only saves state.
+ * Strings must be NUL-terminated within 65 bytes; invalid IDs become unknown.
+ * Saved state is caller-owned and restores borrowed-call attribution. Like
+ * other context APIs, neither call is legal inside a batch-execute callback,
+ * whose executor already holds the nonrecursive context mutex. */
+#define FORT_SCOPE_TRACE_ABI_VERSION 1
+enum fort_scope_trace_field {
+    FORT_SCOPE_TRACE_OWNER = 1, FORT_SCOPE_TRACE_PROCEDURE = 2,
+    FORT_SCOPE_TRACE_SEGMENT = 4, FORT_SCOPE_TRACE_OPERATION = 8,
+    FORT_SCOPE_TRACE_IMPLEMENTATION = 16, FORT_SCOPE_TRACE_BOUNDARY = 32,
+    FORT_SCOPE_TRACE_ALL = 63
+};
+typedef struct fort_scope_trace_state_v1 {
+    uint32_t version, reserved;
+    char owner[65], procedure[65], segment[65], operation[65], implementation[65], boundary[65];
+} fort_scope_trace_state_v1;
+void fort_scope_trace_set_v1(fort_scope_t context, uint32_t update_mask, const char *owner, const char *procedure,
+                            const char *segment, const char *operation, const char *implementation,
+                            const char *boundary, fort_scope_trace_state_v1 *previous);
+void fort_scope_trace_restore_v1(fort_scope_t context, const fort_scope_trace_state_v1 *previous);
 enum fort_scope_status {
     FORT_SCOPE_OK = 0, FORT_SCOPE_ARGUMENT = 1, FORT_SCOPE_STALE = 2,
     FORT_SCOPE_ALIAS = 3, FORT_SCOPE_RESOURCE = 4, FORT_SCOPE_BOUNDARY = 5,

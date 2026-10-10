@@ -68,6 +68,8 @@ struct Context {
         scratch_stats.version = FORT_SCOPE_SCRATCH_ABI_VERSION;
     }
     int device;
+    fort_scope_t handle = 0;
+    fort_scope_trace_state_v1 provenance{};
     bool ready = false, pending = false, poisoned = false, closed = false;
     size_t device_budget = std::numeric_limits<size_t>::max();
     std::mutex mutex;
@@ -145,13 +147,39 @@ Buffer &buffer(Context &c, fort_buffer_t handle) {
     require(found != c.buffers.end(), FORT_SCOPE_STALE, "invalid, foreign, or stale buffer handle");
     return *found->second;
 }
-void trace(const char *operation, const Buffer *b = nullptr, size_t bytes = 0) {
+bool trace_enabled() noexcept {
     const char *enabled = std::getenv("FORT_RUNTIME_TRACE");
-    if (!enabled || std::strcmp(enabled, "1")) return;
-    std::lock_guard<std::mutex> lock(trace_mutex);
-    std::cerr << "FORT_SCOPED " << operation;
-    if (b) std::cerr << " buffer=" << b->identity << " generation=" << b->generation;
-    std::cerr << " bytes=" << bytes << '\n';
+    return enabled && !std::strcmp(enabled, "1");
+}
+void trace_id(char (&destination)[65], const char *source) noexcept {
+    if (!source) { destination[0] = '\0'; return; }
+    bool valid = true;
+    size_t length = 0;
+    while (length < 65 && source[length]) {
+        const char c = source[length++];
+        valid = valid && ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'));
+    }
+    destination[0] = '\0';
+    if (valid && length == 64) {
+        std::memcpy(destination, source, 64);
+        destination[64] = '\0';
+    }
+}
+void trace(const Context &c, const char *operation, const Buffer *b = nullptr, size_t bytes = 0) noexcept {
+    if (!trace_enabled()) return;
+    try {
+        std::lock_guard<std::mutex> lock(trace_mutex);
+        std::cerr << "FORT_SCOPED " << operation;
+        if (b) std::cerr << " buffer=" << b->identity << " generation=" << b->generation;
+        std::cerr << " bytes=" << bytes << " provenance_version=1 context=" << c.handle;
+        if (b) std::cerr << " buffer_handle=" << b->handle;
+        const auto &p = c.provenance;
+        for (const auto &[name, value] : {
+            std::pair{"owner", p.owner}, {"procedure", p.procedure}, {"segment", p.segment},
+            {"operation", p.operation}, {"implementation", p.implementation}, {"boundary", p.boundary}})
+            std::cerr << ' ' << name << '=' << (value[0] ? value : "unknown");
+        std::cerr << '\n';
+    } catch (...) {} // Reporting must never change numerical success.
 }
 #ifndef FORT_SCOPE_CPU_TEST
 void cuda_check(Context &c, cudaError_t status, bool allocation = false) {
@@ -209,7 +237,7 @@ void initialize(Context &c) {
 #endif
     c.ready = true;
     { std::lock_guard<std::mutex> lock(driver_mutex); initialized_devices.insert(c.device); }
-    trace("initialize");
+    trace(c, "initialize");
 }
 size_t field_budget(const Context &c) {
     require(c.scratch_capacity <= c.device_budget, FORT_SCOPE_STATE, "scratch capacity exceeds scope budget");
@@ -250,7 +278,7 @@ void allocate(Context &c, Buffer &b) {
     c.stats.allocated_bytes += b.bytes;
     c.stats.peak_device_bytes = std::max(c.stats.allocated_bytes, c.stats.peak_device_bytes);
     payload_peak(c);
-    trace("allocate", &b, b.bytes);
+    trace(c, "allocate", &b, b.bytes);
 }
 void wait(Context &c) {
     if (!c.pending) return;
@@ -265,7 +293,7 @@ void wait(Context &c) {
 #endif
     c.pending = false;
     ++c.stats.waits;
-    trace("wait");
+    trace(c, "wait");
 }
 void release_scratch(Context &c) {
     if (!c.scratch) return;
@@ -279,7 +307,7 @@ void release_scratch(Context &c) {
 #endif
         cuda_check(c, cudaFree(c.scratch));
 #endif
-    trace("scratch_free", nullptr, c.scratch_capacity);
+    trace(c, "scratch_free", nullptr, c.scratch_capacity);
     c.scratch = nullptr;
     c.scratch_capacity = 0;
     c.scratch_stats.capacity_bytes = 0;
@@ -322,7 +350,7 @@ void grow_scratch(Context &c, size_t bytes) {
     c.scratch_stats.capacity_bytes = bytes;
     c.scratch_stats.peak_scratch_bytes = std::max<uint64_t>(bytes, c.scratch_stats.peak_scratch_bytes);
     payload_peak(c);
-    trace("scratch_allocate", nullptr, bytes);
+    trace(c, "scratch_allocate", nullptr, bytes);
 }
 const char *transfer_reason(uint32_t reason) noexcept {
     switch (reason) {
@@ -498,7 +526,7 @@ bool copy_pinned(Context &c, Buffer &b, const fort_physical::CopyPlan &plan, boo
     size_t freed = 0;
     cuda_check(c, fort_staging::release(std::move(lease.slots), freed));
 #endif
-    trace(upload ? "upload" : "download", &b, plan.bytes);
+    trace(c, upload ? "upload" : "download", &b, plan.bytes);
     return true;
 }
 void copy(Context &c, Buffer &b, const Box &box, bool upload) {
@@ -539,7 +567,7 @@ void copy(Context &c, Buffer &b, const Box &box, bool upload) {
     });
     if (upload) c.stats.upload_bytes += plan.bytes; else c.stats.download_bytes += plan.bytes;
     c.pending = true;
-    trace(upload ? "upload" : "download", &b, plan.bytes);
+    trace(c, upload ? "upload" : "download", &b, plan.bytes);
 }
 Region sections(const Buffer &b, const fort_scope_section *data, size_t count, bool full) {
     require(count <= rectangle_limit && (!count || data), FORT_SCOPE_ARGUMENT, "section list exceeds the bounded interface");
@@ -578,7 +606,7 @@ void reconcile(Context &c, Buffer &b, bool device) {
     chosen = b.initialized;
     other.clear();
     ++c.stats.reconciliations;
-    trace(device ? "reconcile_device" : "reconcile_host", &b);
+    trace(c, device ? "reconcile_device" : "reconcile_host", &b);
 }
 void ensure(Context &c, Buffer &b, const Region &requested, bool device) {
     if (requested.empty()) return;
@@ -618,13 +646,13 @@ void begin(Context &c, Buffer &b, const fort_scope_access *access, bool device) 
     // host boundary wait. This also completes uploads reading borrowed storage.
     if (!device) wait(c);
 }
-void end(Buffer &b, bool device) {
+void end(Context &c, Buffer &b, bool device) {
     require(b.prepared && b.prepared->device == device, FORT_SCOPE_STATE, "missing or mismatched access begin");
     b.initialized = std::move(b.prepared->initialized);
     (device ? b.device_current : b.host_current) = std::move(b.prepared->current);
     (device ? b.host_current : b.device_current) = std::move(b.prepared->opposite);
     b.prepared.reset();
-    trace(device ? "device_commit" : "host_commit", &b);
+    trace(c, device ? "device_commit" : "host_commit", &b);
 }
 void publish(Context &c, Buffer &b) {
     require(!b.prepared, FORT_SCOPE_STATE, "unfinished buffer access at scope boundary");
@@ -645,7 +673,7 @@ void release(Context &c, Buffer &b) {
 #endif
     b.device = nullptr;
     c.stats.allocated_bytes -= b.bytes;
-    trace("release", &b, b.bytes);
+    trace(c, "release", &b, b.bytes);
 }
 template<class F> int protect(F &&f) noexcept {
     fort_runtime::HostFloatingEnvironment floating_environment;
@@ -1777,6 +1805,44 @@ extern "C" int fort_scope_plan_next(fort_scope_t h, uint64_t unit,
     });
 }
 
+extern "C" void fort_scope_trace_set_v1(fort_scope_t h, uint32_t mask, const char *owner, const char *procedure,
+                                          const char *segment, const char *operation, const char *implementation,
+                                          const char *boundary, fort_scope_trace_state_v1 *previous) {
+    if (previous) previous->version = 0;
+    if (!trace_enabled()) return;
+    if (mask & ~uint32_t(FORT_SCOPE_TRACE_ALL)) return;
+    try {
+        const auto c = lookup(h);
+        std::lock_guard<std::mutex> lock(c->mutex);
+        if (c->closed) return;
+        if (previous) { *previous = c->provenance; previous->version = FORT_SCOPE_TRACE_ABI_VERSION; }
+        auto &p = c->provenance;
+        p.version = FORT_SCOPE_TRACE_ABI_VERSION;
+        if (mask & FORT_SCOPE_TRACE_OWNER) trace_id(p.owner, owner);
+        if (mask & FORT_SCOPE_TRACE_PROCEDURE) trace_id(p.procedure, procedure);
+        if (mask & FORT_SCOPE_TRACE_SEGMENT) trace_id(p.segment, segment);
+        if (mask & FORT_SCOPE_TRACE_OPERATION) trace_id(p.operation, operation);
+        if (mask & FORT_SCOPE_TRACE_IMPLEMENTATION) trace_id(p.implementation, implementation);
+        if (mask & FORT_SCOPE_TRACE_BOUNDARY) trace_id(p.boundary, boundary);
+        if (mask) trace(*c, "position");
+    } catch (...) {} // Even a stale/foreign diagnostic handle cannot fail work.
+}
+extern "C" void fort_scope_trace_restore_v1(fort_scope_t h, const fort_scope_trace_state_v1 *previous) {
+    if (!trace_enabled()) return;
+    if (!previous || previous->version != FORT_SCOPE_TRACE_ABI_VERSION || previous->reserved) return;
+    try {
+        const auto c = lookup(h);
+        std::lock_guard<std::mutex> lock(c->mutex);
+        if (c->closed) return;
+        auto &p = c->provenance;
+        p = {};
+        p.version = FORT_SCOPE_TRACE_ABI_VERSION;
+        trace_id(p.owner, previous->owner); trace_id(p.procedure, previous->procedure);
+        trace_id(p.segment, previous->segment); trace_id(p.operation, previous->operation);
+        trace_id(p.implementation, previous->implementation); trace_id(p.boundary, previous->boundary);
+        trace(*c, "restore");
+    } catch (...) {}
+}
 extern "C" uint32_t fort_scope_abi_version() { return FORT_SCOPE_ABI_VERSION; }
 extern "C" const char *fort_scope_error() { return last_error; }
 extern "C" int fort_scope_create(int device, fort_scope_t *out) {
@@ -1784,8 +1850,13 @@ extern "C" int fort_scope_create(int device, fort_scope_t *out) {
         require(out && device >= 0, FORT_SCOPE_ARGUMENT, "invalid context output or device");
         auto c = std::make_shared<Context>(device);
         auto handle = token();
-        std::lock_guard<std::mutex> lock(registry_mutex);
-        contexts.emplace(handle, std::move(c)); *out = handle;
+        c->handle = handle;
+        {
+            std::lock_guard<std::mutex> lock(registry_mutex);
+            contexts.emplace(handle, c);
+        }
+        *out = handle;
+        trace(*c, "create");
     });
 }
 extern "C" int fort_scope_serial_caller(void) {
@@ -1986,7 +2057,7 @@ extern "C" int fort_scope_batch_execute_v1(fort_scope_t h, const fort_scope_batc
                 ++c.stats.downloads; c.stats.download_bytes+=bytes;
                 ++c.transfer_stats.pinned_downloads; c.transfer_stats.pinned_download_bytes+=bytes; out->actual_download_bytes+=bytes;
             }
-            ++c.transfer_stats.tiles; trace(upload ? "upload" : "download",copy.buffer,bytes);
+            ++c.transfer_stats.tiles; trace(c, upload ? "upload" : "download",copy.buffer,bytes);
         };
         auto record=[&](size_t slot) {
 #ifdef FORT_SCOPE_CPU_TEST
@@ -2156,7 +2227,7 @@ extern "C" int fort_scope_forget_definition(fort_scope_t h, fort_buffer_t handle
         require(!b.prepared, FORT_SCOPE_STATE, "definition change during a prepared buffer access");
         wait(c);
         b.initialized.clear(); b.host_current.clear(); b.device_current.clear();
-        trace("forget_definition", &b);
+        trace(c, "forget_definition", &b);
     });
 }
 extern "C" int fort_scope_forget_sections_v1(fort_scope_t h, fort_buffer_t handle,
@@ -2174,7 +2245,7 @@ extern "C" int fort_scope_forget_sections_v1(fort_scope_t h, fort_buffer_t handl
         b.initialized = std::move(initialized);
         b.host_current = std::move(host);
         b.device_current = std::move(device);
-        trace("forget_sections", &b);
+        trace(c, "forget_sections", &b);
     });
 }
 extern "C" int fort_scope_view_get_v1(fort_scope_t h, const fort_scope_view_v1 *view,
@@ -2270,7 +2341,7 @@ extern "C" int fort_scope_host_begin(fort_scope_t h, fort_buffer_t b, const fort
     });
 }
 extern "C" int fort_scope_host_end(fort_scope_t h, fort_buffer_t b) {
-    return with(h, [&](Context &c) { end(buffer(c,b), false); });
+    return with(h, [&](Context &c) { end(c, buffer(c,b), false); });
 }
 extern "C" int fort_scope_device_begin(fort_scope_t h, fort_buffer_t b, const fort_scope_access *a, void **out) {
     return with(h, [&](Context &c) {
@@ -2280,7 +2351,7 @@ extern "C" int fort_scope_device_begin(fort_scope_t h, fort_buffer_t b, const fo
     });
 }
 extern "C" int fort_scope_device_end(fort_scope_t h, fort_buffer_t b) {
-    return with(h, [&](Context &c) { end(buffer(c,b), true); c.pending = c.pending || c.ready; });
+    return with(h, [&](Context &c) { end(c, buffer(c,b), true); c.pending = c.pending || c.ready; });
 }
 extern "C" int fort_scope_cancel_access(fort_scope_t h, fort_buffer_t b) {
     return with(h, [&](Context &c) { buffer(c,b).prepared.reset(); });
@@ -2318,7 +2389,7 @@ extern "C" int fort_scope_note_launch(fort_scope_t h) {
     return with(h, [&](Context &c) {
         require(c.ready, FORT_SCOPE_STATE, "GPU launch recorded without entering the context device");
         note_numerical_activity(c);
-        ++c.stats.launches; c.pending = true; trace("launch");
+        ++c.stats.launches; c.pending = true; trace(c, "launch");
     });
 }
 extern "C" int fort_scope_execution_error(fort_scope_t h, const char *message) {
@@ -2365,7 +2436,7 @@ extern "C" int fort_scope_scratch_acquire_v1(fort_scope_t h, size_t bytes, fort_
         c.scratch_stats.active_bytes = bytes;
         *out = {FORT_SCOPE_SCRATCH_ABI_VERSION, 0, lease_token,
                 bytes ? c.scratch : nullptr, bytes, c.scratch_capacity};
-        trace("scratch_acquire", nullptr, bytes);
+        trace(c, "scratch_acquire", nullptr, bytes);
     });
 }
 extern "C" int fort_scope_scratch_release_v1(fort_scope_t h, uint64_t lease_token) {
@@ -2376,7 +2447,7 @@ extern "C" int fort_scope_scratch_release_v1(fort_scope_t h, uint64_t lease_toke
         c.scratch_stats.active = 0;
         c.scratch_stats.active_bytes = 0;
         ++c.scratch_stats.releases;
-        trace("scratch_release");
+        trace(c, "scratch_release");
     });
 }
 extern "C" int fort_scope_scratch_stats_get_v1(fort_scope_t h, fort_scope_scratch_stats_v1 *out) {
@@ -2411,6 +2482,7 @@ extern "C" int fort_scope_close(fort_scope_t h) {
         }
 #endif
         c.buffers.clear(); c.identities.clear(); c.closed = true;
+        trace(c, "close");
         transfer_statistics_trace(c, h);
     });
     if (status == FORT_SCOPE_OK) {

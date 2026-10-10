@@ -292,19 +292,18 @@ def test_every_joined_unit_completes_pending_work_before_reached_validation(tmp_
         assert '!$omp barrier' in between
 
 
-def test_successful_all_native_auto_choice_keeps_original_worksharing_and_hooks(tmp_path):
-    _, _, report, text = emit(tmp_path, policy='auto')
-    assert teams(report)
-    selections = list(re.finditer(r'fort_team_run = fort_decision%gpu_units > 0', text))
-    assert len(selections) == 2
-    for selection in selections:
-        native = text.index('if (fort_native_ready .and. .not. fort_team_run) then', selection.end())
-        worker = text.index('if (fort_team_run) then', native)
-        assert 'fort_scope_plan_validate(fort_context)' in text[native:worker]
-        assert 'fort_scope_host_begin(' in text[native:worker]
-        original = text.index('else\n!$omp do', worker)
-        assert original > worker
-        assert 'fort_scope_host_end(' in text[original:]
+def test_missing_calibration_auto_elides_instrumentation_and_keeps_original_worksharing(tmp_path):
+    _, outputs, report, text = emit(tmp_path, policy='auto')
+    owner, = report['scopes']
+    preflight = owner['automatic_preflight']
+    assert preflight['successful']
+    assert preflight['selection'] == 'native'
+    assert preflight['caller_source_unchanged']
+    assert preflight['contexts_created'] == preflight['registrations'] == preflight['queries_constructed'] == 0
+    assert text == SOURCE
+    assert 'fort_scope_' not in text
+    assert all(item['role'] in {'original_source', 'common_runtime'} for item in report['build_sources'])
+    assert not any(path.startswith('entries/') for path in outputs)
 
 
 def module_source():
