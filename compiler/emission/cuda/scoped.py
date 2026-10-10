@@ -133,7 +133,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         from compiler.offload.source_compute import apply_source_compute_costs
         numerical_analysis = apply_source_compute_costs(
             OffloadAnalysis(prep.analysis.available, prep.analysis.reason, tuple(units.values())),
-            config.profile, config.native_participation)
+            config.profile, config.native_participation, array_views=root_views)
         units = {unit.region.id: unit for unit in numerical_analysis.units}
     elif not config.collective:
         from compiler.offload.numerical_calibration import apply_numerical_costs
@@ -159,12 +159,20 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                   "    return kind == static_cast<unsigned int>(omp_sched_static) && chunk == 0;", "}"]
     if affinity is not None:
         lines.insert(0, '#include <sched.h>')
+        protocol_environment = compute_models[0].get("cpu_protocol_environment")
+        environment_guard = ""
+        if protocol_environment is not None:
+            lines[0:0] = ['#include <cstdlib>', '#include <cstring>']
+            for field, variable in (("omp_wait_policy", "OMP_WAIT_POLICY"), ("gomp_spincount", "GOMP_SPINCOUNT")):
+                value = protocol_environment[field]
+                environment_guard += (f' && !std::getenv("{variable}")' if value is None else
+                    f' && std::getenv("{variable}") && !std::strcmp(std::getenv("{variable}"), {json.dumps(value)})')
         lines += ["static bool scoped_compute_placement_compatible() {",
                   "    cpu_set_t actual; CPU_ZERO(&actual);",
                   "    if (sched_getaffinity(0, sizeof(actual), &actual)) return false;",
                   f"    if (CPU_COUNT(&actual) != {len(affinity)}) return false;",
                   *[f"    if (!CPU_ISSET({cpu}, &actual)) return false;" for cpu in affinity],
-                  f"    return !omp_get_dynamic() && omp_get_max_threads() == {config.host_threads} && omp_get_proc_bind() == omp_proc_bind_false{' && scoped_compute_schedule_compatible()' if runtime_schedule else ''};", "}"]
+                  f"    return omp_get_level() == 0 && !omp_get_dynamic() && omp_get_max_threads() == {config.host_threads} && omp_get_thread_limit() >= {config.host_threads} && omp_get_proc_bind() == omp_proc_bind_false{' && scoped_compute_schedule_compatible()' if runtime_schedule else ''}{environment_guard};", "}"]
     else:
         lines += ["static bool scoped_compute_placement_compatible() { return true; }"]
     profile_reason = config.profile_reason
@@ -806,7 +814,16 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                   "        fort_compute.version = FORT_SCOPE_COMPUTE_ABI_VERSION;"]
                         if model is not None:
                             lower, upper = model["item_range"]
-                            schedule_guard = " && scoped_compute_schedule_compatible()" if model.get("runtime_schedule") is not None else ""
+                            # Public queries can be called without this entry's
+                            # chooser. Validate cost participation here too;
+                            # mismatches retain effects with unknown costs.
+                            schedule_guard = " && scoped_compute_placement_compatible()"
+                            if model.get("runtime_schedule") is not None:
+                                schedule_guard += " && scoped_compute_schedule_compatible()"
+                            if model.get("require_unit_stride") and root_views:
+                                requirement = units[step.id].memory_access_requirement
+                                schedule_guard += "".join(f" && {access.symbol.cpp_name}.strides[0] == 1ULL"
+                                                         for access in requirement.accesses)
                             record += [f"        if (unit.units[0].iterations >= {lower}ULL && unit.units[0].iterations <= {upper}ULL{schedule_guard}) {{"]
                             if any((step.id, role) in memory_helpers for role in ("native_fortran", "generated_cpu", "gpu")):
                                 from compiler.emission.cuda.working_set import working_set_lines
@@ -819,7 +836,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                               ("gpu", "FORT_SCOPE_COMPUTE_GPU")):
                                 coefficients = model[role]
                                 arithmetic = units[step.id].compute_arithmetic_operations_per_iteration
-                                seconds = arithmetic * coefficients["arithmetic_seconds_per_operation"] + coefficients["intrinsic_seconds_per_item"]
+                                seconds = coefficients.get("compute_seconds_per_item",
+                                    arithmetic * coefficients["arithmetic_seconds_per_operation"] + coefficients["intrinsic_seconds_per_item"])
                                 helper = memory_helpers.get((step.id, role))
                                 if helper is not None:
                                     record += ["            {", "                double fort_memory_seconds = 0.0;",
@@ -992,6 +1010,10 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                 "compute_arithmetic_operations_per_iteration": units[r.id].compute_arithmetic_operations_per_iteration,
                                 "compute_runtime_divisions_per_iteration": units[r.id].compute_runtime_divisions_per_iteration,
                                 "compute_arithmetic_estimate_reason": units[r.id].compute_arithmetic_estimate_reason,
+                                "compute_dependencies": (units[r.id].compute_dependencies.to_dict()
+                                                         if units[r.id].compute_dependencies is not None else None),
+                                "memory_access_requirement": (units[r.id].memory_access_requirement.to_dict()
+                                                              if units[r.id].memory_access_requirement is not None else None),
                                 **({"intrinsic_work_per_iteration": dict(units[r.id].intrinsic_work_per_iteration),
                                     "cpu_numerical_seconds_per_iteration": units[r.id].cpu_numerical_seconds_per_iteration,
                                     "gpu_numerical_seconds_per_iteration": units[r.id].gpu_numerical_seconds_per_iteration}

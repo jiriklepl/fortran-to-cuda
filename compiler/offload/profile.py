@@ -167,6 +167,20 @@ def validate_profile(
             validate_numerical_profile(profile["numerical"], profile)
         except NumericalCalibrationError as error:
             raise ProfileError(str(error)) from error
+    if "cpu_execution_protocol" in profile:
+        from .cpu_protocol_calibration import validate_cpu_protocol
+        from .numerical_calibration import NumericalCalibrationError
+        try:
+            validate_cpu_protocol(profile)
+        except NumericalCalibrationError as error:
+            raise ProfileError(str(error)) from error
+    if "cpu_dependency" in profile:
+        from .cpu_dependency_calibration import validate_dependency_profile
+        from .numerical_calibration import NumericalCalibrationError
+        try:
+            validate_dependency_profile(profile)
+        except NumericalCalibrationError as error:
+            raise ProfileError(str(error)) from error
     if "scoped" in profile:
         scoped = profile["scoped"]
         if not isinstance(scoped, dict) or type(scoped.get("schema_version")) is not int or scoped["schema_version"] != 1:

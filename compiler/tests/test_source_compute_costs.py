@@ -11,8 +11,11 @@ from compiler.frontend import lower_source
 from compiler.offload.analysis import analyze_offload
 from compiler.offload.config import OffloadConfig
 from compiler.offload.numerical_calibration import profile_from_compute_measurements
-from compiler.offload.source_compute import (apply_source_compute_costs,
-    fork_join_schedule_compatible, native_participation)
+from compiler.offload.source_compute import (
+    apply_source_compute_costs,
+    fork_join_schedule_compatible,
+    native_participation,
+)
 from compiler.tests.test_numerical_calibration import observations
 from compiler.tests.test_numerical_calibration_v2 import observations_v2
 from compiler.tests.test_offload_profile import scoped_profile
@@ -110,6 +113,15 @@ def test_static_chunked_and_other_schedules_do_not_borrow_contiguous_costs(tmp_p
     from compiler.offload.source_compute import fork_join_participation
     _, _, nodes = original_source_effects(tmp_path, "parallel do schedule(" + schedule + ")")
     assert fork_join_participation(nodes) == "unknown"
+
+
+@pytest.mark.parametrize("clause", ["num_threads(2)", "NUM_THREADS ( n )", "if(n > 8)", "proc_bind(close)"])
+def test_explicit_team_protocols_do_not_borrow_fixed_budget_costs(tmp_path, clause):
+    from compiler.offload.source_compute import fork_join_participation
+
+    analysis, procedure, nodes = original_source_effects(tmp_path, "parallel do " + clause)
+    assert fork_join_participation(nodes) == "unknown"
+    assert native_participation(analysis, procedure) == "unknown"
 
 
 @pytest.mark.parametrize("flags", [{"exact": False}, {"full_read": True}, {"full_write": True}])
