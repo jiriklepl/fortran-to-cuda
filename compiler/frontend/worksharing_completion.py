@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from hashlib import sha256
 import json
 
+from fparser.two.utils import walk
+
 from compiler.frontend.native_completion import _directive, _joined_completion_facts
 from compiler.ir import CompilationError
 
@@ -47,6 +49,39 @@ class WorksharingCompletionProof:
                 'join': 'explicit original END DO' if self.ending is not None else 'implicit original worksharing completion',
                 'standalone_execution_authority': False, 'native_effects_authority': False,
                 'gpu_legality_established': False}
+
+    def following(self, analysis):
+        """Retain original suffix liveness even if an outlining caller omits it.
+
+        Use prepared source order here: included native statements may lack
+        editable original spans, but their reads cannot disappear from proof.
+        Taking later alternative branches too is deliberately conservative.
+        """
+        self.validate(analysis, self.procedure, (self.loop,))
+
+        def span(node):
+            positions = [item.item.span for item in walk(node) if getattr(item, 'item', None) is not None]
+            if not positions or any(position is None for position in positions):
+                raise CompilationError('worksharing liveness requires original prepared source ordering')
+            return min(position[0] for position in positions), max(position[1] for position in positions)
+
+        last = span(self.loop)[1]
+        selected = {id(node) for node in walk(self.loop)}
+        result = []
+
+        def visit(node):
+            if id(node) in selected:
+                return
+            low, high = span(node)
+            if low > last:
+                result.append(node)
+            elif high > last:
+                for child in getattr(node, 'content', ()):
+                    visit(child)
+
+        for node in analysis.routines[self.procedure].execution.content:
+            visit(node)
+        return tuple(result)
 
 
 def prove_worksharing_completion(analysis, procedure, joined, selected):
