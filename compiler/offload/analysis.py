@@ -14,6 +14,7 @@ stores give conservative boxes: uploading the write boxes preserves holes.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
 
 from compiler.analysis.dependence import Affine, affine_expression
 from compiler.ir import (
@@ -42,6 +43,10 @@ from compiler.ir import (
 )
 from compiler.ir.integers import constant_integer
 from compiler.ir.intrinsics import REAL_MATH
+
+if TYPE_CHECKING:
+    from compiler.offload.compute_dependencies import ComputeDependencies
+    from compiler.offload.memory_applicability import MemoryAccessRequirement
 
 
 @dataclass(frozen=True)
@@ -185,6 +190,10 @@ class Unit:
     compute_arithmetic_operations_per_iteration: int | None = None
     compute_runtime_divisions_per_iteration: int | None = None
     compute_arithmetic_estimate_reason: str | None = None
+    # Source-dependence features price no backend without new offline evidence.
+    # They never change the numerical plan or existing v2 operation counts.
+    compute_dependencies: ComputeDependencies | None = None
+    memory_access_requirement: MemoryAccessRequirement | None = None
 
 
 @dataclass(frozen=True)
@@ -331,6 +340,10 @@ class OffloadAnalysis:
                     "compute_arithmetic_operations_per_iteration": unit.compute_arithmetic_operations_per_iteration,
                     "compute_runtime_divisions_per_iteration": unit.compute_runtime_divisions_per_iteration,
                     "compute_arithmetic_estimate_reason": unit.compute_arithmetic_estimate_reason,
+                    "compute_dependencies": (unit.compute_dependencies.to_dict()
+                                             if unit.compute_dependencies is not None else None),
+                    "memory_access_requirement": (unit.memory_access_requirement.to_dict()
+                                                  if unit.memory_access_requirement is not None else None),
                     **({"intrinsic_work_per_iteration": dict(unit.intrinsic_work_per_iteration),
                         "arithmetic_work_per_iteration": unit.arithmetic_work_per_iteration,
                         "cpu_numerical_seconds_per_iteration": unit.cpu_numerical_seconds_per_iteration,
@@ -768,6 +781,10 @@ def _unit_footprints(unit, parameters):
     visit(unit.region.body, {})
     features = _workload_features(used_symbols)
     compute_operations, compute_divisions, compute_reason = _compute_operation_counts(unit.region.body)
+    from compiler.offload.compute_dependencies import analyze_compute_dependencies
+    from compiler.offload.memory_applicability import memory_access_requirement
+    dependencies = analyze_compute_dependencies(unit.region)
+    memory_requirement = memory_access_requirement(unit.region)
     return replace(
         unit,
         footprints=_merge_footprints(accesses),
@@ -784,6 +801,8 @@ def _unit_footprints(unit, parameters):
         compute_arithmetic_operations_per_iteration=compute_operations,
         compute_runtime_divisions_per_iteration=compute_divisions,
         compute_arithmetic_estimate_reason=compute_reason,
+        compute_dependencies=dependencies,
+        memory_access_requirement=memory_requirement,
     )
 
 

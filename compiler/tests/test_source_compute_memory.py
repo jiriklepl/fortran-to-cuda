@@ -74,7 +74,11 @@ def query_source(emitted, namespace):
     selected = "\n".join(function_text(source, start) for start in starts)
     assert "__global__" not in selected
     assert "<<<" not in selected
-    return f"namespace generated_kernels::{namespace} {{\n{selected}\n}}\n"
+    # These tests isolate physical memory contracts. Runtime placement and
+    # environment rejection are exercised with the real helper separately;
+    # this extracted query deliberately supplies compatible participation.
+    placement = "static bool scoped_compute_placement_compatible() { return true; }"
+    return f"namespace generated_kernels::{namespace} {{\n{placement}\n{selected}\n}}\n"
 
 
 @pytest.fixture(scope="module")

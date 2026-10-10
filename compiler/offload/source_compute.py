@@ -37,6 +37,11 @@ def fork_join_participation(nodes):
         text = directive(node)
         if text is None:
             continue
+        # These clauses change the team/startup protocol independently of
+        # static worksharing. Their original expressions remain untouched;
+        # the fixed-budget fixture does not price the resulting execution.
+        if re.search(r"\b(?:num_threads|proc_bind|if)\s*\(", text, re.IGNORECASE):
+            return "unknown"
         for match in re.finditer(r"\bschedule\s*\(([^)]*)\)", text):
             schedule = match.group(1).strip().lower()
             if schedule == "runtime":
@@ -97,7 +102,7 @@ def native_participation(analysis, procedure):
     return "unknown"
 
 
-def apply_source_compute_costs(analysis, profile, native_participation):
+def apply_source_compute_costs(analysis, profile, native_participation, *, array_views=False):
     """Attach total-compute coefficients without changing numerical legality.
 
     Runtime dimensions must still satisfy each model's item range. Original
@@ -116,12 +121,18 @@ def apply_source_compute_costs(analysis, profile, native_participation):
                 raise NumericalCalibrationError("shared original fork/join startup requires a complete multi-loop cost contract")
             if profile is None:
                 raise NumericalCalibrationError("native Fortran compute calibration is missing")
+            if array_views and "cpu_dependency" in profile:
+                raise NumericalCalibrationError("borrowed-view address compute calibration unavailable")
             primitives = dict(unit.intrinsic_work_per_iteration)
             if unit.compute_runtime_divisions_per_iteration:
                 primitives["divide"] = unit.compute_runtime_divisions_per_iteration
-            model = numerical_compute_model(profile, tuple(sorted(primitives.items())),
-                workload_class=unit.workload_class, workload_features=unit.workload_features,
-                native_participation="fork_join" if native_participation == "fork_join_runtime" else native_participation)
+            if "cpu_dependency" in profile:
+                from compiler.offload.dependency_source import dependency_source_model
+                model = dependency_source_model(unit, profile, native_participation)
+            else:
+                model = numerical_compute_model(profile, tuple(sorted(primitives.items())),
+                    workload_class=unit.workload_class, workload_features=unit.workload_features,
+                    native_participation="fork_join" if native_participation == "fork_join_runtime" else native_participation)
             if (any(model[role].get("memory_cost_model", {}).get("kind") == "piecewise_bandwidth_v1"
                     for role in ("native_fortran", "generated_cpu", "gpu"))
                     and any(not footprint.exact or footprint.full_upload or footprint.full_write

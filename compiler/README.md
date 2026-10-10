@@ -1626,6 +1626,54 @@ The standalone `python -m compiler.offload.schedule_calibrate` producer takes
 compiled Fortran identities and CPU placement before timing. A profile with no
 accepted native workload class is rejected before building the validation job.
 
+Two optional CPU calibration sections separate measured execution startup from
+the numerical-v2 regression intercept. First,
+`python -m compiler.offload.cpu_protocol_calibration` adds
+`cpu_execution_protocol`: zero/one/eight-item startup controls, an untimed
+OpenMP team-entry proof over the same object files, and fresh three-array memory
+observations. Generated controls use the production cyclic worker renderer,
+while original Fortran controls retain their original static worksharing.
+The timed and proof executables share their numerical objects;
+the proof instrumentation is absent from timing. Seven interleaved batches per
+size retain raw observations, actual team size, thread limits, CPU placement,
+Fortran options and `OMP_WAIT_POLICY`/`GOMP_SPINCOUNT`. Archived numerical-v2
+memory observations remain diagnostics and cannot establish this new protocol.
+Startup is charged once outside the compute/memory maximum. Failed startup or
+memory validation makes the affected backend unavailable.
+
+Second, `python -m compiler.offload.cpu_dependency_calibration` adds
+`cpu_dependency`, without changing the numerical-v2 section. Its 26 predefined
+generic recipes distinguish ordinary operations, constant/dynamic division and
+selected transcendental families. One-chain and four-chain bases identify a
+bounded work/span hypothesis; independent sizes, inline/separate helper forms,
+diamonds, private arrays and argument-domain holdouts validate it. Every timed
+batch lasts at least 200 ms; all seven observations and rejected families are
+retained. Memory-limited or unidentifiable bases reject instead of changing the
+fitting equation. The same three-array access contract and proven execution
+identity apply to the new compute observations. Both producers take
+`--profile`, a new `--output`, a new `--build-dir`, optional compiler paths and
+repeated `--fortran-flag=...` arguments matching the original Fortran build.
+Run them sequentially under the campaign memory guard, before application
+measurements; neither producer reads or fits application timings.
+
+Public unit diagnostics expose the bounded source dependency identity and
+physical memory access class separately from legality. The first source
+attachment admits contiguous one-dimensional pointwise work with two distinct
+immutable inputs and one write-only output. Mixed floating-point conversions,
+unpriced integer/logical numerical work, unproved primitive input domains
+(including dynamic division), uniform numerical folding/hoisting, borrowed-view
+addressing, unconsumed private work, other memory patterns and existing-team
+costs remain unavailable.
+Runtime checks
+enforce original root strides, CPU placement, team budget and calibrated wait
+environment. The wait/spin environment must remain fixed from process launch:
+live checks detect mismatches but cannot read libgomp's private effective wait
+state or establish that changing `getenv` values reconfigured an initialized
+runtime. An optional rejected dependency section keeps AUTO native rather
+than borrowing an accepted older expression class. Numerical-v2-only profiles
+retain their existing path; these additions do not establish automatic SGS
+placement or an application speedup.
+
 Source planning supplies complete compute seconds for all three implementations
 through `fort_scope_plan_add_compute_costs_v3`. Transfers, launches, allocation
 and coordination are charged separately. A native operation inside an active
