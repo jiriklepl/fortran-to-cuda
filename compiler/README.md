@@ -1243,6 +1243,21 @@ owner captures. Detached work, unresolved calls, nonuniform conditions and
 unsupported directives remain boundaries. A token for an entire joined group
 cannot be reused for one of its unfinished child loops.
 
+Native completion schema 4 also proves uniform reads of shared rank-one REAL
+or INTEGER array elements with literal or source-backed INTEGER PARAMETER
+subscripts. Fixed explicit bounds must prove the point is in range in the
+original declaring scope. Original assumed-shape dummies require checked
+descriptor coordinates and remain unsupported in nested, ELSEIF or compound
+logical conditions. Fixed, in-range storage can appear in those conditions.
+No condition value is evaluated during analysis: coherence hooks publish its
+required host point before the unchanged complete original team, and normal
+registration, alias and defined-coverage checks still apply. The public proof
+records the canonical resource, constant index, storage and runtime
+requirements. Private, THREADPRIVATE, written, allocatable, pointer, optional,
+TARGET, volatile and asynchronous storage remains unsupported, as do indirect
+indices, slices and uncertain storage association. This proof grants no GPU
+scatter independence and does not authorize reading an inactive allocation.
+
 `SourceEffects.worksharing_completion` supplies a separate versioned proof for
 one original worksharing DO inside a complete joined team. It requires uniform
 participation and completion at every DO; a `NOWAIT` anywhere in that team

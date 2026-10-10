@@ -11,9 +11,9 @@ from fparser.two.utils import walk
 
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError, SourceLocation
-from compiler.ir.integers import INTEGER_MAX, INTEGER_MIN
+from compiler.ir.integers import INTEGER_MAX, INTEGER_MIN, integer_literal
 
-NATIVE_COMPLETION_VERSION = 3
+NATIVE_COMPLETION_VERSION = 4
 
 
 def _kind(node):
@@ -72,7 +72,7 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
     originals = tuple(node for identity in identities for node in graph.source_nodes(identity))
     executable = tuple(identity for identity in identities
                        if any(_kind(node) != "Comment" for node in graph.source_nodes(identity)))
-    private, written, peeled = set(), set(), {}
+    private, written, peeled, uniform_reads = set(), set(), {}, {}
 
     def content(node):
         return peeled.get(id(node), _children(node))
@@ -171,9 +171,128 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                         private.add(binding.root)
             remainder = remainder[match.end():].lstrip(", ")
 
-    def uniform(header):
+    def constant_index(scope, node):
+        """Authenticate one literal or original INTEGER PARAMETER, not a read."""
+        location = SourceLocation(str(scope.path))
+        kind, items = _kind(node), _children(node)
+        if kind == "Parenthesis":
+            return constant_index(scope, items[1])
+        if len(items) == 2 and str(items[0]) in {"+", "-"}:
+            value, parameter = constant_index(scope, items[1])
+            value = -value if str(items[0]) == "-" else value
+            return integer_literal(str(value), location), parameter
+        if kind == "Int_Literal_Constant":
+            width = 4 if node.items[1] is None else scope.kinds.integer(node.items[1], location)
+            if width not in {4, 8} or not 0 <= int(node.items[0]) < 2 ** (width * 8 - 1):
+                raise CompilationError("uniform array subscript requires a supported INTEGER literal")
+            return integer_literal(str(node.items[0]), location), None
+        if kind == "Name":
+            binding = analysis._binding(scope, node)
+            if (binding is None or binding.rank or binding.dtype != "integer" or binding.kind not in {4, 8}
+                    or "parameter" not in binding.attributes or binding.root in private | written):
+                raise CompilationError("uniform array subscript requires an original INTEGER PARAMETER")
+            reason = analysis.resource_identity_boundary(binding)
+            if reason:
+                raise CompilationError(reason)
+            owner = binding.declaring_scope
+            if owner is None:
+                raise CompilationError("uniform array subscript PARAMETER lacks original declaration authority")
+            value = owner.kinds.integer(binding.name, SourceLocation(str(owner.path)))
+            return integer_literal(str(value), location), binding.root
+        raise CompilationError("uniform array subscript requires a literal or original INTEGER PARAMETER")
+
+    def storage_ownership(binding, scope):
+        # THREADPRIVATE belongs to the original declaring specification, not
+        # to a synthetic dummy or to whichever spelling an importing scope uses.
+        # Storage association is deliberately outside this narrow proof.
+        seen = set()
+        for start in (binding.declaring_scope, scope):
+            owner = start
+            while owner is not None and id(owner) not in seen:
+                seen.add(id(owner))
+                specification = next((node for node in _children(owner.node)
+                                      if _kind(node) == "Specification_Part"), None)
+                for node in walk(specification):
+                    if _kind(node) in {"Common_Stmt", "Equivalence_Stmt"}:
+                        raise CompilationError("uniform array condition storage association is uncertain")
+                    directive = _directive(node)
+                    if directive is None or not directive.startswith("threadprivate"):
+                        continue
+                    match = re.fullmatch(r"threadprivate\s*\(([^()]*)\)", directive)
+                    if match is None:
+                        raise CompilationError("uniform array condition THREADPRIVATE ownership is uncertain")
+                    for name in match[1].split(","):
+                        original = analysis._binding(owner, name.strip())
+                        if original is None:
+                            raise CompilationError("uniform array condition THREADPRIVATE ownership is unresolved")
+                        if original.root == binding.root:
+                            raise CompilationError("uniform array condition storage is THREADPRIVATE")
+                owner = owner.parent
+
+    def uniform_array(binding, reference, scope, *, guarded, compound):
+        if (binding.rank != 1 or _kind(reference) != "Part_Ref"
+                or _kind(reference.items[0]) != "Name"
+                or binding.dtype not in {"real", "integer"} or binding.kind not in {4, 8}
+                or binding.attributes & {"allocatable", "pointer", "optional", "target", "volatile",
+                                         "asynchronous", "parameter", "value"}):
+            raise CompilationError("uniform array condition requires fixed shared rank-one numeric storage")
+        reason = analysis.resource_identity_boundary(binding)
+        if reason:
+            raise CompilationError(reason)
+        storage_ownership(binding, scope)
+        indices = tuple(_children(reference.items[1]))
+        if len(indices) != 1:
+            raise CompilationError("uniform array condition requires one constant scalar subscript")
+        value, parameter = constant_index(scope, indices[0])
+        axes = binding.shape_nodes
+        if len(axes) != 1:
+            raise CompilationError("uniform array condition lacks original rank-one bounds")
+        owner = binding.declaring_scope
+        if owner is None:
+            raise CompilationError("uniform array condition lacks original declaration authority")
+        axis = axes[0]
+        fact = {"resource": binding.root, "type": binding.dtype, "kind": binding.kind, "rank": 1,
+                "source_reference": str(reference), "subscript": value,
+                "source_subscript": str(indices[0]), "parameter_resource": parameter,
+                "guarded_condition": guarded,
+                "compound_logical_condition": compound,
+                "shared_and_unwritten_in_complete_team": True,
+                "requires_registered_storage_and_alias_validation": True,
+                "requires_host_coherence_before_original_team": True,
+                "condition_evaluation": "unchanged original team condition; no proof-time payload read"}
+        location = SourceLocation(str(owner.path))
+        if _kind(axis) == "Explicit_Shape_Spec":
+            lower, upper = axis.items
+            lo = 1 if lower is None else owner.kinds.integer(lower, location)
+            hi = owner.kinds.integer(upper, location)
+            integer_literal(str(lo), location)
+            integer_literal(str(hi), location)
+            if not lo <= value <= hi:
+                raise CompilationError("uniform array constant subscript is outside original fixed bounds")
+            fact.update(storage="fixed_explicit_shape", original_lower_bound=lo, original_upper_bound=hi)
+        elif (_kind(axis) == "Assumed_Shape_Spec" and binding.name in routine.arguments
+              and owner is routine.scope):
+            if guarded:
+                # Native exact hooks prepare possible reads before the team.
+                # An inactive assumed-shape point may be outside its actual
+                # descriptor even when the original execution is valid.
+                raise CompilationError("guarded uniform array condition requires original-position coherence")
+            if compound:
+                raise CompilationError("compound uniform array condition requires proved fixed bounds")
+            fact.update(storage="stable_original_assumed_shape",
+                        requires_original_descriptor_and_checked_coordinates=True)
+        else:
+            raise CompilationError("uniform array condition requires fixed or original assumed-shape storage")
+        key = binding.root, str(reference), guarded, compound
+        uniform_reads[key] = fact
+        if len(uniform_reads) > analysis.operation_limit:
+            raise CompilationError("uniform array condition resource budget exhausted")
+
+    def uniform(header, *, guarded):
         condition = header.items[0]
         scope = analysis.source_scope_for(header, routine.scope)
+        compound = any(_kind(node) in {"And_Operand", "Or_Operand", "Equiv_Operand"}
+                       for node in walk(condition))
         for expression in walk(condition):
             kind = _kind(expression)
             if kind in {"Function_Reference", "Structure_Constructor"}:
@@ -192,7 +311,7 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
             if binding.root in private or binding.root in written:
                 raise CompilationError("joined native OpenMP condition is private or changes inside the complete region")
             if binding.rank and _kind(reference) in {"Part_Ref", "Data_Ref"}:
-                raise CompilationError("joined native OpenMP condition payload reads require a uniform-value proof")
+                uniform_array(binding, reference, scope, guarded=guarded, compound=compound)
             if binding.attributes & {"pointer", "optional", "volatile", "asynchronous"}:
                 raise CompilationError("joined native OpenMP condition association or observation is uncertain")
 
@@ -209,7 +328,7 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
     combined = bool(re.match(r"parallel\s+do(?:\s|$)", first))
     clauses(first[len("parallel do"):] if combined else first[len("parallel"):])
 
-    def body(items):
+    def body(items, *, branch_depth=0):
         items, index = normalize(items), 0
         while index < len(items):
             node, directive = items[index], _directive(items[index])
@@ -219,10 +338,10 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                     label = _kind(item)
                     if label in {"If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt"}:
                         if branch:
-                            body(branch)
+                            body(branch, branch_depth=branch_depth + 1)
                         branch = []
                         if label in {"If_Then_Stmt", "Else_If_Stmt"}:
-                            uniform(item)
+                            uniform(item, guarded=branch_depth > 0 or label == "Else_If_Stmt")
                     else:
                         branch.append(item)
                 index += 1
@@ -270,6 +389,13 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
               "has_openmp_in_closure": True, "has_opaque_calls_in_closure": False,
               "join": "implicit combined-loop completion" if implicit_join else "explicit original parallel end",
               "retains_original_team_and_directives": True}
+    if uniform_reads:
+        record.update(uniform_array_reads=list(uniform_reads.values()),
+                      uniform_array_read_contract="fixed-rank-one-shared-constant-point-v1",
+                      guarded_fixed_bound_array_conditions_authorized=any(
+                          item["guarded_condition"] for item in uniform_reads.values()),
+                      guarded_assumed_shape_array_conditions_authorized=False,
+                      gpu_independence_established=False)
     if deferred is not None:
         record.update(deferred_native_group_identity=deferred.identity,
                       native_only=True, internal_cuts_authorized=False,
