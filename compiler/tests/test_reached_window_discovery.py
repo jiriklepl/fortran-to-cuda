@@ -87,13 +87,14 @@ def test_unknown_array_dependency_cannot_be_hidden_by_omitting_its_capture(tmp_p
 def test_module_allocatable_facts_do_not_substitute_for_selected_lifetime_proof(tmp_path):
     source = SOURCE.replace("real(8)::prefix_total=0.0_8", "real(8)::prefix_total=0.0_8\nreal(8),allocatable::hidden(:)")
     source = source.replace("b(i)=a(i)+real(i+4,8)", "b(i)=a(i)+hidden(i)")
+    source = source.replace("a(i)=2.0_8*b(i)", "deallocate(hidden)\nallocate(hidden(8))\na(i)=2.0_8*b(i)")
     captures = {root: deepcopy(FACT) for root in (*ROOTS, "renamed_stage::hidden")}
     _path, builder = discovery_fixture(tmp_path, source, captures=captures)
     assert not discover_reached_window(builder)
     assert not builder.outputs
     assert not builder.edits
     assert not builder.scopes
-    assert any("selected-position lifetime authority" in attempt["reason"]
+    assert any("Deallocate_Stmt" in attempt["reason"]
                for attempt in builder.reached_window_discovery["attempts"])
 
 

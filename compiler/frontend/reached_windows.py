@@ -18,7 +18,7 @@ from fparser.two.utils import walk
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 
-REACHED_WINDOW_VERSION = 2
+REACHED_WINDOW_VERSION = 3
 _EFFECTS = {"read", "write", "overwrite", "descriptor_read", "definition_change"}
 _FORBIDDEN = {"pointer", "optional", "volatile", "asynchronous", "value"}
 
@@ -121,7 +121,7 @@ def _derive(analysis, procedure, selection, roots, facts):
             or facts.get("sources") != analysis.sources or not isinstance(facts.get("captures"), dict)
             or len(facts["captures"]) > analysis.operation_limit):
         raise CompilationError("reached window requires matching invocation-entry source facts")
-    bindings, coverage = {}, {}
+    bindings, coverage, module_roots = {}, {}, []
     for root in roots:
         binding, fact = _binding(analysis, routine, root), facts["captures"].get(root)
         if (not isinstance(fact, dict) or fact.get("storage") != "stable" or fact.get("escapes") is not False
@@ -129,9 +129,15 @@ def _derive(analysis, procedure, selection, roots, facts):
                 or fact["initialized"] not in {"whole", "none"}):
             raise CompilationError("reached window lacks stable entry coverage/no-escape facts: " + root)
         if "allocatable" in binding.attributes and binding.name not in routine.arguments:
-            raise CompilationError("reached window local/module allocation requires separate selected-position lifetime authority: " + root)
+            defining = [owner for owner in analysis.modules.values()
+                        if owner.bindings.get(binding.name) is binding]
+            if len(defining) != 1:
+                raise CompilationError("reached window local allocation requires separate selected-position lifetime authority: " + root)
+            module_roots.append(root)
         bindings[root], coverage[root] = binding, fact["initialized"]
-    descriptor_roots = tuple(root for root, binding in bindings.items() if "allocatable" in binding.attributes)
+    descriptor_roots = tuple(root for root, binding in bindings.items()
+                             if "allocatable" in binding.attributes and root not in module_roots)
+    module_roots = tuple(module_roots)
     for root in graph.nodes[graph.entry_id].details.get("definition_changes", ()):
         if root in coverage:
             coverage[root] = "none"
@@ -164,9 +170,10 @@ def _derive(analysis, procedure, selection, roots, facts):
                     raise CompilationError("reached window native prefix child proof is incomplete")
                 native_prefix_demands.append(native_prefix.identity)
         descriptor = None
-        if descriptor_roots:
+        if descriptor_roots or module_roots:
             from compiler.frontend.descriptor_windows import prove_descriptor_window
-            descriptor = prove_descriptor_window(selected_analysis, procedure, (identity,), descriptor_roots)
+            descriptor = prove_descriptor_window(selected_analysis, procedure, (identity,), descriptor_roots,
+                                                 module_roots=module_roots)
             descriptor_demands.append(descriptor.identity)
         summary = selected_analysis.segment_summary(procedure, (identity,), capture_locals=True,
                                                     descriptor_window=descriptor)
@@ -242,6 +249,7 @@ def _derive(analysis, procedure, selection, roots, facts):
                "escapes": False, "allocation_changes": False,
                "descriptor_authority": "registered source-relative prefix/window proofs; excluded tail requires close",
                "requires_original_allocation_presence_guard": "allocatable" in bindings[root].attributes,
+               "resource_kind": "original_module_allocatable" if root in module_roots else "original_entry_capture",
                "requires_runtime_layout_and_alias_guards": True,
                "address_or_shape_freshness_inferred": False} for root in roots]
     return {"schema_version": REACHED_WINDOW_VERSION, "procedure": procedure,
@@ -249,6 +257,7 @@ def _derive(analysis, procedure, selection, roots, facts):
             "analysis_identity": graph.authority_identity, "selected_node_ids": list(selected),
             "prefix_node_ids": list(prefix), "first_traversal_controls": list(controls),
             "descriptor_window_identities": descriptor_demands, "entry_facts_identity": _hash(facts),
+            "module_descriptor_resources": list(module_roots),
             "native_prefix_proof_identities": native_prefix_demands,
             "entry_facts_authority": "conditional on supplied invocation-entry facts; independent admission required",
             "source_demands": demands, "control_visits": visits, "ordered_effects": effects,
