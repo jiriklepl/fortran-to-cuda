@@ -82,7 +82,8 @@ def _native_analysis(analysis):
     # reissue selected proofs; sharing their registries would either lend
     # foreign authority or mutate the original owner's proof state.
     for name in ("_descriptor_window_proofs", "_native_prefix_proofs", "_reached_window_proofs",
-                 "_native_definition_proofs"):
+                 "_native_definition_proofs", "_numerical_preparations", "_numerical_preparation_providers",
+                 "_numerical_effect_proofs"):
         setattr(result, name, {})
     result._summary_cache = SummaryCache(max_entries=0)
     return result
@@ -542,6 +543,7 @@ class StructuredScope:
         self.native_host_reads = native_host_reads
         self.calls, self.native, self.segments = [], [], []
         self.guarded = {}
+        self.close_guards = {}
         self.operation_count = 0
         if condition_only:
             if len(nodes) != 1 or _kind(nodes[0]) not in {"If_Then_Stmt", "If_Stmt"}:
@@ -621,18 +623,26 @@ class StructuredScope:
                     continue
                 if call.region is not None and (call.region.runtime_guards or call.region.requires_numerical_environment):
                     flush()
-                    private = {self.builder.entry.scope.bindings[name].root
-                               for name in (*call.region.private_arrays, *call.region.private_scalars)}
-                    try:
-                        fallback = fragment(self.builder, self.builder.inline.original_selection(node),
-                                            kind="guarded original numerical fallback", private_roots=private)
-                    except CompilationError as error:
-                        raise CompilationError("reached numerical guard lacks safe original native effects: " + str(error)) from error
-                    self.guarded[id(call.node)] = fallback
-                    self.native.append(fallback)
+                    numerical_effect = self.builder.call_numerical_effect(call)
+                    if numerical_effect is not None:
+                        # Conditional numerical sections cannot authorize the
+                        # native operation when their geometry guards fail.
+                        # The lexical owner closes before the entire original
+                        # group; no native fragment or query is constructed.
+                        self.close_guards[id(call.node)] = numerical_effect
+                    else:
+                        private = {self.builder.entry.scope.bindings[name].root
+                                   for name in (*call.region.private_arrays, *call.region.private_scalars)}
+                        try:
+                            fallback = fragment(self.builder, self.builder.inline.original_selection(node),
+                                                kind="guarded original numerical fallback", private_roots=private)
+                        except CompilationError as error:
+                            raise CompilationError("reached numerical guard lacks safe original native effects: " + str(error)) from error
+                        self.guarded[id(call.node)] = fallback
+                        self.native.append(fallback)
                 self.calls.append(call)
                 run.append(call)
-                if id(call.node) in self.guarded:
+                if id(call.node) in self.guarded or id(call.node) in self.close_guards:
                     flush()
                 continue
             flush()
@@ -742,7 +752,7 @@ class StructuredScope:
                 elif isinstance(item, Segment):
                     run = []
                     for call in item.calls:
-                        if id(call.node) in self.guarded:
+                        if id(call.node) in self.guarded or id(call.node) in self.close_guards:
                             if run:
                                 result.append(self.segment(run, arrays))
                                 run = []
@@ -839,7 +849,11 @@ class StructuredScope:
                                      for guard in (*call.region.runtime_guards,
                                                    *( ("fort_scope_numerical_environment_supported() /= 0",)
                                                       if call.region.requires_numerical_environment else ()))],
-                 "guard_failure": "original native operation with coherence hooks; earlier work is retained",
+                 "guard_failure": ("publish and close before original group; native suffix once; no reopening"
+                                   if any(id(call.node) in self.close_guards for call in segment.calls)
+                                   else "original native operation with coherence hooks; earlier work is retained"),
+                 "numerical_effect_proofs": [self.close_guards[id(call.node)].public()
+                                            for call in segment.calls if id(call.node) in self.close_guards],
                  "position": "when reached after preceding source operations"}
                 for segment in self.segments],
             "native_operations": [{"operation_id": index, "kind": operation.kind,

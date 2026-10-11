@@ -11,7 +11,7 @@ from __future__ import annotations
 import copy
 import math
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
 
@@ -23,6 +23,66 @@ from compiler.frontend.source_effects import Binding, _children, _kind, _part
 from compiler.ir import CompilationError
 from compiler.scopes.numerical import Parameter
 from compiler.scopes.segments import directive, fortran_lines, grouped_nodes, statement_span
+
+
+@dataclass(frozen=True)
+class OriginalNumericalPrecondition:
+    """Typed conditional geometry, issued only by original tile extraction.
+
+    Evaluate activation domains in order before rendering/evaluating the
+    predicate. Fortran logical conjunction is not a short-circuit substitute.
+    This record alone is not authority: its owning preparation authenticates
+    the exact original nodes and operands.
+    """
+    role: str
+    operands: tuple
+    activation_domains: tuple = ()
+    _source_nodes: tuple = field(default=(), compare=False, repr=False)
+    _runtime_expression: str = field(default="", repr=False)
+
+    @property
+    def runtime_expression(self):
+        return self._runtime_expression
+
+    @property
+    def dependencies(self):
+        result = {}
+
+        def collect(bound):
+            for item in bound.dependencies:
+                result[item.resource, item.kind] = item
+            for child in bound.children:
+                collect(child)
+
+        for bound in self.operands:
+            collect(bound)
+        for domain in self.activation_domains:
+            collect(domain.lower)
+            collect(domain.upper)
+        return tuple(result.values())
+
+    def render(self, resolve):
+        """Render a predicate using a NativeBound -> original-expression map."""
+        values = tuple(f"int(({resolve(bound)}),kind=c_int64_t)" for bound in self.operands)
+        if self.role == "positive_tile_step" and len(values) == 1:
+            return values[0] + " > 0_c_int64_t"
+        if self.role == "tile_integer_range" and len(values) == 2:
+            return " + ".join(values) + " <= 2147483647_c_int64_t"
+        raise CompilationError("unknown original numerical precondition")
+
+    def render_activation(self, resolve):
+        return tuple(f"int(({resolve(item.lower)}),kind=c_int64_t) <= "
+                     f"int(({resolve(item.upper)}),kind=c_int64_t)" for item in self.activation_domains)
+
+    def public(self):
+        return {"role": self.role, "operands": [item.public() for item in self.operands],
+                "activation_domains": [item.public() for item in self.activation_domains],
+                "dependencies": [item.public() for item in self.dependencies],
+                "original_source_sha256": sha256("\0".join(map(str, self._source_nodes)).encode()).hexdigest(),
+                "original_runtime_predicate": self._runtime_expression,
+                "evaluation": "ordered original activation domains before checked INTEGER64 predicate",
+                "on_false": "publish and close before unchanged original whole group",
+                "definitions_conditional_on_true": True}
 
 
 @dataclass(frozen=True)
@@ -48,6 +108,7 @@ class RegionExtraction:
     immutable_scalar_captures: tuple[str, ...] = ()
     scalar_element_captures: tuple = ()
     immutable_array_reads: tuple[str, ...] = ()
+    preconditions: tuple[OriginalNumericalPrecondition, ...] = ()
 
     @property
     def requires_numerical_environment(self):
@@ -74,6 +135,7 @@ class RegionExtraction:
                 "allocation_guards": list(self.allocation_guards), "completion": dict(self.completion),
                 "runtime_guards": list(self.runtime_guards), "numerical_helpers": list(self.numerical_helpers),
                 "tile_domains": list(self.tile_domains),
+                "source_preconditions": [item.public() for item in self.preconditions],
                 "private_arrays": list(self.private_arrays),
                 "immutable_constants": list(self.immutable_constants),
                 "immutable_scalar_captures": list(self.immutable_scalar_captures),
@@ -377,15 +439,28 @@ def _untile(analysis, routine, loop, helpers):
             break
         current = body[0]
     if len(chain) < 2 or len(chain) % 2:
-        return loop, (), ()
+        return loop, (), (), ()
     dimensions = len(chain) // 2
     outer, inner = chain[:dimensions], chain[dimensions:]
-    domains, guards = [], []
+    domains, guards, preconditions, activation = [], [], [], []
+
+    def bound(value):
+        from compiler.frontend.call_bindings import SourceDependency
+        from compiler.frontend.native_sections import NativeBound
+        from compiler.ir import SourceLocation
+        binding = analysis._binding(routine.scope, value) if _kind(value) == "Name" else None
+        if binding is not None and "parameter" not in binding.attributes:
+            return NativeBound("scalar", resource=binding.root,
+                               dependencies=(SourceDependency(binding.root, "scalar_read", binding),))
+        constant = routine.scope.kinds.integer(value, SourceLocation(str(routine.scope.path)))
+        if not -(2**31) <= constant < 2**31:
+            raise CompilationError("inline tile bound exceeds the INTEGER ABI")
+        return NativeBound("literal", value=constant)
     for tile, cells in zip(outer, inner, strict=True):
         tile_name, tile_bounds = _iterator(tile)
         index_name, cell_bounds = _iterator(cells)
         if len(tile_bounds) != 3 or len(cell_bounds) != 2:
-            return loop, (), ()
+            return loop, (), (), ()
         lower, upper, step = tile_bounds
         for value in (lower, upper, step):
             if _kind(value) == "Name":
@@ -394,20 +469,20 @@ def _untile(analysis, routine, loop, helpers):
                 from compiler.ir import SourceLocation
                 constant = routine.scope.kinds.integer(value, SourceLocation(str(routine.scope.path)))
                 if not -(2**31) <= constant < 2**31:
-                    return loop, (), ()
+                    return loop, (), (), ()
             except CompilationError:
-                return loop, (), ()
+                return loop, (), (), ()
         if str(cell_bounds[0]).lower() != tile_name:
-            return loop, (), ()
+            return loop, (), (), ()
         ceiling = cell_bounds[1]
         if _kind(ceiling) != "Intrinsic_Function_Reference" or str(ceiling.items[0]).lower() != "min":
-            return loop, (), ()
+            return loop, (), (), ()
         if _intrinsic_shadowed(analysis, routine, "min"):
             raise CompilationError("inline tile clipping intrinsic is shadowed")
         arguments = _children(ceiling.items[1])
         expected = {str(F.Level_2_Expr(f"{tile_name}+{step}-1")).lower(), str(upper).lower()}
         if len(arguments) != 2 or {str(value).lower() for value in arguments} != expected:
-            return loop, (), ()
+            return loop, (), (), ()
         for value in (lower, upper, step):
             if _kind(value) == "Name":
                 binding = analysis._binding(routine.scope, value)
@@ -417,8 +492,16 @@ def _untile(analysis, routine, loop, helpers):
                     raise CompilationError("inline tile guard INTEGER kind namespace conflicts")
         if _intrinsic_shadowed(analysis, routine, "int"):
             raise CompilationError("inline tile guard conversion intrinsic is shadowed")
-        guards += [f"int({step},kind=c_int64_t) > 0_c_int64_t",
-                   f"int({upper},kind=c_int64_t) + int({step},kind=c_int64_t) <= 2147483647_c_int64_t"]
+        predicates = [f"int({step},kind=c_int64_t) > 0_c_int64_t",
+                      f"int({upper},kind=c_int64_t) + int({step},kind=c_int64_t) <= 2147483647_c_int64_t"]
+        guards += predicates
+        header = next(child for child in _children(tile) if _kind(child) == "Nonlabel_Do_Stmt")
+        preconditions += [OriginalNumericalPrecondition("positive_tile_step", (bound(step),), tuple(activation),
+                                                       (header, step), predicates[0]),
+                          OriginalNumericalPrecondition("tile_integer_range", (bound(upper), bound(step)),
+                                                       tuple(activation), (header, upper, step), predicates[1])]
+        from compiler.frontend.native_sections import NativeIteration
+        activation.append(NativeIteration(bound(lower), bound(upper)))
         domains.append({"tile_iterator": tile_name, "iterator": index_name,
                         "lower": str(lower), "upper": str(upper), "tile_size": str(step),
                         "coverage": "positive disjoint clipped tiles cover the original rectangular domain"})
@@ -439,7 +522,7 @@ def _untile(analysis, routine, loop, helpers):
         replacement.item = header.item
         clone.content = [replacement, *result, ending]
         result = (clone,)
-    return result[0], tuple(guards), tuple(domains)
+    return result[0], tuple(guards), tuple(domains), tuple(preconditions)
 
 
 def _upward_reads(analysis, routine, nodes):
@@ -1145,9 +1228,10 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                      ("(" + ",".join(_fixed_shape(routine, binding)) + ")" if binding.rank else "")
                      for binding in sorted(private.values(), key=lambda item: item.name)]
     normalized = [_untile(analysis, routine, loop, helpers) for loop in loops]
-    runtime_guards = tuple(dict.fromkeys(guard for _, guards, _ in normalized for guard in guards))
-    tile_domains = tuple(domain for _, _, domains in normalized for domain in domains)
-    body = [str(transformed(loop)) for loop, _, _ in normalized]
+    runtime_guards = tuple(dict.fromkeys(guard for _, guards, _, _ in normalized for guard in guards))
+    tile_domains = tuple(domain for _, _, domains, _ in normalized for domain in domains)
+    preconditions = tuple(guard for _, _, _, guards in normalized for guard in guards)
+    body = [str(transformed(loop)) for loop, _, _, _ in normalized]
     declarations += ["integer :: " + name for name in section_variables]
     runtime_guards = tuple(dict.fromkeys((*runtime_guards, *section_guards)))
     helper_sources = []
@@ -1197,4 +1281,5 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                             numerical_environment_required=vector_reduction,
                             immutable_constants=constants.resources,
                             immutable_scalar_captures=tuple(binding.root for binding in constants.scalar_captures),
-                            scalar_element_captures=elements, immutable_array_reads=tuple(sorted(immutable_reads)))
+                            scalar_element_captures=elements, immutable_array_reads=tuple(sorted(immutable_reads)),
+                            preconditions=preconditions)

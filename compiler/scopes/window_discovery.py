@@ -14,7 +14,7 @@ from compiler.ir import CompilationError
 from compiler.scopes.generation_transaction import GenerationTransaction
 from compiler.scopes.reached_owner import ReachedWindowOwner
 
-DISCOVERY_VERSION = 5
+DISCOVERY_VERSION = 6
 MAX_ADJACENT_UNITS = 4
 MAX_ATTEMPTS = 16
 
@@ -163,8 +163,13 @@ def discover_reached_window(builder):
         try:
             with GenerationTransaction(builder) as transaction:
                 candidate = transaction.builder
+                from compiler.frontend.numerical_preparation import NumericalPreparationProvider
+
+                provider = NumericalPreparationProvider(candidate.analysis, options=candidate.options,
+                    config=candidate.config, environment_root=candidate._numerical_environment_root,
+                    immutable_inputs=getattr(candidate, "immutable_inputs", {}))
                 proof = plan_reached_window(candidate.analysis, candidate.entry.qualified,
-                                            originals, tuple(roots), candidate.facts)
+                                            originals, tuple(roots), candidate.facts, numerical_provider=provider)
                 owner = ReachedWindowOwner(candidate, proof, originals)
                 if not owner.run():
                     raise _no_implementation(owner, attempt,

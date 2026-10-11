@@ -23,7 +23,7 @@ from compiler.frontend.source_functions import _validate_scope
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 
-REACHED_WINDOW_VERSION = 11
+REACHED_WINDOW_VERSION = 12
 _EFFECTS = {"read", "write", "overwrite", "descriptor_read", "definition_change"}
 _FORBIDDEN = {"pointer", "optional", "volatile", "asynchronous", "value"}
 
@@ -174,7 +174,13 @@ def _position(analysis, procedure, selection):
 
 
 def _derive(analysis, procedure, selection, roots, facts, planned_close_before=None, *,
-            _mapped=None, _work=None, _stack=(), _children=None, _result=None):
+            numerical_provider=None, _mapped=None, _work=None, _stack=(), _children=None, _result=None,
+            _numerical_regions=None):
+    if numerical_provider is not None:
+        from compiler.frontend.numerical_preparation import NumericalPreparationProvider
+
+        if planned_close_before is None or not isinstance(numerical_provider, NumericalPreparationProvider):
+            raise CompilationError("numerical effects require an explicit registered planned-window provider")
     routine = analysis._require_original(procedure)
     graph = analysis.structure(procedure)
     if not graph.available:
@@ -268,6 +274,8 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                     raise CompilationError("mapped reached entry definition budget exhausted")
             coverage[root] = ()
     demands, descriptor_demands, native_prefix_demands, definition_demands = [], [], [], []
+    numerical_demands = []
+    numerical_regions = _numerical_regions if _numerical_regions is not None else []
     prefix_steps, prefix_disables = [], {}
     visits, effects, effect_work = 0, 0, 0
     active_ids, closes, changed_scalars = set(), {}, set()
@@ -278,6 +286,9 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
         work["coordinates"] += amount
         if work["coordinates"] > NATIVE_GROUP_SCAN_LIMIT:
             raise CompilationError("mapped reached aggregate coordinate/source scan budget exhausted")
+
+    if numerical_provider is not None:
+        numerical_provider.validate(analysis, consume=coordinate_work)
 
     def dormant_condition_reads(identity, summary, state):
         """Unchanged host inputs, with neither capture nor definition authority."""
@@ -418,7 +429,8 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
 
     def checkpoint():
         return (tuple(map(len, (demands, descriptor_demands, native_prefix_demands, definition_demands,
-                                mapped_children, prefix_steps))), effects, set(changed_scalars))
+                                mapped_children, prefix_steps, numerical_demands, numerical_regions))),
+                effects, set(changed_scalars))
 
     def discard(before):
         nonlocal effects
@@ -426,7 +438,7 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
         changed_scalars.clear()
         changed_scalars.update(scalar_snapshot)
         for items, length in zip((demands, descriptor_demands, native_prefix_demands, definition_demands,
-                                  mapped_children, prefix_steps),
+                                  mapped_children, prefix_steps, numerical_demands, numerical_regions),
                                  lengths, strict=True):
             del items[length:]
 
@@ -435,9 +447,10 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
         # authentication and aggregate work failures remain hard exceptions,
         # independently of the wording of their diagnostics.
         from compiler.frontend.native_definitions import NativeCallCoordinatesUnsupported, NativeDefinitionUnsupported
+        from compiler.frontend.numerical_effects import NumericalEffectUnsupported
         if (work["effects"] > analysis.operation_limit or not isinstance(error, (
                 DescriptorWindowUnsupported, NativeCallCoordinatesUnsupported, NativeDefinitionUnsupported,
-                _NeedsNativeClose))):
+                NumericalEffectUnsupported, _NeedsNativeClose))):
             raise error
 
     def may_disable(error):
@@ -481,7 +494,19 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
         if joined_selection is not None or graph.native_group_for_selection(identities) is not None:
             if joined_selections.get(identity) != identities:
                 raise CompilationError("planned close lacks exact complete original joined selection")
-            completion = analysis.joined_completion(procedure, identities)
+            retained = next((prepared for owner, selected, prepared, _effect in numerical_regions
+                             if owner == procedure and len(selected) == len(originals)
+                             and all(left is right for left, right in zip(selected, originals, strict=True))), None)
+            if retained is None and numerical_provider is not None and _mapped is not None:
+                from compiler.frontend.numerical_preparation import NumericalPreparationUnsupported
+
+                with suppress(NumericalPreparationUnsupported):
+                    retained = numerical_provider.prepare(analysis, procedure, originals, consume=coordinate_work)
+            if retained is not None:
+                retained.validate(analysis, procedure, originals, consume=coordinate_work)
+                completion = retained.completion_proof
+            else:
+                completion = analysis.joined_completion(procedure, identities)
         elif (len(originals) != 1 or type(originals[0]).__name__ not in {
                 "Call_Stmt", "Assignment_Stmt", "If_Construct", "If_Stmt", "Block_Nonlabel_Do_Construct",
                 "Associate_Construct", "Allocate_Stmt", "Deallocate_Stmt"}):
@@ -568,6 +593,24 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                 entry_input = {root: state[root] for root in (*resource_mapping.values(), *hidden)}
                 for root in mapping.entry_definition_changes:
                     entry_input[root] = ()
+                # A prior whole definition subsumes later same-resource
+                # partial writes. Keep that exact existing rectangle rather
+                # than requiring unrelated caller controls in this child.
+                # OUT kills above still remove every prior definition first.
+                for root, boxes in entry_input.items():
+                    for box in boxes:
+                        coordinate_work(1)
+                        if box.iterations:
+                            continue
+                        whole = True
+                        for axis in box.axes:
+                            coordinate_work(1)
+                            if axis.lower is not None or axis.upper is not None:
+                                whole = False
+                                break
+                        if whole:
+                            entry_input[root] = (box,)
+                            break
                 entry = mapping.caller_to_child(entry_input, consume=coordinate_work)
                 entry = {**{root: entry.get(root, ()) for root in resource_mapping},
                          **{root: state[root] for root in hidden}}
@@ -578,8 +621,10 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                 originals = tuple(source_children(child.execution))
                 output, nested = {}, []
                 record = _derive(analysis, child_name, originals, tuple(entry), facts, (),
+                                 numerical_provider=numerical_provider,
                                  _mapped={"entry": entry, "facts_roots": facts_roots},
-                                 _work=work, _stack=stack, _children=nested, _result=output)
+                                 _work=work, _stack=stack, _children=nested, _result=output,
+                                 _numerical_regions=numerical_regions)
                 mapped_children.append(_MappedChildPlan(identity, original, child_name, originals, mapping,
                                                        _freeze(record), tuple(nested)))
                 if output["active"] is None:
@@ -628,6 +673,68 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                     raise CompilationError("reached window native prefix child proof is incomplete")
                 native_prefix_demands.append(native_prefix.identity)
         leaf_selection = joined_selection or (identity,)
+        # Exact numerical computation can establish physical effects without
+        # making an unsupported ordinary native child summary complete. This
+        # capability is opt-in, mapped-child only, and conditional on the
+        # original preparation guards. Descriptor/lifetime authority remains
+        # independent and is checked before any definition credit is used.
+        if (planned and not before_owner and _mapped is not None and numerical_provider is not None
+                and joined_selection is not None):
+            from compiler.frontend.numerical_effects import prove_numerical_effects
+            from compiler.frontend.numerical_preparation import NumericalPreparationUnsupported
+
+            originals = tuple(original for item in leaf_selection for original in graph.source_nodes(item))
+            try:
+                prepared = numerical_provider.prepare(analysis, procedure, originals, consume=coordinate_work)
+            except NumericalPreparationUnsupported:
+                prepared = None  # The ordinary native proof may still suffice.
+            if prepared is not None:
+                descriptor = None
+                if descriptor_roots or module_roots:
+                    from compiler.frontend.descriptor_windows import prove_descriptor_window
+
+                    descriptor = prove_descriptor_window(analysis, procedure, leaf_selection, descriptor_roots,
+                                                         module_roots=module_roots)
+                    descriptor_demands.append(descriptor.identity)
+                definition = prove_numerical_effects(analysis, procedure, originals, prepared, consume=coordinate_work)
+                # Retain the source completion even when the subsequent input
+                # check closes; closing grants no native memory-hook authority.
+                numerical_regions.append((procedure, originals, prepared, definition))
+                public = definition.public()
+                count = public["ordered_effect_count"]
+                effects += count
+                effect_work += count
+                work["effects"] += count
+                if work["effects"] > analysis.operation_limit:
+                    raise CompilationError("reached window ordered numerical effect budget exhausted")
+                resources = {item.resource for item in definition.sections.resources}
+                if resources - state.keys():
+                    raise _NeedsNativeClose("reached numerical group needs independent managed resource authority: "
+                                            + sorted(resources - state.keys())[0])
+                transferred = definition.transfer({root: state[root] for root in resources}, consume=coordinate_work)
+                if transferred.uncovered_reads:
+                    raise _NeedsNativeClose("reached numerical group read requires original group-entry definition: "
+                                            + transferred.uncovered_reads[0].resource)
+                numerical_demands.append({"selected_node_ids": list(leaf_selection),
+                    "preparation_identity": prepared.identity, "effect_proof_identity": definition.identity,
+                    "conditional_close_before_original": bool(prepared.preconditions
+                        or prepared.extraction.requires_numerical_environment
+                        or prepared.requires_original_team_environment_preflight),
+                    "preconditions": [guard.public() for guard in prepared.preconditions],
+                    "guard_false_execution": "publish and close before original group; execute original once",
+                    "native_summary_upgraded": False, "execution_authorized": False})
+                demands.extend(public["source_demands"])
+                for step in definition.steps:
+                    for resource in step.sections.resources:
+                        activation_templates[resource.resource] = resource
+                changed = tuple(public["scalar_changes"])
+                changed_scalars.update(changed)
+                if changed:
+                    from compiler.frontend.native_definitions import invalidate_rectangles
+
+                    state = {root: invalidate_rectangles(boxes, changed) for root, boxes in state.items()}
+                state.update(transferred.definitions)
+                return state
         completion = None
         if joined_selection is not None or graph.native_group_for_selection(leaf_selection) is not None:
             # This exact whole-team token grants completion only. Invalid
@@ -1076,6 +1183,7 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
     if planned:
         state = planned_sequence(selected, (coverage if activation_possible else None, False))
         active_coverage, has_closed_path = state
+        has_closed_path = has_closed_path or any(item["conditional_close_before_original"] for item in numerical_demands)
         coverage = active_coverage or {root: () for root in roots}
         if set(forced) - set(closes):
             raise CompilationError("planned reached closure does not match an active complete source planning unit")
@@ -1144,6 +1252,8 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
             "module_descriptor_resources": list(module_roots),
             "native_prefix_proof_identities": native_prefix_demands,
             "native_definition_proof_identities": definition_demands,
+            "numerical_preparation_provider": numerical_provider.public() if numerical_provider is not None else None,
+            "numerical_effect_demands": numerical_demands,
             "entry_facts_authority": "independent original fact scopes preserved; selected-window whole is not new prefix-copy read authority; independent admission required",
             "source_demands": demands, "control_visits": visits, "ordered_effects": effects,
             "ordered_effect_work": effect_work,
@@ -1155,7 +1265,9 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                                  "active_path_may_return": active_coverage is not None if planned else True,
                                  "conditional_return_is_unconditional_definition_summary": False,
                                  "mapped_child_plans": [child.public() for child in mapped_children]},
-            "native_only_proof": True, "gpu_legality_established": False,
+            "native_only_proof": not numerical_demands and all(
+                child.public()["plan"]["native_only_proof"] for child in mapped_children),
+            "gpu_legality_established": False,
             "execution_authorized": False, "definition_facts_reset": False,
             "requires_original_serial_caller_guard": True,
             "mandatory_close": "before the first excluded operation; before any enclosing loop backedge",
@@ -1200,6 +1312,8 @@ class ReachedWindowProof:
     _planned_close_before: object = field(repr=False, compare=False)
     _children: tuple = field(repr=False, compare=False)
     _activation_resources: tuple = field(repr=False, compare=False)
+    _numerical_provider: object = field(default=None, repr=False, compare=False)
+    _numerical_regions: tuple = field(default=(), repr=False, compare=False)
 
     def public(self):
         return {"proof_identity": self.identity, **_thaw(self._record)}
@@ -1211,9 +1325,21 @@ class ReachedWindowProof:
                 or getattr(analysis, "_reached_window_proofs", {}).get(self.identity) is not self):
             raise CompilationError("reached window lacks registered exact original source authority")
         if _derive(analysis, procedure, self._selection, self._roots, _thaw(self._facts),
-                   self._planned_close_before) != _thaw(self._record):
+                   self._planned_close_before, numerical_provider=self._numerical_provider) != _thaw(self._record):
             raise CompilationError("reached window source-position authority changed")
         return self
+
+    def numerical_region(self, procedure, original_selection):
+        """Return exact typed capabilities, never authority reconstructed from JSON."""
+        self.validate(self._analysis, self.procedure, self._selection)
+        for owner, selected, prepared, effects in self._numerical_regions:
+            if (owner == procedure and isinstance(original_selection, tuple)
+                    and len(selected) == len(original_selection)
+                    and all(left is right for left, right in zip(selected, original_selection, strict=True))):
+                prepared.validate(self._analysis, procedure, original_selection)
+                effects.validate(self._analysis, procedure, original_selection, prepared)
+                return prepared, effects
+        return None
 
     def capture_state(self, canonical_root):
         self.validate(self._analysis, self.procedure, self._selection)
@@ -1256,10 +1382,12 @@ class ReachedWindowProof:
         return selected
 
 
-def _prove(analysis, procedure, original_selection, requested_roots, entry_definition_facts, close_before):
-    children, result = [], {}
+def _prove(analysis, procedure, original_selection, requested_roots, entry_definition_facts, close_before,
+           numerical_provider=None):
+    children, result, numerical_regions = [], {}, []
     record = _derive(analysis, procedure, original_selection, requested_roots, entry_definition_facts, close_before,
-                     _children=children, _result=result)
+                     numerical_provider=numerical_provider, _children=children, _result=result,
+                     _numerical_regions=numerical_regions)
     identity = _hash(record)
     registry = getattr(analysis, "_reached_window_proofs", None)
     if registry is None:
@@ -1270,7 +1398,7 @@ def _prove(analysis, procedure, original_selection, requested_roots, entry_defin
         raise CompilationError("reached window proof registry budget exhausted")
     proof = ReachedWindowProof(procedure, identity, analysis, original_selection, requested_roots,
                                _freeze(entry_definition_facts), _freeze(record), close_before, tuple(children),
-                               tuple(result["activation_sections"].items()))
+                               tuple(result["activation_sections"].items()), numerical_provider, tuple(numerical_regions))
     registry[identity] = proof
     return proof
 
@@ -1285,7 +1413,7 @@ def prove_reached_window(analysis, procedure, original_selection, requested_root
 
 
 def plan_reached_window(analysis, procedure, original_selection, requested_roots, entry_definition_facts,
-                        *, close_before=()):
+                        *, close_before=(), numerical_provider=None):
     """Plan conditional active intervals and exact native closure points.
 
     Eligible prefixes retain source-proven definitions; reaching unsupported
@@ -1293,4 +1421,5 @@ def plan_reached_window(analysis, procedure, original_selection, requested_roots
     still-active unit is checked normally; after an authenticated close only
     original native code may execute. Ordinary complete summaries stay strict.
     """
-    return _prove(analysis, procedure, original_selection, requested_roots, entry_definition_facts, close_before)
+    return _prove(analysis, procedure, original_selection, requested_roots, entry_definition_facts, close_before,
+                  numerical_provider)

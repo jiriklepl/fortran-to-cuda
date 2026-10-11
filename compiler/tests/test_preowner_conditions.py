@@ -90,7 +90,7 @@ def test_renamed_mutable_metadata_stays_an_original_guarded_host_read(tmp_path):
     paths, analysis, facts, selection, _owner = condition_fixture(tmp_path)
     facts_before = deepcopy(facts)
     proof = plan_reached_window(analysis, ENTRY, selection, ROOTS, facts)
-    assert proof.public()["schema_version"] == 11
+    assert proof.public()["schema_version"] == 12
     assert proof.public()["prefix_eligibility"]["activation_path_possible"]
     assert not proof.public()["prefix_eligibility"]["disabled_path_possible"]
     step, = native_conditions(proof)

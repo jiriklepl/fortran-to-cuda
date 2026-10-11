@@ -666,12 +666,80 @@ def test_postproof_native_fallback_preserves_contiguous_views(tmp_path, monkeypa
     assert "call wrapper(" in fallback
 
 
+def _synthetic_native_fallback_profile(directory, supplied_profile, flags):
+    """Bind test-only observations to the supplied identity and original flags."""
+    from compiler.offload.collective_calibration import normalize_fortran_options
+    from compiler.offload.numerical_calibration import profile_from_compute_measurements
+    from compiler.tests.test_numerical_calibration_v2 import observations_v2
+
+    base = json.loads(supplied_profile.read_text())
+    assert base["precision_bits"] == 64, "this fixture uses original REAL(8) source"
+    probe = directory / "fortran-identity.f90"
+    probe.write_text("""program identity
+use iso_fortran_env,only:compiler_version,compiler_options
+print '(a)',compiler_version()
+print '(a)',compiler_options()
+end program
+""")
+    object_file, binary = directory / "fortran-identity.o", directory / "fortran-identity"
+    commands = []
+    # Original modules are compiled with -c. A combined compile/link probe
+    # can report driver-injected link options absent from those source objects.
+    for role, command in (
+        ("identity-compile", [*flags, "-c", str(probe), "-o", str(object_file)]),
+        ("identity-link", [*flags, str(object_file), "-o", str(binary)]),
+        ("identity-run", [str(binary)]),
+    ):
+        response = run(command, cwd=directory)
+        commands.append({"role": role, "argv": command, "returncode": response.returncode,
+                         "stdout": response.stdout, "stderr": response.stderr})
+    version, options = commands[-1]["stdout"].strip().splitlines()
+    observations = observations_v2()
+    identity = observations[0]
+    identity.update({name: base["hardware"][name]
+                     for name in ("gpu_name", "gpu_uuid", "compute_capability")})
+    identity.update({name: base["toolchain"][name]
+                     for name in ("cuda_runtime_version", "driver_version")})
+    identity.update(precision_bits=base["precision_bits"], cpu_threads=base["cpu_threads"],
+                    cpu_affinity=sorted(os.sched_getaffinity(0)),
+                    fortran={"compiler_version": version, "compiler_options": options,
+                             "semantic_options": normalize_fortran_options(options)})
+    assert len(identity["cpu_affinity"]) == base["cpu_threads"], "matching offline CPU placement required"
+    # Leave the observations and their applicability ranges unscaled. They
+    # exercise placement correctness and are never measured performance data.
+    calibration = profile_from_compute_measurements(base, observations,
+        calibration={"synthetic_correctness_only": True})
+    assert {key: value for key, value in calibration.items() if key != "numerical"} == {
+        key: value for key, value in base.items() if key != "numerical"}
+    profile = directory / "synthetic-native-fallback-profile.json"
+    profile.write_text(json.dumps(calibration, indent=2, sort_keys=True) + "\n")
+    (directory / "synthetic-native-fallback-profile-evidence.json").write_text(json.dumps({
+        "schema_version": 1, "synthetic_calibration_for_correctness_only": True,
+        "performance_samples": 0, "base_profile": {
+            "path": str(supplied_profile), "sha256": sha256(supplied_profile.read_bytes()).hexdigest()},
+        "profile": {"path": str(profile), "sha256": sha256(profile.read_bytes()).hexdigest()},
+        "compile_mode": "separate_object", "fortran_flags": flags,
+        "fortran": identity["fortran"], "cpu_affinity": identity["cpu_affinity"], "commands": commands,
+        "artifacts_sha256": {path.name: sha256(path.read_bytes()).hexdigest()
+                             for path in (probe, object_file, binary)},
+    }, indent=2, sort_keys=True) + "\n")
+    return profile
+
+
 def compile_contiguous_native_fallback(directory, *, checkout, profile, source=None, shared_objects=None):
     """Small public-interface fixture; reusable CUDA objects need byte proof."""
     directory.mkdir(parents=True, exist_ok=True)
     original = source or directory / "original.f90"
     if source is None:
         original.write_text(CONTIGUOUS_WRAPPER_PROGRAM)
+    fortran = shutil.which("gfortran-15") or shutil.which("gfortran")
+    host = shutil.which("g++-14") or shutil.which("g++")
+    nvcc = shutil.which("nvcc")
+    assert fortran, "CUDA/Fortran fixture requires installed Fortran toolchain"
+    assert host, "CUDA/Fortran fixture requires installed C++ toolchain"
+    assert nvcc, "CUDA/Fortran fixture requires installed CUDA toolchain"
+    flags = [fortran, "-std=f2018", "-fopenmp", "-fcheck=all,array-temps"]
+    profile = _synthetic_native_fallback_profile(directory, profile, flags)
     captures = {"schema_version": 1, "participation": "serial",
                 "sources": {str(original): sha256(original.read_bytes()).hexdigest()},
                 "captures": {"argument::a": FACT, "argument::b": {**FACT, "initialized": "none"},
@@ -685,12 +753,6 @@ def compile_contiguous_native_fallback(directory, *, checkout, profile, source=N
                    env={**os.environ, "PYTHONPATH": str(checkout), "PYTHONHASHSEED": "0", "OMP_NUM_THREADS": "4"})
     manifest = json.loads(response.stdout)["scopes"]
     assert manifest["automatic_estimate_available"], manifest["boundaries"]
-    fortran = shutil.which("gfortran-15") or shutil.which("gfortran")
-    host = shutil.which("g++-14") or shutil.which("g++")
-    nvcc = shutil.which("nvcc")
-    assert fortran, "CUDA/Fortran fixture requires installed Fortran toolchain"
-    assert host, "CUDA/Fortran fixture requires installed C++ toolchain"
-    assert nvcc, "CUDA/Fortran fixture requires installed CUDA toolchain"
     objects, reusable = [], {}
     for role in ("common_runtime", "shared_entry", "original_source"):
         for item in manifest["build_sources"]:
@@ -705,18 +767,20 @@ def compile_contiguous_native_fallback(directory, *, checkout, profile, source=N
                 target = Path(old["object"])
             else:
                 command = ([nvcc, "-std=c++17", "-ccbin", host, "-arch=sm_86", "-Xcompiler=-fopenmp", "-I", str(output)]
-                           if item["language"] == "cuda" else [fortran, "-std=f2018", "-fopenmp", "-fcheck=all,array-temps"])
+                           if item["language"] == "cuda" else flags)
                 run([*command, "-c", str(output / item["path"]), "-o", str(target)], cwd=output)
             objects.append(str(target))
             if item["language"] == "cuda":
                 reusable[item["path"]] = {"sha256": digest, "object": str(target)}
     driver = output / "caller.f90"
-    driver.write_text(DRIVER)
+    # Keep the generic shared driver unchanged. This calibrated fixture needs
+    # dimensions within the existing v2 compute and physical working-set ranges.
+    driver.write_text(DRIVER.replace("n=8+8*shape", "n=131072*shape"))
     target = output / "caller"
-    run([fortran, "-std=f2018", "-fopenmp", "-fcheck=all,array-temps", str(driver), *objects,
+    run([*flags, str(driver), *objects,
          "-L/usr/local/cuda/lib64", "-Wl,-rpath,/usr/local/cuda/lib64", "-lcudart", "-lstdc++", "-o", str(target)], cwd=output)
     native = output / "native"
-    run([fortran, "-std=f2018", "-fopenmp", "-fcheck=all,array-temps", str(original), str(driver),
+    run([*flags, str(original), str(driver),
          "-o", str(native)], cwd=output)
     reference = run([str(native)], cwd=output, env={**os.environ, "OMP_NUM_THREADS": "4"})
     assert "FIELDS_OK" in reference.stdout

@@ -249,6 +249,71 @@ class NativeDefinitionTransfer:
                 "entry_rectangles_require_independent_admission": True}
 
 
+def _transfer_steps(steps, resources, entry_rectangles=None, *, kills=(), joined=False,
+                    operation_limit, consume=None):
+    """Bounded geometry calculation; callers authenticate their own proof first.
+
+    This helper creates no source, entry-definition or execution authority.
+    Joined steps all read the same entry snapshot, including NOWAIT siblings.
+    """
+    entry_rectangles = {} if entry_rectangles is None else entry_rectangles
+    if (not isinstance(entry_rectangles, (dict, MappingProxyType))
+            or any(root not in resources or not isinstance(boxes, tuple) or len(boxes) > RECTANGLE_LIMIT
+                   or any(not isinstance(box, NativeRectangle) or len(box.axes) != resources[root] for box in boxes)
+                   for root, boxes in entry_rectangles.items())):
+        raise CompilationError("native definition entry rectangles require bounded original-resource coordinates")
+    state = {root: _unique(entry_rectangles.get(root, ())) for root in resources}
+    for root in kills:
+        state[root] = ()
+    uncovered, visits = [], 0
+
+    def visit(item, current):
+        nonlocal visits
+        visits += 1
+        if consume is not None:
+            consume(1)
+        if visits > operation_limit * 4 + 2:
+            raise CompilationError("native definition transfer traversal budget exhausted")
+        if item.kind == "sequence":
+            for child in item.children:
+                current = visit(child, current)
+        elif item.kind == "branch":
+            paths, remaining = [], dict(current)
+            for condition, body in item.alternatives:
+                if condition is not None:
+                    remaining = visit(condition, remaining)
+                paths.append(visit(body, dict(remaining)))
+            if not item.alternatives or item.alternatives[-1][0] is not None:
+                paths.append(remaining)
+            current = {root: _unique(box for path in paths for box in path[root]
+                                    if all(any(_covers(other, box, consume=consume) for other in alternative[root])
+                                           for alternative in paths)) for root in current}
+        else:
+            for resource in item.sections.resources:
+                for box in resource.reads:
+                    if not any(_covers(defined, box, consume=consume) for defined in current[resource.resource]):
+                        uncovered.append(NativeDefinitionRead(item.node_id, item.guard, resource.resource, box))
+                        if len(uncovered) > operation_limit * RECTANGLE_LIMIT:
+                            raise CompilationError("native definition read-obligation budget exhausted")
+            if item.scalar_writes:
+                current = {root: invalidate_rectangles(boxes, item.scalar_writes)
+                           for root, boxes in current.items()}
+            for resource in item.sections.resources:
+                current[resource.resource] = _unique((*current[resource.resource], *resource.overwrites))
+        return current
+
+    if joined:
+        entry = dict(state)
+        completed = []
+        for item in steps:
+            completed.append(visit(item, dict(entry)))
+        state = {root: _unique(tuple(box for result in completed for box in result[root])) for root in state}
+    else:
+        for item in steps:
+            state = visit(item, state)
+    return NativeDefinitionTransfer(MappingProxyType(state), tuple(uncovered))
+
+
 def _derive_joined(analysis, procedure, selection, include_entry, descriptor_window, completion, consume):
     """Retain the whole original team; definitions become available at its join.
 
@@ -556,63 +621,10 @@ class NativeDefinitionProof:
     def transfer(self, entry_rectangles=None, *, consume=None):
         """Conditional transfer; supplied entry definitions need own authority."""
         self.validate(self._analysis, self.procedure, self._selection, consume=consume)
-        entry_rectangles = {} if entry_rectangles is None else entry_rectangles
         resources = {item["resource"]: item["rank"] for item in _thaw(self._record)["resources"]}
-        if (not isinstance(entry_rectangles, (dict, MappingProxyType))
-                or any(root not in resources or not isinstance(boxes, tuple) or len(boxes) > RECTANGLE_LIMIT
-                       or any(not isinstance(box, NativeRectangle) or len(box.axes) != resources[root] for box in boxes)
-                       for root, boxes in entry_rectangles.items())):
-            raise CompilationError("native definition entry rectangles require bounded original-resource coordinates")
-        state = {root: _unique(entry_rectangles.get(root, ())) for root in resources}
-        for root in self._kills:
-            state[root] = ()
-        uncovered, visits = [], 0
-
-        def visit(item, current):
-            nonlocal visits
-            visits += 1
-            if consume is not None:
-                consume(1)
-            if visits > self._analysis.operation_limit * 4 + 2:
-                raise CompilationError("native definition transfer traversal budget exhausted")
-            if item.kind == "sequence":
-                for child in item.children:
-                    current = visit(child, current)
-            elif item.kind == "branch":
-                paths, remaining = [], dict(current)
-                for condition, body in item.alternatives:
-                    if condition is not None:
-                        remaining = visit(condition, remaining)
-                    paths.append(visit(body, dict(remaining)))
-                if not item.alternatives or item.alternatives[-1][0] is not None:
-                    paths.append(remaining)
-                current = {root: _unique(box for path in paths for box in path[root]
-                                        if all(any(_covers(other, box, consume=consume) for other in alternative[root])
-                                               for alternative in paths)) for root in current}
-            else:
-                for resource in item.sections.resources:
-                    for box in resource.reads:
-                        if not any(_covers(defined, box, consume=consume) for defined in current[resource.resource]):
-                            uncovered.append(NativeDefinitionRead(item.node_id, item.guard, resource.resource, box))
-                            if len(uncovered) > self._analysis.operation_limit * RECTANGLE_LIMIT:
-                                raise CompilationError("native definition read-obligation budget exhausted")
-                if item.scalar_writes:
-                    current = {root: invalidate_rectangles(boxes, item.scalar_writes)
-                               for root, boxes in current.items()}
-                for resource in item.sections.resources:
-                    current[resource.resource] = _unique((*current[resource.resource], *resource.overwrites))
-            return current
-
-        if self._completion is not None:
-            entry = dict(state)
-            completed = []
-            for item in self.steps:
-                completed.append(visit(item, dict(entry)))
-            state = {root: _unique(tuple(box for result in completed for box in result[root])) for root in state}
-        else:
-            for item in self.steps:
-                state = visit(item, state)
-        return NativeDefinitionTransfer(MappingProxyType(state), tuple(uncovered))
+        return _transfer_steps(self.steps, resources, entry_rectangles, kills=self._kills,
+                               joined=self._completion is not None,
+                               operation_limit=self._analysis.operation_limit, consume=consume)
 
 
 def prove_native_definitions(analysis, procedure, original_selection, *, include_entry=False, descriptor_window=None,

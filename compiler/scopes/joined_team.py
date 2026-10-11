@@ -5,18 +5,25 @@ configured includes retain their lexical source and their original worksharing.
 The original master owns runtime mutation; every member enters team workers.
 """
 
-from dataclasses import replace
-from copy import copy
 import re
+from copy import copy
 
 from fparser.two.utils import walk
 
 from compiler.frontend.native_completion import _joined_completion_facts
 from compiler.frontend.source_effects import _kind
 from compiler.ir import CompilationError
-from compiler.scopes.segments import (Branch, Native, Segment, StructuredScope,
-                                     condition_fragment, directive, fortran_lines,
-                                     fragment, original_roots, statement_span)
+from compiler.scopes.segments import (
+    Branch,
+    Segment,
+    StructuredScope,
+    condition_fragment,
+    directive,
+    fortran_lines,
+    fragment,
+    original_roots,
+    statement_span,
+)
 
 
 def prepared_span(node):
@@ -61,6 +68,7 @@ class JoinedTeam(StructuredScope):
         self.native_metadata = True
         self.native_host_reads = native_host_reads
         self.calls, self.native, self.segments, self.guarded = [], [], [], {}
+        self.close_guards = {}
         self.operation_count, self.numerical_units, self.rejections = 0, [], []
         self.original_nodes = original_roots(builder.inline.original_selection(nodes))
         self.completion = builder.analysis.joined_completion(builder.entry.qualified, self.original_nodes)
@@ -97,7 +105,7 @@ class JoinedTeam(StructuredScope):
         units = [self.units_by_loop[id(loop)] for loop in selected]
         try:
             return unit_span(units[0])[0], unit_span(units[-1])[1]
-        except CompilationError:
+        except CompilationError as error:
             record = self.builder.analysis.inputs.entries.get(str(self.builder.entry.scope.path))
             if record is None:
                 raise
@@ -118,7 +126,7 @@ class JoinedTeam(StructuredScope):
                         and not prepared_lines[before_index].strip()):
                     original_first = before
             if before is None or after is None or original_first >= after:
-                raise CompilationError('configured native units have no bounded original source window')
+                raise CompilationError('configured native units have no bounded original source window') from error
             # All prepared text between those mapped neighbours must belong to
             # the selected units; a partial include cannot acquire whole authority.
             left = next(index for index in range(first-2, -1, -1) if mapping[index] is not None) + 2
@@ -130,7 +138,7 @@ class JoinedTeam(StructuredScope):
                     continue
                 low, high = node.item.span
                 if left <= low <= right and high <= right and id(node) not in covered:
-                    raise CompilationError('configured native edit window includes unselected execution')
+                    raise CompilationError('configured native edit window includes unselected execution') from error
             return original_first, after - 1
 
     def _native(self, loops):

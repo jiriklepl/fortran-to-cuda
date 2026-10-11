@@ -1599,7 +1599,7 @@ joined `PARALLEL DO` groups with supported scalar private/reduction clauses;
 the native compiler executes every original reduction. No reduction lowering,
 reassociation or active-owner coherence is authorized.
 
-`prove_reached_window` version 11 transfers separately supplied entry facts through
+`prove_reached_window` version 12 transfers separately supplied entry facts through
 these prefix and descriptor proofs to an exact contiguous window, at top level
 or in the first traversal of one top-level serial counted loop. Branches meet
 conservatively and definitions retain original ordering. Hidden read-only native
@@ -1697,12 +1697,31 @@ units discard their demands while preserving consumed analysis work. Source
 authority, IEEE checks and aggregate analysis budgets remain independent gates.
 Joined close and prefix-disable points identify the entire ordered original
 selection, including its opening directive and final join. Emission cannot cut
-or validate only the first node of a team. Discovery version 5 retains these
+or validate only the first node of a team. Discovery version 6 retains these
 selections and completion identities in its decline diagnostics.
+An explicitly supplied `NumericalPreparationProvider` can extend a planned
+mapped child with exact physical effects from its original numerical group.
+Preparation is source-only: it neither admits captures nor publishes generated
+artifacts. The separate registered effect proof maps actual numerical indices
+back to original logical coordinates; preservation uploads are not reads or
+definitions. Every unit in a joined group checks reads against the same entry
+snapshot. Only exact unconditional writes contribute definitions after the join.
+Descriptor, lifetime, allocation and alias checks remain independent. The
+ordinary native child summary and complete-window proof remain unchanged.
+Conditional tile geometry is checked after original allocation guards and before
+the numerical unit's registration, definition events or queries. An outer owner
+may already have registered independently proved original descriptors; that
+registration establishes no tile-derived definitions. A failed guard publishes and closes
+before the complete original group, which executes once; the owner cannot reopen.
+Public records identify the preparation, physical effects and typed preconditions;
+these conditional return effects never become unconditional native contracts.
 An original direct child call can carry its own registered conditional plan.
 The separate `prove_native_call_coordinates` version 2 API authenticates whole
 ordinary assumed-shape associations, original caller lower origins, read-only
 scalar mappings and every `INTENT(OUT)` entry event, including unused formals.
+After those entry events, an existing unconditional whole definition subsumes
+redundant partial definitions before mapping coverage into a child. This does
+not supply missing scalar mappings or widen partial-only coverage.
 Read-only real/logical scalar fields require their original fixed-component
 proof; integer coordinate fields and descriptor-bearing fields remain native.
 Field selectors use original type authority rather than the caller's `USE`

@@ -594,6 +594,16 @@ class LexicalOwner:
                 prepare += [f"fort_can = {capture.index_guard}"]
                 prepare += ["endif"] * (len(capture.activation_guards) + 1)
         prepare += ["if (.not. fort_can) then", *self.close(), "exit " + block, "endif"]
+        if unit.scope.close_guards:
+            if not immutable_numerical_unit(unit.scope):
+                raise CompilationError("conditional numerical effects require one complete reached original group")
+            from compiler.scopes.numerical_preflight import preparation_preflight
+
+            guard_spec, guard_code = preparation_preflight(builder, unit.scope.calls[0], parameters)
+            spec += guard_spec
+            prepare += [*guard_code, "if (.not. fort_numerical_guard) then",
+                        *self.close(reason="original numerical preparation guard failed"),
+                        "exit " + block, "endif"]
         from compiler.scopes.segments import Segment
         if builder.config.policy == "auto" and unit.definition_summary.changes:
             unit.native_preflight = {"abi_version": 1, "available": False,

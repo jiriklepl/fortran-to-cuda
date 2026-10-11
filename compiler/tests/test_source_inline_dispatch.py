@@ -131,29 +131,39 @@ def test_reached_inline_segments_keep_native_partial_writes_and_mutable_controls
 
 
 def test_rejected_inline_attempts_are_bounded_before_lowering(tmp_path, monkeypatch):
+    from compiler import frontend
     from compiler.ir import CompilationError
-    from compiler.scopes import region_dispatch
+    from compiler.scopes.region_dispatch import InlineRegions
     source = PROGRAM[:PROGRAM.index("do i=-2,n-3")] + (
         "do i=-2,n-3\nscratch(i)=2*a(i)+real(i,8)\nenddo\n" * 40) + "end subroutine\nend module\n"
-    attempts = []
+    attempts, reservations = [], []
+    original_reserve = InlineRegions._reserve
+
+    def reserve(self, nodes):
+        original_reserve(self, nodes)
+        reservations.append(self.attempts)
 
     def decline(*args, **kwargs):
         attempts.append(args[1])
         raise CompilationError("unsupported computation in admitted region")
-    monkeypatch.setattr(region_dispatch, "lower_source", decline)
+    monkeypatch.setattr(InlineRegions, "_reserve", reserve)
+    monkeypatch.setattr(frontend, "lower_source", decline)
     outputs, report = build(tmp_path, source)
-    assert len(attempts) == 32
+    # Rejected loops can also reserve a reached body candidate that declines
+    # during extraction, before lowering. Both consume the same attempt cap.
+    assert reservations == list(range(1, 33))
+    assert 0 < len(attempts) <= 32
     assert report["scope_count"] == 0
     assert any("bounded inline region/operation budget exhausted" in item["reason"] for item in report["boundaries"])
     assert set(outputs) == {"scope-manifest.json"}
 
 
 def test_inline_operation_budget_rejects_before_lowering(tmp_path, monkeypatch):
-    from compiler.scopes import region_dispatch
+    from compiler import frontend
     source = PROGRAM[:PROGRAM.index("do i=-2,n-3")] + "do i=-2,n-3\n" + (
         "scratch(i)=2*a(i)+real(i,8)\n" * 256) + "enddo\nend subroutine\nend module\n"
     attempts = []
-    monkeypatch.setattr(region_dispatch, "lower_source", lambda *args, **kwargs: attempts.append(args))
+    monkeypatch.setattr(frontend, "lower_source", lambda *args, **kwargs: attempts.append(args))
     _, report = build(tmp_path, source)
     assert not attempts
     assert report["scope_count"] == 0

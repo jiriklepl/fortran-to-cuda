@@ -8,11 +8,9 @@ from types import SimpleNamespace
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import Base, walk
 
-from compiler.driver.pipeline import prepare_function
 from compiler.emission import generate_sources
 from compiler.emission.fortran.formatting import _fortran_list
-from compiler.frontend import lower_source
-from compiler.frontend.source_effects import _children, _kind
+from compiler.frontend.source_effects import _kind
 from compiler.ir import CompilationError
 from compiler.scopes.regions import _exception_observers, extract_region
 
@@ -25,6 +23,7 @@ class InlineRegions:
         self.bindings = {}
         self.element_operands = {}
         self.definition_proofs = {}
+        self.prepared_regions = {}
         self.collective_regions = set()
         self.computations = {}
         self.attempts = self.operations = 0
@@ -162,52 +161,9 @@ class InlineRegions:
                     "Pointer_Assignment_Stmt", "Nullify_Stmt", "Stop_Stmt", "Error_Stop_Stmt"}
 
         def context(sources):
-            # Maximal original nodes outside this region retain allocation-site
-            # and scalar-liveness authority even when the loop is in a branch.
-            # Prepared coordinates establish order only. Included statements
-            # without editable original spans must still participate in
-            # liveness; they must never disappear from the following context.
-            def prepared_span(node):
-                spans = [item.item.span for item in walk(node) if getattr(item, 'item', None) is not None]
-                if not spans or any(span is None for span in spans):
-                    raise CompilationError('source context has no prepared ordering span')
-                return min(span[0] for span in spans), max(span[1] for span in spans)
-
-            spans = [prepared_span(node) for node in sources]
-            first, last = min(span[0] for span in spans), max(span[1] for span in spans)
-            before, after, cyclic = [], [], []
-
-            def visit(node):
-                try:
-                    low, high = prepared_span(node)
-                except CompilationError:
-                    return
-                if high < first:
-                    before.append(node)
-                elif low > last:
-                    after.append(node)
-                elif _kind(node) in {"If_Construct", "Block_Nonlabel_Do_Construct"}:
-                    for child in node.content:
-                        visit(child)
-                    if _kind(node) == "Block_Nonlabel_Do_Construct":
-                        # Prefix reads can also consume this iteration's
-                        # private values on the next backedge. The original
-                        # counted header itself evaluates only once.
-                        for child in node.content:
-                            low, high = prepared_span(child)
-                            if high < first and _kind(child) not in {"Nonlabel_Do_Stmt", "Comment"}:
-                                cyclic.append(child)
-            # Preparation may target only a proved one-shot source window.
-            # Its excluded native suffix and enclosing next-iteration prefix
-            # still observe original private state. Never trim that liveness
-            # authority to the selected preparation tuple.
-            for node in _children(self.builder.entry.execution):
-                visit(node)
-            # Current suffix and next-iteration prefix are distinct liveness
-            # paths. Neither path's definitions may kill the other's reads:
-            # a prefix DO can redefine an iterator still read by this suffix,
-            # and EXIT/CYCLE can bypass a suffix definition before a backedge.
-            return tuple(before), tuple(after), tuple(cyclic)
+            from compiler.scopes.region_context import original_region_context
+            original = original_region_context(self.builder.entry, sources)
+            return original.preceding, original.following, original.cyclic_following
 
         def prepare_sequence(sequence, depth=0):
             result = []
@@ -327,6 +283,7 @@ class InlineRegions:
 
     def _outline(self, extraction, sources, *, collective, reservation=None):
         """Lower an authenticated extraction and register its private facade."""
+        from compiler.frontend.numerical_preparation import NumericalPreparationProvider, _prepare
         if collective and extraction.scalar_element_captures:
             raise CompilationError("immutable element preparation requires a serial reached preflight; collective execution remains native")
         # Publishing arrays cannot reconstruct CPU exception flags produced by
@@ -340,6 +297,23 @@ class InlineRegions:
             # A serial caller's mask cannot establish the original workers'
             # masks. Keep the team for JoinedTeam's uniform reached preflight.
             raise CompilationError("original IEEE environment requires an original-team numerical preflight")
+        retained = getattr(self.builder, "numerical_preparation_for", lambda *_: None)(
+            self.builder.analysis, self.builder.entry.qualified, sources)
+        if retained is not None:
+            retained.validate(self.builder.analysis, self.builder.entry.qualified, sources)
+            retained.validate_configuration(options=self.builder.options, config=self.builder.config,
+                environment_root=self.builder._numerical_environment_root,
+                immutable_inputs=getattr(self.builder, "immutable_inputs", {}))
+            # Source preparation retains the exact original full context. The
+            # extraction below is only enriched by reached descriptor guards.
+            extraction = retained.extraction
+        else:
+            provider = NumericalPreparationProvider(self.builder.analysis, options=self.builder.options,
+                config=self.builder.config, environment_root=self.builder._numerical_environment_root,
+                immutable_inputs=getattr(self.builder, "immutable_inputs", {}))
+            retained = _prepare(self.builder.analysis, self.builder.entry.qualified, sources, provider,
+                                extraction=extraction, require_effects=False)
+            extraction = retained.extraction
         for binding in extraction.bindings:
             if binding.rank:
                 self.builder.capture(binding)
@@ -356,16 +330,8 @@ class InlineRegions:
                                self.builder.visible(self.builder.entry, binding.root), binding.rank))
             extraction = replace(extraction, runtime_guards=(*guards, *extraction.runtime_guards))
         source_name = str(self.builder.entry.scope.path) + "#inline:" + extraction.source_identity
-        function, plan = prepare_function(lower_source(extraction.source, extraction.entry, source_name=source_name),
-                                          options=self.builder.options)
-        if native_environment:
-            function = replace(function, requires_numerical_environment=True)
-        if function.requires_numerical_environment:
-            # Numerical lowering is authoritative: vector expressions can lose
-            # their source syntax when expanded into ordinary scalar IR.
-            extraction = replace(extraction, numerical_environment_required=True)
-        if not plan.regions:
-            raise CompilationError("inline numerical candidate has no proven parallel region")
+        # Capture is independently authorized before reusing prepared IR.
+        function, plan = retained.function, retained.plan
         if reservation is not None:
             # Original parent/unit analysis is bounded separately. Native
             # corrections that fail complete numerical legality must not use
@@ -397,6 +363,7 @@ class InlineRegions:
         if canonical != procedure:
             generated, function, plan = self.generated[canonical], *self.ir[canonical]
         self.regions[procedure], self.generated[procedure] = extraction, generated
+        self.prepared_regions[procedure] = retained
         self.ir[procedure], self.entries[procedure] = (function, plan), canonical
         if collective:
             self.collective_regions.add(procedure)
@@ -443,14 +410,19 @@ class InlineRegions:
 
     @staticmethod
     def artifact_ir(value, source_name, identity):
-        """Canonicalize private proof locations, retaining original provenance."""
+        """Canonicalize private locations and source identities for artifacts.
+
+        Exact original paths remain on the registered preparation and source
+        manifest. A private entry's provenance hashes must use its stable
+        extraction identity rather than the caller's temporary directory.
+        """
         if isinstance(value, (tuple, list)):
             return type(value)(InlineRegions.artifact_ir(child, source_name, identity) for child in value)
         if isinstance(value, str):
             return value.replace(source_name, "inline:" + identity)
         if is_dataclass(value) and not isinstance(value, type):
             return replace(value, **{field.name: InlineRegions.artifact_ir(getattr(value, field.name), source_name, identity)
-                                     for field in fields(value) if field.name != "source"})
+                                     for field in fields(value)})
         return value
 
     def call(self, node):
@@ -511,6 +483,10 @@ class InlineRegions:
 
     def whole_definitions(self, call):
         """Must-write coverage authenticated against the original region."""
+        if getattr(self.builder, "call_numerical_effect", lambda *_: None)(call) is not None:
+            # Exact partial definition transfer belongs to the retained typed
+            # effects proof. A bounding box never promotes a whole overwrite.
+            return set()
         if call.procedure not in self.definition_proofs:
             summary = self.builder.segment_summary(
                 self.builder.analysis, self.builder.entry.qualified, call.region.nodes, capture_locals=True)
