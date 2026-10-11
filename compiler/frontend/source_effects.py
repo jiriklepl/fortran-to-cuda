@@ -21,6 +21,7 @@ from compiler.frontend.call_bindings import resolve_source_call
 from compiler.frontend.lowering import _KindScope
 from compiler.frontend.native_sections import analyze_native_sections
 from compiler.frontend.source_inputs import SourceInputs
+from compiler.frontend.source_syntax import SourceSyntaxSnapshot
 from compiler.frontend.summary_cache import SummaryCache
 from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
@@ -421,6 +422,9 @@ class SourceEffects:
                 if item is not None:
                     self._source_provenance[id(node)] = (node, item, item.span,
                                                          getattr(item, "fort_original_span", None))
+        self._source_syntax = SourceSyntaxSnapshot(
+            [*(scope.node for scope in self.modules.values()),
+             *(routine.scope.node for routine in self.numerical_helpers.values())])
 
     def _register_routine(self, parent, node, *, source_kind="module"):
         _attach_execution_directives(node)
@@ -520,18 +524,19 @@ class SourceEffects:
                            "logical_bound_nodes": {name: [str(node) if node is not None else None for node in binding.lower_bound_nodes]
                                                    for name, binding in routine.scope.bindings.items()}})
 
-    def _summary_authority(self):
+    def _summary_authority(self, *, _syntax=None):
         from compiler.frontend.descriptor_windows import DESCRIPTOR_WINDOW_VERSION
         from compiler.frontend.native_intrinsics import NATIVE_PREDICATE_VERSION
         from compiler.frontend.source_functions import SOURCE_FUNCTION_VERSION, resolution_changes
         from compiler.frontend.source_objects import SOURCE_OBJECT_VERSION
         from compiler.frontend.structured_effects import STRUCTURED_EFFECT_VERSION
+        syntax = _syntax if _syntax is not None else self._source_syntax.checkpoint()
         projections = []
         for name, routine in self.routines.items():
             original = self._source_roles.get(name)
             signature = self._routine_signature(routine)
             if (original is None or routine.execution is not original[0] or signature != original[1]
-                    or str(routine.execution) != original[2]):
+                    or not syntax.unchanged(routine.execution)):
                 projections.append({"procedure": name, "signature": signature,
                                     "execution": str(routine.execution)})
         for name, routine in self.numerical_helpers.items():
@@ -540,7 +545,7 @@ class SourceEffects:
             original = self._numerical_roles.get(name)
             signature = self._routine_signature(routine)
             if (original is None or routine.scope.node is not original[0] or signature != original[1]
-                    or str(routine.scope.node) != original[2]):
+                    or not syntax.unchanged(routine.scope.node)):
                 projections.append({"procedure": name, "signature": signature,
                                     "function_source": str(routine.scope.node)})
         projections.extend(resolution_changes(self))
@@ -1942,23 +1947,24 @@ class SourceEffects:
         from compiler.frontend.component_bindings import source_scope_for
         return source_scope_for(self, node, default)
 
-    def _require_original(self, requested):
+    def _require_original(self, requested, *, _syntax=None):
         """Only original parsed source, not lookalike ASTs, grants authority."""
         self.inputs.verify()
         routine = self.routines.get(requested)
         original = self._source_roles.get(requested)
         numerical = self._numerical_roles.get(requested)
+        syntax = _syntax if _syntax is not None else self._source_syntax.checkpoint()
         if any(getattr(node, "item", None) is not item or item.span != span
                or getattr(item, "fort_original_span", None) != original_span
                for node, item, span, original_span in self._source_provenance.values()):
             raise CompilationError("structured effects require unchanged original source span authority")
-        if any(name not in self.modules or self.modules[name].node is not node or str(node) != text
-               for name, (node, text) in getattr(self, "_source_module_roles", {}).items()):
+        if any(name not in self.modules or self.modules[name].node is not node or not syntax.unchanged(node)
+               for name, (node, _text) in getattr(self, "_source_module_roles", {}).items()):
             raise CompilationError("structured effects require unchanged original source-backed module authority")
         if (routine is None or original is None or routine.execution is not original[0]
-                or self._routine_signature(routine) != original[1] or str(routine.execution) != original[2]
+                or self._routine_signature(routine) != original[1] or not syntax.unchanged(routine.execution)
                 or numerical is None or routine.scope.node is not numerical[0]
-                or str(routine.scope.node) != numerical[2]):
+                or not syntax.unchanged(routine.scope.node)):
             raise CompilationError("structured effects require original source-backed procedure authority")
         return routine
 
@@ -1966,8 +1972,9 @@ class SourceEffects:
         """Return one reusable local skeleton without expanding its callees."""
         from compiler.frontend.structured_effects import admit_cached_structure, build_structure
         self._analysis_started = True
-        routine = self._require_original(requested)
-        authority = self._summary_authority()
+        syntax = self._source_syntax.checkpoint()
+        routine = self._require_original(requested, _syntax=syntax)
+        authority = self._summary_authority(_syntax=syntax)
         digest = sha256(_canonical(authority).encode()).hexdigest()
         key = requested, digest
         if key not in self._structures:

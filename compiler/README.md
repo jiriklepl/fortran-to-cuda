@@ -1448,6 +1448,15 @@ memory, each capped at 8 MiB; disk-directory cleanup belongs to its caller.
 `summary_cache` reports construction-local cache statistics. No application data,
 runtime placement or allocation addresses are cached by this mechanism.
 
+Original syntax is authenticated against a bounded structural snapshot rather
+than repeatedly formatting every configured module. Each public demand checks
+current node and statement identities, ordered syntax values, labels and source
+spans. A local checkpoint shares comparisons only within that immediate demand;
+it never retains a successful validation across calls. Files, bindings,
+namespaces, contracts and budgets are still checked separately. Changed private
+execution projections receive distinct authority and cannot grant original
+source proofs. Unknown or cyclic parser state fails closed.
+
 Generated procedure variants have a separate bounded registry. The public
 `implementation_variants` manifest retains the original native entry and records summary
 identities, interfaces, requirements and shared numerical artifacts. Workers

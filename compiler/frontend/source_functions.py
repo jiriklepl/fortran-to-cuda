@@ -145,16 +145,17 @@ def _original(analysis, procedure):
     if procedure in analysis.routines:
         return analysis._require_original(procedure)
     analysis.inputs.verify()
+    syntax = analysis._source_syntax.checkpoint()
     routine = analysis.numerical_helpers.get(procedure)
     role = analysis._numerical_roles.get(procedure)
     if (routine is None or routine.source_kind not in {"function", "internal_function"}
             or role is None or routine.scope.node is not role[0]
-            or analysis._routine_signature(routine) != role[1] or str(routine.scope.node) != role[2]):
+            or analysis._routine_signature(routine) != role[1] or not syntax.unchanged(routine.scope.node)):
         raise CompilationError("native source function requires original lexical source authority")
     # Authenticate original module and span authority too. Functions remain
     # absent from public routine/structured-entry registration.
-    if any(analysis.modules.get(name) is None or analysis.modules[name].node is not node or str(node) != text
-           for name, (node, text) in analysis._source_module_roles.items()):
+    if any(analysis.modules.get(name) is None or analysis.modules[name].node is not node or not syntax.unchanged(node)
+           for name, (node, _text) in analysis._source_module_roles.items()):
         raise CompilationError("native source function module authority changed")
     if any(getattr(node, "item", None) is not item or item.span != span
            or getattr(item, "fort_original_span", None) != original_span
