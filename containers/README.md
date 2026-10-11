@@ -146,6 +146,34 @@ Submit with:
 sbatch slurm_job.sh
 ```
 
+### Automated Headnode Runner (`bw01` & `hopper01`)
+
+For automated, one-command execution from the cluster headnode (`hpc.troja.mff.cuni.cz` or `parlab` / `gpulab`), use the automated dispatcher:
+
+```bash
+# Run ELMM pipeline on hopper01 (H100 PCIe 80GB, sm_90) and produce all report graphs:
+./run_on_node.sh hopper01
+
+# Run ELMM pipeline on bw01 (RTX PRO Blackwell 96GB, sm_100) and produce all report graphs:
+./run_on_node.sh bw01
+
+# Background execution (do not block terminal):
+./run_on_node.sh hopper01 --no-wait
+
+# Custom output directory:
+./run_on_node.sh hopper01 -o ./results/hopper-run-1
+
+# Dry-run to inspect the generated Slurm job script and command:
+./run_on_node.sh hopper01 --dry-run
+```
+
+The script automatically:
+1. Validates that the target is either `hopper01` or `bw01`.
+2. Configures the exact node hardware, architecture (`sm_90` for `hopper01`, `sm_100` for `bw01`), partition (`gpu-ffa-gpulab` or `ffa-gpulab`), GRES (`--gpus=1`), host CPUs, memory, and walltime.
+3. Submits a Slurm job using `sbatch` targeting the selected compute node.
+4. Executes the ELMM pipeline and benchmark harness with GPU offload.
+5. Produces all publication-quality graphs found in the campaign and benchmark reports directly into the output directory (`complete-wall-relative`, `entry-time`, `transfer-volume`, `scoped-wall-relative`, `scoped-transfers-wall-relative`, `grid_512x512x512_niter100`, `manifest.json`).
+
 ---
 
 ## 6. Interactive Debugging & Development
