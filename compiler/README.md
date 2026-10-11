@@ -1599,7 +1599,7 @@ joined `PARALLEL DO` groups with supported scalar private/reduction clauses;
 the native compiler executes every original reduction. No reduction lowering,
 reassociation or active-owner coherence is authorized.
 
-`prove_reached_window` version 8 transfers separately supplied entry facts through
+`prove_reached_window` version 9 transfers separately supplied entry facts through
 these prefix and descriptor proofs to an exact contiguous window, at top level
 or in the first traversal of one top-level serial counted loop. Branches meet
 conservatively and definitions retain original ordering. Hidden read-only native
@@ -1641,6 +1641,15 @@ invocation, including `CYCLE`, `EXIT`, `RETURN` and later loop traversals. Only
 eligible branches contribute activation coverage. Source/token and budget
 failures remain hard; incomplete generic native-prefix proofs are not converted
 into support declines.
+
+Before a root owner exists, a complete original condition may read uncaptured
+fixed numeric or logical metadata on the host. The source proof authenticates
+its original storage and permits only read effects; uncertain associations,
+allocation lifetimes and side effects remain boundaries. The condition and its
+mutable inputs execute at their original point on every invocation. This grants
+no capture, initialized payload, descriptor stability or device freshness.
+Managed inputs still need their ordered definition coverage. Active owners and
+mapped child conditions retain their existing coherence requirements.
 
 Planned windows can also transfer exact interior definitions through a complete
 original joined OpenMP prefix. Native-definition version 3 authenticates the

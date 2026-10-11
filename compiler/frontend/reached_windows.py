@@ -23,7 +23,7 @@ from compiler.frontend.source_functions import _validate_scope
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 
-REACHED_WINDOW_VERSION = 8
+REACHED_WINDOW_VERSION = 9
 _EFFECTS = {"read", "write", "overwrite", "descriptor_read", "definition_change"}
 _FORBIDDEN = {"pointer", "optional", "volatile", "asynchronous", "value"}
 
@@ -225,6 +225,109 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
         work["coordinates"] += amount
         if work["coordinates"] > NATIVE_GROUP_SCAN_LIMIT:
             raise CompilationError("mapped reached aggregate coordinate/source scan budget exhausted")
+
+    def dormant_condition_reads(identity, summary, state):
+        """Unchanged host inputs, with neither capture nor definition authority."""
+        from compiler.frontend.call_bindings import _fixed_array_bounds
+        from compiler.frontend.source_functions import _validate_resolution, _walk
+
+        node = graph.nodes[identity]
+        if _mapped is not None or node.details.get("evaluation") != "condition":
+            return set()
+        roots = set()
+        for effect in summary["ordered_effects"]:
+            coordinate_work(1)
+            if effect["resource"] not in state and (effect.get("rank", 0) or any(
+                    view.get("actual_descriptor", {}).get("rank", 0)
+                    for view in effect.get("view_chain", ()) if view.get("actual_descriptor") is not None)):
+                roots.add(effect["resource"])
+        if not roots:
+            return set()
+        registered = False
+        for branch in graph.nodes.values():
+            coordinate_work(1)
+            for condition, _body in branch.alternatives:
+                coordinate_work(1)
+                registered |= condition == identity
+        if not registered:
+            raise CompilationError("dormant condition lacks exact original branch authority")
+        # Complete scalar-function proofs remain responsible for every called
+        # computation. A real side effect cannot become readonly metadata just
+        # because its array reads happen in an original branch condition.
+        probe = procedure + "::fort_effect_condition"
+        if any(effect["kind"] not in {"read", "descriptor_read"}
+               and not (effect["resource"] == probe and "fort_effect_condition" not in routine.scope.bindings)
+               for effect in summary["ordered_effects"]):
+            return set()
+        originals = graph.source_nodes(identity)
+        _validate_resolution(analysis, routine.scope, _walk(originals), tick=lambda _role: coordinate_work(1))
+        resources = []
+        for root in sorted(roots):
+            choices = {}
+            for candidate in (routine.scope, *analysis.modules.values()):
+                coordinate_work(1)
+                for binding in candidate.bindings.values():
+                    coordinate_work(1)
+                    if binding.root == root:
+                        choices[id(binding)] = binding
+            if len(choices) != 1:
+                raise _NeedsNativeClose("dormant condition needs an original fixed metadata binding: " + root)
+            binding = next(iter(choices.values()))
+            owner = binding.declaring_scope
+            if owner is None:
+                raise CompilationError("dormant condition lacks original declaration authority: " + root)
+            _validate_scope(analysis, owner)
+            if owner.bindings.get(binding.name) is not binding:
+                raise CompilationError("dormant condition original binding identity changed: " + root)
+            reason = analysis.resource_identity_boundary(binding)
+            if reason:
+                raise CompilationError(reason)
+            if (root.startswith("argument::") or binding.dtype not in {"real", "integer", "logical"}
+                    or binding.kind not in {4, 8} or not 1 <= binding.rank <= 4
+                    or binding.attributes & (_FORBIDDEN | {"allocatable", "target"})
+                    or len(binding.shape_nodes) != binding.rank
+                    or any(type(axis).__name__ != "Explicit_Shape_Spec" for axis in binding.shape_nodes)):
+                raise _NeedsNativeClose("dormant condition requires fixed unaliased native metadata: " + root)
+            # Authenticate the original declaration's expressions, including
+            # imported kind/bound PARAMETER bindings. No host payload is read.
+            declarations, seen = [], set()
+            for start in (owner, routine.scope):
+                current = start
+                while current is not None and id(current) not in seen:
+                    seen.add(id(current))
+                    _validate_scope(analysis, current)
+                    specification = next((part for part in getattr(current.node, "content", ())
+                                          if type(part).__name__ == "Specification_Part"), None)
+                    for original in _walk(specification):
+                        coordinate_work(1)
+                        kind = type(original).__name__
+                        if kind in {"Common_Stmt", "Equivalence_Stmt"}:
+                            raise _NeedsNativeClose("dormant condition metadata storage association is unproved: " + root)
+                        if kind == "Comment" and str(original).lstrip().lower().startswith("!$omp"):
+                            raise _NeedsNativeClose("dormant condition metadata OpenMP ownership is unproved: " + root)
+                        if current is owner and kind == "Type_Declaration_Stmt":
+                            dtype, _attributes, entities = original.items
+                            if (any(type(entity).__name__ == "Entity_Decl" and str(entity.items[0]).lower() == binding.name
+                                    for entity in getattr(entities, "items", ()))
+                                    and type(dtype).__name__ == "Intrinsic_Type_Spec" and dtype.items[1] is not None):
+                                declarations.append(dtype.items[1])
+                    current = current.parent
+            _validate_resolution(analysis, owner, _walk((*binding.shape_nodes, *declarations)),
+                                 tick=lambda _role: coordinate_work(1))
+            bounds = _fixed_array_bounds(analysis, binding)
+            resources.append({**_thaw(_freeze(binding.public())), "source": str(owner.path),
+                              "source_sha256": analysis.sources[str(owner.path)],
+                              "original_bounds": [list(axis) for axis in bounds]})
+        if resources:
+            prefix_steps.append({"node_id": identity, "selected_node_ids": [identity],
+                "guard": list(node.guard), "span": list(node.span),
+                "original_source_kind": "original_native_condition_reads",
+                "original_source_sha256": _hash([str(original) for original in originals]),
+                "resources": resources, "evaluation": "unchanged original host condition before ownership",
+                "capture_authority": False, "managed_definition_authority": False,
+                "descriptor_lifetime_authority": False, "alias_authority": False, "requires_no_active_context": True,
+                "allocation_freshness_authority": False, "gpu_legality_established": False})
+        return set(roots)
 
     joined_selections = {}
     if _mapped is not None or planned:
@@ -541,6 +644,7 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
             raise error("reached window needs complete prefix/window effects: "
                         + "; ".join(summary.get("reasons", ())))
         demands.append(summary["summary_identity"])
+        condition_reads = dormant_condition_reads(identity, summary, state) if before_owner else set()
         outer = set(graph.nodes[identity].guard)
         scalar_writes = set()
         for effect in summary["ordered_effects"]:
@@ -553,6 +657,8 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                 raise CompilationError("reached window native environment/control effect needs distinct authority")
             root = effect["resource"]
             if root not in state:
+                if root in condition_reads and effect["kind"] in {"read", "descriptor_read"}:
+                    continue  # Original dormant host input; no managed definition.
                 if (before_owner and native_prefix is not None and root in native_reads
                         and effect["kind"] in {"read", "descriptor_read"}):
                     continue  # Unchanged native read; no device capture or coverage.
@@ -987,6 +1093,7 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                        "direct OpenMP groups require a separate complete-group selection contract",
                        "every payload array dependency must be included; runtime nonalias guards remain required",
                        "new dormant descriptor events require selected_window none and exact original transfer; active replacement closes",
+                       "unmanaged dormant condition inputs require fixed unaliased original metadata within the existing 256-element bound",
                        "runtime registration/layout/alias guards and numerical legality required separately"]}
 
 

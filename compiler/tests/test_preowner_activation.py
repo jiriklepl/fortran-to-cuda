@@ -19,6 +19,7 @@ PREOWNER_SOURCE = """module renamed_prefix
 implicit none
 real(8),allocatable::workspace(:)
 integer::prefix_visits=0,tail_visits=0,bad_visits=0,condition_visits=0
+integer::route(2)=[0,0]
 contains
 subroutine advance(a,b,n,iterations,bad,skip)
 real(8),intent(in)::a(-2:)
@@ -26,8 +27,13 @@ real(8),allocatable,intent(inout)::b(:)
 integer,intent(in)::n,iterations
 logical,intent(in)::bad,skip
 real(8),allocatable::temporary(:)
-integer::stage,i
+integer::stage,i,bias
 prefix_visits=prefix_visits+1
+if(any(route==1).and.route(2)>=0) then
+bias=3
+else
+bias=-2
+endif
 if(allocated(workspace)) then
 deallocate(workspace)
 endif
@@ -44,7 +50,7 @@ if(skip .and. stage==1) then
 cycle
 endif
 do i=-2,n-3
-b(i)=workspace(i)+real(i+4,8)
+b(i)=workspace(i)+real(i+4+bias,8)
 enddo
 do i=-2,n-3
 workspace(i)=2.0_8*b(i)
@@ -106,13 +112,22 @@ def test_original_allocation_and_copy_establish_only_source_defined_activation(t
     path, builder, proof, originals = preowner_window_fixture(tmp_path)
     record = proof.public()
     prefix = record["prefix_eligibility"]
-    assert record["schema_version"] == 8
+    assert record["schema_version"] == 9
     assert prefix["activation_path_possible"]
     assert prefix["disabled_path_possible"]
     assert not prefix["selected_window_whole_assertion_is_prefix_read_authority"]
-    assert [step["original_source_kind"] for step in prefix["steps"]] == [
+    conditions = [step for step in prefix["steps"]
+                  if step["original_source_kind"] == "original_native_condition_reads"]
+    condition, = conditions
+    assert [resource["resource"] for resource in condition["resources"]] == ["renamed_prefix::route"]
+    assert not condition["capture_authority"]
+    assert not condition["managed_definition_authority"]
+    assert not condition["allocation_freshness_authority"]
+    assert "renamed_prefix::route" not in builder.facts["captures"]
+    transfers = [step for step in prefix["steps"] if step not in conditions]
+    assert [step["original_source_kind"] for step in transfers] == [
         "Deallocate_Stmt", "Allocate_Stmt", "Assignment_Stmt", "Assignment_Stmt"]
-    for step in prefix["steps"]:
+    for step in transfers:
         assert not step["allocation_presence_proves_payload"]
         assert step["ordered_events"][-1]["fact_initialized"] == "none"
     assert all(state["initialized"] == "whole" for state in record["states"])
