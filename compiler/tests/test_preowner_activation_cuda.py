@@ -27,7 +27,7 @@ use renamed_prefix,only:bad_visits
 bad_visits=bad_visits+100
 end subroutine
 program verify
-use renamed_prefix,only:advance,workspace,prefix_visits,tail_visits,bad_visits,condition_visits
+use renamed_prefix,only:advance,workspace,prefix_visits,tail_visits,bad_visits,condition_visits,route
 implicit none
 real({precision}),allocatable::a(:),b(:)
 integer,parameter::sizes(4)=[0,0,7,4096],extents(4)=[0,12,19,4108]
@@ -55,6 +55,8 @@ do shape=1,size(sizes)
     a(i)=real(i+32*iteration,{precision})*0.125_{precision}
    enddo
    if(allocated(b)) b=-77._{precision}
+   ! Mutable host-only metadata must be read anew at the original condition.
+   route=[iteration,merge(shape,-shape,state/=2)]
    call advance(a,b,n,iterations,bad,skip)
    if(.not.allocated(b).or..not.allocated(workspace)) error stop 'original copy did not allocate'
    if(size(b)/=extent.or.size(workspace)/=extent) error stop 'stale destination shape'
@@ -184,6 +186,7 @@ def test_original_prefix_current_bounds_and_absorbing_native_paths(preowner_bina
                "conforming_lhs_retains_distinct_lower_bound": True,
                "empty_and_changing_original_allocations": True,
                "source_copy_destinations_initially_undefined_in_capture_facts": True,
+               "dormant_metadata_reloaded_each_call": True,
                "independently_traced_path": True, "numerical_launches": launches,
                "h2d_bytes": uploaded, "d2h_bytes": downloaded,
                "compared_bytes": len(actual), "native_sha256": sha256(expected).hexdigest(),
