@@ -55,7 +55,15 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
                 # First registration can follow the original OUT event. No
                 # handle existed at ENTRY in that case, so old caller values
                 # cannot initialize this callee's definition coverage.
-                return {**fact, "initialized": "none"}
+                return {**{key: value for key, value in fact.items()
+                           if key not in {"source_sections", "sections", "requires_registered_handle"}},
+                        "initialized": "none"}
+            if "source_sections" in fact:
+                # The original root caller must establish this coverage before
+                # borrowing. Child coordinates cannot recreate root geometry.
+                return {**{key: value for key, value in fact.items()
+                           if key not in {"source_sections", "sections"}},
+                        "initialized": "none", "requires_registered_handle": True}
             return fact
 
         proxy.capture = MethodType(capture, proxy)
@@ -234,6 +242,18 @@ def borrow_module(parent, node, *, reached=None):
     # handle might outlive temporary copyback at the original call return.
     arrays = [mapping for mapping in resolved.mappings if mapping.formal_binding.rank
               and mapping.formal_binding.root not in immutable_inputs]
+    if reached is not None and parent is owner:
+        from compiler.scopes.call_registration import OriginalActual
+        # Descendant handles include hidden resources. Only the root lexical
+        # caller can evaluate its source activation geometry and descriptor.
+        record = owner.builder.reached_plan_record()
+        partial = {state["resource"] for state in record["states"] if state["initialized"] == "sections"}
+        present = {parent.canonical(mapping.binding).root for mapping in arrays}
+        numbers = set(existing.handle_numbers())
+        for binding, number in owner.resources.values():
+            if number in numbers and binding.root in partial and binding.root not in present:
+                arrays.append(OriginalActual(binding, owner.builder.visible(owner.routine, binding.root)))
+                present.add(binding.root)
     preflight = []
     if arrays:
         preflight = ["block", "logical :: fort_actuals_contiguous", "fort_actuals_contiguous = .true."]

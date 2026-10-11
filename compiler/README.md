@@ -1599,7 +1599,7 @@ joined `PARALLEL DO` groups with supported scalar private/reduction clauses;
 the native compiler executes every original reduction. No reduction lowering,
 reassociation or active-owner coherence is authorized.
 
-`prove_reached_window` version 7 transfers separately supplied entry facts through
+`prove_reached_window` version 8 transfers separately supplied entry facts through
 these prefix and descriptor proofs to an exact contiguous window, at top level
 or in the first traversal of one top-level serial counted loop. Branches meet
 conservatively and definitions retain original ordering. Hidden read-only native
@@ -1640,9 +1640,33 @@ before the whole conditional. Disabled eligibility is absorbing for that
 invocation, including `CYCLE`, `EXIT`, `RETURN` and later loop traversals. Only
 eligible branches contribute activation coverage. Source/token and budget
 failures remain hard; incomplete generic native-prefix proofs are not converted
-into support declines. Original joined prefix groups and partial activation
-registration retain their separate existing gates. Supported
-branch paths may keep ownership while another path publishes and closes before
+into support declines.
+
+Planned windows can also transfer exact interior definitions through a complete
+original joined OpenMP prefix. Native-definition version 3 authenticates the
+whole team and its unconditional single-assignment perfect nests. Every unit's
+reads require coverage at group entry, including with `NOWAIT`; writes become
+available only after the final join. May-write unions are never definitions.
+Original worksharing and synchronization remain unchanged. Invocation-entry
+facts and source-established selected-window-none coverage may justify these
+prefix reads; a selected-window-whole assertion cannot do so.
+
+Partial activation uses registered typed source geometry, distinct from external
+literal physical `sections` facts. First registration maps that geometry through
+the guarded original descriptor before a runtime handle exists, retaining
+checked coordinates, empty-domain guards and original lower bounds. Scalars
+used by this geometry must remain unchanged along active selected paths because
+registration is lazy. The original caller registers required partial resources
+before borrowed dummy association; borrowed workers require the existing handle
+and never reinterpret root geometry. `INTENT(OUT)` still kills prior definitions.
+Coverage comparisons recognize bounded constant translations of logical bounds
+and equivalent unit-stride empty-domain conditions across mapped calls. This
+proof does not rewrite runtime indices or relax descriptor and overflow checks;
+other symbolic expressions retain conservative coverage requirements.
+Unsupported nonlexical or collective registration paths retain explicit native
+boundaries. No runtime ABI or memory budget changes are required.
+
+Supported branch paths may keep ownership while another path publishes and closes before
 an unsupported call or allocation change. Closure is absorbing: that path
 executes its original native suffix once, without descriptor registration,
 planning queries or reopening. Return coverage after a possible close is
@@ -1650,6 +1674,10 @@ explicitly unknown; separately reported active-path coverage is conditional and
 cannot establish an unconditional child definition summary. Failed speculative
 units discard their demands while preserving consumed analysis work. Source
 authority, IEEE checks and aggregate analysis budgets remain independent gates.
+Joined close and prefix-disable points identify the entire ordered original
+selection, including its opening directive and final join. Emission cannot cut
+or validate only the first node of a team. Discovery version 5 retains these
+selections and completion identities in its decline diagnostics.
 An original direct child call can carry its own registered conditional plan.
 The separate `prove_native_call_coordinates` version 2 API authenticates whole
 ordinary assumed-shape associations, original caller lower origins, read-only

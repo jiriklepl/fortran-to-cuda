@@ -252,6 +252,8 @@ class CollectiveScopeBuilder(ScopeBuilder):
                       f"integer(c_int64_t), target :: fort_lowers_{i}({binding.rank})",
                       f"type(fort_scope_layout) :: fort_layout_{i}"]
             fact = self.capture(binding)
+            if "source_sections" in fact or fact.get("requires_registered_handle"):
+                raise CompilationError("collective source activation sections require separate original registration authority")
             if fact["initialized"] == "sections" and fact["sections"]:
                 specs += [f"type(fort_scope_section), target :: fort_defined_{i}({len(fact['sections'])})"]
                 for j in range(len(fact["sections"])):

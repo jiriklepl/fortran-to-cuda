@@ -11,19 +11,19 @@ from __future__ import annotations
 
 import json
 from contextlib import suppress
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from hashlib import sha256
 
 from fparser.two.utils import walk
 
 from compiler.frontend.descriptor_windows import DescriptorWindowUnsupported
-from compiler.frontend.native_sections import NativeAxis, NativeRectangle
+from compiler.frontend.native_sections import NativeAxis, NativeRectangle, NativeResourceSections
 from compiler.frontend.preowner_transfers import PreownerUnsupported, derive_preowner_step
 from compiler.frontend.source_functions import _validate_scope
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 
-REACHED_WINDOW_VERSION = 7
+REACHED_WINDOW_VERSION = 8
 _EFFECTS = {"read", "write", "overwrite", "descriptor_read", "definition_change"}
 _FORBIDDEN = {"pointer", "optional", "volatile", "asynchronous", "value"}
 
@@ -133,13 +133,14 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
         raise CompilationError("reached window requires an exact original statement tuple")
     graph, selected, prefix, controls = _position(analysis, procedure, selection)
     if _mapped is None and any(type(node).__name__ == "Comment" and str(node).lstrip().lower().startswith("!$omp")
-           for identity in (*prefix, *selected) for node in walk(graph.source_nodes(identity))):
+           for identity in (selected if planned_close_before is not None else (*prefix, *selected))
+           for node in walk(graph.source_nodes(identity))):
         raise CompilationError("reached window direct OpenMP groups require separate whole-completion authority")
     # Ordinary window proofs retain their complete-interval meaning. Planned
     # owners additionally authenticate exact close-before-original constructs;
     # nothing after a reached close receives effects or descriptor authority.
     planned = planned_close_before is not None
-    forced = {}
+    forced, forced_selections = {}, {}
     selected_graph_ids, pending = set(), list(selected)
     while pending:
         identity = pending.pop()
@@ -157,17 +158,20 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
             if not isinstance(item, tuple) or len(item) != 2:
                 raise CompilationError("planned reached closure requires an original selection and reason pair")
             originals, reason = item
-            if (not isinstance(originals, tuple) or len(originals) != 1 or not isinstance(reason, str)
-                    or type(originals[0]).__name__ not in {"Call_Stmt", "Assignment_Stmt", "If_Construct", "If_Stmt",
-                                                          "Block_Nonlabel_Do_Construct", "Associate_Construct"}):
+            if (not isinstance(originals, tuple) or not originals or len(originals) > analysis.operation_limit
+                    or not isinstance(reason, str)):
                 raise CompilationError("planned reached closure requires a complete original construct")
             _original_graph, identities = analysis._selected_source(procedure, originals)
-            if len(identities) != 1 or identities[0] not in selected_graph_ids or identities[0] in forced:
+            if not identities or not set(identities) <= selected_graph_ids or identities[0] in forced:
                 raise CompilationError("planned reached closure escapes or duplicates its exact selected source")
             identity = identities[0]
-            if graph.nodes[identity].details.get("evaluation") in {"condition", "loop_header", "directive"}:
+            if len(identities) == 1 and len(originals) == 1 and (
+                    type(originals[0]).__name__ not in {"Call_Stmt", "Assignment_Stmt", "If_Construct", "If_Stmt",
+                                                      "Block_Nonlabel_Do_Construct", "Associate_Construct"}
+                    or graph.nodes[identity].details.get("evaluation") in {"condition", "loop_header", "directive"}):
                 raise CompilationError("planned reached closure cannot cut an original control or joined-group interior")
             forced[identity] = reason
+            forced_selections[identity] = identities, originals
     if (not isinstance(roots, tuple) or not roots or len(roots) > analysis.operation_limit
             or any(not isinstance(root, str) for root in roots) or len(set(roots)) != len(roots)):
         raise CompilationError("reached window requires bounded unique canonical roots")
@@ -214,6 +218,7 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
     prefix_steps, prefix_disables = [], {}
     visits, effects, effect_work = 0, 0, 0
     active_ids, closes, changed_scalars = set(), {}, set()
+    activation_templates = {}
 
     def coordinate_work(amount):
         from compiler.frontend.native_group_structure import NATIVE_GROUP_SCAN_LIMIT
@@ -222,7 +227,7 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
             raise CompilationError("mapped reached aggregate coordinate/source scan budget exhausted")
 
     joined_selections = {}
-    if _mapped is not None:
+    if _mapped is not None or planned:
         from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
 
         def groups(originals, peeled):
@@ -230,12 +235,30 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                 coordinate_work(1)
                 if isinstance(item, NativeGroupCandidate):
                     _graph, identities = analysis._selected_source(procedure, item.original_nodes)
-                    if len(identities) > 1:
-                        joined_selections[identities[0]] = identities
+                    joined_selections[identities[0]] = identities
                 elif type(item).__name__ in {"If_Construct", "Block_Nonlabel_Do_Construct", "Associate_Construct"}:
                     groups(peeled.get(id(item), getattr(item, "content", ())), peeled)
 
-        groups(selection, {})
+        groups(selection if _mapped is not None else (), {})
+        if planned and _mapped is None:
+            groups(tuple(original for identity in prefix for original in graph.source_nodes(identity)), {})
+    for identity, (identities, originals) in forced_selections.items():
+        grouped = joined_selections.get(identity)
+        if len(identities) != 1 or len(originals) != 1:
+            exact = tuple(original for node_id in identities for original in graph.source_nodes(node_id))
+            if grouped != identities or len(exact) != len(originals) or any(
+                    left is not right for left, right in zip(exact, originals, strict=True)):
+                raise CompilationError("planned reached closure requires one exact complete original joined selection")
+        elif any(identity in members for first, members in joined_selections.items() if first != identity):
+            raise CompilationError("planned reached closure cannot cut an original joined-group interior")
+    if planned and _mapped is None:
+        owned_directives = {id(node) for members in joined_selections.values() for identity in members
+                            for original in graph.source_nodes(identity) for node in walk(original)
+                            if type(node).__name__ == "Comment"}
+        if any(id(node) not in owned_directives for identity in prefix for original in graph.source_nodes(identity)
+               for node in walk(original) if type(node).__name__ == "Comment"
+               and str(node).lstrip().lower().startswith("!$omp")):
+            raise CompilationError("reached window direct OpenMP prefix needs exact whole joined selection authority")
 
     def checkpoint():
         return (tuple(map(len, (demands, descriptor_demands, native_prefix_demands, definition_demands,
@@ -255,13 +278,16 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
         # Only an explicit local support rejection can close. Source/token
         # authentication and aggregate work failures remain hard exceptions,
         # independently of the wording of their diagnostics.
-        from compiler.frontend.native_definitions import NativeCallCoordinatesUnsupported
+        from compiler.frontend.native_definitions import NativeCallCoordinatesUnsupported, NativeDefinitionUnsupported
         if (work["effects"] > analysis.operation_limit or not isinstance(error, (
-                DescriptorWindowUnsupported, NativeCallCoordinatesUnsupported, _NeedsNativeClose))):
+                DescriptorWindowUnsupported, NativeCallCoordinatesUnsupported, NativeDefinitionUnsupported,
+                _NeedsNativeClose))):
             raise error
 
     def may_disable(error):
-        if not isinstance(error, (PreownerUnsupported, DescriptorWindowUnsupported, _NeedsNativeClose)):
+        from compiler.frontend.native_definitions import NativeDefinitionUnsupported
+        if not isinstance(error, (PreownerUnsupported, DescriptorWindowUnsupported, NativeDefinitionUnsupported,
+                                  _NeedsNativeClose)):
             raise error
         if work["effects"] > analysis.operation_limit:
             raise error
@@ -279,11 +305,28 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                 pending.extend((body,) if condition is None else (condition, body))
         return result
 
-    def close_before(identity, reason):
+    def selection_span(identities):
+        if len(identities) == 1:
+            # A single-line IF action has no independent original edit span.
+            # Its provisional cut is upgraded to the intact IF by the branch
+            # transfer; never invent an inner statement's source position.
+            return list(graph.nodes[identities[0]].span)
+        first, last = graph.nodes[identities[0]].span, graph.nodes[identities[-1]].span
+        if len(first) != 2 or len(last) != 2:
+            raise CompilationError("joined reached selection lacks exact original endpoint spans")
+        return [first[0], last[1]]
+
+    def close_before(identity, reason, joined_selection=None):
         from compiler.frontend.source_functions import _validate_resolution, _validate_scope, _walk
 
-        originals = graph.source_nodes(identity)
-        if (len(originals) != 1 or type(originals[0]).__name__ not in {
+        identities = joined_selection or (identity,)
+        originals = tuple(original for item in identities for original in graph.source_nodes(item))
+        completion = None
+        if joined_selection is not None or graph.native_group_for_selection(identities) is not None:
+            if joined_selections.get(identity) != identities:
+                raise CompilationError("planned close lacks exact complete original joined selection")
+            completion = analysis.joined_completion(procedure, identities)
+        elif (len(originals) != 1 or type(originals[0]).__name__ not in {
                 "Call_Stmt", "Assignment_Stmt", "If_Construct", "If_Stmt", "Block_Nonlabel_Do_Construct",
                 "Associate_Construct", "Allocate_Stmt", "Deallocate_Stmt"}):
             raise CompilationError("planned reached closure needs a complete original native construct: " + reason)
@@ -295,10 +338,12 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
             child = graph.nodes[identity].details.get("procedure")
             if child in analysis.routines:
                 _validate_scope(analysis, analysis._require_original(child).scope)
-        closes[identity] = {"node_id": identity, "guard": list(graph.nodes[identity].guard),
-                            "original_source_sha256": _hash(str(originals[0])),
-                            "original_source_kind": type(originals[0]).__name__,
-                            "span": list(graph.nodes[identity].span), "reason": reason,
+        closes[identity] = {"node_id": identity, "selected_node_ids": list(identities),
+                            "guard": list(graph.nodes[identity].guard),
+                            "original_source_sha256": _hash([str(node) for node in originals]),
+                            "original_source_kind": "complete_original_joined_group" if completion else type(originals[0]).__name__,
+                            "completion_identity": completion.identity if completion else None,
+                            "span": selection_span(identities), "reason": reason,
                             "execution": "publish and close before unchanged original source; native suffix once",
                             "closed_is_absorbing": True, "reopen": False}
         return None, True
@@ -434,6 +479,46 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
             descriptor = prove_descriptor_window(selected_analysis, procedure, leaf_selection, descriptor_roots,
                                                  module_roots=module_roots)
             descriptor_demands.append(descriptor.identity)
+        if completion is not None and (before_owner or any(_coverage_kind(boxes) != "whole"
+                                                         for boxes in state.values())):
+            from compiler.frontend.native_definitions import prove_native_definitions
+            originals = tuple(original for item in leaf_selection for original in graph.source_nodes(item))
+            definition = prove_native_definitions(selected_analysis, procedure, originals,
+                descriptor_window=descriptor, completion=completion, consume=coordinate_work)
+            public = definition.public()
+            count = public["ordered_effect_count"]
+            effects += count
+            effect_work += count
+            work["effects"] += count
+            if work["effects"] > analysis.operation_limit:
+                raise CompilationError("reached window ordered joined effect budget exhausted")
+            resources = {item["resource"] for item in public["resources"]}
+            if resources - state.keys():
+                raise _NeedsNativeClose("reached joined group untracked array needs definition/alias authority: "
+                                        + sorted(resources - state.keys())[0])
+            if before_owner and any(resource.reads and facts["captures"][resource.resource].get("lifetime") == "selected_window"
+                                    and facts["captures"][resource.resource]["initialized"] == "whole"
+                                    for step in definition.steps for resource in step.sections.resources):
+                raise PreownerUnsupported("joined-prefix read cannot use selected-window whole assertion before activation")
+            transferred = definition.transfer({root: state[root] for root in resources}, consume=coordinate_work)
+            if transferred.uncovered_reads:
+                raise _NeedsNativeClose("reached joined group read requires original group-entry definition: "
+                                        + transferred.uncovered_reads[0].resource)
+            definition_demands.append(definition.identity)
+            demands.extend(public["source_demands"])
+            for step in definition.steps:
+                for resource in step.sections.resources:
+                    activation_templates[resource.resource] = resource
+            state.update(transferred.definitions)
+            if before_owner:
+                prefix_steps.append({"node_id": identity, "selected_node_ids": list(leaf_selection),
+                    "guard": list(graph.nodes[identity].guard), "original_source_kind": "complete_original_joined_group",
+                    "span": selection_span(leaf_selection),
+                    "original_source_sha256": _hash([str(node) for node in originals]),
+                    "definition_proof_identity": definition.identity, "completion_identity": completion.identity,
+                    "payload_provenance": "exact unconditional native must-writes after original final join",
+                    "no_cross_unit_definition_credit": True})
+            return state
         if completion is not None and graph.native_group_for_selection(leaf_selection) is not None:
             _graph, _ids, _group, units = selected_analysis.native_group_summaries(procedure, leaf_selection, completion)
             summary = {"complete": all(unit["complete"] for unit in units),
@@ -652,9 +737,19 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                 work["visits"] += len(joined)
                 if work["visits"] > graph.node_limit or depth > analysis.depth_limit:
                     raise CompilationError("mapped reached joined control traversal budget exhausted")
-                # No conditional cut can occur inside a complete original
-                # team. A support failure propagates to its whole caller.
-                result = leaf(identity, dict(state[0]), joined_selection=joined)
+                before = checkpoint()
+                try:
+                    if identity in forced:
+                        state = close_before(identity, forced[identity], joined)
+                        index += len(joined)
+                        continue
+                    result = leaf(identity, dict(state[0]), joined_selection=joined)
+                except CompilationError as error:
+                    may_close(error)
+                    discard(before)
+                    state = close_before(identity, str(error), joined)
+                    index += len(joined)
+                    continue
                 active_ids.update(item for child in joined for item in descendants(child))
                 state = result, state[1]
                 index += len(joined)
@@ -663,25 +758,58 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
             index += 1
         return state
 
-    def disable_prefix(identity, reason):
+    def disable_prefix(identity, reason, joined_selection=None):
         from compiler.frontend.source_functions import _validate_resolution, _walk
 
-        originals = graph.source_nodes(identity)
-        if (len(originals) != 1 or type(originals[0]).__name__ not in {
+        identities = joined_selection or (identity,)
+        originals = tuple(original for item in identities for original in graph.source_nodes(item))
+        completion = None
+        if joined_selection is not None:
+            if joined_selections.get(identity) != identities:
+                raise CompilationError("pre-owner disable lacks exact complete joined selection")
+            completion = analysis.joined_completion(procedure, identities)
+        elif (len(originals) != 1 or type(originals[0]).__name__ not in {
                 "Call_Stmt", "Assignment_Stmt", "If_Construct", "If_Stmt", "Block_Nonlabel_Do_Construct",
                 "Associate_Construct", "Allocate_Stmt", "Deallocate_Stmt", "Cycle_Stmt", "Exit_Stmt",
                 "Return_Stmt", "Write_Stmt", "Print_Stmt", "Read_Stmt", "Stop_Stmt", "Error_Stop_Stmt"}):
             raise CompilationError("pre-owner disable requires a complete original structured statement: " + reason)
         _validate_scope(analysis, routine.scope)
-        _validate_resolution(analysis, routine.scope, _walk(originals[0]), tick=lambda _role: coordinate_work(1))
+        _validate_resolution(analysis, routine.scope, _walk(originals), tick=lambda _role: coordinate_work(1))
         prefix_disables[identity] = {
-            "node_id": identity, "guard": list(graph.nodes[identity].guard),
-            "original_source_sha256": _hash(str(originals[0])),
-            "original_source_kind": type(originals[0]).__name__,
-            "span": list(graph.nodes[identity].span), "reason": reason,
+            "node_id": identity, "selected_node_ids": list(identities), "guard": list(graph.nodes[identity].guard),
+            "original_source_sha256": _hash([str(node) for node in originals]),
+            "original_source_kind": "complete_original_joined_group" if completion else type(originals[0]).__name__,
+            "completion_identity": completion.identity if completion else None,
+            "span": selection_span(identities), "reason": reason,
             "execution": "disable eligibility before unchanged original source; native remainder once",
             "disabled_is_absorbing": True, "context_exists": False, "reopen": False}
         return None, True
+
+    def prefix_sequence(identities, state, depth=0):
+        index = 0
+        while index < len(identities):
+            identity = identities[index]
+            joined = joined_selections.get(identity)
+            if joined is None or state[0] is None:
+                state = prefix_transfer(identity, state, depth)
+                index += 1
+                continue
+            if tuple(identities[index:index + len(joined)]) != joined:
+                raise CompilationError("pre-owner joined selection is not an intact original sequence")
+            work["visits"] += len(joined)
+            if work["visits"] > graph.node_limit or depth > analysis.depth_limit:
+                raise CompilationError("reached prefix joined control traversal budget exhausted")
+            before = checkpoint()
+            try:
+                result = leaf(identity, dict(state[0]), before_owner=True, joined_selection=joined)
+            except CompilationError as error:
+                may_disable(error)
+                discard(before)
+                state = disable_prefix(identity, str(error), joined)
+            else:
+                state = result, state[1]
+            index += len(joined)
+        return state
 
     def prefix_transfer(identity, state, depth=0):
         nonlocal visits
@@ -694,9 +822,7 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
             raise CompilationError("reached window prefix control traversal budget exhausted")
         node = graph.nodes[identity]
         if node.kind == "sequence":
-            for child in node.children:
-                state = prefix_transfer(child, state, depth + 1)
-            return state
+            return prefix_sequence(node.children, state, depth + 1)
         if node.kind == "branch":
             before = checkpoint()
             previous_disables = dict(prefix_disables)
@@ -755,8 +881,7 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
     prefix_disabled, activation_possible = False, True
     if planned and _mapped is None:
         state = coverage, False
-        for identity in prefix:
-            state = prefix_transfer(identity, state)
+        state = prefix_sequence(prefix, state)
         eligible, prefix_disabled = state
         activation_possible = eligible is not None
         coverage = eligible or {root: () for root in roots}
@@ -764,8 +889,9 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
         for identity in prefix:
             coverage = transfer(identity, coverage, before_owner=True)
     at_entry = dict(coverage)
-    if _mapped is None and any(_coverage_kind(boxes) == "sections" for boxes in at_entry.values()):
+    if not planned and _mapped is None and any(_coverage_kind(boxes) == "sections" for boxes in at_entry.values()):
         raise CompilationError("reached prefix partial definitions require source-position section registration")
+    entry_templates = dict(activation_templates)
     has_closed_path = False
     if planned:
         state = planned_sequence(selected, (coverage if activation_possible else None, False))
@@ -776,13 +902,30 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
     else:
         for identity in selected:
             coverage = transfer(identity, coverage)
+    activation_resources = {}
+    for root, boxes in at_entry.items():
+        if _coverage_kind(boxes) != "sections":
+            continue
+        template = entry_templates.get(root)
+        if template is None:
+            if _mapped is not None:
+                continue  # An original caller registers before dummy rebasing.
+            raise CompilationError("partial activation lacks typed original descriptor provenance: " + root)
+        resource = replace(template, reads=(), writes=(), overwrites=boxes)
+        if any(dependency.kind == "scalar_read" and dependency.resource in changed_scalars
+               for dependency in resource.dependencies):
+            raise CompilationError("partial activation bound changes before possible lazy registration: " + root)
+        activation_resources[root] = resource
     if _children is not None:
         _children.extend(mapped_children)
     if _result is not None:
-        _result.update(active=active_coverage if planned else coverage, closed=has_closed_path)
+        _result.update(active=active_coverage if planned else coverage, closed=has_closed_path,
+                       activation_sections=activation_resources)
     unmanaged_path = has_closed_path or prefix_disabled
     states = [{"resource": root, "initialized": _coverage_kind(at_entry[root]),
                "definition_coverage": _coverage_kind(at_entry[root]),
+               "source_sections_on_activation": (activation_resources[root].public()
+                                                  if root in activation_resources else None),
                "coverage_on_return": "unknown_after_close" if unmanaged_path else _coverage_kind(coverage[root]),
                "defined_sections_on_return": [box.public() for box in coverage[root]]
                    if not unmanaged_path and _coverage_kind(coverage[root]) == "sections" else [],
@@ -839,7 +982,7 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
             "activation": "first traversal only; no live context during the native prefix",
             "limits": ["one original immediate sequence at top level or first traversal of one top-level counted loop",
                        "exact original assignment/perfect affine-loop partial definitions within the selected window",
-                       "partial prefix definitions require separate source-position registration",
+                       "exact joined-prefix sections require typed original-layout first registration",
                        "calls and unsupported native footprints retain conservative whole-definition requirements",
                        "direct OpenMP groups require a separate complete-group selection contract",
                        "every payload array dependency must be included; runtime nonalias guards remain required",
@@ -875,6 +1018,7 @@ class ReachedWindowProof:
     _record: object = field(repr=False, compare=False)
     _planned_close_before: object = field(repr=False, compare=False)
     _children: tuple = field(repr=False, compare=False)
+    _activation_resources: tuple = field(repr=False, compare=False)
 
     def public(self):
         return {"proof_identity": self.identity, **_thaw(self._record)}
@@ -897,6 +1041,24 @@ class ReachedWindowProof:
             raise CompilationError("reached window capture root was not proved")
         return state
 
+    def activation_sections(self, canonical_root):
+        """Authenticated typed coverage, never thawed public geometry.
+
+        Whole/none use the existing registration contract. Partial coverage is
+        expressed in original logical coordinates and needs checked conversion
+        against the guarded original descriptor before first registration.
+        """
+        state = self.capture_state(canonical_root)
+        resource = next((item for root, item in self._activation_resources if root == canonical_root), None)
+        if state["initialized"] != "sections":
+            if resource is not None:
+                raise CompilationError("whole/empty activation unexpectedly carries partial source authority")
+            return None
+        if (not isinstance(resource, NativeResourceSections) or resource.resource != canonical_root
+                or resource.reads or resource.writes or resource.public() != state["source_sections_on_activation"]):
+            raise CompilationError("partial activation lacks exact typed source-section authority")
+        return resource
+
     def child_plan(self, path, original_call):
         """Authenticate a nested original call without inventing child facts."""
         self.validate(self._analysis, self.procedure, self._selection)
@@ -914,9 +1076,9 @@ class ReachedWindowProof:
 
 
 def _prove(analysis, procedure, original_selection, requested_roots, entry_definition_facts, close_before):
-    children = []
+    children, result = [], {}
     record = _derive(analysis, procedure, original_selection, requested_roots, entry_definition_facts, close_before,
-                     _children=children)
+                     _children=children, _result=result)
     identity = _hash(record)
     registry = getattr(analysis, "_reached_window_proofs", None)
     if registry is None:
@@ -926,7 +1088,8 @@ def _prove(analysis, procedure, original_selection, requested_roots, entry_defin
     if len(registry) >= analysis.procedure_limit:
         raise CompilationError("reached window proof registry budget exhausted")
     proof = ReachedWindowProof(procedure, identity, analysis, original_selection, requested_roots,
-                               _freeze(entry_definition_facts), _freeze(record), close_before, tuple(children))
+                               _freeze(entry_definition_facts), _freeze(record), close_before, tuple(children),
+                               tuple(result["activation_sections"].items()))
     registry[identity] = proof
     return proof
 

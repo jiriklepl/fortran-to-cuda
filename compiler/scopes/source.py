@@ -590,13 +590,13 @@ class ScopeBuilder:
         try:
             children = [node for node in _children(routine.execution) if _kind(node) != "Comment"]
             if (self.config.scope_execution != "reached" and children
-                    and all(_kind(node) == "Call_Stmt" for node in children)):
+                    and all(_kind(node) == "Call_Stmt" for node in children)
+                    and not any(self.coordinator(self.execution_source_call(routine, node).procedure)
+                                for node in children)):
                 # Existing straight wrappers retain their shared query unless a
                 # descendant explicitly owns reached source decisions.
-                if not any(self.coordinator(self.execution_source_call(routine, node).procedure)
-                           for node in children):
-                    self.coordinators[procedure] = None
-                    return None
+                self.coordinators[procedure] = None
+                return None
             from compiler.scopes.procedures import BorrowedCoordinator
             coordinator = BorrowedCoordinator(self, procedure, tuple(self.coordinator_visiting))
             self.coordinators[procedure] = coordinator
@@ -752,6 +752,8 @@ class ScopeBuilder:
         if {"pointer", "optional", "volatile", "asynchronous", "value"} & binding.attributes:
             raise CompilationError("capture association or participation is uncertain: " + binding.name)
         fact = self.facts["captures"].get(binding.root)
+        if isinstance(fact, dict) and ("source_sections" in fact or "requires_registered_handle" in fact):
+            raise CompilationError("source activation coverage is compiler-owned, not an external capture fact")
         if (not isinstance(fact, dict) or fact.get("storage") != "stable"
                 or fact.get("escapes") is not False or fact.get("allocation_changes") is not False
                 or not isinstance(fact.get("initialized"),str)
@@ -782,7 +784,13 @@ class ScopeBuilder:
             if self.visible_binding(self.entry, binding.root) is not binding:
                 raise CompilationError("reached owner capture requires its exact original storage binding")
             state = proof.capture_state(binding.root)
-            return {**fact, "initialized": state["initialized"]}
+            result = {**fact, "initialized": state["initialized"]}
+            if state["initialized"] == "sections":
+                sections = proof.activation_sections(binding.root)
+                if sections is None:
+                    raise CompilationError("reached partial activation lacks typed original source geometry")
+                result["source_sections"] = sections
+            return result
         if fact.get("lifetime") == "selected_window":
             raise CompilationError("capture requires a registered selected-position lifetime proof: " + binding.root)
         return fact
@@ -1510,7 +1518,7 @@ class ScopeBuilder:
                     if formal in formal_definitions:
                         written.add(binding.root)
             for root in actions:
-                visible = self.visible(routine, root)
+                self.visible(routine, root)
                 binding = self.visible_binding(routine, root)
                 self.capture(binding)
                 arrays[root] = binding
@@ -1759,7 +1767,10 @@ class ScopeBuilder:
             dtype, enum, width = DTYPES[binding.signature()[:2]]
             handles[root] = "fort_handle_" + str(i)
             layouts[root] = "fort_layout_" + str(i)
-            flags[root] = int(self.capture(binding)["initialized"] == "whole")
+            fact = self.capture(binding)
+            if "source_sections" in fact or fact.get("requires_registered_handle"):
+                raise CompilationError("source activation sections require original lexical caller registration")
+            flags[root] = int(fact["initialized"] == "whole")
             if binding.intent == "in" and root in written:
                 raise CompilationError("scope writes an INTENT(IN) capture")
             intent = "inout" if root in written else "in"
@@ -1874,7 +1885,7 @@ class ScopeBuilder:
                 body += ["if (fort_status == FORT_SCOPE_OK) then"]
                 body += _fortran_list(f"fort_extents_{i} = [",
                                      [f"size({visible},{axis},kind=c_size_t)" for axis in range(1,binding.rank+1)], "]", 0)
-                body += [f"fort_lowers_{i} = {bounds[root] if root in bounds else '1_c_int64_t'}",
+                body += [f"fort_lowers_{i} = {bounds.get(root, '1_c_int64_t')}",
                          "fort_host_pointer = c_null_ptr",
                          f"if (all(fort_extents_{i} > 0)) fort_host_pointer = c_loc({visible})",
                          f"{layouts[root]} = fort_scope_layout({binding.rank}, {enum}, {width}_c_size_t, &",

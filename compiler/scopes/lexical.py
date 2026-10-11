@@ -525,6 +525,13 @@ class LexicalOwner:
                 f"type(fort_scope_plan_binding), target :: fort_bindings({max(1,len(arrays))})",
                 f"integer(c_int), parameter :: fort_mode = {1 if builder.config.policy == 'sections' else 2}"]
         prepare = ["fort_status = FORT_SCOPE_OK", "fort_can = .true."]
+        failure = [*self.close(), "exit " + block]
+        capture_facts = {root: builder.capture(binding) for root, binding in arrays.items()}
+        for root, fact in capture_facts.items():
+            if fact.get("requires_registered_handle"):
+                # The root registered exact partial coverage before borrowing.
+                # Check before even preparing child descriptors or decisions.
+                prepare += [f"if ({handles[root]} == 0) then", "fort_status = FORT_SCOPE_BOUNDARY", *failure, "endif"]
         element_captures = [capture for call in unit.scope.calls if call.region is not None
                             for capture in call.region.scalar_element_captures]
         element_active = None
@@ -622,9 +629,12 @@ class LexicalOwner:
         for root, binding in arrays.items():
             name, number = parameters[root], self.resources[root][1]
             _, enum, width = DTYPES[binding.signature()[:2]]
-            fact = builder.capture(binding)
+            fact = capture_facts[root]
             if root not in direct:
                 prepare += [f"{views[root]} => {name}"]
+            if fact.get("requires_registered_handle"):
+                # Root activation geometry is never rendered through a dummy.
+                continue
             prepare += [f"if (fort_status == FORT_SCOPE_OK .and. {handles[root]} == 0) then",
                         f"fort_extents_{number} = shape({name}, kind=c_size_t)",
                         f"fort_lowers_{number} = lbound({name}, kind=c_int64_t)",
@@ -632,23 +642,19 @@ class LexicalOwner:
                         f"if (all(fort_extents_{number} > 0)) fort_pointer = c_loc({name})",
                         f"fort_layout = fort_scope_layout({binding.rank}, {enum}, {width}_c_size_t, &",
                         f"fort_pointer, c_loc(fort_extents_{number}), c_loc(fort_lowers_{number}), 1_c_int64_t)"]
-            if fact["initialized"] == "sections":
-                sections = fact["sections"]
-                spec += [f"type(fort_scope_section), target :: fort_defined_{number}({len(sections)})"]
-                for ordinal, section in enumerate(sections, 1):
-                    for bound in ("lower", "upper"):
-                        variable = f"fort_defined_{number}_{ordinal}_{bound}"
-                        spec += [f"integer(c_size_t), target :: {variable}({binding.rank})"]
-                        prepare += [variable + " = [" + ",".join(f"{v}_c_size_t" for v in section[bound]) + "]",
-                                    f"fort_defined_{number}({ordinal})%{bound} = c_loc({variable})"]
-                pointer = f"c_loc(fort_defined_{number})" if sections else "c_null_ptr"
-                prepare += [f"fort_status = fort_scope_register_sections(fort_context, {number}_c_int64_t, &",
-                            f"1_c_int64_t, fort_layout, {pointer}, {len(sections)}_c_size_t, {handles[root]})"]
-            else:
-                prepare += [f"fort_status = fort_scope_register(fort_context, {number}_c_int64_t, &",
-                            f"1_c_int64_t, fort_layout, {int(fact['initialized']=='whole')}_c_int, {handles[root]})"]
+            from compiler.scopes.registration import build_registration
+            source = fact.get("source_sections")
+            scalar_parameters = dict(parameters)
+            if source is not None:
+                scalar_parameters.update({item.resource: builder.visible(self.routine, item.resource)
+                                          for item in source.dependencies if item.kind == "scalar_read"})
+            code = build_registration(fact, binding.rank, handles[root], f"fort_defined_{number}",
+                f"{number}_c_int64_t", "fort_layout", on_error=tuple(failure), parameters=scalar_parameters,
+                logical_lower_bounds={root: tuple(f"lbound({name},{axis},kind=c_int64_t)"
+                                                   for axis in range(1, binding.rank+1))})
+            spec += code.specification
+            prepare += code.prepare
             prepare += ["endif"]
-        failure = [*self.close(), "exit " + block]
         prepare += ["if (fort_status /= FORT_SCOPE_OK) then", *failure, "endif"]
         # Native derived-object fields keep their original representation.
         # An undefined opaque registration reserves the address range for
