@@ -272,10 +272,13 @@ if command -v module &>/dev/null || type module &>/dev/null 2>&1; then
     module load apptainer 2>/dev/null || true
     module load cuda 2>/dev/null || true
     module load gcc 2>/dev/null || true
+    module load python3.12 2>/dev/null || module load python/3.12 2>/dev/null || module load python-3.12 2>/dev/null || true
 elif [[ -f /etc/profile.d/modules.sh ]]; then
     source /etc/profile.d/modules.sh 2>/dev/null || true
     module load apptainer 2>/dev/null || true
     module load cuda 2>/dev/null || true
+    module load gcc 2>/dev/null || true
+    module load python3.12 2>/dev/null || module load python/3.12 2>/dev/null || module load python-3.12 2>/dev/null || true
 fi
 
 # 2. Check for GPU device visibility
@@ -313,6 +316,19 @@ else
     export MPLCONFIGDIR="/tmp/matplotlib-${USER:-tmp}"
     mkdir -p "${MPLCONFIGDIR}"
     chmod 777 "${MPLCONFIGDIR}" 2>/dev/null || true
+
+    # Explicitly discover and export Python 3.12+ (worker nodes default to 3.9)
+    for py_cand in python3.12 /usr/bin/python3.12 /usr/local/bin/python3.12 python3.13 python3.11; do
+        if command -v "${py_cand}" &>/dev/null; then
+            export PYTHON="$(command -v "${py_cand}")"
+            echo "Selected Python interpreter: ${PYTHON} ($(${PYTHON} --version 2>&1))"
+            break
+        elif [[ -x "${py_cand}" ]]; then
+            export PYTHON="${py_cand}"
+            echo "Selected Python interpreter: ${PYTHON} ($(${PYTHON} --version 2>&1))"
+            break
+        fi
+    done
 
     "${WORKSPACE_ROOT}/containers/reproduce_plots.sh" \
         ${REPRODUCE_FLAG} \
