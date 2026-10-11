@@ -24,7 +24,7 @@ from compiler.emission.fortran.formatting import _fortran_line, _fortran_list
 from compiler.frontend import lower_file
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.frontend.component_bindings import references
-from compiler.frontend.source_effects import SourceEffects, _children, _kind, _part
+from compiler.frontend.source_effects import SourceEffects, _canonical, _children, _kind, _part
 from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.integers import integer_literal
 from compiler.numerical_contract import numerical_build_contract
@@ -523,7 +523,9 @@ class ScopeBuilder:
             self.generated[procedure] = None
             self.numerical_reasons[procedure] = "source calls require their reached workers"
             return None
-        summary = self.analysis.summarize(procedure)
+        analysis = self.analysis
+        configuration = _canonical({"options": vars(self.options), "config": vars(self.config)})
+        summary = analysis.summarize(procedure)
         result = None
         # Keep procedure-entry definition events at their original positions.
         # Numerical helper inlining currently discards those source events;
@@ -538,42 +540,56 @@ class ScopeBuilder:
             reason = "optional or allocatable numerical formals require descriptor-aware numerical variants"
         elif (summary["cloneable"] or package and not summary["persistent_state"]) and summary["complete"] and leaf:
             try:
-                self.check_numerical_capture_origins(procedure)
+                self._check_numerical_capture_origins(procedure, summary)
                 if any(b.dtype == "logical" and b.kind != 1 for b in routine.scope.bindings.values()
                        if b.name in routine.arguments):
                     raise CompilationError("source LOGICAL conversion requires guarded ABI handling")
                 if package:
-                    effects, _, _ = self.native_effects(procedure)
+                    effects, _, _ = self._native_effects(procedure, summary=summary)
                     if not set(effects).issubset(package.arrays):
                         raise CompilationError("numerical source package omits original array effects")
                     function = lower_file(package.path, package.entry)
                 else:
-                    effects, _, _ = self.native_effects(procedure)
+                    effects, _, _ = self._native_effects(procedure, summary=summary)
                     if any(not root.startswith("argument::") for root in effects):
                         raise CompilationError("hidden numerical arrays require a normalized source package")
                     function = lower_file(self.analysis.inputs.path(routine.scope.path), procedure)
                 function, plan = prepare_function(function, options=self.options)
                 if plan.regions:
-                    from compiler.offload.source_compute import native_participation
-                    participation = native_participation(self.analysis, procedure)
+                    from compiler.offload.source_compute import _native_participation
+                    participation = _native_participation(analysis, procedure, summary["native_completion"])
                     sources = generate_sources(function, plan,
                         offload_config=replace(self.config, native_participation=participation), memory_model="scoped")
                     if sources.scoped:
                         result = sources
-                        self.numerical_ir[procedure] = (function, plan)
                     else:
                         reason = "numerical source has no supported shared entry"
                 else:
                     reason = "numerical source has no parallel region"
             except CompilationError as error:
                 reason = str(error) # Supported native effects do not imply GPU eligibility.
+        if result is not None:
+            # Reuse only the summary issued in this synchronous classification.
+            # No successful candidate is adopted until fresh source/config
+            # checks complete, outside the numerical-support decline handler.
+            if self.analysis is not analysis:
+                raise CompilationError("source analysis changed during numerical classification")
+            syntax = analysis._source_syntax.checkpoint()
+            analysis._require_original(procedure, _syntax=syntax)
+            authority = _canonical(analysis._summary_authority(_syntax=syntax))
+            if (sha256(authority.encode()).hexdigest() != summary["analysis_identity"]
+                    or configuration != _canonical({"options": vars(self.options), "config": vars(self.config)})):
+                raise CompilationError("source or configuration authority changed during numerical classification")
+            self.numerical_ir[procedure] = (function, plan)
         self.generated[procedure] = result
         self.numerical_reasons[procedure] = None if result else reason
         return result
 
     def check_numerical_capture_origins(self, procedure):
         """Require complete original-descriptor mappings for dynamic origins."""
-        summary = self.analysis.summarize(procedure)
+        self._check_numerical_capture_origins(procedure, self.analysis.summarize(procedure))
+
+    def _check_numerical_capture_origins(self, procedure, summary):
         resources = {operation.get("resource") for operation in summary["operations"]}
         package = self.packages.get(procedure)
         if package:
@@ -694,6 +710,9 @@ class ScopeBuilder:
 
     def native_effects(self, procedure, mapping=None, active=(), *, allow_views=False):
         """Flatten bounded effects with formal-to-root identities, never IR."""
+        return self._native_effects(procedure, mapping, active, allow_views=allow_views)
+
+    def _native_effects(self, procedure, mapping=None, active=(), *, allow_views=False, summary=None):
         if self.config.scope_execution == "reached":
             # Classification creates the coordinator. Numerical leaf probing
             # also asks for native effects and must not recursively classify
@@ -716,7 +735,8 @@ class ScopeBuilder:
         for node in walk(routine.execution):
             if _kind(node) == "Call_Stmt":
                 self.execution_source_call(routine, node)
-        summary = self.analysis.summarize(procedure)
+        if summary is None:
+            summary = self.analysis.summarize(procedure)
         mapping = {} if mapping is None else mapping
         effects, definitions, overwrites = {}, set(), set()
 

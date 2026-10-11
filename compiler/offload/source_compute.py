@@ -58,11 +58,14 @@ def native_participation(analysis, procedure):
     the original execution point; only a reached numerical unit incurs team
     startup. Mixed serial/team bodies retain an unavailable counterfactual.
     """
+    return _native_participation(analysis, procedure, analysis.summarize(procedure)["native_completion"])
+
+
+def _native_participation(analysis, procedure, summary):
     from compiler.frontend.source_effects import _children, _kind
     from compiler.ir import CompilationError
     from compiler.scopes.segments import directive, grouped_nodes
 
-    summary = analysis.summarize(procedure)["native_completion"]
     if summary["available"] and not summary["has_openmp_in_closure"]:
         return "serial"
     routine = analysis.routines[procedure]
