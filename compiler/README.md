@@ -1599,7 +1599,7 @@ joined `PARALLEL DO` groups with supported scalar private/reduction clauses;
 the native compiler executes every original reduction. No reduction lowering,
 reassociation or active-owner coherence is authorized.
 
-`prove_reached_window` version 6 transfers separately supplied entry facts through
+`prove_reached_window` version 7 transfers separately supplied entry facts through
 these prefix and descriptor proofs to an exact contiguous window, at top level
 or in the first traversal of one top-level serial counted loop. Branches meet
 conservatively and definitions retain original ordering. Hidden read-only native
@@ -1613,14 +1613,35 @@ reads must be covered, conditional paths meet conservatively, and scalar changes
 invalidate rectangles that used the old bound. These return rectangles are
 conditional diagnostics; they never seed registration or whole-return facts.
 Runtime workers still validate actual physical coverage before numerical work.
-These APIs do not create an owner or authorize execution. Partial definitions
-before activation, deeper or conditional activation, direct OpenMP cuts, unknown effects,
-local allocation ownership and prefix allocation replacement remain
-limitations. No address/shape freshness or owner reopening is inferred.
+These APIs do not create an owner or authorize execution. For the ordinary
+complete-window proof, partial definitions before activation, deeper or
+conditional activation, direct OpenMP cuts, unknown effects, local allocation
+ownership and prefix allocation replacement remain limitations. No address/shape
+freshness or owner reopening is inferred.
 
 The compiler's `plan_reached_window` uses the same transfer to identify exact
-close-before-original operations within a selected window. It preserves the
-complete prefix requirement and ordinary complete-window proof API. Supported
+close-before-original operations within a selected window. The ordinary
+complete-window proof API retains its complete prefix requirement. Planned
+windows additionally track dormant prefix eligibility at original source points.
+Plain numeric whole-name copies and single-object explicit-shape `ALLOCATE` or
+plain `DEALLOCATE` may precede activation only when their destination capture
+explicitly has `lifetime: "selected_window"` and `initialized: "none"`.
+The original statements execute once; fresh guards acquire the actual reached
+descriptor. A conforming copy can retain destination bounds, so RHS bounds are
+never substituted for them. Allocation alone defines no payload. Whole copies
+require current whole RHS coverage from invocation-entry assertions or earlier
+source definitions of a selected-window-none capture. A selected-window-whole
+assertion cannot authorize these earlier prefix reads. Supplied facts and their
+hashes remain unchanged; no activation assertion is unioned over a definition
+kill. Allocation options, pointer/target associations and unsupported shapes
+remain native. Prefix support declines disable eligibility before the complete
+original operation; unsupported conditions and single-line actions disable
+before the whole conditional. Disabled eligibility is absorbing for that
+invocation, including `CYCLE`, `EXIT`, `RETURN` and later loop traversals. Only
+eligible branches contribute activation coverage. Source/token and budget
+failures remain hard; incomplete generic native-prefix proofs are not converted
+into support declines. Original joined prefix groups and partial activation
+registration retain their separate existing gates. Supported
 branch paths may keep ownership while another path publishes and closes before
 an unsupported call or allocation change. Closure is absorbing: that path
 executes its original native suffix once, without descriptor registration,
@@ -1655,7 +1676,9 @@ The internal `ReachedWindowOwner` emitter consumes an exact registered window
 proof together with the same independently admitted capture document. It keeps
 the original native prefix and excluded tail in place, declares control at
 procedure entry, and activates once at the selected source point. The attempt
-is spent before allocation, layout, alias or placement guards. It closes before
+is spent before prefix eligibility, allocation, layout, alias or placement guards.
+An invocation-local eligibility flag gates all later associations, registration
+and queries; the serial-caller guard cannot overwrite a prefix disable. It closes before
 the excluded tail or an enclosing backedge, including resource failures; later
 traversals remain native. Source-position definition coverage is private to the
 window-bound builder and does not rewrite entry facts or whole-procedure
@@ -1674,14 +1697,16 @@ module captures, triggers compiler-owned window discovery before inline
 preparation. It considers at most four adjacent
 original units at entry or inside one top-level counted loop, with at most 16
 attempts. A selected window must admit two numerical invocations. Discovery
-version 3 also consumes planned closures, so an unsupported branch can finish
+version 4 also consumes planned closures, so an unsupported branch can finish
 ownership without rejecting a supported sibling. Staged emission must match the
 exact original close points before adoption. Failed attempts run in isolated generation
 transactions: source objects and registered proof identities remain original,
 while rejected artifacts, variants, coordinators, edits and analysis caches do
 not leak into existing fallback generation. The manifest's additive
 `reached_window_discovery` record reports original selections, limits, proof
-identities and rejection reasons. AUTO with unavailable estimates retains the
+identities and rejection reasons. Rejected windows without enough numerical
+invocations retain bounded exact original prefix-disable and active-close reasons
+in `source_declines`, including source kinds, node identities and spans. AUTO with unavailable estimates retains the
 original native path. Module captures consume separate descriptor-window proofs
 at every reached consumer, without globally blessing their allocations.
 Discovery neither invents capture facts nor proves whole-stage residency.

@@ -18,11 +18,12 @@ from fparser.two.utils import walk
 
 from compiler.frontend.descriptor_windows import DescriptorWindowUnsupported
 from compiler.frontend.native_sections import NativeAxis, NativeRectangle
+from compiler.frontend.preowner_transfers import PreownerUnsupported, derive_preowner_step
 from compiler.frontend.source_functions import _validate_scope
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 
-REACHED_WINDOW_VERSION = 6
+REACHED_WINDOW_VERSION = 7
 _EFFECTS = {"read", "write", "overwrite", "descriptor_read", "definition_change"}
 _FORBIDDEN = {"pointer", "optional", "volatile", "asynchronous", "value"}
 
@@ -210,6 +211,7 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                     raise CompilationError("mapped reached entry definition budget exhausted")
             coverage[root] = ()
     demands, descriptor_demands, native_prefix_demands, definition_demands = [], [], [], []
+    prefix_steps, prefix_disables = [], {}
     visits, effects, effect_work = 0, 0, 0
     active_ids, closes, changed_scalars = set(), {}, set()
 
@@ -237,7 +239,7 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
 
     def checkpoint():
         return (tuple(map(len, (demands, descriptor_demands, native_prefix_demands, definition_demands,
-                                mapped_children))), effects, set(changed_scalars))
+                                mapped_children, prefix_steps))), effects, set(changed_scalars))
 
     def discard(before):
         nonlocal effects
@@ -245,7 +247,7 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
         changed_scalars.clear()
         changed_scalars.update(scalar_snapshot)
         for items, length in zip((demands, descriptor_demands, native_prefix_demands, definition_demands,
-                                  mapped_children),
+                                  mapped_children, prefix_steps),
                                  lengths, strict=True):
             del items[length:]
 
@@ -256,6 +258,12 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
         from compiler.frontend.native_definitions import NativeCallCoordinatesUnsupported
         if (work["effects"] > analysis.operation_limit or not isinstance(error, (
                 DescriptorWindowUnsupported, NativeCallCoordinatesUnsupported, _NeedsNativeClose))):
+            raise error
+
+    def may_disable(error):
+        if not isinstance(error, (PreownerUnsupported, DescriptorWindowUnsupported, _NeedsNativeClose)):
+            raise error
+        if work["effects"] > analysis.operation_limit:
             raise error
 
     def descendants(identity):
@@ -297,6 +305,23 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
 
     def leaf(identity, state, *, before_owner=False, joined_selection=None):
         nonlocal effects, effect_work
+        if planned and before_owner:
+            originals = graph.source_nodes(identity)
+            if len(originals) == 1:
+                step = derive_preowner_step(analysis, procedure, originals[0], bindings, state, facts,
+                                            consume=coordinate_work)
+                if step is not None:
+                    count = len(step.events)
+                    effects += count
+                    effect_work += count
+                    work["effects"] += count
+                    if work["effects"] > analysis.operation_limit:
+                        raise CompilationError("reached window ordered pre-owner effect budget exhausted")
+                    prefix_steps.append({"node_id": identity, "guard": list(graph.nodes[identity].guard),
+                                         "original_source_sha256": _hash(str(originals[0])),
+                                         "original_source_kind": type(originals[0]).__name__,
+                                         "span": list(graph.nodes[identity].span), **step.public()})
+                    return dict(step.definitions)
         if planned and not before_owner and joined_selection is None and graph.nodes[identity].kind == "call":
             child_name = graph.nodes[identity].details.get("procedure")
             child_routine = analysis.routines.get(child_name)
@@ -427,8 +452,9 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
             # by that query before treating its incompleteness as support-only.
             for key in selected_analysis._source_function_used_scopes:
                 _validate_scope(selected_analysis, selected_analysis._source_function_scopes[key][0])
-            raise _NeedsNativeClose("reached window needs complete prefix/window effects: "
-                                    + "; ".join(summary.get("reasons", ())))
+            error = CompilationError if before_owner else _NeedsNativeClose
+            raise error("reached window needs complete prefix/window effects: "
+                        + "; ".join(summary.get("reasons", ())))
         demands.append(summary["summary_identity"])
         outer = set(graph.nodes[identity].guard)
         scalar_writes = set()
@@ -637,14 +663,112 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
             index += 1
         return state
 
-    for identity in prefix:
-        coverage = transfer(identity, coverage, before_owner=True)
+    def disable_prefix(identity, reason):
+        from compiler.frontend.source_functions import _validate_resolution, _walk
+
+        originals = graph.source_nodes(identity)
+        if (len(originals) != 1 or type(originals[0]).__name__ not in {
+                "Call_Stmt", "Assignment_Stmt", "If_Construct", "If_Stmt", "Block_Nonlabel_Do_Construct",
+                "Associate_Construct", "Allocate_Stmt", "Deallocate_Stmt", "Cycle_Stmt", "Exit_Stmt",
+                "Return_Stmt", "Write_Stmt", "Print_Stmt", "Read_Stmt", "Stop_Stmt", "Error_Stop_Stmt"}):
+            raise CompilationError("pre-owner disable requires a complete original structured statement: " + reason)
+        _validate_scope(analysis, routine.scope)
+        _validate_resolution(analysis, routine.scope, _walk(originals[0]), tick=lambda _role: coordinate_work(1))
+        prefix_disables[identity] = {
+            "node_id": identity, "guard": list(graph.nodes[identity].guard),
+            "original_source_sha256": _hash(str(originals[0])),
+            "original_source_kind": type(originals[0]).__name__,
+            "span": list(graph.nodes[identity].span), "reason": reason,
+            "execution": "disable eligibility before unchanged original source; native remainder once",
+            "disabled_is_absorbing": True, "context_exists": False, "reopen": False}
+        return None, True
+
+    def prefix_transfer(identity, state, depth=0):
+        nonlocal visits
+        eligible, disabled = state
+        if eligible is None:
+            return state
+        visits += 1
+        work["visits"] += 1
+        if work["visits"] > graph.node_limit or depth > analysis.depth_limit:
+            raise CompilationError("reached window prefix control traversal budget exhausted")
+        node = graph.nodes[identity]
+        if node.kind == "sequence":
+            for child in node.children:
+                state = prefix_transfer(child, state, depth + 1)
+            return state
+        if node.kind == "branch":
+            before = checkpoint()
+            previous_disables = dict(prefix_disables)
+            paths, false_path = [], dict(eligible)
+            for condition, body in node.alternatives:
+                path = dict(false_path)
+                if condition is not None:
+                    visits += 1
+                    work["visits"] += 1
+                    if work["visits"] > graph.node_limit or depth + 1 > analysis.depth_limit:
+                        raise CompilationError("reached window prefix control traversal budget exhausted")
+                    try:
+                        path = leaf(condition, path, before_owner=True)
+                    except CompilationError as error:
+                        may_disable(error)
+                        discard(before)
+                        prefix_disables.clear()
+                        prefix_disables.update(previous_disables)
+                        return disable_prefix(identity, "original prefix condition is unsupported: " + str(error))
+                    false_path = dict(path)
+                paths.append(prefix_transfer(body, (path, False), depth + 1))
+            if not node.alternatives or node.alternatives[-1][0] is not None:
+                paths.append((false_path, False))
+            originals = graph.source_nodes(identity)
+            if len(originals) == 1 and type(originals[0]).__name__ == "If_Stmt" and any(path[1] for path in paths):
+                discard(before)
+                prefix_disables.clear()
+                prefix_disables.update(previous_disables)
+                return disable_prefix(identity, "single original IF action requires whole-construct prefix disable")
+            eligible_paths = [path[0] for path in paths if path[0] is not None]
+            if not eligible_paths:
+                return None, True
+            from compiler.frontend.native_definitions import intersect_rectangles
+            joined = dict(eligible_paths[0])
+            for path in eligible_paths[1:]:
+                joined = {root: intersect_rectangles(boxes, path[root]) for root, boxes in joined.items()}
+            return joined, disabled or any(path[1] for path in paths)
+        before = checkpoint()
+        try:
+            originals = graph.source_nodes(identity)
+            allocation = len(originals) == 1 and type(originals[0]).__name__ in {"Allocate_Stmt", "Deallocate_Stmt"}
+            if node.kind == "boundary" and not allocation:
+                raise PreownerUnsupported("original prefix operation needs native-only eligibility: "
+                                          + node.details.get("reason", "boundary"))
+            if node.kind == "call" and node.details.get("procedure") not in analysis.routines:
+                raise PreownerUnsupported("original prefix call has no complete source-backed effects")
+            if node.kind not in {"operation", "call", "loop", "associate"} and not allocation:
+                raise CompilationError("pre-owner source node requires distinct control authority")
+            result = leaf(identity, dict(eligible), before_owner=True)
+        except CompilationError as error:
+            may_disable(error)
+            discard(before)
+            return disable_prefix(identity, str(error))
+        return result, disabled
+
+    prefix_disabled, activation_possible = False, True
+    if planned and _mapped is None:
+        state = coverage, False
+        for identity in prefix:
+            state = prefix_transfer(identity, state)
+        eligible, prefix_disabled = state
+        activation_possible = eligible is not None
+        coverage = eligible or {root: () for root in roots}
+    else:
+        for identity in prefix:
+            coverage = transfer(identity, coverage, before_owner=True)
     at_entry = dict(coverage)
     if _mapped is None and any(_coverage_kind(boxes) == "sections" for boxes in at_entry.values()):
         raise CompilationError("reached prefix partial definitions require source-position section registration")
     has_closed_path = False
     if planned:
-        state = planned_sequence(selected, (coverage, False))
+        state = planned_sequence(selected, (coverage if activation_possible else None, False))
         active_coverage, has_closed_path = state
         coverage = active_coverage or {root: () for root in roots}
         if set(forced) - set(closes):
@@ -656,23 +780,24 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
         _children.extend(mapped_children)
     if _result is not None:
         _result.update(active=active_coverage if planned else coverage, closed=has_closed_path)
+    unmanaged_path = has_closed_path or prefix_disabled
     states = [{"resource": root, "initialized": _coverage_kind(at_entry[root]),
                "definition_coverage": _coverage_kind(at_entry[root]),
-               "coverage_on_return": "unknown_after_close" if has_closed_path else _coverage_kind(coverage[root]),
+               "coverage_on_return": "unknown_after_close" if unmanaged_path else _coverage_kind(coverage[root]),
                "defined_sections_on_return": [box.public() for box in coverage[root]]
-                   if not has_closed_path and _coverage_kind(coverage[root]) == "sections" else [],
+                   if not unmanaged_path and _coverage_kind(coverage[root]) == "sections" else [],
                "active_path_coverage_on_return": _coverage_kind(coverage[root]) if planned else None,
                "active_path_sections_on_return": [box.public() for box in coverage[root]]
                    if planned and _coverage_kind(coverage[root]) == "sections" else [],
-               "active_path_return_is_conditional": has_closed_path,
+               "active_path_return_is_conditional": unmanaged_path,
                "storage": "original current binding",
-               "escapes": None if has_closed_path else False,
-               "allocation_changes": None if has_closed_path else False,
+               "escapes": None if unmanaged_path else False,
+               "allocation_changes": None if unmanaged_path else False,
                "active_interval_storage": {"escapes": False, "allocation_changes": False,
                                            "conditional_on_owner_remaining_active": planned},
-               "closed_path_storage_authority": "unavailable" if has_closed_path else None,
+               "closed_path_storage_authority": "unavailable" if unmanaged_path else None,
                "descriptor_authority": ("registered active-interval proofs only; no closed native suffix authority"
-                                        if has_closed_path else
+                                        if unmanaged_path else
                                         "registered source-relative prefix/window proofs; excluded tail requires close"),
                "requires_original_allocation_presence_guard": "allocatable" in bindings[root].attributes,
                "resource_kind": "original_module_allocatable" if root in module_roots else "original_entry_capture",
@@ -682,11 +807,21 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
             "structured_identity": graph.identity, "source_identity": analysis.inputs.identity(),
             "analysis_identity": graph.authority_identity, "selected_node_ids": list(selected),
             "prefix_node_ids": list(prefix), "first_traversal_controls": list(controls),
+            "prefix_eligibility": {"enabled": planned and _mapped is None,
+                                   "activation_path_possible": activation_possible,
+                                   "disabled_path_possible": prefix_disabled,
+                                   "disable_points": list(prefix_disables.values()), "steps": prefix_steps,
+                                   "disabled_is_absorbing": True, "reopen": False,
+                                   "activation_coverage_is_conditional": prefix_disabled,
+                                   "new_descriptor_event_destinations": "selected_window initialized none only",
+                                   "new_copy_reads": "current whole coverage from invocation facts or source-defined selected_window none",
+                                   "selected_window_whole_assertion_is_prefix_read_authority": False,
+                                   "payload_from_allocation_presence": False},
             "descriptor_window_identities": descriptor_demands, "entry_facts_identity": _hash(facts),
             "module_descriptor_resources": list(module_roots),
             "native_prefix_proof_identities": native_prefix_demands,
             "native_definition_proof_identities": definition_demands,
-            "entry_facts_authority": "conditional on supplied invocation-entry facts; independent admission required",
+            "entry_facts_authority": "independent original fact scopes preserved; selected-window whole is not new prefix-copy read authority; independent admission required",
             "source_demands": demands, "control_visits": visits, "ordered_effects": effects,
             "ordered_effect_work": effect_work,
             "mapped_work": dict(work),
@@ -708,7 +843,7 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                        "calls and unsupported native footprints retain conservative whole-definition requirements",
                        "direct OpenMP groups require a separate complete-group selection contract",
                        "every payload array dependency must be included; runtime nonalias guards remain required",
-                       "allocation replacement within prefix/window and incomplete closures rejected",
+                       "new dormant descriptor events require selected_window none and exact original transfer; active replacement closes",
                        "runtime registration/layout/alias guards and numerical legality required separately"]}
 
 
@@ -809,8 +944,9 @@ def plan_reached_window(analysis, procedure, original_selection, requested_roots
                         *, close_before=()):
     """Plan conditional active intervals and exact native closure points.
 
-    The original prefix still needs complete proof. Each still-active unit is
-    checked normally; after an authenticated close only original native code
-    may execute. This does not weaken ordinary complete window/child summaries.
+    Eligible prefixes retain source-proven definitions; reaching unsupported
+    original prefix source disables that invocation before activation. Each
+    still-active unit is checked normally; after an authenticated close only
+    original native code may execute. Ordinary complete summaries stay strict.
     """
     return _prove(analysis, procedure, original_selection, requested_roots, entry_definition_facts, close_before)

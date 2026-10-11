@@ -171,10 +171,27 @@ def test_closed_suffix_has_no_descriptor_or_query_authority(tmp_path):
     assert "fort_scope_plan" not in native_suffix
 
 
-def test_unknown_relevant_prefix_still_rejects_before_activation(tmp_path):
+def test_unknown_relevant_prefix_disables_planned_activation_and_plain_proof_stays_strict(tmp_path):
     source = PLANNED_SOURCE.replace("call native_prefix(a)", "call unknown_prefix(a)")
+    _path, builder, proof, originals = planned_window_fixture(tmp_path, source)
+    record = proof.public()
+    prefix = record["prefix_eligibility"]
+    assert prefix["disabled_path_possible"]
+    assert not prefix["activation_path_possible"]
+    point, = prefix["disable_points"]
+    assert point["original_source_kind"] == "Call_Stmt"
+    assert point["disabled_is_absorbing"]
+    assert not point["context_exists"]
+    assert not point["reopen"]
+    assert not record["source_demands"]
+    assert not record["planned_closures"]["active_node_ids"]
+    owner = ReachedWindowOwner(builder, proof, originals)
+    assert not owner.run()
+    assert not owner.builder.edits
+    assert not owner.builder.scopes
+    assert not owner.units
     with pytest.raises(CompilationError, match="native prefix|complete.*effects|original source|unknown effects"):
-        planned_window_fixture(tmp_path, source)
+        prove_reached_window(builder.analysis, ENTRY, originals, ROOTS, builder.facts)
 
 
 def test_foreign_or_forged_plan_cannot_emit(tmp_path):
@@ -248,7 +265,7 @@ def test_public_discovery_adopts_planned_branch_without_full_child_summary(tmp_p
     _outputs, report = builder.run()
     discovery = report["reached_window_discovery"]
     assert discovery["selected"], discovery
-    assert discovery["schema_version"] == 3
+    assert discovery["schema_version"] == 4
     scope, = report["scopes"]
     assert scope["reached_window"]["automatic_discovery"]
     assert scope["reached_window"]["planned_closures"]["closed_path_possible"]

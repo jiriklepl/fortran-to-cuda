@@ -25,6 +25,23 @@ def discovery_fixture(directory, source=SOURCE, *, policy="sections", captures=N
     return path, builder
 
 
+def assert_original_declines(builder, expected):
+    graph = builder.analysis.structure(ENTRY)
+    found = []
+    for attempt in builder.reached_window_discovery["attempts"]:
+        declines = attempt.get("source_declines", [])
+        assert len(declines) <= builder.analysis.operation_limit
+        for point in declines:
+            original, = graph.source_nodes(point["node_id"])
+            assert point["phase"] in {"prefix_disable", "active_close"}
+            assert point["span"] == list(graph.nodes[point["node_id"]].span)
+            assert point["original_source_kind"] == type(original).__name__
+            assert point["reason"] in attempt["reason"]
+            if expected in point["reason"] or expected == point["original_source_kind"]:
+                found.append(point)
+    assert found
+
+
 def test_public_reached_path_discovers_window_and_keeps_original_prefix_and_tail(tmp_path):
     path, builder = discovery_fixture(tmp_path)
     assert not getattr(builder.analysis, "_reached_window_proofs", {})
@@ -90,6 +107,7 @@ def test_unknown_array_dependency_cannot_be_hidden_by_omitting_its_capture(tmp_p
     assert not builder.edits
     assert not builder.scopes
     assert any("untracked array" in attempt["reason"] for attempt in builder.reached_window_discovery["attempts"])
+    assert_original_declines(builder, "untracked array")
 
 
 def test_module_allocatable_facts_do_not_substitute_for_selected_lifetime_proof(tmp_path):
@@ -103,6 +121,9 @@ def test_module_allocatable_facts_do_not_substitute_for_selected_lifetime_proof(
     assert not builder.edits
     assert not builder.scopes
     assert any("Deallocate_Stmt" in attempt["reason"]
+               for attempt in builder.reached_window_discovery["attempts"])
+    assert_original_declines(builder, "Deallocate_Stmt")
+    assert any(attempt.get("source_declines") and "needs two admitted numerical" in attempt["reason"]
                for attempt in builder.reached_window_discovery["attempts"])
 
 
