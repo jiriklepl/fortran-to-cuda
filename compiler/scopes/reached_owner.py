@@ -106,6 +106,7 @@ class ReachedWindowOwner(MappedReachedControl, LexicalOwner):
         proxy = builder.bind_reached_window(proof, original_selection)
         super().__init__(proxy)
         self.spent = _name("fort_window_spent_", proof.identity)
+        self.prefix_eligible = _name("fort_prefix_eligible_", proof.identity)
         self.trace_owner = source_id(proxy, "owner", lifetime="one-shot reached window",
                                      reached_window_proof=proof.identity)
 
@@ -178,16 +179,28 @@ class ReachedWindowOwner(MappedReachedControl, LexicalOwner):
         start = _span(_part(self.routine.scope.node, "Subroutine_Stmt"))[1] + 1
         builder.add_edit(self.routine.scope.path, start, start - 1,
                          f"use iso_c_binding, only: {self.kind} => c_int64_t\n")
-        declarations = [f"integer({self.kind}) :: {self.context}", f"logical :: {self.enabled}, {self.spent}",
+        declarations = [f"integer({self.kind}) :: {self.context}",
+                        f"logical :: {self.enabled}, {self.spent}, {self.prefix_eligible}",
                         *[f"integer({self.kind}) :: fort_buffer_{number}"
                           for _binding, number in self.resources.values()]]
         initialize = [f"{self.context} = 0", f"{self.enabled} = .false.", f"{self.spent} = .false.",
+                      f"{self.prefix_eligible} = .true.",
                       *[f"fort_buffer_{number} = 0" for _binding, number in self.resources.values()]]
         builder.add_edit(self.routine.scope.path, first_execution, first_execution - 1,
                          "\n".join(fortran_lines([*declarations, *initialize])) + "\n", prepend=True)
+        prefix = self.window_proof.public()["prefix_eligibility"]
+        graph = builder.analysis.structure(self.routine.qualified)
+        for point in prefix["disable_points"]:
+            originals = graph.source_nodes(point["node_id"])
+            if len(originals) != 1 or list(statement_span(originals[0])) != point["span"]:
+                raise CompilationError("pre-owner eligibility edit lacks its exact original source span")
+            line = point["span"][0]
+            builder.add_edit(self.routine.scope.path, line, line - 1,
+                             f"{self.prefix_eligible} = .false.\n")
         activation = [f"if (.not. {self.spent}) then", f"{self.spent} = .true.",
+                      f"if ({self.prefix_eligible}) then",
                       "block", "use fort_scoped_memory, only: fort_scope_serial_caller",
-                      f"{self.enabled} = fort_scope_serial_caller() /= 0", "end block", "endif"]
+                      f"{self.enabled} = fort_scope_serial_caller() /= 0", "end block", "endif", "endif"]
         builder.add_edit(self.routine.scope.path, first, first - 1,
                          "\n".join(fortran_lines(activation)) + "\n")
         builder.add_edit(self.routine.scope.path, last + 1, last,
@@ -197,6 +210,12 @@ class ReachedWindowOwner(MappedReachedControl, LexicalOwner):
 
     def run(self, nodes=None):
         """Emit only selected originals; the caller may supply approved facades."""
+        self.builder.validate_reached_window()
+        self.window_proof.validate(self.builder.analysis, self.routine.qualified, self.window_originals)
+        if not self.window_proof.public()["prefix_eligibility"]["activation_path_possible"]:
+            # A valid all-native decision needs no synthetic source preparation,
+            # protected descriptor association or dormant control edits.
+            return False
         if nodes is None:
             nodes = self.builder.inline.prepare(self.window_originals)
             self.builder.generated.update(self.builder.inline.generated)
@@ -216,10 +235,11 @@ class ReachedWindowOwner(MappedReachedControl, LexicalOwner):
                     "validated_emission_proof_identity": self.window_proof.identity,
                     "selected_node_ids": public["selected_node_ids"],
                     "prefix_node_ids": public["prefix_node_ids"],
+                    "prefix_eligibility": public["prefix_eligibility"],
                     "first_traversal_controls": public["first_traversal_controls"],
                     "entry_facts_identity": public["entry_facts_identity"],
                     "lifecycle": "one invocation; dormant -> active -> spent; no reopening",
-                    "activation": "first reached selected source point; spend before every guard",
+                    "activation": "first reached selected source point; spend before eligibility and every guard",
                     "mandatory_close": public["mandatory_close"],
                     "managed_resources": [state["resource"] for state in public["states"]],
                     "definition_proof_identities": public["native_definition_proof_identities"],

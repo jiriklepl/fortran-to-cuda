@@ -14,7 +14,7 @@ from compiler.ir import CompilationError
 from compiler.scopes.generation_transaction import GenerationTransaction
 from compiler.scopes.reached_owner import ReachedWindowOwner
 
-DISCOVERY_VERSION = 3
+DISCOVERY_VERSION = 4
 MAX_ADJACENT_UNITS = 4
 MAX_ATTEMPTS = 16
 
@@ -78,6 +78,28 @@ def _numerical_calls(owner):
         return counts[name]
 
     return count(owner.routine.qualified)
+
+
+def _source_declines(owner):
+    """Retain exact proof reasons when an otherwise valid window is unused."""
+    proof = owner.window_proof.validate(owner.builder.analysis, owner.routine.qualified,
+                                        owner.window_originals)
+    public = proof.public()
+    points = [("prefix_disable", point) for point in public["prefix_eligibility"]["disable_points"]]
+    points.extend(("active_close", point) for point in public["planned_closures"]["close_points"])
+    if len(points) > owner.builder.analysis.operation_limit:
+        raise CompilationError("original-window decline diagnostic budget exhausted")
+    return [{"phase": phase, **{field: point[field] for field in
+                              ("node_id", "span", "original_source_kind", "reason")}}
+            for phase, point in points]
+
+
+def _no_implementation(owner, attempt, reason):
+    declines = _source_declines(owner)
+    attempt["source_declines"] = declines
+    details = "; ".join(f"{point['phase']} {point['original_source_kind']} at {point['span']}: {point['reason']}"
+                        for point in declines)
+    return CompilationError(reason + (": " + details if details else ""))
 
 
 def discover_reached_window(builder):
@@ -144,10 +166,12 @@ def discover_reached_window(builder):
                                             originals, tuple(roots), candidate.facts)
                 owner = ReachedWindowOwner(candidate, proof, originals)
                 if not owner.run():
-                    raise CompilationError("selected source window has no admitted numerical implementation")
+                    raise _no_implementation(owner, attempt,
+                                             "selected source window has no admitted numerical implementation")
                 calls = _numerical_calls(owner)
                 if calls < 2:
-                    raise CompilationError("selected source window needs two admitted numerical invocations")
+                    raise _no_implementation(owner, attempt,
+                                             "selected source window needs two admitted numerical invocations")
                 proof = owner.window_proof
                 scope = owner.builder.scopes[-1]
                 if scope.get("automatic_preflight", {}).get("selection") == "native":
