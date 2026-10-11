@@ -16,6 +16,7 @@ from compiler.ir import CompilationError
 
 NUMERICAL_PREPARATION_VERSION = 1
 _SCAN_LIMIT = 65536
+_IDENTITY_TEXT_LIMIT = 4 * 1024 * 1024
 
 
 class NumericalPreparationUnsupported(CompilationError):
@@ -43,7 +44,7 @@ def _digest(value, budget):
         if depth > 256:
             raise CompilationError("original numerical preparation identity depth exhausted")
         if item is None or isinstance(item, (bool, int, float, str)):
-            if isinstance(item, str) and len(item) > 4 * 1024 * 1024:
+            if isinstance(item, str) and len(item) > _IDENTITY_TEXT_LIMIT:
                 raise CompilationError("original numerical preparation identity text budget exhausted")
             return item
         if isinstance(item, Enum):
@@ -119,6 +120,60 @@ def _walk(node, budget):
             stack.append(iter(getattr(item, "content", getattr(item, "items", ())) or ()))
 
 
+def _source_calls(node, budget):
+    """Visit original CALL statements without expanding expression payloads.
+
+    Lexical constructs, including labeled/shared DO terminals, use content.
+    A single-line IF is the only item-based statement containing an action;
+    WHERE and FORALL actions are assignments, and expressions cannot hold CALL.
+    """
+    stack = [iter((node,))]
+    while stack:
+        try:
+            item = next(stack[-1])
+        except StopIteration:
+            stack.pop()
+            continue
+        budget.tick()
+        if isinstance(item, (tuple, list)):
+            stack.append(iter(item))
+        elif type(item).__name__ == "Call_Stmt":
+            yield item
+        elif type(item).__name__ == "If_Stmt":
+            stack.append(iter((item.items[1],)))
+        else:
+            content = getattr(item, "content", None)
+            if content is not None:
+                stack.append(iter(content))
+
+
+def _input_identity(analysis, budget):
+    """Fingerprint line-map data without charging it as executable syntax."""
+    identity = analysis.inputs.identity()
+    for entry in identity["entries"]:
+        budget.tick()
+        mapping = entry.get("line_map") if isinstance(entry, dict) else None
+        if type(mapping) is not list:
+            raise CompilationError("original numerical preparation line map requires an INTEGER-or-null list")
+        if len(mapping) > _IDENTITY_TEXT_LIMIT // 2:
+            raise CompilationError("original numerical preparation line-map text budget exhausted")
+        if any(value is not None and type(value) is not int for value in mapping):
+            raise CompilationError("original numerical preparation line map requires an INTEGER-or-null list")
+        digest, size = sha256(), 0
+        try:
+            for chunk in json.JSONEncoder(separators=(",", ":"), allow_nan=False).iterencode(mapping):
+                encoded = chunk.encode("ascii")
+                size += len(encoded)
+                if size > _IDENTITY_TEXT_LIMIT:
+                    raise CompilationError("original numerical preparation line-map text budget exhausted")
+                digest.update(encoded)
+        except (TypeError, ValueError, OverflowError, RecursionError) as error:
+            raise CompilationError("invalid original numerical preparation line-map identity") from error
+        entry["line_map"] = {"private_identity_kind": "configured_line_map_sha256_v1",
+                             "count": len(mapping), "sha256": digest.hexdigest()}
+    return identity
+
+
 def _source_authority(analysis, procedure, selection, helpers, budget):
     """Authenticate consulted source namespaces and exact original bindings."""
     from compiler.frontend.source_functions import _original, _validate_resolution, _validate_scope
@@ -182,13 +237,14 @@ def _source_authority(analysis, procedure, selection, helpers, budget):
             for _visit in range(authority.visits):
                 budget.tick()
         source.append((owner.qualified, analysis._routine_signature(owner), str(owner.scope.node)))
-    return routine, graph, identities, _digest((analysis.inputs.identity(), tuple(source)), budget)
+    return routine, graph, identities, _digest((_input_identity(analysis, budget), tuple(source)), budget)
 
 
 def _environment_required(analysis, root, budget):
     from compiler.frontend.native_environment import intrinsic_export
     from compiler.frontend.source_functions import _validate_scope
     checked = set()
+    syntax = analysis._source_syntax.checkpoint()
 
     def scope_authority(scope):
         while scope is not None and id(scope) not in checked:
@@ -205,31 +261,38 @@ def _environment_required(analysis, root, budget):
     for scope in analysis.modules.values():
         scope_authority(scope)
     pending, visited, calls = [root], set(), 0
+
+    def publish(required):
+        # A budget callback can mutate syntax after its containing module was
+        # checked. Recheck before every return without retaining either memo.
+        final_syntax = analysis._source_syntax.checkpoint()
+        for procedure in sorted(visited | {root}):
+            analysis._require_original(procedure, _syntax=final_syntax)
+        return required
+
     while pending:
         name = pending.pop()
         if name in visited:
             continue
         if len(visited) >= analysis.procedure_limit:
-            return True
-        routine = analysis._require_original(name)
+            return publish(True)
+        routine = analysis._require_original(name, _syntax=syntax)
         scope_authority(routine.scope)
         visited.add(name)
-        for node in _walk(routine.execution, budget):
-            if type(node).__name__ != "Call_Stmt":
-                continue
+        for node in _source_calls(routine.execution, budget):
             calls += 1
             if calls > analysis.operation_limit:
-                return True
+                return publish(True)
             if type(node.items[0]).__name__ != "Name":
                 continue
             scope = analysis.source_scope_for(node, routine.scope)
             if intrinsic_export(analysis, scope, node.items[0]) in {
                     "$intrinsic::ieee_exceptions::ieee_get_halting_mode",
                     "$intrinsic::ieee_exceptions::ieee_set_halting_mode"}:
-                return True
+                return publish(True)
             pending.extend(target for target in analysis._candidates(scope, node.items[0])
                            if target in analysis.routines and target not in visited)
-    return False
+    return publish(False)
 
 
 def _extraction_identity(extraction, budget):

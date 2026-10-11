@@ -2,10 +2,12 @@
 
 from copy import copy
 from dataclasses import replace
+from hashlib import sha256
 
 import pytest
 
 from compiler.driver.options import CompilerOptions
+from compiler.frontend import numerical_preparation
 from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
 from compiler.frontend.numerical_preparation import (
     NumericalPreparationProvider,
@@ -74,6 +76,108 @@ def fixture(directory, source=SOURCE):
     selection = next(item.original_nodes for item in groups if isinstance(item, NativeGroupCandidate))
     provider = NumericalPreparationProvider(analysis, options=OPTIONS, config=CONFIG, environment_root=ENTRY)
     return path, analysis, provider, selection
+
+
+def configured_fixture(directory, *, padding=3):
+    path = directory / "renamed.f90"
+    prepared = directory / "prepared.f90"
+    dependency = directory / "configuration.inc"
+    text = SOURCE + "\n" * padding
+    path.write_text(text)
+    prepared.write_text(text)
+    dependency.write_text("integer,parameter::configuration=1\n")
+    document = {"schema_version": 1, "preserves_source_order": True,
+                "source_inputs": {str(path): sha256(path.read_bytes()).hexdigest()},
+                "configuration": {"defines": ["ORIGINAL_CONFIGURATION"]},
+                "dependencies": {str(dependency): sha256(dependency.read_bytes()).hexdigest()},
+                "entries": [{"source": str(path), "path": str(prepared),
+                             "sha256": sha256(prepared.read_bytes()).hexdigest(),
+                             "line_map": list(range(1, len(text.splitlines()) + 1))}]}
+    analysis = SourceEffects([path], analysis_sources=document)
+    groups = grouped_original_sequence(analysis.routines[ENTRY].execution.content, {})
+    selection = next(item.original_nodes for item in groups if isinstance(item, NativeGroupCandidate))
+    provider = NumericalPreparationProvider(analysis, options=OPTIONS, config=CONFIG, environment_root=ENTRY)
+    return path, analysis, provider, selection
+
+
+def test_large_configured_line_map_does_not_consume_executable_source_budget(tmp_path, monkeypatch):
+    path, analysis, provider, selection = configured_fixture(tmp_path, padding=34000)
+    original = analysis.inputs.identity()
+    assert len(original["entries"][0]["line_map"]) > 34000
+    # The previous identity representation visited every mapping scalar on
+    # each source check, exhausting the shared budget for this small region.
+    with monkeypatch.context() as old_identity:
+        old_identity.setattr(numerical_preparation, "_input_identity", lambda analysis, _budget: analysis.inputs.identity())
+        with pytest.raises(CompilationError, match="source-scan budget exhausted"):
+            provider.prepare(analysis, ENTRY, selection)
+    prepared = provider.prepare(analysis, ENTRY, selection)
+    assert prepared.offload.available
+    assert prepared.validate(analysis, ENTRY, selection) is prepared
+    assert analysis.inputs.identity() == original
+    assert type(analysis.inputs.entries[str(path)]["line_map"]) is list
+
+    def exhausted(_count):
+        raise CompilationError("parent aggregate source budget exhausted")
+
+    with pytest.raises(CompilationError, match="parent aggregate"):
+        provider.prepare(analysis, ENTRY, selection, consume=exhausted)
+    with pytest.raises(CompilationError, match="parent aggregate"):
+        prepared.validate(analysis, ENTRY, selection, consume=exhausted)
+    # A mapping well beyond the selected AST still belongs to provenance.
+    analysis.inputs.entries[str(path)]["line_map"][-1] = None
+    with pytest.raises(CompilationError) as failure:
+        prepared.validate(analysis, ENTRY, selection)
+    assert not isinstance(failure.value, NumericalPreparationUnsupported)
+
+
+@pytest.mark.parametrize("change", ["map_tail", "map_order", "map_none", "configuration", "dependency",
+                                  "prepared_path", "original_file", "prepared_file", "dependency_file"])
+def test_configured_provenance_changes_invalidate_registered_preparation(tmp_path, change):
+    path, analysis, provider, selection = configured_fixture(tmp_path)
+    prepared = provider.prepare(analysis, ENTRY, selection)
+    entry = analysis.inputs.entries[str(path)]
+    dependency = tmp_path / "configuration.inc"
+    if change == "map_tail":
+        entry["line_map"][-1] = entry["line_map"][-2]
+    elif change == "map_order":
+        entry["line_map"][-2:] = reversed(entry["line_map"][-2:])
+    elif change == "map_none":
+        entry["line_map"][-1] = None
+    elif change == "configuration":
+        analysis.inputs.configuration["defines"].append("CHANGED_CONFIGURATION")
+    elif change == "dependency":
+        alternate = tmp_path / "same_configuration.inc"
+        alternate.write_bytes(dependency.read_bytes())
+        analysis.inputs.dependencies = {str(alternate): sha256(alternate.read_bytes()).hexdigest()}
+    elif change == "prepared_path":
+        alternate = tmp_path / "same_prepared.f90"
+        alternate.write_bytes((tmp_path / "prepared.f90").read_bytes())
+        entry["path"] = str(alternate)
+    else:
+        changed = {"original_file": path, "prepared_file": tmp_path / "prepared.f90",
+                   "dependency_file": dependency}[change]
+        changed.write_text(changed.read_text() + "! changed after preparation\n")
+    with pytest.raises(CompilationError) as failure:
+        prepared.validate(analysis, ENTRY, selection)
+    assert not isinstance(failure.value, NumericalPreparationUnsupported)
+
+
+@pytest.mark.parametrize("change", ["tuple", "bool", "nested", "length", "text"])
+def test_line_map_fingerprint_rejects_noninteger_or_unbounded_data(tmp_path, monkeypatch, change):
+    path, analysis, _provider, _selection = configured_fixture(tmp_path)
+    entry = analysis.inputs.entries[str(path)]
+    if change == "tuple":
+        entry["line_map"] = tuple(entry["line_map"])
+    elif change == "bool":
+        entry["line_map"][-1] = True
+    elif change == "nested":
+        entry["line_map"][-1] = [1]
+    else:
+        monkeypatch.setattr(numerical_preparation, "_IDENTITY_TEXT_LIMIT", 64)
+        entry["line_map"] = [None] * 33 if change == "length" else [10**40, 10**40]
+    with pytest.raises(CompilationError, match="line.map") as failure:
+        numerical_preparation._input_identity(analysis, numerical_preparation._Budget())
+    assert not isinstance(failure.value, NumericalPreparationUnsupported)
 
 
 @pytest.mark.parametrize("mutation", [None, "scope_binding", "scope_parent", "selector_source"])

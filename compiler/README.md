@@ -1790,6 +1790,16 @@ requiring a reached-window plan. The bounded local registry revalidates the exac
 selection, source, bindings and compiler policy at use and publication, and rolls
 back with failed generation candidates. It grants no storage or definition facts;
 a bound reached plan remains authoritative for its own conditional regions.
+Preparation fingerprints each configured line map as bounded provenance data,
+retaining its exact length and contents without charging every line number as
+an AST proof operation. Each demand recomputes the fingerprint; changed maps,
+configuration, source paths or dependencies still invalidate the prepared proof.
+Source, scope and numerical validation retain their existing work limits.
+Invocation-wide IEEE-state queries visit original lexical statements and
+single-line IF actions to find calls. Expression payloads retain their separate
+source and numerical checks without adding work to this call-only search.
+Each query shares syntax validation across callees, then uses a fresh checkpoint
+to revalidate its visited source before publishing the result.
 
 Supported groups are a combined `PARALLEL DO`, or one flat `PARALLEL` containing
 up to 32 complete numerical worksharing `DO` units. The latter preserves every
