@@ -11,5 +11,8 @@
         "Vadv",
         "Vdiv",
         "Wadv"
+    ],
+    "python.analysis.exclude": [
+        "**/results"
     ]
 }

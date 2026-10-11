@@ -1,8 +1,10 @@
+# PSyclone 3.3.1 requires fparser==0.2.4 and sympy<=1.13.3.
+# That SymPy release requires mpmath<1.4.
 configparser==7.2.0
 fparser==0.2.4
 graphviz==0.21
 Jinja2==3.1.6
-MarkupSafe==3.0.3
+MarkupSafe==3.0.4
 mpmath==1.3.0
 PSyclone==3.3.1
 pyparsing==3.3.3

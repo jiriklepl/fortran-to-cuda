@@ -1,0 +1,33 @@
+# Ignore version control and virtual environments
+.git/
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+**/*/__pycache__/
+
+# Ignore intermediate build artifacts and object files
+*.o
+*.mod
+*.a
+*.so
+*.out
+*.log
+benchmarks/bin/
+out/
+
+# Ignore large raw simulation output fields (VTK / HDF5 / raw binaries)
+**/*.vtk
+**/*.h5
+**/*.dat
+**/out.vtk
+builds.json
+**/builds.json
+
+# Keep report json files, CSVs, and campaign configs in benchmarks/results/
+!benchmarks/results/**/*.json
+!benchmarks/results/**/*.csv
+!benchmarks/results/**/*.py
+!benchmarks/results/**/*.md
