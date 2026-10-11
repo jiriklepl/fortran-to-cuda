@@ -19,11 +19,11 @@ def preparation_preflight(builder, call, parameters):
 
     from compiler.scopes.segments import renamed
 
-    effect = builder.call_numerical_effect(call)
-    if effect is None:
+    region = builder.call_numerical_region(call)
+    if region is None:
         raise CompilationError("numerical preflight requires registered exact physical effects")
+    effect = region.effects
     original = builder.inline.original_selection(call.node)
-    effect.validate(builder.analysis, builder.entry.qualified, original)
     specification, lines = [], ["fort_numerical_guard = .true."]
     ordinal = 0
 

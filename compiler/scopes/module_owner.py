@@ -35,6 +35,9 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
         if reached is not None:
             proxy._mapped_reached_path, proxy._mapped_reached_child = reached
         proxy.immutable_inputs = dict(immutable_inputs or {})
+        consumption = getattr(proxy, "_reached_consumption", None)
+        if consumption is not None:
+            consumption.bind_child(proxy)
         proxy.inline = InlineRegions(proxy)
         super().__init__(proxy, parent=parent)
         if any("save" in binding.attributes for binding in routine.scope.bindings.values()):
@@ -214,6 +217,9 @@ def borrow_module(parent, node, *, reached=None):
             owner.members.update(members)
             owner.resources.clear()
             owner.resources.update(resources)
+            consumption = getattr(parent.builder, "_reached_consumption", None)
+            if consumption is not None:
+                consumption.retain_children(member.builder for member in members.values())
             parent.refresh()
             raise
         finally:

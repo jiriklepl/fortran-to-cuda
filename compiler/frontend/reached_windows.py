@@ -13,6 +13,7 @@ import json
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from hashlib import sha256
+from types import MappingProxyType
 
 from fparser.two.utils import walk
 
@@ -1434,6 +1435,9 @@ class ReachedWindowProof:
     def child_plan(self, path, original_call):
         """Authenticate a nested original call without inventing child facts."""
         self.validate(self._analysis, self.procedure, self._selection)
+        return self._child_plan(path, original_call)
+
+    def _child_plan(self, path, original_call):
         children = self._children
         selected = None
         for identity in path:
@@ -1445,6 +1449,121 @@ class ReachedWindowProof:
             raise CompilationError("mapped child requires its exact original call and path")
         selected.coordinates.validate(self._analysis, selected.coordinates.caller, original_call)
         return selected
+
+
+@dataclass(frozen=True)
+class _ResolvedNumericalRegion:
+    """One prepared/effect pair, consumed only within a validated plan pass."""
+
+    procedure: str
+    selection: tuple
+    prepared: object
+    effects: object
+
+
+@dataclass(frozen=True)
+class _ReachedPlanView:
+    """Immutable indexes for one consumption pass, never a registered proof.
+
+    The owning scope pass validates the root before construction and again on
+    exit. Every access requires that exact active pass, including copied views.
+    Public proof accessors deliberately retain their fresh validation behavior.
+    """
+
+    proof: ReachedWindowProof
+    states: object
+    children: object
+    numerical_regions: object
+    activation_resources: object
+
+    @classmethod
+    def create(cls, proof):
+        states = {state["resource"]: state for state in proof._record["states"]}
+        children, regions = {}, {}
+        work = 0
+
+        def tick():
+            nonlocal work
+            from compiler.frontend.native_group_structure import NATIVE_GROUP_SCAN_LIMIT
+
+            work += 1
+            if work > NATIVE_GROUP_SCAN_LIMIT:
+                raise CompilationError("reached plan consumption index budget exhausted")
+
+        pending = [((), proof._children, proof._record)]
+        while pending:
+            path, members, record = pending.pop()
+            expected = {item["caller_node_id"]: item for item in
+                        record["planned_closures"]["mapped_child_plans"]}
+            if len(expected) != len(members):
+                raise CompilationError("reached plan child index differs from its registered record")
+            for child in members:
+                tick()
+                child_path = (*path, child.node_id)
+                if child_path in children or child.public() != _thaw(expected.get(child.node_id)):
+                    raise CompilationError("reached plan child index lacks exact registered authority")
+                child.coordinates.validate(proof._analysis, child.coordinates.caller, child.original_call)
+                children[child_path] = child
+                pending.append((child_path, child.children, child.record))
+        for procedure, selection, prepared, effects in proof._numerical_regions:
+            tick()
+            prepared.validate(proof._analysis, procedure, selection)
+            effects.validate(proof._analysis, procedure, selection, prepared)
+            key = procedure, tuple(id(node) for node in selection)
+            previous = regions.get(key)
+            if previous is not None:
+                if previous.prepared is not prepared or previous.effects is not effects:
+                    raise CompilationError("reached numerical source has conflicting registered capabilities")
+            else:
+                regions[key] = _ResolvedNumericalRegion(procedure, selection, prepared, effects)
+        resources = dict(proof._activation_resources)
+        for root, state in states.items():
+            tick()
+            resource = resources.get(root)
+            if state["initialized"] == "sections":
+                if (not isinstance(resource, NativeResourceSections) or resource.resource != root
+                        or resource.reads or resource.writes
+                        or resource.public() != _thaw(state["source_sections_on_activation"])):
+                    raise CompilationError("partial activation lacks exact typed source-section authority")
+            elif resource is not None:
+                raise CompilationError("whole/empty activation unexpectedly carries partial source authority")
+        if set(resources) - set(states):
+            raise CompilationError("reached plan activation index contains an unproved resource")
+        return cls(proof, MappingProxyType(states), MappingProxyType(children),
+                   MappingProxyType(regions), MappingProxyType(resources))
+
+    def record(self, consumption, path=()):
+        consumption._check_view(self)
+        if not path:
+            return self.proof.public()
+        child = self.children.get(tuple(path))
+        if child is None:
+            raise CompilationError("mapped child record requires its exact original call path")
+        return _thaw(child.record)
+
+    def child(self, consumption, path, original_call):
+        consumption._check_view(self)
+        child = self.children.get(tuple(path))
+        if child is None or child.original_call is not original_call:
+            raise CompilationError("mapped child requires its exact original call and path")
+        return child
+
+    def capture(self, consumption, root):
+        consumption._check_view(self)
+        state = self.states.get(root)
+        if state is None:
+            raise CompilationError("reached window capture root was not proved")
+        return _thaw(state), self.activation_resources.get(root)
+
+    def numerical_region(self, consumption, procedure, selection):
+        consumption._check_view(self)
+        if not isinstance(selection, tuple):
+            raise CompilationError("reached numerical lookup requires its exact original selection")
+        region = self.numerical_regions.get((procedure, tuple(id(node) for node in selection)))
+        if region is not None and any(left is not right for left, right in
+                                     zip(region.selection, selection, strict=True)):
+            raise CompilationError("reached numerical lookup lost its exact original source identity")
+        return region
 
 
 def _prove(analysis, procedure, original_selection, requested_roots, entry_definition_facts, close_before,

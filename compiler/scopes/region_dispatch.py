@@ -291,14 +291,11 @@ class InlineRegions:
         from compiler.scopes.segments import original_roots
 
         sources = original_roots(self.original_selection(nodes))
-        retained = self.builder.numerical_preparation_for(
+        region = self.builder.resolved_numerical_region(
             self.builder.analysis, self.builder.entry.qualified, sources)
-        if retained is None:
+        if region is None:
             raise CompilationError("combined numerical team requires registered original preparation")
-        retained.validate(self.builder.analysis, self.builder.entry.qualified, sources)
-        retained.validate_configuration(options=self.builder.options, config=self.builder.config,
-            environment_root=self.builder._numerical_environment_root,
-            immutable_inputs=getattr(self.builder, "immutable_inputs", {}))
+        retained = region.prepared
         if retained.completion_proof is None:
             raise CompilationError("combined numerical team requires complete original numerical authority")
         # Preparation validates the exact registered completion type: simple
@@ -321,13 +318,10 @@ class InlineRegions:
             # A serial caller's mask cannot establish the original workers'
             # masks. Keep the team for JoinedTeam's uniform reached preflight.
             raise CompilationError("original IEEE environment requires an original-team numerical preflight")
-        retained = getattr(self.builder, "numerical_preparation_for", lambda *_: None)(
+        region = self.builder.resolved_numerical_region(
             self.builder.analysis, self.builder.entry.qualified, sources)
-        if retained is not None:
-            retained.validate(self.builder.analysis, self.builder.entry.qualified, sources)
-            retained.validate_configuration(options=self.builder.options, config=self.builder.config,
-                environment_root=self.builder._numerical_environment_root,
-                immutable_inputs=getattr(self.builder, "immutable_inputs", {}))
+        if region is not None:
+            retained = region.prepared
             # Source preparation retains the exact original full context. The
             # extraction below is only enriched by reached descriptor guards.
             extraction = retained.extraction
@@ -507,7 +501,7 @@ class InlineRegions:
 
     def whole_definitions(self, call):
         """Must-write coverage authenticated against the original region."""
-        if getattr(self.builder, "call_numerical_effect", lambda *_: None)(call) is not None:
+        if self.builder.call_numerical_effect(call) is not None:
             # Exact partial definition transfer belongs to the retained typed
             # effects proof. A bounding box never promotes a whole overwrite.
             return set()

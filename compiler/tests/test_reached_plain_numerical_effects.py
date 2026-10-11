@@ -8,16 +8,12 @@ import pytest
 from compiler.frontend import native_group_structure
 from compiler.frontend.numerical_preparation import NumericalPreparationProvider
 from compiler.ir import CompilationError
-from compiler.tests.test_combined_numerical_team import (
-    ENVIRONMENT_TEAM,
-    ENVIRONMENT_USE,
-    emit_combined_team_fixture,
-)
-from compiler.tests.test_reached_numerical_effects import (
+from compiler.tests.support.numerical_regions import (
     CHILD,
-    CHILD_SOURCE,
     ENTRY,
     ROOTS,
+    emit_combined_team_fixture,
+    environment_source,
     reached_numerical_fixture,
 )
 
@@ -26,11 +22,6 @@ def plain_consumer(builder):
     """Use the exact intact final original DO, not its body or header."""
     return (next(node for node in reversed(builder.analysis.routines[CHILD].execution.content)
                  if type(node).__name__ == "Block_Nonlabel_Do_Construct"),)
-
-
-def environment_source():
-    return CHILD_SOURCE.replace("implicit none\n", ENVIRONMENT_USE + "implicit none\n", 1).replace(
-        "i=0\n", "i=0\n" + ENVIRONMENT_TEAM, 1)
 
 
 def test_plain_consumer_has_exact_registered_effects_without_output_entry_definition(tmp_path):

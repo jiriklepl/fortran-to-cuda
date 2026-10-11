@@ -180,6 +180,7 @@ class ScopeBuilder:
             self.capture_fact(binding)
         result = copy(self)
         result._reached_window_binding = proof, original_selection
+        result._reached_window_parent = self
         # Inline source authority stays original, but summary consumers must
         # use the window-bound builder rather than its invocation-wide parent.
         result.inline = copy(self.inline)
@@ -190,6 +191,27 @@ class ScopeBuilder:
         return result
 
     def validate_reached_window(self):
+        consumption = getattr(self, "_reached_consumption", None)
+        return consumption.check(self) if consumption is not None else self._validate_reached_window_fresh()
+
+    def consume_reached_plan(self):
+        from compiler.scopes.reached_consumption import _ReachedPlanConsumption
+
+        return _ReachedPlanConsumption(self)
+
+    def _check_reached_publication(self):
+        """Fence every projection sharing a failed or active parent's outputs."""
+        builder, seen = self, set()
+        while builder is not None and id(builder) not in seen:
+            if (getattr(builder, "_reached_consumption", None) is not None
+                    or getattr(builder, "_reached_consumption_failed", False)):
+                raise CompilationError("source publication requires a completed successful reached consumption pass")
+            if len(seen) > self.analysis.procedure_limit:
+                raise CompilationError("reached publication parent projection budget exhausted")
+            seen.add(id(builder))
+            builder = getattr(builder, "_reached_window_parent", None)
+
+    def _validate_reached_window_fresh(self):
         binding = getattr(self, "_reached_window_binding", None)
         if binding is None:
             return None
@@ -202,7 +224,7 @@ class ScopeBuilder:
                                   else getattr(self, "immutable_inputs", {})))
         proof.validate(self.analysis, proof.procedure if child is not None else self.entry.qualified, selection)
         if child is not None:
-            original = proof.child_plan(getattr(self, "_mapped_reached_path", ()), child.original_call)
+            original = proof._child_plan(getattr(self, "_mapped_reached_path", ()), child.original_call)
             if original is not child or child.procedure != self.entry.qualified:
                 raise CompilationError("mapped child builder lacks its exact registered procedure authority")
         identity = sha256(json.dumps(self.facts, sort_keys=True, separators=(",", ":"),
@@ -223,43 +245,52 @@ class ScopeBuilder:
         if len(selected) != 1:
             raise CompilationError("mapped child call identity is ambiguous")
         path = (*getattr(self, "_mapped_reached_path", ()), selected[0])
-        child = proof.child_plan(path, originals[0])
+        consumption = getattr(self, "_reached_consumption", None)
+        child = (consumption.view.child(consumption, path, originals[0]) if consumption is not None else
+                 proof._child_plan(path, originals[0]))
         return path, child
 
     def reached_plan_record(self):
         proof = self.validate_reached_window()
         if proof is None:
             return None
+        consumption = getattr(self, "_reached_consumption", None)
+        if consumption is not None:
+            return consumption.view.record(consumption, getattr(self, "_mapped_reached_path", ()))
         child = getattr(self, "_mapped_reached_child", None)
         return child.public()["plan"] if child is not None else proof.public()
 
-    def numerical_preparation_for(self, analysis, procedure, selection):
-        """Borrow a prepared computation only from this exact reached owner."""
+    def resolved_numerical_region(self, analysis, procedure, selection):
+        """Resolve one exact prepared/effect pair from this reached owner."""
+        from compiler.frontend.reached_windows import _ResolvedNumericalRegion
+
         proof = self.validate_reached_window()
         if proof is None:
             return None
         if analysis is not self.analysis or procedure != self.entry.qualified:
-            raise CompilationError("reached numerical preparation requires its original procedure and analysis")
+            raise CompilationError("reached numerical region requires its original procedure and analysis")
+        consumption = getattr(self, "_reached_consumption", None)
+        if consumption is not None:
+            return consumption.numerical_region(self, procedure, selection)
         region = proof.numerical_region(procedure, selection)
-        return region[0] if region is not None else None
+        if region is not None:
+            region[0].validate_configuration(options=self.options, config=self.config,
+                environment_root=self._numerical_environment_root,
+                immutable_inputs=getattr(self, "immutable_inputs", {}))
+        return _ResolvedNumericalRegion(procedure, selection, *region) if region is not None else None
 
-    def numerical_effect_for(self, analysis, procedure, selection):
-        proof = self.validate_reached_window()
-        if proof is None:
-            return None
-        if analysis is not self.analysis or procedure != self.entry.qualified:
-            raise CompilationError("reached numerical effects require their original procedure and analysis")
-        region = proof.numerical_region(procedure, selection)
-        return region[1] if region is not None else None
-
-    def call_numerical_effect(self, call):
+    def call_numerical_region(self, call):
         if call.region is None:
             return None
         owner = self.inline_for(call.procedure)
         if owner is None:
             raise CompilationError("numerical effect lookup lacks an original inline owner")
         originals = owner.original_selection(call.node)
-        return owner.builder.numerical_effect_for(owner.builder.analysis, owner.builder.entry.qualified, originals)
+        return owner.builder.resolved_numerical_region(owner.builder.analysis, owner.builder.entry.qualified, originals)
+
+    def call_numerical_effect(self, call):
+        region = self.call_numerical_region(call)
+        return region.effects if region is not None else None
 
     def descriptor_window_for(self, analysis, procedure, selection):
         """Issue exact per-consumer authority inside an authenticated owner."""
@@ -820,10 +851,14 @@ class ScopeBuilder:
         if proof is not None:
             if self.visible_binding(self.entry, binding.root) is not binding:
                 raise CompilationError("reached owner capture requires its exact original storage binding")
-            state = proof.capture_state(binding.root)
+            consumption = getattr(self, "_reached_consumption", None)
+            if consumption is not None:
+                state, sections = consumption.view.capture(consumption, binding.root)
+            else:
+                state = proof.capture_state(binding.root)
+                sections = proof.activation_sections(binding.root) if state["initialized"] == "sections" else None
             result = {**fact, "initialized": state["initialized"]}
             if state["initialized"] == "sections":
-                sections = proof.activation_sections(binding.root)
                 if sections is None:
                     raise CompilationError("reached partial activation lacks typed original source geometry")
                 result["source_sections"] = sections
@@ -2508,7 +2543,8 @@ class ScopeBuilder:
 
     def finish(self):
         """Publish source edits and build artifacts after approved scope work."""
-        self.validate_reached_window()
+        self._check_reached_publication()
+        self._validate_reached_window_fresh()
         self.analysis.inputs.verify()
         if any(sha256(package.path.read_bytes()).hexdigest() != package.digest for package in self.packages.values()):
             raise CompilationError("normalized source changed while scope artifacts were being prepared")

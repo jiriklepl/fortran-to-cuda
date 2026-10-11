@@ -110,7 +110,6 @@ class ReachedWindowOwner(MappedReachedControl, LexicalOwner):
             raise CompilationError("reached window emission requires a registered source-position proof")
         if not isinstance(original_selection, tuple) or not original_selection:
             raise CompilationError("reached window emission requires exact original statements")
-        proof.validate(builder.analysis, builder.entry.qualified, original_selection)
         self.window_proof = proof
         self.control_source_proof_identity = proof.identity
         self.window_originals = original_selection
@@ -143,18 +142,10 @@ class ReachedWindowOwner(MappedReachedControl, LexicalOwner):
             proof = plan_reached_window(self.builder.analysis, self.routine.qualified, self.window_originals,
                                         self.window_proof._roots, self.builder.facts, close_before=forced,
                                         numerical_provider=self.window_proof._numerical_provider)
+            children = tuple(member.builder for member in self.members.values() if member is not self)
+            self.builder._reached_consumption.refresh(proof, children)
             self.window_proof = proof
-            self.builder._reached_window_binding = proof, self.window_originals
             planned = proof.public()["planned_closures"]
-            for member in self.members.values():
-                if member is self:
-                    continue
-                old = member.builder._mapped_reached_child
-                child = proof.child_plan(member.builder._mapped_reached_path, old.original_call)
-                if child.public() != old.public():
-                    raise CompilationError("generation close changes an already staged mapped child; owner remains native")
-                member.builder._reached_window_binding = proof, self.window_originals
-                member.builder._mapped_reached_child = child
         cuts = tuple(_close_selection(point) for point in planned["close_points"])
         actual = tuple(tuple(boundary["original_node_ids"]) for boundary in self.boundaries)
         if actual != cuts:
@@ -172,7 +163,6 @@ class ReachedWindowOwner(MappedReachedControl, LexicalOwner):
 
     def _validate_selection(self, nodes):
         self.builder.validate_reached_window()
-        self.window_proof.validate(self.builder.analysis, self.routine.qualified, self.window_originals)
         originals = self.builder.inline.original_selection(tuple(nodes))
         if len(originals) != len(self.window_originals) or any(
                 left is not right for left, right in zip(originals, self.window_originals, strict=True)):
@@ -233,8 +223,10 @@ class ReachedWindowOwner(MappedReachedControl, LexicalOwner):
 
     def run(self, nodes=None):
         """Emit only selected originals; the caller may supply approved facades."""
-        self.builder.validate_reached_window()
-        self.window_proof.validate(self.builder.analysis, self.routine.qualified, self.window_originals)
+        with self.builder.consume_reached_plan():
+            return self._run(nodes)
+
+    def _run(self, nodes):
         if not self.window_proof.public()["prefix_eligibility"]["activation_path_possible"]:
             # A valid all-native decision needs no synthetic source preparation,
             # protected descriptor association or dormant control edits.
