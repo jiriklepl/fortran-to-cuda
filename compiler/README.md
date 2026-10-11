@@ -1469,6 +1469,14 @@ similarly shares one local checkpoint, then rechecks the original syntax and
 every visited procedure before retaining its Boolean result. Neither operation
 retains a successful syntax checkpoint for later calls or other builders.
 
+Numerical procedure classification reuses its locally issued source summary
+for capture origins, native effects and team participation. The summary stays
+inside that synchronous classification; standalone queries and recursive child
+demands still validate independently. Fresh original-source, complete-authority
+and compiler-configuration checks precede adoption of generated artifacts.
+These checks are hard failures rather than numerical-support declines, and no
+successful validation is retained for the next classification.
+
 Generated procedure variants have a separate bounded registry. The public
 `implementation_variants` manifest retains the original native entry and records summary
 identities, interfaces, requirements and shared numerical artifacts. Workers
