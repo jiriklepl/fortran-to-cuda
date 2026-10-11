@@ -1457,6 +1457,15 @@ namespaces, contracts and budgets are still checked separately. Changed private
 execution projections receive distinct authority and cannot grant original
 source proofs. Unknown or cyclic parser state fails closed.
 
+A synchronous recursive summary shares syntax comparisons only while its
+original parser roots remain intact. A fresh exit check precedes closure storage
+or adoption; failed checks discard candidate section-cache changes. Local cache
+hits still validate current authority on each call. Copied source-function
+projections use their own checks. The bounded invocation-environment traversal
+similarly shares one local checkpoint, then rechecks the original syntax and
+every visited procedure before retaining its Boolean result. Neither operation
+retains a successful syntax checkpoint for later calls or other builders.
+
 Generated procedure variants have a separate bounded registry. The public
 `implementation_variants` manifest retains the original native entry and records summary
 identities, interfaces, requirements and shared numerical artifacts. Workers

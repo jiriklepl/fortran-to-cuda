@@ -45,7 +45,11 @@ class InlineRegions:
         if self._native_environment_required is None:
             from compiler.frontend.native_environment import intrinsic_export
             analysis = self.builder.analysis
-            pending = [self.builder._numerical_environment_root]
+            root = self.builder._numerical_environment_root
+            pending = [root]
+            # This traversal only reads original calls and namespace records.
+            # Share syntax checks within this demand, never across builders.
+            syntax = analysis._source_syntax.checkpoint()
             visited, calls = set(), 0
             required = False
             while pending and not required:
@@ -55,7 +59,7 @@ class InlineRegions:
                 if len(visited) >= analysis.procedure_limit:
                     required = True
                     break
-                analysis._require_original(procedure)
+                analysis._require_original(procedure, _syntax=syntax)
                 routine = analysis.routines[procedure]
                 visited.add(procedure)
                 for call in walk(routine.execution, F.Call_Stmt):
@@ -75,6 +79,11 @@ class InlineRegions:
                     # calls grant no borrowed/native continuation authority.
                     pending.extend(target for target in analysis._candidates(scope, call.items[0])
                                    if target in analysis.routines and target not in visited)
+            # Recheck syntax and every visited namespace before publishing.
+            # This second checkpoint is fresh even when a scan stopped early.
+            syntax = analysis._source_syntax.checkpoint()
+            for procedure in sorted(visited | {root}):
+                analysis._require_original(procedure, _syntax=syntax)
             self._native_environment_required = required
         return self._native_environment_required
 

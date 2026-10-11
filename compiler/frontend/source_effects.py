@@ -566,8 +566,8 @@ class SourceEffects:
                 "role": "private_projection" if projections else "source",
                 "projections": projections}
 
-    def _stamp_summary(self, summary):
-        authority = self._summary_authority()
+    def _stamp_summary(self, summary, *, _syntax=None):
+        authority = self._summary_authority(_syntax=_syntax)
         summary["summary_version"] = SOURCE_SUMMARY_VERSION
         summary["summary_role"] = authority["role"]
         summary["analysis_identity"] = sha256(_canonical(authority).encode()).hexdigest()
@@ -575,8 +575,8 @@ class SourceEffects:
         summary["summary_identity"] = sha256(_canonical(body).encode()).hexdigest()
         return summary
 
-    def _cached_closure(self, requested):
-        authority = self._summary_authority()
+    def _cached_closure(self, requested, *, _syntax=None):
+        authority = self._summary_authority(_syntax=_syntax)
         # A structured fragment replaces execution/INTENT under its original
         # qualified name. Its private AST proof must not borrow a source closure.
         if authority["role"] != "source":
@@ -627,8 +627,8 @@ class SourceEffects:
             self._cache_rejections += 1
             return None
 
-    def _store_closures(self, closure):
-        authority = self._summary_authority()
+    def _store_closures(self, closure, *, _syntax=None):
+        authority = self._summary_authority(_syntax=_syntax)
         if authority["role"] != "source":
             return
         # Store reusable reachable leaves as well as their callers. Every import
@@ -1145,27 +1145,59 @@ class SourceEffects:
 
         return sorted(prove(_children(routine.execution)))
 
-    def summarize(self, requested, active=(), *, _closure=None):
+    def _original_syntax_unchanged(self, syntax):
+        return (all(name in self.modules and self.modules[name].node is node and syntax.unchanged(node)
+                    for name, (node, _text) in self._source_module_roles.items())
+                and all(syntax.unchanged(role[0]) for role in self._numerical_roles.values()))
+
+    def summarize(self, requested, active=(), *, _closure=None, _syntax=None):
         self._analysis_started = True
         # Each requested proof owns its budget. Unrelated extraction offers and
         # rejected branches cannot exhaust it or leave apparently complete,
         # empty summaries behind. Cache a closure only in its original context.
         if _closure is None:
             self.inputs.verify()
-            authority = _canonical(self._summary_authority())
+            syntax = self._source_syntax.checkpoint()
+            authority = _canonical(self._summary_authority(_syntax=syntax))
+            # Share only intact original syntax during this synchronous call.
+            # In-place private projections retain their existing fresh checks;
+            # a copied projection can still share the unchanged original AST.
+            syntax = syntax if self._original_syntax_unchanged(syntax) else None
             if authority != self._closure_authority:
                 self._closures.clear()
                 self.summaries.clear()
                 self._closure_authority = authority
             closure = self._closures.get(requested)
-            if closure is None:
-                closure = self._cached_closure(requested)
+            if closure is not None:
+                self.operation_count = closure.operations
+                self.summaries.update(closure.summaries)
+                return deepcopy(closure.summaries[requested])
+            original_sections = dict(self._native_sections)
+            try:
+                store = False
+                closure = self._cached_closure(requested, _syntax=syntax)
                 if closure is None:
                     closure = _Closure()
-                    self.summarize(requested, active, _closure=closure)
-                    self._store_closures(closure)
-                if len(self._closures) < self.procedure_limit:
+                    self.summarize(requested, active, _closure=closure, _syntax=syntax)
+                    store = True
+                if syntax is not None:
+                    # Instrumentation must not turn a mid-demand source change
+                    # into authorized cached evidence. Recheck before storing
+                    # any shared closure or adopting the local candidate.
+                    self.inputs.verify()
+                    final_syntax = self._source_syntax.checkpoint()
+                    if (not self._original_syntax_unchanged(final_syntax)
+                            or _canonical(self._summary_authority(_syntax=final_syntax)) != authority):
+                        raise CompilationError("source authority changed during summary demand")
+                    syntax = final_syntax
+                if store:
+                    self._store_closures(closure, _syntax=syntax)
+                if requested not in self._closures and len(self._closures) < self.procedure_limit:
                     self._closures[requested] = closure
+            except BaseException:
+                self._native_sections.clear()
+                self._native_sections.update(original_sections)
+                raise
             self.operation_count = closure.operations
             self.summaries.update(closure.summaries)
             return deepcopy(closure.summaries[requested])
@@ -1183,7 +1215,7 @@ class SourceEffects:
         if len(_closure.summaries) >= self.procedure_limit:
             return {"procedure": requested, "complete": False, "cloneable": False, "operations": [],
                     "reasons": ["bounded source closure procedure budget exhausted"]}
-        cached_closure = self._cached_closure(requested)
+        cached_closure = self._cached_closure(requested, _syntax=_syntax)
         if cached_closure is not None:
             new = {name: item for name, item in cached_closure.summaries.items() if name not in _closure.summaries}
             added_operations = sum(len(item["operations"]) for item in new.values())
@@ -1462,7 +1494,7 @@ class SourceEffects:
                         # dummies. Borrowed read-only descriptors cannot prove
                         # these allocation or association effects stable.
                         reasons.append(f"allocatable callee formals require original descriptor and allocation semantics: {chosen}")
-                child = self.summarize(chosen, active + (requested,), _closure=_closure)
+                child = self.summarize(chosen, active + (requested,), _closure=_closure, _syntax=_syntax)
                 for requirement in child.get("native_predicate_requirements", ()):
                     predicate_requirement({**deepcopy(requirement), "guard_frames": [
                         *({"procedure": requested, "condition": condition} for condition in guard),
@@ -1727,11 +1759,11 @@ class SourceEffects:
                                 and not any(operation["kind"] == "call" and any(mapping.get("source_object")
                                             for mapping in operation.get("resource_mappings", ()))
                                             for operation in summary["operations"]))
-        sections = self.native_sections(requested)
+        sections = self.native_sections(requested, _syntax=_syntax)
         summary["native_sections"] = sections.public()
         summary["section_precision"] = ("typed bounded native rectangles; checked physical mapping required"
                                         if sections.available else "whole-resource conservative effects")
-        return self._stamp_summary(summary)
+        return self._stamp_summary(summary, _syntax=_syntax)
 
     def _compose_effects(self, summary, closure):
         """Project ordered call effects without inventing a physical rectangle.
@@ -1928,13 +1960,13 @@ class SourceEffects:
                             if has_directives else "source closure has no OpenMP directives")
         return result
 
-    def native_sections(self, requested):
+    def native_sections(self, requested, *, _syntax=None):
         """Return typed original references without parsing explanatory strings."""
         self._analysis_started = True
         self.inputs.verify()
         if requested not in self.routines:
             raise CompilationError("source procedure unavailable: " + requested)
-        authority = sha256(_canonical(self._summary_authority()).encode()).hexdigest()
+        authority = sha256(_canonical(self._summary_authority(_syntax=_syntax)).encode()).hexdigest()
         key = requested, authority
         if key not in self._native_sections:
             result = analyze_native_sections(self, self.routines[requested])
