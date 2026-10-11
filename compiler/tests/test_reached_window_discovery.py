@@ -71,7 +71,12 @@ end subroutine
     _outputs, report = builder.run()
     assert report["reached_window_discovery"]["selected"]
     scope, = report["scopes"]
-    assert scope["gpu_leaves"] == ["renamed_stage::update"]
+    assert scope["gpu_leaves"] == ["renamed_stage::update#region1"]
+    coordinator, = scope["module_coordinators"]
+    assert coordinator["procedure"] == "renamed_stage::update"
+    assert len(coordinator["calls"]) == 2
+    assert len({site["mapped_call_node_id"] for site in coordinator["calls"]}) == 2
+    assert coordinator["structured_summary_identity"] == coordinator["mapped_reached_plan"]["plan"]["structured_identity"]
     assert report["reached_window_discovery"]["attempts"][-1]["numerical_invocations"] == 2
     assert len([item for item in report["numerical_decisions"] if item["supported"]]) == 1
 

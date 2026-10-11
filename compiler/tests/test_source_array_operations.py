@@ -1,7 +1,7 @@
 """Source-backed array operations keep bounds and RHS snapshot semantics."""
 
-from fparser.two import Fortran2003 as F
 import pytest
+from fparser.two import Fortran2003 as F
 
 from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
@@ -10,7 +10,6 @@ from compiler.frontend.source_effects import SourceEffects, _children, _kind
 from compiler.ir import CompilationError
 from compiler.offload.analysis import analyze_offload
 from compiler.scopes.array_operations import extract_array_operation
-
 
 SOURCE = """module renamed_fields
 implicit none
@@ -79,7 +78,7 @@ def test_source_authority_cannot_be_forged_with_same_statement(tmp_path):
         extract_array_operation(analysis, routine, F.Assignment_Stmt(str(node)))
 
 
-@pytest.mark.parametrize("statement,reason", [
+@pytest.mark.parametrize(("statement", "reason"), [
     ("a(lo:hi:lo,-2)=scale", "constant|INTEGER|parameter"),
     ("a=unknown(b)", "unresolved"),
     ("a(:,lo:hi)=b(:,-6)", "rank"),
@@ -100,3 +99,37 @@ def test_new_array_math_retains_native_ieee_environment_guard(tmp_path):
                                   "STATEMENT", "STATEMENT\ncall ieee_get_flag(ieee_invalid,seen)")
     with pytest.raises(CompilationError, match="source-observable"):
         extracted(tmp_path, "a=a*scale", observer)
+
+
+@pytest.mark.parametrize("statement", [
+    "a(-2:1,-2)=b(-6:-3,-6)+scale",
+    "a(1:-2:-1,-2)=b(-3:-6:-1,-6)+scale",
+    "a(-2:-3,-2)=b(-6:-7,-6)+scale",
+    "a(left:1,-2)=b(right:-3,-6)+scale",
+    "a(1:left:-2,-2)=b(-3:right:-2,-6)+scale",
+])
+def test_signed_section_bounds_render_valid_workers_and_checked_guards(tmp_path, statement):
+    source = SOURCE.replace("STATEMENT", "integer,parameter::left=-2,right=-6\nSTATEMENT")
+    _, _, _, region, function, plan = extracted(tmp_path, statement, source)
+    public = analyze_offload(function, plan)
+    assert public.available, public.reason
+    assert "--" not in region.source
+    assert len(plan.regions) == 1
+    for guard in region.runtime_guards:
+        assert "--" not in guard
+        # Syntax must be valid independently of whether the runtime guard
+        # selects the original native operation for its current dimensions.
+        assert F.If_Stmt("if (" + guard + ") continue")
+
+
+def test_minimum_integer_parameter_keeps_checked_signed_abi_spelling(tmp_path):
+    source = SOURCE.replace("real(8),intent(inout)",
+        "integer,parameter::left=(-2147483647-1)\nreal(8),intent(inout)").replace("a(-3:,-2:)", "a(left:,-2:)")
+    _, _, _, region, function, plan = extracted(tmp_path, "a(left:left,-2)=scale", source)
+    assert "2147483648" not in region.source
+    assert "(-2147483647 - 1)" in region.source
+    public = analyze_offload(function, plan)
+    assert public.available, public.reason
+    assert any("(-2147483648_c_int64_t)" in guard for guard in region.runtime_guards)
+    for guard in region.runtime_guards:
+        assert F.If_Stmt("if (" + guard + ") continue")

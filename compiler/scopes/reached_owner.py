@@ -17,29 +17,32 @@ from compiler.scopes.segments import fortran_lines, statement_span
 from compiler.scopes.source import _name, _span
 
 
-class ReachedWindowOwner(LexicalOwner):
-    """Emit one dormant -> active -> spent owner, never a reopened owner."""
+class MappedReachedControl:
+    """One source plan for both a lexical owner and its original-body child."""
 
-    def __init__(self, builder, proof, original_selection):
-        if not isinstance(proof, ReachedWindowProof):
-            raise CompilationError("reached window emission requires a registered source-position proof")
-        if not isinstance(original_selection, tuple) or not original_selection:
-            raise CompilationError("reached window emission requires exact original statements")
-        proof.validate(builder.analysis, builder.entry.qualified, original_selection)
-        self.window_proof = proof
-        self.control_source_proof_identity = proof.identity
-        self.window_originals = original_selection
-        proxy = builder.bind_reached_window(proof, original_selection)
-        super().__init__(proxy)
-        self.spent = _name("fort_window_spent_", proof.identity)
-        self.trace_owner = source_id(proxy, "owner", lifetime="one-shot reached window",
-                                     reached_window_proof=proof.identity)
+    def reached_record(self):
+        return self.builder.reached_plan_record()
 
     def allow_child_continuation(self):
-        return not self.window_proof.public().get("planned_closures", {}).get("enabled")
+        record = self.reached_record()
+        return record is None or not record.get("planned_closures", {}).get("enabled")
+
+    def mapped_child(self, node):
+        record = self.reached_record()
+        if record is None or hasattr(node, "fort_inline_region"):
+            return False
+        originals = self.builder.inline.original_selection((node,))
+        _graph, selected = self.builder.analysis._selected_source(self.routine.qualified, originals)
+        mapped = record["planned_closures"]["mapped_child_plans"]
+        if len(selected) != 1 or selected[0] not in {item["caller_node_id"] for item in mapped}:
+            return False
+        path, child = self.builder.bind_reached_child(node)
+        from compiler.scopes.module_owner import borrow_module
+        return borrow_module(self, node, reached=(path, child))
 
     def planned_source(self, nodes):
-        planned = self.window_proof.public().get("planned_closures", {})
+        record = self.reached_record()
+        planned = record.get("planned_closures", {}) if record is not None else {}
         if not planned.get("enabled") or all(type(node).__name__ == "Comment" for node in nodes):
             return False
         originals = self.builder.inline.original_selection(tuple(nodes))
@@ -64,20 +67,57 @@ class ReachedWindowOwner(LexicalOwner):
         return not bool(descendants & active)
 
     def boundary(self, nodes, reason, *, force_unconditional=False):
+        if self.reached_record() is None:
+            return super().boundary(nodes, reason, force_unconditional=force_unconditional)
         originals = self.builder.inline.original_selection(tuple(nodes))
         _graph, identities = self.builder.analysis._selected_source(self.routine.qualified, originals)
         super().boundary(nodes, reason, force_unconditional=force_unconditional)
         self.boundaries[-1]["original_node_ids"] = list(identities)
 
+    def validate_mapped_plan(self):
+        record = self.reached_record()
+        if record is None:
+            return
+        planned = record["planned_closures"]
+        cuts = {point["node_id"] for point in planned["close_points"]}
+        actual = {identity for boundary in self.boundaries for identity in boundary["original_node_ids"]}
+        if actual != cuts:
+            raise CompilationError("mapped child staged closes differ from its exact registered reached plan")
+        active = set(planned["active_node_ids"])
+        for unit in self.units:
+            originals = self.builder.inline.original_selection(unit.nodes)
+            _graph, identities = self.builder.analysis._selected_source(self.routine.qualified, originals)
+            if not set(identities) <= active:
+                raise CompilationError("mapped child numerical unit crosses an original reached close")
+
+
+class ReachedWindowOwner(MappedReachedControl, LexicalOwner):
+    """Emit one dormant -> active -> spent owner, never a reopened owner."""
+
+    def __init__(self, builder, proof, original_selection):
+        if not isinstance(proof, ReachedWindowProof):
+            raise CompilationError("reached window emission requires a registered source-position proof")
+        if not isinstance(original_selection, tuple) or not original_selection:
+            raise CompilationError("reached window emission requires exact original statements")
+        proof.validate(builder.analysis, builder.entry.qualified, original_selection)
+        self.window_proof = proof
+        self.control_source_proof_identity = proof.identity
+        self.window_originals = original_selection
+        proxy = builder.bind_reached_window(proof, original_selection)
+        super().__init__(proxy)
+        self.spent = _name("fort_window_spent_", proof.identity)
+        self.trace_owner = source_id(proxy, "owner", lifetime="one-shot reached window",
+                                     reached_window_proof=proof.identity)
+
     def validate_plan(self, nodes):
         planned = self.window_proof.public().get("planned_closures", {})
         if not planned.get("enabled"):
             return
-        # Child companions cannot borrow a parent's conditional descriptor
-        # plan. A separately mapped plan is still an independent requirement.
-        if any(member.boundaries or member.units for member in self.members.values() if member is not self):
-            raise CompilationError("planned reached child continuation requires separate mapped closure authority; "
-                                   "close at its original caller instead")
+        for member in self.members.values():
+            if member is not self:
+                if getattr(member.builder, "_mapped_reached_child", None) is None:
+                    raise CompilationError("planned reached child lacks exact mapped authority")
+                member.validate_mapped_plan()
         graph = self.builder.analysis.structure(self.routine.qualified)
         known = {point["node_id"] for point in planned["close_points"]}
         extra = []
@@ -94,6 +134,15 @@ class ReachedWindowOwner(LexicalOwner):
             self.window_proof = proof
             self.builder._reached_window_binding = proof, self.window_originals
             planned = proof.public()["planned_closures"]
+            for member in self.members.values():
+                if member is self:
+                    continue
+                old = member.builder._mapped_reached_child
+                child = proof.child_plan(member.builder._mapped_reached_path, old.original_call)
+                if child.public() != old.public():
+                    raise CompilationError("generation close changes an already staged mapped child; owner remains native")
+                member.builder._reached_window_binding = proof, self.window_originals
+                member.builder._mapped_reached_child = child
         cuts = {point["node_id"] for point in planned["close_points"]}
         actual = {identity for boundary in self.boundaries for identity in boundary["original_node_ids"]}
         if actual != cuts:

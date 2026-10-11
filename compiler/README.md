@@ -1599,7 +1599,7 @@ joined `PARALLEL DO` groups with supported scalar private/reduction clauses;
 the native compiler executes every original reduction. No reduction lowering,
 reassociation or active-owner coherence is authorized.
 
-`prove_reached_window` version 5 transfers separately supplied entry facts through
+`prove_reached_window` version 6 transfers separately supplied entry facts through
 these prefix and descriptor proofs to an exact contiguous window, at top level
 or in the first traversal of one top-level serial counted loop. Branches meet
 conservatively and definitions retain original ordering. Hidden read-only native
@@ -1629,8 +1629,27 @@ explicitly unknown; separately reported active-path coverage is conditional and
 cannot establish an unconditional child definition summary. Failed speculative
 units discard their demands while preserving consumed analysis work. Source
 authority, IEEE checks and aggregate analysis budgets remain independent gates.
-Incomplete children close at their original caller; borrowing a child's own
-conditional plan still requires separate actual-argument and descriptor proofs.
+An original direct child call can carry its own registered conditional plan.
+The separate `prove_native_call_coordinates` version 2 API authenticates whole
+ordinary assumed-shape associations, original caller lower origins, read-only
+scalar mappings and every `INTENT(OUT)` entry event, including unused formals.
+Read-only real/logical scalar fields require their original fixed-component
+proof; integer coordinate fields and descriptor-bearing fields remain native.
+Field selectors use original type authority rather than the caller's `USE`
+namespace, while original syntax and aggregate work remain charged.
+Shared constant declaration bounds are authenticated once per derivation, with
+charged reuse under the existing work limits. Runtime descriptor and scalar
+bounds retain their original dependencies and are not cached this way.
+Source authentication and rectangle transfer each retain their own bounded
+work phase, and both charge the same parent aggregate work limit.
+It does not inspect the child's executable closure or grant storage, initialized
+payload, completion or GPU authority. The reached transfer visits the child at
+that original call, maps ordered partial definitions and shares aggregate work
+limits. Conditional active return coverage remains conditional; a child close
+disables the caller's owner before either original native suffix continues.
+Unsupported associations still close at the original call. Allocation-changing
+callee formals, recursion, uncertain aliases and unproved saved storage remain
+boundaries; immutable array arguments require their existing independent proof.
 
 The internal `ReachedWindowOwner` emitter consumes an exact registered window
 proof together with the same independently admitted capture document. It keeps
@@ -1643,6 +1662,12 @@ window-bound builder and does not rewrite entry facts or whole-procedure
 descriptor proofs. Per-unit native summaries reissue descriptor tokens in their
 own analysis, and managed captures require exact original bindings. Numerical
 lowering and existing native coherence/failure checks remain separate gates.
+Supported child coordinators reuse the same context, handles and enabled flag.
+Caller descriptors are registered under their original allocation/layout guards
+before child argument association can rebase bounds. The emitted child retains
+its original logical coordinates and declarations. Whole joined native groups
+require their separate original completion proof and remain indivisible; a
+coordinate proof alone cannot authorize a team or a cut inside one.
 In opt-in serial `--scope-execution reached` mode, incomplete whole-entry
 descriptor stability for original allocatable formals, or explicit selected-window
 module captures, triggers compiler-owned window discovery before inline

@@ -5,11 +5,18 @@ from __future__ import annotations
 import json
 import os
 import shutil
+from collections import Counter
 from hashlib import sha256
 
 import pytest
 
 from compiler.numerical_contract import require_numerical_build_contract
+from compiler.tests.test_mapped_child_reached_plans import (
+    CHILD_SOURCE,
+    PARENT_SOURCE,
+    PARTIAL_CHILD,
+    emit_mapped_child_window,
+)
 from compiler.tests.test_module_reached_windows import MODULE_BOUNDARY_SOURCE, module_fixture
 from compiler.tests.test_planned_reached_closures import PLANNED_SOURCE, emit_planned_window
 from compiler.tests.test_reached_partial_definitions import PARTIAL_BOUNDARY_SOURCE, partial_fixture
@@ -73,6 +80,38 @@ close(unit)
 end program
 """
 
+MAPPED_DRIVER = """program verify
+use outer_fields,only:advance,prefix_visits,tail_visits
+use inner_fields,only:child_visits,condition_visits,bad_visits,good_visits,workspace
+implicit none
+real(8),allocatable::a(:),b(:)
+integer,parameter::sizes(3)=[0,8,4096],lowers(3)=[-13,-7,4],counts(3)=[0,1,3]
+integer::shape,stages,iteration,n,i,unit,path
+open(newunit=unit,file='fields.bin',access='stream',form='unformatted',status='replace')
+do path=0,1
+ do shape=1,size(sizes)
+  n=sizes(shape)
+  do stages=1,size(counts)
+   allocate(a(lowers(shape):lowers(shape)+n-1),b(lowers(shape):lowers(shape)+n-1))
+   do iteration=1,2
+    do i=lbound(a,1),ubound(a,1)
+     a(i)=real(i+16,8)*0.125_8+real(iteration,8)
+    enddo
+    b=-77.0_8
+    call advance(a,b,n,counts(stages),path==1)
+    write(unit)prefix_visits,tail_visits,child_visits,condition_visits,bad_visits,good_visits
+    write(unit)lbound(a),ubound(a),lbound(b),ubound(b),a,b
+    write(unit)allocated(workspace)
+    if(allocated(workspace)) write(unit)lbound(workspace),ubound(workspace),workspace
+   enddo
+   deallocate(a,b)
+  enddo
+ enddo
+enddo
+close(unit)
+end program
+"""
+
 
 @pytest.fixture(scope="module", params=(
     *((name, fallback, 8) for name, fallback in (
@@ -82,6 +121,9 @@ end program
     *((name, fallback, precision) for precision in (4, 8) for name, fallback in (
         ("module_partial", False), ("module_partial", True), ("module_partial_boundary", False))),
     *(("planned", fallback, precision) for precision in (4, 8) for fallback in (False, True)),
+    *(("mapped", fallback, precision) for precision in (4, 8) for fallback in (False, True)),
+    *(("mapped_partial", False, precision) for precision in (4, 8)),
+    *(("mapped_joined", False, precision) for precision in (4, 8)),
 ))
 def window_binaries(tmp_path_factory, request):
     nvcc = shutil.which("nvcc")
@@ -92,7 +134,36 @@ def window_binaries(tmp_path_factory, request):
     directory = tmp_path_factory.mktemp("one_shot_window")
     architecture = actual_profile(directory, nvcc, host)["hardware"]["compute_capability"].replace(".", "")
     emission, resource_fallback, precision = request.param
-    if emission == "planned":
+    if emission == "mapped_partial":
+        parent_source = PARENT_SOURCE.replace(
+            "do i=lbound(a,1),ubound(a,1)\nb(i)=a(i)+2.0_8\nenddo",
+            "b(lbound(b,1)+1:lbound(b,1)+4)=a(lbound(a,1)+1:lbound(a,1)+4)+2.0_8")
+        # INTENT(OUT) made the other elements undefined. Restore them in the
+        # excluded native tail before any complete-array consumer or backedge.
+        parent_source = parent_source.replace("call move_alloc(a,temporary)",
+            "a(lbound(a,1))=-123.0_8\na(lbound(a,1)+5:ubound(a,1))=-124.0_8\ncall move_alloc(a,temporary)")
+        declarations = CHILD_SOURCE.split("contains", 1)[0].removeprefix("module inner_fields\n")
+        child_source = PARTIAL_CHILD.replace("module inner_fields\n", "module inner_fields\n" + declarations).replace(
+            "y(-2:1)=", "child_visits=child_visits+1\ncondition_visits=condition_visits+1\ny(-2:1)=")
+        original, outputs, report, _owner = emit_mapped_child_window(
+            directory, precision=precision, parent_source=parent_source, child_source=child_source)
+        assert len(report["scopes"][0]["gpu_leaves"]) == 3
+        assert not report["scopes"][0]["reached_window"]["planned_closures"]["closed_path_possible"]
+    elif emission in {"mapped", "mapped_joined"}:
+        # Keep the native fixture valid for empty allocations; all changes to
+        # workspace storage still execute in their original child owner.
+        child_source = CHILD_SOURCE.replace("x(-3)=x(-3)+10.0_8", "if(size(x)>0) then\nx(-3)=x(-3)+10.0_8\nendif").replace(
+            "x(-3)=x(-3)+3.0_8", "if(n>0) then\nx(-3)=x(-3)+3.0_8\nendif")
+        if emission == "mapped_joined":
+            child_source = child_source.replace("do i=-3,n-4\nx(i)=x(i)+real(i,8)\nenddo",
+                "!$omp parallel private(i)\n!$omp do\ndo i=-3,n-4\nx(i)=x(i)+real(i,8)\nenddo\n"
+                "!$omp end do\n!$omp end parallel")
+        original, outputs, report, _owner = emit_mapped_child_window(
+            directory, precision=precision, device_budget=0 if resource_fallback else None,
+            child_source=child_source)
+        assert len(report["scopes"][0]["reached_window"]["planned_closures"]["mapped_child_plans"]) == 1
+        assert len(report["scopes"][0]["gpu_leaves"]) == 4
+    elif emission == "planned":
         source = PLANNED_SOURCE
         if precision == 4:
             source = source.replace("real(8)", "real(4)").replace("_8", "_4").replace(",8)", ",4)")
@@ -127,10 +198,14 @@ def window_binaries(tmp_path_factory, request):
         artifact.write_text(text)
     objects, compile_commands, build_commands = [], [], []
     flags = [fortran, "-O3", "-cpp", "-std=f2018", "-fopenmp", "-fcheck=all,array-temps"]
+    originals = original if isinstance(original, tuple) else (original,)
+    original_order = {report["sources"][str(path)]["replacement"]: index
+                      for index, path in enumerate(originals)}
     for role in ("common_runtime", "shared_entry", "original_source"):
-        for item in report["build_sources"]:
-            if item["role"] != role:
-                continue
+        sources = [item for item in report["build_sources"] if item["role"] == role]
+        if role == "original_source":
+            sources.sort(key=lambda item: original_order[item["path"]])
+        for item in sources:
             artifact = directory / item["path"]
             target = artifact.with_suffix(".o")
             if item["language"] == "cuda":
@@ -148,7 +223,9 @@ def window_binaries(tmp_path_factory, request):
                                      "numerical_contract": item.get("numerical_contract")})
             objects.append(str(target))
     driver = directory / "driver.f90"
-    driver_text = PLANNED_DRIVER if emission == "planned" else DRIVER
+    driver_text = MAPPED_DRIVER if emission.startswith("mapped") else (PLANNED_DRIVER if emission == "planned" else DRIVER)
+    if emission == "mapped_partial":
+        driver_text = driver_text.replace("sizes(3)=[0,8,4096]", "sizes(3)=[8,16,4096]")
     if emission.startswith("module_"):
         driver_text = driver_text.replace("tail_visits,prefix_total", "tail_visits,prefix_total,a,b").replace(
             "real(8),allocatable::a(:),b(:)\n", "").replace("call step(a,b,n,counts(stages))",
@@ -163,7 +240,7 @@ def window_binaries(tmp_path_factory, request):
                "-lcudart", "-lstdc++", "-o", str(candidate)]
     run(command, cwd=directory)
     build_commands.append({"role": "candidate-link", "argv": command})
-    command = [*flags, str(original), str(driver), "-o", str(native)]
+    command = [*flags, *(str(path) for path in originals), str(driver), "-o", str(native)]
     run(command, cwd=directory)
     build_commands.append({"role": "native-compile-link", "argv": command})
     native_env = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE"}
@@ -198,19 +275,37 @@ def test_one_shot_window_matches_complete_native_arrays_and_all_original_visits(
     # Planned closures execute both original paths: two kernels on the good
     # path, one before publishing/replacing storage on the bad path. The native
     # suffix must never register or launch, including subsequent backedges.
-    numerical_launches = 24 if emission == "planned" else (8 if emission == "explicit_live_iterator" else 16)
+    numerical_launches = {"mapped_partial": 72, "mapped": 48, "mapped_joined": 48, "planned": 24,
+                          "explicit_live_iterator": 8}.get(emission, 16)
     assert launches == (0 if disabled or resource_fallback else numerical_launches)
     contexts = result.stderr.count("FORT_SCOPED create ")
     # At most one context may be opened at each first reached traversal. A
     # failed pre-execution resource guard cannot retry on later backedges.
-    assert contexts <= (24 if emission == "planned" else 12)
+    assert contexts <= (24 if emission == "planned" or emission.startswith("mapped") else 12)
+    context_launches = Counter()
+    for line in result.stderr.splitlines():
+        if line.startswith("FORT_SCOPED launch "):
+            context = next(part.removeprefix("context=") for part in line.split() if part.startswith("context="))
+            context_launches[context] += 1
+    if emission in {"mapped", "mapped_joined"} and not disabled and not resource_fallback:
+        # The good path's caller producer, two child kernels and caller consumer
+        # must use one owner, rather than four individually published contexts.
+        # The bad path stops after the caller/child producers, then continues
+        # native once. Both paths run eight nonempty first traversals.
+        assert Counter(context_launches.values()) == {4: 8, 2: 8}
+    if emission == "mapped_partial" and not disabled:
+        assert Counter(context_launches.values()) == {3: 24}
     receipt = {"schema_version": 1, "disabled": disabled, "fields_bytes": len(actual),
                "native_fields_sha256": sha256(expected).hexdigest(),
                "candidate_fields_sha256": sha256(actual).hexdigest(),
                "launches": launches, "contexts_created": contexts, "resource_fallback": resource_fallback,
+               "launches_per_context": dict(context_launches),
                "complete_arrays_and_halos_equal": True,
                "original_prefix_and_tail_counters_equal": True,
-               "conditional_native_replacement_and_branch_counters_equal": emission == "planned",
+               "conditional_native_replacement_and_branch_counters_equal": emission in {"planned", "mapped", "mapped_joined"},
+               "mapped_original_caller_bounds_and_child_index_as_data_equal": emission in {"mapped", "mapped_joined"},
+               "mapped_partial_output_and_restored_native_halo_equal": emission == "mapped_partial",
+               "mapped_original_joined_openmp_and_native_entry_equal": emission == "mapped_joined",
                "reached_window": report["scopes"][0]["reached_window"],
                "compiler_owned_discovery": report["scopes"][0]["reached_window"]["automatic_discovery"],
                "emission": emission,

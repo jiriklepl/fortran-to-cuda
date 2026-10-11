@@ -12,16 +12,28 @@ from fparser.two.utils import walk
 from compiler.frontend.source_effects import _children, _kind, _part
 from compiler.ir import CompilationError
 from compiler.scopes.lexical import LexicalOwner, optional_scalar_input
+from compiler.scopes.reached_owner import MappedReachedControl
 from compiler.scopes.segments import fortran_lines, statement_span
 from compiler.scopes.source import _call, _name, _span
 
 
-class ModuleOwner(LexicalOwner):
-    def __init__(self, parent, routine, mappings, immutable_inputs=None):
+def _reusable_plan(value):
+    """Aggregate validation work belongs to the call, not the worker body."""
+    if isinstance(value, dict):
+        return {key: _reusable_plan(item) for key, item in value.items() if key != "mapped_work"}
+    if isinstance(value, list):
+        return [_reusable_plan(item) for item in value]
+    return value
+
+
+class ModuleOwner(MappedReachedControl, LexicalOwner):
+    def __init__(self, parent, routine, mappings, immutable_inputs=None, reached=None):
         from compiler.scopes.region_dispatch import InlineRegions
 
         proxy = copy(parent.builder)
         proxy.entry = routine
+        if reached is not None:
+            proxy._mapped_reached_path, proxy._mapped_reached_child = reached
         proxy.immutable_inputs = dict(immutable_inputs or {})
         proxy.inline = InlineRegions(proxy)
         super().__init__(proxy, parent=parent)
@@ -58,6 +70,8 @@ class ModuleOwner(LexicalOwner):
         proxy.numerical_ir.update(proxy.inline.ir)
         proxy.numerical_reasons.update({name: None for name in proxy.inline.regions})
         self.scan(self.nodes)
+        if reached is not None:
+            self.validate_mapped_plan()
         if len({number for _, number in self.resources.values()}) != len(self.resources):
             raise CompilationError("original module companion has uncertain hidden-resource aliases")
 
@@ -120,14 +134,20 @@ class ModuleOwner(LexicalOwner):
                 "planning_segments": [{"segment_id": index, "first_line": unit.scope.first,
                     "last_line": unit.scope.last, "operations": unit.scope.public()}
                     for index, unit in enumerate(self.units)],
+                "mapped_reached_plan": (self.builder._mapped_reached_child.public()
+                    if hasattr(self.builder, "_mapped_reached_child") else None),
                 "limits": "ordinary numeric formals and read-only optional scalars; one canonical mapping; original saved locals remain native"}
 
 
-def borrow_module(parent, node):
+def borrow_module(parent, node, *, reached=None):
     """Try one original module body after its complete borrowed worker failed."""
     if hasattr(node, "fort_inline_region"):
         return False
     resolved = parent.builder.execution_source_call(parent.routine, node)
+    if reached is not None and any(mapping.formal_binding.rank and mapping.actual is not None
+                                  and str(mapping.actual).lower().startswith("fort_")
+                                  for mapping in resolved.mappings):
+        raise CompilationError("original mapped actual conflicts with compiler-private registration names")
     routine = parent.builder.analysis.routines[resolved.procedure]
     if routine.source_kind != "module":
         return False
@@ -167,6 +187,10 @@ def borrow_module(parent, node):
             or {root: item.actual.root for root, item in existing.builder.immutable_inputs.items()}
             != {root: item.actual.root for root, item in immutable_inputs.items()}):
         raise CompilationError("original module companion requires one canonical mapping per owning invocation")
+    if existing is not None and reached is not None:
+        old = getattr(existing.builder, "_mapped_reached_child", None)
+        if old is None or _reusable_plan(old.public()["plan"]) != _reusable_plan(reached[1].public()["plan"]):
+            raise CompilationError("original module companion requires one reusable reached child plan")
     if existing is None:
         if len(owner.members) >= parent.builder.analysis.procedure_limit:
             raise CompilationError("original module companion procedure budget exhausted")
@@ -174,7 +198,7 @@ def borrow_module(parent, node):
         members, resources = dict(owner.members), dict(owner.resources)
         owner.active.append(routine.qualified)
         try:
-            existing = ModuleOwner(parent, routine, mappings, immutable_inputs)
+            existing = ModuleOwner(parent, routine, mappings, immutable_inputs, reached)
             owner.members[routine.qualified] = existing
         except CompilationError:
             owner.builder.restore_scope_checkpoint(checkpoint)
@@ -218,7 +242,13 @@ def borrow_module(parent, node):
             if "allocatable" in mapping.binding.attributes:
                 preflight += [f"if (fort_actuals_contiguous) fort_actuals_contiguous = allocated({name})"]
             preflight += [f"if (fort_actuals_contiguous) fort_actuals_contiguous = is_contiguous({name})"]
+            if reached is not None:
+                preflight += [f"if (fort_actuals_contiguous) fort_actuals_contiguous = {condition}"
+                              for condition in parent.builder.original_bound_conditions(name, mapping.binding.rank)]
         preflight += ["if (.not. fort_actuals_contiguous) then", *parent.close(), "endif", "end block"]
+    if reached is not None:
+        from compiler.scopes.call_registration import register_original_actuals
+        preflight += register_original_actuals(parent, arrays)
     lines = [f"if ({parent.enabled}) then", *preflight, "endif",
              f"if ({parent.enabled}) then", *_call(existing.entry, [*arguments, *controls]),
              "else", *parent.original((node,)).splitlines(), "endif"]
@@ -227,6 +257,12 @@ def borrow_module(parent, node):
     from compiler.scopes.provenance import borrowed
     lines = borrowed(parent, (node,), lines)
     parent.patches.append((first, last, "\n".join(fortran_lines(lines))+"\n"))
-    existing.call_sites.append({"caller": parent.routine.qualified, "first_line": first, "last_line": last})
+    if reached is not None:
+        patches = getattr(parent, "mapped_call_patches", {})
+        parent.mapped_call_patches = patches
+        patches[first, last] = reached[1].node_id
+    existing.call_sites.append({"caller": parent.routine.qualified, "first_line": first, "last_line": last,
+                               "mapped_call_node_id": reached[1].node_id if reached is not None else None,
+                               "coordinate_proof_identity": reached[1].coordinates.identity if reached is not None else None})
     parent.builder.resolved_calls[(parent.routine.qualified, (first, last))] = resolved.public()
     return True

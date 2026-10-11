@@ -114,7 +114,7 @@ def test_planned_bad_arm_closes_and_good_arm_retains_active_coverage(tmp_path):
     assert planned["closed_path_possible"]
     assert planned["active_path_may_return"]
     assert not planned["conditional_return_is_unconditional_definition_summary"]
-    assert "mapped" in planned["mapped_child_plans"] or "unavailable" in planned["mapped_child_plans"]
+    assert planned["mapped_child_plans"] == []  # Complete native face call needs no mapped variant.
     assert "partial" not in point["execution"]
     assert proof.validate(builder.analysis, ENTRY, originals) is proof
     for state in record["states"]:
