@@ -131,6 +131,161 @@ def _directive(node):
     return text[5:].strip() if type(node).__name__ == "Comment" and text.startswith("!$omp") else None
 
 
+def reject_unsupported_native_prefix_call(analysis, caller, original_call, *, consume=None):
+    """Recognize native-only calls before demanding their complete effects.
+
+    This is a bounded support preflight, not a completion or effect proof. A
+    known unsupported original construct can disable dormant eligibility before
+    the outer CALL; its original body then runs once without a managed owner.
+    Source, association and budget failures are deliberately not support declines.
+    """
+    from compiler.frontend.native_call_coordinates import _call_resolution_nodes
+    from compiler.frontend.preowner_transfers import PreownerUnsupported
+    from compiler.frontend.source_functions import _validate_resolution
+
+    if getattr(analysis, "_descriptor_source", None) is not None:
+        raise CompilationError("native prefix preflight requires original source authority")
+    routine = _original(analysis, caller)
+    graph, selection = analysis._selected_source(caller, (original_call,))
+    if (type(original_call).__name__ != "Call_Stmt" or len(selection) != 1
+            or graph.nodes[selection[0]].kind != "call"
+            or graph.source_nodes(selection[0]) != (original_call,)):
+        raise CompilationError("native prefix preflight requires an exact original CALL")
+
+    visits, operations, checked_scopes = 0, 0, set()
+
+    def tick(_label=None):
+        nonlocal visits
+        visits += 1
+        if consume is not None:
+            consume(1)
+        if visits > _SCAN_LIMIT:
+            raise CompilationError("native prefix support source scan budget exhausted")
+
+    def scope_authority(scope):
+        depth = 0
+        while scope is not None and id(scope) not in checked_scopes:
+            tick()
+            if depth > analysis.depth_limit:
+                raise CompilationError("native prefix support lexical depth budget exhausted")
+            # _validate_scope authenticates these complete namespace snapshots,
+            # including the original Binding and declaring-scope identities.
+            for name in ("bindings", "imports", "wildcards", "wildcard_exclusions",
+                         "ambiguous_imports", "access", "generics", "procedures", "externals",
+                         "procedure_arguments", "intrinsic_procedures", "intrinsic_wildcards",
+                         "intrinsic_exclusions"):
+                for _item in getattr(scope, name):
+                    tick()
+            _validate_scope(analysis, scope)
+            checked_scopes.add(id(scope))
+            scope, depth = scope.parent, depth + 1
+
+    def resolve(routine, node):
+        scope = analysis.source_scope_for(node, routine.scope)
+        scope_authority(scope)
+        components = []
+
+        def resolution_nodes():
+            for item in _call_resolution_nodes(node, tick=tick):
+                if type(item).__name__ == "Data_Ref":
+                    components.append(item)
+                yield item
+
+        # Field selectors keep their existing type authority; only the original
+        # root and index expressions enter lexical USE-name resolution.
+        _validate_resolution(analysis, scope, resolution_nodes(), tick=tick)
+        resolved = resolve_source_call(analysis, scope, node)
+        for selector in components:
+            from compiler.frontend.component_bindings import _typename, component_access
+            from compiler.frontend.source_objects import _TypeBuilder
+
+            access = component_access(analysis, scope, selector)
+            if access is None:
+                raise CompilationError("native prefix support original component authority is unavailable")
+            authority = _TypeBuilder(analysis)
+            schema = authority.binding(access.root_binding)
+            for index, member_name in enumerate(access.path):
+                tick()
+                if index + 1 > analysis.depth_limit:
+                    raise CompilationError("native prefix support component depth budget exhausted")
+                # Authenticate every visited original schema without demanding
+                # layout/effect legality for its unrelated sibling components.
+                for _member in schema.members:
+                    tick()
+                member = schema.members.get(member_name)
+                if member is None:
+                    raise CompilationError("native prefix support original component declaration changed")
+                if index + 1 < len(access.path):
+                    nested = _typename(member[0])
+                    schema = authority.resolve(schema.scope, nested) if nested else None
+                    if schema is None:
+                        raise CompilationError("native prefix support original component type changed")
+            for _visit in range(authority.visits):
+                tick()
+        for mapping in resolved.mappings:
+            scope_authority(mapping.formal_binding.declaring_scope)
+            if mapping.binding is not None:
+                scope_authority(mapping.binding.declaring_scope)
+        return resolved.procedure
+
+    target = resolve(routine, original_call)
+    if (target not in analysis.routines or graph.nodes[selection[0]].details.get("procedure") != target
+            or graph.nodes[selection[0]].details.get("contract")):
+        raise CompilationError("native prefix preflight requires an original source-backed call target")
+
+    io_statements = {"Open_Stmt", "Close_Stmt", "Read_Stmt", "Write_Stmt", "Print_Stmt",
+                     "Inquire_Stmt", "Wait_Stmt", "Backspace_Stmt", "Rewind_Stmt", "Endfile_Stmt", "Flush_Stmt"}
+    controls = {"If_Construct", "If_Stmt", "Block_Nonlabel_Do_Construct", "Block_Label_Do_Construct",
+                "Select_Case_Construct", "Case_Construct", "Associate_Construct", "Where_Construct",
+                "Forall_Construct"}
+    pending, checked = [(target, ())], set()
+    while pending:
+        name, ancestors = pending.pop(0)
+        if name in ancestors or len(ancestors) > analysis.depth_limit:
+            raise CompilationError("native prefix support call depth or recursion budget exhausted")
+        if name in checked:
+            continue
+        checked.add(name)
+        if len(checked) > analysis.procedure_limit:
+            raise CompilationError("native prefix support procedure budget exhausted")
+        child = _original(analysis, name)
+        scope_authority(child.scope)
+        calls, stack = [], [(child.execution, 0)]
+        while stack:
+            node, depth = stack.pop()
+            tick()
+            if isinstance(node, (tuple, list)):
+                stack.extend((item, depth) for item in reversed(node))
+                continue
+            if not isinstance(node, Base):
+                continue
+            kind = type(node).__name__
+            depth += kind in controls
+            if depth > analysis.depth_limit:
+                raise CompilationError("native prefix support control depth budget exhausted")
+            directive = _directive(node)
+            if kind.endswith("_Stmt") or directive is not None:
+                operations += 1
+                if operations > analysis.operation_limit:
+                    raise CompilationError("native prefix support operation budget exhausted")
+            if kind in io_statements:
+                raise PreownerUnsupported("original native prefix call contains unsupported " + kind + ": " + name)
+            if (directive is not None and re.match(r"parallel(?:\s|$)", directive)
+                    and re.match(r"parallel\s+do(?:\s|$)", directive) is None):
+                raise PreownerUnsupported("native prefix requires a complete original PARALLEL DO and matching join: "
+                                          + name)
+            if kind == "Call_Stmt":
+                calls.append(node)
+            children = getattr(node, "content", getattr(node, "items", ())) or ()
+            stack.extend((item, depth) for item in reversed(children))
+        # Inspect a direct body's known native-only syntax first. Do not expand
+        # a preceding child's effects before an unsupported original team/IO.
+        for node in calls:
+            called = resolve(child, node)
+            if called in analysis.routines:
+                pending.append((called, (*ancestors, name)))
+
+
 def _clauses(analysis, routine, text):
     names, private, reductions, shared = set(), [], [], []
     while text:

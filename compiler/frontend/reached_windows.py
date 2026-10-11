@@ -23,7 +23,7 @@ from compiler.frontend.source_functions import _validate_scope
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 
-REACHED_WINDOW_VERSION = 9
+REACHED_WINDOW_VERSION = 10
 _EFFECTS = {"read", "write", "overwrite", "descriptor_read", "definition_change"}
 _FORBIDDEN = {"pointer", "optional", "volatile", "asynchronous", "value"}
 
@@ -551,6 +551,10 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
         # before any owner exists. They never grant a managed capture or make
         # an incomplete ordinary summary complete in the original analysis.
         if before_owner and graph.nodes[identity].kind == "call":
+            if planned and _mapped is None:
+                from compiler.frontend.native_prefix import reject_unsupported_native_prefix_call
+                original, = graph.source_nodes(identity)
+                reject_unsupported_native_prefix_call(analysis, procedure, original, consume=coordinate_work)
             initial = analysis.segment_summary(procedure, (identity,), capture_locals=True)
             if not initial["complete"] or not initial["native_completion"]["available"]:
                 from compiler.frontend.native_prefix import _fork, prove_native_prefix
