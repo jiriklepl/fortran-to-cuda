@@ -1642,6 +1642,14 @@ eligible branches contribute activation coverage. Source/token and budget
 failures remain hard; incomplete generic native-prefix proofs are not converted
 into support declines.
 
+Before expanding a dormant native call's effects, a bounded original-source
+support check identifies native I/O and OpenMP team shapes outside the supported
+before-owner grammar. It resolves and authenticates the original call chain;
+it does not prove effects or grant capture authority. Reaching such a call
+disables eligibility before the unchanged call, while an inactive caller branch
+does not reject the later owner. Source, binding, resolution and budget errors
+remain hard. Active owners retain their ordinary coherence and closure checks.
+
 Before a root owner exists, a complete original condition may read uncaptured
 fixed numeric or logical metadata on the host. The source proof authenticates
 its original storage and permits only read effects; uncertain associations,

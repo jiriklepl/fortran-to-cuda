@@ -20,6 +20,30 @@ from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
 from compiler.tests.test_source_scopes import run
 
 
+def _source_with_native_boundaries():
+    # Both unsupported, source-backed children stay at their original call
+    # sites. The opaque child remains a separate absorbing-native control.
+    source = PREOWNER_SOURCE.replace("call opaque_prefix()", """if(stage==1) then
+call original_notice()
+else
+call original_joined_team()
+endif
+call opaque_prefix()""")
+    return source.removesuffix("end module\n") + """subroutine original_notice()
+write(*,'(a)') 'original native notice'
+bad_visits=bad_visits+1000
+end subroutine
+subroutine original_joined_team()
+!$omp parallel default(shared)
+!$omp single
+bad_visits=bad_visits+10000
+!$omp end single
+!$omp end parallel
+end subroutine
+end module
+"""
+
+
 def _driver(precision):
     return f"""subroutine opaque_prefix()
 ! Deliberately absent from configured source analysis; original native once.
@@ -90,7 +114,7 @@ def preowner_binaries(tmp_path_factory, request):
     require_explicit_cuda_environment()
     directory = tmp_path_factory.mktemp("preowner_" + str(precision))
     architecture = actual_profile(directory, nvcc, host)["hardware"]["compute_capability"].replace(".", "")
-    source = PREOWNER_SOURCE
+    source = _source_with_native_boundaries()
     if precision == 4:
         source = source.replace("real(8)", "real(4)").replace("_8", "_4").replace(",8)", ",4)")
     original, outputs, report, owner = emit_preowner_window(
@@ -100,6 +124,11 @@ def preowner_binaries(tmp_path_factory, request):
     assert len(scope["gpu_leaves"]) == 2
     assert scope["reached_window"]["prefix_eligibility"]["activation_path_possible"]
     assert scope["reached_window"]["prefix_eligibility"]["disabled_path_possible"]
+    disabled_calls = {point["reason"] for point in
+                      scope["reached_window"]["prefix_eligibility"]["disable_points"]
+                      if point["original_source_kind"] == "Call_Stmt"}
+    assert any("Write_Stmt" in reason for reason in disabled_calls)
+    assert any("PARALLEL DO" in reason for reason in disabled_calls)
     for root in ("argument::b", "renamed_prefix::workspace"):
         assert owner.builder.facts["captures"][root]["initialized"] == "none"
         assert owner.builder.facts["captures"][root]["lifetime"] == "selected_window"
@@ -187,6 +216,7 @@ def test_original_prefix_current_bounds_and_absorbing_native_paths(preowner_bina
                "empty_and_changing_original_allocations": True,
                "source_copy_destinations_initially_undefined_in_capture_facts": True,
                "dormant_metadata_reloaded_each_call": True,
+               "source_backed_io_and_joined_team_execute_once_on_original_paths": True,
                "independently_traced_path": True, "numerical_launches": launches,
                "h2d_bytes": uploaded, "d2h_bytes": downloaded,
                "compared_bytes": len(actual), "native_sha256": sha256(expected).hexdigest(),
