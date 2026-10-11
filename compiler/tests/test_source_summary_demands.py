@@ -1,4 +1,4 @@
-"""A synchronous summary shares syntax checks without retaining authority."""
+"""Synchronous summaries share frozen authority without retaining demand state."""
 
 import pytest
 from fparser.two import Fortran2003 as F
@@ -119,9 +119,11 @@ end module
     assert any(syntax is not None for current, syntax in uses if current is subject)
 
 
-@pytest.mark.parametrize("change", ["module", "execution", "binding", "contracts", "file"])
+@pytest.mark.parametrize("change", ["module", "execution", "binding", "contracts", "nested_contract", "file"])
 def test_mid_demand_mutation_rejects_before_store_and_restores_section_cache(analysis, monkeypatch, change):
     path, subject = analysis
+    if change == "nested_contract":
+        subject.contracts["opaque"] = {"identity": "original-contract"}
     subject.native_sections(CHILD)
     original_sections = dict(subject._native_sections)
     declaration = next(node for node in walk(subject.modules["closure_source"].node, F.Type_Declaration_Stmt)
@@ -135,9 +137,9 @@ def test_mid_demand_mutation_rejects_before_store_and_restores_section_cache(ana
     original_stamp = SourceEffects._stamp_summary
     changed = False
 
-    def stamp(current, summary, *, _syntax=None):
+    def stamp(current, summary, *, _syntax=None, _authority=None):
         nonlocal changed
-        result = original_stamp(current, summary, _syntax=_syntax)
+        result = original_stamp(current, summary, _syntax=_syntax, _authority=_authority)
         if current is subject and summary["procedure"] == CHILD and not changed:
             changed = True
             if change == "module":
@@ -148,6 +150,8 @@ def test_mid_demand_mutation_rejects_before_store_and_restores_section_cache(ana
                 binding.kind = 4
             elif change == "contracts":
                 subject.contracts["opaque"] = {"identity": "changed-during-demand"}
+            elif change == "nested_contract":
+                subject.contracts["opaque"]["identity"] = "changed-during-demand"
             else:
                 path.write_text(SOURCE + "! changed during demand\n")
         return result
@@ -187,3 +191,34 @@ def test_local_cache_still_rechecks_non_syntax_authority(analysis, change):
     else:
         assert not changed["complete"]
         assert any("budget" in reason for reason in changed["reasons"])
+
+
+def test_imported_closure_rechecks_authority_before_adoption(analysis, monkeypatch):
+    path, original = analysis
+    original.contracts["opaque"] = {"identity": "original-contract"}
+    expected = original.summarize(ENTRY)
+    subject = SourceEffects([path])
+    subject.contracts["opaque"] = {"identity": "original-contract"}
+    original_lookup = SummaryCache.lookup
+    stores = subject._summary_cache.stats["stores"]
+    changed = False
+
+    def lookup(cache, identity, requested):
+        nonlocal changed
+        payload = original_lookup(cache, identity, requested)
+        if cache is subject._summary_cache and requested == ENTRY and payload is not None and not changed:
+            changed = True
+            subject.contracts["opaque"]["identity"] = "changed-during-cache-import"
+        return payload
+
+    monkeypatch.setattr(SummaryCache, "lookup", lookup)
+    with pytest.raises(CompilationError, match="source authority changed during summary demand"):
+        subject.summarize(ENTRY)
+    assert changed
+    assert not subject._closures
+    assert not subject.summaries
+    assert not subject._native_sections
+    assert subject._summary_cache.stats["stores"] == stores
+
+    subject.contracts["opaque"]["identity"] = "original-contract"
+    assert source_effects._canonical(subject.summarize(ENTRY)) == source_effects._canonical(expected)

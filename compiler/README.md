@@ -1457,9 +1457,12 @@ namespaces, contracts and budgets are still checked separately. Changed private
 execution projections receive distinct authority and cannot grant original
 source proofs. Unknown or cyclic parser state fails closed.
 
-A synchronous recursive summary shares syntax comparisons only while its
-original parser roots remain intact. A fresh exit check precedes closure storage
-or adoption; failed checks discard candidate section-cache changes. Local cache
+A synchronous recursive summary shares syntax comparisons and one frozen
+canonical authority only while its original parser roots remain intact. Its
+recursive stamping, native-section queries and cache access reuse that immutable
+authority within the demand. Fresh file, syntax and complete-authority checks
+precede closure storage or adoption; failed checks discard candidate
+section-cache changes. Local cache
 hits still validate current authority on each call. Copied source-function
 projections use their own checks. The bounded invocation-environment traversal
 similarly shares one local checkpoint, then rechecks the original syntax and
