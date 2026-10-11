@@ -1,4 +1,4 @@
-"""One original combined numerical team with a whole-group native exit.
+"""One original numerical team with a whole-group native exit.
 
 Numerical completion never supplies native memory hooks. Every original team
 member votes before master's preparation, and a rejected unit closes before
@@ -12,7 +12,7 @@ from pathlib import Path
 
 from fparser.two.utils import walk
 
-from compiler.frontend.native_group_structure import NATIVE_GROUP_SCAN_LIMIT
+from compiler.frontend.native_group_structure import NATIVE_GROUP_SCAN_LIMIT, original_sequence
 from compiler.frontend.source_effects import _kind
 from compiler.ir import CompilationError
 from compiler.scopes.joined_team import declared_names
@@ -29,7 +29,7 @@ from compiler.scopes.segments import (
 def is_combined_group(builder, nodes):
     """Route original syntax only; the consumer separately proves authority."""
     originals = original_roots(builder.inline.original_selection(nodes))
-    count = 0
+    count, directives = 0, []
     for original in originals:
         for node in walk(original):
             count += 1
@@ -37,8 +37,88 @@ def is_combined_group(builder, nodes):
                 raise CompilationError("combined team routing scan budget exhausted")
             text = directive(node)
             if text is not None:
-                return re.match(r"parallel\s+do(?:\s|$)", text) is not None
-    return False
+                directives.append((node, text))
+    if not directives:
+        return False
+    if re.match(r"parallel\s+do(?:\s|$)", directives[0][1]):
+        return True
+    if not re.match(r"parallel(?:\s|$)", directives[0][1]):
+        return False
+    # Mixed/native groups retain their existing JoinedTeam route. This
+    # recognizes source shape only, never numerical legality.
+    try:
+        items, units = _separate_units(originals)
+    except CompilationError:
+        return False
+    expected = _separate_directives(items, units)
+    return tuple(id(node) for node, _text in directives) == tuple(id(node) for node in expected)
+
+
+def _separate_units(originals):
+    """Recognize a flat whole PARALLEL without detaching a worksharing unit."""
+    peeled = {}
+    items = original_sequence(originals, peeled)
+    if (not items or not re.match(r"parallel(?:\s|$)", directive(items[0]) or "")
+            or directive(items[-1]) != "end parallel"):
+        raise CompilationError("separate numerical team requires a complete original PARALLEL group")
+    units, index = [], 1
+    while index < len(items) - 1:
+        opening = items[index]
+        text = directive(opening)
+        if _kind(opening) == "Comment" and text is None:
+            index += 1
+            continue
+        if text is None or not re.match(r"do(?:\s|$)", text):
+            raise CompilationError("separate numerical team requires only flat original worksharing DO units")
+        index += 1
+        while index < len(items) - 1 and _kind(items[index]) == "Comment" and directive(items[index]) is None:
+            index += 1
+        if index >= len(items) - 1 or _kind(items[index]) != "Block_Nonlabel_Do_Construct":
+            raise CompilationError("separate numerical team requires complete original associated DO loops")
+        loop = items[index]
+        content = peeled.get(id(loop), tuple(loop.content))
+        if (not content or _kind(content[0]) != "Nonlabel_Do_Stmt"
+                or _kind(content[-1]) != "End_Do_Stmt"):
+            raise CompilationError("separate numerical team requires complete original counted DO loops")
+        index += 1
+        while index < len(items) - 1 and _kind(items[index]) == "Comment" and directive(items[index]) is None:
+            index += 1
+        ending = None
+        if index < len(items) - 1 and directive(items[index]) in {"end do", "end do nowait"}:
+            ending = items[index]
+            index += 1
+        units.append((opening, loop, content[0], content[-1], ending))
+        if len(units) > 32:
+            raise CompilationError("separate numerical team source-unit budget exhausted")
+    if not units:
+        raise CompilationError("separate numerical team requires at least one original DO unit")
+    return items, tuple(units)
+
+
+def _separate_directives(items, units):
+    return (items[0], *(node for unit in units for node in (unit[0], unit[-1]) if node is not None), items[-1])
+
+
+def _clauses(builder, text, allowed):
+    result, count = [], 0
+    remainder = text.strip()
+    while remainder:
+        count += 1
+        if count > builder.analysis.operation_limit:
+            raise CompilationError("combined numerical team clause budget exhausted")
+        match = re.match(r"(private|shared|default|collapse|schedule)\s*\(([^()]*)\)\s*", remainder)
+        if match is None or match.group(1) not in allowed:
+            raise CompilationError("combined numerical team has an unsupported clause partition: " + remainder)
+        kind, value = match.group(1), match.group(2).strip()
+        if ((kind == "default" and value not in {"none", "shared"})
+                or (kind == "collapse" and value not in {"1", "2", "3", "4"})
+                or (kind == "schedule" and value not in {"static", "runtime"})
+                or (kind in {"private", "shared"} and any(
+                    not re.fullmatch(r"[a-z][a-z0-9_]*", name.strip()) for name in value.split(",")))):
+            raise CompilationError("combined numerical team clause operands are unsupported")
+        result.append((kind, kind + "(" + value + ")"))
+        remainder = remainder[match.end():].lstrip(", ")
+    return tuple(result)
 
 
 def _source_partition(builder, originals):
@@ -51,8 +131,53 @@ def _source_partition(builder, originals):
                 raise CompilationError("combined team source scan budget exhausted")
             if (text := directive(node)) is not None:
                 directives.append((node, text))
-    if not directives or not re.match(r"parallel\s+do(?:\s|$)", directives[0][1]):
-        raise CompilationError("combined numerical team requires one original PARALLEL DO")
+    if not directives or not re.match(r"parallel(?:\s|$)", directives[0][1]):
+        raise CompilationError("combined numerical team requires one original PARALLEL group")
+    opening, text = directives[0]
+    separate = not re.match(r"parallel\s+do(?:\s|$)", text)
+    if separate:
+        items, units = _separate_units(originals)
+        ending = items[-1]
+        expected = _separate_directives(items, units)
+        if tuple(id(node) for node, _text in directives) != tuple(id(node) for node in expected):
+            raise CompilationError("separate numerical team cannot contain nested or unmatched directives")
+        parallel = [clause for _kind_, clause in _clauses(builder, text[len("parallel"):],
+                                                        {"private", "shared", "default"})]
+        worksharing = []
+        clauses = len(parallel)
+        for unit in units:
+            unit_clauses = _clauses(builder, directive(unit[0])[len("do"):], {"private", "collapse", "schedule"})
+            clauses += len(unit_clauses)
+        first, last = statement_span(opening)[0], statement_span(ending)[1]
+        body_first, body_last = statement_span(opening)[1] + 1, statement_span(ending)[0] - 1
+        boundaries = (opening, ending, *(node for unit in units for node in (unit[0], unit[2], unit[3], unit[4])
+                                         if node is not None))
+    else:
+        first, last, body_first, body_last, boundaries, parallel, worksharing, clauses = _combined_partition(
+            builder, originals, directives)
+        units = (None,)
+    if clauses > builder.analysis.operation_limit:
+        raise CompilationError("combined numerical team clause budget exhausted")
+    if not first < body_first <= body_last <= last:
+        raise CompilationError("combined numerical team source association is unordered")
+    source = builder.entry.scope.path
+    if source.stat().st_size > 32 * 1024**2:
+        raise CompilationError("combined numerical team original source byte budget exhausted")
+    lines = source.read_text().splitlines(keepends=True)
+    raw = "".join(lines[first-1:last])
+    if (last > len(lines) or len(raw.encode()) > NATIVE_GROUP_SCAN_LIMIT
+            or any(line.lstrip().startswith("#") for line in lines[first-1:last])):
+        raise CompilationError("combined numerical team requires a bounded original mapped source span")
+    if any(";" in line for node in boundaries for line in lines[statement_span(node)[0]-1:statement_span(node)[1]]):
+        raise CompilationError("combined numerical team cannot replace a semicolon source boundary")
+    return {"first": first, "last": last, "body": "".join(lines[body_first-1:body_last]),
+            "source_sha256": sha256(raw.encode()).hexdigest(),
+            "parallel_clauses": tuple(parallel), "do_clauses": tuple(worksharing),
+            "group_kind": "separate_parallel" if separate else "combined_parallel_do", "unit_count": len(units),
+            "scan_nodes": count, "clause_count": clauses}
+
+
+def _combined_partition(builder, originals, directives):
     opening, text = directives[0]
     ending = None
     if len(directives) == 2 and directives[1][1] == "end parallel do":
@@ -70,45 +195,13 @@ def _source_partition(builder, originals):
     first = statement_span(opening)[0]
     body_first, body_last = statement_span(header)[0], statement_span(end)[1]
     last = statement_span(ending)[1] if ending is not None else body_last
-    if not first < body_first <= body_last <= last:
-        raise CompilationError("combined numerical team source association is unordered")
-    source = builder.entry.scope.path
-    if source.stat().st_size > 32 * 1024**2:
-        raise CompilationError("combined numerical team original source byte budget exhausted")
-    lines = source.read_text().splitlines(keepends=True)
-    raw = "".join(lines[first-1:last])
-    if (last > len(lines) or len(raw.encode()) > NATIVE_GROUP_SCAN_LIMIT
-            or any(line.lstrip().startswith("#") for line in lines[first-1:last])):
-        raise CompilationError("combined numerical team requires a bounded original mapped source span")
     boundaries = (opening, header, end, *((ending,) if ending is not None else ()))
-    if any(";" in line for node in boundaries for line in lines[statement_span(node)[0]-1:statement_span(node)[1]]):
-        raise CompilationError("combined numerical team cannot replace a semicolon source boundary")
     parallel, worksharing = [], []
-    remainder = re.sub(r"^parallel\s+do\b", "", text, count=1).strip()
-    clauses = 0
-    while remainder:
-        clauses += 1
-        if clauses > builder.analysis.operation_limit:
-            raise CompilationError("combined numerical team clause budget exhausted")
-        match = re.match(r"(private|shared|default|collapse|schedule)\s*\(([^()]*)\)\s*", remainder)
-        if match is None:
-            raise CompilationError("combined numerical team has an unsupported clause partition: " + remainder)
-        kind, value = match.group(1), match.group(2).strip()
-        # Completion has authenticated these original operands and bindings.
-        # Repeat the finite shape checks so no new clause semantics is implied.
-        if ((kind == "default" and value not in {"none", "shared"})
-                or (kind == "collapse" and value not in {"1", "2", "3", "4"})
-                or (kind == "schedule" and value not in {"static", "runtime"})
-                or (kind in {"private", "shared"} and any(
-                    not re.fullmatch(r"[a-z][a-z0-9_]*", name.strip()) for name in value.split(",")))):
-            raise CompilationError("combined numerical team clause operands are unsupported")
-        clause = kind + "(" + value + ")"
+    parsed = _clauses(builder, re.sub(r"^parallel\s+do\b", "", text, count=1),
+                      {"private", "shared", "default", "collapse", "schedule"})
+    for kind, clause in parsed:
         (worksharing if kind in {"collapse", "schedule"} else parallel).append(clause)
-        remainder = remainder[match.end():].lstrip(", ")
-    return {"first": first, "last": last, "body": "".join(lines[body_first-1:body_last]),
-            "source_sha256": sha256(raw.encode()).hexdigest(),
-            "parallel_clauses": tuple(parallel), "do_clauses": tuple(worksharing),
-            "scan_nodes": count, "clause_count": clauses}
+    return first, last, body_first, body_last, boundaries, parallel, worksharing, len(parsed)
 
 
 def _check_generated_names(originals, specification, imports, generated, block):
@@ -195,6 +288,8 @@ class CombinedNumericalTeam(StructuredScope):
     def __init__(self, builder, nodes):
         self.builder, self.nodes = builder, tuple(nodes)
         self.original_nodes = original_roots(builder.inline.original_selection(nodes))
+        self.partition = _source_partition(builder, self.original_nodes)
+        facade = builder.inline.prepare_combined_team(self.original_nodes)
         region = builder.resolved_numerical_region(
             builder.analysis, builder.entry.qualified, self.original_nodes)
         if region is None:
@@ -202,9 +297,7 @@ class CombinedNumericalTeam(StructuredScope):
         self.prepared, self.effect = region.prepared, region.effects
         if not self.prepared.completion.get("has_openmp_in_closure"):
             raise CompilationError("combined numerical team requires original joined completion")
-        self.partition = _source_partition(builder, self.original_nodes)
         self.first, self.last = self.partition["first"], self.partition["last"]
-        facade = builder.inline.prepare_combined_team(self.original_nodes)
         call = builder.inline.call(facade)
         outlined = builder.call_numerical_region(call)
         if outlined is None or outlined.prepared is not self.prepared or outlined.effects is not self.effect:
@@ -231,7 +324,8 @@ class CombinedNumericalTeam(StructuredScope):
     def public(self):
         result = super().public()
         result["combined_numerical_team"] = {
-            "schema_version": 1, "completion": self.completion.public(),
+            "schema_version": 2, "completion": self.completion.public(),
+            "group_kind": self.partition["group_kind"], "unit_count": self.partition["unit_count"],
             "preparation_identity": self.prepared.identity, "effect_proof_identity": self.effect.identity,
             "original_span_sha256": self.partition["source_sha256"],
             "parallel_clauses": list(self.partition["parallel_clauses"]),
@@ -304,9 +398,12 @@ class CombinedNumericalTeam(StructuredScope):
                   "if (fort_status /= FORT_SCOPE_OK) error stop 'combined original team numerical execution failed'",
                   "fort_status = fort_scope_wait(fort_context)",
                   "if (fort_status /= FORT_SCOPE_OK) error stop 'combined original team completion failed'",
-                  "!$omp end master", "!$omp barrier", "end associate", "end block", "else", do,
-                  *native_body, "!$omp end do", "endif", "!$omp end parallel"]
-        generated = [*lines[:len(lines)-len(native_body)-3], *lines[-3:]]
+                  "!$omp end master", "!$omp barrier", "end associate", "end block", "else"]
+        native = ([do, *native_body, "!$omp end do"]
+                  if self.partition["group_kind"] == "combined_parallel_do" else native_body)
+        suffix = ["endif", "!$omp end parallel"]
+        generated = [*lines, *suffix]
+        lines += [*native, *suffix]
         _narrow_runtime_imports(imports, [*specification, *extra], [*before, *generated, *after])
         _check_generated_names(self.original_nodes, [*specification, *extra], imports, generated, block)
         replacement = "\n".join(fortran_lines(lines)) + "\n"

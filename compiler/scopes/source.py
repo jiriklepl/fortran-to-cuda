@@ -261,14 +261,14 @@ class ScopeBuilder:
         return child.public()["plan"] if child is not None else proof.public()
 
     def resolved_numerical_region(self, analysis, procedure, selection):
-        """Resolve one exact prepared/effect pair from this reached owner."""
+        """Resolve exact source evidence from the reached or lexical owner."""
         from compiler.frontend.reached_windows import _ResolvedNumericalRegion
 
-        proof = self.validate_reached_window()
-        if proof is None:
-            return None
         if analysis is not self.analysis or procedure != self.entry.qualified:
             raise CompilationError("reached numerical region requires its original procedure and analysis")
+        proof = self.validate_reached_window()
+        if proof is None:
+            return self.inline.resolved_numerical_region(selection)
         consumption = getattr(self, "_reached_consumption", None)
         if consumption is not None:
             return consumption.numerical_region(self, procedure, selection)
@@ -278,6 +278,19 @@ class ScopeBuilder:
                 environment_root=self._numerical_environment_root,
                 immutable_inputs=getattr(self, "immutable_inputs", {}))
         return _ResolvedNumericalRegion(procedure, selection, *region) if region is not None else None
+
+    def _validate_numerical_regions(self):
+        retained = 0
+        for registry in self.region_owners.values():
+            if not registry.original_numerical_regions:
+                continue
+            retained += 1
+            if retained > self.analysis.procedure_limit:
+                raise CompilationError("ordinary numerical owner registry budget exhausted")
+            if (registry.builder.options != self.options or registry.builder.config != self.config
+                    or registry.builder._numerical_environment_root != self._numerical_environment_root):
+                raise CompilationError("ordinary numerical owner compiler policy changed")
+            registry.validate_numerical_regions()
 
     def call_numerical_region(self, call):
         if call.region is None:
@@ -2393,18 +2406,21 @@ class ScopeBuilder:
                 dict(self.clones), dict(self.queries), dict(self.generated), dict(self.numerical_reasons),
                 dict(self.numerical_ir), dict(self.batch_chains), self.variants.checkpoint(), dict(self.view_generated),
                 dict(self.view_clones), dict(self.view_queries),
-                {procedure: set(registry.used) for procedure, registry in self.region_owners.items()},
+                {procedure: (set(registry.used), dict(registry.original_numerical_regions))
+                 for procedure, registry in self.region_owners.items()},
                 dict(self.runtime_provenance.records))
 
     def restore_scope_checkpoint(self, checkpoint):
         (self.outputs, self.edits, self.clones, self.queries,
          self.generated, self.numerical_reasons, self.numerical_ir, self.batch_chains, variants, self.view_generated,
-         self.view_clones, self.view_queries, used, provenance) = checkpoint
+         self.view_clones, self.view_queries, registries, provenance) = checkpoint
         self.runtime_provenance.records.clear()
         self.runtime_provenance.records.update(provenance)
         self.variants.restore(variants)
         for procedure, registry in self.region_owners.items():
-            registry.used = set(used.get(procedure, ()))
+            used, regions = registries.get(procedure, ((), {}))
+            registry.used = set(used)
+            registry.original_numerical_regions = dict(regions)
 
     def scan(self, nodes):
         from compiler.scopes.segments import StructuredScope, statement_span
@@ -2550,6 +2566,7 @@ class ScopeBuilder:
         """Publish source edits and build artifacts after approved scope work."""
         self._check_reached_publication()
         self._validate_reached_window_fresh()
+        self._validate_numerical_regions()
         self.analysis.inputs.verify()
         if any(sha256(package.path.read_bytes()).hexdigest() != package.digest for package in self.packages.values()):
             raise CompilationError("normalized source changed while scope artifacts were being prepared")

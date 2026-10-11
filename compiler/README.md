@@ -1765,8 +1765,22 @@ registration establishes no tile-derived definitions. A failed guard publishes a
 before the complete original group, which executes once; the owner cannot reopen.
 Public records identify the preparation, physical effects and typed preconditions;
 these conditional return effects never become unconditional native contracts.
-For an exact prepared combined `PARALLEL DO`, the reached mapped-child emitter
-can retain the original team and its complete join. It preserves supported
+For an exact prepared numerical group, both ordinary lexical owners and reached
+mapped children can retain the original team and its complete join. Ordinary
+owners issue their preparation/effect pair from the original source, without
+requiring a reached-window plan. The bounded local registry revalidates the exact
+selection, source, bindings and compiler policy at use and publication, and rolls
+back with failed generation candidates. It grants no storage or definition facts;
+a bound reached plan remains authoritative for its own conditional regions.
+
+Supported groups are a combined `PARALLEL DO`, or one flat `PARALLEL` containing
+up to 32 complete numerical worksharing `DO` units. The latter preserves every
+original worksharing directive, barrier and `END DO NOWAIT` in the native
+alternative. Generated units execute in their proved order. Whole-group read
+coverage still uses the original entry snapshot; a final join cannot justify
+reading an undefined intermediate or authorize an individual NOWAIT cut.
+Private state carried between units, native siblings and nested teams retain
+their existing conservative boundaries. The emitter preserves supported
 `PRIVATE`, `SHARED` and `DEFAULT` clauses on the team, and `COLLAPSE` and
 `SCHEDULE` clauses on the original worksharing loop. Every actual participant
 checks its numerical environment before the master evaluates guarded bounds,
@@ -1779,7 +1793,8 @@ preflight, the existing collective worker may handle pre-execution resource
 failure with its checked generated CPU implementation and coherent commit.
 Execution or completion failure cannot replay work. This consumer grants no
 native-effect hooks from numerical footprints. Its versioned
-`combined_numerical_team` manifest records completion, source partition,
+version 2 `combined_numerical_team` manifest records group kind and source-unit
+count, completion, source partition,
 preparation and physical-effect identities, participant requirements and failure
 policies. Missing applicable collective calibration still selects native AUTO.
 An original direct child call can carry its own registered conditional plan.

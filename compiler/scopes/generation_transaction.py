@@ -190,6 +190,7 @@ class GenerationTransaction:
         if winner.facts != self._parent_state["facts"]:
             raise CompilationError("generation candidate changed independently admitted source facts")
         winner._validate_reached_window_fresh()
+        winner._validate_numerical_regions()
         winner.analysis.inputs.verify()
         # Rebind every nested builder, inline registry and bound closure to the
         # adopted root while retaining their internal alias relationships.
