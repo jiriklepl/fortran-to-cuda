@@ -281,6 +281,30 @@ class InlineRegions:
                                     immutable_inputs=getattr(self.builder, "immutable_inputs", {}))
         return self._outline(extraction, sources, collective=True, reservation=sources)
 
+    def prepare_combined_team(self, nodes):
+        """Consume one retained whole numerical group through its original team.
+
+        This is not a worksharing cut or native-effect proof. The distinct
+        combined-team consumer retains the complete original join and checks
+        every participant before any reached registration or query.
+        """
+        from compiler.scopes.segments import original_roots
+
+        sources = original_roots(self.original_selection(nodes))
+        retained = self.builder.numerical_preparation_for(
+            self.builder.analysis, self.builder.entry.qualified, sources)
+        if retained is None:
+            raise CompilationError("combined numerical team requires registered original preparation")
+        retained.validate(self.builder.analysis, self.builder.entry.qualified, sources)
+        retained.validate_configuration(options=self.builder.options, config=self.builder.config,
+            environment_root=self.builder._numerical_environment_root,
+            immutable_inputs=getattr(self.builder, "immutable_inputs", {}))
+        if retained.completion_proof is None:
+            raise CompilationError("combined numerical team requires complete original numerical authority")
+        # Preparation validates the exact registered completion type: simple
+        # helper-free groups and pure-helper closures have distinct token ABIs.
+        return self._outline(retained.extraction, sources, collective=True, reservation=sources)
+
     def _outline(self, extraction, sources, *, collective, reservation=None):
         """Lower an authenticated extraction and register its private facade."""
         from compiler.frontend.numerical_preparation import NumericalPreparationProvider, _prepare

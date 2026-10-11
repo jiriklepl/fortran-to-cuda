@@ -358,6 +358,51 @@ def _derive_joined(analysis, procedure, selection, include_entry, descriptor_win
             charge()
     # The original completion/source check is deliberately performed before a
     # support-only rejection. A stale token or malformed team is never a cut.
+    native_environment = completion.public().get("native_environment_contract")
+    if native_environment:
+        # A whole original IEEE-only team changes native thread state and
+        # possibly its separately proved unsaved LOGICAL storage. It neither
+        # accesses managed numeric arrays nor supplies their definitions. Do
+        # not request worksharing cuts to describe this indivisible operation.
+        calls = []
+        for original in originals:
+            for node in walk(original):
+                if type(node).__name__.endswith("_Stmt"):
+                    if type(node).__name__ != "Call_Stmt":
+                        raise NativeDefinitionUnsupported("native environment definitions require a whole IEEE-only team")
+                    calls.append(node)
+        if not calls or len(calls) > analysis.operation_limit:
+            raise CompilationError("native environment definition operation budget exhausted")
+        proofs = []
+        for call in calls:
+            charge()
+            proof = analysis.native_environment(procedure, call)
+            proof.validate(analysis, procedure, call)
+            proofs.append(proof)
+        if [proof.public() for proof in proofs] != completion.public().get("native_environment_operations"):
+            raise CompilationError("native environment definitions require every original completion operation")
+        writes = tuple(sorted({root for proof in proofs for root in proof.written_roots}))
+        steps = (NativeDefinitionStep(identities[0], "access", graph.nodes[identities[0]].guard,
+                                      NativeSections(True), writes),)
+        record = {"schema_version": NATIVE_DEFINITION_VERSION, "procedure": procedure,
+                  "structured_identity": graph.identity, "analysis_identity": graph.authority_identity,
+                  "source_identity": analysis.inputs.identity(), "selected_node_ids": list(identities),
+                  "include_entry": False, "entry_definition_changes": [],
+                  "descriptor_window_identity": descriptor_window.identity if descriptor_window is not None else None,
+                  "leaf_descriptor_windows": [], "resources": [], "steps": [step.public() for step in steps],
+                  "source_demands": [proof.identity for proof in proofs], "control_visits": 1, "leaf_count": 1,
+                  "rectangle_count": 0, "rectangle_limit": RECTANGLE_LIMIT, "source_work": source_work,
+                  "ordered_effect_count": len(proofs), "completion_identity": completion.identity,
+                  "transfer_mode": "whole_joined_environment_no_payload",
+                  "native_environment_contract": native_environment,
+                  "native_environment_operations": [proof.public() for proof in proofs],
+                  "execution_authorized": False, "gpu_legality_established": False,
+                  "global_initialization_authority": False, "allocation_freshness_authority": False,
+                  "whole_definition_inferred": False, "requires_original_reached_selection": True,
+                  "requires_runtime_layout_alias_and_coverage_checks": True, "bounds_evaluated": False,
+                  "limits": ["whole original IEEE-only joined team; original calling threads and native local state",
+                             "no worksharing cuts, managed payload access or array definition credit"]}
+        return steps, (), record
     units = []
     _joined_completion_facts(analysis, procedure, selection, worksharing=units)
     if any(type(node).__name__ in {"If_Construct", "If_Stmt", "Associate_Construct"}

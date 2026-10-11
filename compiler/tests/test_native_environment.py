@@ -7,7 +7,9 @@ import pytest
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import walk
 
+from compiler.frontend.native_definitions import NativeDefinitionUnsupported, prove_native_definitions
 from compiler.frontend.native_environment import intrinsic_export
+from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
 from compiler.frontend.source_effects import SourceEffects, _children, _kind
 from compiler.ir import CompilationError
 
@@ -66,6 +68,56 @@ def test_original_typed_state_and_ordered_environment_effects(tmp_path, array):
         "environment_read", "write", "environment_write", "environment_write", "read"]
     assert [operation["kind"] for operation in summary["operations"]] == ["native_environment"] * 3
     assert path.read_bytes() == original
+
+
+@pytest.mark.parametrize("array", [False, True])
+def test_whole_environment_team_preserves_partial_payload_definition_state(tmp_path, array):
+    flag = "ieee_all" if array else "ieee_invalid"
+    body = ("continue\n!$omp parallel shared(modes)\n"
+            f"call ieee_get_halting_mode({flag},modes)\n"
+            f"call ieee_set_halting_mode({flag},.false.)\n"
+            f"call ieee_set_halting_mode({flag},modes)\n!$omp end parallel")
+    path, analysis, routine, _calls = analyze(tmp_path, array=array, body=body)
+    group, = (item for item in grouped_original_sequence(routine.execution.content, {})
+              if isinstance(item, NativeGroupCandidate))
+    completion = analysis.joined_completion(ENTRY, group.original_nodes)
+    proof = prove_native_definitions(analysis, ENTRY, group.original_nodes, completion=completion)
+    public = proof.public()
+    assert public["transfer_mode"] == "whole_joined_environment_no_payload"
+    assert public["resources"] == []
+    assert public["ordered_effect_count"] == 3
+    assert public["completion_identity"] == completion.identity
+    assert all(not step.sections.resources for step in proof.steps)
+    assert proof.steps[0].scalar_writes == (ENTRY + "::modes",)
+    assert not public["execution_authorized"]
+    assert not public["whole_definition_inferred"]
+    assert proof.transfer().reads_covered
+    assert dict(proof.transfer().definitions) == {}
+    # An indivisible native environment group never becomes a worksharing cut.
+    with pytest.raises(CompilationError):
+        analysis.worksharing_native_completion(ENTRY, group.original_nodes, (_calls[0],))
+    path.write_text(path.read_text() + "! source changed\n")
+    with pytest.raises(CompilationError):
+        proof.validate(analysis, ENTRY, group.original_nodes)
+
+
+def test_environment_and_payload_worksharing_do_not_acquire_neutral_definitions(tmp_path):
+    body = """continue
+!$omp parallel private(i)
+call ieee_set_halting_mode(ieee_invalid,.false.)
+!$omp do
+do i=1,size(a)
+a(i)=1.0_8
+enddo
+!$omp end do
+!$omp end parallel"""
+    _path, analysis, routine, _calls = analyze(tmp_path, array=False, body=body,
+                                             declaration="logical::modes\ninteger::i")
+    group, = (item for item in grouped_original_sequence(routine.execution.content, {})
+              if isinstance(item, NativeGroupCandidate))
+    completion = analysis.joined_completion(ENTRY, group.original_nodes)
+    with pytest.raises(NativeDefinitionUnsupported, match="whole IEEE-only team"):
+        prove_native_definitions(analysis, ENTRY, group.original_nodes, completion=completion)
 
 
 def test_private_projection_uses_registered_original_token(tmp_path):

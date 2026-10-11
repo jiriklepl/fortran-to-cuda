@@ -173,6 +173,70 @@ def _position(analysis, procedure, selection):
     return graph, selected, tuple(prefix), tuple(controls)
 
 
+def _plain_counted_numerical_candidate(analysis, routine, graph, identity, consume):
+    """Route only an intact original serial counted DO to the provider.
+
+    This syntax check grants no numerical, descriptor or definition authority.
+    The provider still authenticates and prepares the complete original loop.
+    Attached or nested directives require the separate joined-group route.
+    """
+    if graph.nodes[identity].kind != "loop":
+        return False
+    originals = graph.source_nodes(identity)
+    if len(originals) != 1 or type(originals[0]).__name__ != "Block_Nonlabel_Do_Construct":
+        return False
+    pending, iterators, writes = [originals[0]], set(), []
+    while pending:
+        syntax = []
+        for node in pending.pop().content:
+            consume(1)
+            if type(node).__name__ == "Comment":
+                if str(node).lstrip().startswith("!$"):
+                    return False
+            else:
+                syntax.append(node)
+        if not syntax or type(syntax[0]).__name__ != "Nonlabel_Do_Stmt":
+            return False
+        control = syntax[0].items[1]
+        if (type(control).__name__ != "Loop_Control" or control.items[1] is None
+                or type(syntax[-1]).__name__ != "End_Do_Stmt"):
+            return False
+        iterators.add(str(control.items[1][0]).lower())
+        for node in syntax[1:-1]:
+            consume(1)
+            if type(node).__name__ == "Block_Nonlabel_Do_Construct":
+                pending.append(node)
+            elif type(node).__name__ == "Assignment_Stmt":
+                writes.append(node.items[0])
+            else:
+                return False
+    array_write = False
+    for target in writes:
+        consume(1)
+        if type(target).__name__ != "Part_Ref":
+            # Scalar and whole-array native operations keep their old path.
+            return False
+        scope = analysis.source_scope_for(target, routine.scope)
+        binding = analysis._binding(scope, target.items[0])
+        if binding is None or not binding.rank:
+            return False
+        array_write = True
+    for node in walk(originals[0]):
+        consume(1)
+        if type(node).__name__ == "Part_Ref":
+            scope = analysis.source_scope_for(node, routine.scope)
+            binding = analysis._binding(scope, node.items[0])
+            if binding is not None and binding.rank:
+                for index in getattr(node.items[1], "items", ()):
+                    consume(1)
+                    if not (type(index).__name__ == "Int_Literal_Constant"
+                            or type(index).__name__ == "Name" and str(index).lower() in iterators):
+                        # In particular, native scatter/gather corrections
+                        # must not become a speculative lowering hard error.
+                        return False
+    return array_write
+
+
 def _derive(analysis, procedure, selection, roots, facts, planned_close_before=None, *,
             numerical_provider=None, _mapped=None, _work=None, _stack=(), _children=None, _result=None,
             _numerical_regions=None):
@@ -679,7 +743,8 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
         # original preparation guards. Descriptor/lifetime authority remains
         # independent and is checked before any definition credit is used.
         if (planned and not before_owner and _mapped is not None and numerical_provider is not None
-                and joined_selection is not None):
+                and (joined_selection is not None
+                     or _plain_counted_numerical_candidate(analysis, routine, graph, identity, coordinate_work))):
             from compiler.frontend.numerical_effects import prove_numerical_effects
             from compiler.frontend.numerical_preparation import NumericalPreparationUnsupported
 

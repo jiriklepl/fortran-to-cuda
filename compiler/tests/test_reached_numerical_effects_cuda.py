@@ -97,15 +97,21 @@ def _transfers(trace):
 @pytest.fixture(scope="module", params=((4, False), (4, True), (8, False), (8, True)))
 def reached_numerical_binaries(tmp_path_factory, request):
     precision, resource_fallback = request.param
+    return build_reached_numerical_binaries(tmp_path_factory, precision, resource_fallback)
+
+
+def build_reached_numerical_binaries(tmp_path_factory, precision, resource_fallback, *,
+                                    emit_fixture=emit_reached_numerical_fixture, prefix="reached_numerical_"):
+    """Build the same authenticated chain for source participation fixtures."""
     nvcc = shutil.which("nvcc")
     host = shutil.which("g++-14") or shutil.which("g++")
     fortran = shutil.which("gfortran-15") or shutil.which("gfortran")
     if not all((nvcc, host, fortran)):
         pytest.skip("CUDA, C++ and Fortran toolchain required")
     require_explicit_cuda_environment()
-    directory = tmp_path_factory.mktemp("reached_numerical_" + str(precision))
+    directory = tmp_path_factory.mktemp(prefix + str(precision))
     architecture = actual_profile(directory, nvcc, host)["hardware"]["compute_capability"].replace(".", "")
-    originals, outputs, report, owner = emit_reached_numerical_fixture(
+    originals, outputs, report, owner = emit_fixture(
         directory, precision=precision, device_budget=0 if resource_fallback else None)
     scope, = report["scopes"]
     assert len(scope["gpu_leaves"]) == 3
@@ -174,7 +180,12 @@ def reached_numerical_binaries(tmp_path_factory, request):
 @pytest.mark.parametrize("disabled", [False, True])
 @pytest.mark.parametrize("path", ["eligible", "negative", "overflow", "empty", "late"])
 def test_prepared_chain_keeps_native_faces_coherent_without_replay(reached_numerical_binaries, disabled, path):
-    directory, candidate, native, precision, resource_fallback, resources = reached_numerical_binaries
+    check_prepared_chain(reached_numerical_binaries, disabled, path)
+
+
+def check_prepared_chain(binaries, disabled, path):
+    """Check full native agreement, original visits and exact resident traffic."""
+    directory, candidate, native, precision, resource_fallback, resources = binaries
     environment = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "FORT_RUNTIME_TRACE": "1"}
     if disabled:
         environment["CUDA_VISIBLE_DEVICES"] = "-1"

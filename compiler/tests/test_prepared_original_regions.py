@@ -9,6 +9,7 @@ from compiler.driver.options import CompilerOptions
 from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
 from compiler.frontend.numerical_preparation import (
     NumericalPreparationProvider,
+    NumericalPreparationUnsupported,
     PreparedOriginalRegion,
     prepare_original_region,
 )
@@ -82,6 +83,25 @@ def test_source_only_preparation_retains_exact_original_checked_ir(tmp_path, mon
     assert not prepared.public()["capture_authorized"]
     assert path.read_bytes() == before
     assert {item.name for item in tmp_path.iterdir()} == {path.name}
+
+
+def test_authenticated_non_numerical_team_declines_without_masking_source_changes(tmp_path):
+    source = SOURCE.replace("implicit none\ncontains", """use,intrinsic::ieee_exceptions,only:ieee_set_halting_mode,ieee_invalid
+implicit none
+contains""", 1).replace("continue\n", """continue
+!$omp parallel
+call ieee_set_halting_mode(ieee_invalid,.false.)
+!$omp end parallel
+""", 1)
+    path, analysis, provider, selection = fixture(tmp_path, source)
+    with pytest.raises(NumericalPreparationUnsupported, match="contains no counted loop"):
+        provider.prepare(analysis, ENTRY, selection)
+    # This is only candidate classification; the original source is still
+    # authenticated before any unsupported result can become a native fallback.
+    path.write_text(path.read_text() + "! changed source\n")
+    with pytest.raises(CompilationError) as error:
+        provider.prepare(analysis, ENTRY, selection)
+    assert not isinstance(error.value, NumericalPreparationUnsupported)
 
 
 def test_tile_guards_are_typed_original_operands_and_exact_legacy_bindings(tmp_path):
