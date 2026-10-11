@@ -1800,6 +1800,12 @@ single-line IF actions to find calls. Expression payloads retain their separate
 source and numerical checks without adding work to this call-only search.
 Each query shares syntax validation across callees, then uses a fresh checkpoint
 to revalidate its visited source before publishing the result.
+Original liveness contexts reuse prepared-span aggregates only within one query.
+The index retains expression descendants, unmapped include coordinates and
+missing-span rejection, while avoiding repeated subtree walks for enclosing
+branches and loop backedges. Cached lookups still spend the existing local and
+parent work budgets. Every new demand rebuilds the index; source authority,
+capture definitions and execution eligibility remain separate checks.
 
 Supported groups are a combined `PARALLEL DO`, or one flat `PARALLEL` containing
 up to 32 complete numerical worksharing `DO` units. The latter preserves every
