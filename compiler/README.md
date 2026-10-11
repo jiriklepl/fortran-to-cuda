@@ -1701,6 +1701,14 @@ or validate only the first node of a team. Discovery version 6 retains these
 selections and completion identities in its decline diagnostics.
 An explicitly supplied `NumericalPreparationProvider` can extend a planned
 mapped child with exact physical effects from its original numerical group.
+The same route supports original serial pointwise counted loops containing
+array-element assignments with iterator or literal indices, without OpenMP
+directives. Calls, indirect indexing and scalar writes retain the ordinary
+native path. Exact registered numerical effects avoid demanding
+undefined output values solely to prepare a conditional native fallback. A
+failed numerical-environment or geometry guard still publishes and closes
+before the unchanged original loop executes once; numerical effects never
+authorize native memory hooks.
 Preparation is source-only: it neither admits captures nor publishes generated
 artifacts. The separate registered effect proof maps actual numerical indices
 back to original logical coordinates; preservation uploads are not reads or
@@ -1715,6 +1723,23 @@ registration establishes no tile-derived definitions. A failed guard publishes a
 before the complete original group, which executes once; the owner cannot reopen.
 Public records identify the preparation, physical effects and typed preconditions;
 these conditional return effects never become unconditional native contracts.
+For an exact prepared combined `PARALLEL DO`, the reached mapped-child emitter
+can retain the original team and its complete join. It preserves supported
+`PRIVATE`, `SHARED` and `DEFAULT` clauses on the team, and `COLLAPSE` and
+`SCHEDULE` clauses on the original worksharing loop. Every actual participant
+checks its numerical environment before the master evaluates guarded bounds,
+registers this unit or constructs its query. No separate sampling team is used.
+The native ABI borrows no absent companion controls; always-present local
+mirrors carry coordination state inside the original team.
+An unsupported team, numerical environment, geometry or native placement
+publishes and closes before that original loop executes once. After successful
+preflight, the existing collective worker may handle pre-execution resource
+failure with its checked generated CPU implementation and coherent commit.
+Execution or completion failure cannot replay work. This consumer grants no
+native-effect hooks from numerical footprints. Its versioned
+`combined_numerical_team` manifest records completion, source partition,
+preparation and physical-effect identities, participant requirements and failure
+policies. Missing applicable collective calibration still selects native AUTO.
 An original direct child call can carry its own registered conditional plan.
 The separate `prove_native_call_coordinates` version 2 API authenticates whole
 ordinary assumed-shape associations, original caller lower origins, read-only

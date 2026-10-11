@@ -448,6 +448,13 @@ def _prepare(analysis, procedure, exact_original_selection, provider, *, consume
     routine, graph, identities, _source = _source_authority(analysis, procedure, selection, (), budget)
     context = context or original_region_context(routine, selection, consume=budget.tick)
     if extraction is None:
+        # A reached owner also visits complete native teams, such as original
+        # IEEE setup. Authenticate their source first, then decline numerical
+        # preparation without granting native effects or swallowing a failed
+        # numerical proof. The ordinary native analysis remains responsible.
+        if not any(type(node).__name__ == "Block_Nonlabel_Do_Construct"
+                   for node in _walk(selection, budget)):
+            raise NumericalPreparationUnsupported("original numerical candidate contains no counted loop")
         extraction = extract_region(analysis, routine, selection, preceding=context.preceding,
                                     following=context.following, cyclic_following=context.cyclic_following,
                                     immutable_inputs=provider.immutable_inputs)

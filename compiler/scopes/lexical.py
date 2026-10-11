@@ -303,9 +303,11 @@ class LexicalOwner:
                 self.check_host_read_actuals(nodes[0])
             scope = None
             if len(nodes) > 1 and not condition_only:
+                from compiler.scopes.combined_team import CombinedNumericalTeam, is_combined_group
                 from compiler.scopes.joined_team import JoinedTeam
                 try:
-                    scope = JoinedTeam(self.builder, nodes, native_host_reads=True)
+                    scope = (CombinedNumericalTeam(self.builder, nodes) if is_combined_group(self.builder, nodes)
+                             else JoinedTeam(self.builder, nodes, native_host_reads=True))
                 except CompilationError as error:
                     # A joined native group can remain coherent without cuts.
                     # Unsupported participation never grants numerical authority.
@@ -505,10 +507,23 @@ class LexicalOwner:
     def emit_unit(self, unit, index):
         self.refresh()
         builder, arrays = self.builder, unit.arrays
+        from compiler.scopes.combined_team import CombinedNumericalTeam
+
+        combined_team = isinstance(unit.scope, CombinedNumericalTeam)
+        close_owner = self
+        if combined_team:
+            # Optional companion controls cannot appear in the original
+            # team's data-sharing clauses. Preparation mutates local mirrors
+            # only after every original participant has voted eligibility.
+            close_owner = copy(self)
+            close_owner.context, close_owner.enabled = "fort_team_context", "fort_team_enabled"
+            close_owner.control_guard = None
+        close = close_owner.close
         from compiler.scopes.provenance import position, source_id
         trace_segment = source_id(builder, "segment", span=(unit.scope.first, unit.scope.last))
         block = "fort_reached_" + str(index)
-        handles = {root: "fort_buffer_" + str(self.resources[root][1]) for root in arrays}
+        handles = {root: ("fort_team_buffer_" if combined_team else "fort_buffer_")
+                   + str(self.resources[root][1]) for root in arrays}
         parameters = {root: builder.visible(self.routine, root) for root in (*arrays, *unit.scalars)}
         direct = {root for root, binding in arrays.items()
                   if "protected" in binding.attributes and root not in unit.written}
@@ -525,7 +540,7 @@ class LexicalOwner:
                 f"type(fort_scope_plan_binding), target :: fort_bindings({max(1,len(arrays))})",
                 f"integer(c_int), parameter :: fort_mode = {1 if builder.config.policy == 'sections' else 2}"]
         prepare = ["fort_status = FORT_SCOPE_OK", "fort_can = .true."]
-        failure = [*self.close(), "exit " + block]
+        failure = [*close(), "exit " + block]
         capture_facts = {root: builder.capture(binding) for root, binding in arrays.items()}
         for root, fact in capture_facts.items():
             if fact.get("requires_registered_handle"):
@@ -570,7 +585,7 @@ class LexicalOwner:
             if identity.required:
                 imports += list(identity.imports)
                 prepare += ["if (.not. (" + identity.expression + ")) then",
-                            *self.close(), "exit " + block, "endif"]
+                            *close(), "exit " + block, "endif"]
         for root, binding in arrays.items():
             name, number = parameters[root], self.resources[root][1]
             dtype, enum, width = DTYPES[binding.signature()[:2]]
@@ -593,7 +608,7 @@ class LexicalOwner:
                 prepare += [f"if ({guard}) then" for guard in capture.activation_guards]
                 prepare += [f"fort_can = {capture.index_guard}"]
                 prepare += ["endif"] * (len(capture.activation_guards) + 1)
-        prepare += ["if (.not. fort_can) then", *self.close(), "exit " + block, "endif"]
+        prepare += ["if (.not. fort_can) then", *close(), "exit " + block, "endif"]
         if unit.scope.close_guards:
             if not immutable_numerical_unit(unit.scope):
                 raise CompilationError("conditional numerical effects require one complete reached original group")
@@ -602,13 +617,13 @@ class LexicalOwner:
             guard_spec, guard_code = preparation_preflight(builder, unit.scope.calls[0], parameters)
             spec += guard_spec
             prepare += [*guard_code, "if (.not. fort_numerical_guard) then",
-                        *self.close(reason="original numerical preparation guard failed"),
+                        *close(reason="original numerical preparation guard failed"),
                         "exit " + block, "endif"]
         from compiler.scopes.segments import Segment
         if builder.config.policy == "auto" and unit.definition_summary.changes:
             unit.native_preflight = {"abi_version": 1, "available": False,
                 "reason": "ordered definition changes require reached registration and validation"}
-        if (builder.config.policy == "auto" and not unit.definition_summary.changes
+        if (builder.config.policy == "auto" and not combined_team and not unit.definition_summary.changes
                 and not unit.scope.native and len(unit.scope.tree) == 1
                 and isinstance(unit.scope.tree[0], Segment)
                 and unit.scope.tree[0].query and unit.scope.tree[0].query[0]):
@@ -721,10 +736,16 @@ class LexicalOwner:
             imports += [f"use {selector['fortran_module']}, only: fort_choose => {selector['planning']['fortran_selector']}"]
         from compiler.scopes.joined_team import JoinedTeam
         joined_team = isinstance(unit.scope, JoinedTeam)
-        preserve_original = joined_team or any(operation.preserve_original for operation in unit.scope.native)
+        original_team = joined_team or combined_team
+        preserve_original = original_team or any(operation.preserve_original for operation in unit.scope.native)
         joined_patches = []
         joined_copyback = []
-        if joined_team:
+        if combined_team:
+            extra, joined_patches, joined_prepare, joined_copyback = unit.scope.emit_original(
+                self, unit, handles, values, imports, spec, preparation=prepare, block=block)
+            spec += extra
+            execution = (joined_prepare, [])
+        elif joined_team:
             extra, joined_patches, joined_prepare, joined_copyback = unit.scope.emit_original(
                 self, unit, handles, values, imports, spec)
             spec += extra
@@ -750,12 +771,13 @@ class LexicalOwner:
             # native ABI of a companion never reads absent control arguments.
             prefix = ["block", *dict.fromkeys(imports), *spec,
                       "logical :: fort_native_ready", "fort_native_ready = .false."]
-            if joined_team:
+            if original_team:
                 prefix += ["fort_team_run = .false.", "fort_team_native = .false.", "fort_team_owned = .false."]
             if self.control_guard:
                 prefix += [f"if ({self.control_guard}) then"]
             prefix += [f"if ({self.enabled}) then", f"associate(fort_context => {self.context})",
-                       block + ": block", *prepare, *before, "fort_native_ready = .true.",
+                       block + ": block", *([] if combined_team else prepare),
+                       *before, "fort_native_ready = .true.",
                        "end block " + block, "end associate", "endif"]
             if self.control_guard:
                 prefix += ["endif"]
