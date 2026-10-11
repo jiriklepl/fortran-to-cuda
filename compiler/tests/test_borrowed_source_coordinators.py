@@ -5,7 +5,7 @@ import re
 
 import pytest
 
-from compiler.tests.test_scoped_planning_entries import calibration
+from compiler.tests.test_source_compute_costs import profile_v2
 from compiler.tests.test_source_scopes import FACT, PROGRAM, generate
 
 
@@ -71,7 +71,7 @@ def test_repeated_mixed_child_reuses_one_mode_bearing_worker(tmp_path):
 
 def test_calibrated_auto_child_imports_its_own_public_selector(tmp_path):
     profile = tmp_path / "profile.json"
-    profile.write_text(json.dumps(calibration()))
+    profile.write_text(json.dumps(profile_v2()))
     original, output, manifest = generate(tmp_path, source(), mode="auto", profile=profile, facts={
         "schema_version": 1, "participation": "serial",
         "captures": {"argument::" + name: FACT for name in ("a", "b", "out")}})
@@ -83,6 +83,39 @@ def test_calibrated_auto_child_imports_its_own_public_selector(tmp_path):
     alias = re.search(r"use \w+, only: (fort_choose_\w+) => \w+", body).group(1)
     assert f"fort_status = {alias}(fort_context, fort_decision)" in body
     assert "fort_status = fort_choose(" not in body
+
+
+def test_auto_reached_alias_rollback_restores_retained_compute_identities(tmp_path):
+    profile = tmp_path / "profile.json"
+    profile.write_text(json.dumps(profile_v2()))
+    text = source().replace("call child(a,b,out,n)",
+        "if(n<0) then\ncall child(a,b,b,n)\nendif\ncall child(a,b,out,n)")
+    original, output, manifest = generate(tmp_path, text, mode="auto", profile=profile,
+        scope_execution="reached", facts={
+            "schema_version": 1, "participation": "serial",
+            "captures": {"argument::" + name: FACT for name in ("a", "b", "out")}})
+    assert original.read_text() == text
+    scope, = manifest["scopes"]
+    assert scope["estimate_available"], scope["planning_reason"]
+    assert scope["planning_reason"] is None
+    assert set(scope["gpu_leaves"]) == {
+        "original::producer", "original::consumer", "original::transform#region1"}
+    segment, = scope["planning_segments"]
+    identity = segment["compute_identity"]
+    assert identity["available"]
+    assert {name for item in identity["requirements"] for name in item["procedures"]} == (
+        set(scope["gpu_leaves"]))
+    supported = {item["procedure"] for item in manifest["numerical_decisions"] if item["supported"]}
+    assert set(scope["gpu_leaves"]) <= supported
+    boundary, = scope["boundaries"]
+    assert "alias" in boundary["reason"]
+    assert not boundary["reopen"]
+    assert text.splitlines()[boundary["first_line"] - 1] == "call child(a,b,b,n)"
+    assert text.splitlines()[segment["first_line"] - 1] == "call child(a,b,out,n)"
+    generated = (output / manifest["sources"][str(original)]["replacement"]).read_text()
+    assert "if(n<0) then" in generated
+    for item in identity["requirements"]:
+        assert "logical function " + item["helper"] + "(" in generated
 
 
 def test_child_original_dummy_bounds_are_captured_before_mutable_controls(tmp_path):

@@ -5,9 +5,9 @@ logical bounds and native RHS snapshot semantics remain authoritative. The
 ordinary dependence proof rejects operations needing an overlapping snapshot.
 """
 
+import copy
 from dataclasses import dataclass
 from hashlib import sha256
-import copy
 
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import Base, walk
@@ -17,7 +17,7 @@ from compiler.frontend.component_bindings import component_access, source_scope_
 from compiler.frontend.source_effects import _children, _kind
 from compiler.ir import CompilationError, SourceLocation
 from compiler.scopes.numerical import Parameter
-from compiler.scopes.regions import RegionExtraction, allocation_guard, _exception_observers, _validate_real_varargs
+from compiler.scopes.regions import RegionExtraction, _exception_observers, _validate_real_varargs, allocation_guard
 from compiler.scopes.segments import fortran_lines, statement_span
 
 
@@ -82,8 +82,11 @@ def extract_array_operation(analysis, routine, node, *, preceding=(), following=
 
         def render(item):
             if item.kind == "literal":
-                return str(item.value), checked(str(item.value) + "_c_int64_t" if item.value >= 0 else
-                                               "(-" + str(-item.value) + "_c_int64_t)")
+                spelling = ("(-2147483647 - 1)" if item.value == -(2**31) else
+                            str(item.value) if item.value >= 0 else "(" + str(item.value) + ")")
+                return (spelling,
+                        checked(str(item.value) + "_c_int64_t" if item.value >= 0 else
+                                "(-" + str(-item.value) + "_c_int64_t)"))
             if item.kind == "scalar":
                 dependency, = (dependency for dependency in item.dependencies if dependency.kind == "scalar_read")
                 name = capture(dependency.binding)
@@ -102,7 +105,7 @@ def extract_array_operation(analysis, routine, node, *, preceding=(), following=
             if item.kind == "parenthesis":
                 return f"({children[0][0]})", f"({children[0][1]})"
             if item.kind == "unary":
-                return item.operator + f"({children[0][0]})", checked(item.operator + f"({children[0][1]})")
+                return f"({item.operator}({children[0][0]}))", checked(f"({item.operator}({children[0][1]}))")
             if item.kind == "binary":
                 return (f"({children[0][0]}{item.operator}{children[1][0]})",
                         checked(f"({children[0][1]}{item.operator}{children[1][1]})"))

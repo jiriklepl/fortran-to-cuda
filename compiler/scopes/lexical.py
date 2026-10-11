@@ -290,6 +290,10 @@ class LexicalOwner:
         """A conditional owner needs separate mapped child-plan authority."""
         return True
 
+    def mapped_child(self, node):
+        """A registered reached plan may borrow this exact original child."""
+        return False
+
     def admit(self, nodes, *, source_guard=None, native_source=None, boundary_nodes=None, condition_only=False):
         self.refresh()
         before = self.owner.builder.scope_checkpoint()
@@ -412,6 +416,8 @@ class LexicalOwner:
                         body.append(item)
             elif kind == "Call_Stmt":
                 try:
+                    if self.mapped_child(group):
+                        continue
                     if not self.internal(group):
                         if not hasattr(group, "fort_inline_region"):
                             try:
@@ -547,6 +553,11 @@ class LexicalOwner:
         preflight = None
         if builder.config.policy == "auto":
             from compiler.scopes.compute_identity import compute_identity_guard
+            # An earlier rejected candidate can roll back artifact maps while
+            # retaining reusable child proofs. Restore only this admitted
+            # unit's numerical leaves before its prepared-only identity query.
+            for leaf in sorted(unit.leaves):
+                builder.numerical(leaf)
             identity = compute_identity_guard(builder, unit.leaves, caller=self.routine)
             unit.compute_identity = identity.public()
             if identity.required:
@@ -839,13 +850,16 @@ class LexicalOwner:
             shared_artifacts=("sources/" + _name("source_", str(self.routine.scope.path)) + ".f90",))
         target_declarations = {}
         for member in self.members.values():
-            for unit in member.units:
-                for binding in {**unit.arrays, **(unit.host_metadata or {})}.values():
-                    owner, declaration = member.declaration(binding)
-                    key = owner.path, _span(declaration)
-                    if key not in target_declarations:
-                        target_declarations[key] = declaration, set()
-                    target_declarations[key][1].add(getattr(binding, "component_object", binding).name)
+            declared = [binding for unit in member.units
+                        for binding in {**unit.arrays, **(unit.host_metadata or {})}.values()]
+            declared += [mapping.binding for arrays in getattr(member, "original_actual_registrations", {}).values()
+                         for mapping in arrays]
+            for binding in declared:
+                owner, declaration = member.declaration(binding)
+                key = owner.path, _span(declaration)
+                if key not in target_declarations:
+                    target_declarations[key] = declaration, set()
+                target_declarations[key][1].add(getattr(binding, "component_object", binding).name)
         for (path, (first,last)), (declaration, selected) in target_declarations.items():
             dtype, attributes, entities = declaration.items
             flags = list(map(str, _children(attributes)))
@@ -871,6 +885,8 @@ class LexicalOwner:
         for member in self.members.values():
             edits = [edit for index,unit in enumerate(member.units) for edit in member.emit_unit(unit,index)]
             for first,last,text in [*member.patches, *edits]:
+                from compiler.scopes.call_registration import finish_original_registrations
+                text = finish_original_registrations(member, text)
                 builder.add_edit(member.routine.scope.path, first,last,text)
             if member is not self:
                 if hasattr(member, "emit_companion"):

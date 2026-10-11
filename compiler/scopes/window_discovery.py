@@ -44,8 +44,40 @@ def _candidates(graph):
 
 def _numerical_calls(owner):
     """Count admitted numerical invocations, including repeated shared leaves."""
-    return sum(bool(member.builder.closure(call.procedure)[0])
-               for member in owner.members.values() for unit in member.units for call in unit.scope.calls)
+    direct = {name: sum(bool(member.builder.closure(call.procedure)[0])
+                       for unit in member.units for call in unit.scope.calls)
+              for name, member in owner.members.items()}
+    if not any(getattr(member.builder, "_mapped_reached_child", None) is not None
+               for member in owner.members.values()):
+        return sum(direct.values())
+    edges, seen, visits = {}, set(), 0
+    for name, member in owner.members.items():
+        for site in getattr(member, "call_sites", ()):
+            identity = site.get("mapped_call_node_id")
+            if identity is None:
+                continue
+            caller = owner.members.get(site["caller"])
+            span = site["first_line"], site["last_line"]
+            if caller is None or getattr(caller, "mapped_call_patches", {}).get(span) != identity:
+                raise CompilationError("numerical invocation count lacks its retained original call site")
+            key = site["caller"], identity
+            if key in seen:
+                raise CompilationError("numerical invocation count repeats one original call site")
+            seen.add(key)
+            visits += 1
+            if visits > owner.builder.analysis.procedure_limit:
+                raise CompilationError("numerical invocation call traversal budget exhausted")
+            edges.setdefault(site["caller"], []).append(name)
+    counts = {}
+
+    def count(name, active=()):
+        if name in active or len(active) >= owner.builder.analysis.depth_limit:
+            raise CompilationError("numerical invocation call depth or recursion budget exhausted")
+        if name not in counts:
+            counts[name] = direct[name] + sum(count(child, (*active, name)) for child in edges.get(name, ()))
+        return counts[name]
+
+    return count(owner.routine.qualified)
 
 
 def discover_reached_window(builder):

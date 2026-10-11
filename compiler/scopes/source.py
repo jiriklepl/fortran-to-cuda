@@ -190,12 +190,39 @@ class ScopeBuilder:
         if binding is None:
             return None
         proof, selection = binding
-        proof.validate(self.analysis, self.entry.qualified, selection)
+        child = getattr(self, "_mapped_reached_child", None)
+        proof.validate(self.analysis, proof.procedure if child is not None else self.entry.qualified, selection)
+        if child is not None:
+            original = proof.child_plan(getattr(self, "_mapped_reached_path", ()), child.original_call)
+            if original is not child or child.procedure != self.entry.qualified:
+                raise CompilationError("mapped child builder lacks its exact registered procedure authority")
         identity = sha256(json.dumps(self.facts, sort_keys=True, separators=(",", ":"),
                                     allow_nan=False).encode()).hexdigest()
         if proof.public()["entry_facts_identity"] != identity:
             raise CompilationError("reached owner admitted entry facts changed")
         return proof
+
+    def bind_reached_child(self, original_call):
+        """Borrow only the exact mapped child of a registered root plan."""
+        proof = self.validate_reached_window()
+        if proof is None:
+            raise CompilationError("mapped child requires an owning reached proof")
+        originals = self.inline.original_selection((original_call,))
+        if len(originals) != 1:
+            raise CompilationError("mapped child requires one original call")
+        _graph, selected = self.analysis._selected_source(self.entry.qualified, originals)
+        if len(selected) != 1:
+            raise CompilationError("mapped child call identity is ambiguous")
+        path = (*getattr(self, "_mapped_reached_path", ()), selected[0])
+        child = proof.child_plan(path, originals[0])
+        return path, child
+
+    def reached_plan_record(self):
+        proof = self.validate_reached_window()
+        if proof is None:
+            return None
+        child = getattr(self, "_mapped_reached_child", None)
+        return child.public()["plan"] if child is not None else proof.public()
 
     def descriptor_window_for(self, analysis, procedure, selection):
         """Issue exact per-consumer authority inside an authenticated owner."""
@@ -210,8 +237,9 @@ class ScopeBuilder:
                 raise CompilationError("reached owner summary requires the exact original source objects")
             if procedure != self.entry.qualified:
                 raise CompilationError("reached owner child requires separate mapped window authority")
+            record = self.reached_plan_record()
             graph, selected = analysis._selected_source(procedure, selection)
-            covered, pending = set(), list(proof.public()["selected_node_ids"])
+            covered, pending = set(), list(record["selected_node_ids"])
             while pending:
                 identity = pending.pop()
                 if identity in covered:
@@ -225,13 +253,13 @@ class ScopeBuilder:
                         pending.append(condition)
             if not selected or not set(selected) <= covered:
                 raise CompilationError("reached owner summary escapes its original selected window")
-            planned = proof.public().get("planned_closures", {})
+            planned = record.get("planned_closures", {})
             if planned.get("enabled") and not set(selected) <= set(planned["active_node_ids"]):
                 raise CompilationError("reached owner summary crosses a planned close or closed native path")
-            roots = tuple(state["resource"] for state in proof.public()["states"]
+            roots = tuple(state["resource"] for state in record["states"]
                           if state["requires_original_allocation_presence_guard"]
                           and state["resource_kind"] != "original_module_allocatable")
-            modules = tuple(proof.public()["module_descriptor_resources"])
+            modules = tuple(record["module_descriptor_resources"])
             if roots or modules:
                 from compiler.frontend.descriptor_windows import prove_descriptor_window
 

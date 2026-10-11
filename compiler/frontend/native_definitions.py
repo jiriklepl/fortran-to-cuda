@@ -16,6 +16,15 @@ from types import MappingProxyType
 
 from fparser.two.utils import walk
 
+from compiler.frontend.native_call_coordinates import (
+    NativeCallCoordinatesProof as NativeCallCoordinatesProof,
+)
+from compiler.frontend.native_call_coordinates import (
+    NativeCallCoordinatesUnsupported as NativeCallCoordinatesUnsupported,
+)
+from compiler.frontend.native_call_coordinates import (
+    prove_native_call_coordinates as prove_native_call_coordinates,
+)
 from compiler.frontend.native_sections import RECTANGLE_LIMIT, NativeRectangle, NativeSections
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
