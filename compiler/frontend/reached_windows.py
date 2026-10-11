@@ -24,7 +24,7 @@ from compiler.frontend.source_functions import _validate_scope
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 
-REACHED_WINDOW_VERSION = 13
+REACHED_WINDOW_VERSION = 14
 _EFFECTS = {"read", "write", "overwrite", "descriptor_read", "definition_change"}
 _FORBIDDEN = {"pointer", "optional", "volatile", "asynchronous", "value"}
 
@@ -631,6 +631,9 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
 
                 original, = graph.source_nodes(identity)
                 mapping = prove_native_call_coordinates(analysis, procedure, original, consume=coordinate_work)
+                if any(element.binding.root in state or element.binding.root in facts["captures"]
+                       for element in mapping.scalar_elements):
+                    raise _NeedsNativeClose("scalar element backing storage must remain unmanaged")
                 child = analysis._require_original(child_name)
                 if any("save" in binding.attributes for binding in child.scope.bindings.values()):
                     raise _NeedsNativeClose("mapped reached child saved storage needs separate lifetime authority")

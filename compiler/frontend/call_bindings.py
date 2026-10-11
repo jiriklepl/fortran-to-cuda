@@ -93,6 +93,27 @@ class RectangularSection:
 
 
 @dataclass(frozen=True)
+class SourceScalarElementActual:
+    """Original native scalar association, never an array resource mapping."""
+    binding: object = field(compare=False, repr=False)
+    actual: object = field(compare=False, repr=False)
+    index: SourceSectionBound
+    bounds: tuple[int, int]
+    initializer: object = field(compare=False, repr=False)
+    declaration: object = field(compare=False, repr=False)
+    declaration_work: int = field(compare=False, repr=False)
+
+    def public(self):
+        return {"resource": self.binding.root, "actual": str(self.actual),
+                "backing_descriptor": self.binding.public(), "index": self.index.public(),
+                "bounds": list(self.bounds), "association": "original CALL element association",
+                "declaration_initializer": str(self.initializer),
+                "declaration_scan_work": self.declaration_work,
+                "payload_evaluation": "original scalar dummy uses; no call-entry value snapshot",
+                "managed_storage_authority": False, "definition_authority": False}
+
+
+@dataclass(frozen=True)
 class SourceActualMapping:
     formal: str
     actual: object = field(compare=False, repr=False)
@@ -101,17 +122,20 @@ class SourceActualMapping:
     section: RectangularSection | None = None
     presence: str = "supplied"
     source_object: object = field(default=None, compare=False, repr=False)
+    scalar_element: SourceScalarElementActual | None = None
     canonical_resource: str | None = field(init=False)
 
     def __post_init__(self):
-        object.__setattr__(self, "canonical_resource", self.binding.root if self.binding is not None else None)
+        object.__setattr__(self, "canonical_resource", self.binding.root
+                           if self.binding is not None and self.scalar_element is None else None)
 
     @property
     def resource(self):
         return self.canonical_resource
 
     def public(self):
-        storage = ("omitted" if self.actual is None else "rectangle" if self.section is not None else
+        storage = ("omitted" if self.actual is None else "scalar_element" if self.scalar_element is not None else
+                   "rectangle" if self.section is not None else
                    "whole" if self.binding is not None else "expression")
         return {"formal": self.formal, "formal_resource": "argument::" + self.formal,
                 "actual": str(self.actual) if self.actual is not None else None,
@@ -120,6 +144,7 @@ class SourceActualMapping:
                 "actual_descriptor": self.binding.public() if self.binding is not None else None,
                 "section": self.section.public() if self.section is not None else None,
                 **({"source_object": self.source_object.public()} if self.source_object is not None else {}),
+                **({"scalar_element": self.scalar_element.public()} if self.scalar_element is not None else {}),
                 "requirements": {"presence_preserving_forwarding": self.presence == "forwarded_optional",
                                  "descriptor_dependent_presence": self.presence in {"allocation_dependent", "association_dependent"},
                                  "original_actual_presence": bool(self.binding is not None
@@ -152,7 +177,8 @@ class ResolvedSourceCall:
 
     @property
     def bindings(self):
-        return {"argument::" + item.formal: item.binding for item in self.mappings if item.binding is not None}
+        return {"argument::" + item.formal: item.binding for item in self.mappings
+                if item.binding is not None and item.scalar_element is None}
 
     @property
     def resource_mapping(self):
@@ -166,7 +192,7 @@ class ResolvedSourceCall:
                      for item in self.original_arguments)
 
     def public(self):
-        return {"schema_version": 1, "procedure": self.procedure, "target": self.target, "source_kind": self.source_kind,
+        return {"schema_version": 2, "procedure": self.procedure, "target": self.target, "source_kind": self.source_kind,
                 "formal_arguments": list(self.formals),
                 "actual_arguments": [str(actual) if actual is not None else None for actual in self.actuals],
                 "original_arguments": [argument.public() for argument in self.original_arguments],
@@ -300,8 +326,6 @@ def _actual(analysis, scope, node):
                 axes.append(SourceSectionAxis(_bound(analysis, scope, lower, binding, dimension, "lbound"),
                                               _bound(analysis, scope, upper, binding, dimension, "ubound")))
             section = RectangularSection(binding.root, tuple(axes), node)
-            if not section.logical_rank:
-                raise CompilationError("array-element actual requires scalar payload coherence: " + str(node))
             return (*binding.signature()[:2], section.logical_rank), binding, section
     reason = analysis._actual_mapping_boundary(scope, node)
     if reason:
@@ -430,6 +454,80 @@ def _function_array_mapping(analysis, declaration, binding, section):
         raise CompilationError("native source function array shape mismatch")
 
 
+def _scalar_element_storage_scope(analysis, scope):
+    from compiler.frontend.source_effects import _part
+    from compiler.frontend.source_functions import _validate_scope, _walk
+
+    _validate_scope(analysis, scope)
+    visits = 0
+    for node in _walk(_part(scope.node, "Specification_Part")):
+        visits += 1
+        if (type(node).__name__ in {"Equivalence_Stmt", "Common_Stmt", "Cray_Pointer_Stmt"}
+                or type(node).__name__ == "Comment" and str(node).lstrip().lower().startswith("!$omp")):
+            raise CompilationError("scalar element storage requires no original storage association or OpenMP directives")
+    return visits
+
+
+def _scalar_element_actual(analysis, scope, actual, binding, section, formal):
+    from compiler.frontend.source_effects import _part
+    from compiler.frontend.source_functions import _validate_resolution, _walk
+
+    forbidden = {"pointer", "target", "allocatable", "optional", "value", "volatile", "asynchronous", "parameter"}
+    owner = binding.declaring_scope
+    if (type(actual).__name__ != "Part_Ref" or binding.rank != 1 or binding.dtype != "real"
+            or binding.kind not in {4, 8} or binding.attributes & forbidden
+            or owner is None or analysis.modules.get(owner.module) is not owner
+            or formal.rank or formal.intent != "in" or formal.attributes & (forbidden - {"parameter"})):
+        raise CompilationError("scalar element requires fixed module REAL storage and required scalar INTENT(IN)")
+    index = section.axes[0].lower
+    syntax = index.node
+    if type(syntax).__name__ == "Name":
+        selector = analysis._binding(scope, syntax)
+        if (selector is None or selector.rank or selector.dtype != "integer" or selector.kind != 4
+                or selector.attributes & forbidden or analysis.resource_identity_boundary(selector)
+                or selector.declaring_scope is None):
+            raise CompilationError("scalar element selector requires ordinary default INTEGER storage")
+        selector_work = _scalar_element_storage_scope(analysis, selector.declaring_scope)
+    elif not (index.kind == "literal" or index.kind == "unary" and len(index.children) == 1
+              and index.children[0].kind == "literal"):
+        raise CompilationError("scalar element selector requires an original INTEGER Name or literal")
+    else:
+        selector_work = 0
+    if analysis._signature(scope, syntax) != ("integer", 4, 0):
+        raise CompilationError("scalar element selector requires default INTEGER kind")
+    bounds, = _fixed_array_bounds(analysis, binding)
+    spec = _part(owner.node, "Specification_Part")
+    initializer, declaration = None, None
+    visits = _scalar_element_storage_scope(analysis, owner) + selector_work
+    for node in _children(spec):
+        visits += 1
+        if visits > 65536:
+            raise CompilationError("scalar element declaration scan budget exhausted")
+        if type(node).__name__ != "Type_Declaration_Stmt":
+            continue
+        for entity in _children(node.items[2]):
+            visits += 1
+            if visits > 65536:
+                raise CompilationError("scalar element declaration scan budget exhausted")
+            if str(entity.items[0]).lower() == binding.name:
+                initializer, declaration = entity.items[3], node
+                shape = entity.items[1]
+                if shape is None:
+                    shape = next((attribute.items[1] for attribute in _children(node.items[1])
+                                  if type(attribute).__name__ == "Dimension_Attr_Spec"), None)
+                axes = tuple(_children(shape))
+                if (len(axes) != 1 or binding.shape_nodes[0] is not axes[0]
+                        or binding.lower_bound_nodes[0] is not axes[0].items[0]):
+                    raise CompilationError("scalar element original declaration bounds authority changed")
+                break
+        if declaration is not None:
+            break
+    if initializer is None or type(initializer).__name__ != "Initialization" or str(initializer.items[0]) != "=":
+        raise CompilationError("scalar element backing module table requires original declaration initialization")
+    _validate_resolution(analysis, owner, _walk(initializer))
+    return SourceScalarElementActual(binding, actual, index, bounds, initializer, declaration, visits)
+
+
 def _resolve_source_invocation(analysis, scope, call_node, *, function=False):
     target, arguments = call_node.items
     if _kind(target) not in ({"Name", "Type_Name"} if function else {"Name"}):
@@ -470,6 +568,17 @@ def _resolve_source_invocation(analysis, scope, call_node, *, function=False):
                     mappings.append(SourceActualMapping(formal, None, declaration, presence="omitted"))
                     continue
                 signature, binding, section = _actual(analysis, scope, actual)
+                scalar_element = None
+                if section is not None and not section.logical_rank:
+                    if function:
+                        raise CompilationError("array-element actual requires scalar payload coherence: "
+                                               "source function association needs separate authority: " + str(actual))
+                    try:
+                        scalar_element = _scalar_element_actual(analysis, scope, actual, binding, section, declaration)
+                    except CompilationError as error:
+                        raise CompilationError("array-element actual requires scalar payload coherence: "
+                                               + str(error) + ": " + str(actual)) from error
+                    section = None
                 source_object = None
                 if derived:
                     from compiler.frontend.source_objects import source_object_mapping
@@ -493,7 +602,8 @@ def _resolve_source_invocation(analysis, scope, call_node, *, function=False):
                 if "allocatable" in declaration.attributes and (binding is None or section is not None
                                                                 or "allocatable" not in binding.attributes):
                     raise CompilationError("allocatable callee formal requires its original allocation descriptor: " + formal)
-                mappings.append(SourceActualMapping(formal, actual, declaration, binding, section, presence, source_object))
+                mappings.append(SourceActualMapping(formal, actual, declaration, binding, section, presence,
+                                                    source_object, scalar_element))
             matches.append(ResolvedSourceCall(procedure, callee.arguments, actuals, tuple(mappings),
                                               original_arguments, str(target), callee.source_kind))
         except CompilationError as error:

@@ -215,7 +215,7 @@ def test_omitted_original_middle_unit_cannot_form_definition_authority(tmp_path)
 def test_typed_activation_sections_do_not_turn_prefix_interior_into_whole(tmp_path):
     _paths, builder, proof, originals = joined_prefix_fixture(tmp_path)
     public = proof.public()
-    assert public["schema_version"] == 13
+    assert public["schema_version"] == 14
     assert public["prefix_eligibility"]["activation_path_possible"]
     assert not public["prefix_eligibility"]["disabled_path_possible"]
     sections = proof.activation_sections("argument::seed")

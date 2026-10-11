@@ -26,7 +26,7 @@ from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
 # Bump when source-effect, call-composition or summary semantics change.
-SOURCE_SUMMARY_VERSION = 19
+SOURCE_SUMMARY_VERSION = 20
 _DEFAULT_SUMMARY_CACHE = SummaryCache()
 
 
@@ -137,6 +137,7 @@ def _admit_cached_summary(item, routine, limit):
     def mapping(value):
         require(type(value) is dict and {"formal", "formal_resource", "actual", "resource", "storage", "presence", "formal_descriptor", "actual_descriptor", "requirements", "section"} <= value.keys())
         require("source_object" not in value)  # Original scalar object proofs are always rebuilt.
+        require("scalar_element" not in value)  # Original association witnesses are always rebuilt.
         require(type(value.get("formal")) is str and value.get("formal_resource") == "argument::" + value["formal"])
         require(value.get("actual") is None or type(value["actual"]) is str)
         require(value.get("resource") is None or type(value["resource"]) is str)
@@ -1429,7 +1430,14 @@ class SourceEffects:
                 # Passing an array does not itself read its payload. A section's
                 # bounds must not be mistaken for a whole-array upload.
                 for item in resolved.mappings:
-                    if item.section is not None:
+                    if item.scalar_element is not None:
+                        for dependency in item.scalar_element.index.dependencies:
+                            effect(dependency.binding, "read", guard, str(item.actual))
+                        # Ordinary whole native summaries conservatively retain
+                        # the backing read. Mapped execution uses the separate
+                        # original association and its bounded source witness.
+                        effect(item.binding, "read", guard, str(item.actual))
+                    elif item.section is not None:
                         for dependency in item.section.dependencies:
                             effect(dependency.binding,
                                    "descriptor_read" if dependency.kind == "descriptor_read" else "read",
@@ -1769,6 +1777,12 @@ class SourceEffects:
                             mapped = {**parent, "resource": projected,
                                       "component_suffix": effect["resource"][len(parent["formal_resource"]):]}
                     if mapped is not None:
+                        if mapped.get("scalar_element") is not None:
+                            if effect["kind"] not in {"read", "descriptor_read"}:
+                                summary["complete"] = False
+                                summary["reasons"].append("scalar element association cannot project writable effects")
+                                return result
+                            continue  # Conservative backing read retained at the original call above.
                         if mapped["resource"] is None:
                             # Omitted optional storage and scalar expressions
                             # have no caller array root. Actual-expression
@@ -1839,9 +1853,9 @@ class SourceEffects:
 
         if not summary["complete"]:
             return boundary("native source effects are incomplete")
-        if any(operation["kind"] == "call" and any(mapping.get("source_object")
+        if any(operation["kind"] == "call" and any(mapping.get("source_object") or mapping.get("scalar_element")
                for mapping in operation.get("resource_mappings", ())) for operation in summary["operations"]):
-            return boundary("source object call mappings do not prove native continuation eligibility")
+            return boundary("source object or scalar-element mappings do not prove native continuation eligibility")
         if module_directives:
             return boundary("enclosing module OpenMP ownership is unproven: " + module_directives[0])
         for child in children:

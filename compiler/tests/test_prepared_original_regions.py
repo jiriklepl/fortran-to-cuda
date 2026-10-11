@@ -20,6 +20,22 @@ from compiler.offload.config import OffloadConfig
 ENTRY = "renamed_region::form_field"
 OPTIONS = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="reached")
 CONFIG = OffloadConfig(policy="sections", scope_execution="reached")
+ASSOCIATION_SOURCE = """module original_aliases
+implicit none
+contains
+subroutine form_field(a,b,n)
+real(8),intent(in)::a(:)
+real(8),intent(out)::b(:)
+integer,intent(in)::n
+integer::i
+associate(limit=>n)
+do i=1,limit
+b(i)=2.0_8*a(i)
+enddo
+end associate
+end subroutine
+end module
+"""
 SOURCE = """module renamed_region
 implicit none
 contains
@@ -58,6 +74,61 @@ def fixture(directory, source=SOURCE):
     selection = next(item.original_nodes for item in groups if isinstance(item, NativeGroupCandidate))
     provider = NumericalPreparationProvider(analysis, options=OPTIONS, config=CONFIG, environment_root=ENTRY)
     return path, analysis, provider, selection
+
+
+@pytest.mark.parametrize("mutation", [None, "scope_binding", "scope_parent", "selector_source"])
+def test_original_association_scope_is_authenticated_during_numerical_preparation(tmp_path, mutation):
+    from fparser.two import Fortran2003 as F
+    from fparser.two.utils import walk
+
+    path = tmp_path / "aliases.f90"
+    path.write_text(ASSOCIATION_SOURCE)
+    analysis = SourceEffects([path])
+    entry = "original_aliases::form_field"
+    routine = analysis.routines[entry]
+    associate, = walk(routine.execution, F.Associate_Construct)
+    loop, = walk(associate, F.Block_Nonlabel_Do_Construct)
+    record = analysis._associate_scopes[id(associate)]
+    assert record.available
+    assert analysis._source_function_scopes[id(record.scope)][0] is record.scope
+    provider = NumericalPreparationProvider(analysis, options=OPTIONS, config=CONFIG, environment_root=entry)
+    prepared = provider.prepare(analysis, entry, (loop,))
+    assert prepared.offload.available
+    assert prepared.validate(analysis, entry, (loop,)) is prepared
+    assert record.scope.bindings["limit"].root == "argument::n"
+    assert path.read_text() == ASSOCIATION_SOURCE
+    if mutation is None:
+        return
+    if mutation == "scope_binding":
+        record.scope.bindings["limit"] = copy(record.scope.bindings["limit"])
+    elif mutation == "scope_parent":
+        record.scope.parent = analysis.modules["original_aliases"]
+    else:
+        header = associate.content[0]
+        selector, = header.items[1].items
+        selector.items = (*selector.items[:-1], F.Name("i"))
+    with pytest.raises(CompilationError):
+        prepared.validate(analysis, entry, (loop,))
+    with pytest.raises(CompilationError):
+        provider.prepare(analysis, entry, (loop,))
+
+
+def test_rejected_association_remains_a_source_boundary_without_scope_authority(tmp_path):
+    from fparser.two import Fortran2003 as F
+    from fparser.two.utils import walk
+
+    path = tmp_path / "aliases.f90"
+    path.write_text(ASSOCIATION_SOURCE.replace("limit=>n", "limit=>a(1)"))
+    analysis = SourceEffects([path])
+    routine = analysis.routines["original_aliases::form_field"]
+    associate, = walk(routine.execution, F.Associate_Construct)
+    record = analysis._associate_scopes[id(associate)]
+    assert not record.available
+    assert record.scope is None
+    graph = analysis.structure(routine.qualified)
+    point = next(node for node in graph.nodes.values() if node.kind == "boundary")
+    assert "original scalar variable selector" in point.details["reason"]
+    assert graph.source_nodes(point.id) == (associate,)
 
 
 def test_source_only_preparation_retains_exact_original_checked_ir(tmp_path, monkeypatch):

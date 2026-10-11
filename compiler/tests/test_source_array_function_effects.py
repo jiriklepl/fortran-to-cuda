@@ -46,7 +46,7 @@ def test_renamed_multifile_fixed_arrays_preserve_negative_bounds_and_authority(t
     analysis = fixture(tmp_path)
     summary = analysis.summarize("application::step")
     assert summary["complete"], summary["reasons"]
-    assert summary["summary_version"] == SOURCE_SUMMARY_VERSION == 19
+    assert summary["summary_version"] == SOURCE_SUMMARY_VERSION == 20
     requirement, = summary["native_function_requirements"]
     assert requirement["schema_version"] == SOURCE_FUNCTION_VERSION == 2
     assert requirement["fixed_arrays"] == [{"resource": "argument::a", "rank": 2,

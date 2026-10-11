@@ -62,6 +62,8 @@ def _resolution(scope):
 def register_source_function_authority(analysis):
     scopes = {id(scope): scope for scope in analysis.modules.values()}
     scopes.update((id(routine.scope), routine.scope) for routine in analysis.numerical_helpers.values())
+    scopes.update((id(record.scope), record.scope) for record in analysis._associate_scopes.values()
+                  if record.available)
     analysis._source_function_scopes = {key: (scope, scope.node, scope.parent, _resolution(scope),
                                             {name: (binding, binding.declaring_scope)
                                              for name, binding in scope.bindings.items()})

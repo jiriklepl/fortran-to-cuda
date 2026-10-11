@@ -1,8 +1,10 @@
 """Original whole-array call coordinates, conditional on reached execution.
 
-This adapter authenticates associations without scanning a child's executable
-closure. The reached planner owns child effects, branches and completion. No
-coordinate token supplies storage, definition, execution or GPU authority.
+Ordinary array mappings do not scan a child's executable closure. Scalar element
+associations additionally require a bounded source property: no other backing
+reference and only readonly scalar forwarding. The reached planner still owns
+effects, branches and completion. No coordinate token supplies storage,
+definition, execution or GPU authority.
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.integers import integer_literal
 
-NATIVE_CALL_COORDINATES_VERSION = 2
+NATIVE_CALL_COORDINATES_VERSION = 3
 _UNSAFE = {"pointer", "optional", "volatile", "asynchronous", "value"}
 
 
@@ -31,6 +33,14 @@ class NativeCallCoordinatesUnsupported(CompilationError):
 
 def _hash(value):
     return sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+
+
+def _same_elements(left, right):
+    return len(left) == len(right) and all(
+        original.binding is fresh.binding and original.actual is fresh.actual
+        and original.index.node is fresh.index.node and original.initializer is fresh.initializer
+        and original.declaration is fresh.declaration and original.public() == fresh.public()
+        for original, fresh in zip(left, right, strict=True))
 
 
 class _Budget:
@@ -149,7 +159,7 @@ def _derive(analysis, caller, original_call, budget):
     _validate_scope(analysis, child.scope)
     if len(resolved.mappings) > analysis.operation_limit:
         raise CompilationError("native call coordinate argument budget exhausted")
-    arrays, scalars, scalar_roots, kills, immutable, components = [], {}, {}, [], [], []
+    arrays, scalars, scalar_roots, kills, immutable, components, elements = [], {}, {}, [], [], [], []
     actual_roots = set()
     constant_lowers = {}
 
@@ -203,6 +213,9 @@ def _derive(analysis, caller, original_call, budget):
                 or formal.attributes & _UNSAFE or formal.dtype not in {"real", "integer", "logical"}
                 or formal.kind not in {4, 8} or mapping.source_object is not None):
             raise NativeCallCoordinatesUnsupported("native call coordinates require fixed supplied numeric associations")
+        if mapping.scalar_element is not None:
+            elements.append(mapping.scalar_element)
+            continue
         if actual is not None:
             component = type(mapping.actual).__name__ == "Data_Ref"
             if component:
@@ -285,6 +298,15 @@ def _derive(analysis, caller, original_call, budget):
                   for axis in range(1, actual.rank + 1))))
         if formal.intent == "out":
             kills.append(actual.root)
+    association_closure = None
+    if elements:
+        from compiler.frontend.scalar_elements import ScalarElementUnsupported, check_scalar_element_closure
+
+        try:
+            association_closure = check_scalar_element_closure(analysis, child.qualified, resolved.mappings,
+                                                               consume=budget.consume)
+        except ScalarElementUnsupported as error:
+            raise NativeCallCoordinatesUnsupported(str(error)) from error
     record = {"schema_version": NATIVE_CALL_COORDINATES_VERSION, "kind": "original_native_call_coordinates",
               "caller": caller, "callee": resolved.procedure, "node_id": selected[0],
               "guard": list(graph.nodes[selected[0]].guard), "structured_identity": graph.identity,
@@ -293,6 +315,8 @@ def _derive(analysis, caller, original_call, budget):
               "scalar_mapping": dict(sorted(scalar_roots.items())),
               "scalar_bounds": {root: value.public() for root, value in sorted(scalars.items())},
               "original_scalar_components": components,
+              "original_scalar_elements": [item.public() for item in elements],
+              "scalar_element_closure": association_closure,
               "unmanaged_immutable_associations": immutable, "entry_definition_changes": kills,
               "source_work": budget.work, "bounds_evaluated": False, "execution_authorized": False,
               "entry_definition_authority": False, "allocation_freshness_authority": False,
@@ -307,7 +331,7 @@ def _derive(analysis, caller, original_call, budget):
                          "nontrivial empty-sensitive LBOUND/UBOUND inquiry substitutions rejected",
                          "partial caller-to-child transforms exclude unresolved caller descriptor origins",
                          "conditional child return coverage remains owned by its reached plan"]}
-    return tuple(arrays), scalars, scalar_roots, tuple(kills), record
+    return tuple(arrays), scalars, scalar_roots, tuple(kills), record, tuple(elements)
 
 
 @dataclass(frozen=True)
@@ -321,6 +345,7 @@ class NativeCallCoordinatesProof:
     _scalars: object = field(compare=False, repr=False)
     _scalar_roots: object = field(compare=False, repr=False)
     _kills: tuple[str, ...] = field(compare=False, repr=False)
+    _elements: tuple = field(compare=False, repr=False)
     _record: object = field(compare=False, repr=False)
 
     @property
@@ -343,6 +368,10 @@ class NativeCallCoordinatesProof:
     def entry_definition_changes(self):
         return self._kills
 
+    @property
+    def scalar_elements(self):
+        return self._elements
+
     def public(self):
         return {"proof_identity": self.identity, **_thaw(self._record)}
 
@@ -351,7 +380,8 @@ class NativeCallCoordinatesProof:
                 or getattr(analysis, "_native_definition_proofs", {}).get(self.identity) is not self):
             raise CompilationError("native call coordinates lack registered exact original source authority")
         budget = _Budget(analysis, consume)
-        if _hash(_derive(analysis, caller, original_call, budget)[4]) != self.identity:
+        derived = _derive(analysis, caller, original_call, budget)
+        if _hash(derived[4]) != self.identity or not _same_elements(self._elements, derived[5]):
             raise CompilationError("native call coordinate source authority changed")
         return self
 
@@ -480,7 +510,7 @@ class NativeCallCoordinatesProof:
 def prove_native_call_coordinates(analysis, caller, original_call, *, consume=None):
     """Register original associations; child reached transfer remains separate."""
     budget = _Budget(analysis, consume)
-    arrays, scalars, scalar_roots, kills, record = _derive(analysis, caller, original_call, budget)
+    arrays, scalars, scalar_roots, kills, record, elements = _derive(analysis, caller, original_call, budget)
     identity = _hash(record)
     registry = getattr(analysis, "_native_definition_proofs", None)
     if registry is None:
@@ -492,12 +522,13 @@ def prove_native_call_coordinates(analysis, caller, original_call, *, consume=No
         # depend on whether this token was created earlier.
         if (not isinstance(proof, NativeCallCoordinatesProof) or proof.identity != identity
                 or proof._analysis is not analysis or proof.caller != caller or proof._call is not original_call
-                or _hash(_thaw(proof._record)) != identity):
+                or _hash(_thaw(proof._record)) != identity or not _same_elements(proof._elements, elements)):
             raise CompilationError("native call coordinates lack registered exact original source authority")
         return proof
     if len(registry) >= analysis.procedure_limit:
         raise CompilationError("native call coordinate proof registry budget exhausted")
     proof = NativeCallCoordinatesProof(caller, record["callee"], identity, analysis, original_call, arrays,
-                                       MappingProxyType(scalars), MappingProxyType(scalar_roots), kills, _freeze(record))
+                                       MappingProxyType(scalars), MappingProxyType(scalar_roots), kills, elements,
+                                       _freeze(record))
     registry[identity] = proof
     return proof

@@ -155,6 +155,20 @@ def borrow_module(parent, node, *, reached=None):
     if hasattr(node, "fort_inline_region"):
         return False
     resolved = parent.builder.execution_source_call(parent.routine, node)
+    elements = tuple(mapping.scalar_element for mapping in resolved.mappings if mapping.scalar_element is not None)
+    if elements:
+        if reached is None:
+            raise CompilationError("scalar element borrowing requires a registered mapped reached call")
+        authorized = reached[1].coordinates.scalar_elements
+        if (len(elements) != len(authorized) or any(
+                element.actual is not original.actual or element.binding is not original.binding
+                or element.public() != original.public()
+                for element, original in zip(elements, authorized, strict=True))):
+            raise CompilationError("scalar element borrowing lost original coordinate association authority")
+        managed = {member.canonical(binding).root for member in parent.owner.members.values()
+                   for unit in member.units for binding in unit.arrays.values()}
+        if managed & {element.binding.root for element in elements}:
+            raise CompilationError("scalar element backing storage must remain unmanaged")
     if reached is not None and any(mapping.formal_binding.rank and mapping.actual is not None
                                   and str(mapping.actual).lower().startswith("fort_")
                                   for mapping in resolved.mappings):
@@ -261,8 +275,19 @@ def borrow_module(parent, node, *, reached=None):
                 arrays.append(OriginalActual(binding, owner.builder.visible(owner.routine, binding.root)))
                 present.add(binding.root)
     preflight = []
+    if elements:
+        # Only the original INTEGER selector is observed here, inside the
+        # original CALL's guards. No table payload or child dummy is evaluated.
+        preflight += ["block", "use iso_c_binding, only: c_int64_t"]
+        for element in elements:
+            lower, upper = element.bounds
+            index = element.index.expression
+            preflight += [f"if ({parent.enabled}) then",
+                          f"if (int({index},kind=c_int64_t) < {lower}_c_int64_t .or. &",
+                          f"int({index},kind=c_int64_t) > {upper}_c_int64_t) then", *parent.close(), "endif", "endif"]
+        preflight += ["end block"]
     if arrays:
-        preflight = ["block", "logical :: fort_actuals_contiguous", "fort_actuals_contiguous = .true."]
+        preflight += ["block", "logical :: fort_actuals_contiguous", "fort_actuals_contiguous = .true."]
         for mapping in arrays:
             name = str(mapping.actual)
             if "allocatable" in mapping.binding.attributes:
@@ -274,7 +299,7 @@ def borrow_module(parent, node, *, reached=None):
         preflight += ["if (.not. fort_actuals_contiguous) then", *parent.close(), "endif", "end block"]
     if reached is not None:
         from compiler.scopes.call_registration import register_original_actuals
-        preflight += register_original_actuals(parent, arrays)
+        preflight += register_original_actuals(parent, arrays, scalar_elements=elements)
     lines = [f"if ({parent.enabled}) then", *preflight, "endif",
              f"if ({parent.enabled}) then", *_call(existing.entry, [*arguments, *controls]),
              "else", *parent.original((node,)).splitlines(), "endif"]
