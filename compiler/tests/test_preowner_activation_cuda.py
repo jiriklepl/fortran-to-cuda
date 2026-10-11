@@ -21,14 +21,19 @@ from compiler.tests.test_source_scopes import run
 
 
 def _source_with_native_boundaries():
-    # Both unsupported, source-backed children stay at their original call
-    # sites. The opaque child remains a separate absorbing-native control.
-    source = PREOWNER_SOURCE.replace("call opaque_prefix()", """if(stage==1) then
-call original_notice()
-else
-call original_joined_team()
+    # False single-line guards keep the owner eligible. True guards disable
+    # before each original call, including the separate opaque control.
+    source = PREOWNER_SOURCE.replace("""if(bad) then
+call opaque_prefix()
+bad_visits=bad_visits+1
 endif
-call opaque_prefix()""")
+if(skip .and. stage==1) then
+cycle
+endif""", """if(bad.and.stage==1) call original_notice()
+if(bad.and.stage/=1) call original_joined_team()
+if(bad) call opaque_prefix()
+if(bad) bad_visits=bad_visits+1
+if(skip .and. stage==1) cycle""")
     return source.removesuffix("end module\n") + """subroutine original_notice()
 write(*,'(a)') 'original native notice'
 bad_visits=bad_visits+1000
@@ -123,10 +128,16 @@ def preowner_binaries(tmp_path_factory, request):
     scope, = report["scopes"]
     assert len(scope["gpu_leaves"]) == 2
     assert scope["reached_window"]["prefix_eligibility"]["activation_path_possible"]
+    conditional = [point for point in scope["reached_window"]["prefix_eligibility"]["disable_points"]
+                   if point.get("conditional_action")]
+    assert len(conditional) == 4
+    assert all(point["original_source_kind"] == "If_Stmt" for point in conditional)
+    assert [point["conditional_action"]["action_source_kind"] for point in conditional].count("Call_Stmt") == 3
+    assert [point["conditional_action"]["action_source_kind"] for point in conditional].count("Cycle_Stmt") == 1
     assert scope["reached_window"]["prefix_eligibility"]["disabled_path_possible"]
     disabled_calls = {point["reason"] for point in
                       scope["reached_window"]["prefix_eligibility"]["disable_points"]
-                      if point["original_source_kind"] == "Call_Stmt"}
+                      if point.get("conditional_action", {}).get("action_source_kind") == "Call_Stmt"}
     assert any("Write_Stmt" in reason for reason in disabled_calls)
     assert any("PARALLEL DO" in reason for reason in disabled_calls)
     for root in ("argument::b", "renamed_prefix::workspace"):
@@ -217,6 +228,8 @@ def test_original_prefix_current_bounds_and_absorbing_native_paths(preowner_bina
                "source_copy_destinations_initially_undefined_in_capture_facts": True,
                "dormant_metadata_reloaded_each_call": True,
                "source_backed_io_and_joined_team_execute_once_on_original_paths": True,
+               "single_line_guards_execute_original_calls_once": True,
+               "single_line_cycle_is_absorbing": True,
                "independently_traced_path": True, "numerical_launches": launches,
                "h2d_bytes": uploaded, "d2h_bytes": downloaded,
                "compared_bytes": len(actual), "native_sha256": sha256(expected).hexdigest(),

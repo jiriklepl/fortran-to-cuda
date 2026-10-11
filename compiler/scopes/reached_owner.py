@@ -8,7 +8,7 @@ tail stay in their original lexical owner.
 
 from __future__ import annotations
 
-from compiler.frontend.reached_windows import ReachedWindowProof, plan_reached_window
+from compiler.frontend.reached_windows import ReachedWindowProof, _single_if_action_source, plan_reached_window
 from compiler.frontend.source_effects import _children, _part
 from compiler.ir import CompilationError
 from compiler.scopes.lexical import LexicalOwner
@@ -204,6 +204,18 @@ class ReachedWindowOwner(MappedReachedControl, LexicalOwner):
             originals = tuple(original for identity in _close_selection(point) for original in graph.source_nodes(identity))
             if not originals or [statement_span(originals[0])[0], statement_span(originals[-1])[1]] != point["span"]:
                 raise CompilationError("pre-owner eligibility edit lacks its exact original source span")
+            conditional = point.get("conditional_action")
+            if conditional is not None:
+                if len(originals) != 1 or _close_selection(point) != (point["node_id"],):
+                    raise CompilationError("conditional prefix edit requires its exact original single-line IF")
+                expected, unsafe = _single_if_action_source(builder.analysis, self.routine, graph, point["node_id"])
+                if unsafe is not None or conditional != expected:
+                    raise CompilationError("conditional prefix edit differs from its registered original source")
+                condition, action = originals[0].items
+                replacement = [f"if ({condition}) then", f"{self.prefix_eligible} = .false.", str(action), "endif"]
+                builder.add_edit(self.routine.scope.path, point["span"][0], point["span"][1],
+                                 "\n".join(fortran_lines(replacement)) + "\n")
+                continue
             line = point["span"][0]
             builder.add_edit(self.routine.scope.path, line, line - 1,
                              f"{self.prefix_eligible} = .false.\n")
@@ -260,7 +272,7 @@ class ReachedWindowOwner(MappedReachedControl, LexicalOwner):
                         "return_sections": state["defined_sections_on_return"],
                         "authority": "conditional original reached transfer; return sections never seed registration"}
                         for state in public["states"]],
-                    "prefix_execution": "unchanged original native source before any active context",
+                    "prefix_execution": "original native evaluation before any active context; registered single-line IF actions retain condition and action once",
                     "allocation_and_alias_authority": "independent admitted facts and reached runtime guards",
                     "automatic_discovery": False,
                 }

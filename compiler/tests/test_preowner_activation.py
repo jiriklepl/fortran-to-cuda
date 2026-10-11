@@ -112,7 +112,7 @@ def test_original_allocation_and_copy_establish_only_source_defined_activation(t
     path, builder, proof, originals = preowner_window_fixture(tmp_path)
     record = proof.public()
     prefix = record["prefix_eligibility"]
-    assert record["schema_version"] == 10
+    assert record["schema_version"] == 11
     assert prefix["activation_path_possible"]
     assert prefix["disabled_path_possible"]
     assert not prefix["selected_window_whole_assertion_is_prefix_read_authority"]
@@ -222,14 +222,19 @@ def test_early_prefix_control_is_absorbing_at_original_action(tmp_path, control)
     assert not point["reopen"]
 
 
-def test_single_line_prefix_control_disables_before_complete_if(tmp_path):
+def test_single_line_prefix_control_disables_inside_original_condition(tmp_path):
     source = PREOWNER_SOURCE.replace("if(skip .and. stage==1) then\ncycle\nendif",
                                     "if(skip .and. stage==1) cycle")
     _path, _builder, proof, _originals = preowner_window_fixture(tmp_path, source)
     prefix = proof.public()["prefix_eligibility"]
-    assert not prefix["activation_path_possible"]
+    assert prefix["activation_path_possible"]
+    assert prefix["disabled_path_possible"]
     point = next(item for item in prefix["disable_points"] if item["original_source_kind"] == "If_Stmt")
     assert point["disabled_is_absorbing"]
+    conditional = point["conditional_action"]
+    assert conditional["action_source_kind"] == "Cycle_Stmt"
+    assert conditional["condition_evaluated_once"]
+    assert conditional["action_evaluated_once"]
 
 
 @pytest.mark.parametrize("mutation", ["source", "binding", "declaring_scope", "imports", "budget"])

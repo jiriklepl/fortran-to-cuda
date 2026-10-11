@@ -1599,7 +1599,7 @@ joined `PARALLEL DO` groups with supported scalar private/reduction clauses;
 the native compiler executes every original reduction. No reduction lowering,
 reassociation or active-owner coherence is authorized.
 
-`prove_reached_window` version 9 transfers separately supplied entry facts through
+`prove_reached_window` version 11 transfers separately supplied entry facts through
 these prefix and descriptor proofs to an exact contiguous window, at top level
 or in the first traversal of one top-level serial counted loop. Branches meet
 conservatively and definitions retain original ordering. Hidden read-only native
@@ -1635,9 +1635,13 @@ assertion cannot authorize these earlier prefix reads. Supplied facts and their
 hashes remain unchanged; no activation assertion is unioned over a definition
 kill. Allocation options, pointer/target associations and unsupported shapes
 remain native. Prefix support declines disable eligibility before the complete
-original operation; unsupported conditions and single-line actions disable
-before the whole conditional. Disabled eligibility is absorbing for that
-invocation, including `CYCLE`, `EXIT`, `RETURN` and later loop traversals. Only
+original operation. A supported original single-line `IF` condition retains its
+evaluation once: a registered block rewrite disables eligibility inside its
+true branch before the original unsupported action executes once. The proof
+binds the original parent span, condition and action identities and hashes.
+Unsupported conditions, labels, preprocessor boundaries and potentially shared
+semicolon spans retain whole-conditional disabling. Disabled eligibility is
+absorbing for that invocation, including `CYCLE`, `EXIT`, `RETURN` and later loop traversals. Only
 eligible branches contribute activation coverage. Source/token and budget
 failures remain hard; incomplete generic native-prefix proofs are not converted
 into support declines.
