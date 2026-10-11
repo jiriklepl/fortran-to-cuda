@@ -8,11 +8,11 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.tests.test_combined_numerical_team import emit_combined_team_fixture
-from compiler.tests.test_reached_numerical_effects_cuda import (
+from compiler.tests.support.numerical_cuda import (
     build_reached_numerical_binaries,
     check_prepared_chain,
 )
+from compiler.tests.support.numerical_regions import emit_combined_team_fixture
 from compiler.tests.test_source_scopes import run
 
 VOTE_PROBE = r"""#include <cfenv>

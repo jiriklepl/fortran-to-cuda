@@ -14,77 +14,64 @@ from compiler.scopes.combined_team import (
     is_combined_group,
 )
 from compiler.scopes.segments import grouped_nodes
-from compiler.tests.test_reached_numerical_effects import (
+from compiler.tests.support.numerical_regions import (
     CHILD,
     CHILD_SOURCE,
+    ENVIRONMENT_TEAM,
     MATH_SOURCE,
-    emit_reached_numerical_fixture,
+    EmittedNumericalText,
+    combined_units,
+    emit_combined_team_fixture,
+    emitted_child,
     reached_numerical_fixture,
+    team_text,
 )
 
-ENVIRONMENT_USE = "use,intrinsic::ieee_exceptions,only:ieee_set_halting_mode,ieee_invalid\n"
-ENVIRONMENT_TEAM = """!$omp parallel
-call ieee_set_halting_mode(ieee_invalid,.false.)
-!$omp end parallel
-"""
 
-
-def emit_combined_team_fixture(directory, **options):
-    """Keep the native environment setter and force original-team admission."""
-    source = options.pop("child_source", CHILD_SOURCE)
-    assert "implicit none\n" in source
-    assert "i=0\n" in source
-    source = source.replace("implicit none\n", ENVIRONMENT_USE + "implicit none\n", 1)
-    source = source.replace("i=0\n", "i=0\n" + ENVIRONMENT_TEAM, 1)
-    return emit_reached_numerical_fixture(directory, child_source=source, **options)
-
-
-def combined_units(owner):
-    return tuple(unit for unit in owner.members[CHILD].units if isinstance(unit.scope, CombinedNumericalTeam))
-
-
-def emitted_child(paths, outputs, report):
-    return outputs[report["sources"][str(paths[1])]["replacement"]]
-
-
-def team_text(text):
-    """The original setter has no generated environment-vote marker."""
-    body = text.index("call cell_formula(g,s,a(i),i)")
-    marker = text.rfind("fort_team_environment_supported = .true.", 0, body)
-    assert marker >= 0
-    first = text.rfind("!$omp parallel", 0, marker)
-    last = text.index("!$omp end parallel", marker) + len("!$omp end parallel")
-    assert first >= 0
-    return text[first:last]
-
-
-def test_combined_team_requires_actual_participants_and_keeps_native_environment(tmp_path):
-    paths, outputs, report, owner = emit_combined_team_fixture(tmp_path)
-    units = combined_units(owner)
-    assert units
-    assert any(unit.scope.prepared.requires_original_team_environment_preflight for unit in units)
-    text = emitted_child(paths, outputs, report)
-    assert paths[1].read_text().count(ENVIRONMENT_TEAM) == 1
-    assert "!$omp parallel\ncall ieee_set_halting_mode" in text
-    assert not owner.members[CHILD].boundaries
-    for unit in units:
+@pytest.fixture(scope="module")
+def combined_emission(tmp_path_factory):
+    """Only immutable source/artifact strings and serialized JSON escape."""
+    paths, outputs, report, owner = emit_combined_team_fixture(tmp_path_factory.mktemp("combined_source"))
+    units = []
+    for unit in combined_units(owner):
         scope = unit.scope
-        assert is_combined_group(scope.builder, scope.original_nodes)
-        assert not scope.native
-        assert not scope.guarded
-        public = scope.public()["combined_numerical_team"]
+        units.append({
+            "requires_original_team_environment_preflight": scope.prepared.requires_original_team_environment_preflight,
+            "is_original_combined_group": is_combined_group(scope.builder, scope.original_nodes),
+            "native": bool(scope.native), "guarded": bool(scope.guarded),
+            "completion_identity": scope.prepared.completion_proof.identity,
+            "public": scope.public()["combined_numerical_team"],
+        })
+    return EmittedNumericalText.capture(paths, outputs, report, observations={
+        "combined_units": units, "child_boundaries": owner.members[CHILD].boundaries,
+    })
+
+
+def test_combined_team_requires_actual_participants_and_keeps_native_environment(combined_emission):
+    observed = combined_emission.observations()
+    units = observed["combined_units"]
+    assert units
+    assert any(unit["requires_original_team_environment_preflight"] for unit in units)
+    text = combined_emission.child_text()
+    assert combined_emission.original_sources[1][1].count(ENVIRONMENT_TEAM) == 1
+    assert "!$omp parallel\ncall ieee_set_halting_mode" in text
+    assert not observed["child_boundaries"]
+    for unit in units:
+        assert unit["is_original_combined_group"]
+        assert not unit["native"]
+        assert not unit["guarded"]
+        public = unit["public"]
         assert public["expected_omp_level"] == 1
         assert public["host_threads"] == 4
         assert not public["native_effects_authority"]
         assert not public["nested_team_created"]
         assert public["closed_is_absorbing"]
         assert "generated CPU" in public["worker_resource_failure"]
-        assert public["completion"]["proof_identity"] == scope.prepared.completion_proof.identity
+        assert public["completion"]["proof_identity"] == unit["completion_identity"]
 
 
-def test_combined_preparation_and_query_follow_the_all_participant_vote(tmp_path):
-    paths, outputs, report, _owner = emit_combined_team_fixture(tmp_path)
-    text = team_text(emitted_child(paths, outputs, report))
+def test_combined_preparation_and_query_follow_the_all_participant_vote(combined_emission):
+    text = team_text(combined_emission.child_text())
     reset = text.index("fort_team_environment_supported = .true.")
     qualification = text.index("fort_team_omp_level() /= 1")
     probe = text.index("fort_scope_numerical_environment_supported() == 0")
@@ -146,11 +133,13 @@ def test_combined_source_and_configuration_mutation_remain_hard(tmp_path, author
 
 
 def test_combined_partition_scan_limit_is_a_hard_failure(tmp_path, monkeypatch):
-    _paths, _outputs, _report, owner = emit_combined_team_fixture(tmp_path)
-    scope = combined_units(owner)[0].scope
+    _paths, builder, _proof, _originals, _provider = reached_numerical_fixture(tmp_path)
+    local = copy(builder)
+    local.entry = builder.analysis.routines[CHILD]
+    group, = (node for node in grouped_nodes(local.entry.execution.content) if isinstance(node, tuple))
     monkeypatch.setattr("compiler.scopes.combined_team.NATIVE_GROUP_SCAN_LIMIT", 1)
     with pytest.raises(CompilationError, match="source scan budget"):
-        _source_partition(scope.builder, scope.original_nodes)
+        _source_partition(local, group)
 
 
 def test_combined_partial_selection_cannot_replace_registered_whole_join(tmp_path):
@@ -162,14 +151,15 @@ def test_combined_partial_selection_cannot_replace_registered_whole_join(tmp_pat
 
 
 def test_combined_generated_names_cannot_shadow_original_references(tmp_path):
-    _paths, _outputs, _report, owner = emit_combined_team_fixture(tmp_path)
-    scope = next(unit.scope for unit in combined_units(owner) if unit.scope.prepared.extraction.numerical_helpers)
+    _paths, builder, _proof, _originals, _provider = reached_numerical_fixture(tmp_path)
+    group, = (node for node in grouped_nodes(builder.analysis.routines[CHILD].execution.content)
+              if isinstance(node, tuple))
     with pytest.raises(CompilationError, match="generated name conflicts with original reference: n"):
-        _check_generated_names(scope.original_nodes, ["integer :: n"], [], [], "generated_block")
+        _check_generated_names(group, ["integer :: n"], [], [], "generated_block")
     with pytest.raises(CompilationError, match="generated name conflicts with original reference: n"):
-        _check_generated_names(scope.original_nodes, ["integer(c_int), parameter :: n = 1"], [], [], "generated_block")
-    _check_generated_names(scope.original_nodes, ["integer :: n_extra"], [], [], "generated_block")
-    _check_generated_names(scope.original_nodes, ["integer(n), parameter :: unrelated = 1"], [], [], "generated_block")
+        _check_generated_names(group, ["integer(c_int), parameter :: n = 1"], [], [], "generated_block")
+    _check_generated_names(group, ["integer :: n_extra"], [], [], "generated_block")
+    _check_generated_names(group, ["integer(n), parameter :: unrelated = 1"], [], [], "generated_block")
 
 
 @pytest.mark.parametrize("alias", ["fort_team_context", "fort_mode"])

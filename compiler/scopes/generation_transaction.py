@@ -155,6 +155,7 @@ class GenerationTransaction:
     def __enter__(self):
         if self._active or self._closed:
             raise CompilationError("generation transaction is single-use")
+        self.parent._check_reached_publication()
         self._active = True
         self._parent_state = dict(vars(self.parent))
         try:
@@ -174,6 +175,7 @@ class GenerationTransaction:
                 or getattr(builder, "entry", None) is not self.parent.entry
                 or getattr(builder, "_generation_transaction_marker", None) is not self._marker):
             raise CompilationError("generation adoption requires the same original analysis and entry")
+        builder._check_reached_publication()
         self._winner = builder
 
     def _restore(self):
@@ -184,8 +186,10 @@ class GenerationTransaction:
 
     def _commit(self):
         winner = self._winner
+        winner._check_reached_publication()
         if winner.facts != self._parent_state["facts"]:
             raise CompilationError("generation candidate changed independently admitted source facts")
+        winner._validate_reached_window_fresh()
         winner.analysis.inputs.verify()
         # Rebind every nested builder, inline registry and bound closure to the
         # adopted root while retaining their internal alias relationships.

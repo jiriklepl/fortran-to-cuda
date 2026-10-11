@@ -1,135 +1,24 @@
 """Prepared original numerical closures retain ordered resident data flow."""
 
 import re
-from copy import copy, deepcopy
+from copy import copy
 from dataclasses import replace
-from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
 from compiler.frontend.numerical_effects import prove_numerical_effects
-from compiler.frontend.numerical_preparation import NumericalPreparationProvider
-from compiler.frontend.reached_windows import plan_reached_window, prove_reached_window
+from compiler.frontend.reached_windows import prove_reached_window
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.reached_owner import ReachedWindowOwner
-from compiler.scopes.source import ScopeBuilder
+from compiler.tests.support.numerical_regions import (
+    CHILD,
+    CHILD_SOURCE,
+    ENTRY,
+    ROOTS,
+    emit_reached_numerical_fixture,
+    reached_numerical_fixture,
+)
 from compiler.tests.test_inline_source_regions import original_joined_group
-from compiler.tests.test_source_scopes import FACT
-
-ENTRY = "quartz_owner::advance"
-CHILD = "quartz_numerics::bridge"
-ROOTS = ("argument::a", "argument::b", "argument::c")
-
-MATH_SOURCE = """module quartz_math
-implicit none
-contains
-pure subroutine profile_cell(g,s,value,index)
-real(8),intent(out)::g(2),s
-real(8),intent(in)::value
-integer,intent(in)::index
-g(1)=value
-g(2)=real(index+4,8)
-s=dot_product(g,g)
-end subroutine
-end module
-"""
-
-CHILD_SOURCE = """module quartz_numerics
-use quartz_math,only:cell_formula=>profile_cell
-implicit none
-integer::bridge_visits=0,middle_visits=0
-contains
-subroutine bridge(a,b,c,n,tile)
-real(8),intent(in)::a(-4:)
-real(8),intent(inout)::b(-4:),c(-4:)
-integer,intent(in)::n,tile
-integer::i,block
-real(8)::g(2),s
-bridge_visits=bridge_visits+1
-i=0
-if(tile==-5) then
-!$omp parallel do private(i) schedule(static)
-do i=-3,n
-b(i)=b(i)+a(i)+real(i,8)
-enddo
-!$omp end parallel do
-endif
-!$omp parallel do private(block,i,g,s) schedule(static)
-do block=-3,n,tile
-do i=block,min(block+tile-1,n)
-call cell_formula(g,s,a(i),i)
-b(i)=s+real(i,8)
-enddo
-enddo
-!$omp end parallel do
-if(n>=-3) then
-call touch_face(b)
-endif
-do i=-3,n
-c(i)=2.0_8*b(i)+real(i+1,8)
-enddo
-end subroutine
-subroutine touch_face(b)
-real(8),intent(inout)::b(-4:)
-middle_visits=middle_visits+1
-b(-3)=b(-3)+0.5_8
-end subroutine
-end module
-"""
-
-OWNER_SOURCE = """module quartz_owner
-use quartz_numerics,only:renamed_bridge=>bridge
-implicit none
-integer::prefix_visits=0,tail_visits=0
-contains
-subroutine advance(a,b,c,n,tile)
-real(8),intent(in)::a(-4:)
-real(8),intent(inout)::b(-4:),c(-4:)
-integer,intent(in)::n,tile
-prefix_visits=prefix_visits+1
-call renamed_bridge(a,b,c,n,tile)
-tail_visits=tail_visits+1
-end subroutine
-end module
-"""
-
-
-def reached_numerical_fixture(directory, *, precision=8, device_budget=None, provider_enabled=True,
-                              math_source=MATH_SOURCE, child_source=CHILD_SOURCE, owner_source=OWNER_SOURCE,
-                              captures=None):
-    """The caller defines a/b; only c depends on source-established coverage."""
-    directory.mkdir(parents=True, exist_ok=True)
-    paths = tuple(directory / name for name in ("quartz_math.f90", "quartz_numerics.f90", "quartz_owner.f90"))
-    for path, source in zip(paths, (math_source, child_source, owner_source), strict=True):
-        path.write_text(source.replace("real(8)", f"real({precision})")
-                        .replace("_8", f"_{precision}").replace(",8)", f",{precision})"))
-    facts = {"schema_version": 1, "participation": "serial",
-             "sources": {str(path): sha256(path.read_bytes()).hexdigest() for path in paths},
-             "captures": {ROOTS[0]: deepcopy(FACT), ROOTS[1]: deepcopy(FACT),
-                          ROOTS[2]: {**deepcopy(FACT), "initialized": "none", "lifetime": "selected_window"}}}
-    for root, values in (captures or {}).items():
-        facts["captures"][root].update(values)
-    if device_budget is not None:
-        facts["device_budget_bytes"] = device_budget
-    builder = ScopeBuilder(paths, ENTRY, facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy="sections", scope_execution="reached"))
-    originals = tuple(node for node in builder.entry.execution.content if type(node).__name__ == "Call_Stmt")
-    assert len(originals) == 1
-    provider = NumericalPreparationProvider(builder.analysis, options=builder.options, config=builder.config,
-        environment_root=builder._numerical_environment_root, immutable_inputs={}) if provider_enabled else None
-    options = {"numerical_provider": provider} if provider_enabled else {}
-    proof = plan_reached_window(builder.analysis, ENTRY, originals, ROOTS, facts, **options)
-    return paths, builder, proof, originals, provider
-
-
-def emit_reached_numerical_fixture(directory, **options):
-    paths, builder, proof, originals, _provider = reached_numerical_fixture(directory, **options)
-    owner = ReachedWindowOwner(builder, proof, originals)
-    assert owner.run()
-    outputs, report = owner.builder.finish()
-    return paths, outputs, report, owner
 
 
 def test_source_preparation_is_registered_and_keeps_private_helpers_and_guards(tmp_path):

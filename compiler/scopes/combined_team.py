@@ -195,24 +195,20 @@ class CombinedNumericalTeam(StructuredScope):
     def __init__(self, builder, nodes):
         self.builder, self.nodes = builder, tuple(nodes)
         self.original_nodes = original_roots(builder.inline.original_selection(nodes))
-        self.prepared = builder.numerical_preparation_for(
+        region = builder.resolved_numerical_region(
             builder.analysis, builder.entry.qualified, self.original_nodes)
-        if self.prepared is None:
+        if region is None:
             raise CompilationError("combined numerical team requires registered original preparation")
-        self.prepared.validate(builder.analysis, builder.entry.qualified, self.original_nodes)
-        self.prepared.validate_configuration(options=builder.options, config=builder.config,
-            environment_root=builder._numerical_environment_root,
-            immutable_inputs=getattr(builder, "immutable_inputs", {}))
+        self.prepared, self.effect = region.prepared, region.effects
         if not self.prepared.completion.get("has_openmp_in_closure"):
             raise CompilationError("combined numerical team requires original joined completion")
         self.partition = _source_partition(builder, self.original_nodes)
         self.first, self.last = self.partition["first"], self.partition["last"]
         facade = builder.inline.prepare_combined_team(self.original_nodes)
         call = builder.inline.call(facade)
-        self.effect = builder.call_numerical_effect(call)
-        if self.effect is None or self.effect.prepared is not self.prepared:
+        outlined = builder.call_numerical_region(call)
+        if outlined is None or outlined.prepared is not self.prepared or outlined.effects is not self.effect:
             raise CompilationError("combined numerical team requires exact registered physical effects")
-        self.effect.validate(builder.analysis, builder.entry.qualified, self.original_nodes, self.prepared)
         self.completion = self.prepared.completion_proof
         self.native_metadata = True
         self.native_host_reads = False
@@ -226,11 +222,9 @@ class CombinedNumericalTeam(StructuredScope):
 
     def _validate(self):
         builder = self.builder
-        self.prepared.validate(builder.analysis, builder.entry.qualified, self.original_nodes)
-        self.prepared.validate_configuration(options=builder.options, config=builder.config,
-            environment_root=builder._numerical_environment_root,
-            immutable_inputs=getattr(builder, "immutable_inputs", {}))
-        self.effect.validate(builder.analysis, builder.entry.qualified, self.original_nodes, self.prepared)
+        region = builder.resolved_numerical_region(builder.analysis, builder.entry.qualified, self.original_nodes)
+        if region is None or region.prepared is not self.prepared or region.effects is not self.effect:
+            raise CompilationError("combined numerical team lost its registered prepared/effect pair")
         if _source_partition(builder, self.original_nodes) != self.partition:
             raise CompilationError("combined numerical team original source partition changed")
 

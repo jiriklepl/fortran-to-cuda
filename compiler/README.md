@@ -87,6 +87,17 @@ header combines the template under `emission/common/templates/` with numeric,
 profiling, and storage units in `runtime/`, preserving a single distributable
 support header and `--common-header` behavior.
 
+Reached scope generation uses one bounded consumption pass in
+`scopes/reached_consumption.py`. It authenticates the original source, admitted
+facts and compiler configuration before generation, then indexes exact prepared
+numerical regions together with their physical effects and mapped child calls.
+Only explicitly enrolled child builders can use that pass. It expires on exit;
+source authority is checked again before returning generated work and adopting
+or publishing it. This avoids reconstructing the complete reached plan for each
+lookup without retaining proof state across compiler invocations. Replanning
+replaces the view and rebinds staged children; the existing generation
+transaction owns rollback.
+
 Package entry points remain `compiler.frontend.lower_file`,
 `compiler.analysis.build_execution_plan`, and `compiler.emission.generate_sources`.
 `compiler.driver.pipeline.prepare_function(function, *, options=CompilerOptions())`
@@ -2427,4 +2438,15 @@ those capabilities are available, build or runtime failures fail the tests. All 
 ```bash
 # Parser/analysis checks without native builds:
 python -m pytest compiler/tests -m "not native and not cuda"
+
+# Reached-generation authority and numerical source integration:
+python -m pytest compiler/tests/test_reached_consumption.py \
+  compiler/tests/test_reached_numerical_effects.py \
+  compiler/tests/test_combined_numerical_team.py
 ```
+
+Shared numerical fixtures live in `tests/support/`. Read-only generated-source
+checks may reuse immutable source text and serialized manifests. Mutation and
+authority tests construct fresh analysis, builders and proofs; they must not
+borrow shared mutable frontend objects. CUDA fixtures reuse the original driver
+and strict arithmetic checks through `tests/support/numerical_cuda.py`.
