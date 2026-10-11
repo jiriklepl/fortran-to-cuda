@@ -1,6 +1,7 @@
 ! kernels
 module MomentumAdvection
   implicit none
+  integer, parameter :: knd = kind(1.0d0)
   private
   public CDW
 

@@ -13,7 +13,8 @@ more-itertools==11.1.0
 networkx==3.7
 numpy==2.5.3
 pcpp==1.30
-platformdirs==4.12.2
+platformdirs==4.12.3
+# Loki's IR requires pydantic<2.10 and pymbolic==2022.2.
 pydantic==2.9.2
 pydantic_core==2.23.4
 pymbolic==2022.2

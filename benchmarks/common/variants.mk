@@ -29,12 +29,12 @@ else ifneq ($(filter $(VARIANT),CUDA CUDA-pinned),)
 
 else ifeq ($(VARIANT),CPP)
   VARIANT_FFLAGS   =
-  VARIANT_LDFLAGS  = -static-libstdc++
+  VARIANT_LDFLAGS  = -lstdc++
   VARIANT_CXXFLAGS =
 
 else ifeq ($(VARIANT),CPP-OMP)
   VARIANT_FFLAGS   = -fopenmp
-  VARIANT_LDFLAGS  = -static-libstdc++ -fopenmp
+  VARIANT_LDFLAGS  = -lstdc++ -fopenmp
   VARIANT_CXXFLAGS = -fopenmp
 
 else

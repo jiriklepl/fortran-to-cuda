@@ -1,3 +1,3 @@
-fparser
-matplotlib
+fparser==0.2.5
+matplotlib==3.11.2
 islpy==2026.2.2

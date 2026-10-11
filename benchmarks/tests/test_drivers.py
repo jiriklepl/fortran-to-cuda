@@ -46,3 +46,28 @@ def test_resident_correctness_repeats_call_before_result_copyout(case, output):
     assert region in source
     assert source.index("!$acc end data") < source.index("write(*,'(g0.17)')")
     assert source.replace(region, call) == correctness_driver(case)
+
+
+@pytest.mark.parametrize("case", ["CDU", "CDV", "CDW"])
+def test_local_session_timing_includes_lifetime_and_explicit_result(case):
+    source = timing_driver(case, (37, 11, 5), 7, 2, resident=True, session=True)
+    positions = [
+        source.index(marker)
+        for marker in (
+            "do iteration = 1, nwarmup",
+            "call system_clock(begin_count,rate)",
+            f"call {case}_create(",
+            "do iteration = 1, niter",
+            f"call {case}_run(",
+            f"call {case}_update_host(",
+            f"call {case}_destroy(",
+            "call system_clock(end_count)",
+            "checksum = sum(abs(result(",
+        )
+    ]
+    assert positions == sorted(positions)
+    assert "!$acc" not in source
+    assert source.count(f"call {case}(result,") == 1  # Warmup remains host-visible.
+    correctness = correctness_driver(case, resident=True, session=True)
+    assert correctness.count(f"call {case}_run(") == 2
+    assert correctness.index(f"call {case}_update_host(") < correctness.index("write(*,'(g0.17)')")
