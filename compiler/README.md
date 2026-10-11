@@ -1556,7 +1556,7 @@ call or generated reevaluation. These records deny cloning, GPU lowering and
 atomic native callbacks, and are rebuilt rather than restored from persistent
 summary caches. Changed source, resolution maps or kind state invalidate them.
 
-Source summary version 19 carries child `capture_lifetime_requirements` through
+Source summary version 20 carries child `capture_lifetime_requirements` through
 original actual mappings and guards, even when the child remains incomplete.
 Distinct view chains retain their obligations; forwarding does not upgrade an
 authorization or turn partial raw operations into complete ordered effects.
@@ -1610,7 +1610,7 @@ joined `PARALLEL DO` groups with supported scalar private/reduction clauses;
 the native compiler executes every original reduction. No reduction lowering,
 reassociation or active-owner coherence is authorized.
 
-`prove_reached_window` version 13 transfers separately supplied entry facts through
+`prove_reached_window` version 14 transfers separately supplied entry facts through
 these prefix and descriptor proofs to an exact contiguous window, at top level
 or in the first traversal of one top-level serial counted loop. Branches meet
 conservatively and definitions retain original ordering. Hidden read-only native
@@ -1762,7 +1762,7 @@ native-effect hooks from numerical footprints. Its versioned
 preparation and physical-effect identities, participant requirements and failure
 policies. Missing applicable collective calibration still selects native AUTO.
 An original direct child call can carry its own registered conditional plan.
-The separate `prove_native_call_coordinates` version 2 API authenticates whole
+The separate `prove_native_call_coordinates` version 3 API authenticates whole
 ordinary assumed-shape associations, original caller lower origins, read-only
 scalar mappings and every `INTENT(OUT)` entry event, including unused formals.
 After those entry events, an existing unconditional whole definition subsumes
@@ -1777,14 +1777,56 @@ charged reuse under the existing work limits. Runtime descriptor and scalar
 bounds retain their original dependencies and are not cached this way.
 Source authentication and rectangle transfer each retain their own bounded
 work phase, and both charge the same parent aggregate work limit.
-It does not inspect the child's executable closure or grant storage, initialized
-payload, completion or GPU authority. The reached transfer visits the child at
+Ordinary coordinate mappings do not inspect the child's executable closure or
+grant storage, initialized payload, completion or GPU authority. The reached transfer visits the child at
 that original call, maps ordered partial definitions and shares aggregate work
 limits. Conditional active return coverage remains conditional; a child close
 disables the caller's owner before either original native suffix continues.
 Unsupported associations still close at the original call. Allocation-changing
 callee formals, recursion, uncertain aliases and unproved saved storage remain
 boundaries; immutable array arguments require their existing independent proof.
+
+Version 3 also retains an original scalar-element association such as
+`call child(a, weights(selector))`, without replacing it with an early scalar
+snapshot. Initially this requires a rank-one, fixed, declaration-initialized
+module REAL table, an INTEGER name or literal index, and a required same-kind
+scalar `INTENT(IN)` formal. Pointer, TARGET, optional, VALUE, volatile and
+asynchronous associations remain unsupported. A distinct `scalar_element` role
+stays outside array-resource mappings, scalar renaming and coordinate bounds.
+The selected element remains associated with the original child dummy even if
+the child subsequently changes the selector.
+
+A separate bounded source witness checks the complete transitive child closure:
+no other reference to the backing table and only unchanged scalar IN forwarding.
+It supplies no effects, completion, initialization or GPU authority. Unknown
+calls, backing writes, write-then-restore, writable forwarding and unproved
+escapes close ownership before the original call. At that original guarded
+point, an undefined BYTE reservation checks the full table address range against
+managed captures. The reservation reads no payload and allocates no device
+buffer. Overlap publishes and closes before the unchanged call; distinct source
+root names do not establish physical disjointness. Checked original bounds guard
+the index before borrowed associations. Neither check moves above the original
+condition. Public `original_scalar_elements`, `scalar_element_closure` and the
+opaque alias-reservation role distinguish these obligations from managed data.
+Source summary version 20, structured-effect version 7 and reached-window version
+14 invalidate previous association representations and dependent cache entries.
+
+Guarded alternatives require a typed source property and proof that the emitted
+guard establishes it for the entire optimized interval. An entry value or version
+check alone cannot prove future immutability; an exit equality check misses a
+write followed by restoration. A missing proof may require complete mutation
+tracking or an ownership close at the unknown effect. Decline text is diagnostic
+input, not executable proof. Keep guard reads at their original safe evaluation
+points, including allocation, optional-argument and collective synchronization
+requirements. Before numerical execution, failure may select the original native
+path. After a device prefix, failure must publish and continue the original
+suffix once; it must never replay the prefix. Legal guarded execution still
+requires an independently valid cost estimate for automatic placement.
+
+Available original scalar `ASSOCIATE` scopes participate in the same lexical
+resolution authentication as their enclosing procedures. Numerical preparation
+can retain those aliases without bypassing original binding, parent or source
+checks. Unsupported selectors remain local boundaries.
 
 The internal `ReachedWindowOwner` emitter consumes an exact registered window
 proof together with the same independently admitted capture document. It keeps

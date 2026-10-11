@@ -99,7 +99,8 @@ def _transfers(trace):
 
 
 def build_reached_numerical_binaries(tmp_path_factory, precision, resource_fallback, *,
-                                    emit_fixture=emit_reached_numerical_fixture, prefix="reached_numerical_"):
+                                    emit_fixture=emit_reached_numerical_fixture, prefix="reached_numerical_",
+                                    driver_source=None, expected_gpu_leaves=3):
     """Build the same authenticated chain for source participation fixtures."""
     nvcc = shutil.which("nvcc")
     host = shutil.which("g++-14") or shutil.which("g++")
@@ -112,7 +113,7 @@ def build_reached_numerical_binaries(tmp_path_factory, precision, resource_fallb
     originals, outputs, report, owner = emit_fixture(
         directory, precision=precision, device_budget=0 if resource_fallback else None)
     scope, = report["scopes"]
-    assert len(scope["gpu_leaves"]) == 3
+    assert len(scope["gpu_leaves"]) == expected_gpu_leaves
     assert owner.builder.facts["captures"][ROOTS[1]]["initialized"] == "whole"
     assert owner.builder.facts["captures"][ROOTS[2]]["initialized"] == "none"
     resources = {item["resource"]: item for item in scope["resource_bindings"]["resources"]}
@@ -158,7 +159,7 @@ def build_reached_numerical_binaries(tmp_path_factory, precision, resource_fallb
                              "source_input_sha256": item.get("source_input_sha256")})
             objects.append(str(target))
     driver = directory / "driver.f90"
-    driver.write_text(_driver(precision))
+    driver.write_text(_driver(precision) if driver_source is None else driver_source(precision))
     library = Path(nvcc).resolve().parents[1] / "lib64"
     candidate, native = directory / "candidate", directory / "native"
     for role, command in (

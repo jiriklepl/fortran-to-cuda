@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from compiler.ir import CompilationError
 from compiler.scopes.registration import build_registration
+from compiler.scopes.segments import fortran_lines
 from compiler.scopes.source import DTYPES, _name
 
 
@@ -13,7 +14,7 @@ class OriginalActual:
     actual: str
 
 
-def register_original_actuals(owner, arrays):
+def register_original_actuals(owner, arrays, *, scalar_elements=()):
     """Reserve a deferred patch; numerical artifacts are known after scanning."""
     key = _name("fort_original_actuals_", owner.routine.qualified + str(len(owner.patches)))
     registrations = getattr(owner, "original_actual_registrations", {})
@@ -25,6 +26,14 @@ def register_original_actuals(owner, arrays):
         owner.declaration(mapping.binding)
         owner.add_resource(mapping.binding)
     registrations[key] = tuple(arrays)
+    reservations = getattr(owner, "original_scalar_element_reservations", {})
+    owner.original_scalar_element_reservations = reservations
+    for element in scalar_elements:
+        binding = element.binding
+        owner.declaration(binding)
+        owner.add_resource(binding)
+        owner.owner.scalar_element_resources[binding.root] = binding
+    reservations[key] = tuple(scalar_elements)
     return ["!" + key]
 
 
@@ -74,6 +83,34 @@ def finish_original_registrations(owner, text):
                                                           for axis in range(1, binding.rank+1))})
             spec += code.specification
             lines += [*code.prepare, "endif"]
+        for element in getattr(owner, "original_scalar_element_reservations", {}).get(key, ()):
+            binding = element.binding
+            # Keep the exact authenticated CALL spelling. Another imported
+            # alias for this root could be shadowed by this block's locals.
+            name = str(element.actual.items[0])
+            number = owner.resources[binding.root][1]
+            handle = f"fort_buffer_{number}"
+            extents, lowers = f"fort_element_extents_{number}", f"fort_element_lowers_{number}"
+            spec += [f"integer(c_size_t), target :: {extents}(1)",
+                     f"integer(c_int64_t), target :: {lowers}(1)"]
+            lower, upper = element.bounds
+            lines += [f"if (fort_actual_status == FORT_SCOPE_OK .and. {handle} == 0) then",
+                      f"{extents}(1) = {max(0, upper-lower+1)}_c_size_t",
+                      f"{lowers}(1) = {lower}_c_int64_t", "fort_actual_pointer = c_null_ptr",
+                      f"if ({extents}(1) > 0) fort_actual_pointer = c_loc({name})",
+                      f"fort_actual_layout = fort_scope_layout(1, FORT_SCOPE_BYTES, {binding.kind}_c_size_t, &",
+                      f"fort_actual_pointer, c_loc({extents}), c_loc({lowers}), 1_c_int64_t)",
+                      f"fort_actual_status = fort_scope_register({owner.context}, {number}_c_int64_t, &",
+                      f"1_c_int64_t, fort_actual_layout, 0_c_int, {handle})", "endif"]
         lines += ["if (fort_actual_status /= FORT_SCOPE_OK) then", *owner.close(), "endif", "endif"]
-        text = text.replace("!" + key, "\n".join([block + ": block", *imports, *spec, *lines, "end block " + block]))
+        elements = getattr(owner, "original_scalar_element_reservations", {}).get(key, ())
+        if elements:
+            from compiler.scopes.combined_team import _check_generated_names, _narrow_runtime_imports
+
+            _narrow_runtime_imports(imports, spec, lines)
+            _check_generated_names(tuple(element.actual for element in elements), spec, imports, lines, block)
+        replacement = [block + ": block", *imports, *spec, *lines, "end block " + block]
+        if elements:
+            replacement = fortran_lines(replacement)
+        text = text.replace("!" + key, "\n".join(replacement))
     return text

@@ -490,7 +490,7 @@ def test_indexed_actual_keeps_its_source_position_between_shared_scopes(tmp_path
     prefix = "array-element/section actual requires in-place mapping and coherence: "
     assert boundary["reason"].partition(": ")[0] in {
         prefix.removesuffix(": "), "array-element actual requires scalar payload coherence"}
-    assert boundary["reason"].partition(": ")[2].lower().replace(" ", "") == actual
+    assert boundary["reason"].rpartition(": ")[2].lower().replace(" ", "") == actual
     assert [scope["calls"] for scope in manifest["scopes"]] == [
         ["original::producer", "original::transform"], ["original::consumer", "original::transform"]]
     replacement = (output / manifest["sources"][str(original)]["replacement"]).read_text()

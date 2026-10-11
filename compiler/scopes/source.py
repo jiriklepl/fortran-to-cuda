@@ -377,6 +377,8 @@ class ScopeBuilder:
                 raise CompilationError("inline numerical call lacks compiler-owned source authority")
             return self.inline.call(node)
         resolved = self.execution_source_call(routine, node)
+        if any(mapping.scalar_element is not None for mapping in resolved.mappings):
+            raise CompilationError("scalar element execution requires its registered original mapped companion")
         procedure, actuals, bindings = resolved.procedure, resolved.actuals, resolved.bindings
         span = getattr(node.item, "fort_original_span", node.item.span)
         self.resolved_calls[(routine.qualified, span)] = {

@@ -89,6 +89,7 @@ class LexicalOwner:
         if parent is None:
             self.members = {self.routine.qualified: self}
             self.active = []
+            self.scalar_element_resources = {}
         self.internal_calls = []
         self.graph = builder.analysis.structure(self.routine.qualified)
         if not self.graph.available:
@@ -174,7 +175,8 @@ class LexicalOwner:
                 previous_host.update(member.canonical(binding).root for operation in unit.scope.native
                                      for binding in operation.host_only_reads.values())
                 previous_managed.update(member.canonical(binding).root for binding in unit.arrays.values())
-        return (host_reads & (managed | previous_managed)) | (managed & previous_host)
+        return ((host_reads & (managed | previous_managed)) | (managed & previous_host)
+                | (managed & self.owner.scalar_element_resources.keys()))
 
     def internal(self, node):
         """Instrument a direct lexical child in place, without copying state.
@@ -837,6 +839,10 @@ class LexicalOwner:
         self.scan(nodes)
         self.active.pop()
         self.validate_plan(nodes)
+        managed = {member.canonical(binding).root for member in self.members.values()
+                   for unit in member.units for binding in unit.arrays.values()}
+        if managed & self.scalar_element_resources.keys():
+            raise CompilationError("scalar element backing storage conflicts with final managed resource inventory")
         self.leaves = {leaf for member in self.members.values() for unit in member.units for leaf in unit.leaves}
         if not self.leaves:
             return False
@@ -892,6 +898,8 @@ class LexicalOwner:
                         for binding in {**unit.arrays, **(unit.host_metadata or {})}.values()]
             declared += [mapping.binding for arrays in getattr(member, "original_actual_registrations", {}).values()
                          for mapping in arrays]
+            declared += [element.binding for elements in
+                         getattr(member, "original_scalar_element_reservations", {}).values() for element in elements]
             for binding in declared:
                 owner, declaration = member.declaration(binding)
                 key = owner.path, _span(declaration)
@@ -953,7 +961,10 @@ class LexicalOwner:
             "resource_bindings": {"schema_version": 1,
                 "identity": "invocation-local canonical registration; matches runtime buffer trace identity",
                 "resources": [{"resource": root, "registration_identity": number,
-                               "descriptor": binding.public()}
+                               "descriptor": binding.public(),
+                               **({"role": "opaque_scalar_element_alias_reservation",
+                                   "managed_payload": False, "definition_authority": False}
+                                  if root in self.scalar_element_resources else {})}
                               for root, (binding, number) in self.resources.items()]},
             "source_authority": {"version": 1, "structured_summary_identity": self.graph.identity},
             "internal_coordinators": [{"procedure": member.routine.qualified,
