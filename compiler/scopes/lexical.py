@@ -185,6 +185,8 @@ class LexicalOwner:
         """
         if hasattr(node, "fort_inline_region"):
             return False
+        if not self.allow_child_continuation():
+            return False
         self.check_host_read_actuals(node)
         from compiler.scopes.native_guard import borrow
         if borrow(self, node):
@@ -256,10 +258,10 @@ class LexicalOwner:
         lines += ["end block"]
         return [f"if ({self.control_guard}) then", *lines, "endif"] if self.control_guard else lines
 
-    def boundary(self, nodes, reason):
+    def boundary(self, nodes, reason, *, force_unconditional=False):
         first, last = statement_span(nodes[0])[0], statement_span(nodes[-1])[1]
         reached_guard = None
-        if len(nodes) == 1 and _kind(nodes[0]) == "If_Stmt":
+        if not force_unconditional and len(nodes) == 1 and _kind(nodes[0]) == "If_Stmt":
             try:
                 condition = condition_fragment(self.builder, nodes[0])
                 if not condition.effects:
@@ -276,6 +278,17 @@ class LexicalOwner:
         else:
             replacement = "\n".join(fortran_lines(self.close(reason=reason, span=(first, last)))) + "\n" + self.original(nodes)
         self.patches.append((first, last, replacement))
+
+    def planned_source(self, nodes):
+        """A registered reached-owner plan may retain this original source."""
+        return False
+
+    def validate_plan(self, nodes):
+        """Validate a staged scan before any owner/unit source is emitted."""
+
+    def allow_child_continuation(self):
+        """A conditional owner needs separate mapped child-plan authority."""
+        return True
 
     def admit(self, nodes, *, source_guard=None, native_source=None, boundary_nodes=None, condition_only=False):
         self.refresh()
@@ -348,7 +361,7 @@ class LexicalOwner:
                 error = CompilationError(str(error) + "; reached original-team split: " + joined_rejection)
             if condition_only:
                 raise
-            if source_guard is None and len(nodes) == 1 and _kind(nodes[0]) == "Call_Stmt":
+            if source_guard is None and len(nodes) == 1 and _kind(nodes[0]) == "Call_Stmt" and self.allow_child_continuation():
                 try:
                     self.check_host_read_actuals(nodes[0])
                     from compiler.scopes.module_owner import borrow_module
@@ -356,6 +369,8 @@ class LexicalOwner:
                         return
                 except CompilationError as companion_error:
                     error = CompilationError(str(error) + "; original-body continuation: " + str(companion_error))
+            elif len(nodes) == 1 and _kind(nodes[0]) == "Call_Stmt" and not self.allow_child_continuation():
+                error = CompilationError(str(error) + "; separate mapped child closure plan unavailable; close at original caller")
             self.boundary(tuple(boundary_nodes or nodes), str(error))
 
     def scan(self, nodes, depth=0):
@@ -364,6 +379,8 @@ class LexicalOwner:
             return
         for group in self.builder.inline.grouped_nodes(nodes):
             self.refresh()
+            if self.planned_source(group if isinstance(group, tuple) else (group,)):
+                continue
             if isinstance(group, tuple):
                 self.admit(group)
                 continue
@@ -400,7 +417,7 @@ class LexicalOwner:
                             try:
                                 call = self.builder.execution_source_call(self.routine, group)
                                 child = self.builder.analysis.routines[call.procedure]
-                                if (child.source_kind == "module" and any(_kind(item) == "Return_Stmt"
+                                if (self.allow_child_continuation() and child.source_kind == "module" and any(_kind(item) == "Return_Stmt"
                                         for item in walk(child.execution))):
                                     from compiler.scopes.module_owner import borrow_module
                                     if borrow_module(self, group):
@@ -770,6 +787,7 @@ class LexicalOwner:
         self.active.append(self.routine.qualified)
         self.scan(nodes)
         self.active.pop()
+        self.validate_plan(nodes)
         self.leaves = {leaf for member in self.members.values() for unit in member.units for leaf in unit.leaves}
         if not self.leaves:
             return False

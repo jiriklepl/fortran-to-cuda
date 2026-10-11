@@ -1599,7 +1599,7 @@ joined `PARALLEL DO` groups with supported scalar private/reduction clauses;
 the native compiler executes every original reduction. No reduction lowering,
 reassociation or active-owner coherence is authorized.
 
-`prove_reached_window` version 4 transfers separately supplied entry facts through
+`prove_reached_window` version 5 transfers separately supplied entry facts through
 these prefix and descriptor proofs to an exact contiguous window, at top level
 or in the first traversal of one top-level serial counted loop. Branches meet
 conservatively and definitions retain original ordering. Hidden read-only native
@@ -1618,6 +1618,20 @@ before activation, deeper or conditional activation, direct OpenMP cuts, unknown
 local allocation ownership and prefix allocation replacement remain
 limitations. No address/shape freshness or owner reopening is inferred.
 
+The compiler's `plan_reached_window` uses the same transfer to identify exact
+close-before-original operations within a selected window. It preserves the
+complete prefix requirement and ordinary complete-window proof API. Supported
+branch paths may keep ownership while another path publishes and closes before
+an unsupported call or allocation change. Closure is absorbing: that path
+executes its original native suffix once, without descriptor registration,
+planning queries or reopening. Return coverage after a possible close is
+explicitly unknown; separately reported active-path coverage is conditional and
+cannot establish an unconditional child definition summary. Failed speculative
+units discard their demands while preserving consumed analysis work. Source
+authority, IEEE checks and aggregate analysis budgets remain independent gates.
+Incomplete children close at their original caller; borrowing a child's own
+conditional plan still requires separate actual-argument and descriptor proofs.
+
 The internal `ReachedWindowOwner` emitter consumes an exact registered window
 proof together with the same independently admitted capture document. It keeps
 the original native prefix and excluded tail in place, declares control at
@@ -1634,8 +1648,10 @@ descriptor stability for original allocatable formals, or explicit selected-wind
 module captures, triggers compiler-owned window discovery before inline
 preparation. It considers at most four adjacent
 original units at entry or inside one top-level counted loop, with at most 16
-attempts. A selected window must admit two numerical invocations without an
-internal ownership-ending operation. Failed attempts run in isolated generation
+attempts. A selected window must admit two numerical invocations. Discovery
+version 3 also consumes planned closures, so an unsupported branch can finish
+ownership without rejecting a supported sibling. Staged emission must match the
+exact original close points before adoption. Failed attempts run in isolated generation
 transactions: source objects and registered proof identities remain original,
 while rejected artifacts, variants, coordinators, edits and analysis caches do
 not leak into existing fallback generation. The manifest's additive

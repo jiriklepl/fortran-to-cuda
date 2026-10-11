@@ -9,12 +9,12 @@ and a separate registered descriptor proof; local allocations remain native.
 
 from __future__ import annotations
 
-from compiler.frontend.reached_windows import prove_reached_window
+from compiler.frontend.reached_windows import plan_reached_window
 from compiler.ir import CompilationError
 from compiler.scopes.generation_transaction import GenerationTransaction
 from compiler.scopes.reached_owner import ReachedWindowOwner
 
-DISCOVERY_VERSION = 2
+DISCOVERY_VERSION = 3
 MAX_ADJACENT_UNITS = 4
 MAX_ATTEMPTS = 16
 
@@ -108,22 +108,22 @@ def discover_reached_window(builder):
         try:
             with GenerationTransaction(builder) as transaction:
                 candidate = transaction.builder
-                proof = prove_reached_window(candidate.analysis, candidate.entry.qualified,
-                                             originals, tuple(roots), candidate.facts)
+                proof = plan_reached_window(candidate.analysis, candidate.entry.qualified,
+                                            originals, tuple(roots), candidate.facts)
                 owner = ReachedWindowOwner(candidate, proof, originals)
                 if not owner.run():
                     raise CompilationError("selected source window has no admitted numerical implementation")
                 calls = _numerical_calls(owner)
                 if calls < 2:
                     raise CompilationError("selected source window needs two admitted numerical invocations")
-                if any(member.boundaries for member in owner.members.values()):
-                    raise CompilationError("selected source window contains an ownership-ending reached operation")
+                proof = owner.window_proof
                 scope = owner.builder.scopes[-1]
                 if scope.get("automatic_preflight", {}).get("selection") == "native":
                     raise CompilationError("selected window has no available automatic GPU alternative: "
                                            + scope["automatic_preflight"]["reason"])
                 attempt.update({"accepted": True, "proof_identity": proof.identity,
-                                "numerical_invocations": calls})
+                                "numerical_invocations": calls,
+                                "planned_closures": proof.public()["planned_closures"]})
                 scope["reached_window"]["automatic_discovery"] = True
                 transaction.adopt(owner.builder)
         except CompilationError as error:

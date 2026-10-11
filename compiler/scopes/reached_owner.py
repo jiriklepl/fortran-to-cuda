@@ -8,7 +8,7 @@ tail stay in their original lexical owner.
 
 from __future__ import annotations
 
-from compiler.frontend.reached_windows import ReachedWindowProof
+from compiler.frontend.reached_windows import ReachedWindowProof, plan_reached_window
 from compiler.frontend.source_effects import _children, _part
 from compiler.ir import CompilationError
 from compiler.scopes.lexical import LexicalOwner
@@ -27,12 +27,87 @@ class ReachedWindowOwner(LexicalOwner):
             raise CompilationError("reached window emission requires exact original statements")
         proof.validate(builder.analysis, builder.entry.qualified, original_selection)
         self.window_proof = proof
+        self.control_source_proof_identity = proof.identity
         self.window_originals = original_selection
         proxy = builder.bind_reached_window(proof, original_selection)
         super().__init__(proxy)
         self.spent = _name("fort_window_spent_", proof.identity)
         self.trace_owner = source_id(proxy, "owner", lifetime="one-shot reached window",
                                      reached_window_proof=proof.identity)
+
+    def allow_child_continuation(self):
+        return not self.window_proof.public().get("planned_closures", {}).get("enabled")
+
+    def planned_source(self, nodes):
+        planned = self.window_proof.public().get("planned_closures", {})
+        if not planned.get("enabled") or all(type(node).__name__ == "Comment" for node in nodes):
+            return False
+        originals = self.builder.inline.original_selection(tuple(nodes))
+        graph, selected = self.builder.analysis._selected_source(self.routine.qualified, originals)
+        cuts = {point["node_id"]: point for point in planned["close_points"]}
+        if len(selected) == 1 and selected[0] in cuts:
+            self.boundary(tuple(nodes), cuts[selected[0]]["reason"], force_unconditional=True)
+            return True
+        active = set(planned["active_node_ids"])
+        pending, descendants = list(selected), set()
+        while pending:
+            identity = pending.pop()
+            if identity in descendants:
+                continue
+            descendants.add(identity)
+            node = graph.nodes[identity]
+            pending.extend(node.children)
+            for condition, body in node.alternatives:
+                pending.extend((body,) if condition is None else (condition, body))
+        # All paths arriving here have closed. Leave the original native source
+        # untouched, rather than even constructing its protected-descriptor query.
+        return not bool(descendants & active)
+
+    def boundary(self, nodes, reason, *, force_unconditional=False):
+        originals = self.builder.inline.original_selection(tuple(nodes))
+        _graph, identities = self.builder.analysis._selected_source(self.routine.qualified, originals)
+        super().boundary(nodes, reason, force_unconditional=force_unconditional)
+        self.boundaries[-1]["original_node_ids"] = list(identities)
+
+    def validate_plan(self, nodes):
+        planned = self.window_proof.public().get("planned_closures", {})
+        if not planned.get("enabled"):
+            return
+        # Child companions cannot borrow a parent's conditional descriptor
+        # plan. A separately mapped plan is still an independent requirement.
+        if any(member.boundaries or member.units for member in self.members.values() if member is not self):
+            raise CompilationError("planned reached child continuation requires separate mapped closure authority; "
+                                   "close at its original caller instead")
+        graph = self.builder.analysis.structure(self.routine.qualified)
+        known = {point["node_id"] for point in planned["close_points"]}
+        extra = []
+        for boundary in self.boundaries:
+            identities = tuple(boundary["original_node_ids"])
+            if len(identities) != 1:
+                raise CompilationError("planned reached closure cannot cut a partial original joined construct")
+            if identities[0] not in known:
+                extra.append((graph.source_nodes(identities[0]), boundary["reason"]))
+        if extra:
+            forced = (*self.window_proof._planned_close_before, *extra)
+            proof = plan_reached_window(self.builder.analysis, self.routine.qualified, self.window_originals,
+                                        self.window_proof._roots, self.builder.facts, close_before=forced)
+            self.window_proof = proof
+            self.builder._reached_window_binding = proof, self.window_originals
+            planned = proof.public()["planned_closures"]
+        cuts = {point["node_id"] for point in planned["close_points"]}
+        actual = {identity for boundary in self.boundaries for identity in boundary["original_node_ids"]}
+        if actual != cuts:
+            raise CompilationError("planned reached close points differ from the exact staged original emission")
+        retained = []
+        active = set(planned["active_node_ids"])
+        for unit in self.units:
+            originals = self.builder.inline.original_selection(unit.nodes)
+            _graph, identities = self.builder.analysis._selected_source(self.routine.qualified, originals)
+            if set(identities) <= active:
+                retained.append(unit)
+            elif set(identities) & active:
+                raise CompilationError("planned reached numerical unit crosses an original close point")
+        self.units = retained
 
     def _validate_selection(self, nodes):
         self.builder.validate_reached_window()
@@ -88,6 +163,8 @@ class ReachedWindowOwner(LexicalOwner):
                 scope["reached_window"] = {
                     "schema_version": 1, "proof_identity": self.window_proof.identity,
                     "source_proof_version": public["schema_version"],
+                    "control_source_proof_identity": self.control_source_proof_identity,
+                    "validated_emission_proof_identity": self.window_proof.identity,
                     "selected_node_ids": public["selected_node_ids"],
                     "prefix_node_ids": public["prefix_node_ids"],
                     "first_traversal_controls": public["first_traversal_controls"],
@@ -97,6 +174,7 @@ class ReachedWindowOwner(LexicalOwner):
                     "mandatory_close": public["mandatory_close"],
                     "managed_resources": [state["resource"] for state in public["states"]],
                     "definition_proof_identities": public["native_definition_proof_identities"],
+                    "planned_closures": public["planned_closures"],
                     "defined_coverage": [{"resource": state["resource"],
                         "on_activation": state["initialized"], "on_return": state["coverage_on_return"],
                         "return_sections": state["defined_sections_on_return"],

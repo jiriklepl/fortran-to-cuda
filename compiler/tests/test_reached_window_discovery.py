@@ -32,8 +32,11 @@ def test_public_reached_path_discovers_window_and_keeps_original_prefix_and_tail
     outputs, report = builder.run()
     discovery = report["reached_window_discovery"]
     assert discovery["selected"]
-    assert len(discovery["attempts"]) == 3
-    assert [attempt["accepted"] for attempt in discovery["attempts"]] == [False, False, True]
+    assert len(discovery["attempts"]) == 1
+    assert discovery["attempts"][0]["accepted"]
+    cut, = discovery["attempts"][0]["planned_closures"]["close_points"]
+    assert cut["original_source_kind"] == "Call_Stmt"
+    assert "move_alloc" in str(builder.analysis.structure(ENTRY).source_nodes(cut["node_id"])[0]).lower()
     assert discovery["attempts"][-1]["numerical_invocations"] == 2
     scope, = report["scopes"]
     assert scope["reached_window"]["automatic_discovery"]
