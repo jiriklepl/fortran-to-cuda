@@ -1,10 +1,10 @@
 """Reached mixed teams preserve original synchronization and native entries."""
 
-from hashlib import sha256
+import os
 import re
 import shutil
 import subprocess
-import os
+from hashlib import sha256
 
 import pytest
 
@@ -12,7 +12,6 @@ from compiler.driver.options import CompilerOptions
 from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT
-
 
 PRODUCER = '''!$omp do
 do i=-2,n-3
@@ -129,6 +128,10 @@ def test_mixed_team_retains_original_work_once_and_reports_separate_authority(tm
     assert team['schema_version'] == 1
     assert team['completion']['retains_original_team_and_directives']
     assert len(team['numerical_units']) == 2
+    decline, = report['lexical_owner_attempt']['numerical_team_declines']
+    assert decline['route'] == 'whole_numerical_team'
+    assert 'array section requires bounded constant cardinality' in decline['reason']
+    assert decline['continuation'].startswith('proved mixed original team;')
     assert all(not unit['completion']['native_effects_authority']
                for unit in team['numerical_units'])
     native = native_operation_at(operations, SOURCE, 'b(i)=b(i)+sum(a)')
@@ -144,8 +147,10 @@ def test_mixed_team_retains_original_work_once_and_reports_separate_authority(tm
         assert text.count(statement) == 1
     assert text.count('subroutine step(a,b,out,n,flag)') == 1
     assert 'run_team' in text
-    assert '!$omp master' in text and '!$omp barrier' in text
-    assert 'fort_scope_host_begin' in text and 'fort_scope_host_end' in text
+    assert '!$omp master' in text
+    assert '!$omp barrier' in text
+    assert 'fort_scope_host_begin' in text
+    assert 'fort_scope_host_end' in text
 
 
 def test_team_cuda_entries_ship_their_runtime_headers_without_root_include_paths(tmp_path):

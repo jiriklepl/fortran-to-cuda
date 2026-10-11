@@ -1165,12 +1165,15 @@ class SourceEffects:
         if _closure is None:
             self.inputs.verify()
             syntax = self._source_syntax.checkpoint()
+            # Authenticate containing modules first so execution/function
+            # checks below reuse this demand's descendant comparisons.
+            intact_original = self._original_syntax_unchanged(syntax)
             entry_authority = self._summary_authority(_syntax=syntax)
             authority = _canonical(entry_authority)
             # Share only intact original syntax during this synchronous call.
             # In-place private projections retain their existing fresh checks;
             # a copied projection can still share the unchanged original AST.
-            syntax = syntax if self._original_syntax_unchanged(syntax) else None
+            syntax = syntax if intact_original else None
             # Freeze both values before any recursive work: authority documents
             # contain mutable contracts and capture authorizations. Reuse is
             # local to this demand, with fresh complete validation before store.
@@ -1181,6 +1184,14 @@ class SourceEffects:
                 self._closure_authority = authority
             closure = self._closures.get(requested)
             if closure is not None:
+                if syntax is not None:
+                    # Authority construction may be instrumented. Recheck
+                    # before publishing a local hit after priming its memo.
+                    self.inputs.verify()
+                    final_syntax = self._source_syntax.checkpoint()
+                    if (not self._original_syntax_unchanged(final_syntax)
+                            or _canonical(self._summary_authority(_syntax=final_syntax)) != authority):
+                        raise CompilationError("source authority changed during summary demand")
                 self.operation_count = closure.operations
                 self.summaries.update(closure.summaries)
                 return deepcopy(closure.summaries[requested])

@@ -37,7 +37,7 @@ def analysis(tmp_path, monkeypatch):
     return path, SourceEffects([path])
 
 
-def test_recursive_summary_has_fresh_entry_exit_and_one_fresh_local_cache_check(analysis, monkeypatch):
+def test_recursive_and_cached_summaries_have_fresh_entry_and_exit_checks(analysis, monkeypatch):
     _path, subject = analysis
     original_checkpoint = SourceSyntaxSnapshot.checkpoint
     checkpoints = []
@@ -59,9 +59,8 @@ def test_recursive_summary_has_fresh_entry_exit_and_one_fresh_local_cache_check(
 
     cached = subject.summarize(ENTRY)
     assert cached == summary
-    assert len(checkpoints) == 3
-    assert checkpoints[2] is not checkpoints[0]
-    assert checkpoints[2] is not checkpoints[1]
+    assert len(checkpoints) == 4
+    assert len({id(checkpoint) for checkpoint in checkpoints}) == 4
 
 
 def test_next_call_recomputes_in_place_private_projection_and_restores_source_cache(analysis):
@@ -222,3 +221,67 @@ def test_imported_closure_rechecks_authority_before_adoption(analysis, monkeypat
 
     subject.contracts["opaque"]["identity"] = "original-contract"
     assert source_effects._canonical(subject.summarize(ENTRY)) == source_effects._canonical(expected)
+
+
+def test_summary_checks_whole_module_before_overlapping_routine_subtrees(analysis, monkeypatch):
+    _path, subject = analysis
+    module = subject.modules["closure_source"].node
+    original_layout = SourceSyntaxSnapshot._layout
+    layouts = []
+
+    def layout(snapshot, node):
+        if snapshot is subject._source_syntax:
+            layouts.append(node)
+        return original_layout(snapshot, node)
+
+    monkeypatch.setattr(SourceSyntaxSnapshot, "_layout", layout)
+    original = subject.summarize(ENTRY)
+    assert original["complete"], original["reasons"]
+    assert len(layouts) == 2
+    assert all(node is module for node in layouts)
+
+    assert subject.summarize(ENTRY) == original
+    assert len(layouts) == 4
+    assert all(node is module for node in layouts)
+
+    statement, = walk(subject.routines[CHILD].execution, F.Assignment_Stmt)
+    expression = statement.items[2]
+    items = expression.items
+    expression.items = (items[0], "-", items[2])
+    changed = subject.summarize(ENTRY)
+    assert changed["summary_role"] == "private_projection"
+    assert changed["summary_identity"] != original["summary_identity"]
+    with pytest.raises(CompilationError, match="source.*authority"):
+        subject.structure(ENTRY)
+
+
+@pytest.mark.parametrize("cached", [False, True])
+def test_authority_construction_mutation_cannot_publish_after_module_memo(analysis, monkeypatch, cached):
+    _path, subject = analysis
+    if cached:
+        subject.summarize(ENTRY)
+    stores = subject._summary_cache.stats["stores"]
+    statement, = walk(subject.routines[CHILD].execution, F.Assignment_Stmt)
+    expression = statement.items[2]
+    items = expression.items
+    original_authority = SourceEffects._summary_authority
+    changed = False
+
+    def authority(current, *, _syntax=None):
+        nonlocal changed
+        document = original_authority(current, _syntax=_syntax)
+        if current is subject and not changed:
+            changed = True
+            expression.items = (items[0], "-", items[2])
+        return document
+
+    monkeypatch.setattr(SourceEffects, "_summary_authority", authority)
+    with pytest.raises(CompilationError, match="source authority changed during summary demand"):
+        subject.summarize(ENTRY)
+    assert changed
+    assert subject._summary_cache.stats["stores"] == stores
+
+    expression.items = items
+    restored = subject.summarize(ENTRY)
+    assert restored["complete"], restored["reasons"]
+    assert restored["summary_role"] == "source"

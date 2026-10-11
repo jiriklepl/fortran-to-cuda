@@ -6,7 +6,7 @@ publishes and closes that context before the unchanged source operation runs.
 No synthetic array dummy remains associated across a native escape.
 """
 
-from copy import copy
+from copy import copy, deepcopy
 from dataclasses import dataclass
 
 from fparser.two.utils import walk
@@ -61,6 +61,51 @@ def immutable_numerical_unit(scope):
             and fallback.kind == "guarded original numerical fallback")
 
 
+def lexical_attempt_diagnostics(builder, owner, *, outcome, scope_count_before, inline_before,
+                                finalize, error=None):
+    """Snapshot existing planning diagnostics without issuing source authority."""
+    routine = builder.entry
+    members = tuple(owner.members.values()) if owner is not None else ()
+    limit = builder.analysis.operation_limit
+    boundaries, numerical_team_declines, member_records = [], [], []
+    for member in members[:builder.analysis.procedure_limit]:
+        path = str(member.routine.scope.path)
+        provenance = {"procedure": member.routine.qualified, "source": path,
+                      "source_sha256": builder.analysis.sources.get(path)}
+        member_records.append({**provenance, "unit_count": len(member.units),
+                               "boundary_count": len(member.boundaries),
+                               "numerical_team_decline_count": member.numerical_team_decline_count,
+                               "inline_preparation": {"attempts": member.builder.inline.attempts,
+                                                      "operations": member.builder.inline.operations}})
+        boundaries.extend({**deepcopy(row), **provenance}
+                          for row in member.boundaries[:max(0, limit - len(boundaries))])
+        numerical_team_declines.extend({**deepcopy(row), **provenance}
+            for row in member.numerical_team_declines[:max(0, limit - len(numerical_team_declines))])
+    total = sum(len(member.boundaries) for member in members)
+    decline_total = sum(member.numerical_team_decline_count for member in members)
+    scopes = builder.scopes[scope_count_before:]
+    admitted = outcome == "accepted" and any(scope.get("owner_variant") is not None for scope in scopes)
+    return {"schema_version": 1, "procedure": routine.qualified, "source": str(routine.scope.path),
+            "source_sha256": builder.analysis.sources.get(str(routine.scope.path)),
+            "outcome": outcome, "planning_succeeded": outcome in {"accepted", "successful_native"},
+            "admitted": admitted, "compiler_source_owner_admitted": admitted,
+            "source_scope_count_delta": len(scopes), "finalize_requested": finalize,
+            "artifacts_published": finalize and outcome in {"accepted", "successful_native"},
+            "execution": "source planning only; no application or GPU execution",
+            "error": str(error) if error is not None else None,
+            "members": member_records, "member_count": len(members),
+            "member_limit": builder.analysis.procedure_limit,
+            "members_truncated": len(member_records) < len(members),
+            "boundaries": boundaries, "boundary_count": total, "boundary_limit": limit,
+            "boundaries_truncated": len(boundaries) < total,
+            "numerical_team_declines": numerical_team_declines,
+            "numerical_team_decline_count": decline_total, "numerical_team_decline_limit": limit,
+            "numerical_team_declines_truncated": len(numerical_team_declines) < decline_total,
+            "inline_preparation": {"before": inline_before,
+                                   "after": {"attempts": builder.inline.attempts,
+                                             "operations": builder.inline.operations}}}
+
+
 @dataclass
 class Unit:
     nodes: tuple
@@ -104,6 +149,7 @@ class LexicalOwner:
         self.control_guard = parent.control_guard if parent else None
         self.forwarded_handles = parent.forwarded_handles if parent else set()
         self.units, self.boundaries, self.patches = [], [], []
+        self.numerical_team_declines, self.numerical_team_decline_count = [], 0
         self.counted_controls = []
         self.lines = self.routine.scope.path.read_text().splitlines(keepends=True)
         check_structured_entry(self.routine)
@@ -296,10 +342,20 @@ class LexicalOwner:
         """A registered reached plan may borrow this exact original child."""
         return False
 
+    def _retain_numerical_team_declines(self, nodes, rejections, scope):
+        """Retain rejected alternatives separately from the admitted route."""
+        for route, reason in rejections:
+            self.numerical_team_decline_count += 1
+            if len(self.numerical_team_declines) < self.builder.analysis.operation_limit:
+                first, last = statement_span(nodes[0])[0], statement_span(nodes[-1])[1]
+                continuation = "proved mixed original team" if scope.calls else "proved original native operation"
+                self.numerical_team_declines.append({"first_line": first, "last_line": last, "reason": reason,
+                    "route": route, "continuation": continuation + "; no numerical authority from the declined route"})
+
     def admit(self, nodes, *, source_guard=None, native_source=None, boundary_nodes=None, condition_only=False):
         self.refresh()
         before = self.owner.builder.scope_checkpoint()
-        joined_rejection = None
+        joined_rejections = []
         try:
             if len(nodes) == 1 and _kind(nodes[0]) == "Call_Stmt":
                 self.check_host_read_actuals(nodes[0])
@@ -307,15 +363,24 @@ class LexicalOwner:
             if len(nodes) > 1 and not condition_only:
                 from compiler.scopes.combined_team import CombinedNumericalTeam, is_combined_group
                 from compiler.scopes.joined_team import JoinedTeam
-                try:
-                    scope = (CombinedNumericalTeam(self.builder, nodes) if is_combined_group(self.builder, nodes)
-                             else JoinedTeam(self.builder, nodes, native_host_reads=True))
-                except CompilationError as error:
-                    # A joined native group can remain coherent without cuts.
-                    # Unsupported participation never grants numerical authority.
-                    joined_rejection = str(error)
-                    self.owner.builder.restore_scope_checkpoint(before)
-                    self.refresh()
+                if is_combined_group(self.builder, nodes):
+                    try:
+                        scope = CombinedNumericalTeam(self.builder, nodes)
+                    except CompilationError as error:
+                        joined_rejections.append(("whole_numerical_team", str(error)))
+                        self.owner.builder.restore_scope_checkpoint(before)
+                        self.refresh()
+                        before = self.owner.builder.scope_checkpoint()
+                if scope is None:
+                    try:
+                        # Unsupported whole-group numerics can still contain
+                        # supported workers and proved original native units.
+                        scope = JoinedTeam(self.builder, nodes, native_host_reads=True)
+                    except CompilationError as error:
+                        joined_rejections.append(("mixed_joined_team", str(error)))
+                        self.owner.builder.restore_scope_checkpoint(before)
+                        self.refresh()
+                        before = self.owner.builder.scope_checkpoint()
             if scope is None:
                 scope = StructuredScope(self.builder, nodes, condition_only=condition_only,
                                         native_metadata=True, lexical_native=True, native_host_reads=True)
@@ -326,6 +391,7 @@ class LexicalOwner:
                 # Source completion/effects were authenticated above. There is
                 # no managed payload to publish, register or plan, and no reason
                 # to associate an absent optional with a synthetic dummy.
+                self._retain_numerical_team_declines(nodes, joined_rejections, scope)
                 return
             arrays, scalars, written = self.builder.owner_inputs(scope.calls, reached_definitions=True)
             scope.inputs(arrays, scalars, written)
@@ -355,6 +421,7 @@ class LexicalOwner:
             definitions = summarize(scope)
             leaves = {leaf for call in scope.calls for leaf in self.builder.closure(call.procedure)[0]}
             if not arrays and not leaves and not metadata and not any(operation.native_environment for operation in scope.native):
+                self._retain_numerical_team_declines(nodes, joined_rejections, scope)
                 return  # Original scalar operations need no runtime context.
             self.builder.scope_budget(scope.calls)
             unit = Unit(tuple(nodes), scope, arrays, scalars, written, leaves, definitions,
@@ -362,11 +429,13 @@ class LexicalOwner:
             for binding in {**arrays, **metadata}.values():
                 self.add_resource(binding)
             self.units.append(unit)
+            self._retain_numerical_team_declines(nodes, joined_rejections, scope)
         except CompilationError as error:
             self.owner.builder.restore_scope_checkpoint(before)
             self.refresh()
-            if joined_rejection is not None:
-                error = CompilationError(str(error) + "; reached original-team split: " + joined_rejection)
+            if joined_rejections:
+                error = CompilationError(str(error) + "; reached original-team split: "
+                                         + "; ".join(route + ": " + reason for route, reason in joined_rejections))
             if condition_only:
                 raise
             if source_guard is None and len(nodes) == 1 and _kind(nodes[0]) == "Call_Stmt" and self.allow_child_continuation():

@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
+from compiler.numerical_contract import cuda_compile_options
 from compiler.tests.test_joined_team_source import teams
 from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
 from compiler.tests.test_source_scopes import FACT, ROOT, generate, run
-
 
 TEAM = '''!$omp parallel private(i,j) shared(a,b,out,n,m,flag) default(none)
 !$omp do
@@ -241,9 +241,13 @@ def joined_binaries(tmp_path_factory):
         '__pycache__', '.*cache', 'CODE_MAP.md', 'MEMORY_MODEL_PLAN.md'))
     architecture = actual_profile(directory, nvcc, host)['hardware']['compute_capability'].replace('.', '')
     cuda_library = Path(nvcc).resolve().parent.parent/'lib64'
-    cuda_flags = [nvcc, '-O2', '-std=c++17', '-ccbin', host, '-arch=sm_'+architecture, '-Xcompiler=-fopenmp']
+    cuda_flags = [nvcc, '-O2', '-std=c++17', '-ccbin', host, '-arch=sm_'+architecture, '-Xcompiler=-fopenmp',
+                  *cuda_compile_options()]
     fortran_flags = [fortran, '-O3', '-cpp', '-std=f2018', '-fopenmp', '-fcheck=all,array-temps',
-                     '-finit-logical=true', '-ffree-line-length-none']
+                     '-finit-logical=true', '-ffree-line-length-none', '-ffp-contract=off']
+    (directory/'build-flags.json').write_text(json.dumps({
+        'schema_version': 1, 'cuda_flags': cuda_flags, 'fortran_flags': fortran_flags,
+        'architecture': architecture}, indent=2)+'\n')
     cache, reuse, binaries = {}, [], {}
     for label in ('plain', 'zero_budget', 'module_child', *INDIRECT_CASES, 'many_segments'):
         case = directory/label
@@ -350,7 +354,8 @@ def test_mixed_original_team_preserves_fields_and_only_mirrors_boundary_sections
     validations = [json.loads(line.removeprefix('FORT_SCOPED evidence '))
                    for line in result.stderr.splitlines() if line.startswith('FORT_SCOPED evidence ')]
     definitions = [row for row in validations if row['event'] == 'definition_validation']
-    assert definitions and all(row['status'] == 0 for row in definitions)
+    assert definitions
+    assert all(row['status'] == 0 for row in definitions)
     for ordinal, n, m, trace in calls(result.stderr):
         assert trace.count('FORT_SCOPED launch ') == (2 if n else 0)
         # One immutable input upload spans producer and consumer. Only the
@@ -360,7 +365,7 @@ def test_mixed_original_team_preserves_fields_and_only_mirrors_boundary_sections
 
 
 @pytest.mark.cuda
-@pytest.mark.parametrize('label,threads', [('plain', 2), ('zero_budget', 4)])
+@pytest.mark.parametrize(('label', 'threads'), [('plain', 2), ('zero_budget', 4)])
 def test_original_team_mismatch_or_zero_budget_falls_back_once(joined_binaries, label, threads):
     result, _ = execute(joined_binaries, label, threads=threads)
     for _, _, _, trace in calls(result.stderr):
