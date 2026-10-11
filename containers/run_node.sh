@@ -381,6 +381,34 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
     exit 0
 fi
 
+# Pre-bootstrap pipeline dependencies on headnode if needed (headnodes have internet access)
+if [[ "${MODE}" == "elmm" || "${MODE}" == "all" ]]; then
+    if [[ "${DRY_RUN}" -eq 0 ]]; then
+        HEAD_PY=""
+        for p in python3.12 /usr/bin/python3.12 /usr/local/bin/python3.12 python3.13 python3.11 python3; do
+            if command -v "$p" &>/dev/null && "$p" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' &>/dev/null; then
+                HEAD_PY="$(command -v "$p")"
+                break
+            fi
+        done
+        if [[ -n "${HEAD_PY}" ]]; then
+            # Ensure matplotlib and numpy are installed for Python 3.12 in user site (~/.local)
+            if ! "${HEAD_PY}" -c 'import matplotlib, numpy' &>/dev/null; then
+                echo "Installing matplotlib and numpy for ${HEAD_PY} into user site..."
+                "${HEAD_PY}" -m pip install --quiet --user matplotlib numpy 2>/dev/null || true
+            fi
+            # Ensure elmm-pipeline setup is initialized
+            if [[ ! -f "${WORKSPACE_ROOT}/elmm-pipeline/.cache/setup.json" && -d "${WORKSPACE_ROOT}/elmm-pipeline" ]]; then
+                echo ""
+                echo "Pre-bootstrapping ELMM pipeline on headnode (where internet/PyPI is accessible)..."
+                (cd "${WORKSPACE_ROOT}/elmm-pipeline" && "${HEAD_PY}" pipeline.py setup --tools baseline,local --local-compiler "${WORKSPACE_ROOT}") || {
+                    echo "Notice: Headnode pre-bootstrap returned non-zero code. Proceeding to job submission..."
+                }
+            fi
+        fi
+    fi
+fi
+
 # Check if Slurm sbatch is available
 if ! command -v sbatch &>/dev/null; then
     echo "NOTICE: 'sbatch' command was not found on this machine."
