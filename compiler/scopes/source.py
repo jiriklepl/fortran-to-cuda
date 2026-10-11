@@ -1462,7 +1462,8 @@ class ScopeBuilder:
         # A native call must finish its effects before host_end commits them.
         # Memory summaries alone do not prove participation or completion of
         # worksharing, tasks or target operations, including hidden callees.
-        completion = self.analysis.summarize(call.procedure)["native_completion"]
+        summary = self.analysis.summarize(call.procedure)
+        completion = summary["native_completion"]
         if not completion["available"]:
             raise CompilationError("native OpenMP participation and completion require source proof: "
                                    + call.procedure + ": " + completion["reason"])
@@ -1470,15 +1471,17 @@ class ScopeBuilder:
         # a read of values defined later inside that call, or preserve undefined
         # holes in a conservative whole-resource write. Numerical workers have
         # their own physical effects and original-position definition events.
-        for operation in self.analysis.summarize(call.procedure)["operations"]:
+        for operation in summary["operations"]:
             if operation["kind"] == "call":
                 child_definitions = self.native_effects(operation["procedure"])[1]
                 mapping = operation["resource_mapping"]
                 if any(mapping.get(root, root) in actions for root in child_definitions):
                     raise CompilationError("nested native definition changes require original-position hooks")
+        physical = None
         for root in sorted(definitions & actions.keys()):
             kinds = actions[root]
-            physical = self.analysis.native_sections(call.procedure)
+            if physical is None:
+                physical = self.analysis.native_sections(call.procedure)
             exact = next((item for item in physical.resources if item.resource == root), None) if physical.available else None
             partial_overwrite = exact is not None and not exact.reads and exact.writes == exact.overwrites
             if "read" in kinds or ("write" in kinds and root not in overwrites and not partial_overwrite):
