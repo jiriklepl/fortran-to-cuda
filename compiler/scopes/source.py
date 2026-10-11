@@ -225,6 +225,9 @@ class ScopeBuilder:
                         pending.append(condition)
             if not selected or not set(selected) <= covered:
                 raise CompilationError("reached owner summary escapes its original selected window")
+            planned = proof.public().get("planned_closures", {})
+            if planned.get("enabled") and not set(selected) <= set(planned["active_node_ids"]):
+                raise CompilationError("reached owner summary crosses a planned close or closed native path")
             roots = tuple(state["resource"] for state in proof.public()["states"]
                           if state["requires_original_allocation_presence_guard"]
                           and state["resource_kind"] != "original_module_allocatable")

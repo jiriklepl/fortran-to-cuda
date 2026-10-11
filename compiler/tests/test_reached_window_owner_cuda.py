@@ -11,6 +11,7 @@ import pytest
 
 from compiler.numerical_contract import require_numerical_build_contract
 from compiler.tests.test_module_reached_windows import MODULE_BOUNDARY_SOURCE, module_fixture
+from compiler.tests.test_planned_reached_closures import PLANNED_SOURCE, emit_planned_window
 from compiler.tests.test_reached_partial_definitions import PARTIAL_BOUNDARY_SOURCE, partial_fixture
 from compiler.tests.test_reached_window_discovery import discovery_fixture
 from compiler.tests.test_reached_window_owner import SOURCE, emit_window
@@ -43,6 +44,35 @@ close(unit)
 end program
 """
 
+PLANNED_DRIVER = """program verify
+use renamed_stage,only:step,prefix_visits,tail_visits,prefix_total,bad_visits,good_visits,condition_visits
+implicit none
+real(8),allocatable::a(:),b(:)
+integer,parameter::sizes(3)=[0,8,4096],counts(3)=[0,1,3]
+integer::shape,stages,iteration,n,i,unit,path
+open(newunit=unit,file='fields.bin',access='stream',form='unformatted',status='replace')
+do path=0,1
+ do shape=1,size(sizes)
+  n=sizes(shape)
+  do stages=1,size(counts)
+   allocate(a(-7:n+2),b(-7:n+2))
+   do iteration=1,2
+    do i=lbound(a,1),ubound(a,1)
+     a(i)=real(i+16,8)*0.125_8+real(iteration,8)
+    enddo
+    b=-77.0_8
+    call step(a,b,n,counts(stages),path==1)
+    write(unit)prefix_visits,tail_visits,prefix_total,bad_visits,good_visits,condition_visits
+    write(unit)lbound(a),ubound(a),lbound(b),ubound(b),a,b
+   enddo
+   deallocate(a,b)
+  enddo
+ enddo
+enddo
+close(unit)
+end program
+"""
+
 
 @pytest.fixture(scope="module", params=(
     *((name, fallback, 8) for name, fallback in (
@@ -51,6 +81,7 @@ end program
         ("explicit_live_iterator", False))),
     *((name, fallback, precision) for precision in (4, 8) for name, fallback in (
         ("module_partial", False), ("module_partial", True), ("module_partial_boundary", False))),
+    *(("planned", fallback, precision) for precision in (4, 8) for fallback in (False, True)),
 ))
 def window_binaries(tmp_path_factory, request):
     nvcc = shutil.which("nvcc")
@@ -61,7 +92,14 @@ def window_binaries(tmp_path_factory, request):
     directory = tmp_path_factory.mktemp("one_shot_window")
     architecture = actual_profile(directory, nvcc, host)["hardware"]["compute_capability"].replace(".", "")
     emission, resource_fallback, precision = request.param
-    if emission in {"module_partial", "module_partial_boundary"}:
+    if emission == "planned":
+        source = PLANNED_SOURCE
+        if precision == 4:
+            source = source.replace("real(8)", "real(4)").replace("_8", "_4").replace(",8)", ",4)")
+        original, outputs, report, _owner = emit_planned_window(
+            directory, source, device_budget=0 if resource_fallback else None)
+        assert report["scopes"][0]["reached_window"]["planned_closures"]["closed_path_possible"]
+    elif emission in {"module_partial", "module_partial_boundary"}:
         options = {"source": PARTIAL_BOUNDARY_SOURCE} if emission == "module_partial_boundary" else {}
         original, builder = partial_fixture(directory, device_budget=0 if resource_fallback else None,
                                             precision=precision, **options)
@@ -110,7 +148,7 @@ def window_binaries(tmp_path_factory, request):
                                      "numerical_contract": item.get("numerical_contract")})
             objects.append(str(target))
     driver = directory / "driver.f90"
-    driver_text = DRIVER
+    driver_text = PLANNED_DRIVER if emission == "planned" else DRIVER
     if emission.startswith("module_"):
         driver_text = driver_text.replace("tail_visits,prefix_total", "tail_visits,prefix_total,a,b").replace(
             "real(8),allocatable::a(:),b(:)\n", "").replace("call step(a,b,n,counts(stages))",
@@ -136,6 +174,7 @@ def window_binaries(tmp_path_factory, request):
     (directory / "native-fields.bin").write_bytes(expected)
     (directory / "compile-commands.json").write_text(json.dumps(compile_commands, indent=2) + "\n")
     (directory / "build-commands.json").write_text(json.dumps(build_commands, indent=2) + "\n")
+    (directory / "manifest.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     return directory, candidate, expected, report, resource_fallback, emission, precision
 
 
@@ -147,6 +186,8 @@ def test_one_shot_window_matches_complete_native_arrays_and_all_original_visits(
     if disabled:
         env["CUDA_VISIBLE_DEVICES"] = "-1"
     result = run([str(candidate)], cwd=directory, env=env)
+    label = "window-disabled" if disabled else "window-enabled"
+    (directory / (label + ".stderr")).write_text(result.stderr)
     actual = (directory / "fields.bin").read_bytes()
     assert actual == expected
     assert "array temporary" not in result.stderr.lower()
@@ -154,22 +195,27 @@ def test_one_shot_window_matches_complete_native_arrays_and_all_original_visits(
     # Extra original stages still execute once, after mandatory publication and
     # MOVE_ALLOC. Zero-trip enclosing loops never activate the window at all.
     launches = result.stderr.count("FORT_SCOPED launch ")
-    numerical_launches = 8 if emission == "explicit_live_iterator" else 16
+    # Planned closures execute both original paths: two kernels on the good
+    # path, one before publishing/replacing storage on the bad path. The native
+    # suffix must never register or launch, including subsequent backedges.
+    numerical_launches = 24 if emission == "planned" else (8 if emission == "explicit_live_iterator" else 16)
     assert launches == (0 if disabled or resource_fallback else numerical_launches)
     contexts = result.stderr.count("FORT_SCOPED create ")
     # At most one context may be opened at each first reached traversal. A
     # failed pre-execution resource guard cannot retry on later backedges.
-    assert contexts <= 12
+    assert contexts <= (24 if emission == "planned" else 12)
     receipt = {"schema_version": 1, "disabled": disabled, "fields_bytes": len(actual),
                "native_fields_sha256": sha256(expected).hexdigest(),
                "candidate_fields_sha256": sha256(actual).hexdigest(),
                "launches": launches, "contexts_created": contexts, "resource_fallback": resource_fallback,
                "complete_arrays_and_halos_equal": True,
                "original_prefix_and_tail_counters_equal": True,
+               "conditional_native_replacement_and_branch_counters_equal": emission == "planned",
                "reached_window": report["scopes"][0]["reached_window"],
                "compiler_owned_discovery": report["scopes"][0]["reached_window"]["automatic_discovery"],
                "emission": emission,
                "precision_bytes": precision,
+               "runtime_trace_sha256": sha256(result.stderr.encode()).hexdigest(),
                "performance_sample": False}
-    (directory / ("window-disabled.json" if disabled else "window-enabled.json")).write_text(
+    (directory / (label + ".json")).write_text(
         json.dumps(receipt, indent=2, sort_keys=True) + "\n")

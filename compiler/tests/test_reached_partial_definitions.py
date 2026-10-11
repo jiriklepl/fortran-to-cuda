@@ -39,18 +39,29 @@ def test_partial_producer_consumer_is_emitted_without_whole_initialization(tmp_p
     assert report["reached_window_discovery"]["selected"]
     scope, = report["scopes"]
     assert len(scope["gpu_leaves"]) == 2
-    assert not scope["boundaries"]
+    closes_before_swap = source == MODULE_SOURCE
+    if closes_before_swap:
+        boundary, = scope["boundaries"]
+        assert "move_alloc" in boundary["reason"]
+    else:
+        assert not scope["boundaries"]
     proof = builder.validate_reached_window()
     state = proof.capture_state(MODULE_ROOTS[1])
     assert state["initialized"] == "none"
-    assert state["coverage_on_return"] == "sections"
-    assert len(state["defined_sections_on_return"]) == (3 if source == PARTIAL_BOUNDARY_SOURCE else 1)
+    assert state["coverage_on_return"] == ("unknown_after_close" if closes_before_swap else "sections")
+    assert bool(state["defined_sections_on_return"]) is not closes_before_swap
+    # The longer discovered window closes before the allocation exchange;
+    # ordinary complete geometry retains its shorter original contract.
+    complete = prove_reached_window(builder.analysis, ENTRY, selection(builder), MODULE_ROOTS, builder.facts)
+    complete_state = complete.capture_state(MODULE_ROOTS[1])
+    assert complete_state["coverage_on_return"] == "sections"
+    assert len(complete_state["defined_sections_on_return"]) == (3 if source == PARTIAL_BOUNDARY_SOURCE else 1)
     assert proof.public()["native_definition_proof_identities"]
-    assert scope["reached_window"]["source_proof_version"] == 4
+    assert scope["reached_window"]["source_proof_version"] == 5
     public_state = next(item for item in scope["reached_window"]["defined_coverage"]
                         if item["resource"] == MODULE_ROOTS[1])
     assert public_state["on_activation"] == "none"
-    assert public_state["on_return"] == "sections"
+    assert public_state["on_return"] == state["coverage_on_return"]
     assert public_state["return_sections"] == state["defined_sections_on_return"]
     assert builder.facts["captures"][MODULE_ROOTS[1]]["initialized"] == "none"
     assert not builder.analysis.stable_module_allocatables

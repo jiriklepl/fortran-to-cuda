@@ -36,6 +36,14 @@ _INTRINSICS = set(INTRINSICS) | ARRAY_INQUIRIES | MODEL_INQUIRIES | {
 _EXPRESSION_CONTAINERS = {"Actual_Arg_Spec_List", "Section_Subscript_List", "Actual_Arg_Spec", "Parenthesis"}
 
 
+class DescriptorWindowUnsupported(CompilationError):
+    """An unchanged original operation may run only after its owner closes.
+
+    Original-source/token validation and aggregate analysis-budget failures
+    never use this signal. It grants no descriptor or execution authority.
+    """
+
+
 def _kind(node):
     return type(node).__name__
 
@@ -149,7 +157,7 @@ class _Check:
     def prefix_directive(self, routine):
         proof = self.prefix_scopes.get(routine.qualified)
         if proof is None:
-            raise CompilationError("descriptor window original OpenMP storage requires registered whole-closure authority")
+            raise DescriptorWindowUnsupported("descriptor window original OpenMP storage requires registered whole-closure authority")
         proof.validate(self.analysis, proof.procedure)
         public = proof.public()
         self.prefixes[proof.identity] = {
@@ -211,18 +219,18 @@ class _Check:
         if not isinstance(node, (Base, tuple, list)):
             return
         if depth > self.analysis.depth_limit:
-            raise CompilationError("descriptor window expression depth exhausted")
+            raise DescriptorWindowUnsupported("descriptor window expression depth exhausted")
         kind = _kind(node)
         child_depth = depth if isinstance(node, (tuple, list)) or kind in _EXPRESSION_CONTAINERS else depth + 1
         scope = self.analysis.source_scope_for(node, routine.scope)
         if (kind in {"Proc_Component_Ref", "Coindexed_Named_Object"}
                 or kind.startswith("Defined_") and kind.endswith("_Op")):
-            raise CompilationError("descriptor window association/operator effects require separate authority")
+            raise DescriptorWindowUnsupported("descriptor window association/operator effects require separate authority")
         if kind == "Data_Ref":
             access = component_access(self.analysis, scope, node)
             self.fixed_object(access.root_binding)
             if access.binding.dtype not in {"real", "integer", "logical"}:
-                raise CompilationError("descriptor window whole-object effects require separate authority")
+                raise DescriptorWindowUnsupported("descriptor window whole-object effects require separate authority")
             for index in access.indices:
                 self.expression(routine, index, depth + 1)
             return
@@ -232,7 +240,7 @@ class _Check:
         if kind == "Name":
             binding = self.analysis._binding(scope, node)
             if binding is None or binding.attributes & _UNSAFE or binding.dtype.startswith("type("):
-                raise CompilationError("descriptor window original expression storage is unproved: " + str(node))
+                raise DescriptorWindowUnsupported("descriptor window original expression storage is unproved: " + str(node))
             return
         if kind in {"Part_Ref", "Function_Reference", "Intrinsic_Function_Reference", "Structure_Constructor"}:
             name, args = node.items
@@ -257,7 +265,7 @@ class _Check:
                 proofs = [proof for proof in self.analysis._native_functions.values()
                           if proof.procedure == routine.qualified and proof._expression is node]
                 if len(proofs) != 1:
-                    raise CompilationError("descriptor window requires registered original readonly source-function proof")
+                    raise DescriptorWindowUnsupported("descriptor window requires registered original readonly source-function proof")
                 proof = proofs[0].validate(self.analysis, routine.qualified, node,
                                            resolution_tick=self.resolution_tick)
                 self.functions[proof.identity] = proof.public()
@@ -266,7 +274,7 @@ class _Check:
                 return
             if (kind != "Intrinsic_Function_Reference" or binding is not None
                     or self.analysis._unknown_exports(scope) or str(name).lower() not in _INTRINSICS):
-                raise CompilationError("descriptor window unknown function/escape effects: " + str(name))
+                raise DescriptorWindowUnsupported("descriptor window unknown function/escape effects: " + str(name))
             self.expression(routine, args, depth + 1)
             return
         for child in _children(node):
@@ -299,7 +307,7 @@ class _Check:
                     elif role == "loop_header":
                         control = original.items[1]
                         if control is None or control.items[1] is None:
-                            raise CompilationError("descriptor window requires original counted loop control")
+                            raise DescriptorWindowUnsupported("descriptor window requires original counted loop control")
                         self.resolution(routine, control.items[1])
                         self.expression(routine, control.items[1])
                     elif _kind(original) == "Assignment_Stmt":
@@ -308,18 +316,18 @@ class _Check:
                         scope = self.analysis.source_scope_for(original, routine.scope)
                         binding = self.analysis._binding(scope, target) if _kind(target) == "Name" else None
                         if binding is not None and "allocatable" in binding.attributes:
-                            raise CompilationError("descriptor window whole allocatable assignment may replace storage")
+                            raise DescriptorWindowUnsupported("descriptor window whole allocatable assignment may replace storage")
                         self.expression(routine, target)
                         self.expression(routine, value)
                     elif _kind(original) != "Continue_Stmt":
-                        raise CompilationError("descriptor window operation lacks descriptor/escape authority")
+                        raise DescriptorWindowUnsupported("descriptor window operation lacks descriptor/escape authority")
             elif node.kind == "call":
                 self.operations += 1
                 if self.operations > self.analysis.operation_limit:
                     raise CompilationError("descriptor window source operation budget exhausted")
                 originals = graph.source_nodes(identity)
                 if len(originals) != 1 or node.details.get("contract"):
-                    raise CompilationError("descriptor window requires original direct source calls")
+                    raise DescriptorWindowUnsupported("descriptor window requires original direct source calls")
                 call = originals[0]
                 self.resolution(routine, call)
                 scope = self.analysis.source_scope_for(call, routine.scope)
@@ -328,7 +336,7 @@ class _Check:
                     if (mapping.presence != "supplied"
                             or mapping.formal_binding.attributes & _UNSAFE
                             or mapping.binding is not None and mapping.binding.attributes & _UNSAFE):
-                        raise CompilationError("descriptor window call association/escape authority is unavailable")
+                        raise DescriptorWindowUnsupported("descriptor window call association/escape authority is unavailable")
                     if mapping.source_object is not None:
                         self.fixed_object(mapping.formal_binding)
                         self.fixed_object(mapping.binding)
@@ -343,7 +351,7 @@ class _Check:
                               and proof.procedure == routine.qualified
                               and proof._call is originals[0]]
                 if len(candidates) != 1:
-                    raise CompilationError("descriptor window unknown selected storage effects: boundary"
+                    raise DescriptorWindowUnsupported("descriptor window unknown selected storage effects: boundary"
                                            + (": " + node.details["reason"] if node.details.get("reason") else ""))
                 proof = candidates[0].validate(self.join_analysis, routine.qualified, originals[0])
                 self.resolution(routine, originals[0])
@@ -353,7 +361,7 @@ class _Check:
                 self.environments[proof.identity] = {**proof.public(), "descriptor_evidence_only": True,
                                                      "execution_authorized": False}
             else:
-                raise CompilationError("descriptor window unknown selected storage effects: " + node.kind
+                raise DescriptorWindowUnsupported("descriptor window unknown selected storage effects: " + node.kind
                                        + (": " + node.details["reason"] if node.details.get("reason") else ""))
 
     def procedure(self, name):
@@ -386,7 +394,7 @@ class _Check:
             if binding.dtype.startswith("type("):
                 self.fixed_object(binding)
             elif binding.dtype not in {"real", "integer", "logical"} or binding.attributes & {"pointer", "volatile", "asynchronous"}:
-                raise CompilationError("descriptor window child specification effects require separate authority")
+                raise DescriptorWindowUnsupported("descriptor window child specification effects require separate authority")
             states = [proof for proof in self.join_analysis._native_environment_states.values()
                       if isinstance(proof, NativeLocalStateProof) and proof.procedure == name
                       and proof.binding is binding]
@@ -403,9 +411,9 @@ class _Check:
         for argument in routine.arguments:
             binding = routine.scope.bindings.get(argument)
             if binding is None or binding.attributes & _UNSAFE:
-                raise CompilationError("descriptor window child formal storage is unproved")
+                raise DescriptorWindowUnsupported("descriptor window child formal storage is unproved")
             if "allocatable" in binding.attributes and binding.intent not in {"in", "inout"}:
-                raise CompilationError("descriptor window allocatable OUT/unspecified entry may replace storage")
+                raise DescriptorWindowUnsupported("descriptor window allocatable OUT/unspecified entry may replace storage")
         self.active.append(name)
         self.visit(routine, graph, (graph.root_id,))
         self.active.pop()

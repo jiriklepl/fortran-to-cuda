@@ -118,10 +118,26 @@ def test_reached_native_partial_update_retains_same_module_owner(tmp_path, singl
     assert report["reached_window_discovery"]["selected"]
     scope, = report["scopes"]
     assert len(scope["gpu_leaves"]) == 2
-    assert not scope.get("boundaries")
+    boundary, = scope["boundaries"]
+    cut, = scope["reached_window"]["planned_closures"]["close_points"]
+    assert boundary["original_node_ids"] == [cut["node_id"]]
+    original, = builder.analysis.structure(ENTRY).source_nodes(cut["node_id"])
+    assert str(original).lower() == "call move_alloc(a, temporary)"
+    assert cut["original_source_kind"] == "Call_Stmt"
+    producer, correction, consumer = scope["planning_segments"]
+    assert [bool(segment["gpu_leaves"]) for segment in (producer, correction, consumer)] == [True, False, True]
+    assert producer["last_line"] < correction["first_line"]
+    assert correction["last_line"] < consumer["first_line"]
+    assert consumer["last_line"] < boundary["first_line"]
+    assert not scope["reopen_after_boundary"]
     text = outputs[report["sources"][str(path)]["replacement"]]
-    assert "b(0)=b(0)+0.5_8" in "".join(text.lower().split())
-    assert text.count("fort_scope_close(") > 0
+    compact = "".join(text.lower().split())
+    native_edit = compact.index("b(0)=b(0)+0.5_8")
+    replacement = compact.index("callmove_alloc(a,temporary)")
+    close = compact.rindex("fort_scope_close(", 0, replacement)
+    assert compact.index("fort_scope_host_begin(") < native_edit < close < replacement
+    assert text.count("call move_alloc(a,temporary)") == 1
+    assert path.read_text() == source
     assert builder.analysis.stable_module_allocatables == frozenset()
 
 
