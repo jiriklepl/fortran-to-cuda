@@ -231,16 +231,20 @@ def test_partial_or_excluded_close_nodes_are_not_accepted(tmp_path):
                                 close_before=((wrong, "forced test cut"),))
 
 
-def test_unknown_single_line_if_action_closes_before_whole_condition(tmp_path):
+def test_managed_payload_single_line_if_action_closes_before_whole_condition(tmp_path):
     source = PLANNED_SOURCE.replace("if(bad) then\ncall replace_storage(b)\nelse\ncall face_update(b)\nendif",
-                                    "if(bad) call replace_storage(b)")
+                                    "if(any(b>0.0_8)) call replace_storage(b)")
     path, outputs, report, owner = emit_planned_window(tmp_path, source)
     text = outputs[report["sources"][str(path)]["replacement"]]
-    point, = report["scopes"][0]["reached_window"]["planned_closures"]["close_points"]
+    planned = report["scopes"][0]["reached_window"]["planned_closures"]
+    point, = planned["close_points"]
     assert point["original_source_kind"] == "If_Stmt"
-    assert text.count("if(bad) call replace_storage(b)") == 1
-    assert text.index("fort_scope_close(") < text.index("if(bad) call replace_storage(b)")
+    assert "conditional_action" not in point
+    assert not planned["active_path_may_return"]
+    assert text.count("if(any(b>0.0_8)) call replace_storage(b)") == 1
+    assert text.index("fort_scope_close(") < text.index("if(any(b>0.0_8)) call replace_storage(b)")
     assert len(owner.units) == 1
+    assert path.read_text() == source
 
 
 def test_rejected_staged_generation_preserves_original_containers(tmp_path):
@@ -325,13 +329,14 @@ def test_global_descriptor_scan_exhaustion_does_not_become_a_cut(tmp_path, monke
 
 def test_whole_branch_upgrade_discards_descendant_demand_metadata(tmp_path):
     source = PLANNED_SOURCE.replace("if(bad) then\ncall replace_storage(b)\nelse\ncall face_update(b)\nendif",
-                                    "if(bad) call replace_storage(b)")
+                                    "if(any(b>0.0_8)) call replace_storage(b)")
     _path, _builder, proof, _originals = planned_window_fixture(tmp_path, source)
     record = proof.public()
     assert len(record["planned_closures"]["close_points"]) == 1
     assert not record["planned_closures"]["active_path_may_return"]
     assert record["ordered_effect_work"] >= record["ordered_effects"]
     point = record["planned_closures"]["close_points"][0]
+    assert "conditional_action" not in point
     assert point["node_id"] not in record["planned_closures"]["active_node_ids"]
     assert not any("replace_storage" in demand for demand in record["source_demands"])
 

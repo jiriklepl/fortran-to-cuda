@@ -1610,7 +1610,7 @@ joined `PARALLEL DO` groups with supported scalar private/reduction clauses;
 the native compiler executes every original reduction. No reduction lowering,
 reassociation or active-owner coherence is authorized.
 
-`prove_reached_window` version 12 transfers separately supplied entry facts through
+`prove_reached_window` version 13 transfers separately supplied entry facts through
 these prefix and descriptor proofs to an exact contiguous window, at top level
 or in the first traversal of one top-level serial counted loop. Branches meet
 conservatively and definitions retain original ordering. Hidden read-only native
@@ -1656,6 +1656,16 @@ absorbing for that invocation, including `CYCLE`, `EXIT`, `RETURN` and later loo
 eligible branches contribute activation coverage. Source/token and budget
 failures remain hard; incomplete generic native-prefix proofs are not converted
 into support declines.
+
+Active planned owners can likewise retain residency across an original
+single-line `IF` whose unsupported action needs closure. The compiler authenticates
+the complete parent span, condition and sole action. For a supported condition
+with no managed payload reads, it evaluates the condition once and publishes and
+closes only in the true branch, immediately before the original action. The
+false path retains its device state and definitions. Closed paths remain native
+for the rest of the owner and never reopen or replay earlier work. Conditions
+that read managed payloads, unsafe shared source spans and forced whole-parent
+cuts retain conservative closure before the complete original `IF`.
 
 Before expanding a dormant native call's effects, a bounded original-source
 support check identifies native I/O and OpenMP team shapes outside the supported

@@ -8,7 +8,7 @@ tail stay in their original lexical owner.
 
 from __future__ import annotations
 
-from compiler.frontend.reached_windows import ReachedWindowProof, _single_if_action_source, plan_reached_window
+from compiler.frontend.reached_windows import ReachedWindowProof, _hash, _single_if_action_source, plan_reached_window
 from compiler.frontend.source_effects import _children, _part
 from compiler.ir import CompilationError
 from compiler.scopes.lexical import LexicalOwner
@@ -58,9 +58,13 @@ class MappedReachedControl:
         graph, selected = self.builder.analysis._selected_source(self.routine.qualified, originals)
         cuts = {point["node_id"]: point for point in planned["close_points"]}
         if selected and selected[0] in cuts:
-            if tuple(selected) != _close_selection(cuts[selected[0]]):
+            point = cuts[selected[0]]
+            if tuple(selected) != _close_selection(point):
                 raise CompilationError("reached close cuts a partial original joined selection")
-            self.boundary(tuple(nodes), cuts[selected[0]]["reason"], force_unconditional=True)
+            if point.get("conditional_action") is not None:
+                self.conditional_boundary(tuple(nodes), originals, graph, point)
+            else:
+                self.boundary(tuple(nodes), point["reason"], force_unconditional=True)
             return True
         active = set(planned["active_node_ids"])
         pending, descendants = list(selected), set()
@@ -76,6 +80,27 @@ class MappedReachedControl:
         # All paths arriving here have closed. Leave the original native source
         # untouched, rather than even constructing its protected-descriptor query.
         return not bool(descendants & active)
+
+    def conditional_boundary(self, nodes, originals, graph, point):
+        """Close inside one authenticated original IF; never infer permission."""
+        if (len(nodes) != 1 or len(originals) != 1 or type(originals[0]).__name__ != "If_Stmt"
+                or _close_selection(point) != (point["node_id"],)):
+            raise CompilationError("conditional reached close requires its exact original single-line IF")
+        conditional, unsafe = _single_if_action_source(self.builder.analysis, self.routine, graph, point["node_id"])
+        span = statement_span(originals[0])
+        if (unsafe is not None or conditional != point["conditional_action"]
+                or point["original_source_kind"] != "If_Stmt"
+                or point["original_source_sha256"] != _hash([str(originals[0])])
+                or point["span"] != list(span) or point["guard"] != list(graph.nodes[point["node_id"]].guard)):
+            raise CompilationError("conditional reached close differs from its registered original source")
+        condition, action = originals[0].items
+        reason = point["reason"]
+        self.boundaries.append({"first_line": span[0], "last_line": span[1], "reason": reason,
+                                "execution": point["execution"], "conditional_close": str(condition),
+                                "conditional_action": conditional, "original_node_ids": [point["node_id"]],
+                                "reopen": False})
+        replacement = [f"if ({condition}) then", *self.close(reason=reason, span=span), str(action), "endif"]
+        self.patches.append((*span, "\n".join(fortran_lines(replacement)) + "\n"))
 
     def boundary(self, nodes, reason, *, force_unconditional=False):
         if self.reached_record() is None:

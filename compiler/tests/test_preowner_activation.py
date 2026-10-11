@@ -112,7 +112,7 @@ def test_original_allocation_and_copy_establish_only_source_defined_activation(t
     path, builder, proof, originals = preowner_window_fixture(tmp_path)
     record = proof.public()
     prefix = record["prefix_eligibility"]
-    assert record["schema_version"] == 12
+    assert record["schema_version"] == 13
     assert prefix["activation_path_possible"]
     assert prefix["disabled_path_possible"]
     assert not prefix["selected_window_whole_assertion_is_prefix_read_authority"]

@@ -124,6 +124,9 @@ end program
     *(("mapped", fallback, precision) for precision in (4, 8) for fallback in (False, True)),
     *(("mapped_partial", False, precision) for precision in (4, 8)),
     *(("mapped_joined", False, precision) for precision in (4, 8)),
+    *(pytest.param(("planned_single", fallback, precision),
+                   id=f"planned_single-real{precision}-{'resource' if fallback else 'normal'}")
+      for precision in (4, 8) for fallback in (False, True)),
 ))
 def window_binaries(tmp_path_factory, request):
     nvcc = shutil.which("nvcc")
@@ -163,13 +166,20 @@ def window_binaries(tmp_path_factory, request):
             child_source=child_source)
         assert len(report["scopes"][0]["reached_window"]["planned_closures"]["mapped_child_plans"]) == 1
         assert len(report["scopes"][0]["gpu_leaves"]) == 4
-    elif emission == "planned":
+    elif emission in {"planned", "planned_single"}:
         source = PLANNED_SOURCE
+        if emission == "planned_single":
+            source = source.replace("if(bad) then\ncall replace_storage(b)\nelse\ncall face_update(b)\nendif",
+                                    "if(bad) call replace_storage(b)")
         if precision == 4:
             source = source.replace("real(8)", "real(4)").replace("_8", "_4").replace(",8)", ",4)")
         original, outputs, report, _owner = emit_planned_window(
             directory, source, device_budget=0 if resource_fallback else None)
         assert report["scopes"][0]["reached_window"]["planned_closures"]["closed_path_possible"]
+        if emission == "planned_single":
+            point, = report["scopes"][0]["reached_window"]["planned_closures"]["close_points"]
+            assert point["conditional_action"]["action_source_kind"] == "Call_Stmt"
+            assert len(report["scopes"][0]["gpu_leaves"]) == 2
     elif emission in {"module_partial", "module_partial_boundary"}:
         options = {"source": PARTIAL_BOUNDARY_SOURCE} if emission == "module_partial_boundary" else {}
         original, builder = partial_fixture(directory, device_budget=0 if resource_fallback else None,
@@ -223,7 +233,8 @@ def window_binaries(tmp_path_factory, request):
                                      "numerical_contract": item.get("numerical_contract")})
             objects.append(str(target))
     driver = directory / "driver.f90"
-    driver_text = MAPPED_DRIVER if emission.startswith("mapped") else (PLANNED_DRIVER if emission == "planned" else DRIVER)
+    driver_text = MAPPED_DRIVER if emission.startswith("mapped") else (
+        PLANNED_DRIVER if emission in {"planned", "planned_single"} else DRIVER)
     if emission == "mapped_partial":
         driver_text = driver_text.replace("sizes(3)=[0,8,4096]", "sizes(3)=[8,16,4096]")
     if emission.startswith("module_"):
@@ -255,6 +266,56 @@ def window_binaries(tmp_path_factory, request):
     return directory, candidate, expected, report, resource_fallback, emission, precision
 
 
+def _single_if_context_transfers(trace, report, precision, *, native_only):
+    """Bind every event to a live owner and price each reached path exactly."""
+    bindings = report["scopes"][0]["resource_bindings"]["resources"]
+    identities = {item["resource"]: item["registration_identity"] for item in bindings}
+    a, b = identities["argument::a"], identities["argument::b"]
+    records, closed = {}, set()
+    for line in trace.splitlines():
+        if not line.startswith(tuple("FORT_SCOPED " + event + " " for event in
+                                     ("create", "launch", "upload", "download", "close"))):
+            continue
+        parts = line.split()
+        event = parts[1]
+        fields = dict(part.split("=", 1) for part in parts[2:])
+        assert fields["provenance_version"] == "1"
+        context = fields["context"]
+        if event == "create":
+            assert context not in records
+            records[context] = {"launches": 0, "upload": Counter(), "download": Counter()}
+            continue
+        assert context in records
+        assert context not in closed
+        if event == "close":
+            closed.add(context)
+        elif event == "launch":
+            records[context]["launches"] += 1
+        else:
+            assert fields["generation"] == "1"
+            assert "buffer_handle" in fields
+            identity, size = int(fields["buffer"]), int(fields["bytes"])
+            assert identity in {a, b}
+            assert size > 0
+            records[context][event][identity] += size
+    assert set(records) == closed
+    observed = Counter((item["launches"], tuple(sorted(item["upload"].items())),
+                        tuple(sorted(item["download"].items()))) for item in records.values()
+                       if item["launches"] or item["upload"] or item["download"])
+    expected = Counter()
+    if not native_only:
+        # Each path/size has two nonzero stage counts and two calls. The window
+        # is spent after its first traversal; later stages stay original native.
+        for n in (8, 4096):
+            size = n * precision
+            incoming = ((a, size),)
+            expected[(2, incoming, tuple(sorted(((a, size), (b, size)))))] = 4
+            expected[(1, incoming, ((b, size),))] = 4
+    assert observed == expected
+    return {context: {"launches": item["launches"], "upload": dict(item["upload"]),
+                      "download": dict(item["download"])} for context, item in records.items()}
+
+
 @pytest.mark.cuda
 @pytest.mark.parametrize("disabled", [False, True])
 def test_one_shot_window_matches_complete_native_arrays_and_all_original_visits(window_binaries, disabled):
@@ -275,13 +336,13 @@ def test_one_shot_window_matches_complete_native_arrays_and_all_original_visits(
     # Planned closures execute both original paths: two kernels on the good
     # path, one before publishing/replacing storage on the bad path. The native
     # suffix must never register or launch, including subsequent backedges.
-    numerical_launches = {"mapped_partial": 72, "mapped": 48, "mapped_joined": 48, "planned": 24,
+    numerical_launches = {"mapped_partial": 72, "mapped": 48, "mapped_joined": 48, "planned": 24, "planned_single": 24,
                           "explicit_live_iterator": 8}.get(emission, 16)
     assert launches == (0 if disabled or resource_fallback else numerical_launches)
     contexts = result.stderr.count("FORT_SCOPED create ")
     # At most one context may be opened at each first reached traversal. A
     # failed pre-execution resource guard cannot retry on later backedges.
-    assert contexts <= (24 if emission == "planned" or emission.startswith("mapped") else 12)
+    assert contexts <= (24 if emission in {"planned", "planned_single"} or emission.startswith("mapped") else 12)
     context_launches = Counter()
     for line in result.stderr.splitlines():
         if line.startswith("FORT_SCOPED launch "):
@@ -295,6 +356,12 @@ def test_one_shot_window_matches_complete_native_arrays_and_all_original_visits(
         assert Counter(context_launches.values()) == {4: 8, 2: 8}
     if emission == "mapped_partial" and not disabled:
         assert Counter(context_launches.values()) == {3: 24}
+    context_transfers = None
+    if emission == "planned_single":
+        if not disabled and not resource_fallback:
+            assert Counter(context_launches.values()) == {2: 8, 1: 8}
+        context_transfers = _single_if_context_transfers(result.stderr, report, precision,
+                                                       native_only=disabled or resource_fallback)
     receipt = {"schema_version": 1, "disabled": disabled, "fields_bytes": len(actual),
                "native_fields_sha256": sha256(expected).hexdigest(),
                "candidate_fields_sha256": sha256(actual).hexdigest(),
@@ -302,7 +369,9 @@ def test_one_shot_window_matches_complete_native_arrays_and_all_original_visits(
                "launches_per_context": dict(context_launches),
                "complete_arrays_and_halos_equal": True,
                "original_prefix_and_tail_counters_equal": True,
-               "conditional_native_replacement_and_branch_counters_equal": emission in {"planned", "mapped", "mapped_joined"},
+               "conditional_native_replacement_and_branch_counters_equal": emission in {
+                   "planned", "planned_single", "mapped", "mapped_joined"},
+               "single_line_conditional_context_transfers": context_transfers,
                "mapped_original_caller_bounds_and_child_index_as_data_equal": emission in {"mapped", "mapped_joined"},
                "mapped_partial_output_and_restored_native_halo_equal": emission == "mapped_partial",
                "mapped_original_joined_openmp_and_native_entry_equal": emission == "mapped_joined",
