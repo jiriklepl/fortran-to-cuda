@@ -9,7 +9,7 @@ control-flow around sibling spans remains in the original source.
 from __future__ import annotations
 
 import json
-from copy import copy
+from copy import copy, deepcopy
 from dataclasses import dataclass, replace
 from hashlib import sha256
 
@@ -2545,6 +2545,36 @@ class ScopeBuilder:
                 self.scan(node.content)
         self.build_span(run)
 
+    def _attempt_lexical_owner(self, nodes, *, finalize=False):
+        """Retain one lexical planning attempt separately from legacy fallback."""
+        from compiler.scopes.lexical import LexicalOwner, lexical_attempt_diagnostics
+
+        before = self.scope_checkpoint()
+        scope_count = len(self.scopes)
+        inline_before = {"attempts": self.inline.attempts, "operations": self.inline.operations}
+        owner = None
+        try:
+            owner = LexicalOwner(self)
+            accepted = owner.run(nodes)
+            outcome = "accepted" if accepted else "no_numerical_leaves"
+            scopes = self.scopes[scope_count:]
+            if accepted and scopes and all(scope.get("automatic_preflight", {}).get("generated_owner_invoked") is False
+                                           for scope in scopes):
+                outcome = "successful_native"
+            self.lexical_owner_attempt = lexical_attempt_diagnostics(
+                self, owner, outcome=outcome, scope_count_before=scope_count,
+                inline_before=inline_before, finalize=finalize)
+            if accepted:
+                return self.finish() if finalize else True
+        except CompilationError as error:
+            self.lexical_owner_attempt = lexical_attempt_diagnostics(
+                self, owner, outcome="error", scope_count_before=scope_count,
+                inline_before=inline_before, finalize=finalize, error=error)
+            self.restore_scope_checkpoint(before)
+            self.boundaries.append({"reason": "lexical owner unavailable: " + str(error),
+                                    "fallback": "existing bounded source scopes"})
+        return False
+
     def run(self):
         if self.entry.source_kind != "module":
             first = _span(_part(self.entry.scope.node, "Subroutine_Stmt"))[0]
@@ -2570,15 +2600,9 @@ class ScopeBuilder:
         self.numerical_ir.update(self.inline.ir)
         self.numerical_reasons.update({procedure: None for procedure in self.inline.regions})
         if self.config.scope_execution == "reached" and not self.config.collective:
-            from compiler.scopes.lexical import LexicalOwner
-            before = self.scope_checkpoint()
-            try:
-                if LexicalOwner(self).run(nodes):
-                    return self.finish()
-            except CompilationError as error:
-                self.restore_scope_checkpoint(before)
-                self.boundaries.append({"reason": "lexical owner unavailable: " + str(error),
-                                        "fallback": "existing bounded source scopes"})
+            result = self._attempt_lexical_owner(nodes, finalize=True)
+            if result:
+                return result
         self.scan(nodes)
         return self.finish()
 
@@ -2624,6 +2648,8 @@ class ScopeBuilder:
             **({"reached_plan_schema_version": 1} if self.config.scope_execution == "reached" else {}),
             **({"reached_window_discovery": self.reached_window_discovery}
                if hasattr(self, "reached_window_discovery") else {}),
+            **({"lexical_owner_attempt": deepcopy(self.lexical_owner_attempt)}
+               if hasattr(self, "lexical_owner_attempt") else {}),
             "automatic_scope_available":bool(self.scopes), "scope_count":len(self.scopes),
             "scopes":self.scopes, "boundaries":self.boundaries, "source_edits":patches,
             "runtime_provenance": self.runtime_provenance.public(available=bool(self.scopes), additional=[

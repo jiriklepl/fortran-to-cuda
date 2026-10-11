@@ -1314,6 +1314,16 @@ owner's versioned `resource_bindings` record map runtime buffer counters to
 source resources without inspecting generated workers. This experimental
 path does not by itself establish whole-stage residency or application speedup.
 
+The separate `lexical_owner_attempt` manifest record retains bounded original
+member boundaries even when lexical planning finds no numerical leaves. It
+distinguishes a generated source owner, a successful native AUTO decision and
+an error, with original source spans and preparation counters. Legacy fallback
+reasons remain separate. These diagnostics describe source planning and do not
+establish application or GPU execution.
+When whole-team numerical lowering is unsupported, the compiler also tries the
+independently proved mixed-team implementation before the complete native
+operation. Each alternative retains its own rejection reason.
+
 Source imports resolve `USE` renames with and without `ONLY`, including public
 re-exports and ambiguity checks. Imported objects retain the declaring scope of
 their types even when only the object is imported or its type name is shadowed.
