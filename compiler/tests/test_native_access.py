@@ -45,6 +45,22 @@ def test_native_access_mapping_rejects_read_only_alias_ambiguity(tmp_path):
         build_native_accesses(sections, {}, "fort_native")
 
 
+@pytest.mark.parametrize("original_layout", ["actual", "fort_original%root", "fort_original(1)", "fort_" + "x" * 59])
+def test_unregistered_layout_requires_one_compiler_local_descriptor(tmp_path, original_layout):
+    _, sections = analyze(tmp_path, "a(-1:1,:)=7")
+    resource, = sections.resources
+    with pytest.raises(CompilationError, match="compiler-local identifier"):
+        build_native_access(resource, "0_c_int64_t", "fort_native", original_layout=original_layout)
+
+
+def test_unregistered_layout_cannot_replace_a_validated_view(tmp_path):
+    _, sections = analyze(tmp_path, "a(-1:1,:)=7")
+    resource, = sections.resources
+    with pytest.raises(CompilationError, match="without a view"):
+        build_native_access(resource, "0_c_int64_t", "fort_native", original_layout="fort_original", view="fort_view")
+
+
+@pytest.mark.parametrize("original_layout", [False, True])
 @pytest.mark.parametrize(("body", "declaration", "shape", "expected", "status"), [
     ("a(-1:1,:)=7", "real(8),intent(inout)::a(-2:,:)", [5, 3], [1, 4, 0, 3], 0),
     ("a(:,:)=7", "real(8),intent(inout)::a(-2:,:)", [0, 3], [], 0),
@@ -56,14 +72,18 @@ def test_native_access_mapping_rejects_read_only_alias_ambiguity(tmp_path):
     ("a(1:size(a,1),:)=7", "real(8),intent(inout)::a(:,:)", [5, 3], [0, 5, 0, 3], 0),
     ("a(1:size(a,1),:)=7", "real(8),intent(inout)::a(:,:)", [2147483648, 3], [], 5),
 ])
-def test_generated_native_coordinates_against_real_fortran_descriptors(tmp_path, body, declaration, shape, expected, status):
+def test_generated_native_coordinates_against_real_fortran_descriptors(tmp_path, body, declaration, shape, expected, status,
+                                                                     original_layout):
     fortran = shutil.which("gfortran-15") or shutil.which("gfortran")
     if not fortran:
         pytest.skip("Fortran compiler unavailable")
     _, sections = analyze(tmp_path, body, declaration=declaration)
     assert sections.available, sections.reason
     resource, = sections.resources
-    code = build_native_access(resource, "1_c_int64_t", "fort_native", context="1_c_int64_t", status="result")
+    code = build_native_access(resource, "1_c_int64_t", "fort_native", context="1_c_int64_t", status="result",
+                               original_layout="fort_original" if original_layout else None)
+    if original_layout:
+        assert not any("fort_scope_layout_get" in line or "fort_scope_view_get" in line for line in code.prepare)
     # A tiny descriptor-only stub exposes the same public layout ABI. No CUDA,
     # runtime linkage, payload allocation, source execution or timing is needed.
     interface = Path(__file__).resolve().parents[1] / "runtime" / "scoped_memory.f90"
@@ -83,8 +103,12 @@ end function
 """.replace("EXTENTS_ASSIGNMENT", "extents=[" + ",".join(f"{value}_c_size_t" for value in shape) + "]")
     checked = "\n".join(["module check_access", "use iso_c_binding", "use fort_scoped_memory", "implicit none", "contains",
                           "subroutine prepare(result,counts,coordinates)", "integer(c_int),intent(out)::result",
-                          "integer(c_size_t),intent(out)::counts(2),coordinates(4)", *code.specification,
-                          "result=0", "counts=0", "coordinates=0", *code.prepare,
+                          "integer(c_size_t),intent(out)::counts(2),coordinates(4)",
+                          "type(fort_scope_layout) :: fort_original", "integer(c_size_t),target :: fort_original_extents(2)",
+                          *code.specification, "result=0", "counts=0", "coordinates=0",
+                          "fort_original_extents=[" + ",".join(f"{value}_c_size_t" for value in shape) + "]",
+                          "fort_original=fort_scope_layout()", "fort_original%rank=2",
+                          "fort_original%extents=c_loc(fort_original_extents)", *code.prepare,
                           f"counts=[{code.access_name}%write_count,{code.access_name}%overwrite_count]"])
     if expected:
         checked += "\ncoordinates=[fort_native_w_lows(1,1),fort_native_w_highs(1,1),fort_native_w_lows(2,1),fort_native_w_highs(2,1)]"

@@ -93,11 +93,20 @@ def emit_preowner_window(directory, source=PREOWNER_SOURCE, *, policy="sections"
     return path, outputs, report, owner
 
 
+@pytest.mark.parametrize("private_key", ["source_sections", "requires_registered_handle"])
+def test_external_capture_facts_cannot_supply_private_activation_authority(tmp_path, private_key):
+    _path, builder, _proof, _originals = preowner_window_fixture(tmp_path)
+    binding = builder.visible_binding(builder.entry, ROOTS[1])
+    builder.facts["captures"][binding.root][private_key] = False
+    with pytest.raises(CompilationError, match="compiler-owned"):
+        builder.capture_fact(binding)
+
+
 def test_original_allocation_and_copy_establish_only_source_defined_activation(tmp_path):
     path, builder, proof, originals = preowner_window_fixture(tmp_path)
     record = proof.public()
     prefix = record["prefix_eligibility"]
-    assert record["schema_version"] == 7
+    assert record["schema_version"] == 8
     assert prefix["activation_path_possible"]
     assert prefix["disabled_path_possible"]
     assert not prefix["selected_window_whole_assertion_is_prefix_read_authority"]

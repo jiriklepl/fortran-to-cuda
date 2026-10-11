@@ -17,6 +17,15 @@ from compiler.scopes.segments import fortran_lines, statement_span
 from compiler.scopes.source import _name, _span
 
 
+def _close_selection(point):
+    selected = point.get("selected_node_ids")
+    if (not isinstance(selected, list) or not 1 <= len(selected) <= 256
+            or any(not isinstance(identity, str) for identity in selected)
+            or len(set(selected)) != len(selected) or selected[0] != point.get("node_id")):
+        raise CompilationError("reached closure lacks its exact ordered original selection")
+    return tuple(selected)
+
+
 class MappedReachedControl:
     """One source plan for both a lexical owner and its original-body child."""
 
@@ -48,7 +57,9 @@ class MappedReachedControl:
         originals = self.builder.inline.original_selection(tuple(nodes))
         graph, selected = self.builder.analysis._selected_source(self.routine.qualified, originals)
         cuts = {point["node_id"]: point for point in planned["close_points"]}
-        if len(selected) == 1 and selected[0] in cuts:
+        if selected and selected[0] in cuts:
+            if tuple(selected) != _close_selection(cuts[selected[0]]):
+                raise CompilationError("reached close cuts a partial original joined selection")
             self.boundary(tuple(nodes), cuts[selected[0]]["reason"], force_unconditional=True)
             return True
         active = set(planned["active_node_ids"])
@@ -79,8 +90,8 @@ class MappedReachedControl:
         if record is None:
             return
         planned = record["planned_closures"]
-        cuts = {point["node_id"] for point in planned["close_points"]}
-        actual = {identity for boundary in self.boundaries for identity in boundary["original_node_ids"]}
+        cuts = tuple(_close_selection(point) for point in planned["close_points"])
+        actual = tuple(tuple(boundary["original_node_ids"]) for boundary in self.boundaries)
         if actual != cuts:
             raise CompilationError("mapped child staged closes differ from its exact registered reached plan")
         active = set(planned["active_node_ids"])
@@ -120,14 +131,13 @@ class ReachedWindowOwner(MappedReachedControl, LexicalOwner):
                     raise CompilationError("planned reached child lacks exact mapped authority")
                 member.validate_mapped_plan()
         graph = self.builder.analysis.structure(self.routine.qualified)
-        known = {point["node_id"] for point in planned["close_points"]}
+        known = {_close_selection(point) for point in planned["close_points"]}
         extra = []
         for boundary in self.boundaries:
             identities = tuple(boundary["original_node_ids"])
-            if len(identities) != 1:
-                raise CompilationError("planned reached closure cannot cut a partial original joined construct")
-            if identities[0] not in known:
-                extra.append((graph.source_nodes(identities[0]), boundary["reason"]))
+            if identities not in known:
+                originals = tuple(original for identity in identities for original in graph.source_nodes(identity))
+                extra.append((originals, boundary["reason"]))
         if extra:
             forced = (*self.window_proof._planned_close_before, *extra)
             proof = plan_reached_window(self.builder.analysis, self.routine.qualified, self.window_originals,
@@ -144,8 +154,8 @@ class ReachedWindowOwner(MappedReachedControl, LexicalOwner):
                     raise CompilationError("generation close changes an already staged mapped child; owner remains native")
                 member.builder._reached_window_binding = proof, self.window_originals
                 member.builder._mapped_reached_child = child
-        cuts = {point["node_id"] for point in planned["close_points"]}
-        actual = {identity for boundary in self.boundaries for identity in boundary["original_node_ids"]}
+        cuts = tuple(_close_selection(point) for point in planned["close_points"])
+        actual = tuple(tuple(boundary["original_node_ids"]) for boundary in self.boundaries)
         if actual != cuts:
             raise CompilationError("planned reached close points differ from the exact staged original emission")
         retained = []
@@ -191,8 +201,8 @@ class ReachedWindowOwner(MappedReachedControl, LexicalOwner):
         prefix = self.window_proof.public()["prefix_eligibility"]
         graph = builder.analysis.structure(self.routine.qualified)
         for point in prefix["disable_points"]:
-            originals = graph.source_nodes(point["node_id"])
-            if len(originals) != 1 or list(statement_span(originals[0])) != point["span"]:
+            originals = tuple(original for identity in _close_selection(point) for original in graph.source_nodes(identity))
+            if not originals or [statement_span(originals[0])[0], statement_span(originals[-1])[1]] != point["span"]:
                 raise CompilationError("pre-owner eligibility edit lacks its exact original source span")
             line = point["span"][0]
             builder.add_edit(self.routine.scope.path, line, line - 1,
@@ -246,6 +256,7 @@ class ReachedWindowOwner(MappedReachedControl, LexicalOwner):
                     "planned_closures": public["planned_closures"],
                     "defined_coverage": [{"resource": state["resource"],
                         "on_activation": state["initialized"], "on_return": state["coverage_on_return"],
+                        "source_sections_on_activation": state.get("source_sections_on_activation"),
                         "return_sections": state["defined_sections_on_return"],
                         "authority": "conditional original reached transfer; return sections never seed registration"}
                         for state in public["states"]],

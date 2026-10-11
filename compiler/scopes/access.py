@@ -37,13 +37,15 @@ def _statement_lines(statement):
 
 def build_native_access(resource: NativeResourceSections, handle: str, prefix: str, *,
                         context="fort_context", status="fort_status", on_error=("return",), view=None,
-                        parameters=None, logical_lower_bounds=None, view_abi=2):
+                        parameters=None, logical_lower_bounds=None, view_abi=2, original_layout=None):
     """Map original callee coordinates through the registered full layout.
 
     The returned TARGET arrays must remain in the caller's specification until
     host_end (plan_add instead copies them). This preparation has no payload
     access and does not mutate runtime coherence. A query must run it before any
     numerical work; later execution may never replay the original span on error.
+    First registration can supply a guarded original local layout before a
+    runtime handle exists. All coordinate checks are retained in that mode.
     """
     if not re.fullmatch(r"[a-z][a-z0-9_]{0,29}", prefix):
         raise CompilationError("native access prefix must be a short generated Fortran identifier")
@@ -52,6 +54,9 @@ def build_native_access(resource: NativeResourceSections, handle: str, prefix: s
     rank = resource.rank
     if view is not None and view_abi not in {1, 2}:
         raise CompilationError("native view access requires a supported versioned descriptor")
+    if original_layout is not None and (view is not None or not isinstance(original_layout, str)
+            or not re.fullmatch(r"fort_[a-z0-9_]{1,58}", original_layout)):
+        raise CompilationError("native original layout requires one compiler-local identifier without a view")
     parameters = parameters or {}
     logical_lower_bounds = logical_lower_bounds or {}
     access, layout, extents = (prefix + suffix for suffix in ("_access", "_layout", "_extents"))
@@ -67,8 +72,11 @@ def build_native_access(resource: NativeResourceSections, handle: str, prefix: s
         prepare.extend([f"if ({condition}) then", f"{status} = FORT_SCOPE_BOUNDARY", *on_error, "endif"])
 
     if view is None:
-        prepare += [f"{status} = fort_scope_layout_get({context}, {handle}, {layout})",
-                    f"if ({status} /= FORT_SCOPE_OK) then", *on_error, "endif"]
+        if original_layout is None:
+            prepare += [f"{status} = fort_scope_layout_get({context}, {handle}, {layout})",
+                        f"if ({status} /= FORT_SCOPE_OK) then", *on_error, "endif"]
+        else:
+            prepare += [f"{layout} = {original_layout}"]
         require(f"{layout}%rank /= {rank} .or. .not. c_associated({layout}%extents)")
     else:
         physical_origin = prefix + "_physical_origin"

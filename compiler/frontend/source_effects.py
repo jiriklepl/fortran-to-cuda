@@ -2168,6 +2168,45 @@ class SourceEffects:
         self._segments[key] = deepcopy(summary)
         return summary
 
+    def native_definition_unit_projection(self, requested, selected, completion, unit_graph, unit_ids, *,
+                                          descriptor_window=None, consume=None):
+        """An exact whole-team token may refine one retained original unit.
+
+        This private view proves accesses, not standalone execution. A whole
+        descriptor token remains bound to its whole source selection; it is
+        never relabelled as a smaller original descriptor interval.
+        """
+        graph, identities = self._selected_source(requested, selected)
+        from compiler.frontend.native_completion import NativeCompletionProof
+        if not isinstance(completion, NativeCompletionProof):
+            raise CompilationError("native definition unit requires whole registered completion")
+        completion.validate(self, requested, identities)
+        group = graph.native_group_for_selection(selected)
+        if consume is not None:
+            consume(len(identities) + len(unit_ids))
+        if unit_graph is graph:
+            inside = bool(unit_ids) and set(unit_ids) <= set(identities)
+        else:
+            inside = False
+            for unit in group.units if group is not None else ():
+                if consume is not None:
+                    consume(1)
+                if unit.structure is unit_graph and unit.selected_node_ids == tuple(unit_ids):
+                    inside = True
+                    break
+        if not inside or any(identity not in unit_graph.nodes for identity in unit_ids):
+            raise CompilationError("native definition unit escapes original whole group")
+        if descriptor_window is not None:
+            self._validate_descriptor_window(requested, identities, descriptor_window)
+        analysis, routine, guard = self._segment_projection(requested, unit_ids,
+            capture_locals=True, _graph=unit_graph)
+        if descriptor_window is not None:
+            analysis._descriptor_source = self
+            analysis._selected_descriptor_window = self, requested, identities, descriptor_window
+            analysis._descriptor_window_projection = (
+                routine, routine.execution, str(routine.execution), analysis._routine_signature(routine))
+        return analysis, routine, guard
+
     def native_group_summaries(self, requested, selected, completion):
         """Demand bounded units only after authenticating a complete native group.
 

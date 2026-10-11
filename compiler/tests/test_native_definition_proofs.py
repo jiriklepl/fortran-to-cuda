@@ -267,7 +267,7 @@ def test_module_partial_definitions_use_exact_descriptor_without_initialization(
     assert result.reads_covered
     assert set(result.definitions) == {"original_storage::cells", "original_storage::other"}
     assert len(result.definitions["original_storage::cells"]) == 1
-    assert proof.public()["schema_version"] == 2
+    assert proof.public()["schema_version"] == 3
     assert proof.public()["descriptor_window_identity"] == descriptor.identity
     assert len(proof.public()["leaf_descriptor_windows"]) == 2
     assert not proof.public()["global_initialization_authority"]

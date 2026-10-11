@@ -25,11 +25,20 @@ from compiler.frontend.native_call_coordinates import (
 from compiler.frontend.native_call_coordinates import (
     prove_native_call_coordinates as prove_native_call_coordinates,
 )
-from compiler.frontend.native_sections import RECTANGLE_LIMIT, NativeRectangle, NativeSections
+from compiler.frontend.native_sections import (
+    RECTANGLE_LIMIT,
+    NativeRectangle,
+    NativeSections,
+    analyze_native_sections,
+)
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 
-NATIVE_DEFINITION_VERSION = 2
+NATIVE_DEFINITION_VERSION = 3
+
+
+class NativeDefinitionUnsupported(CompilationError):
+    """Authenticated native syntax has no exact must-definition transfer."""
 
 
 def _hash(value):
@@ -58,19 +67,68 @@ def _dependencies(box):
     return roots
 
 
-def _covers(definition, read):
+def _covers(definition, read, *, consume=None):
     """One source-symbolic rectangle, never a bounding hull of several faces."""
     if len(definition.axes) != len(read.axes):
         return False
+    work = 0
+
+    def offset(value, depth=0):
+        """Recognize one original base plus checked literal translations."""
+        nonlocal work
+        work += 1
+        if consume is not None:
+            consume(1)
+        if work > 256 or depth > 8 or value is None:
+            return None
+        if value.kind == "literal":
+            return (None, value.value) if type(value.value) is int and -(2**31) <= value.value < 2**31 else None
+        if value.kind in {"scalar", "lbound", "ubound", "size"} and not value.children:
+            return (_hash(value.public()), 0)
+        if value.kind == "parenthesis" and len(value.children) == 1:
+            return offset(value.children[0], depth + 1)
+        if value.kind == "unary" and len(value.children) == 1 and value.operator in {"+", "-"}:
+            child = offset(value.children[0], depth + 1)
+            if child is None or value.operator == "-" and child[0] is not None:
+                return None
+            result = child if value.operator == "+" else (None, -child[1])
+        elif value.kind == "binary" and len(value.children) == 2 and value.operator in {"+", "-"}:
+            left, right = (offset(child, depth + 1) for child in value.children)
+            if left is None or right is None or left[0] is not None and right[0] is not None:
+                return None
+            if value.operator == "-" and right[0] is not None:
+                return None
+            result = (left[0] or right[0], left[1] + right[1] if value.operator == "+" else left[1] - right[1])
+        else:
+            return None
+        return result if -(2**31) <= result[1] < 2**31 else None
+
+    def nonempty(iteration):
+        if iteration.step != 1:
+            return None
+        lower, upper = offset(iteration.lower), offset(iteration.upper)
+        if lower is None or upper is None or lower[0] is not None:
+            return None
+        difference = upper[1] - lower[1]
+        return (upper[0], difference) if -(2**31) <= difference < 2**31 else None
+
     # A repeated point write is absent when its original loop is empty. Such
     # a point cannot cover a later unconditional read merely by matching axes.
     guards = [item.public() for item in read.iterations]
-    if any(item.public() not in guards for item in definition.iterations):
-        return False
+    for item in definition.iterations:
+        if item.public() in guards:
+            continue
+        predicate = nonempty(item)
+        if predicate is None or not any(nonempty(other) == predicate for other in read.iterations):
+            return False
     for left, right in zip(definition.axes, read.axes, strict=True):
         if left.lower is None and left.upper is None:
             continue
         if left.public() == right.public():
+            continue
+        normalized = tuple(offset(value) for value in (left.lower, left.upper, right.lower, right.upper))
+        if (all(value is not None for value in normalized)
+                and normalized[:2] == normalized[2:]):
             continue
         bounds = left.lower, left.upper, right.lower, right.upper
         if (all(item is not None and item.kind == "literal" for item in bounds)
@@ -191,7 +249,142 @@ class NativeDefinitionTransfer:
                 "entry_rectangles_require_independent_admission": True}
 
 
-def _derive(analysis, procedure, selection, include_entry, descriptor_window=None):
+def _derive_joined(analysis, procedure, selection, include_entry, descriptor_window, completion, consume):
+    """Retain the whole original team; definitions become available at its join.
+
+    Unit projections describe source accesses only. In particular, preceding
+    NOWAIT writes are never supplied as another unit's entry definitions.
+    """
+    from compiler.frontend.native_completion import NativeCompletionProof, _joined_completion_facts
+    from compiler.frontend.source_effects import _part
+
+    routine = analysis._require_original(procedure)
+    graph, identities = analysis._selected_source(procedure, selection)
+    if not isinstance(completion, NativeCompletionProof):
+        raise CompilationError("joined definitions require registered whole completion authority")
+    completion.validate(analysis, procedure, identities)
+    group = graph.native_group_for_selection(selection)
+    if group is None:
+        parents = [node for node in graph.nodes.values() if node.kind == "sequence" and identities
+                   and identities[0] in node.children and tuple(node.children[
+                       node.children.index(identities[0]):node.children.index(identities[0]) + len(identities)]) == identities]
+        if len(parents) != 1:
+            raise CompilationError("joined definitions require an intact contiguous original whole group")
+    elif len(selection) != len(group.original_nodes) or any(
+            left is not right for left, right in zip(selection, group.original_nodes, strict=True)):
+        raise CompilationError("joined definitions require exact deferred original whole-group nodes")
+    if include_entry:
+        raise CompilationError("joined definitions do not replace original procedure entry events")
+    if descriptor_window is not None:
+        analysis._validate_descriptor_window(procedure, identities, descriptor_window)
+    source_work = 0
+
+    def charge(count=1):
+        nonlocal source_work
+        source_work += count
+        if source_work > 65536:
+            raise CompilationError("joined definition source traversal budget exhausted")
+        if consume is not None:
+            consume(count)
+
+    originals = tuple(node for identity in identities for node in graph.source_nodes(identity))
+    for original in originals:
+        for _syntax in walk(original):
+            charge()
+    # The original completion/source check is deliberately performed before a
+    # support-only rejection. A stale token or malformed team is never a cut.
+    units = []
+    _joined_completion_facts(analysis, procedure, selection, worksharing=units)
+    if any(type(node).__name__ in {"If_Construct", "If_Stmt", "Associate_Construct"}
+           for original in originals for node in walk(original)):
+        raise NativeDefinitionUnsupported("joined definitions require unconditional original worksharing nests")
+    if group is not None:
+        projected = [(unit.original_nodes[0], unit.structure, unit.selected_node_ids) for unit in group.units
+                     if unit.kind == "worksharing"]
+        if len(projected) != len(group.units):
+            raise NativeDefinitionUnsupported("joined definitions require original worksharing DO units")
+    else:
+        loops = [loop for _opening, loop, _ending in units]
+        if not loops:
+            # A complete combined PARALLEL DO has no separate worksharing row.
+            loops = [node for node in originals if type(node).__name__ == "Block_Nonlabel_Do_Construct"]
+        projected = [(loop, graph, (graph.node_id(loop),)) for loop in loops]
+    if not projected or len(projected) > analysis.operation_limit:
+        raise CompilationError("joined definition unit budget exhausted")
+    resources, steps, demands, rectangles, ordered_effects = {}, [], [], 0, 0
+    for loop, unit_graph, unit_ids in projected:
+        charge()
+        current = loop
+        while type(current).__name__ == "Block_Nonlabel_Do_Construct":
+            body = tuple(node for node in current.content if type(node).__name__ != "Comment")
+            if len(body) != 3 or type(body[-1]).__name__ != "End_Do_Stmt":
+                raise NativeDefinitionUnsupported("joined definitions require one perfect-nest assignment per unit")
+            current = body[1]
+        if type(current).__name__ != "Assignment_Stmt":
+            raise NativeDefinitionUnsupported("joined definitions require one perfect-nest assignment per unit")
+        target = current.items[0]
+        target_name = target.items[0] if type(target).__name__ == "Part_Ref" else target
+        binding = analysis._binding(analysis.source_scope_for(current, routine.scope), target_name)
+        if binding is None or not binding.rank:
+            raise NativeDefinitionUnsupported("joined definitions require array writes without scalar state changes")
+        projection, local, _guard = analysis.native_definition_unit_projection(procedure, selection,
+            completion, unit_graph, unit_ids, descriptor_window=descriptor_window, consume=charge)
+        specification = _part(routine.scope.node, "Specification_Part")
+        local.scope.node.content = ([specification] if specification is not None else []) + [local.execution]
+        projection._native_sections_include_entry = False
+        projection._native_sections_completion = completion
+        summary = projection.summarize(procedure)
+        if (not summary["complete"] or not summary.get("effect_composition", {}).get("available")
+                or any(effect["kind"] not in {"read", "write", "overwrite", "descriptor_read"}
+                       for effect in summary["ordered_effects"])):
+            # Incomplete summaries can include exhausted budgets. They are
+            # never reclassified as merely unsupported native continuation.
+            raise CompilationError("joined definitions require complete bounded original unit effects")
+        ordered_effects += len(summary["ordered_effects"])
+        if ordered_effects > analysis.operation_limit:
+            raise CompilationError("joined definition ordered effect budget exhausted")
+        charge(len(summary["ordered_effects"]))
+        sections = analyze_native_sections(projection, local)
+        if not sections.available:
+            raise CompilationError("joined definition sections unavailable: " + str(sections.reason))
+        for resource in sections.resources:
+            if any(dependency.resource in completion.private_roots for dependency in resource.dependencies):
+                raise NativeDefinitionUnsupported("joined definition bounds depend on original private state")
+            descriptor = {key: value for key, value in resource.public().items()
+                          if key not in {"reads", "writes", "overwrites", "dependencies"}}
+            if resource.resource in resources and resources[resource.resource] != descriptor:
+                raise CompilationError("joined definition original resource coordinates changed")
+            resources[resource.resource] = descriptor
+            rectangles += sum(len(getattr(resource, label)) for label in ("reads", "writes", "overwrites"))
+            charge(sum(len(getattr(resource, label)) for label in ("reads", "writes", "overwrites")))
+        if len(resources) > analysis.operation_limit or rectangles > 3 * RECTANGLE_LIMIT * analysis.operation_limit:
+            raise CompilationError("joined definition bounded resource/rectangle budget exhausted")
+        demands.append(summary["summary_identity"])
+        steps.append(NativeDefinitionStep(unit_ids[0], "access", graph.nodes[identities[0]].guard, sections))
+    record = {"schema_version": NATIVE_DEFINITION_VERSION, "procedure": procedure,
+              "structured_identity": graph.identity, "analysis_identity": graph.authority_identity,
+              "source_identity": analysis.inputs.identity(), "selected_node_ids": list(identities),
+              "include_entry": False, "entry_definition_changes": [],
+              "descriptor_window_identity": descriptor_window.identity if descriptor_window is not None else None,
+              "leaf_descriptor_windows": [], "resources": [resources[root] for root in sorted(resources)],
+              "steps": [item.public() for item in steps], "source_demands": demands,
+              "control_visits": len(steps), "leaf_count": len(steps), "rectangle_count": rectangles,
+              "rectangle_limit": RECTANGLE_LIMIT, "source_work": source_work,
+              "ordered_effect_count": ordered_effects,
+              "completion_identity": completion.identity, "transfer_mode": "whole_joined_entry_snapshot",
+              "execution_authorized": False, "gpu_legality_established": False,
+              "global_initialization_authority": False, "allocation_freshness_authority": False,
+              "whole_definition_inferred": False, "requires_original_reached_selection": True,
+              "requires_runtime_layout_alias_and_coverage_checks": True, "bounds_evaluated": False,
+              "limits": ["complete original joined team; unconditional single-assignment perfect nests",
+                         "every unit read requires group-entry coverage; no cross-unit NOWAIT credit",
+                         "exact must-writes available only after the original final join"]}
+    return tuple(steps), (), record
+
+
+def _derive(analysis, procedure, selection, include_entry, descriptor_window=None, completion=None, consume=None):
+    if completion is not None:
+        return _derive_joined(analysis, procedure, selection, include_entry, descriptor_window, completion, consume)
     routine = analysis._require_original(procedure)
     if (not isinstance(selection, tuple) or not selection or len(selection) > analysis.operation_limit
             or any(isinstance(item, str) for item in selection) or type(include_entry) is not bool):
@@ -344,23 +537,25 @@ class NativeDefinitionProof:
     _descriptor_window: object = field(repr=False, compare=False)
     _kills: tuple[str, ...] = field(repr=False, compare=False)
     _record: object = field(repr=False, compare=False)
+    _completion: object = field(default=None, repr=False, compare=False)
 
     def public(self):
         return {"proof_identity": self.identity, **_thaw(self._record)}
 
-    def validate(self, analysis, procedure, original_selection):
+    def validate(self, analysis, procedure, original_selection, *, consume=None):
         if (analysis is not self._analysis or procedure != self.procedure
                 or not isinstance(original_selection, tuple) or len(original_selection) != len(self._selection)
                 or any(left is not right for left, right in zip(original_selection, self._selection, strict=True))
                 or getattr(analysis, "_native_definition_proofs", {}).get(self.identity) is not self):
             raise CompilationError("native definitions lack registered exact original source authority")
-        if _derive(analysis, procedure, original_selection, self._include_entry, self._descriptor_window)[2] != _thaw(self._record):
+        if _derive(analysis, procedure, original_selection, self._include_entry, self._descriptor_window,
+                   self._completion, consume)[2] != _thaw(self._record):
             raise CompilationError("native definition source authority changed")
         return self
 
-    def transfer(self, entry_rectangles=None):
+    def transfer(self, entry_rectangles=None, *, consume=None):
         """Conditional transfer; supplied entry definitions need own authority."""
-        self.validate(self._analysis, self.procedure, self._selection)
+        self.validate(self._analysis, self.procedure, self._selection, consume=consume)
         entry_rectangles = {} if entry_rectangles is None else entry_rectangles
         resources = {item["resource"]: item["rank"] for item in _thaw(self._record)["resources"]}
         if (not isinstance(entry_rectangles, (dict, MappingProxyType))
@@ -376,6 +571,8 @@ class NativeDefinitionProof:
         def visit(item, current):
             nonlocal visits
             visits += 1
+            if consume is not None:
+                consume(1)
             if visits > self._analysis.operation_limit * 4 + 2:
                 raise CompilationError("native definition transfer traversal budget exhausted")
             if item.kind == "sequence":
@@ -390,12 +587,12 @@ class NativeDefinitionProof:
                 if not item.alternatives or item.alternatives[-1][0] is not None:
                     paths.append(remaining)
                 current = {root: _unique(box for path in paths for box in path[root]
-                                        if all(any(_covers(other, box) for other in alternative[root])
+                                        if all(any(_covers(other, box, consume=consume) for other in alternative[root])
                                                for alternative in paths)) for root in current}
             else:
                 for resource in item.sections.resources:
                     for box in resource.reads:
-                        if not any(_covers(defined, box) for defined in current[resource.resource]):
+                        if not any(_covers(defined, box, consume=consume) for defined in current[resource.resource]):
                             uncovered.append(NativeDefinitionRead(item.node_id, item.guard, resource.resource, box))
                             if len(uncovered) > self._analysis.operation_limit * RECTANGLE_LIMIT:
                                 raise CompilationError("native definition read-obligation budget exhausted")
@@ -406,23 +603,41 @@ class NativeDefinitionProof:
                     current[resource.resource] = _unique((*current[resource.resource], *resource.overwrites))
             return current
 
-        for item in self.steps:
-            state = visit(item, state)
+        if self._completion is not None:
+            entry = dict(state)
+            completed = []
+            for item in self.steps:
+                completed.append(visit(item, dict(entry)))
+            state = {root: _unique(tuple(box for result in completed for box in result[root])) for root in state}
+        else:
+            for item in self.steps:
+                state = visit(item, state)
         return NativeDefinitionTransfer(MappingProxyType(state), tuple(uncovered))
 
 
-def prove_native_definitions(analysis, procedure, original_selection, *, include_entry=False, descriptor_window=None):
+def prove_native_definitions(analysis, procedure, original_selection, *, include_entry=False, descriptor_window=None,
+                             completion=None, consume=None):
     """Register a source transfer, never facts about any current allocation."""
-    steps, kills, record = _derive(analysis, procedure, original_selection, include_entry, descriptor_window)
+    steps, kills, record = _derive(analysis, procedure, original_selection, include_entry, descriptor_window,
+                                 completion, consume)
     identity = _hash(record)
     registry = getattr(analysis, "_native_definition_proofs", None)
     if registry is None:
         registry = analysis._native_definition_proofs = {}
     if identity in registry:
-        return registry[identity].validate(analysis, procedure, original_selection)
+        proof = registry[identity]
+        # The fresh derivation above has authenticated every original source
+        # and bound. Do not repeat it only on a cache hit: charged proof work
+        # and reached identities must be identical for cold/reused queries.
+        if (not isinstance(proof, NativeDefinitionProof) or proof._analysis is not analysis
+                or proof.procedure != procedure or len(proof._selection) != len(original_selection)
+                or any(left is not right for left, right in zip(proof._selection, original_selection, strict=True))
+                or _thaw(proof._record) != record):
+            raise CompilationError("native definition cached proof lacks exact source authority")
+        return proof
     if len(registry) >= analysis.procedure_limit:
         raise CompilationError("native definition proof registry budget exhausted")
     proof = NativeDefinitionProof(procedure, identity, steps, analysis, original_selection, include_entry,
-                                  descriptor_window, kills, _freeze(record))
+                                  descriptor_window, kills, _freeze(record), completion)
     registry[identity] = proof
     return proof

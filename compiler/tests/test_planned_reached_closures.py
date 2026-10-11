@@ -265,7 +265,7 @@ def test_public_discovery_adopts_planned_branch_without_full_child_summary(tmp_p
     _outputs, report = builder.run()
     discovery = report["reached_window_discovery"]
     assert discovery["selected"], discovery
-    assert discovery["schema_version"] == 4
+    assert discovery["schema_version"] == 5
     scope, = report["scopes"]
     assert scope["reached_window"]["automatic_discovery"]
     assert scope["reached_window"]["planned_closures"]["closed_path_possible"]

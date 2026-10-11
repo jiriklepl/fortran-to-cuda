@@ -14,7 +14,7 @@ from compiler.ir import CompilationError
 from compiler.scopes.generation_transaction import GenerationTransaction
 from compiler.scopes.reached_owner import ReachedWindowOwner
 
-DISCOVERY_VERSION = 4
+DISCOVERY_VERSION = 5
 MAX_ADJACENT_UNITS = 4
 MAX_ATTEMPTS = 16
 
@@ -90,7 +90,8 @@ def _source_declines(owner):
     if len(points) > owner.builder.analysis.operation_limit:
         raise CompilationError("original-window decline diagnostic budget exhausted")
     return [{"phase": phase, **{field: point[field] for field in
-                              ("node_id", "span", "original_source_kind", "reason")}}
+                              ("node_id", "selected_node_ids", "span", "original_source_kind", "reason")},
+             "completion_identity": point.get("completion_identity")}
             for phase, point in points]
 
 
