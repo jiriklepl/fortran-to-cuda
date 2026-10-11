@@ -9,7 +9,6 @@ from compiler.ir import CompilationError
 from compiler.tests.test_inline_source_regions import original_joined_group
 from compiler.tests.test_source_numerical_closures import SOURCE
 
-
 PROCEDURE = "renamed_numerics::advance"
 
 
@@ -26,9 +25,11 @@ def test_pure_private_outputs_and_lexical_reads_have_distinct_completion_authori
     _path, analysis, group = fixture(tmp_path)
     proof = analysis.numerical_joined_completion(PROCEDURE, group)
     record = proof.public()
-    assert record["available"] and record["requires_numerical_lowering"]
+    assert record["available"]
+    assert record["requires_numerical_lowering"]
     assert record["proof_role"] == "numerical_source_completion"
-    assert not record["native_effects_authority"] and not record["gpu_legality_established"]
+    assert not record["native_effects_authority"]
+    assert not record["gpu_legality_established"]
     assert {item["procedure"] for item in record["helper_closure"]} == {
         PROCEDURE + "::derivative", PROCEDURE + "::invariant"}
     assert {PROCEDURE + "::g", PROCEDURE + "::s"}.issubset(proof.private_roots)
@@ -52,7 +53,7 @@ end module""")
     assert "renamed_numerics::quadratic" in {item["procedure"] for item in record["helper_closure"]}
 
 
-@pytest.mark.parametrize("before,after,reason", [
+@pytest.mark.parametrize(("before", "after", "reason"), [
     ("pure subroutine derivative", "subroutine derivative", "explicit PURE"),
     ("g(1)=a(i)", "call missing(g)\ng(1)=a(i)", "unresolved synchronous source helper"),
     ("g(1)=a(i)", "call derivative(g,i)\ng(1)=a(i)", "recursive"),
@@ -108,7 +109,7 @@ end module
     # unchanged source text alone cannot grant stale helper authority.
     binding = helper.scope.bindings["value"]
     helper.scope.bindings["value"] = replace(binding, attributes=binding.attributes | {"volatile"})
-    with pytest.raises(CompilationError, match="unchanged original source-backed helper authority"):
+    with pytest.raises(CompilationError, match="numerical completion.*original source.*authority"):
         proof.validate(analysis)
 
 

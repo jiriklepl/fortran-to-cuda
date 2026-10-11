@@ -32,7 +32,8 @@ _CACHES = ("summaries", "_closures", "_structures", "_segments", "_descriptor_pr
            "_worksharing_completions", "_worksharing_native_completions", "_reduction_proofs",
            "_reduction_candidates", "_omp_reduction_proofs", "_native_environments",
            "_native_environment_states", "_native_predicates", "_native_functions",
-           "_native_prefix_proofs", "_native_definition_proofs")
+           "_native_prefix_proofs", "_native_definition_proofs", "_numerical_effect_proofs",
+           "_numerical_preparations", "_numerical_preparation_providers")
 
 
 def _hash(value):

@@ -141,7 +141,8 @@ class ReachedWindowOwner(MappedReachedControl, LexicalOwner):
         if extra:
             forced = (*self.window_proof._planned_close_before, *extra)
             proof = plan_reached_window(self.builder.analysis, self.routine.qualified, self.window_originals,
-                                        self.window_proof._roots, self.builder.facts, close_before=forced)
+                                        self.window_proof._roots, self.builder.facts, close_before=forced,
+                                        numerical_provider=self.window_proof._numerical_provider)
             self.window_proof = proof
             self.builder._reached_window_binding = proof, self.window_originals
             planned = proof.public()["planned_closures"]

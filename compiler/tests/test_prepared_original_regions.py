@@ -1,0 +1,283 @@
+"""Source-only numerical preparation retains original policy and context."""
+
+from copy import copy
+from dataclasses import replace
+
+import pytest
+
+from compiler.driver.options import CompilerOptions
+from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
+from compiler.frontend.numerical_preparation import (
+    NumericalPreparationProvider,
+    PreparedOriginalRegion,
+    prepare_original_region,
+)
+from compiler.frontend.source_effects import SourceEffects
+from compiler.ir import CompilationError
+from compiler.offload.config import OffloadConfig
+
+ENTRY = "renamed_region::form_field"
+OPTIONS = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="reached")
+CONFIG = OffloadConfig(policy="sections", scope_execution="reached")
+SOURCE = """module renamed_region
+implicit none
+contains
+pure subroutine leaf_value(x,work)
+real(8),intent(in)::x
+real(8),intent(out)::work(2)
+work(1)=sqrt(abs(x)+1.0_8)
+work(2)=work(1)*work(1)+x
+end subroutine
+subroutine form_field(a,b,n,width)
+real(8),intent(in)::a(:)
+real(8),intent(out)::b(:)
+integer,intent(in)::n,width
+integer::tile,i
+real(8)::work(2)
+continue
+!$omp parallel do private(i,work)
+do tile=1,n,width
+do i=tile,min(tile+width-1,n)
+call leaf_value(a(i),work)
+b(i)=work(2)
+enddo
+enddo
+!$omp end parallel do
+end subroutine
+end module
+"""
+
+
+def fixture(directory, source=SOURCE):
+    path = directory / "renamed.f90"
+    path.write_text(source)
+    analysis = SourceEffects([path])
+    routine = analysis.routines[ENTRY]
+    groups = grouped_original_sequence(routine.execution.content, {})
+    selection = next(item.original_nodes for item in groups if isinstance(item, NativeGroupCandidate))
+    provider = NumericalPreparationProvider(analysis, options=OPTIONS, config=CONFIG, environment_root=ENTRY)
+    return path, analysis, provider, selection
+
+
+def test_source_only_preparation_retains_exact_original_checked_ir(tmp_path, monkeypatch):
+    path, analysis, provider, selection = fixture(tmp_path)
+    before = path.read_bytes()
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("source-only preparation acquired capture or artifact authority")
+
+    monkeypatch.setattr("compiler.emission.generate_sources", forbidden)
+    monkeypatch.setattr("compiler.scopes.source.ScopeBuilder.capture", forbidden)
+    prepared = provider.prepare(analysis, ENTRY, selection)
+    assert type(prepared) is PreparedOriginalRegion
+    assert prepared.validate(analysis, ENTRY, selection) is prepared
+    assert prepared.offload.available
+    assert prepared.public()["physical_backend"] == "scoped_pointer_abi"
+    assert prepared.offload.units
+    assert prepared.extraction.numerical_helpers == ("renamed_region::leaf_value",)
+    assert prepared.extraction.private_arrays == ("work",)
+    assert not prepared.scalar_changes  # Original complete team has private iterators/temporaries.
+    assert prepared.completion_proof.identity == prepared.completion["proof_identity"]
+    assert not prepared.public()["execution_authorized"]
+    assert not prepared.public()["capture_authorized"]
+    assert path.read_bytes() == before
+    assert {item.name for item in tmp_path.iterdir()} == {path.name}
+
+
+def test_tile_guards_are_typed_original_operands_and_exact_legacy_bindings(tmp_path):
+    _path, analysis, provider, selection = fixture(tmp_path)
+    prepared = provider.prepare(analysis, ENTRY, selection)
+    guards = prepared.preconditions
+    assert [item.role for item in guards] == ["positive_tile_step", "tile_integer_range"]
+    assert guards[0].operands[0].resource == "argument::width"
+    assert guards[1].operands[0].resource == "argument::n"
+    assert not guards[0].activation_domains
+    assert {item.resource for item in guards[0].dependencies} == {"argument::width"}
+    assert prepared.all_runtime_guards_typed
+    assert prepared.covered_runtime_guards == prepared.extraction.runtime_guards
+    assert guards[0].render(lambda bound: bound.resource.split("::")[-1]) == "int((width),kind=c_int64_t) > 0_c_int64_t"
+    assert "checked INTEGER64" in guards[0].public()["evaluation"]
+
+
+@pytest.mark.parametrize("target", ["provider", "preparation", "analysis", "selection"])
+def test_copied_or_foreign_authority_cannot_validate(tmp_path, target):
+    _path, analysis, provider, selection = fixture(tmp_path)
+    prepared = provider.prepare(analysis, ENTRY, selection)
+    def invalid():
+        if target == "provider":
+            copy(provider).validate(analysis)
+        elif target == "preparation":
+            replace(prepared).validate(analysis, ENTRY, selection)
+        elif target == "analysis":
+            prepared.validate(copy(analysis), ENTRY, selection)
+        else:
+            forged = tuple(copy(node) if type(node).__name__ == "Block_Nonlabel_Do_Construct" else node
+                           for node in selection)
+            prepared.validate(analysis, ENTRY, forged)
+
+    with pytest.raises(CompilationError):
+        invalid()
+
+
+@pytest.mark.parametrize("change", ["source", "binding", "declaring_scope", "imports", "IR", "guard"])
+def test_original_source_binding_policy_and_checked_ir_mutations_are_hard(tmp_path, change):
+    path, analysis, provider, selection = fixture(tmp_path)
+    prepared = provider.prepare(analysis, ENTRY, selection)
+    helper = analysis.numerical_helpers["renamed_region::leaf_value"]
+    if change == "source":
+        path.write_text(path.read_text().replace("work(2)=work(1)*work(1)+x", "work(2)=work(1)*work(1)-x"))
+    elif change == "binding":
+        helper.scope.bindings["x"] = replace(helper.scope.bindings["x"], attributes=frozenset({"volatile"}))
+    elif change == "declaring_scope":
+        object.__setattr__(helper.scope.bindings["x"], "declaring_scope", analysis.routines[ENTRY].scope)
+    elif change == "imports":
+        helper.scope.imports["unused_alias"] = ("not_original", "storage")
+    elif change == "IR":
+        object.__setattr__(prepared.function, "parameters", ())
+    else:
+        object.__setattr__(prepared.preconditions[0], "_runtime_expression", "width > -1")
+    with pytest.raises(CompilationError):
+        prepared.validate(analysis, ENTRY, selection)
+
+
+@pytest.mark.parametrize("policy", ["options", "config", "root"])
+def test_preparation_cannot_cross_compiler_policy_or_environment_root(tmp_path, policy):
+    _path, analysis, provider, selection = fixture(tmp_path)
+    prepared = provider.prepare(analysis, ENTRY, selection)
+    options, config, root = OPTIONS, CONFIG, ENTRY
+    if policy == "options":
+        options = replace(options, opt_level=0)
+    elif policy == "config":
+        config = replace(config, host_threads=2)
+    else:
+        root = "another_original::entry"
+    with pytest.raises(CompilationError, match="policy changed"):
+        prepared.validate_configuration(options=options, config=config, environment_root=root)
+    with pytest.raises(CompilationError, match="policy changed"):
+        provider.validate_configuration(options=options, config=config, environment_root=root)
+
+
+def test_cold_and_validation_work_is_charged_and_parent_budget_is_hard(tmp_path):
+    _path, analysis, provider, selection = fixture(tmp_path)
+    charged = []
+    prepared = provider.prepare(analysis, ENTRY, selection, consume=charged.append)
+    assert charged
+    assert set(charged) == {1}
+    charged.clear()
+    prepared.validate(analysis, ENTRY, selection, consume=charged.append)
+    assert charged
+
+    def exhausted(_count):
+        raise CompilationError("parent aggregate source budget exhausted")
+
+    with pytest.raises(CompilationError, match="parent aggregate"):
+        provider.prepare(analysis, ENTRY, selection, consume=exhausted)
+    with pytest.raises(CompilationError, match="parent aggregate"):
+        prepared.validate(analysis, ENTRY, selection, consume=exhausted)
+
+
+def test_repeated_derivation_reuses_exact_token_without_avoiding_work(tmp_path):
+    _path, analysis, provider, selection = fixture(tmp_path)
+    cold, reused = [], []
+    first = provider.prepare(analysis, ENTRY, selection, consume=cold.append)
+    second = provider.prepare(analysis, ENTRY, selection, consume=reused.append)
+    assert second is first
+    assert reused == cold
+    equivalent = NumericalPreparationProvider(analysis, options=OPTIONS, config=CONFIG, environment_root=ENTRY)
+    assert equivalent.prepare(analysis, ENTRY, selection) is first
+
+
+@pytest.mark.parametrize("change", ["intrinsic_reexport", "binding", "declaring_scope"])
+def test_reused_preparation_revalidates_separate_environment_reexport_authority(tmp_path, change):
+    path = tmp_path / "renamed.f90"
+    path.write_text(SOURCE)
+    environment = tmp_path / "environment.f90"
+    environment.write_text("""module reshuffled_environment
+use,intrinsic::ieee_exceptions,only:exposed_set=>ieee_set_halting_mode,ieee_invalid
+implicit none
+integer,parameter::marker=1
+end module
+module distinct_invocation
+use reshuffled_environment,only:invoke_mode=>exposed_set,ieee_invalid
+use renamed_region,only:form_field
+implicit none
+contains
+subroutine start(a,b,n,width)
+real(8),intent(in)::a(:)
+real(8),intent(out)::b(:)
+integer,intent(in)::n,width
+call invoke_mode(ieee_invalid,.false.)
+call form_field(a,b,n,width)
+end subroutine
+end module
+""")
+    analysis = SourceEffects([path, environment])
+    groups = grouped_original_sequence(analysis.routines[ENTRY].execution.content, {})
+    selection = next(item.original_nodes for item in groups if isinstance(item, NativeGroupCandidate))
+    provider = NumericalPreparationProvider(analysis, options=OPTIONS, config=CONFIG,
+                                            environment_root="distinct_invocation::start")
+    prepared = provider.prepare(analysis, ENTRY, selection)
+    assert prepared.requires_original_team_environment_preflight
+    assert prepared.function.requires_numerical_environment
+    assert prepared.extraction.numerical_environment_required
+    assert provider.prepare(analysis, ENTRY, selection) is prepared
+
+    facade = analysis.modules["reshuffled_environment"]
+    if change == "intrinsic_reexport":
+        facade.intrinsic_procedures["exposed_set"] = "$intrinsic::ieee_exceptions::ieee_get_halting_mode"
+    elif change == "binding":
+        facade.bindings["marker"] = replace(facade.bindings["marker"])
+    else:
+        object.__setattr__(facade.bindings["marker"], "declaring_scope", analysis.modules["distinct_invocation"])
+    with pytest.raises(CompilationError, match="original resolution authority changed"):
+        prepared.validate(analysis, ENTRY, selection)
+    with pytest.raises(CompilationError, match="original resolution authority changed"):
+        provider.prepare(analysis, ENTRY, selection)
+
+
+@pytest.mark.parametrize("member", ["scale", "unrelated"], ids=["selected-field", "unused-sibling"])
+def test_fixed_field_views_reuse_original_object_authority_and_reject_schema_mutation(tmp_path, member):
+    source = SOURCE.replace("implicit none\ncontains", """implicit none
+type renamed_weights
+real(8)::scale,alternate
+real(8),allocatable::unrelated(:)
+end type
+contains""").replace(
+        "subroutine form_field(a,b,n,width)\n",
+        "subroutine form_field(a,b,n,width,coeff)\ntype(renamed_weights),intent(in)::coeff\n").replace(
+        "b(i)=work(2)", "b(i)=work(2)*coeff%scale")
+    _path, analysis, provider, selection = fixture(tmp_path, source)
+    prepared = provider.prepare(analysis, ENTRY, selection)
+    field = next(binding for binding in prepared.extraction.bindings if binding.root == "argument::coeff%scale")
+    assert field.component_object is analysis.routines[ENTRY].scope.bindings["coeff"]
+    assert provider.prepare(analysis, ENTRY, selection) is prepared
+    assert prepared.validate(analysis, ENTRY, selection) is prepared
+
+    schema = analysis.modules["renamed_region"].component_types["renamed_weights"]
+    assert "allocatable" in str(schema.members["unrelated"][1]).lower()
+    schema.members[member] = schema.members["alternate"]
+    with pytest.raises(CompilationError, match="schema changed"):
+        prepared.validate(analysis, ENTRY, selection)
+    with pytest.raises(CompilationError, match="schema changed"):
+        provider.prepare(analysis, ENTRY, selection)
+
+
+def test_factory_and_nested_tile_activation_domains_keep_original_order(tmp_path):
+    source = SOURCE.replace("integer::tile,i", "integer::tile,i,row,j").replace(
+        "do tile=1,n,width\ndo i=tile,min(tile+width-1,n)",
+        "do row=1,n,width\ndo tile=1,n,width\ndo j=row,min(row+width-1,n)\ndo i=tile,min(tile+width-1,n)").replace(
+        "enddo\nenddo\n!$omp end", "enddo\nenddo\nenddo\nenddo\n!$omp end").replace(
+        "private(i,work)", "private(i,j,tile,work)").replace("b(i)=work(2)", "b(i)=work(2)+real(j,8)")
+    # This source is intentionally overlapping across rows. Ordinary dependence
+    # analysis must reject it, rather than obtaining definition credit from a
+    # perfectly tiled coordinate shape alone.
+    _path, analysis, _provider, selection = fixture(tmp_path, source)
+    with pytest.raises(CompilationError):
+        prepare_original_region(analysis, ENTRY, selection, options=OPTIONS, config=CONFIG, environment_root=ENTRY)
+
+
+def test_full_original_context_keeps_excluded_iterator_live_out(tmp_path):
+    source = SOURCE.replace("end subroutine\nend module", "print *, i\nend subroutine\nend module")
+    _path, analysis, provider, selection = fixture(tmp_path, source)
+    with pytest.raises(CompilationError):
+        provider.prepare(analysis, ENTRY, selection)

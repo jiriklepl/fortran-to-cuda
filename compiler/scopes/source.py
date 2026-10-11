@@ -166,6 +166,10 @@ class ScopeBuilder:
         if not isinstance(proof, ReachedWindowProof):
             raise CompilationError("reached owner requires a registered original window proof")
         proof.validate(self.analysis, self.entry.qualified, original_selection)
+        if proof._numerical_provider is not None:
+            proof._numerical_provider.validate_configuration(options=self.options, config=self.config,
+                environment_root=self._numerical_environment_root,
+                immutable_inputs=getattr(self, "immutable_inputs", {}))
         record = proof.public()
         identity = sha256(json.dumps(self.facts, sort_keys=True, separators=(",", ":"),
                                     allow_nan=False).encode()).hexdigest()
@@ -191,6 +195,11 @@ class ScopeBuilder:
             return None
         proof, selection = binding
         child = getattr(self, "_mapped_reached_child", None)
+        if proof._numerical_provider is not None:
+            proof._numerical_provider.validate_configuration(options=self.options, config=self.config,
+                environment_root=self._numerical_environment_root,
+                immutable_inputs=(proof._numerical_provider.immutable_inputs if child is not None
+                                  else getattr(self, "immutable_inputs", {})))
         proof.validate(self.analysis, proof.procedure if child is not None else self.entry.qualified, selection)
         if child is not None:
             original = proof.child_plan(getattr(self, "_mapped_reached_path", ()), child.original_call)
@@ -223,6 +232,34 @@ class ScopeBuilder:
             return None
         child = getattr(self, "_mapped_reached_child", None)
         return child.public()["plan"] if child is not None else proof.public()
+
+    def numerical_preparation_for(self, analysis, procedure, selection):
+        """Borrow a prepared computation only from this exact reached owner."""
+        proof = self.validate_reached_window()
+        if proof is None:
+            return None
+        if analysis is not self.analysis or procedure != self.entry.qualified:
+            raise CompilationError("reached numerical preparation requires its original procedure and analysis")
+        region = proof.numerical_region(procedure, selection)
+        return region[0] if region is not None else None
+
+    def numerical_effect_for(self, analysis, procedure, selection):
+        proof = self.validate_reached_window()
+        if proof is None:
+            return None
+        if analysis is not self.analysis or procedure != self.entry.qualified:
+            raise CompilationError("reached numerical effects require their original procedure and analysis")
+        region = proof.numerical_region(procedure, selection)
+        return region[1] if region is not None else None
+
+    def call_numerical_effect(self, call):
+        if call.region is None:
+            return None
+        owner = self.inline_for(call.procedure)
+        if owner is None:
+            raise CompilationError("numerical effect lookup lacks an original inline owner")
+        originals = owner.original_selection(call.node)
+        return owner.builder.numerical_effect_for(owner.builder.analysis, owner.builder.entry.qualified, originals)
 
     def descriptor_window_for(self, analysis, procedure, selection):
         """Issue exact per-consumer authority inside an authenticated owner."""
