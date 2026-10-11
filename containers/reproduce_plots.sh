@@ -182,19 +182,74 @@ if [[ "${MODE}" == "run-elmm" || "${MODE}" == "all" ]]; then
     echo ""
     echo "[Step 2/2] Running ELMM application pipeline..."
     if [[ -d "${WORKSPACE_ROOT}/elmm-pipeline" ]]; then
-        ELMM_ARGS=(run --example channel --steps 10 --threads 4 --repeats 3 --warmups 1)
+        ELMM_RUN_DIR="${OUTPUT_DIR}/elmm-run"
+        mkdir -p "${ELMM_RUN_DIR}"
+        ELMM_ARGS=(run --example channel --steps 10 --threads 4 --repeats 3 --warmups 1 --output "${ELMM_RUN_DIR}")
         if command -v gfortran-15 &>/dev/null; then
             ELMM_ARGS+=(--fc gfortran-15)
+        elif command -v gfortran &>/dev/null; then
+            ELMM_ARGS+=(--fc gfortran)
         fi
         if command -v nvcc &>/dev/null && command -v nvidia-smi &>/dev/null; then
-            ELMM_ARGS+=(--target gpu --cuda-host g++-14)
+            CUDA_HOST_BIN=""
+            if command -v g++-14 &>/dev/null; then
+                CUDA_HOST_BIN="g++-14"
+            elif command -v g++ &>/dev/null; then
+                CUDA_HOST_BIN="g++"
+            fi
+            if [[ -n "${CUDA_HOST_BIN}" ]]; then
+                ELMM_ARGS+=(--target gpu --cuda-host "${CUDA_HOST_BIN}")
+            else
+                ELMM_ARGS+=(--target gpu)
+            fi
             if [[ -n "${CUDA_ARCH}" && "${CUDA_ARCH}" != "native" ]]; then
                 # Strip sm_ prefix if present for pipeline argument
                 NUM_ARCH="${CUDA_ARCH#sm_}"
                 ELMM_ARGS+=(--gpu-arch "${NUM_ARCH}")
             fi
         fi
-        (cd "${WORKSPACE_ROOT}/elmm-pipeline" && "${PYTHON}" pipeline.py "${ELMM_ARGS[@]}")
+        (cd "${WORKSPACE_ROOT}/elmm-pipeline" && "${PYTHON}" pipeline.py "${ELMM_ARGS[@]}") || echo "WARNING: ELMM run encountered non-zero return code."
+
+        # If ELMM run report was produced, generate a direct timing figure and copy report
+        if [[ -f "${ELMM_RUN_DIR}/report.json" ]]; then
+            echo "  Plotting fresh ELMM application run timings from ${ELMM_RUN_DIR}/report.json..."
+            "${PYTHON}" - <<EOF || true
+import json, sys
+from pathlib import Path
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy as np
+
+report_path = Path("${ELMM_RUN_DIR}/report.json")
+if report_path.is_file():
+    data = json.loads(report_path.read_text())
+    variants = data.get("variants", {})
+    names = [k for k, v in variants.items() if v.get("status") == "ok"]
+    if names:
+        step_times = [variants[k]["summary"]["time_steps_seconds"]["median"] for k in names]
+        wall_times = [variants[k]["summary"]["wall_seconds"]["median"] for k in names]
+        fig, ax = plt.subplots(figsize=(8, 5))
+        x = np.arange(len(names))
+        width = 0.35
+        ax.bar(x - width/2, step_times, width, label="Step Time (s)", color="#2563eb")
+        ax.bar(x + width/2, wall_times, width, label="Total Wall Time (s)", color="#10b981")
+        ax.set_ylabel("Execution Time (seconds, lower is better)")
+        ax.set_title("ELMM Pipeline Benchmark Run (Channel Flow)")
+        ax.set_xticks(x)
+        ax.set_xticklabels([n.capitalize() for n in names])
+        ax.legend()
+        ax.grid(axis="y", linestyle="--", alpha=0.5)
+        fig.tight_layout()
+        out_dir = Path("${OUTPUT_DIR}")
+        for ext in ("png", "pdf", "svg"):
+            fig.savefig(out_dir / f"elmm-run-timings.{ext}", dpi=180)
+        plt.close(fig)
+EOF
+            if [[ -f "${ELMM_RUN_DIR}/report.md" ]]; then
+                cp -v "${ELMM_RUN_DIR}/report.md" "${OUTPUT_DIR}/elmm-run-report.md" 2>/dev/null || true
+            fi
+        fi
     else
         echo "  WARNING: elmm-pipeline directory not found. Skipping ELMM run."
     fi
