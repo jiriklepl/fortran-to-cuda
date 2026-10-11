@@ -115,6 +115,7 @@ find_python() {
     # 2. Virtual environments
     local venv_candidates=(
         "${WORKSPACE_ROOT}/.venv/bin/python"
+        "${WORKSPACE_ROOT}/elmm-pipeline/.cache/envs/local/bin/python"
         "${WORKSPACE_ROOT}/elmm-pipeline/.venv/bin/python"
         "/opt/venv/bin/python"
     )
@@ -176,6 +177,60 @@ if [[ -z "${PYTHON}" ]]; then
     exit 1
 fi
 
+# Detect Python interpreter that has matplotlib and numpy for figure generation
+find_plot_python() {
+    # 1. If primary PYTHON has matplotlib, use it
+    if "${PYTHON}" -c 'import matplotlib, numpy' &>/dev/null; then
+        echo "${PYTHON}"
+        return 0
+    fi
+
+    # 2. Check virtualenvs
+    local venv_candidates=(
+        "${WORKSPACE_ROOT}/.venv/bin/python"
+        "${WORKSPACE_ROOT}/elmm-pipeline/.cache/envs/local/bin/python"
+        "${WORKSPACE_ROOT}/elmm-pipeline/.venv/bin/python"
+        "/opt/venv/bin/python"
+    )
+    for v in "${venv_candidates[@]}"; do
+        if [[ -x "$v" ]] && "$v" -c 'import matplotlib, numpy' &>/dev/null; then
+            echo "$v"
+            return 0
+        fi
+    done
+
+    # 3. Check system Python interpreters that have matplotlib (e.g. system python3 on RHEL)
+    local py_candidates=(
+        "python3"
+        "/usr/bin/python3"
+        "python3.9"
+        "/usr/bin/python3.9"
+        "python3.11"
+        "/usr/bin/python3.11"
+        "python3.12"
+        "/usr/bin/python3.12"
+        "python"
+    )
+    for p in "${py_candidates[@]}"; do
+        if command -v "$p" &>/dev/null; then
+            local full_p
+            full_p="$(command -v "$p")"
+            if "$full_p" -c 'import matplotlib, numpy' &>/dev/null; then
+                echo "$full_p"
+                return 0
+            fi
+        elif [[ -x "$p" ]] && "$p" -c 'import matplotlib, numpy' &>/dev/null; then
+            echo "$p"
+            return 0
+        fi
+    done
+
+    # 4. Fallback to primary PYTHON
+    echo "${PYTHON}"
+}
+
+PLOT_PYTHON="$(find_plot_python)"
+
 # Setup matplotlib cache dir
 export MPLCONFIGDIR="/tmp/matplotlib"
 mkdir -p "${MPLCONFIGDIR}"
@@ -190,16 +245,17 @@ mkdir -p "${OUTPUT_DIR}/ordinary-figures"
 
 echo "================================================================================"
 echo " Pipeline Figure Reproduction Engine"
-echo " Workspace:   ${WORKSPACE_ROOT}"
-echo " Output Dir:  ${OUTPUT_DIR}"
-echo " Python:      $(${PYTHON} --version 2>&1) (${PYTHON})"
-echo " Mode:        ${MODE}"
+echo " Workspace:     ${WORKSPACE_ROOT}"
+echo " Output Dir:    ${OUTPUT_DIR}"
+echo " Python (Run):  $(${PYTHON} --version 2>&1) (${PYTHON})"
+echo " Python (Plot): $(${PLOT_PYTHON} --version 2>&1) (${PLOT_PYTHON})"
+echo " Mode:          ${MODE}"
 if command -v nvidia-smi &>/dev/null; then
     GPU_NAME="$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n1 || echo 'N/A')"
     DRIVER_VER="$(nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -n1 || echo 'N/A')"
-    echo " GPU Device:  ${GPU_NAME} (Driver: ${DRIVER_VER})"
+    echo " GPU Device:    ${GPU_NAME} (Driver: ${DRIVER_VER})"
 else
-    echo " GPU Device:  None detected (Offline/Container CPU Mode)"
+    echo " GPU Device:    None detected (Offline/Container CPU Mode)"
 fi
 echo "================================================================================"
 
@@ -236,7 +292,7 @@ if [[ "${MODE}" == "run-benchmarks" || "${MODE}" == "all" ]]; then
     "${PYTHON}" -m benchmarks.harness.run > "${FRESH_CSV}"
 
     echo "  Generating harness plots from fresh sweep..."
-    "${PYTHON}" -m benchmarks.harness.plot --results "${FRESH_CSV}"
+    "${PLOT_PYTHON}" -m benchmarks.harness.plot --results "${FRESH_CSV}"
 fi
 
 # Execute ELMM pipeline if requested
@@ -245,20 +301,19 @@ if [[ "${MODE}" == "run-elmm" || "${MODE}" == "all" ]]; then
     echo "[Step 2/2] Running ELMM application pipeline..."
     if [[ -d "${WORKSPACE_ROOT}/elmm-pipeline" ]]; then
         ELMM_RUN_DIR="${OUTPUT_DIR}/elmm-run"
-        mkdir -p "${ELMM_RUN_DIR}"
+        # ELMM pipeline requires destination directory to NOT exist beforehand
+        rm -rf "${ELMM_RUN_DIR}"
 
-        # Determine supported toolchain components
-        HAS_NVFORTRAN=0
-        if command -v nvfortran &>/dev/null; then
-            HAS_NVFORTRAN=1
-        elif ls /opt/nvidia/hpc_sdk/*/*/compilers/bin/nvfortran &>/dev/null 2>&1; then
-            HAS_NVFORTRAN=1
-        fi
-
+        # Determine tools to run: respect ELMM_TOOLS, or tools recorded in setup.json, or default to baseline,local
         if [[ -n "${ELMM_TOOLS:-}" ]]; then
             CHOSEN_TOOLS="${ELMM_TOOLS}"
-        elif [[ "${HAS_NVFORTRAN}" -eq 1 ]]; then
-            CHOSEN_TOOLS="baseline,local,loki,psyclone"
+        elif [[ -f "${WORKSPACE_ROOT}/elmm-pipeline/.cache/setup.json" ]]; then
+            SETUP_TOOLS="$("${PYTHON}" -c 'import json; print(",".join(json.load(open("'${WORKSPACE_ROOT}/elmm-pipeline/.cache/setup.json'"))["tools"]))' 2>/dev/null || true)"
+            if [[ -n "${SETUP_TOOLS}" ]]; then
+                CHOSEN_TOOLS="${SETUP_TOOLS}"
+            else
+                CHOSEN_TOOLS="baseline,local"
+            fi
         else
             CHOSEN_TOOLS="baseline,local"
         fi
@@ -311,7 +366,7 @@ if [[ "${MODE}" == "run-elmm" || "${MODE}" == "all" ]]; then
         # If ELMM run report was produced, generate a direct timing figure and copy report
         if [[ -f "${ELMM_RUN_DIR}/report.json" ]]; then
             echo "  Plotting fresh ELMM application run timings from ${ELMM_RUN_DIR}/report.json..."
-            "${PYTHON}" - <<EOF || true
+            "${PLOT_PYTHON}" - <<EOF || true
 import json, sys
 from pathlib import Path
 import matplotlib
@@ -366,7 +421,7 @@ if [[ ! -f "${BASELINE_CSV}" && -f "${SCRIPT_DIR}/data/baseline.csv" ]]; then
 fi
 
 if [[ -f "${BASELINE_CSV}" ]]; then
-    "${PYTHON}" -m benchmarks.harness.plot --results "${BASELINE_CSV}"
+    "${PLOT_PYTHON}" -m benchmarks.harness.plot --results "${BASELINE_CSV}"
     
     # Copy generated figures to output
     if [[ -d "${WORKSPACE_ROOT}/benchmarks/results/figures" ]]; then
@@ -399,7 +454,7 @@ done
 
 if [[ -n "${CAMPAIGN_REPORT}" && -f "${CAMPAIGN_REPORT}" ]]; then
     echo "    Using report: ${CAMPAIGN_REPORT}"
-    "${PYTHON}" "${WORKSPACE_ROOT}/benchmarks/harness/plot_strategies.py" \
+    "${PLOT_PYTHON}" "${WORKSPACE_ROOT}/benchmarks/harness/plot_strategies.py" \
         "${CAMPAIGN_REPORT}" \
         --output "${OUTPUT_DIR}/ordinary-figures" \
         --label "Datacenter GPU Pipeline"
@@ -420,7 +475,7 @@ M2_CAMPAIGN="${WORKSPACE_ROOT}/benchmarks/results/generic-elmm-capabilities-2026
 M2_SCRIPT="${WORKSPACE_ROOT}/benchmarks/results/generic-elmm-capabilities-20261009/report_limited_m2.py"
 
 if [[ -d "${M2_CAMPAIGN}" && -f "${M2_SCRIPT}" ]]; then
-    "${PYTHON}" "${M2_SCRIPT}" --campaign "${M2_CAMPAIGN}" >/dev/null 2>&1 || true
+    "${PLOT_PYTHON}" "${M2_SCRIPT}" --campaign "${M2_CAMPAIGN}" >/dev/null 2>&1 || true
     if [[ -d "${M2_CAMPAIGN}/figures" ]]; then
         cp -v "${M2_CAMPAIGN}/figures"/scoped-wall-relative.{png,pdf,svg} "${OUTPUT_DIR}/" 2>/dev/null || true
     fi
