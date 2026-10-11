@@ -24,7 +24,7 @@ from compiler.frontend.source_functions import _validate_scope
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 
-REACHED_WINDOW_VERSION = 12
+REACHED_WINDOW_VERSION = 13
 _EFFECTS = {"read", "write", "overwrite", "descriptor_read", "definition_change"}
 _FORBIDDEN = {"pointer", "optional", "volatile", "asynchronous", "value"}
 
@@ -344,6 +344,7 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
     prefix_steps, prefix_disables = [], {}
     visits, effects, effect_work = 0, 0, 0
     active_ids, closes, changed_scalars = set(), {}, set()
+    condition_payload_reads = set()
     activation_templates = {}
 
     def coordinate_work(amount):
@@ -886,6 +887,9 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
             if effect["kind"] not in _EFFECTS:
                 raise CompilationError("reached window native environment/control effect needs distinct authority")
             root = effect["resource"]
+            if (not before_owner and graph.nodes[identity].details.get("evaluation") == "condition"
+                    and root in state and effect["kind"] in {"read", "write", "overwrite", "definition_change"}):
+                condition_payload_reads.add(identity)
             if root not in state:
                 if root in condition_reads and effect["kind"] in {"read", "descriptor_read"}:
                     continue  # Original dormant host input; no managed definition.
@@ -1026,10 +1030,29 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                 paths.append(planned_transfer(body, (path, False), depth + 1))
             if not node.alternatives or node.alternatives[-1][0] is not None:
                 paths.append((false_path, False))
-            # A single-line IF has no distinct source span for an inner cut.
-            # Close before its entire original condition/action, unconditionally.
+            # An action has no independent physical edit span. Bind its one
+            # direct close to the intact IF only when the supported condition
+            # needs no managed payload publication. Its false path stays active.
             originals = graph.source_nodes(identity)
             if len(originals) == 1 and type(originals[0]).__name__ == "If_Stmt" and any(path[1] for path in paths):
+                conditional, unsafe = _single_if_action_source(analysis, routine, graph, identity,
+                                                               consume=coordinate_work)
+                action_id = conditional["action_node_id"]
+                action_point = closes.get(action_id)
+                if (unsafe is None and conditional["condition_node_id"] not in condition_payload_reads
+                        and paths[0][0] is None and action_point is not None
+                        and action_id not in previous_closes
+                        and set(closes) - set(previous_closes) == {action_id}
+                        and action_point["selected_node_ids"] == [action_id]
+                        and action_point["original_source_sha256"] == conditional["action_source_sha256"]
+                        and action_point["original_source_kind"] == conditional["action_source_kind"]):
+                    del closes[action_id]
+                    closes[identity] = {**action_point, "node_id": identity, "selected_node_ids": [identity],
+                        "guard": list(node.guard), "original_source_sha256": _hash([str(originals[0])]),
+                        "original_source_kind": "If_Stmt", "span": selection_span((identity,)),
+                        "conditional_action": conditional,
+                        "execution": "original condition once; publish and close inside its true branch before original action once"}
+                    return false_path, True
                 discard(branch_before)
                 active_ids.clear()
                 active_ids.update(previous_active)

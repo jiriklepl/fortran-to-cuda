@@ -215,7 +215,7 @@ def test_omitted_original_middle_unit_cannot_form_definition_authority(tmp_path)
 def test_typed_activation_sections_do_not_turn_prefix_interior_into_whole(tmp_path):
     _paths, builder, proof, originals = joined_prefix_fixture(tmp_path)
     public = proof.public()
-    assert public["schema_version"] == 12
+    assert public["schema_version"] == 13
     assert public["prefix_eligibility"]["activation_path_possible"]
     assert not public["prefix_eligibility"]["disabled_path_possible"]
     sections = proof.activation_sections("argument::seed")
@@ -267,7 +267,11 @@ def test_single_line_active_close_retains_whole_original_if_span(tmp_path):
     assert point["original_source_kind"] == "If_Stmt"
     assert point["span"] == list(graph.nodes[identity].span)
     assert len(point["span"]) == 2
-    assert "whole-construct" in point["reason"]
+    conditional = point["conditional_action"]
+    assert graph.source_nodes(conditional["condition_node_id"])[0] is original.items[0]
+    assert graph.source_nodes(conditional["action_node_id"])[0] is original.items[1]
+    assert "opaque_child" in point["reason"]
+    assert proof.public()["planned_closures"]["active_path_may_return"]
 
 
 def test_pure_original_child_cannot_borrow_impure_runtime_companion(tmp_path):
