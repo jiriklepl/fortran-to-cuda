@@ -102,14 +102,76 @@ if [[ "${VERBOSE}" -eq 1 ]]; then
     set -x
 fi
 
-# Detect Python environment
-if [[ -x "/opt/venv/bin/python" ]]; then
-    PYTHON="/opt/venv/bin/python"
-elif [[ -x "${WORKSPACE_ROOT}/.venv/bin/python" ]]; then
-    PYTHON="${WORKSPACE_ROOT}/.venv/bin/python"
-elif command -v python3 &>/dev/null; then
-    PYTHON="$(command -v python3)"
-else
+# Detect Python environment (prioritizing Python 3.12+ as cluster nodes default to 3.9)
+find_python() {
+    # 1. Caller explicit override via PYTHON environment variable if >= 3.11
+    if [[ -n "${PYTHON:-}" ]]; then
+        if "${PYTHON}" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' &>/dev/null; then
+            echo "${PYTHON}"
+            return 0
+        fi
+    fi
+
+    # 2. Virtual environments
+    local venv_candidates=(
+        "${WORKSPACE_ROOT}/.venv/bin/python"
+        "${WORKSPACE_ROOT}/elmm-pipeline/.venv/bin/python"
+        "/opt/venv/bin/python"
+    )
+    for v in "${venv_candidates[@]}"; do
+        if [[ -x "$v" ]] && "$v" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' &>/dev/null; then
+            echo "$v"
+            return 0
+        fi
+    done
+
+    # 3. Explicit Python >= 3.11 candidate binaries (specifically python3.12)
+    local bin_candidates=(
+        "python3.12"
+        "/usr/bin/python3.12"
+        "/usr/local/bin/python3.12"
+        "python3.13"
+        "/usr/bin/python3.13"
+        "python3.11"
+        "/usr/bin/python3.11"
+    )
+    for b in "${bin_candidates[@]}"; do
+        if command -v "$b" &>/dev/null; then
+            local bin_path
+            bin_path="$(command -v "$b")"
+            if "$bin_path" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' &>/dev/null; then
+                echo "$bin_path"
+                return 0
+            fi
+        elif [[ -x "$b" ]] && "$b" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' &>/dev/null; then
+            echo "$b"
+            return 0
+        fi
+    done
+
+    # 4. Default python3 if >= 3.11
+    if command -v python3 &>/dev/null; then
+        local p3
+        p3="$(command -v python3)"
+        if "$p3" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' &>/dev/null; then
+            echo "$p3"
+            return 0
+        fi
+    fi
+
+    # 5. Fallback to any python3 or python
+    if command -v python3 &>/dev/null; then
+        command -v python3
+        return 0
+    elif command -v python &>/dev/null; then
+        command -v python
+        return 0
+    fi
+    return 1
+}
+
+PYTHON="$(find_python || true)"
+if [[ -z "${PYTHON}" ]]; then
     echo "ERROR: No Python interpreter found." >&2
     exit 1
 fi
@@ -184,7 +246,24 @@ if [[ "${MODE}" == "run-elmm" || "${MODE}" == "all" ]]; then
     if [[ -d "${WORKSPACE_ROOT}/elmm-pipeline" ]]; then
         ELMM_RUN_DIR="${OUTPUT_DIR}/elmm-run"
         mkdir -p "${ELMM_RUN_DIR}"
-        ELMM_ARGS=(run --example channel --steps 10 --threads 4 --repeats 3 --warmups 1 --output "${ELMM_RUN_DIR}")
+
+        # Determine supported toolchain components
+        HAS_NVFORTRAN=0
+        if command -v nvfortran &>/dev/null; then
+            HAS_NVFORTRAN=1
+        elif ls /opt/nvidia/hpc_sdk/*/*/compilers/bin/nvfortran &>/dev/null 2>&1; then
+            HAS_NVFORTRAN=1
+        fi
+
+        if [[ -n "${ELMM_TOOLS:-}" ]]; then
+            CHOSEN_TOOLS="${ELMM_TOOLS}"
+        elif [[ "${HAS_NVFORTRAN}" -eq 1 ]]; then
+            CHOSEN_TOOLS="baseline,local,loki,psyclone"
+        else
+            CHOSEN_TOOLS="baseline,local"
+        fi
+
+        ELMM_ARGS=(run --example channel --steps 10 --threads 4 --repeats 3 --warmups 1 --tools "${CHOSEN_TOOLS}" --output "${ELMM_RUN_DIR}")
         if command -v gfortran-15 &>/dev/null; then
             ELMM_ARGS+=(--fc gfortran-15)
         elif command -v gfortran &>/dev/null; then
@@ -208,6 +287,25 @@ if [[ "${MODE}" == "run-elmm" || "${MODE}" == "all" ]]; then
                 ELMM_ARGS+=(--gpu-arch "${NUM_ARCH}")
             fi
         fi
+
+        # Ensure setup has been performed for elmm-pipeline
+        if [[ ! -f "${WORKSPACE_ROOT}/elmm-pipeline/.cache/setup.json" ]]; then
+            echo "  Bootstrapping ELMM pipeline setup (tools: ${CHOSEN_TOOLS})..."
+            SETUP_ARGS=(setup --tools "${CHOSEN_TOOLS}")
+            if [[ -d "${WORKSPACE_ROOT}/compiler" ]]; then
+                SETUP_ARGS+=(--local-compiler "${WORKSPACE_ROOT}")
+            fi
+            if command -v gfortran-15 &>/dev/null; then
+                SETUP_ARGS+=(--fc gfortran-15)
+            elif command -v gfortran &>/dev/null; then
+                SETUP_ARGS+=(--fc gfortran)
+            fi
+            (cd "${WORKSPACE_ROOT}/elmm-pipeline" && "${PYTHON}" pipeline.py "${SETUP_ARGS[@]}") || {
+                echo "WARNING: pipeline.py setup returned non-zero code. Attempting run anyway..."
+            }
+        fi
+
+        echo "  Executing: ${PYTHON} pipeline.py ${ELMM_ARGS[*]}"
         (cd "${WORKSPACE_ROOT}/elmm-pipeline" && "${PYTHON}" pipeline.py "${ELMM_ARGS[@]}") || echo "WARNING: ELMM run encountered non-zero return code."
 
         # If ELMM run report was produced, generate a direct timing figure and copy report
@@ -263,6 +361,10 @@ echo "Generating publication plots..."
 # ------------------------------------------------------------------------------
 echo "  [1/4] Harness microbenchmark figures (Memory transfer vs Kernel time)..."
 BASELINE_CSV="${WORKSPACE_ROOT}/benchmarks/results/baseline.csv"
+if [[ ! -f "${BASELINE_CSV}" && -f "${SCRIPT_DIR}/data/baseline.csv" ]]; then
+    BASELINE_CSV="${SCRIPT_DIR}/data/baseline.csv"
+fi
+
 if [[ -f "${BASELINE_CSV}" ]]; then
     "${PYTHON}" -m benchmarks.harness.plot --results "${BASELINE_CSV}"
     
@@ -285,6 +387,7 @@ POTENTIAL_REPORTS=(
     "${WORKSPACE_ROOT}/benchmarks/results/generic-elmm-capabilities-20261009/campaigns/20261009T152400Z-m2-source-regions-boundary-views/ordinary/report.json"
     "${WORKSPACE_ROOT}/benchmarks/results/generic-elmm-capabilities-20261009/campaigns/20261009T130153Z-m1-numerical-closures-verified/ordinary/report.json"
     "${WORKSPACE_ROOT}/benchmarks/results/structured-offload-20261007T145715Z/report.json"
+    "${SCRIPT_DIR}/data/campaign_report.json"
 )
 
 for r in "${POTENTIAL_REPORTS[@]}"; do
@@ -324,6 +427,9 @@ if [[ -d "${M2_CAMPAIGN}" && -f "${M2_SCRIPT}" ]]; then
     if [[ -f "${M2_CAMPAIGN}/report.md" ]]; then
         cp -v "${M2_CAMPAIGN}/report.md" "${OUTPUT_DIR}/scoped-application-report.md" 2>/dev/null || true
     fi
+elif [[ -f "${SCRIPT_DIR}/data/scoped-wall-relative.png" ]]; then
+    echo "    Using bundled scoped application figures from ${SCRIPT_DIR}/data..."
+    cp -v "${SCRIPT_DIR}/data"/scoped-wall-relative.{png,pdf,svg} "${OUTPUT_DIR}/" 2>/dev/null || true
 else
     echo "    Notice: M2 campaign directory not found, skipping."
 fi
@@ -335,6 +441,7 @@ echo "  [4/4] Scoped transfer control figures (scoped-transfers-wall-relative)..
 POTENTIAL_TRANSFER_DIRS=(
     "${WORKSPACE_ROOT}/benchmarks/results/generic-residency-20261009/scoped-generic-2b-20261009T054608Z-2b-pipelined-scoped-transfers-accepted/figures"
     "${WORKSPACE_ROOT}/benchmarks/results/generic-residency-20261009/milestones/20261009T065104Z-pipelined-scoped-transfers/scoped-generic-figures"
+    "${SCRIPT_DIR}/data"
 )
 
 for tdir in "${POTENTIAL_TRANSFER_DIRS[@]}"; do
