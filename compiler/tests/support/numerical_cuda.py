@@ -114,8 +114,9 @@ def build_reached_numerical_binaries(tmp_path_factory, precision, resource_fallb
         directory, precision=precision, device_budget=0 if resource_fallback else None)
     scope, = report["scopes"]
     assert len(scope["gpu_leaves"]) == expected_gpu_leaves
-    assert owner.builder.facts["captures"][ROOTS[1]]["initialized"] == "whole"
-    assert owner.builder.facts["captures"][ROOTS[2]]["initialized"] == "none"
+    builder = getattr(owner, "builder", owner)
+    assert builder.facts["captures"][ROOTS[1]]["initialized"] == "whole"
+    assert builder.facts["captures"][ROOTS[2]]["initialized"] == "none"
     resources = {item["resource"]: item for item in scope["resource_bindings"]["resources"]}
     for name, text in outputs.items():
         artifact = directory / name

@@ -160,15 +160,42 @@ def test_original_team_checks_every_participant_before_uniform_native_fallback(t
     assert not owner["boundaries"]
     text = outputs[report["sources"][str(path)]["replacement"]]
     assert text.count("!$omp parallel private(i)") == 1
-    team = text[text.index("!$omp parallel private(i)"):]
-    aggregate = ("!$omp master\nfort_numerical_guard = .true.\n!$omp end master\n!$omp barrier\n"
-                 "if (fort_native_ready) then\nif (fort_scope_numerical_environment_supported() == 0) then\n"
-                 "!$omp atomic write\nfort_numerical_guard = .false.\nendif\nendif\n!$omp barrier")
+    first = text.index("!$omp parallel private(i)")
+    last = text.index("!$omp end parallel", first) + len("!$omp end parallel")
+    team = text[first:last]
+    group, = [unit["operations"]["combined_numerical_team"] for unit in owner["planning_segments"]
+              if "combined_numerical_team" in unit["operations"]]
+    assert group["group_kind"] == "separate_parallel"
+    assert group["unit_count"] == 1
+    assert not group["native_effects_authority"]
+    assert not group["nested_team_created"]
+    # Qualification happens in master; every actual participant then votes
+    # outside master, and a barrier completes that vote before preparation.
+    qualification, vote = team.split("!$omp end master\n!$omp barrier\n", 1)
+    assert "fort_team_environment_supported = .true." in qualification
+    assert "fort_team_omp_level() /= 1 .or. fort_team_omp_threads() /= 4" in qualification
+    aggregate = ("if (fort_native_ready) then\n"
+                 "if (fort_scope_numerical_environment_supported() == 0) then\n"
+                 "!$omp atomic write\nfort_team_environment_supported = .false.\n"
+                 "endif\nendif\n!$omp barrier\n")
+    assert vote.startswith(aggregate)
     assert aggregate in team
     decision = team[team.index(aggregate)+len(aggregate):]
-    assert decision.index("if (fort_numerical_guard) then") < decision.index("if (fort_team_run) then")
-    assert "fort_numerical_guard = .true." not in decision[:decision.index("if (fort_team_run) then")]
-    assert "else\n!$omp do\ndo i=-2,n-3\nb(i)=-a(i)\nenddo\n!$omp end do\nendif" in decision
+    assert decision.startswith("!$omp master\nif (fort_native_ready) then\n")
+    veto = decision[decision.index("if (.not. fort_team_environment_supported) then"):
+                    decision.index("fort_numerical_guard = .true.")]
+    assert veto.index("fort_scope_close(fort_team_context)") < veto.index("fort_team_context = 0")
+    assert veto.index("fort_team_enabled = .false.") < veto.index("fort_native_ready = .false.")
+    assert "exit " in veto
+    assert decision.index(veto) < decision.index("fort_scope_register")
+    assert decision.index(veto) < decision.index("fort_scope_plan_reset_mode")
+    assert "fort_team_environment_supported = .true." not in decision
+    assert "!$omp end master\n!$omp barrier\nif (fort_team_run) then" in decision
+    native = "else\n!$omp do\ndo i=-2,n-3\nb(i)=-a(i)\nenddo\n!$omp end do\nendif\n!$omp end parallel"
+    assert decision.endswith(native)
+    assert team.count("b(i)=-a(i)") == 1
+    assert text.index("call ieee_set_halting_mode(ieee_invalid,.false.)") < first
+    assert text.index("call ieee_set_halting_mode(ieee_invalid,.true.)") > last
     assert sum(region["execution_participation"] == "qualified_original_team"
                for region in numerical_regions(report)) == 1
     team_entries = [value for name, value in outputs.items()

@@ -24,6 +24,7 @@ class InlineRegions:
         self.element_operands = {}
         self.definition_proofs = {}
         self.prepared_regions = {}
+        self.original_numerical_regions = {}
         self.collective_regions = set()
         self.computations = {}
         self.attempts = self.operations = 0
@@ -303,13 +304,80 @@ class InlineRegions:
         region = self.builder.resolved_numerical_region(
             self.builder.analysis, self.builder.entry.qualified, sources)
         if region is None:
-            raise CompilationError("combined numerical team requires registered original preparation")
+            region = self.prepare_numerical_region(sources)
         retained = region.prepared
         if retained.completion_proof is None:
             raise CompilationError("combined numerical team requires complete original numerical authority")
         # Preparation validates the exact registered completion type: simple
         # helper-free groups and pure-helper closures have distinct token ABIs.
         return self._outline(retained.extraction, sources, collective=True, reservation=sources)
+
+    def resolved_numerical_region(self, sources):
+        """Reauthenticate a pair issued by this original lexical inline owner."""
+        from compiler.frontend.numerical_effects import NumericalEffectProof
+        from compiler.frontend.numerical_preparation import PreparedOriginalRegion
+        from compiler.frontend.reached_windows import _ResolvedNumericalRegion
+
+        sources = tuple(sources)
+        region = self.original_numerical_regions.get(tuple(id(node) for node in sources))
+        if region is None:
+            return None
+        builder = self.builder
+        if (type(region) is not _ResolvedNumericalRegion or region.procedure != builder.entry.qualified
+                or len(sources) != len(region.selection)
+                or any(left is not right for left, right in zip(sources, region.selection, strict=True))
+                or type(region.prepared) is not PreparedOriginalRegion
+                or type(region.effects) is not NumericalEffectProof):
+            raise CompilationError("ordinary numerical region lost its exact original pair")
+        region.prepared.validate_configuration(options=builder.options, config=builder.config,
+            environment_root=builder._numerical_environment_root,
+            immutable_inputs=getattr(builder, "immutable_inputs", {}))
+        region.effects.validate(builder.analysis, builder.entry.qualified, sources, region.prepared)
+        return region
+
+    def prepare_numerical_region(self, sources):
+        """Issue source computation/effect evidence without capture or emission.
+
+        A bound reached plan remains the sole authority for its conditional
+        region. Ordinary lexical owners retain only the same source-issued
+        pair; storage admission and reached registration stay independent.
+        """
+        from compiler.frontend.numerical_effects import prove_numerical_effects
+        from compiler.frontend.numerical_preparation import NumericalPreparationProvider
+        from compiler.frontend.reached_windows import _ResolvedNumericalRegion
+
+        builder = self.builder
+        sources = tuple(sources)
+        region = builder.resolved_numerical_region(builder.analysis, builder.entry.qualified, sources)
+        if region is not None:
+            return region
+        if builder.validate_reached_window() is not None:
+            raise CompilationError("combined numerical team requires its registered reached preparation")
+        if len(self.original_numerical_regions) >= min(32, builder.analysis.operation_limit):
+            raise CompilationError("ordinary numerical region registry budget exhausted")
+        provider = NumericalPreparationProvider(builder.analysis, options=builder.options, config=builder.config,
+            environment_root=builder._numerical_environment_root,
+            immutable_inputs=getattr(builder, "immutable_inputs", {}))
+        prepared = provider.prepare(builder.analysis, builder.entry.qualified, sources)
+        effects = prove_numerical_effects(builder.analysis, builder.entry.qualified, sources, prepared)
+        region = _ResolvedNumericalRegion(builder.entry.qualified, sources, prepared, effects)
+        self.original_numerical_regions[tuple(id(node) for node in sources)] = region
+        try:
+            return self.resolved_numerical_region(sources)
+        except BaseException:
+            del self.original_numerical_regions[tuple(id(node) for node in sources)]
+            raise
+
+    def validate_numerical_regions(self):
+        """Check retained local capabilities again before source publication."""
+        from compiler.frontend.reached_windows import _ResolvedNumericalRegion
+
+        if len(self.original_numerical_regions) > min(32, self.builder.analysis.operation_limit):
+            raise CompilationError("ordinary numerical region registry budget exhausted")
+        for key, region in self.original_numerical_regions.items():
+            if type(region) is not _ResolvedNumericalRegion or key != tuple(id(node) for node in region.selection):
+                raise CompilationError("ordinary numerical region registry selection changed")
+            self.resolved_numerical_region(region.selection)
 
     def _outline(self, extraction, sources, *, collective, reservation=None):
         """Lower an authenticated extraction and register its private facade."""
