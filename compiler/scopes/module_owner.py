@@ -87,8 +87,13 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
         self.kind = _name("fort_child_kind_", routine.qualified)
         self.control_guard = _name("fort_borrowed_", routine.qualified)
         self.call_sites = []
+        managed_roots = ({state["resource"] for state in reached[1].record["states"]}
+                         if reached is not None else None)
 
         def capture(_proxy, binding):
+            if managed_roots is not None and binding.rank and binding.root not in managed_roots:
+                raise CompilationError("original module companion capture exceeds its reached managed projection: "
+                                       + binding.root)
             fact = self.owner.builder.capture(self.canonical(binding))
             if binding.name in routine.arguments:
                 # The original caller guards its actual before this dummy's

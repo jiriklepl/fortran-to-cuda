@@ -173,14 +173,9 @@ require independent accesses across the entire entry.
 Runtime dependencies include `fparser` and **`islpy==2026.2.2`**. Generated C++ uses
 C++17; add `-fopenmp` to enable its verified OpenMP loops. Compile without that
 flag for serial execution of the same generated implementation. CUDA uses one
-kernel launch per accepted region and 256 threads per block. Axis order comes
-from the schedule. Untiled kernels share one numerical body between two template
-specializations: a covering grid visits each point once, while domains needing
-more than 65,535 blocks retain bounded grid-stride iteration. The checked work
-product and ceiling block count establish coverage before selecting the first
-specialization; tiled execution is unchanged. Empty domains skip the launch.
-Changes to this renderer invalidate offline GPU calibration identities.
-CDU, CDV, and CDW each produce one CUDA kernel by default
+kernel per accepted region and 256 threads per block. Axis order comes from the
+schedule; bounded grids use grid-stride iteration to cover larger domains. Empty
+domains skip the launch. CDU, CDV, and CDW each produce one CUDA kernel by default
 and four with `--opt-level 0`.
 
 ## CLI and outputs
@@ -1176,7 +1171,7 @@ reads/writes and typed native-state accesses; unknown exports, escapes, other
 state uses and unproved completion remain boundaries. This grants no GPU IEEE
 legality, worksharing cuts or new per-thread saved-state semantics. AUTO retains
 native execution until this coordination is priced. Source summaries use
-version 15 and original native completion proofs use version 6.
+version 16 and original native completion proofs use version 6.
 
 Source-resolved halting-mode calls reachable from the original configured entry
 also require numerical-environment checks for ordinary reached arithmetic,
@@ -1742,7 +1737,7 @@ joined `PARALLEL DO` groups with supported scalar private/reduction clauses;
 the native compiler executes every original reduction. No reduction lowering,
 reassociation or active-owner coherence is authorized.
 
-`prove_reached_window` version 15 transfers separately supplied entry facts through
+`prove_reached_window` version 16 transfers separately supplied entry facts through
 these prefix and descriptor proofs to an exact contiguous window, at top level
 or in the first traversal of one top-level serial counted loop. Branches meet
 conservatively and definitions retain original ordering. Hidden read-only native
@@ -2014,7 +2009,7 @@ window-bound builder and does not rewrite entry facts or whole-procedure
 descriptor proofs. Per-unit native summaries reissue descriptor tokens in their
 own analysis, and managed captures require exact original bindings. Numerical
 lowering and existing native coherence/failure checks remain separate gates.
-Reached-window proof version 15 also accepts bounded literal physical entry
+Reached-window proof version 16 also accepts bounded literal physical entry
 `sections` when an `expected_descriptor` supplies the original lower bounds and
 extents. Physical coordinates remain zero-based and half-open; the proof converts
 each rectangle separately to logical inclusive coordinates. Empty rectangles
@@ -2026,6 +2021,16 @@ not source-proven overwrites; the manifest records that distinction in
 selected-position assertions cannot authorize earlier native-prefix reads.
 Partial caller-to-child mapping with unproved descriptor origins remains a
 conservative boundary. This extension does not authorize repeated activation.
+Reached child calls preserve every original actual association, while only already
+managed IN/INOUT actuals and visible managed module resources inherit definition
+and coherence state. Unused array actuals require no new capture facts or handles.
+The first reached payload or descriptor effect on an unproved array publishes
+managed outputs and closes before the unchanged original operation. An unmanaged
+INTENT(OUT) actual closes at the caller because its definition event occurs on
+entry; an empty managed projection also closes there. Managed nested OUT events,
+caller allocation/bounds/contiguity guards, original alias checks and original
+procedure storage remain authoritative. Public child plans identify managed and
+unmanaged associations; reached proof version 16 invalidates earlier authority.
 Supported child coordinators reuse the same context, handles and enabled flag.
 Caller descriptors are registered under their original allocation/layout guards
 before child argument association can rebase bounds. The emitted child retains

@@ -323,7 +323,7 @@ def run_case(tmp_path, function, plan, driver, backend):
     generated = generate_sources(function, plan)
     if backend == "cuda-sim":
         simulated = generated.cuda.replace("#include <cuda_runtime.h>", '#include "cuda_runtime.h"')
-        simulated = re.sub(r"(kernel_region_\d+_device(?:<(?:true|false)>)?)<<<([^>]+)>>>\(", r"fort_test_launch(\1, \2, ", simulated)
+        simulated = re.sub(r"(kernel_region_\d+_device)<<<([^>]+)>>>\(", r"fort_test_launch(\1, \2, ", simulated)
         generated = replace(generated, cpp=simulated)
         (tmp_path / "cuda_runtime.h").write_text(CUDA_RUNTIME)
     (tmp_path / "implementation.cpp").write_text(generated.cpp)
