@@ -5,9 +5,70 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import pytest
+
 spec = importlib.util.spec_from_file_location("sgs_experiment", Path(__file__).resolve().parents[1] / "sgs_experiment.py")
 runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)
+
+
+@pytest.mark.parametrize("case,method", [("channel", 4), ("second-order", 2), ("fourth-order", 4)])
+def test_named_channel_presets_preserve_duration_and_original_inputs(tmp_path, monkeypatch, case, method):
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / "elmm-pipeline"))
+    from elmm_pipeline.configuration import prepare_config
+    upstream = tmp_path / "elmm/examples/channel"
+    upstream.mkdir(parents=True)
+    (upstream / "main.conf").write_text("! upstream method\n4\n")
+    (upstream / "time_stepping.conf").write_text("time_stepping(\n end_time = 50,\n)\n")
+    (upstream / "profile.dat").write_bytes(b"unchanged auxiliary input\n")
+    before = {path.name: path.read_bytes() for path in upstream.iterdir()}
+    source, override = runner.select_configuration({"elmm": tmp_path / "elmm"}, case)
+    configuration = prepare_config(source, tmp_path / "snapshot", advection=override)
+    assert source == upstream
+    assert configuration["advection_method"] == method
+    assert configuration["expected_max_steps"] is None
+    assert "max_number_of_time_steps" not in configuration["overrides"]
+    assert (tmp_path / "snapshot/time_stepping.conf").read_bytes() == before["time_stepping.conf"]
+    assert (tmp_path / "snapshot/profile.dat").read_bytes() == before["profile.dat"]
+    assert {path.name: path.read_bytes() for path in upstream.iterdir()} == before
+    capped = prepare_config(source, tmp_path / "capped", advection=override, steps=50)
+    assert capped["expected_max_steps"] == 50
+    assert capped["overrides"]["max_number_of_time_steps"] == 50
+
+
+@pytest.mark.parametrize("case", runner.CASE_NAMES)
+def test_custom_configuration_keeps_its_identity_and_does_not_inherit_preset_overrides(tmp_path, case):
+    source = tmp_path / "my custom & configuration"
+    source.mkdir()
+    (source / "main.conf").write_text("6\n")
+    selected, override = runner.select_configuration({}, case, source)
+    assert selected == source
+    assert override is None
+    assert runner.configuration_label(case, source) == "my-custom-configuration"
+    assert runner.configuration_label(case, source / "main.conf") == "my-custom-configuration"
+
+
+def test_prepared_channel_simple_preset_retains_reviewed_hash_validation(tmp_path, monkeypatch):
+    import json
+    monkeypatch.setattr(runner, "HERE", tmp_path)
+    source = tmp_path / "cases/channel-simple"
+    source.mkdir(parents=True)
+    (source / "main.conf").write_text("2\n")
+    (source / "origin.json").write_text(json.dumps({"prepared_files_sha256": {
+        "main.conf": runner.digest(source / "main.conf")}}))
+    assert runner.select_configuration({}, "channel-simple") == (source, None)
+    (source / "main.conf").write_text("4\n")
+    with pytest.raises(ValueError, match="reviewed channel-simple configuration changed"):
+        runner.select_configuration({}, "channel-simple")
+
+
+def test_invalid_custom_label_and_missing_configuration_are_rejected(tmp_path):
+    with pytest.raises(ValueError, match="letter or digit"):
+        runner.configuration_label("channel-simple", tmp_path / "!&")
+    source = tmp_path / "not-a-configuration"
+    source.mkdir()
+    with pytest.raises(ValueError, match="main.conf"):
+        runner.select_configuration({}, "channel-simple", source)
 
 
 class PortableSGSChecks(unittest.TestCase):
