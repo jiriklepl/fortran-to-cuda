@@ -151,6 +151,12 @@ series is eligible for this comparison target. `--jobs` controls builds only.
 `--nvcc` and `--cuda-host` are forwarded to the same workflow. Run
 `entrypoint.sh run-elmm --help` or `run_on_node.sh --help` for options.
 
+`--scope-transfers {direct,pinned,pipelined,auto}` transports the compiler's
+existing transfer selection; `direct` remains the default. The compiler owns
+eligibility and fallback. Reports and plots identify the selected control.
+For node runs, supply it after `--`, for example
+`./run_on_node.sh -p gpu-short -A kdss bw01 -- --scope-transfers pinned`.
+
 Source overrides are explicit: `WORKSPACE_ROOT`, `PIPELINE_ROOT` and
 `COMPILER_ROOT` mount read-only source directories in the container. Prepared
 pipeline tools and application copies live in writable work storage. Advanced

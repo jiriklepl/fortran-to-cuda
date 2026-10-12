@@ -77,7 +77,8 @@ def plot_experiment(report, output):
         title = f"{value['case']} · {value['protocol']['threads']} host threads"
         if unvalidated:
             title += "\nUNVALIDATED: native outputs are not repeatable"
-        ax.set(xticks=[0, 1], xticklabels=["Original native", "SGS direct"], ylim=(0, 1.18 * maximum),
+        policy = value.get("selection", {}).get("scope_transfers", "direct")
+        ax.set(xticks=[0, 1], xticklabels=["Original native", "SGS " + policy], ylim=(0, 1.18 * maximum),
                ylabel="Complete wall time / original native" if relative else "Complete wall time (s)",
                title=title)
         ax.grid(axis="y", alpha=.2)

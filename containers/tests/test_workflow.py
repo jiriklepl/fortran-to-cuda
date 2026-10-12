@@ -159,7 +159,7 @@ def test_source_analysis_runs_in_prepared_parser_python(tmp_path, monkeypatch):
     monkeypatch.setattr(workflow.subprocess, "run", execute)
     monkeypatch.setattr(sys, "argv", ["workflow.py", "run-elmm", "--case", "channel",
         "--output-dir", str(output), "--app-root", str(source_root),
-        "--compiler-python", str(parser_python), "--allow-native-variation"])
+        "--compiler-python", str(parser_python), "--allow-native-variation", "--scope-transfers", "pinned"])
     workflow.main()
     assert len(calls) == 1
     command = calls[0]
@@ -167,6 +167,7 @@ def test_source_analysis_runs_in_prepared_parser_python(tmp_path, monkeypatch):
     assert command[command.index("--python") + 1] == str(parser_python)
     assert command[command.index("--app-root") + 1] == str(source_root)
     assert command[command.index("--gpu-arch") + 1] == "120"
+    assert command[command.index("--scope-transfers") + 1] == "pinned"
     assert "--allow-native-variation" in command
     assert "--steps" not in command
 
