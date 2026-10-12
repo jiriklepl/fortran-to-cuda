@@ -173,9 +173,14 @@ require independent accesses across the entire entry.
 Runtime dependencies include `fparser` and **`islpy==2026.2.2`**. Generated C++ uses
 C++17; add `-fopenmp` to enable its verified OpenMP loops. Compile without that
 flag for serial execution of the same generated implementation. CUDA uses one
-kernel per accepted region and 256 threads per block. Axis order comes from the
-schedule; bounded grids use grid-stride iteration to cover larger domains. Empty
-domains skip the launch. CDU, CDV, and CDW each produce one CUDA kernel by default
+kernel launch per accepted region and 256 threads per block. Axis order comes
+from the schedule. Untiled kernels share one numerical body between two template
+specializations: a covering grid visits each point once, while domains needing
+more than 65,535 blocks retain bounded grid-stride iteration. The checked work
+product and ceiling block count establish coverage before selecting the first
+specialization; tiled execution is unchanged. Empty domains skip the launch.
+Changes to this renderer invalidate offline GPU calibration identities.
+CDU, CDV, and CDW each produce one CUDA kernel by default
 and four with `--opt-level 0`.
 
 ## CLI and outputs

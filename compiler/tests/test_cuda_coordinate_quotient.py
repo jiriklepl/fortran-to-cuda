@@ -87,11 +87,12 @@ def coordinate_program(tmp_path_factory):
         arguments.append(f"empty_axis < 0 ? {math.prod(counts)}ULL : 0ULL")
         source.extend(
             [
-                f'extern "C" void case_{identifier}(int *out,int *visits,unsigned blocks,unsigned threads,int empty_axis) {{',
+                f'extern "C" void case_{identifier}(int *out,int *visits,unsigned blocks,unsigned threads,int empty_axis,bool grid_stride) {{',
                 "    gridDim.x=blocks; blockDim.x=threads;",
                 "    for (blockIdx.x=0; blockIdx.x<blocks; ++blockIdx.x)",
                 "        for (threadIdx.x=0; threadIdx.x<threads; ++threadIdx.x)",
-                f"            {kernel_name(region)}({', '.join(arguments)});",
+                f"            if (grid_stride) {kernel_name(region)}<true>({', '.join(arguments)});",
+                f"            else {kernel_name(region)}<false>({', '.join(arguments)});",
                 "}",
             ]
         )
@@ -133,8 +134,9 @@ def test_generated_coordinates_cover_each_signed_work_item_once(coordinate_progr
         ctypes.c_uint,
         ctypes.c_uint,
         ctypes.c_int,
+        ctypes.c_bool,
     ]
-    function(values, visits, *grid, -1)
+    function(values, visits, *grid, -1, True)
     expected = [SENTINEL] * (total + 2)
     for ordinals in itertools.product(*(range(count) for count in counts)):
         offset = sum(ordinal * math.prod(counts[:axis]) for axis, ordinal in enumerate(ordinals))
@@ -148,7 +150,29 @@ def test_generated_coordinates_cover_each_signed_work_item_once(coordinate_progr
 
 @pytest.mark.native
 @pytest.mark.parametrize(("rank", "order", "reverse"), CASES)
-def test_empty_extent_at_each_schedule_position_skips_the_decoder(coordinate_program, rank, order, reverse):
+@pytest.mark.parametrize("threads", [1, 3, 64])
+def test_covering_grid_specialization_matches_grid_stride(coordinate_program, rank, order, reverse, threads):
+    library, cases = coordinate_program
+    identifier, _bounds, counts = cases[(rank, order, reverse)]
+    total = math.prod(counts)
+    blocks = (total - 1) // threads + 1
+    function = getattr(library, f"case_{identifier}")
+    function.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int),
+                         ctypes.c_uint, ctypes.c_uint, ctypes.c_int, ctypes.c_bool]
+    results = []
+    for grid_stride in (True, False):
+        values = (ctypes.c_int * (total + 2))(*([SENTINEL] * (total + 2)))
+        visits = (ctypes.c_int * (total + 2))()
+        function(values, visits, blocks, threads, -1, grid_stride)
+        assert list(visits) == [0, *([1] * total), 0]
+        results.append(list(values))
+    assert results[0] == results[1]
+
+
+@pytest.mark.native
+@pytest.mark.parametrize(("rank", "order", "reverse"), CASES)
+@pytest.mark.parametrize("grid_stride", [True, False])
+def test_empty_extent_at_each_schedule_position_skips_the_decoder(coordinate_program, rank, order, reverse, grid_stride):
     library, cases = coordinate_program
     identifier, _bounds, counts = cases[(rank, order, reverse)]
     total = math.prod(counts)
@@ -159,11 +183,12 @@ def test_empty_extent_at_each_schedule_position_skips_the_decoder(coordinate_pro
         ctypes.c_uint,
         ctypes.c_uint,
         ctypes.c_int,
+        ctypes.c_bool,
     ]
     for axis in order:
         values = (ctypes.c_int * (total + 2))(*([SENTINEL] * (total + 2)))
         visits = (ctypes.c_int * (total + 2))()
-        function(values, visits, 2, 3, axis)
+        function(values, visits, 2, 3, axis, grid_stride)
         assert list(values) == [SENTINEL] * (total + 2)
         assert not any(visits)
 
