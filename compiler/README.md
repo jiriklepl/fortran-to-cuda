@@ -1698,7 +1698,7 @@ joined `PARALLEL DO` groups with supported scalar private/reduction clauses;
 the native compiler executes every original reduction. No reduction lowering,
 reassociation or active-owner coherence is authorized.
 
-`prove_reached_window` version 14 transfers separately supplied entry facts through
+`prove_reached_window` version 15 transfers separately supplied entry facts through
 these prefix and descriptor proofs to an exact contiguous window, at top level
 or in the first traversal of one top-level serial counted loop. Branches meet
 conservatively and definitions retain original ordering. Hidden read-only native
@@ -1970,6 +1970,18 @@ window-bound builder and does not rewrite entry facts or whole-procedure
 descriptor proofs. Per-unit native summaries reissue descriptor tokens in their
 own analysis, and managed captures require exact original bindings. Numerical
 lowering and existing native coherence/failure checks remain separate gates.
+Reached-window proof version 15 also accepts bounded literal physical entry
+`sections` when an `expected_descriptor` supplies the original lower bounds and
+extents. Physical coordinates remain zero-based and half-open; the proof converts
+each rectangle separately to logical inclusive coordinates. Empty rectangles
+define nothing, and an uncovered halo or gap does not become a whole definition.
+The original descriptor expectation is checked after allocation/layout guards
+and before registration. These are independently admitted entry definitions,
+not source-proven overwrites; the manifest records that distinction in
+`entry_section_facts`. Original `INTENT(OUT)` events still kill them, and
+selected-position assertions cannot authorize earlier native-prefix reads.
+Partial caller-to-child mapping with unproved descriptor origins remains a
+conservative boundary. This extension does not authorize repeated activation.
 Supported child coordinators reuse the same context, handles and enabled flag.
 Caller descriptors are registered under their original allocation/layout guards
 before child argument association can rebase bounds. The emitted child retains

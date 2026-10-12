@@ -899,22 +899,11 @@ class ScopeBuilder:
         lifetime = fact.get("lifetime", "invocation")
         if not isinstance(lifetime, str) or lifetime not in {"invocation", "selected_window"}:
             raise CompilationError("unsupported scoped capture lifetime: " + binding.root)
-        from compiler.scopes.registration import expected_descriptor
+        from compiler.frontend.capture_coverage import expected_descriptor, physical_sections
 
         expected_descriptor(fact, binding.rank)
         if fact["initialized"] == "sections":
-            boxes = fact.get("sections")
-            if not isinstance(boxes,list) or len(boxes) > 32:
-                raise CompilationError("initialized capture sections exceed the bounded interface")
-            for box in boxes:
-                if not isinstance(box,dict) or set(box) != {"lower","upper"}:
-                    raise CompilationError("initialized capture section requires lower/upper physical coordinates")
-                lower,upper=box["lower"],box["upper"]
-                if (not isinstance(lower,list) or not isinstance(upper,list)
-                        or len(lower) != binding.rank or len(upper) != binding.rank
-                        or any(type(v) is not int or not 0 <= v < 2**63 for v in [*lower,*upper])
-                        or any(lo > hi for lo,hi in zip(lower,upper,strict=True))):
-                    raise CompilationError("invalid initialized physical capture section")
+            physical_sections(fact, binding.rank)
         return fact
 
     def capture(self, binding):

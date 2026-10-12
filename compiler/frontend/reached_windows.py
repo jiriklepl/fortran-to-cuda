@@ -17,6 +17,7 @@ from types import MappingProxyType
 
 from fparser.two.utils import walk
 
+from compiler.frontend.capture_coverage import expected_descriptor, reached_sections
 from compiler.frontend.descriptor_windows import DescriptorWindowUnsupported
 from compiler.frontend.native_sections import NativeAxis, NativeRectangle, NativeResourceSections
 from compiler.frontend.preowner_transfers import PreownerUnsupported, derive_preowner_step
@@ -24,7 +25,7 @@ from compiler.frontend.source_functions import _validate_scope
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 
-REACHED_WINDOW_VERSION = 14
+REACHED_WINDOW_VERSION = 15
 _EFFECTS = {"read", "write", "overwrite", "descriptor_read", "definition_change"}
 _FORBIDDEN = {"pointer", "optional", "volatile", "asynchronous", "value"}
 
@@ -310,6 +311,7 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
     stack = (*_stack, procedure)
     mapped_children = []
     bindings, coverage, module_roots = {}, {}, []
+    entry_section_resources = {}
     for root in roots:
         binding = _binding(analysis, routine, root)
         fact_root = _mapped["facts_roots"].get(root, root) if _mapped is not None else root
@@ -317,8 +319,13 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
         _validate_scope(analysis, binding.declaring_scope)
         if (not isinstance(fact, dict) or fact.get("storage") != "stable" or fact.get("escapes") is not False
                 or fact.get("allocation_changes") is not False or type(fact.get("initialized")) is not str
-                or fact["initialized"] not in {"whole", "none"}):
+                or fact["initialized"] not in {"whole", "none", "sections"}
+                or "source_sections" in fact or "requires_registered_handle" in fact):
             raise CompilationError("reached window lacks stable entry coverage/no-escape facts: " + root)
+        if _mapped is None:
+            # Mapped facts belong to the original actual, whose descriptor was
+            # checked by its owning plan, not to a possibly rank-reduced dummy.
+            expected_descriptor(fact, binding.rank)
         if "allocatable" in binding.attributes and binding.name not in routine.arguments:
             defining = [owner for owner in analysis.modules.values()
                         if owner.bindings.get(binding.name) is binding]
@@ -326,8 +333,18 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                 raise CompilationError("reached window local allocation requires separate selected-position lifetime authority: " + root)
             module_roots.append(root)
         bindings[root] = binding
-        coverage[root] = (_mapped["entry"].get(root, ()) if _mapped is not None else
-                          _whole_coverage(binding) if fact["initialized"] == "whole" else ())
+        if _mapped is not None:
+            coverage[root] = _mapped["entry"].get(root, ())
+        elif fact["initialized"] == "sections":
+            try:
+                resource = reached_sections(binding, fact)
+            except CompilationError as error:
+                raise CompilationError("reached window lacks stable entry coverage/no-escape facts: "
+                                       + root + ": " + str(error)) from error
+            entry_section_resources[root] = resource
+            coverage[root] = resource.overwrites
+        else:
+            coverage[root] = _whole_coverage(binding) if fact["initialized"] == "whole" else ()
     descriptor_roots = tuple(root for root, binding in bindings.items()
                              if "allocatable" in binding.attributes and root not in module_roots)
     module_roots = tuple(module_roots)
@@ -345,7 +362,7 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
     visits, effects, effect_work = 0, 0, 0
     active_ids, closes, changed_scalars = set(), {}, set()
     condition_payload_reads = set()
-    activation_templates = {}
+    activation_templates = dict(entry_section_resources)
 
     def coordinate_work(amount):
         from compiler.frontend.native_group_structure import NATIVE_GROUP_SCAN_LIMIT
@@ -834,9 +851,9 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                 raise _NeedsNativeClose("reached joined group untracked array needs definition/alias authority: "
                                         + sorted(resources - state.keys())[0])
             if before_owner and any(resource.reads and facts["captures"][resource.resource].get("lifetime") == "selected_window"
-                                    and facts["captures"][resource.resource]["initialized"] == "whole"
+                                    and facts["captures"][resource.resource]["initialized"] != "none"
                                     for step in definition.steps for resource in step.sections.resources):
-                raise PreownerUnsupported("joined-prefix read cannot use selected-window whole assertion before activation")
+                raise PreownerUnsupported("joined-prefix read cannot use selected-window whole or partial assertion before activation")
             transferred = definition.transfer({root: state[root] for root in resources}, consume=coordinate_work)
             if transferred.uncovered_reads:
                 raise _NeedsNativeClose("reached joined group read requires original group-entry definition: "
@@ -1268,7 +1285,9 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
         for identity in prefix:
             coverage = transfer(identity, coverage, before_owner=True)
     at_entry = dict(coverage)
-    if not planned and _mapped is None and any(_coverage_kind(boxes) == "sections" for boxes in at_entry.values()):
+    if not planned and _mapped is None and any(_coverage_kind(boxes) == "sections"
+                                             and root not in entry_section_resources
+                                             for root, boxes in at_entry.items()):
         raise CompilationError("reached prefix partial definitions require source-position section registration")
     entry_templates = dict(activation_templates)
     has_closed_path = False
@@ -1341,6 +1360,12 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                                    "selected_window_whole_assertion_is_prefix_read_authority": False,
                                    "payload_from_allocation_presence": False},
             "descriptor_window_identities": descriptor_demands, "entry_facts_identity": _hash(facts),
+            "entry_section_facts": [{"resource": root,
+                "physical_sections": facts["captures"][root]["sections"],
+                "expected_descriptor": facts["captures"][root]["expected_descriptor"],
+                "authority": "independently admitted physical entry definitions; guarded original descriptor",
+                "source_overwrite_proven": False, "bounding_hull_inferred": False}
+                for root in entry_section_resources],
             "module_descriptor_resources": list(module_roots),
             "native_prefix_proof_identities": native_prefix_demands,
             "native_definition_proof_identities": definition_demands,
