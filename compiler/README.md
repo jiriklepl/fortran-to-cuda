@@ -2391,6 +2391,23 @@ a new `--output`, a new `--build-dir`, and explicit original
 `--fortran-flag=...` arguments. Its `--preflight-only` mode builds and checks
 the workers without sampling or adding cost evidence.
 
+The separate `python -m compiler.offload.numerical_gpu_execution_calibration`
+producer records optional `numerical_execution_gpu` observations using those
+same seventeen recipes and their production CUDA kernels and launch code.
+It accepts `--profile`, new `--output` and `--build-dir` paths, and explicit
+`--nvcc`, `--cuda-host-cxx`, `--arch` and `--device` selections. Fixed enqueue
+CPU placement comes from `--cpu-affinity` or the existing CPU evidence. Inputs
+remain resident during measurement. Complete outputs, unchanged inputs and sentinel
+halos are checked before seven global rounds over the predefined sizes;
+interrupted attempts retain their flushed raw observations. CUDA-event,
+host-enqueue and wall durations and actual launch counts remain separate.
+Zero-item controls issue no CUDA launch and cannot establish launch overhead.
+This initial GPU section supplies evidence only: it does not fit transferable
+startup costs, combine CPU/GPU cost models or authorize automatic placement.
+The base profile and existing CPU evidence are preserved. Profile loading
+checks the observations without lowering source; using an archived backend
+requires a separate check against current renderer and numerical identities.
+
 The other existing producer, `python -m compiler.offload.cpu_dependency_calibration`, adds
 `cpu_dependency`, without changing the numerical-v2 section. Its 26 predefined
 generic recipes distinguish ordinary operations, constant/dynamic division and

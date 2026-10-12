@@ -55,12 +55,16 @@ def test_explicit_version_runs_only_its_own_producer(tmp_path, monkeypatch, vers
     assert selected == [version]
 
 
-def test_new_unavailable_protocol_cannot_borrow_accepted_v2_costs(monkeypatch):
+@pytest.mark.parametrize("gpu_observations", [False, True])
+def test_new_unavailable_protocol_cannot_borrow_accepted_v2_costs(monkeypatch, gpu_observations):
     from compiler.offload import numerical_execution, source_compute
 
     original = profile_v2()
     evidence = deepcopy(original)
     evidence["numerical_execution"] = {"schema_version": 1, "phase": "cpu_only"}
+    if gpu_observations:
+        evidence["numerical_execution_gpu"] = {"schema_version": 1, "phase": "gpu_evidence_only",
+                                                "automatic_placement_authorized": False}
     seen = []
 
     def incomplete(profile, counts, **kwargs):
@@ -79,7 +83,8 @@ def test_new_unavailable_protocol_cannot_borrow_accepted_v2_costs(monkeypatch):
     assert unit.region is analysis.units[0].region
     assert unit.footprints == analysis.units[0].footprints
     assert len(seen) == 1
-    assert original == {key: value for key, value in evidence.items() if key != "numerical_execution"}
+    assert original == {key: value for key, value in evidence.items()
+                        if key not in {"numerical_execution", "numerical_execution_gpu"}}
 
 
 def test_optional_protocol_is_validated_before_profile_use(monkeypatch):
@@ -96,5 +101,23 @@ def test_optional_protocol_is_validated_before_profile_use(monkeypatch):
 
     monkeypatch.setattr(numerical_execution, "validate_execution_profile", reject)
     with pytest.raises(ProfileError, match="saved execution evidence"):
+        validate_profile(evidence)
+    assert calls == [evidence]
+
+
+def test_optional_gpu_observations_are_validated_before_profile_use(monkeypatch):
+    from compiler.offload import numerical_gpu_execution
+    from compiler.offload.profile import ProfileError, validate_profile
+
+    evidence = profile_v2()
+    evidence["numerical_execution_gpu"] = {"schema_version": 1, "phase": "gpu_evidence_only"}
+    calls = []
+
+    def reject(profile):
+        calls.append(profile)
+        raise NumericalCalibrationError("saved GPU observations disagree with the emitted backend")
+
+    monkeypatch.setattr(numerical_gpu_execution, "validate_gpu_execution_profile", reject)
+    with pytest.raises(ProfileError, match="saved GPU observations"):
         validate_profile(evidence)
     assert calls == [evidence]
