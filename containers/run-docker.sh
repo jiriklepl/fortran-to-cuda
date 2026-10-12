@@ -101,4 +101,13 @@ elif [[ "$visible" == void ]]; then
     flags+=(--env NVIDIA_VISIBLE_DEVICES=void)
 fi
 
+printf 'Container runtime: %s (%s)\nImage: %s\nOutput directory: %s -> /output\nUser ID: %s:%s\n' \
+    "$ENGINE" "$ENGINE_KIND" "$IMAGE_TAG" "$OUTPUT_DIR" "$host_uid" "$(id -g)"
+printf 'Command:'
+if (( $# )); then
+    printf ' %q' "$@"
+else
+    printf ' <image default>'
+fi
+printf '\n'
 exec "$ENGINE" "${flags[@]}" "$IMAGE_TAG" "$@"
