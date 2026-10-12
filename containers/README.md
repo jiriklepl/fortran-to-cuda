@@ -36,6 +36,10 @@ select a partition; `--partition` overrides them. Check live availability with
     --sif /work/USER/fortran.sif --time 08:00:00 \
     --output-dir /work/USER/sgs-blackwell-01 -- --timeout 7200
 
+# Explicitly reproduce the earlier 50-step advection-order comparisons.
+./run_on_node.sh -p gpu-short -A kdss bw01 --case second-order --steps 50
+./run_on_node.sh -p gpu-short -A kdss bw01 --case fourth-order --steps 50
+
 # An explicitly capped smoke test. Its report cannot pass the performance gate.
 ./run_on_node.sh hopper01 --steps 3 --repeats 1 --warmups 0 \
     --output-dir /work/USER/sgs-smoke-01
@@ -142,9 +146,25 @@ PYTHON=/path/to/python ./containers/entrypoint.sh run-elmm \
     --case channel --output-dir /work/USER/channel-native-tools-01
 ```
 
-The default has no timestep cap. `--steps` is explicit smoke-test control.
-The upstream channel case retains its supplied end time 50; channel-simple
-retains 0.5. Allow enough Slurm wall time and per-run `--timeout` for channel.
+Each invocation runs one selected case. The presets are:
+
+| Case | Configuration | Advection order | Configured end time |
+|---|---|---:|---:|
+| `channel-simple` | Reviewed `containers/cases/channel-simple` input | 2 | 0.5 |
+| `channel` | Pinned ELMM `examples/channel` input | 4 | 50 |
+| `second-order` | Same upstream channel input, explicit advection override | 2 | 50 |
+| `fourth-order` | Same upstream channel input, explicit advection override | 4 | 50 |
+
+No preset adds a timestep cap. `--steps` is explicit smoke-test control. Earlier
+second-/fourth-order campaign cases used a 50-step cap; reproduce that duration
+with `--steps 50`, rather than treating those historical timings as full-duration
+preset measurements. Allow enough Slurm wall time and per-run `--timeout` for
+the channel-derived presets.
+
+`--config DIR` overrides the preset configuration and its advection selection.
+Reports and plots use the custom directory's name, with the requested preset
+recorded separately. The original directory name survives container binding.
+Only an explicit `--steps` changes a custom configuration's timestep limit.
 `--threads` changes the actual application budget; only the default four-thread
 series is eligible for this comparison target. `--jobs` controls builds only.
 `--repeats`, `--warmups`, `--timeout`, `--gpu` (visible CUDA ordinal or UUID),
@@ -186,6 +206,15 @@ fails the campaign; it does not weaken the candidate check or shorten the case.
 Native/GPU diagnostics precede timing and never
 enter timing medians. Smoke runs and other thread budgets cannot claim the gate.
 No policy is automatically promoted by this runner.
+
+The retained SGS comparison explicitly selects GPU execution with section
+transfers; it does not use automatic CPU/GPU placement. Compiler placement
+`auto` uses offline calibration and current dimensions to compare complete CPU
+and GPU alternatives, requiring a modeled 20% advantage. Missing or incompatible
+estimates select native execution. Automatic SGS cost applicability and complete
+application performance still need validation, so the measured forced-SGS gain
+does not promote automatic placement. `--scope-transfers auto` independently
+selects a transfer mechanism; it does not enable CPU/GPU placement selection.
 
 If guarded execution fails, the launcher prints the end of `run.log` containing
 the worker's error and the full log/`guard.json` paths. The guard receipt stays

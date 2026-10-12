@@ -19,6 +19,9 @@ WORKSPACE = Path(os.environ.get("WORKSPACE_ROOT", HERE.parent)).resolve()
 PIPELINE = Path(os.environ.get("PIPELINE_ROOT", WORKSPACE / "elmm-pipeline")).resolve()
 COMPILER = Path(os.environ.get("COMPILER_ROOT", WORKSPACE)).resolve()
 sys.path.insert(0, str(PIPELINE))
+sys.path.insert(0, str(HERE))
+
+from sgs_experiment import CASE_NAMES, configuration_label
 
 
 def write(path, value):
@@ -179,7 +182,9 @@ def guarded(args):
 
 def run_elmm(args):
     if args.dry_run:
-        print(json.dumps({"action": "fresh original native versus SGS sections/direct", "case": args.case,
+        print(json.dumps({"action": "fresh original native versus SGS sections/" + args.scope_transfers,
+                          "case": configuration_label(args.case, args.config), "requested_case": args.case,
+                          "configuration_preset": args.case if args.config is None else None,
                           "config": str(args.config) if args.config else None, "steps": args.steps,
                           "threads": args.threads, "jobs": args.jobs, "repeats": args.repeats,
                           "warmups": args.warmups, "architecture": args.arch,
@@ -345,7 +350,7 @@ def main():
             child.add_argument("--nvcc", default=os.environ.get("NVCC"))
             child.add_argument("--cuda-host", default=os.environ.get("CUDAHOSTCXX", os.environ.get("CUDA_HOST_CXX")))
         if name == "run-elmm":
-            child.add_argument("--case", choices=("channel-simple", "channel"), default="channel-simple")
+            child.add_argument("--case", choices=CASE_NAMES, default="channel-simple")
             child.add_argument("--config", type=Path)
             child.add_argument("--steps", type=int, help="Explicit smoke-run cap; default preserves original duration")
             child.add_argument("--scope-transfers", choices=("direct", "pinned", "pipelined", "auto", "coalesced"), default="direct")

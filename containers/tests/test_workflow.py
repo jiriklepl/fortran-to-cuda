@@ -144,6 +144,40 @@ def test_run_elmm_dry_run_exposes_explicit_native_variation_option(tmp_path, mon
     assert not value["executes_work"]
 
 
+@pytest.mark.parametrize("case", workflow.CASE_NAMES)
+def test_run_elmm_dry_run_accepts_all_named_presets(tmp_path, monkeypatch, capsys, case):
+    monkeypatch.setattr(sys, "argv", ["workflow.py", "run-elmm", "--case", case, "--dry-run",
+                                     "--output-dir", str(tmp_path / "results")])
+    workflow.main()
+    value = json.loads(capsys.readouterr().out)
+    assert value["case"] == value["requested_case"] == value["configuration_preset"] == case
+    assert value["steps"] is None
+    assert not value["executes_work"]
+
+
+def test_custom_configuration_dry_run_uses_actual_directory_label(tmp_path, monkeypatch, capsys):
+    config = tmp_path / "my custom & configuration"
+    config.mkdir()
+    monkeypatch.setattr(sys, "argv", ["workflow.py", "run-elmm", "--case", "second-order", "--dry-run",
+                                     "--config", str(config), "--output-dir", str(tmp_path / "results")])
+    workflow.main()
+    value = json.loads(capsys.readouterr().out)
+    assert value["case"] == "my-custom-configuration"
+    assert value["requested_case"] == "second-order"
+    assert value["configuration_preset"] is None
+    assert value["config"] == str(config)
+
+
+@pytest.mark.parametrize("transfers", ["direct", "auto", "pinned"])
+def test_dry_run_describes_the_requested_transfer_control(tmp_path, monkeypatch, capsys, transfers):
+    monkeypatch.setattr(sys, "argv", ["workflow.py", "run-elmm", "--dry-run", "--scope-transfers", transfers,
+                                     "--output-dir", str(tmp_path / "results")])
+    workflow.main()
+    value = json.loads(capsys.readouterr().out)
+    assert value["action"].endswith("SGS sections/" + transfers)
+    assert value["scope_transfers"] == transfers
+
+
 @pytest.mark.parametrize("transfers", ["pinned", "coalesced"])
 def test_source_analysis_runs_in_prepared_parser_python(tmp_path, monkeypatch, transfers):
     output = tmp_path / "results with spaces"

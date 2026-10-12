@@ -108,6 +108,19 @@ def test_node_default_submission_and_full_case(sandbox):
     assert values(argv, "--output-dir") == [env["OUTPUT_DIR"]]
 
 
+@pytest.mark.parametrize("case_name", ["channel-simple", "channel", "second-order", "fourth-order"])
+def test_root_launcher_forwards_each_named_preset_without_a_step_cap(sandbox, case_name):
+    _, _, capture, _, invoke = sandbox
+    fake_workspace(sandbox)
+    result = invoke("../run_on_node.sh", "-p", "gpu-short", "-A", "kdss", "bw01",
+                    "--dry-run", "--case", case_name, "--runtime", "native")
+    assert result.returncode == 0, result.stderr
+    assert execute_payload(sandbox, "bw01").returncode == 0
+    argv = json.loads(capture.read_text())["argv"]
+    assert values(argv, "--case") == [case_name]
+    assert "--steps" not in argv
+
+
 def test_node_dry_run_quotes_and_forwards_every_option(sandbox):
     tmp, env, capture, _, invoke = sandbox
     fake_workspace(sandbox)
@@ -343,9 +356,9 @@ def test_node_container_maps_external_config_and_scratch(sandbox):
     record = json.loads(capture.read_text())
     assert values(record["argv"], "--output-dir") == ["/output"]
     assert values(record["argv"], "--work-dir") == ["/work"]
-    assert values(record["argv"], "--config") == ["/container-config"]
+    assert values(record["argv"], "--config") == ["/container-config/outside config"]
     assert f"{scratch}:/work" in record["env"]["APPTAINER_BINDPATH"]
-    assert f"{config}:/container-config:ro" in record["env"]["APPTAINER_BINDPATH"]
+    assert f"{config}:/container-config/outside config:ro" in record["env"]["APPTAINER_BINDPATH"]
     assert record["env"]["CUDA_VISIBLE_DEVICES"] == "GPU-selected"
 
 
@@ -368,10 +381,10 @@ def test_node_payload_reaches_actual_apptainer_wrapper(sandbox):
     command = argv[argv.index(str(sif)) + 1:]
     assert values(command, "--output-dir") == ["/output"]
     assert values(command, "--work-dir") == ["/output/work"]
-    assert values(command, "--config") == ["/container-config"]
+    assert values(command, "--config") == ["/container-config/external config"]
     assert f"{env['OUTPUT_DIR']}:/output" in values(argv, "--bind")
     assert f"{workspace}:/workspace:ro" in values(argv, "--bind")
-    assert f"{config}:/container-config:ro" in record["env"]["APPTAINER_BINDPATH"]
+    assert f"{config}:/container-config/external config:ro" in record["env"]["APPTAINER_BINDPATH"]
 
 
 def test_docker_cpu_command_has_writable_output_without_tty(sandbox):

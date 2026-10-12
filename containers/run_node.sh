@@ -17,7 +17,8 @@ usage() {
 Usage: run_on_node.sh [OPTIONS] NODE [-- EXTRA_RUN_ELMM_ARGS...]
 Submit a fresh native/SGS comparison; no local fallback or headnode setup.
 
-  --case channel-simple|channel    Default: channel-simple
+  --case NAME                     channel-simple (default), channel,
+                                  second-order or fourth-order
   --config DIR                    Explicit application configuration
   --steps N                       Optional timestep cap (smoke experiment)
   --threads N --jobs N             Defaults: 4 runtime threads, build jobs = CPUs
@@ -78,7 +79,10 @@ for argument in "${extra[@]}"; do
     esac
 done
 [[ -n "$node" && "$node" =~ ^[A-Za-z0-9_.-]+$ ]] || fail "one valid SLURM node is required"
-[[ "$case_name" == channel-simple || "$case_name" == channel ]] || fail "case must be channel-simple or channel"
+case "$case_name" in
+    channel-simple|channel|second-order|fourth-order) ;;
+    *) fail "case must be channel-simple, channel, second-order or fourth-order" ;;
+esac
 [[ "$runtime" == auto || "$runtime" == apptainer || "$runtime" == native ]] || fail "runtime must be auto, apptainer or native"
 jobs="${jobs:-$cpus}"
 for name in threads jobs repeats cpus gpus; do positive "$name" "${!name}"; done
@@ -200,8 +204,9 @@ if [[ "$runtime" == apptainer ]]; then
     esac
     binds="$work:$container_work"
     if [[ -n "$config" ]]; then
-        binds+=",$config:/container-config:ro"
-        workflow[config_index]=/container-config
+        container_config="/container-config/${config##*/}"
+        binds+=",$config:$container_config:ro"
+        workflow[config_index]="$container_config"
     fi
     export APPTAINER_BINDPATH="${APPTAINER_BINDPATH:+$APPTAINER_BINDPATH,}$binds"
     export SINGULARITY_BINDPATH="${SINGULARITY_BINDPATH:+$SINGULARITY_BINDPATH,}$binds"

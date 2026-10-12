@@ -16,12 +16,14 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import shutil
 import statistics
 import sys
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_CONTRACT = HERE / "sgs_contract.json"
+CASE_NAMES = ("channel-simple", "channel", "second-order", "fourth-order")
 
 
 def read(path):
@@ -35,6 +37,42 @@ def digest(path):
 
 def write(path, value):
     Path(path).write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
+
+
+def configuration_label(case, config=None):
+    """Use the actual custom input's name rather than a default preset label."""
+    if config is None:
+        return case
+    path = Path(config).resolve()
+    directory = path.parent if path.is_file() else path
+    label = re.sub(r"[^A-Za-z0-9._-]+", "-", directory.name).strip("._-")
+    if not label:
+        raise ValueError("configuration directory needs a letter or digit for its report label")
+    return label
+
+
+def select_configuration(originals, case, config=None):
+    """Resolve maintained presets; custom inputs never inherit preset overrides."""
+    if case not in CASE_NAMES:
+        raise ValueError("unsupported ELMM case: " + case)
+    advection = None
+    if config is None:
+        if case == "channel-simple":
+            config = HERE / "cases/channel-simple"
+            origin = read(config / "origin.json")
+            for name, expected in origin["prepared_files_sha256"].items():
+                if digest(config / name) != expected:
+                    raise ValueError("reviewed channel-simple configuration changed: " + name)
+        else:
+            config = originals["elmm"] / "examples/channel"
+            if case in {"second-order", "fourth-order"}:
+                advection = 2 if case == "second-order" else 4
+    source = Path(config).resolve(strict=True)
+    if source.is_file():
+        source = source.parent
+    if not (source / "main.conf").is_file():
+        raise ValueError("Configuration needs main.conf: " + str(source))
+    return source, advection
 
 
 def application_paths(app_root):
@@ -226,23 +264,15 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
     whole_original = repository_provenance(originals, contract, command)
     if preprocessing_defines(list(build_args)) != contract["defines"]:
         raise ValueError("reviewed SGS preset supports only the retained DPREC preprocessing configuration")
-    if config is None:
-        if case == "channel-simple":
-            config = HERE / "cases/channel-simple"
-            origin = read(config / "origin.json")
-            for name, expected in origin["prepared_files_sha256"].items():
-                if digest(config / name) != expected:
-                    raise ValueError("reviewed channel-simple configuration changed: " + name)
-        elif case == "channel":
-            config = originals["elmm"] / "examples/channel"
-        else:
-            raise ValueError("case must be channel-simple/channel, or supply config")
-    config = Path(config).resolve(strict=True)
+    label = configuration_label(case, config)
+    preset = case if config is None else None
+    config, advection = select_configuration(originals, case, config)
     output.mkdir(parents=True)
     work.mkdir(parents=True)
     provenance_path = output / "original-sources.json"
     write(provenance_path, whole_original)
-    receipt = {"schema_version": 1, "status": "in_progress", "case": case,
+    receipt = {"schema_version": 1, "status": "in_progress", "case": label,
+               "requested_case": case, "configuration_preset": preset,
                "started_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                "paths": {"app_root": str(app_root), "compiler_root": str(compiler_root),
                          "pipeline_root": str(pipeline_root), "work_dir": str(work), "output": str(output)},
@@ -316,7 +346,7 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
                        gpu_sources=metadata["gpu_sources"], gpu_options=options)
         receipt["builds"]["current"] = {"binary": str(binary), "sha256": digest(binary),
                                          "build_receipt": str(binary.parent / "build-command.json")}
-        configuration = prepare_config(config, output / "config", steps=steps)
+        configuration = prepare_config(config, output / "config", steps=steps, advection=advection)
         receipt["configuration"] = configuration
         receipt["config_sha256"] = {str(path.relative_to(output / "config")): digest(path)
                                      for path in (output / "config").rglob("*") if path.is_file()}
@@ -432,7 +462,7 @@ def main(argv=None):
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--work-dir", type=Path)
     parser.add_argument("--config", type=Path)
-    parser.add_argument("--case", choices=("channel-simple", "channel"), default="channel-simple")
+    parser.add_argument("--case", choices=CASE_NAMES, default="channel-simple")
     parser.add_argument("--nvcc")
     parser.add_argument("--cuda-host")
     parser.add_argument("--cuda-runtime-dir")
