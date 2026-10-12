@@ -1295,10 +1295,14 @@ The original declarations, body, module state and internal procedures remain
 in their original owner. This path initially requires ordinary assumed-shape
 numeric formals, no saved local storage and one canonical actual mapping per
 owning invocation. Different mappings and uncertain hidden aliases close
-ownership. Child descriptors are registered only at reached uses; an
-`INTENT(OUT)` entry event invalidates existing coverage and cannot initialize a
-new registration from old caller values. Nested companions forward handles for
-their hidden resources without copying persistent objects.
+ownership. Admitted child operations determine the managed resource subset;
+unused input formals require no payload facts or device registration. Original
+allocation, contiguity and alias checks still cover every array association.
+An unsupported operation closes ownership when its original branch is reached.
+`INTENT(OUT)` actuals are registered before the original call, even when the
+child never uses them, so the unconditional entry event invalidates coverage
+and later registration cannot restore old caller definitions. Nested companions
+forward handles for their hidden resources without copying persistent objects.
 Read-only optional numeric scalar formals retain their original `OPTIONAL`
 association and `PRESENT` guards. Omitted arguments and original keyword order
 are preserved; compiler controls are passed by keyword. Proved scalar-only

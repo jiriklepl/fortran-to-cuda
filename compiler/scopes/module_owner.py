@@ -27,6 +27,41 @@ def _reusable_plan(value):
     return value
 
 
+def _caller_arrays(parent, resolved, child, immutable_inputs, reached):
+    """Separate original associations from the child's retained handles."""
+    associations = [mapping for mapping in resolved.mappings if mapping.formal_binding.rank
+                    and mapping.formal_binding.root not in immutable_inputs]
+    numbers = set(child.handle_numbers())
+    arrays = [mapping for mapping in associations
+              if parent.owner.resources.get(parent.canonical(mapping.binding).root, (None, None))[1] in numbers]
+    preflight_arrays = list(associations)
+    if reached is not None and parent is parent.owner:
+        from compiler.scopes.call_registration import OriginalActual
+
+        record = parent.owner.builder.reached_plan_record()
+        partial = {state["resource"] for state in record["states"] if state["initialized"] == "sections"}
+        present = {parent.canonical(mapping.binding).root for mapping in arrays}
+        for binding, number in parent.owner.resources.values():
+            if number in numbers and binding.root in partial and binding.root not in present:
+                actual = OriginalActual(binding, parent.owner.builder.visible(parent.routine, binding.root))
+                arrays.append(actual)
+                preflight_arrays.append(actual)
+                present.add(binding.root)
+    for mapping in preflight_arrays:
+        name = str(mapping.actual).lower().partition("%")[0].partition("(")[0].strip()
+        if name == "fort_actuals_contiguous":
+            raise CompilationError("original module companion actual conflicts with descriptor guard name")
+    conditions = [condition for mapping in arrays for condition in expected_descriptor_conditions(
+        parent.builder.capture(mapping.binding), mapping.binding.rank, str(mapping.actual))]
+    outputs = [mapping for mapping in associations if mapping.formal_binding.intent == "out"]
+    # Validate new caller storage while companion creation can still roll back.
+    for mapping in arrays if reached is not None else outputs:
+        if str(mapping.actual).lower().startswith("fort_"):
+            raise CompilationError("original mapped actual conflicts with compiler-private registration names")
+        parent.declaration(mapping.binding)
+    return arrays, preflight_arrays, outputs, conditions
+
+
 class ModuleOwner(MappedReachedControl, LexicalOwner):
     def __init__(self, parent, routine, mappings, immutable_inputs=None, reached=None):
         from compiler.scopes.region_dispatch import InlineRegions
@@ -60,9 +95,8 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
                 # association can replace the original descriptor lower bounds.
                 fact = {key: value for key, value in fact.items() if key != "expected_descriptor"}
             if binding.name in routine.arguments and binding.intent == "out":
-                # First registration can follow the original OUT event. No
-                # handle existed at ENTRY in that case, so old caller values
-                # cannot initialize this callee's definition coverage.
+                # The original OUT event invalidates caller coverage. A child
+                # registration can never seed definitions from old values.
                 return {**{key: value for key, value in fact.items()
                            if key not in {"source_sections", "sections", "requires_registered_handle"}},
                         "initialized": "none"}
@@ -75,10 +109,12 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
             return fact
 
         proxy.capture = MethodType(capture, proxy)
-        # OUT events also matter for formals unused by admitted numerical work.
+        # Admitted reached units enroll their own resources. An unrelated
+        # formal needs no payload facts merely to retain its original CALL
+        # association, but OUT events precede every child branch and RETURN.
         for name in routine.arguments:
             binding = routine.scope.bindings[name]
-            if binding.rank and binding.root not in proxy.immutable_inputs:
+            if binding.rank and binding.intent == "out" and binding.root not in proxy.immutable_inputs:
                 self.add_resource(binding)
         self.owner.builder.region_owners[routine.qualified] = proxy.inline
         self.nodes = proxy.inline.prepare(_children(routine.execution))
@@ -146,6 +182,7 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
                 "optional_scalar_formals": [name for name in self.routine.arguments
                     if optional_scalar_input(self.routine.scope.bindings[name])],
                 "optional_scalar_association": "original OPTIONAL reference and PRESENT guards; no payload capture",
+                "array_registration": "admitted reached resources; original OUT actuals registered before unconditional entry invalidation",
                 "argument_rendering": "original source arguments; compiler controls appended by keyword",
                 "planning_segments": [{"segment_id": index, "first_line": unit.scope.first,
                     "last_line": unit.scope.last, "operations": unit.scope.public()}
@@ -229,6 +266,7 @@ def borrow_module(parent, node, *, reached=None):
         owner.active.append(routine.qualified)
         try:
             existing = ModuleOwner(parent, routine, mappings, immutable_inputs, reached)
+            caller_arrays = _caller_arrays(parent, resolved, existing, immutable_inputs, reached)
             owner.members[routine.qualified] = existing
         except CompilationError:
             owner.builder.restore_scope_checkpoint(checkpoint)
@@ -243,6 +281,8 @@ def borrow_module(parent, node, *, reached=None):
             raise
         finally:
             owner.active.pop()
+    else:
+        caller_arrays = _caller_arrays(parent, resolved, existing, immutable_inputs, reached)
     # Reached child admission can roll back rejected local candidates. Rebind
     # the caller's artifact maps before adding its companion import.
     parent.refresh()
@@ -265,20 +305,7 @@ def borrow_module(parent, node, *, reached=None):
     # A CONTIGUOUS callee dummy can conceal a caller-created temporary. Check
     # actual storage before that association exists, otherwise a retained
     # handle might outlive temporary copyback at the original call return.
-    arrays = [mapping for mapping in resolved.mappings if mapping.formal_binding.rank
-              and mapping.formal_binding.root not in immutable_inputs]
-    if reached is not None and parent is owner:
-        from compiler.scopes.call_registration import OriginalActual
-        # Descendant handles include hidden resources. Only the root lexical
-        # caller can evaluate its source activation geometry and descriptor.
-        record = owner.builder.reached_plan_record()
-        partial = {state["resource"] for state in record["states"] if state["initialized"] == "sections"}
-        present = {parent.canonical(mapping.binding).root for mapping in arrays}
-        numbers = set(existing.handle_numbers())
-        for binding, number in owner.resources.values():
-            if number in numbers and binding.root in partial and binding.root not in present:
-                arrays.append(OriginalActual(binding, owner.builder.visible(owner.routine, binding.root)))
-                present.add(binding.root)
+    arrays, preflight_arrays, outputs, descriptor_conditions = caller_arrays
     preflight = []
     if elements:
         # Only the original INTEGER selector is observed here, inside the
@@ -291,14 +318,10 @@ def borrow_module(parent, node, *, reached=None):
                           f"if (int({index},kind=c_int64_t) < {lower}_c_int64_t .or. &",
                           f"int({index},kind=c_int64_t) > {upper}_c_int64_t) then", *parent.close(), "endif", "endif"]
         preflight += ["end block"]
-    if arrays:
-        descriptor_conditions = []
-        for mapping in arrays:
-            fact = parent.builder.capture(mapping.binding)
-            descriptor_conditions += expected_descriptor_conditions(fact, mapping.binding.rank, str(mapping.actual))
+    if preflight_arrays:
         preflight += ["block", *(["use iso_c_binding, only: c_int64_t"] if descriptor_conditions else []),
                       "logical :: fort_actuals_contiguous", "fort_actuals_contiguous = .true."]
-        for mapping in arrays:
+        for mapping in preflight_arrays:
             name = str(mapping.actual)
             if "allocatable" in mapping.binding.attributes:
                 preflight += [f"if (fort_actuals_contiguous) fort_actuals_contiguous = allocated({name})"]
@@ -314,9 +337,12 @@ def borrow_module(parent, node, *, reached=None):
                           "if (.not. fort_actuals_contiguous) then",
                           *parent.close(reason="capture expected descriptor mismatch"), "endif", "endif"]
         preflight += ["end block"]
-    if reached is not None:
+    if reached is not None or outputs:
         from compiler.scopes.call_registration import register_original_actuals
-        preflight += register_original_actuals(parent, arrays, scalar_elements=elements)
+        # A zero handle must become an undefined tracked range at OUT entry,
+        # rather than being freshly seeded from caller facts after return.
+        preflight += register_original_actuals(parent, arrays if reached is not None else outputs,
+                                              scalar_elements=elements)
     lines = [f"if ({parent.enabled}) then", *preflight, "endif",
              f"if ({parent.enabled}) then", *_call(existing.entry, [*arguments, *controls]),
              "else", *parent.original((node,)).splitlines(), "endif"]

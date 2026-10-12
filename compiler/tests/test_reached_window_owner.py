@@ -171,24 +171,43 @@ def test_unregistered_or_foreign_proofs_cannot_emit_controls(tmp_path):
         ReachedWindowOwner(foreign, proof, originals)
 
 
-def test_prepared_selection_cannot_skip_reorder_or_extend_the_proved_window(tmp_path):
+@pytest.mark.parametrize("selection", ["skip", "reorder", "extend"])
+def test_prepared_selection_cannot_skip_reorder_or_extend_the_proved_window(tmp_path, selection):
     _path, builder, proof, originals = window_fixture(tmp_path)
     owner = ReachedWindowOwner(builder, proof, originals)
-    for wrong in (originals[:1], tuple(reversed(originals)), (*originals, builder.entry.execution.content[0])):
-        with pytest.raises(CompilationError, match="differs"):
-            owner.run(wrong)
+    wrong = {"skip": originals[:1], "reorder": tuple(reversed(originals)),
+             "extend": (*originals, builder.entry.execution.content[0])}[selection]
+    before = proof.public()
+    with pytest.raises(CompilationError, match="differs"):
+        owner.run(wrong)
+    assert owner.window_proof is proof
+    assert proof.public() == before
     assert not owner.builder.edits
+    assert not owner.builder.outputs
+    assert not owner.builder.scopes
+    with pytest.raises(CompilationError, match="failed reached consumption candidate"):
+        owner.run(originals)
 
 
-def test_later_source_or_capture_fact_mutation_invalidates_emission(tmp_path):
+@pytest.mark.parametrize("mutation", ["facts", "source"])
+def test_later_source_or_capture_fact_mutation_invalidates_emission(tmp_path, mutation):
     path, builder, proof, originals = window_fixture(tmp_path)
     owner = ReachedWindowOwner(builder, proof, originals)
-    builder.facts["captures"][ROOTS[0]]["initialized"] = "none"
-    with pytest.raises(CompilationError, match="facts|authority"):
+    if mutation == "facts":
+        builder.facts["captures"][ROOTS[0]]["initialized"] = "none"
+        reason = "facts|authority"
+    else:
+        path.write_text(SOURCE + "\n! changed\n")
+        reason = "source changed"
+    before = proof.public()
+    with pytest.raises(CompilationError, match=reason):
         owner.run()
     builder.facts["captures"][ROOTS[0]]["initialized"] = "whole"
-    path.write_text(SOURCE + "\n! changed\n")
-    with pytest.raises(CompilationError, match="source changed"):
+    path.write_text(SOURCE)
+    assert proof.public() == before
+    assert not owner.builder.edits
+    assert not owner.builder.outputs
+    with pytest.raises(CompilationError, match="failed reached consumption candidate"):
         owner.run()
 
 
