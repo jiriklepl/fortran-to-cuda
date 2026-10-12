@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 IMAGE_TAG="${IMAGE_TAG:-fortran-abomination:latest}"
-BASE_IMAGE="${BASE_IMAGE:-nvidia/cuda:12.6.2-devel-ubuntu24.04}"
+BASE_IMAGE="${BASE_IMAGE:-nvidia/cuda:12.8.1-devel-ubuntu24.04}"
 BUILD_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -37,19 +37,24 @@ while [[ $# -gt 0 ]]; do
 done
 
 ENGINE="docker"
+ENGINE_KIND="docker"
 if ! command -v docker &>/dev/null; then
     if command -v podman &>/dev/null; then
         ENGINE="podman"
+        ENGINE_KIND="podman"
     else
         echo "ERROR: Neither 'docker' nor 'podman' command was found." >&2
         echo "Please install Docker or Podman, or build with Apptainer on HPC." >&2
         exit 1
     fi
+else
+    version="$(docker --version 2>/dev/null || true)"
+    if [[ "${version,,}" == *podman* ]]; then ENGINE_KIND="podman"; fi
 fi
 
 echo "================================================================================"
 echo " Building Container Image"
-echo " Engine:     ${ENGINE}"
+echo " Engine:     ${ENGINE} (${ENGINE_KIND})"
 echo " Tag:        ${IMAGE_TAG}"
 echo " Base Image: ${BASE_IMAGE}"
 echo " Context:    ${WORKSPACE_ROOT}"

@@ -1,212 +1,174 @@
-# Reproducible Datacenter Container Pipeline
+# GPU node experiments
 
-Production-ready Docker and Apptainer (Singularity) container environments to reproducibly compile, execute, benchmark, and generate publication-quality figures on datacenter-grade GPU systems (e.g., NVIDIA H100, A100, L40S, RTX 6000 Ada, V100).
+`./run_on_node.sh` remains the top-level Slurm command. It forwards to
+`containers/run_node.sh`; local, Docker/Podman and Apptainer entrypoints run the
+same experiment. The experiment builds **pristine upstream native ELMM and a
+fresh compiler-generated SGS sections/direct variant**, checks final VTK fields,
+verifies actual GPU launches separately, then measures complete process time.
+The target is 20% less wall time than original native (`GPU/native <= 0.80`),
+not another 20% over the previous SGS result. Reports also give the speedup factor.
 
----
+## On the MFF clusters
 
-## 1. Architecture & Toolchain Overview
-
-The containers provide a fully isolated and reproducible environment conforming to all compiler constraints:
-- **Base Image:** Ubuntu 24.04 LTS (`nvidia/cuda:12.6.2-devel-ubuntu24.04`)
-- **Fortran Compiler:** GNU Fortran 15 (`gfortran-15`) from `ppa:ubuntu-toolchain-r/test` (strictly required; GCC 16 rejects an upstream pure geometry constructor in ELMM)
-- **C/C++ Host Compiler:** GCC 14 / G++ 14 (`gcc-14` / `g++-14`, required for host compatibility with `nvcc`)
-- **CUDA Toolkit:** NVIDIA CUDA 12.6 (`nvcc`, runtime libraries, CUBLAS, Nsight Systems CLI `nsys`)
-- **Native Math Libraries:** FFTW3 (single-precision, double-precision, and OpenMP), OpenBLAS, LAPACK
-- **Python Environment:** Python 3 with `fparser==0.2.5`, `matplotlib==3.11.2`, `islpy==2026.2.2`, `numpy==2.5.3`, `scipy`, `pytest`, `ruff`
-- **Publication Graphics:** TeX Live (`pdflatex`, `cm-super`, `dvipng`) for Computer Modern typography and publication styling in Matplotlib
-
-## 2. Supported Datacenter GPU Architectures
-
-| GPU Model | Microarchitecture | Compute Capability | CUDA Target (`CUDA_ARCH`) | nvfortran flag |
-|---|---|---|---|---|
-| **Native (Auto-Detect GPU)** | Host Machine GPU | Auto-detected | `native` | auto |
-| **NVIDIA B200 / GB200** | Blackwell | 10.0 | `sm_100` | `-gpu=cc100` |
-| **NVIDIA H100 (SXM / PCIe)** | Hopper | 9.0 | `sm_90` | `-gpu=cc90` |
-| **NVIDIA L40 / L40S** | Ada Lovelace | 8.9 | `sm_89` | `-gpu=cc89` |
-| **NVIDIA RTX 6000 Ada** | Ada Lovelace | 8.9 | `sm_89` | `-gpu=cc89` |
-| **NVIDIA A100 (SXM / PCIe)** | Ampere | 8.0 | `sm_80` | `-gpu=cc80` |
-| **NVIDIA A10 / A30 / RTX 3090** | Ampere | 8.6 | `sm_86` | `-gpu=cc86` |
-| **NVIDIA V100 (SXM / PCIe)** | Volta | 7.0 | `sm_70` | `-gpu=cc70` |
-
-> [!TIP]
-> **Native Compilation (`native`):**
-> - **GPU (CUDA):** Setting `CUDA_ARCH=native` or `--arch native` instructs `nvcc -arch=native` (analogous to CMake's `CMAKE_CUDA_ARCHITECTURES=native`) to query the installed GPU and compile for its exact compute capability.
-> - **CPU (Fortran / C++):** The benchmark build flags in [`benchmarks/common/defaults.mk`](file:///home/jirka/research/fortran-abomination/benchmarks/common/defaults.mk) already default to `-march=native -flto` for both `FC` and `CXX`, automatically generating optimized code with the host CPU's instruction set (AVX-512, AVX2, FMA, etc.).
-
----
-
-## 3. Quickstart: Reproducing All Plots
-
-All publication figures can be reproduced immediately into the `./out` directory without re-executing long GPU runs by extracting from archived campaign data, or generated from fresh GPU runs.
-
-### With Docker:
-```bash
-# 1. Build the Docker image
-./containers/build-docker.sh
-
-# 2. Reproduce all publication plots
-./containers/run-docker.sh reproduce-plots
-```
-
-### With Apptainer (Singularity on HPC):
-```bash
-# 1. Build the SIF image
-./containers/build-apptainer.sh
-
-# 2. Reproduce all publication plots
-./containers/run-apptainer.sh reproduce-plots
-```
-
-### Generated Artifacts in `./out/`:
-- `grid_512x512x512_niter100.{png,pdf}` — Microbenchmark execution time (memory transfer vs kernel time)
-- `complete-wall-relative.{png,pdf,svg}` — Six-policy complete application wall-clock ratio vs native CPU
-- `entry-time.{png,pdf,svg}` — Execution time per entry call across grid sizes
-- `transfer-volume.{png,pdf,svg}` — Host/device data transfer volume per entry
-- `scoped-wall-relative.{png,pdf,svg}` — Scoped region application comparison across momentum/SGS closures
-- `scoped-transfers-wall-relative.{png,pdf,svg}` — Scoped transfer controls (pinned, direct, pipelined)
-- `scoped-application-report.md` — Verified timing summary table and provenance receipts
-- `manifest.json` — Cryptographic SHA-256 digests and file metadata for every generated figure
-
----
-
-## 4. Running Fresh Benchmarks on Datacenter GPUs
-
-When running on an active GPU node, pass `--run-benchmarks` and specify the target architecture:
-
-### NVIDIA A100 (Compute 8.0):
-```bash
-# Docker
-./containers/run-docker.sh run-benchmarks --arch sm_80
-
-# Apptainer
-./containers/run-apptainer.sh run-benchmarks --arch sm_80
-```
-
-### NVIDIA H100 (Compute 9.0):
-```bash
-# Docker
-./containers/run-docker.sh run-benchmarks --arch sm_90
-
-# Apptainer
-./containers/run-apptainer.sh run-benchmarks --arch sm_90
-```
-
-### NVIDIA L40S / RTX 6000 Ada (Compute 8.9):
-```bash
-# Docker
-./containers/run-docker.sh run-benchmarks --arch sm_89
-
-# Apptainer
-./containers/run-apptainer.sh run-benchmarks --arch sm_89
-```
-
-The runner automatically:
-1. Rebuilds cases using `FC=gfortran-15`, `CXX=g++-14`, and `NVCC=nvcc -arch=<CUDA_ARCH>`.
-2. Validates deterministic correctness against serial Fortran (`python3 -m benchmarks.harness.check`).
-3. Executes multi-grid timing sweeps (`python3 -m benchmarks.harness.run`).
-4. Generates publication-ready figures directly into the mounted output volume (`/output`).
-
----
-
-## 5. HPC / SLURM Batch Execution
-
-On supercomputers managed by SLURM, use Apptainer with `--nv` for GPU passthrough. Below is a production SLURM submission script:
+The [cluster guide](https://gitlab.mff.cuni.cz/mff/hpc/clusters) supplied with this
+work confirms these presets: `hopper01` uses `gpu-ffa-gpulab`; `bw01` uses
+`ffa-gpulab`. Both have two GPUs. The guide's Blackwell GRES label conflicts with
+its hardware description, so the runner requests one GPU without a model name
+and queries the allocated CUDA device for its actual architecture. Presets only
+select a partition; `--partition` overrides them. Check live availability with
+`sinfo` and choose an account with `--account` when needed.
 
 ```bash
-#!/bin/bash
-#SBATCH --job-name=fortran-pipeline
-#SBATCH --output=logs/%x-%j.out
-#SBATCH --error=logs/%x-%j.err
-#SBATCH --partition=gpu
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --gpus=1
-#SBATCH --mem=64G
-#SBATCH --time=02:00:00
-
-module load apptainer cuda/12.6
-
-# Set output directory
-OUTPUT_DIR="${SLURM_SUBMIT_DIR}/out-${SLURM_JOB_ID}"
-mkdir -p "${OUTPUT_DIR}"
-
-# Execute benchmark pipeline in container
-apptainer run \
-    --nv \
-    --bind "${OUTPUT_DIR}:/output" \
-    "${SLURM_SUBMIT_DIR}/fortran-abomination.sif" \
-    reproduce-plots
-
-echo "Generated artifacts saved in: ${OUTPUT_DIR}"
-```
-
-Submit with:
-```bash
-sbatch slurm_job.sh
-```
-
-### Automated Headnode Runner (`bw01` & `hopper01`)
-
-For automated, one-command execution from the cluster headnode (`hpc.troja.mff.cuni.cz` or `parlab` / `gpulab`), use the automated dispatcher:
-
-```bash
-# Run ELMM pipeline on hopper01 (H100 PCIe 80GB, sm_90) and produce all report graphs:
-./run_on_node.sh hopper01
-
-# Run ELMM pipeline on bw01 (RTX PRO Blackwell 96GB, sm_100) and produce all report graphs:
-./run_on_node.sh bw01
-
-# Background execution (do not block terminal):
-./run_on_node.sh hopper01 --no-wait
-
-# Custom output directory:
-./run_on_node.sh hopper01 -o ./results/hopper-run-1
-
-# Dry-run to inspect the generated Slurm job script and command:
+# Inspect the job script without submitting or executing numerical work.
 ./run_on_node.sh hopper01 --dry-run
+
+# Fresh, full-duration channel-simple comparison: four runtime threads,
+# eight build jobs, one warmup and seven rotated measured repetitions per mode.
+./run_on_node.sh hopper01 --runtime apptainer --sif /work/USER/fortran.sif \
+    --output-dir /work/USER/sgs-hopper-01 --work-dir /scratch/tmp/USER-sgs-hopper-01
+
+# The upstream ELMM channel configuration, on the other target.
+./run_on_node.sh bw01 --case channel --runtime apptainer \
+    --sif /work/USER/fortran.sif --time 08:00:00 \
+    --output-dir /work/USER/sgs-blackwell-01 -- --timeout 7200
+
+# An explicitly capped smoke test. Its report cannot pass the performance gate.
+./run_on_node.sh hopper01 --steps 3 --repeats 1 --warmups 0 \
+    --output-dir /work/USER/sgs-smoke-01
+
+# More build resources, while retaining the four-thread timing budget.
+./run_on_node.sh hopper01 --jobs 16 --cpus 16 --mem 64G \
+    --output-dir /work/USER/sgs-build16-01
 ```
 
-The script automatically:
-1. Validates that the target is either `hopper01` or `bw01`.
-2. Configures the exact node hardware, architecture (`sm_90` for `hopper01`, `sm_100` for `bw01`), partition (`gpu-ffa-gpulab` or `ffa-gpulab`), GRES (`--gpus=1`), host CPUs, memory, and walltime.
-3. Submits a Slurm job using `sbatch` targeting the selected compute node.
-4. Executes the ELMM pipeline and benchmark harness with GPU offload.
-5. Produces all publication-quality graphs found in the campaign and benchmark reports directly into the output directory (`complete-wall-relative`, `entry-time`, `transfer-volume`, `scoped-wall-relative`, `scoped-transfers-wall-relative`, `grid_512x512x512_niter100`, `manifest.json`).
+Run builds and experiments on allocated worker nodes. The submission wrapper
+performs no headnode package installation and never falls back to a local run
+when Slurm is missing. `--no-wait` submits without waiting; otherwise scheduler
+failure propagates to the caller. Extra experiment options follow `--`; checked
+path/resource options must precede it. Use `--config DIR` for a custom config.
 
----
+`--runtime auto` uses Apptainer/Singularity when its image is available, otherwise
+the installed native toolchain on the **allocated worker**. Select
+`--runtime apptainer` to require the image. The command never builds an image
+implicitly. The original standalone launchers and top-level wrapper remain
+available.
 
-## 6. Interactive Debugging & Development
+Results and generated work default to persistent output storage. On gpulab,
+`$TMPDIR` is local SSD; on Chimera it is RAM and counts against job memory. Use
+explicit `--work-dir` when moving large build artifacts to scratch. Keep the
+work directory while its report is needed: receipts refer to generated artifacts
+and executable hashes there. Scratch is caller-owned and is never deleted by
+the experiment. Choose a new output/work experiment directory for each run.
 
-To drop into a bash shell inside the container with all tools and compilers pre-configured:
+## Build and inspect an image
 
-### Docker:
 ```bash
-./containers/run-docker.sh bash
+./containers/build-docker.sh
+./containers/build-apptainer.sh --fakeroot -o /work/USER/fortran.sif
+
+OUTPUT_DIR="$PWD/out-doctor" ./containers/run-docker.sh doctor
+SIF_FILE=/work/USER/fortran.sif ./containers/run-apptainer.sh doctor
 ```
 
-### Apptainer:
+The base is `nvidia/cuda:12.8.1-devel-ubuntu24.04`, with GNU Fortran 15,
+GCC/G++ 14, FFTW/OpenBLAS/LAPACK and pinned compiler/parser/build dependencies.
+CUDA 12.8 supports Hopper and both Blackwell target families; GPU naming alone
+does not determine the compute capability. See NVIDIA's
+[CUDA 12.8 release notes](https://docs.nvidia.com/cuda/archive/12.8.0/cuda-features-archive/index.html)
+and [GPU list](https://developer.nvidia.com/cuda/gpus).
+`--arch auto` detects the selected device; an explicit mismatching or unsupported
+target fails before building. An actual CUDA launch, not `nvidia-smi` alone,
+establishes that the generated variant executed.
+
+Image builds exclude result archives, host environments and caches. The
+Apptainer helper stages a small source-only context before `%files` runs;
+`CONTAINER_BUILD_TMPDIR` controls that staging location. Build images on a worker
+node. `--fakeroot` requires the cluster administrator's subuid/subgid setup.
+Images are prepared from current source files, including the independent
+`elmm-pipeline` checkout; keep compatible compiler and pipeline revisions.
+
+Docker commands that are Podman compatibility launchers are detected and use
+Podman CDI GPU flags. Podman GPU runs require a configured NVIDIA CDI runtime.
+For real Docker inside Slurm, use `GPU_DEVICES=GPU-UUID`; scheduler-local numeric
+ordinals are not safe physical Docker device selectors. Apptainer/native runs
+preserve the scheduler's CUDA visibility and resolve its CUDA ordinals to UUIDs.
+CPU-only `doctor`, plotting and tests do not require a GPU.
+
+## Preparation and fresh runs
+
 ```bash
-./containers/run-apptainer.sh bash
+# Provision pinned ELMM/PoisFFT sources and tools into writable persistent work.
+# Can be done before timing on a worker with network access.
+OUTPUT_DIR="$PWD/out-prepared" ./containers/run-docker.sh prepare
+
+# Uses that private cache; no writes into the baked or read-only source tree.
+OUTPUT_DIR="$PWD/out-prepared" ./containers/run-docker.sh run-elmm --case channel-simple
+
+# Native workflow on an already allocated, configured worker.
+PYTHON=/path/to/python ./containers/entrypoint.sh run-elmm \
+    --case channel --output-dir /work/USER/channel-native-tools-01
 ```
 
-### Running the Test Suites:
+The default has no timestep cap. `--steps` is explicit smoke-test control.
+The upstream channel case retains its supplied end time 50; channel-simple
+retains 0.5. Allow enough Slurm wall time and per-run `--timeout` for channel.
+`--threads` changes the actual application budget; only the default four-thread
+series is eligible for this comparison target. `--jobs` controls builds only.
+`--repeats`, `--warmups`, `--timeout`, `--gpu` (visible CUDA ordinal or UUID),
+`--nvcc` and `--cuda-host` are forwarded to the same workflow. Run
+`entrypoint.sh run-elmm --help` or `run_on_node.sh --help` for options.
+
+Source overrides are explicit: `WORKSPACE_ROOT`, `PIPELINE_ROOT` and
+`COMPILER_ROOT` mount read-only source directories in the container. Prepared
+pipeline tools and application copies live in writable work storage. Advanced
+native callers can supply `--app-root` (clean pinned ELMM/PoisFFT Git siblings),
+`--compiler-python`, `--scons-python` and `--native-library-dir` to reuse existing
+provisioning. The compiler and pipeline remain independent checkouts.
+
+The SGS preset is an explicit application experiment, not a generic compiler
+heuristic. Its portable contract pins reviewed caller capture facts and source
+hashes; source/contract drift fails before compilation. The channel-simple
+fixture records its cloud repository revision and parser conversions. Upstream
+ELMM files are not repaired or manually changed for the native baseline.
+
+Each run records tools, GPU UUID, CPU affinity, effective memory headroom,
+source/artifact/configuration hashes, separate correctness/GPU diagnostics,
+raw timings, medians and target status. Generated CUDA retains the compiler's
+strict separate-arithmetic build contract. Final VTK comparison uses the existing
+`atol=1e-6, rtol=1e-5`; this float32 output check does **not** establish float64
+full-array or halo agreement. Native/GPU diagnostics precede timing and never
+enter timing medians. Smoke runs and other thread budgets cannot claim the gate.
+No policy is automatically promoted by this runner.
+
+Heavy commands are sequential under the maintained pipeline memory guard, which
+keeps a 3 GiB reserve using the tighter of host and applicable cgroup budgets.
+Failures retain logs and return failure; they are not converted into successful
+reports. A new run never deletes an earlier result directory.
+
+## Plot explicit saved measurements
+
+Images contain no historical result archive. Mount the saved evidence and choose
+it explicitly; plotting never silently substitutes old results for fresh runs.
+
 ```bash
-# Run all compiler and harness unit tests
-./containers/run-docker.sh test
+# Native example using the maintained sealed-snapshot reader.
+PYTHON=.venv/bin/python ./containers/reproduce_plots.sh \
+    --snapshot benchmarks/results/EXPERIMENT/snapshot.json \
+    --output-dir benchmarks/results/EXPERIMENT/plots/new-snapshot
+
+# Container: mount the evidence under /output; all snapshot-relative files travel
+# with it. Absolute-path campaign receipts require their original artifact paths.
+OUTPUT_DIR=/work/USER/saved-evidence ./containers/run-docker.sh reproduce-plots \
+    --snapshot /output/snapshot.json --output-dir /output/plots/new-snapshot
 ```
 
----
+`--campaign DIR` redraws a maintained campaign report; `--policy-report FILE`
+redraws the older six-policy microbenchmark report. Historical inputs are labeled
+as such. Output plot directories must be new. Fresh `run-elmm` produces its own
+native/SGS figures alongside its report, without importing archived timings.
+Use `--experiment FILE` to redraw one of those fresh paired reports.
 
-## 7. Configuration Reference
-
-### Environment Variables
-| Variable | Default Value | Description |
-|---|---|---|
-| `OUTPUT_DIR` | `./out` | Host directory mounted into container at `/output` |
-| `IMAGE_TAG` | `fortran-abomination:latest` | Docker image tag |
-| `SIF_FILE` | `./fortran-abomination.sif` | Path to Apptainer SIF image |
-| `CUDA_ARCH` | Auto-detected | Target compute architecture (e.g. `sm_80`, `sm_90`) |
-| `MPLCONFIGDIR` | `/tmp/matplotlib` | Writable Matplotlib cache directory |
-| `PYTHONPATH` | `/workspace:/workspace/elmm-pipeline` | Python module import path |
-
+`run-benchmarks` is a separate, bounded generic microbenchmark check/timing run;
+it does not measure the ELMM application or its 20% target. `entrypoint.sh test`
+runs the container workflow tests. Arbitrary commands such as `bash` remain
+available through either container launcher.

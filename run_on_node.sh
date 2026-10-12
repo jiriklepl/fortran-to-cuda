@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# run_on_node.sh — Run ELMM pipeline on HPC node (bw01 or hopper01)
-# Wrapper around containers/run_node.sh
+# Stable top-level entrypoint for fresh native/SGS comparisons on Slurm.
+# See containers/README.md; all arguments go to containers/run_node.sh.
 # ==============================================================================
 set -euo pipefail
 

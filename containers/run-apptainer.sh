@@ -1,50 +1,68 @@
 #!/usr/bin/env bash
-# ==============================================================================
-# run-apptainer.sh — Run Apptainer SIF image with GPU passthrough and bind mounts
-# ==============================================================================
+# Run a SIF with writable output and only explicitly supplied source overrides.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+SIF_FILE="${SIF_FILE:-${SCRIPT_DIR}/../fortran-abomination.sif}"
+OUTPUT_DIR="${OUTPUT_DIR:-${SCRIPT_DIR}/../out}"
 
-SIF_FILE="${SIF_FILE:-${WORKSPACE_ROOT}/fortran-abomination.sif}"
-OUTPUT_DIR="${OUTPUT_DIR:-${WORKSPACE_ROOT}/out}"
+fail() { echo "ERROR: $*" >&2; exit 1; }
+directory() {
+    [[ -d "$1" ]] || fail "Directory not found: $1"
+    (cd -- "$1" && pwd -P)
+}
 
-APPTAINER_BIN="apptainer"
-if ! command -v apptainer &>/dev/null; then
-    if command -v singularity &>/dev/null; then
-        APPTAINER_BIN="singularity"
-    else
-        echo "ERROR: Neither 'apptainer' nor 'singularity' found." >&2
-        exit 1
-    fi
-fi
-
-if [[ ! -f "${SIF_FILE}" ]]; then
-    echo "ERROR: SIF image not found at '${SIF_FILE}'." >&2
-    echo "Run ${SCRIPT_DIR}/build-apptainer.sh first." >&2
-    exit 1
-fi
-
-mkdir -p "${OUTPUT_DIR}"
-
-NV_FLAGS=()
-if command -v nvidia-smi &>/dev/null; then
-    NV_FLAGS=("--nv")
-    echo "NVIDIA GPU detected; enabling GPU acceleration (--nv)."
+if command -v apptainer >/dev/null 2>&1; then
+    ENGINE=apptainer
+elif command -v singularity >/dev/null 2>&1; then
+    ENGINE=singularity
 else
-    echo "No NVIDIA GPU detected; running in CPU-only mode."
+    fail "Neither apptainer nor singularity was found."
+fi
+[[ -f "$SIF_FILE" ]] || fail "SIF image not found: $SIF_FILE"
+SIF_FILE="$(directory "$(dirname -- "$SIF_FILE")")/$(basename -- "$SIF_FILE")"
+mkdir -p -- "$OUTPUT_DIR"
+OUTPUT_DIR="$(directory "$OUTPUT_DIR")"
+[[ -w "$OUTPUT_DIR" ]] || fail "Output directory is not writable: $OUTPUT_DIR"
+
+flags=(run --cleanenv --no-home --pwd /output --bind "$OUTPUT_DIR:/output"
+       --env OUTPUT_DIR=/output --env WORK_DIR=/output/work
+       --env WORKSPACE_ROOT=/workspace --env PIPELINE_ROOT=/workspace/elmm-pipeline
+       --env HOME=/output --env MPLCONFIGDIR=/tmp/matplotlib)
+if [[ ${WORKSPACE_ROOT+x} ]]; then
+    flags+=(--bind "$(directory "$WORKSPACE_ROOT"):/workspace:ro")
+fi
+if [[ ${PIPELINE_ROOT+x} ]]; then
+    flags+=(--bind "$(directory "$PIPELINE_ROOT"):/workspace/elmm-pipeline:ro")
+fi
+if [[ ${COMPILER_ROOT+x} ]]; then
+    flags+=(--bind "$(directory "$COMPILER_ROOT"):/compiler-source:ro"
+            --env COMPILER_ROOT=/compiler-source)
 fi
 
-echo "================================================================================"
-echo " Running SIF Image: ${SIF_FILE}"
-echo " Output Directory:  ${OUTPUT_DIR} -> /output"
-echo " Command:           ${*:-default (reproduce-plots)}"
-echo "================================================================================"
+selection=
+requested=false
+if [[ ${GPU_DEVICES+x} ]]; then
+    selection="$GPU_DEVICES"
+    requested=true
+elif [[ ${CUDA_VISIBLE_DEVICES+x} ]]; then
+    selection="$CUDA_VISIBLE_DEVICES"
+    requested=true
+else
+    case "${1:-doctor}" in
+        run-elmm|elmm|run-benchmarks|benchmark) selection=all; requested=true ;;
+    esac
+fi
+if [[ "$requested" == true ]]; then
+    case "$selection" in
+        ''|-1|none|void) flags+=(--env CUDA_VISIBLE_DEVICES=) ;;
+        all) flags+=(--nv) ;;
+        *) flags+=(--nv --env "CUDA_VISIBLE_DEVICES=$selection") ;;
+    esac
+fi
 
-"${APPTAINER_BIN}" run \
-    "${NV_FLAGS[@]}" \
-    --bind "${OUTPUT_DIR}:/output" \
-    "${SIF_FILE}" \
-    "$@"
-
+# --cleanenv still permits these host injection variables; use the flags above.
+for name in "${!APPTAINERENV_@}" "${!SINGULARITYENV_@}"; do
+    [[ -z "$name" ]] || unset "$name"
+done
+exec "$ENGINE" "${flags[@]}" "$SIF_FILE" "$@"
