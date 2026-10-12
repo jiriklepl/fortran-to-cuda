@@ -8,13 +8,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 SIF_OUTPUT="${SIF_OUTPUT:-${WORKSPACE_ROOT}/fortran-abomination.sif}"
-DEF_FILE="${SCRIPT_DIR}/Apptainer.def"
 FROM_DOCKER=0
 EXTRA_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -o|--output)
+            [[ $# -ge 2 ]] || { echo "missing output path" >&2; exit 2; }
             SIF_OUTPUT="$2"
             shift 2
             ;;
@@ -55,6 +55,8 @@ if ! command -v apptainer &>/dev/null; then
     fi
 fi
 
+SIF_OUTPUT="$(realpath -m -- "$SIF_OUTPUT")"
+[[ ! -e "$SIF_OUTPUT" ]] || { echo "ERROR: Refusing to replace $SIF_OUTPUT" >&2; exit 2; }
 echo "================================================================================"
 echo " Building Apptainer / Singularity SIF Image"
 echo " Tool:       ${APPTAINER_BIN}"
@@ -67,8 +69,16 @@ if [[ "${FROM_DOCKER}" -eq 1 ]]; then
     echo "Converting local Docker image '${DOCKER_TAG}' to SIF..."
     "${APPTAINER_BIN}" build "${EXTRA_ARGS[@]}" "${SIF_OUTPUT}" "docker-daemon:${DOCKER_TAG}"
 else
-    echo "Building SIF from definition file '${DEF_FILE}'..."
-    (cd "${WORKSPACE_ROOT}" && "${APPTAINER_BIN}" build "${EXTRA_ARGS[@]}" "${SIF_OUTPUT}" "${DEF_FILE}")
+    # %files has no Docker-style ignore support. Stage source before building,
+    # so caches and 100+ GB result archives never enter the image or sandbox.
+    context="$(mktemp -d "${CONTAINER_BUILD_TMPDIR:-${TMPDIR:-/tmp}}/fortran-image.XXXXXXXX")"
+    trap 'rm -rf -- "$context"' EXIT
+    tar -C "$WORKSPACE_ROOT" --exclude-vcs --exclude=.cache --exclude=.venv \
+        --exclude=work --exclude=results --exclude=bin --exclude=__pycache__ \
+        --exclude=.pytest_cache --exclude='*.pyc' --exclude='*.o' --exclude='*.mod' \
+        --exclude=CODE_MAP.md --exclude=MEMORY_MODEL_PLAN.md \
+        -cf - requirements.txt compiler benchmarks elmm-pipeline containers | tar -C "$context" -xf -
+    (cd -- "$context" && "$APPTAINER_BIN" build "${EXTRA_ARGS[@]}" "$SIF_OUTPUT" containers/Apptainer.def)
 fi
 
 echo ""

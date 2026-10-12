@@ -26,8 +26,12 @@ out/
 builds.json
 **/builds.json
 
-# Keep report json files, CSVs, and campaign configs in benchmarks/results/
-!benchmarks/results/**/*.json
-!benchmarks/results/**/*.csv
-!benchmarks/results/**/*.py
-!benchmarks/results/**/*.md
+# Mount evidence explicitly; no historical timings or host binaries in images.
+benchmarks/results/
+elmm-pipeline/.cache/
+elmm-pipeline/work/
+elmm-pipeline/results/
+*.sif
+results/
+compiler/CODE_MAP.md
+compiler/MEMORY_MODEL_PLAN.md
