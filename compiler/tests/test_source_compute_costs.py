@@ -182,6 +182,7 @@ def test_public_scoped_queries_supply_three_totals_with_runtime_range_and_placem
         memory_model="scoped")
     public = generated.scoped
     assert public["planning"]["available"]
+    assert public["compute_estimates"]["abi_version"] == 2
     assert public["compute_estimates"]["native_backend"] == "original Fortran"
     unit, = public["planning"]["units"]
     assert unit["workload_class"] == "scalar_expression_v2"
@@ -195,6 +196,40 @@ def test_public_scoped_queries_supply_three_totals_with_runtime_range_and_placem
     assert "iterations >= 65536ULL && unit.units[0].iterations <= 1048576ULL" in source
     assert "sched_getaffinity" in source
     assert "CPU_COUNT(&actual) != 4" in source
+
+
+@pytest.mark.parametrize("piecewise", [False, True])
+def test_query_records_launch_coverage_only_with_known_gpu_estimate(monkeypatch, piecewise):
+    from copy import deepcopy
+
+    from compiler.offload import source_compute
+
+    original = source_compute.apply_source_compute_costs
+
+    def inclusive(*args, **kwargs):
+        analysis = original(*args, **kwargs)
+        units = []
+        for unit in analysis.units:
+            model = deepcopy(unit.compute_model)
+            model["gpu"]["launch_enqueue_included"] = True
+            if not piecewise:
+                model["gpu"].pop("memory_cost_model", None)
+                model["gpu"]["memory_seconds_per_byte"] = 1e-10
+            units.append(replace(unit, compute_model=model))
+        return replace(analysis, units=tuple(units))
+
+    monkeypatch.setattr(source_compute, "apply_source_compute_costs", inclusive)
+    function, plan, _ = source_analysis()
+    generated = generate_sources(function, plan,
+        offload_config=OffloadConfig(policy="auto", profile=profile_v2(), native_participation="serial"),
+        memory_model="scoped")
+    source = next(text for name, text in generated.artifacts.items()
+                  if name.endswith(".cu") and "record_compute(" in text)
+    flag = "fort_compute.known_backends |= FORT_SCOPE_COMPUTE_GPU_LAUNCH_INCLUDED;"
+    assert source.count(flag) == 1
+    assert source.index("fort_compute.gpu_seconds =") < source.index(flag)
+    assert source.index("fort_compute.known_backends |= FORT_SCOPE_COMPUTE_GPU;") < source.index(flag)
+    assert source.index(flag) < source.index(".record_compute(")
 
 
 def test_unavailable_original_object_identity_is_an_explicit_native_requirement(tmp_path, monkeypatch):

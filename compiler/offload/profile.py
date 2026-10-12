@@ -195,6 +195,13 @@ def validate_profile(
             validate_gpu_execution_profile(profile)
         except NumericalCalibrationError as error:
             raise ProfileError(str(error)) from error
+    if "numerical_execution_gpu_costs" in profile:
+        from .numerical_calibration import NumericalCalibrationError
+        from .numerical_gpu_execution_costs import validate_gpu_execution_costs
+        try:
+            validate_gpu_execution_costs(profile)
+        except NumericalCalibrationError as error:
+            raise ProfileError(str(error)) from error
     if "cpu_execution_protocol" in profile:
         from .cpu_protocol_calibration import validate_cpu_protocol
         from .numerical_calibration import NumericalCalibrationError

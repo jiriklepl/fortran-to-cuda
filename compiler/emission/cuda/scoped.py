@@ -890,10 +890,15 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                     record += ["            {", "                double fort_memory_seconds = 0.0;",
                                                f"                if (fort_working_set_available && {helper}(unit.units[0].memory_bytes, fort_working_set_bytes, fort_memory_seconds)) {{",
                                                f"                    fort_compute.{role}_seconds = std::max(static_cast<double>(unit.units[0].iterations) * {seconds!r}, fort_memory_seconds) + {coefficients['fixed_seconds']!r};",
-                                               f"                    fort_compute.known_backends |= {bit};", "                }", "            }"]
+                                               f"                    fort_compute.known_backends |= {bit};"]
+                                    if role == "gpu" and coefficients.get("launch_enqueue_included") is True:
+                                        record += ["                    fort_compute.known_backends |= FORT_SCOPE_COMPUTE_GPU_LAUNCH_INCLUDED;"]
+                                    record += ["                }", "            }"]
                                 else:
                                     record += [f"            fort_compute.{role}_seconds = std::max(static_cast<double>(unit.units[0].iterations) * {seconds!r}, unit.units[0].memory_bytes * {coefficients['memory_seconds_per_byte']!r}) + {coefficients['fixed_seconds']!r};",
                                                f"            fort_compute.known_backends |= {bit};"]
+                                    if role == "gpu" and coefficients.get("launch_enqueue_included") is True:
+                                        record += ["            fort_compute.known_backends |= FORT_SCOPE_COMPUTE_GPU_LAUNCH_INCLUDED;"]
                             record += ["        }"]
                         record += [f"        FORT_SHARED_CHECK(fort_access.record_compute(FORT_SCOPE_PLAN_WORKER, {unit_ids[step.id]}ULL, {flops}, {memory_bytes}, {'true' if known_work and not protected[step.id] else 'false'}, fort_compute));"]
                     result += ["if (d.valid) {",
@@ -1032,7 +1037,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         "runtime_provenance": provenance.public(),
         "automatic_estimate_available": bool(planning_available and costs is not None),
         "automatic_reason": planning_reason or profile_reason,
-        "compute_estimates": {"abi_version": 1 if source_compute else 0,
+        "compute_estimates": {"abi_version": 2 if source_compute else 0,
                               "runtime_api": "fort_scope_plan_add_compute_costs_v3" if source_compute else "fort_scope_plan_add_costs_v2",
                               "native_participation": config.native_participation,
                               "cpu_affinity": affinity,

@@ -45,10 +45,11 @@ def consume(scope, expected):
 @pytest.mark.parametrize("native,cpu,gpu,expected", [
     (10., 100., 1., 1), (1., 100., 2., 0), (10., .01, 1., 1),
 ])
-def test_original_counterfactual_and_generated_worker_have_distinct_costs(compute_api, native, cpu, gpu, expected):
+@pytest.mark.parametrize("version", [1, 2])
+def test_original_counterfactual_and_generated_worker_have_distinct_costs(compute_api, native, cpu, gpu, expected, version):
     scope = Scope(compute_api)
     scope.check(compute_api.fort_scope_plan_reset(scope.handle))
-    values = Compute(1, NATIVE | CPU | GPU, native, cpu, gpu)
+    values = Compute(version, NATIVE | CPU | GPU, native, cpu, gpu)
     scope.check(add(scope, values))
     # Evidence is copied into the query; caller storage is not retained.
     values.native_fortran_seconds = values.generated_cpu_seconds = 0
@@ -93,7 +94,7 @@ def test_native_inspection_is_extra_candidate_work(compute_api, preparation, kno
 
 
 @pytest.mark.parametrize("field,bad", [
-    ("version", 0), ("version", 2), ("known_backends", 8),
+    ("version", 0), ("version", 3), ("known_backends", 8),
     *[(field, bad) for field in ("native_fortran_seconds", "generated_cpu_seconds", "gpu_seconds")
       for bad in (-1., math.inf, math.nan)],
 ])
@@ -174,7 +175,20 @@ int main(int argc,char **argv) {
                  <<",\"cpu\":"<<detail::compute(worker,c,false)<<",\"gpu\":"<<detail::compute(worker,c,true)
                  <<",\"coordinated_native\":"<<state.time-before<<"}\n"; return 0;
     }
-    if(scenario=="unknown_preparation") in.operations.push_back(op(FORT_SCOPE_PLAN_NATIVE,1,0,0,0));
+    if(scenario=="launch_total" || scenario=="launch_legacy" || scenario=="launch_mixed") {
+        c.launch_enqueue_seconds=20;
+        if(scenario!="launch_legacy") {
+            in.operations[0].compute_costs->version=2;
+            in.operations[0].compute_costs->known_backends|=FORT_SCOPE_COMPUTE_GPU_LAUNCH_INCLUDED;
+        }
+        if(scenario=="launch_mixed") {
+            // A legacy operation still pays its own enqueue. A flag on its
+            // neighbour cannot exempt the whole plan.
+            in.operations.push_back(op(FORT_SCOPE_PLAN_WORKER,7,100,100,1));
+            in.operations.back().unit=2;
+        }
+    }
+    else if(scenario=="unknown_preparation") in.operations.push_back(op(FORT_SCOPE_PLAN_NATIVE,1,0,0,0));
     else if(scenario=="known_preparation") in.operations.push_back(op(FORT_SCOPE_PLAN_NATIVE,3,0,20,0));
     else if(scenario=="continuation" || scenario=="continuation_native" || scenario=="continuation_margin") {
         in.continuation=true; in.charge_create=false; in.registrations_incurred=0;
@@ -264,6 +278,28 @@ def test_legacy_additional_cost_contract_is_unchanged(model):
     result = model("legacy")
     assert result["available"] and result["gpu"]
     assert result["native"] == pytest.approx(3, abs=1e-6)
+
+
+def test_launch_total_is_not_charged_again_or_rejected_by_old_startup_bound(model):
+    included = model("launch_total")
+    assert included["available"]
+    assert included["gpu"] == 1
+    assert included["execution"] == pytest.approx(1, abs=1e-6)
+    separate = model("launch_legacy")
+    assert separate["available"]
+    assert separate["gpu"] == 0
+    mixed = model("launch_mixed")
+    assert mixed["available"]
+    assert mixed["gpu"] == 2
+    assert mixed["execution"] == pytest.approx(22, abs=1e-6)
+
+
+@pytest.mark.parametrize(("version", "known"), [(1, 15), (2, 8), (2, 11), (2, 23)])
+def test_launch_coverage_requires_version_two_and_known_gpu(compute_api, version, known):
+    scope = Scope(compute_api)
+    scope.check(compute_api.fort_scope_plan_reset(scope.handle))
+    assert add(scope, Compute(version, known, 10., 10., 1.)) != 0
+    scope.close()
 
 
 def test_cpp_numerical_and_view_entry_helpers_accept_total_costs(tmp_path):

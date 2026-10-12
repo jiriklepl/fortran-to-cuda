@@ -195,15 +195,19 @@ typedef struct fort_scope_plan_costs {
 /* Additive, per-operation computation evidence. Each total includes the
  * backend's arithmetic, numerical primitives, memory throughput and any fixed
  * execution cost not charged by the scope/team protocol. Transfers, scope
- * lifetime, GPU enqueue and separately calibrated team costs remain outside.
+ * lifetime and separately calibrated team costs remain outside. Version two
+ * can include GPU enqueue in a measured launch total; version one always
+ * charges the scope's enqueue estimate separately. The payload layout is
+ * unchanged, and version-one callers remain supported.
  * A zero total is known only when its bit is set; missing bits never borrow
  * another backend's estimate. Existing plan_costs/v2 callers remain unchanged. */
-#define FORT_SCOPE_COMPUTE_ABI_VERSION 1
+#define FORT_SCOPE_COMPUTE_ABI_VERSION 2
 enum fort_scope_compute_backend {
     FORT_SCOPE_COMPUTE_NATIVE_FORTRAN = 1,
     FORT_SCOPE_COMPUTE_GENERATED_CPU = 2,
     FORT_SCOPE_COMPUTE_GPU = 4,
-    FORT_SCOPE_COMPUTE_ALL = 7
+    FORT_SCOPE_COMPUTE_ALL = 7,
+    FORT_SCOPE_COMPUTE_GPU_LAUNCH_INCLUDED = 8
 };
 typedef struct fort_scope_compute_costs_v1 {
     uint32_t version, known_backends;

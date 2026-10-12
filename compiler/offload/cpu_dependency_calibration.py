@@ -19,8 +19,7 @@ from hashlib import sha256
 from pathlib import Path
 
 from compiler.numerical_contract import numerical_build_contract
-
-from compiler.offload.calibrate import CalibrationError, _run, _tool
+from compiler.offload.calibrate import CalibrationError, _run, _tool, cpu_identity
 from compiler.offload.collective_calibration import normalize_fortran_options
 from compiler.offload.cpu_dependency_model import (
     COEFFICIENT_FAMILIES,
@@ -49,12 +48,16 @@ from compiler.offload.numerical_calibration import (
 from compiler.offload.schedule_calibrate import measurement_environment
 
 PROTOCOL_ID = "source-work-span-cpu-v1"
+CURRENT_PROTOCOL_ID = "source-work-span-current-execution-cpu-v2"
 ACCESS_CLASS = "pointwise_three_array_v1"
 DOMAINS = {"sqrt": "finite_nonnegative_normal_or_zero", "acos": "finite_unit_interval",
            "cos": "finite_pi_interval", "divide_constant": "literal_three"}
 PRIVATE_LIMITS = {"private_array_groups": 2, "private_array_elements": 32,
                   "referenced_private_array_elements": 32, "max_private_array_elements": 16,
                   "max_private_array_rank": 2}
+CURRENT_PRIVATE_LIMITS = {**PRIVATE_LIMITS, "private_array_groups": 4,
+                          "private_array_elements": 64, "referenced_private_array_elements": 64}
+COMPILED_FORMS = ("direct_loop", "value_function_same_unit", "value_function_separate")
 BASIS_MEMORY_ENVELOPE = 1.0 / (1.0 - MAX_HOLDOUT_RELATIVE_ERROR)
 
 
@@ -66,7 +69,8 @@ def dependency_generator_identity():
     """Changes to graphs, fixtures, fitting or validation invalidate evidence."""
     directory = Path(__file__).parent
     names = ("compute_dependencies.py", "cpu_dependency_model.py", "cpu_dependency_workloads.py",
-             "cpu_dependency_calibration.py", "cpu_dependency_driver.cpp")
+             "cpu_dependency_calibration.py", "cpu_dependency_driver.cpp",
+             "numerical_execution.py", "numerical_execution_workloads.py")
     try:
         sources = b"".join(name.encode() + (directory / name).read_bytes() for name in names)
         sources += (directory.parent / "runtime" / "numeric.hpp").read_bytes()
@@ -77,10 +81,31 @@ def dependency_generator_identity():
         raise NumericalCalibrationError("CPU dependency calibration sources unavailable") from error
 
 
-def _recipes(precision):
-    from compiler.offload.cpu_dependency_workloads import dependency_recipes
+def _recipes(precision, *, current=False):
+    from compiler.offload.cpu_dependency_workloads import current_dependency_recipes, dependency_recipes
 
-    return {recipe.name: recipe for recipe in dependency_recipes(precision)}
+    selected = current_dependency_recipes if current else dependency_recipes
+    return {recipe.name: recipe for recipe in selected(precision)}
+
+
+def _foundation(profile, *, current):
+    if current:
+        from compiler.offload.numerical_execution import _current_section
+
+        section = _current_section(profile)
+        return {"kind": "numerical_execution_v1", "section": section,
+                "execution_identity": section["identity"], "identity": _hash_json(section)}
+    section = validate_cpu_protocol(profile)
+    return {"kind": "cpu_execution_protocol_v1", "section": section,
+            "execution_identity": section["execution_identity"], "identity": _hash_json(section)}
+
+
+def _foundation_costs(profile, foundation, backend):
+    if foundation["kind"] == "numerical_execution_v1":
+        from compiler.offload.numerical_execution import execution_startup_memory_costs
+
+        return execution_startup_memory_costs(profile, backend, access_class=ACCESS_CLASS)
+    return cpu_protocol_costs(profile, backend, access_class=ACCESS_CLASS)
 
 
 def _identity(profile, identity, protocol):
@@ -98,14 +123,21 @@ def _identity(profile, identity, protocol):
         if name not in identity or (identity[name] is not None and
                 (not isinstance(identity[name], str) or len(identity[name]) > 128)):
             raise NumericalCalibrationError("CPU dependency execution environment unavailable")
-    expected = {"protocol_id": PROTOCOL_ID, "generator_id": dependency_generator_identity(),
+    current = protocol["kind"] == "numerical_execution_v1"
+    expected = {"protocol_id": CURRENT_PROTOCOL_ID if current else PROTOCOL_ID,
+                "generator_id": dependency_generator_identity(),
                 "precision_bits": profile["precision_bits"], "cpu_threads": profile["cpu_threads"],
                 "cpu_affinity": protocol["execution_identity"]["cpu_affinity"],
                 "fortran": protocol["execution_identity"]["fortran"],
                 "host": protocol["execution_identity"]["host"],
-                "omp_dynamic": False, "omp_proc_bind": "false",
-                "base_numerical_identity": _hash_json(profile["numerical"]["identity"]),
-                "cpu_protocol_identity": _hash_json(protocol)}
+                "omp_dynamic": False, "omp_proc_bind": "false"}
+    if current:
+        expected.update(foundation_kind=protocol["kind"], foundation_identity=protocol["identity"],
+                        base_execution_identity=_hash_json(protocol["execution_identity"]),
+                        cpu_name=profile.get("hardware", {}).get("cpu_name"))
+    else:
+        expected.update(base_numerical_identity=_hash_json(profile["numerical"]["identity"]),
+                        cpu_protocol_identity=protocol["identity"])
     for name in ("actual_team_threads", "thread_limit", "omp_wait_policy", "gomp_spincount"):
         expected[name] = protocol["execution_identity"].get(name)
     if any(identity.get(name) != value for name, value in expected.items()):
@@ -137,6 +169,18 @@ def _indexed(records, recipes):
         if key in indexed:
             raise NumericalCalibrationError("duplicate CPU dependency observation")
         indexed[key] = {**row, "observation_id": ordinal}
+        if len(recipes) == 49:
+            cell = tuple(recipes).index(row["recipe"]) * len(COMPUTE_SIZES) + COMPUTE_SIZES.index(row["items"])
+            for sample in row["samples"]:
+                batch = sample["batch"]
+                if type(batch) is not int or sample["elapsed_seconds"] != sample["wall_seconds"]:
+                    raise NumericalCalibrationError("CPU dependency batch duration/order mismatch")
+                turn = (CPU_BACKENDS.index(row["backend"]) - batch) % len(CPU_BACKENDS)
+                order = batch * len(recipes) * len(COMPUTE_SIZES) * len(CPU_BACKENDS) + cell * len(CPU_BACKENDS) + turn
+                if type(sample.get("global_order")) is not int or sample["global_order"] != order:
+                    raise NumericalCalibrationError("CPU dependency global sampling order mismatch")
+    if len(recipes) == 49 and len(indexed) != len(recipes) * len(CPU_BACKENDS) * len(COMPUTE_SIZES):
+        raise NumericalCalibrationError("CPU dependency current protocol requires every predeclared cell")
     return indexed
 
 
@@ -195,11 +239,11 @@ def _validate_rows(recipes, sizes, indexed, backend, coefficients, costs, precis
     return result
 
 
-def _backend(profile, recipes, indexed, backend):
+def _backend(profile, recipes, indexed, backend, foundation):
     result = {"status": "rejected", "reason_codes": [], "families": {},
               "workload_validation": {}, "domain_validation": {}}
     try:
-        costs = cpu_protocol_costs(profile, backend, access_class=ACCESS_CLASS)
+        costs = _foundation_costs(profile, foundation, backend)
     except NumericalCalibrationError as error:
         result["reason_codes"] = ["startup_or_memory_protocol_unavailable"]
         result["reason"] = str(error)
@@ -226,12 +270,20 @@ def _backend(profile, recipes, indexed, backend):
         candidate = {**known, family: coefficient}
         evidence.update(_validate_rows(basis, tuple(size for size in COMPUTE_SIZES if size not in COMPUTE_FIT_SIZES),
             indexed, backend, candidate, costs, profile["precision_bits"]))
+        widths = [recipe for recipe in recipes.values() if recipe.role == "width_holdout" and
+                  recipe.coefficient_family == family]
+        if foundation["kind"] == "numerical_execution_v1":
+            width_evidence = _validate_rows(widths, COMPUTE_SIZES, indexed, backend,
+                                           candidate, costs, profile["precision_bits"])
+            evidence["width_two_validation"] = width_evidence
+            evidence["reason_codes"] = sorted(set(evidence["reason_codes"] + width_evidence["reason_codes"]))
+            evidence["status"] = "rejected" if evidence["reason_codes"] else "accepted"
         evidence["coefficient"] = coefficient.to_dict()
         evidence["basis_slopes_seconds_per_item"] = slopes
         if evidence["status"] == "accepted":
             known[family] = coefficient
     for workload in ("ordinary_expression_v2", "scalar_expression_v2", "fixed_private_array_v2"):
-        selected = [recipe for recipe in recipes.values() if recipe.role == "structural_holdout" and
+        selected = [recipe for recipe in recipes.values() if recipe.role in {"structural_holdout", "original_holdout"} and
                     recipe.workload_class == workload]
         result["workload_validation"][workload] = _validate_rows(selected, COMPUTE_SIZES, indexed, backend,
             known, costs, profile["precision_bits"])
@@ -246,6 +298,29 @@ def _backend(profile, recipes, indexed, backend):
         else:
             evidence = _validate_rows(selected, COMPUTE_SIZES, indexed, backend, known, costs, profile["precision_bits"])
             result["domain_validation"][family] = {**evidence, "domain": DOMAINS[family]}
+    if foundation["kind"] == "numerical_execution_v1":
+        forms = {}
+        for form in COMPILED_FORMS:
+            selected = [recipe for recipe in recipes.values() if recipe.role != "basis" and
+                        recipe.compiled_form == form]
+            classes = {workload: _validate_rows([recipe for recipe in selected if recipe.workload_class == workload],
+                COMPUTE_SIZES, indexed, backend, known, costs, profile["precision_bits"])
+                for workload in result["workload_validation"]}
+            families = {family: _validate_rows([recipe for recipe in selected if any(
+                coefficient_family(operation.family) == family for operation in recipe.graph.operations)],
+                COMPUTE_SIZES, indexed, backend, known, costs, profile["precision_bits"])
+                for family in COEFFICIENT_FAMILIES}
+            domains = {family: {**_validate_rows([recipe for recipe in selected if
+                dict(recipe.domains).get(family) == domain], COMPUTE_SIZES, indexed, backend,
+                known, costs, profile["precision_bits"]), "domain": domain}
+                for family, domain in DOMAINS.items()}
+            private_features = [recipe.to_dict()["private_features"] for recipe in selected
+                                if recipe.workload_class == "fixed_private_array_v2"]
+            limits = {name: min(limit, max((features[name] for features in private_features), default=0))
+                      for name, limit in CURRENT_PRIVATE_LIMITS.items()}
+            forms[form] = {"workload_validation": classes, "families": families,
+                           "domain_validation": domains, "private_limits": limits}
+        result["compiled_form_validation"] = forms
     result["status"] = "accepted" if all(record["status"] == "accepted" for record in
         (*result["families"].values(), *result["workload_validation"].values(), *result["domain_validation"].values())) else "rejected"
     if result["status"] != "accepted":
@@ -257,12 +332,13 @@ def profile_from_dependency_measurements(profile, records, execution_identity, *
     """Retain all raw observations and independently rejected classes."""
     if calibration is not None and not isinstance(calibration, dict):
         raise NumericalCalibrationError("CPU dependency calibration metadata must be an object")
-    protocol = validate_cpu_protocol(profile)
+    current = isinstance(execution_identity, dict) and execution_identity.get("protocol_id") == CURRENT_PROTOCOL_ID
+    protocol = _foundation(profile, current=current)
     _identity(profile, execution_identity, protocol)
-    recipes = _recipes(profile["precision_bits"])
+    recipes = _recipes(profile["precision_bits"], current=current)
     indexed = _indexed(records, recipes)
     result = deepcopy(profile)
-    result["cpu_dependency"] = {"schema_version": 1, "protocol_id": PROTOCOL_ID,
+    result["cpu_dependency"] = {"schema_version": 1, "protocol_id": CURRENT_PROTOCOL_ID if current else PROTOCOL_ID,
         "generator_id": dependency_generator_identity(), "execution_identity": deepcopy(execution_identity),
         "recipe_identities": {name: recipe.identity for name, recipe in recipes.items()},
         "protocol": {"fit_sizes": list(COMPUTE_FIT_SIZES), "sizes": list(COMPUTE_SIZES),
@@ -271,11 +347,17 @@ def profile_from_dependency_measurements(profile, records, execution_identity, *
                      "basis_minimum_memory_ratio": BASIS_MEMORY_ENVELOPE,
                      "constant_or_invariant_numeric_source_applicability": "unavailable",
                      "dynamic_division_source_applicability": "unavailable_without_source_domain_and_holdouts",
-                     "access_class": ACCESS_CLASS, "domains": dict(DOMAINS), "private_limits": dict(PRIVATE_LIMITS),
+                     "access_class": ACCESS_CLASS, "domains": dict(DOMAINS),
+                     "private_limits": dict(CURRENT_PRIVATE_LIMITS if current else PRIVATE_LIMITS),
                      "maximum_holdout_relative_error": MAX_HOLDOUT_RELATIVE_ERROR},
         "measurements": deepcopy(records),
-        "backends": {backend: _backend(profile, recipes, indexed, backend) for backend in CPU_BACKENDS},
+        "backends": {backend: _backend(profile, recipes, indexed, backend, protocol) for backend in CPU_BACKENDS},
         "calibration": {**(calibration or {}), "application_profiled": False, "favorable_retry": False}}
+    if current:
+        result["cpu_dependency"]["protocol"].update(
+            compiled_forms=list(COMPILED_FORMS), width_two_role="independent_holdout",
+            original_execution_role="independent_holdout", automatic_source_selection=False,
+            source_applicability="explicit independently proved compiled form required")
     return result
 
 
@@ -292,13 +374,21 @@ def validate_dependency_profile(profile):
 
 
 def cpu_dependency_costs(profile, graph, backend, *, workload_class, workload_features,
-                         primitive_domains, access_class):
+                         primitive_domains, access_class, compiled_form=None):
     """Return cost-only coefficients after every required independent proof."""
     require_numerical_profile_contract(profile)
     if backend not in CPU_BACKENDS or access_class != ACCESS_CLASS:
         raise NumericalCalibrationError("CPU dependency execution/access class unavailable")
     section = validate_dependency_profile(profile)
     evidence = section["backends"][backend]
+    current = section["protocol_id"] == CURRENT_PROTOCOL_ID
+    validation = evidence
+    if current:
+        if not isinstance(compiled_form, str) or compiled_form not in COMPILED_FORMS:
+            raise NumericalCalibrationError("CPU dependency requires an independently proved compiled form")
+        validation = evidence.get("compiled_form_validation", {}).get(compiled_form, {})
+    elif compiled_form is not None:
+        raise NumericalCalibrationError("legacy CPU dependency compiled form unavailable")
     try:
         families = {coefficient_family(operation.family) for operation in graph.operations}
     except (DependencyModelError, AttributeError) as error:
@@ -309,17 +399,19 @@ def cpu_dependency_costs(profile, graph, backend, *, workload_class, workload_fe
         raise NumericalCalibrationError("dynamic division source domain applicability unavailable")
     validation_class = ("ordinary_expression_v2" if workload_class == "scalar_expression_v2" and
                         not families - {"ordinary", "divide_dynamic", "divide_constant"} else workload_class)
-    if "execution_costs" not in evidence or validation_class not in evidence["workload_validation"]:
+    if "execution_costs" not in evidence or validation_class not in validation.get("workload_validation", {}):
         raise NumericalCalibrationError("CPU dependency startup/memory/workload unavailable")
-    if evidence["workload_validation"][validation_class]["status"] != "accepted":
+    if validation["workload_validation"][validation_class]["status"] != "accepted":
         raise NumericalCalibrationError("CPU dependency expression class rejected")
     features = workload_features.to_dict() if hasattr(workload_features, "to_dict") else workload_features
     if (not isinstance(features, dict) or type(features.get("schema_version")) is not int or
             features["schema_version"] != 2 or features.get("classification_complete") is not True):
         raise NumericalCalibrationError("CPU dependency private storage classification unavailable")
-    for name, limit in PRIVATE_LIMITS.items():
+    for name, limit in (CURRENT_PRIVATE_LIMITS if current else PRIVATE_LIMITS).items():
         if type(features.get(name)) is not int or not 0 <= features[name] <= limit:
             raise NumericalCalibrationError("CPU dependency private storage outside applicability")
+        if current and features[name] > validation["private_limits"][name]:
+            raise NumericalCalibrationError("CPU dependency private storage outside compiled-form applicability")
     if (workload_class == "scalar_expression_v2" and features["private_array_elements"] != 0 or
             workload_class == "fixed_private_array_v2" and features["private_array_elements"] == 0):
         raise NumericalCalibrationError("CPU dependency storage/workload class mismatch")
@@ -329,10 +421,12 @@ def cpu_dependency_costs(profile, graph, backend, *, workload_class, workload_fe
             record = evidence["families"].get(family, {})
             if record.get("status") != "accepted":
                 raise NumericalCalibrationError("CPU dependency primitive rejected: " + family)
+            if current and validation.get("families", {}).get(family, {}).get("status") != "accepted":
+                raise NumericalCalibrationError("CPU dependency compiled-form primitive rejected: " + family)
             if family in DOMAINS:
-                validation = evidence["domain_validation"].get(family, {})
+                domain_validation = validation.get("domain_validation", {}).get(family, {})
                 if (not isinstance(primitive_domains, dict) or primitive_domains.get(family) != DOMAINS[family] or
-                        validation.get("status") != "accepted"):
+                        domain_validation.get("status") != "accepted"):
                     raise NumericalCalibrationError("CPU dependency primitive domain unavailable: " + family)
             coefficients[family] = Coefficient(**record["coefficient"])
         for operation in graph.operations:
@@ -343,7 +437,8 @@ def cpu_dependency_costs(profile, graph, backend, *, workload_class, workload_fe
         raise NumericalCalibrationError(str(error)) from error
     return {**deepcopy(evidence["execution_costs"]), **estimate.to_dict(),
             "item_range": [min(COMPUTE_SIZES), max(COMPUTE_SIZES)], "dependency_identity": graph.identity,
-            "generator_id": section["generator_id"], "access_class": access_class}
+            "generator_id": section["generator_id"], "access_class": access_class,
+            **({"compiled_form": compiled_form} if current else {})}
 
 
 def _require_literal_three(operation):
@@ -366,6 +461,8 @@ def _require_literal_three(operation):
 
 def parse_dependency_measurements(text):
     """Parse bounded producer output without discarding failed observations."""
+    if not isinstance(text, str) or len(text) > 16 * 1024 * 1024:
+        raise NumericalCalibrationError("CPU dependency output exceeds bounded text limit")
     identities, rows = [], []
     for line in text.splitlines():
         if not line.strip():
@@ -379,7 +476,7 @@ def parse_dependency_measurements(text):
         if row.get("kind") == "cpu_dependency_identity_v1":
             identities.append({name: value for name, value in row.items() if name != "kind"})
         elif row.get("kind") == "cpu_dependency_cost_v1":
-            if len(rows) >= 26 * len(CPU_BACKENDS) * len(COMPUTE_SIZES):
+            if len(rows) >= 49 * len(CPU_BACKENDS) * len(COMPUTE_SIZES):
                 raise NumericalCalibrationError("CPU dependency emitted too many observations")
             _compute_samples(row)
             rows.append(row)
@@ -390,6 +487,67 @@ def parse_dependency_measurements(text):
     return rows, identities[0]
 
 
+def _validate_preflight(text, identity, recipes):
+    if not isinstance(text, str) or len(text) > 4 * 1024 * 1024:
+        raise NumericalCalibrationError("CPU dependency preflight exceeds bounded text limit")
+    expected = {(recipe.name, backend, items): recipe.identity for recipe in recipes
+                for items in (0, 1, 8, 17) for backend in CPU_BACKENDS}
+    seen, actual_identity = set(), None
+    try:
+        expected_identity = {key: identity[key] for key in (
+            "cpu_threads", "precision_bits", "cpu_affinity", "omp_dynamic", "omp_proc_bind",
+            "registry_generator_id", "actual_team_threads", "thread_limit", "omp_wait_policy", "gomp_spincount")}
+        expected_identity["fortran"] = {key: identity["fortran"][key]
+                                        for key in ("compiler_version", "compiler_options")}
+        for line in text.splitlines():
+            row = json.loads(line)
+            if not isinstance(row, dict):
+                raise ValueError("preflight row must be an object")
+            if row.get("kind") == "cpu_dependency_identity_v1":
+                if actual_identity is not None:
+                    raise ValueError("duplicate identity")
+                actual_identity = {key: value for key, value in row.items() if key != "kind"}
+                continue
+            key = row.get("recipe"), row.get("backend"), row.get("items")
+            if (row.get("kind") != "cpu_dependency_smoke_v1" or
+                    type(row.get("items")) is not int or key not in expected or key in seen or
+                    row.get("recipe_identity") != expected[key] or row.get("agreement_passed") is not True):
+                raise ValueError("incorrect or unknown preflight control")
+            seen.add(key)
+        if seen != set(expected) or actual_identity != expected_identity:
+            raise ValueError("incomplete preflight or changed identity")
+    except (TypeError, ValueError, KeyError) as error:
+        raise NumericalCalibrationError("CPU dependency preflight failed: " + str(error)) from error
+
+
+def _reconcile_raw(path, rows, recipes):
+    """Authenticate all global rounds against the exact aggregate observations."""
+    if path.stat().st_size > 16 * 1024 * 1024:
+        raise NumericalCalibrationError("CPU dependency raw observations exceed bounded text limit")
+    indexed = _indexed(rows, {recipe.name: recipe for recipe in recipes})
+    expected = []
+    for batch in range(7):
+        for recipe in recipes:
+            for items in COMPUTE_SIZES:
+                for turn in range(len(CPU_BACKENDS)):
+                    backend = CPU_BACKENDS[(batch + turn) % len(CPU_BACKENDS)]
+                    row = indexed[recipe.name, backend, items]
+                    sample = next(sample for sample in row["samples"] if sample["batch"] == batch)
+                    expected.append({**{key: value for key, value in row.items()
+                                       if key not in {"kind", "samples", "observation_id"}},
+                                     **sample, "kind": "cpu_dependency_batch_v1"})
+    count = 0
+    try:
+        with path.open() as stream:
+            for count, line in enumerate(stream, 1):
+                if count > len(expected) or len(line) > 32768 or json.loads(line) != expected[count - 1]:
+                    raise ValueError("raw/aggregate source, order or sample mismatch")
+        if count != len(expected):
+            raise ValueError("incomplete raw observations")
+    except (TypeError, ValueError) as error:
+        raise NumericalCalibrationError("CPU dependency raw reconciliation failed: " + str(error)) from error
+
+
 def calibrate_dependency(profile, args, *, run=_run):
     """Compile fixed fixtures once, validate the backend, then sample once.
 
@@ -398,17 +556,23 @@ def calibrate_dependency(profile, args, *, run=_run):
     overwrites an existing attempt directory.
     """
     from compiler.offload.cpu_dependency_workloads import (
+        current_dependency_recipes,
         dependency_recipes,
         native_identity_source,
         write_dependency_registry,
     )
 
     require_numerical_profile_contract(profile)
-    protocol = validate_cpu_protocol(profile)
+    if "cpu_dependency" in profile:
+        raise NumericalCalibrationError("preserve the existing CPU dependency attempt; use an unmodified foundation")
+    current = "numerical_execution" in profile
+    protocol = _foundation(profile, current=current)
+    if current and cpu_identity() != profile.get("hardware", {}).get("cpu_name"):
+        raise NumericalCalibrationError("CPU dependency actual CPU identity mismatch")
     available_memory = []
     for backend in CPU_BACKENDS:
         try:
-            cpu_protocol_costs(profile, backend, access_class=ACCESS_CLASS)
+            _foundation_costs(profile, protocol, backend)
         except NumericalCalibrationError:
             continue
         available_memory.append(backend)
@@ -425,7 +589,7 @@ def calibrate_dependency(profile, args, *, run=_run):
     target = Path(args.build_dir).resolve()
     target.mkdir(parents=True, exist_ok=False)
     generator = dependency_generator_identity()
-    recipes = dependency_recipes(profile["precision_bits"])
+    recipes = (current_dependency_recipes if current else dependency_recipes)(profile["precision_bits"])
     (target / "recipes.json").write_text(json.dumps([recipe.to_dict() for recipe in recipes], indent=2) + "\n")
     write_dependency_registry(target / "cpu_dependency_recipes.hpp", recipes, generator)
     native_identity = target / "native-identity.f90"
@@ -476,14 +640,23 @@ def calibrate_dependency(profile, args, *, run=_run):
         actual["fortran"]["semantic_options"] = normalize_fortran_options(actual["fortran"]["compiler_options"])
     except (KeyError, TypeError, ValueError) as error:
         raise NumericalCalibrationError("CPU dependency native Fortran identity missing") from error
-    actual.update(protocol_id=PROTOCOL_ID, generator_id=generator,
+    actual.update(protocol_id=CURRENT_PROTOCOL_ID if current else PROTOCOL_ID, generator_id=generator,
         host={"compiler_version": host_version, "semantic_options": list(HOST_FLAGS)},
-        base_numerical_identity=_hash_json(profile["numerical"]["identity"]),
-        cpu_protocol_identity=_hash_json(protocol),
         timed_objects={path.name: sha256(path.read_bytes()).hexdigest() for path in objects})
+    if current:
+        actual.update(foundation_kind=protocol["kind"], foundation_identity=protocol["identity"],
+                      base_execution_identity=_hash_json(protocol["execution_identity"]),
+                      cpu_name=profile["hardware"]["cpu_name"])
+    else:
+        actual.update(base_numerical_identity=_hash_json(profile["numerical"]["identity"]),
+                      cpu_protocol_identity=protocol["identity"])
     # Check all identities before the first timed batch. Unsupported placement
     # or semantic flags cannot silently create observations for another model.
     _identity(profile, actual, protocol)
+    if current:
+        smoke_text = run([*invocation, "--smoke"], target, target / "preflight.jsonl", timeout=120, env=environment)
+        _validate_preflight(smoke_text, actual, recipes)
+    artifacts = {path: sha256(path.read_bytes()).hexdigest() for path in (*objects, binary)}
     measured_text = run(invocation, target, target / "measurements.jsonl", timeout=3600, env=environment)
     rows, measured_identity = parse_dependency_measurements(measured_text)
     for name in ("cpu_threads", "precision_bits", "cpu_affinity", "omp_dynamic", "omp_proc_bind", "registry_generator_id",
@@ -494,6 +667,10 @@ def calibrate_dependency(profile, args, *, run=_run):
                                            ("compiler_version", "compiler_options")}:
         raise NumericalCalibrationError("CPU dependency measurement native flags changed")
     raw_batches = target / "cpu-dependency-raw-samples.jsonl"
+    if current:
+        _reconcile_raw(raw_batches, rows, recipes)
+    if any(sha256(path.read_bytes()).hexdigest() != digest for path, digest in artifacts.items()):
+        raise NumericalCalibrationError("CPU dependency built artifacts changed during sampling")
     return profile_from_dependency_measurements(profile, rows, actual,
         calibration={"commands": commands, "build_directory": str(target),
                      "timed_binary_sha256": sha256(binary.read_bytes()).hexdigest(),

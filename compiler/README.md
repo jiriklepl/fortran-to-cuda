@@ -2416,6 +2416,24 @@ The base profile and existing CPU evidence are preserved. Profile loading
 checks the observations without lowering source; using an archived backend
 requires a separate check against current renderer and numerical identities.
 
+`python -m compiler.offload.numerical_gpu_launch_calibration` adds the separate
+`numerical_execution_gpu_costs` section to that evidence. It takes `--profile`,
+fresh `--output` and `--build-dir` paths, and optional `--nvcc` and
+`--cuda-host-cxx`. The producer authenticates and reuses the parent worker object,
+header and driver, then builds only a launch-control driver. Zero/one/eight/seventeen
+item preflights check outputs and sentinels; seven global rounds of at least
+200 ms measure the three nonempty sizes. One item fits a launch-inclusive fixed
+interval; eight and seventeen items validate it independently. The original
+production observations supply variable costs and independent expression,
+helper, private-array and domain holdouts, with the same 25% error ceiling.
+The cost query requires current source identities and accepted families, classes,
+domains, features and size ranges. Resident-event intervals already include
+enqueue starvation, so their separately recorded enqueue time is not added again.
+The measurement retains the original sixteen-launch/join cadence; applying its
+costs to a different enqueue/wait protocol requires separate evidence.
+Setup, allocation, transfers, coordination and source guard costs remain separate.
+This interface alone does not establish source applicability or AUTO placement.
+
 The other existing producer, `python -m compiler.offload.cpu_dependency_calibration`, adds
 `cpu_dependency`, without changing the numerical-v2 section. Its 26 predefined
 generic recipes distinguish ordinary operations, constant/dynamic division and
@@ -2430,6 +2448,22 @@ identity apply to the new compute observations. Both producers take
 repeated `--fortran-flag=...` arguments matching the original Fortran build.
 Run them sequentially under the campaign memory guard, before application
 measurements; neither producer reads or fits application timings.
+
+When the input contains current `numerical_execution` evidence, the dependency
+producer uses `source-work-span-current-execution-cpu-v2`: 49 fixed recipes and
+735 cells, sampled in seven global rounds. Only the twelve one/four-chain bases
+fit coefficients. Two-chain controls and the seventeen unchanged original
+execution recipes are independent holdouts. Current startup and memory evidence
+can be accepted separately from rejected arithmetic families; rejected arithmetic
+is never borrowed. Queries explicitly select `direct_loop`,
+`value_function_same_unit` or `value_function_separate`, with independent class,
+domain and private-feature validation for each form. Direct loops retain the
+measured 32-element/two-array private limit; value-function forms can admit
+64 elements/four arrays only when their own controls accept. These names describe
+compiled source forms, without asserting vectorization. Source placement still
+requires proofs that the original and generated implementations match the
+measured forms, memory access, domains and execution protocol. The existing
+26-recipe protocol remains available with its original foundation.
 
 Public unit diagnostics expose the bounded source dependency identity and
 physical memory access class separately from legality. The first source
@@ -2451,7 +2485,12 @@ placement or an application speedup.
 
 Source planning supplies complete compute seconds for all three implementations
 through `fort_scope_plan_add_compute_costs_v3`. Transfers, launches, allocation
-and coordination are charged separately. A native operation inside an active
+and coordination are charged separately. The unchanged compute-cost payload
+layout accepts versions 1 and 2. Version 2 can mark a known GPU total with
+`FORT_SCOPE_COMPUTE_GPU_LAUNCH_INCLUDED`; the planner then omits only that
+operation's separate enqueue charge. Legacy neighbors retain their own launch
+costs. The cheap native-rejection bound also respects this coverage, while all
+setup, transfer and synchronization charges remain. A native operation inside an active
 owner uses its actual coordinated host cost, including candidate-only inspectors;
 that differs from the whole-original native fallback. Missing preparation costs
 keep AUTO unavailable. Continuations compare against coherent host execution

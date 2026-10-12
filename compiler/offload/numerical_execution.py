@@ -645,6 +645,27 @@ def _current_section(profile):
     return section
 
 
+def execution_startup_memory_costs(profile, backend, *, access_class):
+    """Current CPU startup/memory evidence, independently of compute acceptance.
+
+    This foundation cannot supply arithmetic coefficients or authorize source
+    placement. Rejected expression holdouts remain rejected in the profile.
+    """
+    section = _current_section(profile)
+    if backend not in CPU_BACKENDS or access_class != ACCESS_CLASS:
+        raise NumericalExecutionError("execution backend or source memory access class unavailable")
+    startup, memory = section["startup"][backend], section["families"]["memory"][backend]
+    if startup["status"] != "accepted" or memory["status"] != "accepted":
+        raise NumericalExecutionError("execution startup or memory rejected for " + backend)
+    return {"backend_identity": backend, "access_class": ACCESS_CLASS,
+            "fixed_seconds": startup["fixed_seconds"],
+            "memory_cost_model": deepcopy(memory["model"]),
+            "cpu_affinity": deepcopy(section["identity"]["cpu_affinity"]),
+            "fortran": deepcopy(section["identity"]["fortran"]),
+            "generator_id": section["generator_id"], "registry_id": section["registry_id"],
+            "fixed_cost_coverage": FIXED_COVERAGE}
+
+
 def execution_cpu_costs(profile, backend, counts, *, workload_class, workload_features, access_class):
     """Independent CPU evidence; this API never authorizes GPU placement."""
     section = _current_section(profile)

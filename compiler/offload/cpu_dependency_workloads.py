@@ -35,10 +35,12 @@ from compiler.ir import (
     Unary,
 )
 from compiler.ir.plan import ParallelRegion
-from compiler.offload.analysis import Unit
+from compiler.offload.analysis import Unit, _workload_features
 from compiler.offload.compute_dependencies import ComputeDependencies, analyze_compute_dependencies
 
 PROTOCOL_VERSION = 1
+CURRENT_PROTOCOL_VERSION = 2
+MAX_RECIPES = 49
 BASIS_STEPS = 32
 BASIS_FAMILIES = ("ordinary", "divide_dynamic", "divide_constant", "sqrt", "acos", "cos")
 STRUCTURAL_GRAPHS = ("ordinary_guarded", "dependent_mixed", "diamond", "private_arrays")
@@ -97,6 +99,9 @@ class CpuDependencyRecipe:
     identity: str
     generated_dispatch_identity: str
     protocol_version: int = PROTOCOL_VERSION
+    compiled_form: str = "direct_loop"
+    original_recipe_identity: str | None = None
+    input_lattices: tuple | None = None
 
     def to_dict(self):
         return {
@@ -108,10 +113,13 @@ class CpuDependencyRecipe:
             "steps": self.steps,
             "precision_bits": self.precision_bits,
             "helper_form": self.helper_form,
+            "compiled_form": self.compiled_form,
+            "original_recipe_identity": self.original_recipe_identity,
             "identity": self.identity,
             "graph": self.graph.to_dict(),
             "domains": dict(self.domains),
             "workload_class": self.workload_class,
+            "private_features": _workload_features(self.region.private_symbols).to_dict(),
             "memory_arrays": self.memory_arrays,
             "native_serial_entry": self.native_serial_entry,
             "native_fork_join_entry": self.native_fork_join_entry,
@@ -136,13 +144,19 @@ class CpuDependencyRecipe:
             raise ValueError("fixture item count must fit the nonnegative INTEGER ABI")
         if split not in {"training", "holdout"}:
             raise ValueError("unknown fixture input split")
-        lattice = _lattice(
-            self.coefficient_family if self.role == "domain_holdout" else None, self.precision_bits, split
-        )
-        other = _DENOMINATORS[0 if split == "training" else 1]
+        lattice, other = self.lattices(split)
         values = tuple(_round(lattice[index % len(lattice)], self.precision_bits) for index in range(n))
         denominators = tuple(_round(other[index % len(other)], self.precision_bits) for index in range(n))
         return CpuDependencyInputs(n, values, denominators, self.precision_bits, split)
+
+    def lattices(self, split):
+        if split not in {"training", "holdout"}:
+            raise ValueError("unknown fixture input split")
+        index = 0 if split == "training" else 1
+        if self.input_lattices is not None:
+            return self.input_lattices[index]
+        family = self.coefficient_family if self.role == "domain_holdout" else None
+        return _lattice(family, self.precision_bits, split), _DENOMINATORS[index]
 
     def reference(self, inputs: CpuDependencyInputs) -> tuple[float, ...]:
         """Typed scalar reference for correctness, not a native cost model."""
@@ -489,7 +503,7 @@ def _recipe(kind, role, width, precision_bits, helper_form="inline"):
             raise ValueError("separate helper changes the transitive numerical graph")
     else:
         analysis_source = inline_source
-    family = kind[7:] if kind.startswith("domain_") else kind if role == "basis" else None
+    family = kind[7:] if kind.startswith("domain_") else kind if role in {"basis", "width_holdout"} else None
     domains = tuple(
         (primitive, contract)
         for primitive, contract in (
@@ -526,7 +540,7 @@ def _recipe(kind, role, width, precision_bits, helper_form="inline"):
                 "role": role,
                 "family": family,
                 "width": width,
-                "steps": BASIS_STEPS if role == "basis" else 1,
+                "steps": BASIS_STEPS if role in {"basis", "width_holdout"} else 1,
                 "precision_bits": precision_bits,
                 "helper_form": helper_form,
                 "domains": domains,
@@ -547,7 +561,7 @@ def _recipe(kind, role, width, precision_bits, helper_form="inline"):
         role,
         family,
         width,
-        BASIS_STEPS if role == "basis" else 1,
+        BASIS_STEPS if role in {"basis", "width_holdout"} else 1,
         precision_bits,
         helper_form,
         body,
@@ -564,6 +578,7 @@ def _recipe(kind, role, width, precision_bits, helper_form="inline"):
         region,
         identity,
         dispatch_identity,
+        compiled_form="value_function_separate" if helper_form == "separate" else "direct_loop",
     )
 
 
@@ -589,6 +604,46 @@ def recipes_for_precision(precision_bits: int) -> tuple[CpuDependencyRecipe, ...
 dependency_recipes = recipes_for_precision
 
 
+@lru_cache(maxsize=2, typed=True)
+def current_dependency_recipes(precision_bits: int) -> tuple[CpuDependencyRecipe, ...]:
+    """Predeclare width-two and exact original execution controls as holdouts.
+
+    The original workers, source names, input lattices and scalar helper ABI
+    are retained byte for byte. Their old coefficient roles never fit this
+    model. Compiled forms remain distinct validation groups, not SIMD claims.
+    """
+    from compiler.offload.numerical_execution_workloads import execution_recipes
+
+    legacy = recipes_for_precision(precision_bits)
+    widths = tuple(_recipe(family, "width_holdout", 2, precision_bits) for family in BASIS_FAMILIES)
+    originals = []
+    for original in execution_recipes(precision_bits):
+        meta = original.metadata
+        graph = analyze_compute_dependencies(original.region)
+        if not graph.available:
+            raise ValueError("original execution holdout dependency graph unavailable")
+        form = "value_function_separate" if meta["helper_form"] == "separate" else "value_function_same_unit"
+        identity = _sha(json.dumps({"protocol_version": CURRENT_PROTOCOL_VERSION,
+            "role": "original_holdout", "original_recipe_identity": meta["recipe_id"],
+            "graph": graph.identity, "compiled_form": form,
+            "native": original.native_sources, "cpp": original.cpp_sources}, sort_keys=True, separators=(",", ":")))
+        originals.append(CpuDependencyRecipe(
+            "original_" + original.name, "original_holdout", None, 0, 1, precision_bits,
+            meta["helper_form"], original.analysis_source, graph,
+            tuple(("divide_dynamic" if name == "divide" else name, domain)
+                  for name, domain in meta["domain_ids"].items()),
+            meta["workload_class"], 3, original.native_sources, original.cpp_sources,
+            "execution_" + original.name + "_serial", "execution_" + original.name + "_fork_join",
+            "execution_" + original.name + "_generated", original.analysis_source, original.region,
+            identity, _sha("\n".join(text for _, text in original.cpp_sources)),
+            CURRENT_PROTOCOL_VERSION, form, meta["recipe_id"],
+            tuple(original.lattices(split) for split in ("training", "holdout"))))
+    result = legacy + widths + tuple(originals)
+    if len(result) != MAX_RECIPES or len({recipe.name for recipe in result}) != len(result):
+        raise ValueError("current dependency registry is incomplete")
+    return result
+
+
 def registry_source(recipes: tuple[CpuDependencyRecipe, ...], generator_id: str) -> str:
     """Emit the driver registry and periodic typed correctness references.
 
@@ -605,7 +660,7 @@ def registry_source(recipes: tuple[CpuDependencyRecipe, ...], generator_id: str)
     if (
         not isinstance(recipes, tuple)
         or not recipes
-        or len(recipes) > 26
+        or len(recipes) > MAX_RECIPES
         or any(not isinstance(recipe, CpuDependencyRecipe) for recipe in recipes)
         or len({recipe.name for recipe in recipes}) != len(recipes)
         or len({recipe.precision_bits for recipe in recipes}) != 1
@@ -650,10 +705,10 @@ def registry_source(recipes: tuple[CpuDependencyRecipe, ...], generator_id: str)
             recipe.native_fork_join_entry,
             recipe.generated_entry,
         ]
-        for split_index, split in enumerate(("training", "holdout")):
-            family = recipe.coefficient_family if recipe.role == "domain_holdout" else None
-            a = tuple(_round(value, precision) for value in _lattice(family, precision, split))
-            d = tuple(_round(value, precision) for value in _DENOMINATORS[split_index])
+        for split in ("training", "holdout"):
+            lattice, other = recipe.lattices(split)
+            a = tuple(_round(value, precision) for value in lattice)
+            d = tuple(_round(value, precision) for value in other)
             period = math.lcm(len(a), len(d))
             reference = recipe.reference(recipe.inputs(period, split=split))
             for kind, values in (("a", a), ("d", d), ("reference", reference)):
