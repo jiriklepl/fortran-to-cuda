@@ -145,10 +145,12 @@ class _Association:
 
 
 def _derive(analysis, caller, original_call, budget):
-    routine = analysis._require_original(caller)
     if type(original_call).__name__ != "Call_Stmt":
         raise NativeCallCoordinatesUnsupported("native call coordinates require an original direct call")
     graph, selected = analysis._selected_source(caller, (original_call,))
+    # The exact original selection already authenticates the caller. Callee
+    # authority below remains a separate demand for a different procedure.
+    routine = analysis.routines[caller]
     if len(selected) != 1 or graph.nodes[selected[0]].kind != "call":
         raise NativeCallCoordinatesUnsupported("native call coordinates require a complete original call node")
     _validate_scope(analysis, routine.scope)
