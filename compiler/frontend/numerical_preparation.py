@@ -179,7 +179,6 @@ def _source_authority(analysis, procedure, selection, helpers, budget):
     from fparser.two.utils import Base
 
     from compiler.frontend.source_functions import _original, _validate_resolution, _validate_scope
-    routine = analysis._require_original(procedure)
     if not selection:
         raise CompilationError("original numerical preparation requires exact original selected nodes")
     for node in selection:
@@ -192,6 +191,9 @@ def _source_authority(analysis, procedure, selection, helpers, budget):
     # parser objects. Walking every unrelated expression in the owner again
     # adds no membership authority and can exhaust a small region's budget.
     graph, identities = analysis._selected_source(procedure, selection)
+    # Selection authenticates this original routine and its source namespaces.
+    # Read that same routine without starting an adjacent full-source demand.
+    routine = analysis.routines[procedure]
     scope_ids = set()
 
     def scope_authority(scope):
@@ -208,7 +210,9 @@ def _source_authority(analysis, procedure, selection, helpers, budget):
     owners = [(routine, selection)]
     if len(helpers) > analysis.procedure_limit:
         raise CompilationError("original numerical preparation helper budget exhausted")
-    owners.extend((_original(analysis, name), (_original(analysis, name).execution,)) for name in helpers)
+    for name in helpers:
+        helper = _original(analysis, name)
+        owners.append((helper, (helper.execution,)))
     source = []
     for owner, body in owners:
         scope_authority(owner.scope)
