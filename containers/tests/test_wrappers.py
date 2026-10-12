@@ -245,10 +245,36 @@ if [[ "$*" == "load apptainer" ]]; then export PATH="$MODULE_BIN:$PATH"; fi
     assert result.returncode == 0, result.stderr
     result = execute_payload(sandbox, "bw01")
     assert result.returncode == 0, result.stderr
-    assert module_log.read_text().splitlines() == ["load apptainer", "load cuda", "load gcc", "load python3.12"]
+    assert module_log.read_text().splitlines() == ["load apptainer", "load cuda", "load gcc", "load python3.12", "list"]
     record = json.loads(capture.read_text())
     assert Path(record["executable"]).name == "run-apptainer.sh"
     assert "Results and logs:" in result.stdout
+
+
+def test_missing_optional_modules_are_logged_and_cuda_environment_is_retained(sandbox):
+    _, env, capture, _, invoke = sandbox
+    fake_workspace(sandbox)
+    env["BASH_FUNC_module%%"] = '''() {
+case "$*" in
+ "load cuda") export CUDA_HOME=/usr/local/cuda-13.4; export LD_LIBRARY_PATH=/usr/local/cuda-13.4/lib64; return 0 ;;
+ "load python/3.12") return 0 ;;
+ "list") printf 'Loaded: cuda, python/3.12\\n'; return 0 ;;
+ *) printf 'Lmod error: unknown module %s\\n' "$*" >&2; return 1 ;;
+esac
+}'''
+    assert invoke("run_node.sh", "bw01", "--dry-run").returncode == 0
+    result = execute_payload(sandbox, "bw01")
+    assert result.returncode == 0, result.stderr
+    log = Path(env["OUTPUT_DIR"]) / "modules.log"
+    for module in ("apptainer", "gcc", "python3.12"):
+        assert f"Lmod error: unknown module load {module}" in log.read_text()
+    assert "Loaded: cuda, python/3.12" in log.read_text()
+    assert "Lmod error" not in result.stderr
+    assert f"Module setup log: {log}" in result.stdout
+    assert "Loaded module: cuda" in result.stdout
+    selected = json.loads(capture.read_text())["env"]
+    assert selected["CUDA_HOME"] == "/usr/local/cuda-13.4"
+    assert selected["LD_LIBRARY_PATH"] == "/usr/local/cuda-13.4/lib64"
 
 
 def test_worker_reports_failure_and_retains_status(sandbox):

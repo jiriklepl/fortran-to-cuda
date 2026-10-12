@@ -145,7 +145,7 @@ slurm_directive() {
         cat <<'EOF'
 printf 'Worker: %s\nJob ID: %s\nOutput directory: %s\nWork directory: %s\n' \
     "${SLURMD_NODENAME:-${HOSTNAME:-unknown}}" "${SLURM_JOB_ID:-interactive}" "$output" "$work"
-trap 'printf "Job exit status: %s\nResults and logs: %s\nReport: %s/experiment/report.json\nFigures: %s/experiment/figures\n" "$?" "$output" "$output" "$output"' EXIT
+trap 'printf "Job exit status: %s\nResults and logs: %s\nProgress log: %s/run.log\nModule setup log: %s/modules.log\nReport: %s/experiment/report.json\nFigures: %s/experiment/figures\n" "$?" "$output" "$output" "$output" "$output" "$output"' EXIT
 if [[ "$jobs_explicit" == 0 && "${SLURM_CPUS_PER_TASK:-}" =~ ^[1-9][0-9]*$ ]] && \
         (( SLURM_CPUS_PER_TASK < workflow[jobs_index] )); then
     workflow[jobs_index]="$SLURM_CPUS_PER_TASK"
@@ -153,16 +153,33 @@ fi
 printf 'Allocated CPUs: %s\nBuild jobs: %s\n' "${SLURM_CPUS_PER_TASK:-scheduler default}" "${workflow[jobs_index]}"
 
 # Restore the cluster module setup before deciding whether Apptainer is present.
+module_log="$output/modules.log"
+printf 'Module setup log: %s\n' "$module_log"
+: > "$module_log"
 if ! type module >/dev/null 2>&1 && [[ -f /etc/profile.d/modules.sh ]]; then
     # shellcheck disable=SC1091
-    source /etc/profile.d/modules.sh || true
+    source /etc/profile.d/modules.sh >> "$module_log" 2>&1 || true
 fi
 if type module >/dev/null 2>&1; then
+    load_module() {
+        printf '\n$ module load %s\n' "$1" >> "$module_log"
+        # Redirect in this shell: module loads must retain their PATH/library changes.
+        if module load "$1" >> "$module_log" 2>&1; then
+            printf 'Loaded module: %s\n' "$1"
+            return 0
+        fi
+        printf 'Module unavailable: %s (details: %s)\n' "$1" "$module_log"
+        return 1
+    }
     echo 'Loading cluster modules: apptainer, cuda, gcc, Python...'
-    module load apptainer || true
-    module load cuda || true
-    module load gcc || true
-    module load python3.12 2>/dev/null || module load python/3.12 2>/dev/null || module load python-3.12 2>/dev/null || true
+    load_module apptainer || true
+    load_module cuda || true
+    load_module gcc || true
+    load_module python3.12 || load_module python/3.12 || load_module python-3.12 || true
+    printf '\n$ module list\n' >> "$module_log"
+    module list >> "$module_log" 2>&1 || true
+else
+    printf 'Environment modules unavailable; using inherited tools.\n' >> "$module_log"
 fi
 if [[ "$runtime" == auto ]]; then
     if [[ -f "$sif" ]] && { command -v apptainer >/dev/null || command -v singularity >/dev/null; }; then
@@ -220,6 +237,7 @@ printf 'Target node: %s\nPartition: %s\nAccount: %s\n' "$node" "$partition" "${a
 printf 'Batch defaults: %s CPUs, %s memory, %s GPU(s), %s wall time\n' "$cpus" "$memory" "$gpus" "$time_limit"
 printf 'Output directory: %s\nWork directory: %s\nJob script: %s\n' "$output" "$work" "$job_script"
 printf 'Report: %s/experiment/report.json\nFigures: %s/experiment/figures\n' "$output" "$output"
+printf 'Progress log: %s/run.log\nModule setup log: %s/modules.log\n' "$output" "$output"
 printf 'Slurm logs: %s/slurm-<job-id>.out and .err\n' "$output"
 if (( interactive )); then
     submission=(srun --nodelist="$node" --partition="$partition" --gpus="$gpus"

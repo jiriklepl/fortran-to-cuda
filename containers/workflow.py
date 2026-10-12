@@ -155,7 +155,25 @@ def guarded(args):
                "--record", str(args.output_dir / "guard.json"),
                "--log", str(args.output_dir / "run.log"), "--",
                sys.executable, str(HERE / "workflow.py"), *sys.argv[1:], "--worker"]
-    subprocess.run(command, env={**os.environ, "PYTHONPATH": str(PIPELINE)}, check=True)
+    result = subprocess.run(command, env={**os.environ, "PYTHONPATH": str(PIPELINE)},
+                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    if result.returncode:
+        log = args.output_dir / "run.log"
+        print(f"Guarded command failed (exit status {result.returncode}).", file=sys.stderr)
+        print("Progress log:", log, file=sys.stderr)
+        if log.is_file():
+            with log.open("rb") as stream:
+                stream.seek(0, os.SEEK_END)
+                stream.seek(max(0, stream.tell() - 8192))
+                tail = stream.read().decode(errors="replace")
+            print("Last progress log lines:\n" + "\n".join(tail.splitlines()[-20:]), file=sys.stderr)
+        else:
+            print("No progress log was created.", file=sys.stderr)
+        if result.stderr:
+            print("Guard startup/cleanup output:\n" + "\n".join(result.stderr[-8192:].splitlines()[-20:]),
+                  file=sys.stderr)
+        print("Guard receipt:", args.output_dir / "guard.json", file=sys.stderr)
+        raise SystemExit(result.returncode if result.returncode > 0 else 128 - result.returncode)
     return False
 
 
