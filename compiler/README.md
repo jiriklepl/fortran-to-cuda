@@ -432,11 +432,20 @@ python -m compiler --emit-scoped-runtime --json --output-dir out/scoped
 ```
 
 The output contains `scoped_runtime.h`, `scoped_entry.hpp`, `section_copy.hpp`, `staging.hpp`,
-`scoped_regions.hpp`, `scoped_planning.hpp`,
+`scoped_regions.hpp`, `scoped_planning.hpp`, `scoped_cuda_resources.hpp`,
 `scoped_runtime.cu`, `fort_scoped_memory.f90`, and `scoped-runtime.json`. Compile and link the CUDA
 runtime once per executable with host OpenMP support (`-Xcompiler=-fopenmp`) and compile the common Fortran interface before its
 users. The manifest identifies the ABI, source hashes, source languages, and
 build ordering. No input procedure is required for this operation.
+
+Completed GPU scopes can reuse one idle stream and CUDA memory pool per device.
+Idle pools retain at most 64 MiB; the runtime explicitly trims and checks the
+reserved capacity, discarding resources if the driver cannot meet that limit.
+Only physical execution resources survive: buffer registrations, definitions
+and freshness are rebuilt for every invocation. Poisoned or incomplete scopes
+never enter this cache. `FORT_RUNTIME_TRACE=1` reports `initialize_reuse` with the
+retained byte capacity; legacy allocation counters still count logical field
+allocations. The cache is lazy, so native-only execution does not query CUDA.
 
 The public C/Fortran API provides explicit contexts, canonical buffer handles,
 host/device access begin/end, completion, and close. Buffers borrow stable

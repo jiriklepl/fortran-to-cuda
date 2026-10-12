@@ -67,6 +67,7 @@ extern "C" int consumer(fort_scope_t context, fort_buffer_t a, fort_buffer_t b, 
 MAIN = r'''
 #include "scoped_runtime.h"
 #include "staging.hpp"
+#include "scoped_cuda_resources.hpp"
 #include <cuda_runtime.h>
 #include <cassert>
 #include <cstdio>
@@ -126,6 +127,39 @@ void chain() {
     for (int i=0;i<8;++i) assert(out[i]==21*a[i]);
     assert(fort_scope_wait(context)==FORT_SCOPE_STALE);
     std::puts("independent modules: correct; shared uploads=1; CPU read reuploads=0; transform uploads=1");
+}
+void invocation_reuse() {
+    void *previous_stream=nullptr;
+    double a[8], b[8], out[8]; // Deliberately reuse all original host addresses.
+    for (int invocation=0;invocation<3;++invocation) {
+        for (int i=0;i<8;++i) { a[i]=100*invocation+i+1; b[i]=-9; out[i]=-11; }
+        fort_scope_t context=0;
+        check(fort_scope_create(0,&context));
+        size_t extents[1]={8}; int64_t bounds[1]={-2-7*invocation};
+        fort_scope_layout layout{1,FORT_SCOPE_REAL64,8,a,extents,bounds,1};
+        fort_buffer_t ha=0,hb=0,ho=0;
+        // Numeric identities and allocation generations also repeat: neither
+        // permits freshness to survive the preceding context's close.
+        check(fort_scope_register(context,1,1,&layout,1,&ha));
+        layout.host=b; check(fort_scope_register(context,2,1,&layout,0,&hb));
+        layout.host=out; check(fort_scope_register(context,3,1,&layout,0,&ho));
+        check(producer(context,ha,hb));
+        check(consumer(context,ha,hb,ho));
+        int previous=0; void *stream=nullptr;
+        check(fort_scope_gpu_enter(context,&previous,&stream));
+        assert(stream && (!previous_stream || stream==previous_stream));
+        previous_stream=stream;
+        check(fort_scope_gpu_leave(context,previous));
+        fort_scope_stats stats{}; check(fort_scope_stats_get(context,&stats));
+        assert(stats.allocations==3 && stats.uploads==1 && stats.upload_bytes==sizeof(a));
+        assert(stats.downloads==0 && stats.launches==2);
+        check(fort_scope_close(context));
+        for (int i=0;i<8;++i) assert(b[i]==2*a[i] && out[i]==3*a[i]);
+        assert(fort_scope_wait(context)==FORT_SCOPE_STALE);
+        const auto &idle=fort_scoped::cuda_resources::cache().idle.at(0);
+        assert(idle.retained_bytes<=fort_scoped::cuda_resources::retained_limit);
+    }
+    std::puts("invocation reuse: changed data and bounds; fresh uploads; bounded idle resources");
 }
 void sections() {
     double host[256];
@@ -285,7 +319,8 @@ int main(int argc,char **argv) {
     }
     if (argc>1 && !std::strcmp(argv[1],"probe")) return 0;
     if (argc>1 && !std::strncmp(argv[1],"pinned-",7)) { pinned_control(argv[1]); return 0; }
-    if (argc>1 && !std::strcmp(argv[1],"coalesced-stencil")) coalesced_stencil();
+    if (argc>1 && !std::strcmp(argv[1],"invocation-reuse")) invocation_reuse();
+    else if (argc>1 && !std::strcmp(argv[1],"coalesced-stencil")) coalesced_stencil();
     else if (argc>1 && !std::strcmp(argv[1],"sections")) sections(); else chain();
 }
 '''
@@ -320,7 +355,7 @@ def cuda_runtime_executable(tmp_path_factory):
 
 
 @pytest.mark.cuda
-@pytest.mark.parametrize("mode", ["chain", "sections", "coalesced-stencil", "lazy", "pinned-budget", "pinned-allocation", "pinned-record"])
+@pytest.mark.parametrize("mode", ["chain", "sections", "coalesced-stencil", "invocation-reuse", "lazy", "pinned-budget", "pinned-allocation", "pinned-record"])
 def test_scoped_cuda_public_consumers(cuda_runtime_executable, mode):
     result = subprocess.run([str(cuda_runtime_executable), mode], capture_output=True, text=True, timeout=30)
     if result.returncode == 77:
