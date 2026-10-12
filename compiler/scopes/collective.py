@@ -128,6 +128,9 @@ class CollectiveScopeBuilder(ScopeBuilder):
             arrays, scalars, written = self.owner_inputs(calls)
             if not arrays:
                 raise CompilationError("collective source scope requires whole array captures")
+            if any("expected_descriptor" in self.capture(binding) for binding in arrays.values()):
+                raise CompilationError("expected capture descriptor requires original caller guards; "
+                                       "qualified collective owner is unsupported")
             available, reason, _, _ = self.owner_query(calls, arrays, written)
             if not available:
                 raise CompilationError("complete collective query is unavailable: " + reason)

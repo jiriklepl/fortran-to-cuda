@@ -13,6 +13,7 @@ from compiler.frontend.source_effects import _children, _kind, _part
 from compiler.ir import CompilationError
 from compiler.scopes.lexical import LexicalOwner, optional_scalar_input
 from compiler.scopes.reached_owner import MappedReachedControl
+from compiler.scopes.registration import expected_descriptor_conditions
 from compiler.scopes.segments import fortran_lines, statement_span
 from compiler.scopes.source import _call, _name, _span
 
@@ -54,6 +55,10 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
 
         def capture(_proxy, binding):
             fact = self.owner.builder.capture(self.canonical(binding))
+            if binding.name in routine.arguments:
+                # The original caller guards its actual before this dummy's
+                # association can replace the original descriptor lower bounds.
+                fact = {key: value for key, value in fact.items() if key != "expected_descriptor"}
             if binding.name in routine.arguments and binding.intent == "out":
                 # First registration can follow the original OUT event. No
                 # handle existed at ENTRY in that case, so old caller values
@@ -287,16 +292,28 @@ def borrow_module(parent, node, *, reached=None):
                           f"int({index},kind=c_int64_t) > {upper}_c_int64_t) then", *parent.close(), "endif", "endif"]
         preflight += ["end block"]
     if arrays:
-        preflight += ["block", "logical :: fort_actuals_contiguous", "fort_actuals_contiguous = .true."]
+        descriptor_conditions = []
+        for mapping in arrays:
+            fact = parent.builder.capture(mapping.binding)
+            descriptor_conditions += expected_descriptor_conditions(fact, mapping.binding.rank, str(mapping.actual))
+        preflight += ["block", *(["use iso_c_binding, only: c_int64_t"] if descriptor_conditions else []),
+                      "logical :: fort_actuals_contiguous", "fort_actuals_contiguous = .true."]
         for mapping in arrays:
             name = str(mapping.actual)
             if "allocatable" in mapping.binding.attributes:
                 preflight += [f"if (fort_actuals_contiguous) fort_actuals_contiguous = allocated({name})"]
             preflight += [f"if (fort_actuals_contiguous) fort_actuals_contiguous = is_contiguous({name})"]
-            if reached is not None:
+            if reached is not None or descriptor_conditions:
                 preflight += [f"if (fort_actuals_contiguous) fort_actuals_contiguous = {condition}"
                               for condition in parent.builder.original_bound_conditions(name, mapping.binding.rank)]
-        preflight += ["if (.not. fort_actuals_contiguous) then", *parent.close(), "endif", "end block"]
+        preflight += ["if (.not. fort_actuals_contiguous) then", *parent.close(), "endif"]
+        if descriptor_conditions:
+            preflight += [f"if ({parent.enabled}) then",
+                          *[f"if (fort_actuals_contiguous) fort_actuals_contiguous = {condition}"
+                            for condition in descriptor_conditions],
+                          "if (.not. fort_actuals_contiguous) then",
+                          *parent.close(reason="capture expected descriptor mismatch"), "endif", "endif"]
+        preflight += ["end block"]
     if reached is not None:
         from compiler.scopes.call_registration import register_original_actuals
         preflight += register_original_actuals(parent, arrays, scalar_elements=elements)

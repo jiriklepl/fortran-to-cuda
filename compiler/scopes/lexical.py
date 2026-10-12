@@ -13,6 +13,7 @@ from fparser.two.utils import walk
 
 from compiler.frontend.source_effects import _children, _kind, _part
 from compiler.ir import CompilationError
+from compiler.scopes.registration import expected_descriptor_conditions, expected_descriptor_public
 from compiler.scopes.segments import Segment, StructuredScope, condition_fragment, fortran_lines, statement_span
 from compiler.scopes.source import DTYPES, _name, _span
 
@@ -408,6 +409,10 @@ class LexicalOwner:
                 self.builder.capture(binding)
                 self.declaration(binding)
             metadata = {root: binding for operation in scope.native for root, binding in operation.host_metadata.items()}
+            for binding in metadata.values():
+                fact = self.builder.facts["captures"].get(self.canonical(binding).root)
+                if isinstance(fact, dict) and "expected_descriptor" in fact:
+                    raise CompilationError("expected capture descriptor is unsupported for opaque native metadata")
             if metadata:
                 for name in ('storage_size', 'mod'):
                     if (self.builder.analysis._binding(self.routine.scope, name)
@@ -680,6 +685,13 @@ class LexicalOwner:
                 prepare += [f"fort_can = {capture.index_guard}"]
                 prepare += ["endif"] * (len(capture.activation_guards) + 1)
         prepare += ["if (.not. fort_can) then", *close(), "exit " + block, "endif"]
+        descriptor_conditions = [condition for root, binding in arrays.items()
+                                 for condition in expected_descriptor_conditions(
+                                     capture_facts[root], binding.rank, parameters[root])]
+        if descriptor_conditions:
+            prepare += [f"if (fort_can) fort_can = {condition}" for condition in descriptor_conditions]
+            prepare += ["if (.not. fort_can) then", *close(reason="capture expected descriptor mismatch"),
+                        "exit " + block, "endif"]
         if unit.scope.close_guards:
             if not immutable_numerical_unit(unit.scope):
                 raise CompilationError("conditional numerical effects require one complete reached original group")
@@ -1014,6 +1026,9 @@ class LexicalOwner:
         first = statement_span(nodes[0])[0]
         last = statement_span(nodes[-1])[1]
         self.emit_control(nodes)
+        opaque_resources = set(self.scalar_element_resources) | {
+            member.canonical(binding).root for member in self.members.values() for unit in member.units
+            for binding in (unit.host_metadata or {}).values()}
         builder.scopes.append({"owner": self.context, "owner_variant": variant.identity,
             "path": str(self.routine.scope.path), "first_line": first, "last_line": last,
             "gpu_leaves": sorted(self.leaves), "mode": builder.config.policy,
@@ -1031,6 +1046,8 @@ class LexicalOwner:
                 "identity": "invocation-local canonical registration; matches runtime buffer trace identity",
                 "resources": [{"resource": root, "registration_identity": number,
                                "descriptor": binding.public(),
+                               **(expected_descriptor_public(builder.facts["captures"].get(root, {}), binding.rank)
+                                  if root not in opaque_resources else {}),
                                **({"role": "opaque_scalar_element_alias_reservation",
                                    "managed_payload": False, "definition_authority": False}
                                   if root in self.scalar_element_resources else {})}
