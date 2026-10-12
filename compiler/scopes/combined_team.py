@@ -1,8 +1,9 @@
-"""One original numerical team with a whole-group native exit.
+"""One original numerical team with an independently authorized native path.
 
 Numerical completion never supplies native memory hooks. Every original team
-member votes before master's preparation, and a rejected unit closes before
-the preserved worksharing body executes once.
+member votes before master's preparation. An owning route closes before the
+preserved body; an independently proved borrowed native path retains its context
+and surrounds that body with coherent host hooks.
 """
 
 import re
@@ -240,7 +241,7 @@ def _check_generated_names(originals, specification, imports, generated, block):
                                 + name.strip())
 
 
-def _narrow_runtime_imports(imports, specification, generated):
+def _narrow_runtime_imports(imports, specification, generated, *, original_imports=()):
     """Introduce only used exports, leaving unrelated original aliases intact."""
     path = Path(__file__).resolve().parents[1] / "runtime" / "scoped_memory.f90"
     if path.stat().st_size > NATIVE_GROUP_SCAN_LIMIT:
@@ -272,10 +273,16 @@ def _narrow_runtime_imports(imports, specification, generated):
     # only referenced entities avoids importing unrelated intrinsic constants.
     iso = {"c_associated", "c_bool", "c_char", "c_double", "c_f_pointer", "c_float", "c_int",
            "c_int32_t", "c_int64_t", "c_intptr_t", "c_loc", "c_null_char", "c_null_ptr", "c_ptr", "c_size_t"}
-    used = set(re.findall(r"\b[a-z][a-z0-9_]*\b", "\n".join((*specification, *generated)).lower()))
+    emitted = "\n".join((*specification, *generated)).lower()
+    used = set(re.findall(r"\b[a-z][a-z0-9_]*\b", emitted))
+    # A literal's kind follows an underscore, so it has no identifier word
+    # boundary: 1_c_size_t and 0.0_c_double still need their ISO exports.
+    used.update(re.findall(
+        r"(?<![a-z0-9_])(?:\d+(?:\.\d*)?|\.\d+)(?:[ed][+-]?\d+)?_([a-z][a-z0-9_]*)\b", emitted))
+    used.update(re.findall(r"\.(?:true|false)\._([a-z][a-z0-9_]*)\b", emitted))
     for index, statement in enumerate(imports):
         lower = statement.strip().lower()
-        if lower in {"use fort_scoped_memory", "use iso_c_binding"}:
+        if lower in {"use fort_scoped_memory", "use iso_c_binding"} and statement not in original_imports:
             selected = sorted(used & (exports if lower.endswith("fort_scoped_memory") else iso))
             if not selected:
                 raise CompilationError("combined team generated runtime import has no required exports")
@@ -338,14 +345,25 @@ class CombinedNumericalTeam(StructuredScope):
             "nested_team_created": False, "expected_omp_level": 1,
             "host_threads": self.builder.config.host_threads,
         }
+        if hasattr(self, "borrowed_fallback"):
+            fallback = self.borrowed_fallback
+            result["combined_numerical_team"].update({
+                "fallback": "independent complete native plan; validate and host begin before original body once; host end after join",
+                "native_effects_authority": True, "closed_is_absorbing": False,
+                "context": "borrowed and never closed by this worker",
+                "native_summary_identity": fallback.summary["summary_identity"],
+                "native_completion": fallback.summary["native_completion"],
+                "native_required_whole": sorted(root for root, actions in fallback.coherence_effects.items()
+                                                if "read" in actions or root not in fallback.overwrites),
+                "whole_on_return": sorted(fallback.overwrites),
+                "whole_return_authority": "same exact original group: independent source must-writes and validated numerical equivalence",
+                "native_validation_failure": "checked hard failure; borrowed context cannot close or replay",
+            })
         return result
 
     def emit_original(self, owner, unit, handles, values, imports, specification, *, preparation, block):
         """Prepare inside the actual team; never exit an enclosing OpenMP block."""
         self._validate()
-        builder = self.builder
-        call, = self.calls
-        imports.append("use omp_lib, only: fort_team_omp_level => omp_get_level, fort_team_omp_threads => omp_get_num_threads")
         close_owner = copy(owner)
         close_owner.context, close_owner.enabled, close_owner.control_guard = (
             "fort_team_context", "fort_team_enabled", None)
@@ -359,7 +377,71 @@ class CombinedNumericalTeam(StructuredScope):
         after = ["if (fort_team_owned) then", f"{owner.context} = fort_team_context",
                  f"{owner.enabled} = fort_team_enabled",
                  *[f"fort_buffer_{owner.resources[root][1]} = {handle}" for root, handle in handles.items()], "endif"]
-        shared = tuple(dict.fromkeys((*declared_names([*specification, *extra]), "fort_native_ready")))
+        lines, generated = self._emit_team(handles, values, imports, [*specification, *extra],
+            preparation=preparation, block=block, failure=failure)
+        _narrow_runtime_imports(imports, [*specification, *extra], [*before, *generated, *after])
+        _check_generated_names(self.original_nodes, [*specification, *extra], imports, generated, block)
+        replacement = "\n".join(fortran_lines(lines)) + "\n"
+        return extra, [(self.first, self.last, replacement)], before, after
+
+    def emit_borrowed(self, handles, values, imports, specification, *, block):
+        """Keep the borrowed context on a separately proved whole native path."""
+        from compiler.scopes.numerical_preflight import preparation_preflight
+        from compiler.scopes.source import _checked
+
+        self._validate()
+        operation = self.borrowed_fallback
+        if (len(self.native) != 1 or self.native[0] is not operation
+                or len(self.guarded) != 1 or self.guarded.get(id(self.calls[0].node)) is not operation
+                or self.close_guards or len(operation.nodes) != len(self.original_nodes)
+                or any(left is not right for left, right in zip(operation.nodes, self.original_nodes, strict=True))):
+            raise CompilationError("borrowed numerical team lost its exact independent native fallback")
+        guard_specification, preparation = preparation_preflight(self.builder, self.calls[0], values)
+        extra = ["logical :: fort_team_run, fort_team_enabled, fort_native_ready",
+                 "logical :: fort_team_environment_supported", "integer(c_int64_t) :: fort_team_context",
+                 "logical :: fort_numerical_guard", *guard_specification]
+        preparation += ["if (.not. fort_numerical_guard) then", "fort_native_ready = .false.",
+                        "exit " + block, "endif"]
+        # The fallback is a complete independent source effect proof. Rebuild
+        # its own conservative plan after any failed/declined numerical query;
+        # no residual numerical binding or status can authorize host access.
+        native_begin = _checked("fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)")
+        for index, (root, actions) in enumerate(sorted(operation.coherence_effects.items()), 1):
+            flags = (["FORT_SCOPE_READ_ALL"] if "read" in actions else [])
+            flags += ["FORT_SCOPE_WRITE_ALL"] if "write" in actions else []
+            flags += ["FORT_SCOPE_OVERWRITE_ALL"] if root in operation.overwrites else []
+            native_begin += [f"fort_bindings({index}) = fort_scope_plan_binding()",
+                             f"fort_bindings({index})%buffer = {handles[root]}",
+                             f"fort_bindings({index})%access%flags = " + " + ".join(flags)]
+        count = len(operation.coherence_effects)
+        native_begin += ["fort_status = fort_scope_plan_add( &",
+            "    fort_context, FORT_SCOPE_PLAN_NATIVE, 0_c_int64_t, &",
+            f"    {'c_loc(fort_bindings)' if count else 'c_null_ptr'}, {count}_c_size_t, &",
+            "    0.0_c_double, 0.0_c_double, 0_c_int)",
+            "if (fort_status /= FORT_SCOPE_OK) error stop 'borrowed native team plan failed'"]
+        native_begin += _checked("fort_scope_plan_validate(fort_context)")
+        for index, root in enumerate(sorted(operation.coherence_effects), 1):
+            native_begin += _checked(f"fort_scope_host_begin(fort_context, {handles[root]}, "
+                                     f"fort_bindings({index})%access)")
+        native_end = [line for root in sorted(operation.coherence_effects)
+                      for line in _checked(f"fort_scope_host_end(fort_context, {handles[root]})")]
+        native_end += _checked("fort_scope_wait(fort_context)")
+        before = ["fort_team_context = fort_context", "fort_team_enabled = .true.",
+                  "fort_native_ready = fort_mode /= 0_c_int"]
+        lines, generated = self._emit_team(handles, values, imports, [*specification, *extra], preparation=preparation,
+            block=block, failure=["fort_native_ready = .false."], native_begin=native_begin,
+            native_end=native_end)
+        # The caller adds entry definition events before this team. Finalize
+        # imports and names only after that complete worker has been assembled.
+        return extra, [*before, *lines], [*before, *generated]
+
+    def _emit_team(self, handles, values, imports, specification, *, preparation, block, failure,
+                   native_begin=(), native_end=()):
+        """One original participant protocol for owning and borrowed workers."""
+        builder = self.builder
+        call, = self.calls
+        imports.append("use omp_lib, only: fort_team_omp_level => omp_get_level, fort_team_omp_threads => omp_get_num_threads")
+        shared = tuple(dict.fromkeys((*declared_names(specification), "fort_native_ready")))
         parallel = "!$omp parallel" + "".join(" " + clause for clause in self.partition["parallel_clauses"])
         parallel += " shared(" + ",".join(shared) + ")"
         do = "!$omp do" + "".join(" " + clause for clause in self.partition["do_clauses"])
@@ -388,8 +470,10 @@ class CombinedNumericalTeam(StructuredScope):
         lines += ["if (fort_status /= FORT_SCOPE_OK) then", *failure, "exit " + block, "endif",
                   "fort_team_run = .true.", "end block " + block, "end associate",
                   # Any preparation-only exit, including a cheap native choice,
-                  # must publish before the original body can touch host data.
-                  "if (.not. fort_team_run) then", *failure, "endif", "endif", "!$omp end master",
+                  # must finish native coherence before the original body.
+                  "if (.not. fort_team_run) then", *failure, "endif", "endif",
+                  *(["if (.not. fort_team_run) then", *native_begin, "endif"] if native_begin else []),
+                  "!$omp end master",
                   "!$omp barrier", "if (fort_team_run) then", "block", "integer(c_int) :: fort_returned",
                   "associate(fort_context => fort_team_context)",
                   *builder.inline.emit_call(call, handles, values, imports, query=False, collective=True,
@@ -401,10 +485,13 @@ class CombinedNumericalTeam(StructuredScope):
                   "!$omp end master", "!$omp barrier", "end associate", "end block", "else"]
         native = ([do, *native_body, "!$omp end do"]
                   if self.partition["group_kind"] == "combined_parallel_do" else native_body)
+        generated = list(lines)
+        lines += native
+        if native_end:
+            # A separate group's last DO may have NOWAIT. The explicit team
+            # join must precede publication of any original native writes.
+            finishing = ["!$omp barrier", "!$omp master", *native_end, "!$omp end master", "!$omp barrier"]
+            lines += finishing
+            generated += finishing
         suffix = ["endif", "!$omp end parallel"]
-        generated = [*lines, *suffix]
-        lines += [*native, *suffix]
-        _narrow_runtime_imports(imports, [*specification, *extra], [*before, *generated, *after])
-        _check_generated_names(self.original_nodes, [*specification, *extra], imports, generated, block)
-        replacement = "\n".join(fortran_lines(lines)) + "\n"
-        return extra, [(self.first, self.last, replacement)], before, after
+        return [*lines, *suffix], [*generated, *suffix]

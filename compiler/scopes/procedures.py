@@ -6,6 +6,7 @@ reached. It never provides a speculative whole-procedure planning query.
 """
 
 from copy import copy
+from dataclasses import replace
 from types import MethodType
 
 from fparser.two import Fortran2003 as F
@@ -61,12 +62,36 @@ class BorrowedCoordinator:
         nodes = tuple(_children(self.routine.execution))
         if not nodes:
             raise CompilationError("borrowed coordinator has no reached source operations")
-        if builder.config.scope_execution == "reached":
+        self.whole_team = False
+        if self.reached:
+            from compiler.scopes.combined_team import CombinedNumericalTeam, is_combined_group
+            from compiler.scopes.segments import directive, fragment
+
+            grouped = self.builder.inline.grouped_nodes(nodes)
+            operations = [node for node in grouped
+                          if isinstance(node, tuple) or _kind(node) != "Comment" or directive(node) is not None]
+            if (len(operations) == 1 and isinstance(operations[0], tuple)
+                    and is_combined_group(self.builder, operations[0])
+                    and self.builder.inline.native_environment_required()):
+                # This native authority is independent of numerical completion
+                # and belongs to the exact same complete original group.
+                from compiler.scopes.segments import original_roots
+                originals = original_roots(self.builder.inline.original_selection(operations[0]))
+                fallback = fragment(self.builder, originals, kind="joined native OpenMP")
+                self.scope = CombinedNumericalTeam(self.builder, originals)
+                self.scope.borrowed_fallback = fallback
+                self.scope.native = [fallback]
+                self.scope.guarded = {id(self.scope.calls[0].node): fallback}
+                self.scope.close_guards = {}
+                self.whole_team = True
+        if self.reached and not self.whole_team:
             nodes = self.builder.inline.prepare(nodes)
+        if self.reached:
             self.builder.generated.update(self.builder.inline.generated)
             self.builder.numerical_ir.update(self.builder.inline.ir)
             self.builder.numerical_reasons.update({name: None for name in self.builder.inline.regions})
-        self.scope = StructuredScope(self.builder, nodes)
+        if not self.whole_team:
+            self.scope = StructuredScope(self.builder, nodes)
         self.leaves = {leaf for call in self.scope.calls
                        for leaf in self.builder.closure(call.procedure, active)[0]}
         if not self.leaves:
@@ -116,6 +141,21 @@ class BorrowedCoordinator:
             self.definition_summary = summarize(self.scope, entry_undefined={
                 self.routine.scope.bindings[name].root for name in self.routine.arguments
                 if self.routine.scope.bindings[name].rank and self.routine.scope.bindings[name].intent == "out"})
+            if self.whole_team:
+                fallback = self.scope.borrowed_fallback
+                required = {root for root, actions in fallback.coherence_effects.items()
+                            if "read" in actions or root not in fallback.overwrites}
+                undefined = {self.routine.scope.bindings[name].root for name in self.routine.arguments
+                             if self.routine.scope.bindings[name].rank
+                             and self.routine.scope.bindings[name].intent == "out"}
+                if required & undefined:
+                    raise CompilationError("borrowed whole-team native fallback requires undefined INTENT(OUT) input")
+                # Both successful alternatives execute this same original
+                # group. Only its independent must-write source proof supplies
+                # whole-return credit; numerical bounding boxes supply none.
+                self.definition_summary = replace(self.definition_summary,
+                    required_whole=self.definition_summary.required_whole | required,
+                    whole_on_return=self.definition_summary.whole_on_return | fallback.overwrites)
             self.required_whole = set(self.definition_summary.required_whole)
             self.resources = tuple(self.arrays)
             return
@@ -173,7 +213,8 @@ class BorrowedCoordinator:
                               "retained_resources": list(self.resources)},
                 "planning_segments": scope["planning_segments"],
                 "native_operations": scope["native_operations"],
-                "source_tree": scope["structured_tree"]}
+                "source_tree": scope["structured_tree"],
+                "whole_original_team": scope.get("combined_numerical_team")}
 
     def check_actuals(self, call):
         self.check_aliases(call)
@@ -222,10 +263,11 @@ class BorrowedCoordinator:
             selector, _ = builder.entry_artifacts(sorted(self.leaves)[0])
             imports.append(f"use {selector['fortran_module']}, only: {selector_name} => "
                            f"{selector['planning']['fortran_selector']}")
-        specification = []
+        specification, original_imports = [], []
         for declaration in _children(_part(routine.scope.node, "Specification_Part")):
             if _kind(declaration) == "Use_Stmt":
                 imports.append(str(declaration))
+                original_imports.append(str(declaration))
             elif _kind(declaration) != "Type_Declaration_Stmt":
                 specification.append(str(declaration))
             else:
@@ -233,27 +275,27 @@ class BorrowedCoordinator:
                 for entity in _children(entities):
                     variable = str(entity.items[0]).lower()
                     flags = [str(attribute) for attribute in _children(attributes)]
-                    if variable in routine.arguments and routine.scope.bindings[variable].rank:
-                        if not any(flag.upper() == "TARGET" for flag in flags):
-                            flags.append("TARGET")
+                    if (variable in routine.arguments and routine.scope.bindings[variable].rank
+                            and not any(flag.upper() == "TARGET" for flag in flags)):
+                        flags.append("TARGET")
                     specification += _fortran_list(str(dtype) + (", " + ", ".join(flags) if flags else "") + " ::",
                                                     [str(entity)], "", 0)
-        specification += ["integer(c_int64_t), intent(in) :: fort_context",
+        runtime_specification = ["integer(c_int64_t), intent(in) :: fort_context",
                           "integer(c_int), intent(in) :: fort_mode",
                           *_fortran_list("integer(c_int64_t), intent(in) ::", list(handles.values()), "", 0),
                           "integer(c_int) :: fort_status", "logical :: fort_branch",
                           "type(fort_scope_access) :: fort_access", "type(fort_scope_plan_decision) :: fort_decision",
                           f"type(fort_scope_plan_binding), target :: fort_bindings({max(1, len(handles))})"]
-        if self.scope.guarded:
-            specification.append("logical :: fort_numerical_guard")
+        if self.scope.guarded and not self.whole_team:
+            runtime_specification.append("logical :: fort_numerical_guard")
         # A dummy's bounds belong to its original entry descriptor. Snapshot
         # them here before native operations can change specification scalars;
         # the canonical registered allocation may have different logical bounds.
         dummy_lowers = {root: "fort_original_lower_" + str(index)
                         for index, (root, binding) in enumerate(self.arrays.items())
                         if binding.root.startswith("argument::") and "allocatable" not in binding.attributes}
-        specification += [f"integer(c_int64_t) :: {value}({self.arrays[root].rank})"
-                          for root, value in dummy_lowers.items()]
+        runtime_specification += [f"integer(c_int64_t) :: {value}({self.arrays[root].rank})"
+                                 for root, value in dummy_lowers.items()]
         parameters = {root: builder.visible(routine, root) for root in (*self.arrays, *self.scalars)}
 
         def actuals(call, *, shared=True):
@@ -268,12 +310,27 @@ class BorrowedCoordinator:
             binding = routine.scope.bindings[variable]
             if binding.rank and binding.intent == "out":
                 body += _checked(f"fort_scope_forget_definition(fort_context, {handles[binding.root]})")
-        body += self.scope.emit(handles, parameters, actuals, imports, selector=selector,
-                                selector_name=selector_name, execution_mode="fort_mode",
-                                terminal_owner=False,
-                                logical_lower_bounds={root: tuple(f"{value}({axis})"
-                                                                 for axis in range(1, self.arrays[root].rank + 1))
-                                                      for root, value in dummy_lowers.items()})
+        if self.whole_team:
+            extra, lines, generated = self.scope.emit_borrowed(handles, parameters, imports, runtime_specification,
+                                                             block="fort_borrowed_prepare")
+            runtime_specification += extra
+            generated = [*body, *generated]
+            body += lines
+        else:
+            body += self.scope.emit(handles, parameters, actuals, imports, selector=selector,
+                                    selector_name=selector_name, execution_mode="fort_mode",
+                                    terminal_owner=False,
+                                    logical_lower_bounds={root: tuple(f"{value}({axis})"
+                                                                     for axis in range(1, self.arrays[root].rank + 1))
+                                                          for root, value in dummy_lowers.items()})
+        specification += runtime_specification
+        if self.whole_team:
+            from compiler.scopes.combined_team import _check_generated_names, _narrow_runtime_imports
+
+            _narrow_runtime_imports(imports, specification, body, original_imports=original_imports)
+            _check_generated_names(self.scope.original_nodes, runtime_specification,
+                [statement for statement in imports if statement not in original_imports],
+                generated, "fort_borrowed_prepare")
         builder.append_procedure(routine.scope.parent, name, "\n".join(fortran_lines([
             *header, *dict.fromkeys(imports), *specification, *body, "end subroutine " + name, ""])))
         return name, list(self.resources)
