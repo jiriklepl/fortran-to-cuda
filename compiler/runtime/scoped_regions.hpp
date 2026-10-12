@@ -39,6 +39,39 @@ inline void append(Region &region, Box box) {
     if (region.size() == rectangle_limit) throw Fragmented{};
     region.push_back(std::move(box));
 }
+inline void coalesce(Region &region) {
+    // Inputs already passed the rectangle budget. Each successful pass removes
+    // one box, so the deterministic scan is bounded by that same small limit.
+    // Merge only exact neighbours: a bounding box across a hole would change
+    // definedness and could copy stale or uninitialized cells.
+    for (;;) {
+        bool merged = false;
+        for (size_t i=0; i<region.size() && !merged; ++i) {
+            for (size_t j=i+1; j<region.size(); ++j) {
+                auto &a = region[i];
+                const auto &b = region[j];
+                size_t axis = a.lo.size();
+                bool adjacent = true;
+                for (size_t k=0; k<a.lo.size(); ++k) {
+                    if (a.lo[k] == b.lo[k] && a.hi[k] == b.hi[k]) continue;
+                    if (axis != a.lo.size() || (a.hi[k] != b.lo[k] && b.hi[k] != a.lo[k])) {
+                        adjacent = false;
+                        break;
+                    }
+                    axis = k;
+                }
+                if (!adjacent || axis == a.lo.size()) continue;
+                // Exclusive endpoints require no addition, including SIZE_MAX.
+                a.lo[axis] = std::min(a.lo[axis], b.lo[axis]);
+                a.hi[axis] = std::max(a.hi[axis], b.hi[axis]);
+                region.erase(region.begin()+j);
+                merged = true;
+                break;
+            }
+        }
+        if (!merged) return;
+    }
+}
 inline Region subtract(const Box &box, const Box &cut, Budget &budget) {
     auto common = intersection(box, cut, budget);
     if (!common) return {box};
@@ -69,6 +102,7 @@ inline Region difference(const Region &a, const Region &b, Budget &budget) {
         }
         for (auto &part : pending) append(result, std::move(part));
     }
+    coalesce(result);
     return result;
 }
 inline Region unite(Region a, const Region &b, Budget &budget) {
@@ -77,6 +111,7 @@ inline Region unite(Region a, const Region &b, Budget &budget) {
         a.erase(std::remove_if(a.begin(), a.end(), [&](const Box &old) { return contains(box, old); }), a.end());
         for (auto &piece : difference({box}, a, budget)) append(a, std::move(piece));
     }
+    coalesce(a);
     return a;
 }
 struct Effects { Region reads, writes, overwrites; };

@@ -202,6 +202,42 @@ def test_gpu_interior_cpu_opposite_faces_preserve_both(runtime):
 
 
 @pytest.mark.native
+def test_coalesced_stencil_transfers_preserve_undefined_corners_and_negative_bounds(runtime):
+    scope = Scope(runtime)
+    shape = (8, 7, 6)
+    host = (c.c_double * (8 * 7 * 6))(*range(8 * 7 * 6))
+    shifts = [(0, 0, 0), (-1, 0, 0), (0, 1, 0), (-1, 1, 0), (0, -1, 0),
+              (-1, -1, 0), (0, 0, 1), (-1, 0, 1), (0, 0, -1), (-1, 0, -1)]
+    interior = (5, 4, 3)
+    boxes = [(tuple(1 + value for value in shift),
+              tuple(n + 1 + value for n, value in zip(interior, shift, strict=True)))
+             for shift in shifts]
+    offsets = {i + shape[0] * (j + shape[1] * k) for lo, hi in boxes
+               for k in range(lo[2], hi[2]) for j in range(lo[1], hi[1]) for i in range(lo[0], hi[0])}
+    status, handle = scope.register(host, shape, lower=[-2, -5, -9], defined=boxes)
+    scope.check(status)
+    effect = access(read=boxes, write=boxes)
+    device = scope.gpu(handle, effect)
+    assert scope.stats().uploads == 3
+    assert scope.stats().upload_bytes == len(offsets) * 8
+    for offset in offsets:
+        assert device[offset] == offset
+        device[offset] += 1000
+    scope.gpu_end(handle)
+    # The surrounding allocation still contains undefined cells, even though
+    # the three rectangles cover every required stencil value.
+    before = bytes(scope.stats())
+    assert runtime.fort_scope_host_begin(scope.handle, handle, c.byref(access(flags=1))) == 7
+    assert bytes(scope.stats()) == before
+    scope.cpu_begin(handle, access(read=boxes))
+    scope.cpu_end(handle)
+    assert scope.stats().downloads == 3
+    assert scope.stats().download_bytes == len(offsets) * 8
+    scope.close()
+    assert list(host) == [i + 1000 if i in offsets else i for i in range(len(host))]
+
+
+@pytest.mark.native
 def test_conditional_holes_and_overwrite_skip_input(runtime):
     scope = Scope(runtime)
     host = (c.c_double * 8)(*range(8))
