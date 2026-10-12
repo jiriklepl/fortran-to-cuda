@@ -148,6 +148,38 @@ def test_selected_partial_effects_predict_actual_transfers_and_preserve_host_wri
     assert list(values) == [-7, -7, *[2*i for i in range(2, 30)], -7, -7]
 
 
+def test_stencil_plan_counts_the_same_three_coalesced_uploads_as_execution(planning):
+    scope = Scope(planning)
+    values = (c.c_double * (8 * 7 * 6))(*range(8 * 7 * 6))
+    shifts = [(0, 0, 0), (-1, 0, 0), (0, 1, 0), (-1, 1, 0), (0, -1, 0),
+              (-1, -1, 0), (0, 0, 1), (-1, 0, 1), (0, 0, -1), (-1, 0, -1)]
+    boxes = [(tuple(1 + value for value in shift),
+              tuple(n + 1 + value for n, value in zip((5, 4, 3), shift, strict=True)))
+             for shift in shifts]
+    status, handle = scope.register(values, [8, 7, 6], lower=[-2, -5, -9], defined=boxes)
+    scope.check(status)
+    effect = access(read=boxes)
+    scope.check(planning.fort_scope_plan_reset(scope.handle))
+    bindings = record(scope, 46, handle, effect)
+    decision = select(scope, costs())
+    assert decision.gpu_units == 1
+    assert decision.uploads == 3
+    assert decision.downloads == 0
+    chosen = c.c_int()
+    scope.check(planning.fort_scope_plan_next(scope.handle, 46, bindings, 1, c.byref(chosen)))
+    assert chosen.value == 1
+    previous, stream = c.c_int(), c.c_void_p()
+    scope.check(planning.fort_scope_gpu_enter(scope.handle, c.byref(previous), c.byref(stream)))
+    scope.gpu(handle, effect)
+    scope.check(planning.fort_scope_note_launch(scope.handle))
+    scope.gpu_end(handle)
+    actual = scope.stats()
+    for field in ("uploads", "upload_bytes", "downloads", "download_bytes", "launches", "allocations"):
+        assert getattr(actual, field) == getattr(decision, field), field
+    scope.close()
+    assert list(values) == list(range(len(values)))
+
+
 def test_installed_worker_effects_and_sequence_cannot_change(planning):
     scope = Scope(planning)
     values = (c.c_double * 32)(*range(32))

@@ -83,6 +83,14 @@ __global__ void interior(double *array) {
     const int i=n%4, j=n/4%4, k=n/16%4, l=n/64;
     if (i>=1 && i<3 && j>=1 && j<3 && k>=1 && k<3 && l==1) array[n]+=1000;
 }
+__global__ void stencil_union(double *array) {
+    const int n=blockIdx.x*blockDim.x+threadIdx.x;
+    if (n>=8*7*6) return;
+    const int i=n%8, j=n/8%7, k=n/(8*7);
+    // The ten shifted source rectangles form this cross; every cell executes
+    // once, including cells appearing in several original read rectangles.
+    if (i<6 && ((j<6 && k>=1 && k<4) || (j>=1 && j<5 && k<5))) array[n]+=1000;
+}
 void chain() {
     double a[8], b[8]={}, out[8]={};
     for (int i=0;i<8;++i) a[i]=i+1;
@@ -151,6 +159,57 @@ void sections() {
     assert(stats.upload_bytes==64 && stats.download_bytes==64 && stats.uploads==1 && stats.downloads==1);
     check(fort_scope_close(context));
     std::puts("4D pitched copies: correct; H2D=64 bytes; D2H=64 bytes; one copy each");
+}
+void coalesced_stencil() {
+    double host[8*7*6]; bool touched[8*7*6]={};
+    for (int n=0;n<8*7*6;++n) host[n]=n;
+    const int shifts[10][3]={{0,0,0},{-1,0,0},{0,1,0},{-1,1,0},{0,-1,0},
+                             {-1,-1,0},{0,0,1},{-1,0,1},{0,0,-1},{-1,0,-1}};
+    const int interior_extents[3]={5,4,3};
+    size_t lo[10][3], hi[10][3]; fort_scope_section sections[10];
+    for (int box=0;box<10;++box) {
+        for (int axis=0;axis<3;++axis) {
+            lo[box][axis]=1+shifts[box][axis];
+            hi[box][axis]=interior_extents[axis]+1+shifts[box][axis];
+        }
+        sections[box]={lo[box],hi[box]};
+        for (size_t k=lo[box][2];k<hi[box][2];++k)
+            for (size_t j=lo[box][1];j<hi[box][1];++j)
+                for (size_t i=lo[box][0];i<hi[box][0];++i) touched[i+8*(j+7*k)]=true;
+    }
+    size_t cells=0;
+    for (bool value:touched) cells+=value;
+    assert(cells==156);
+    size_t extents[3]={8,7,6}; int64_t bounds[3]={-2,-5,-9};
+    fort_scope_layout layout{3,FORT_SCOPE_REAL64,8,host,extents,bounds,1};
+    fort_scope_t context=0; fort_buffer_t buffer=0;
+    check(fort_scope_create(0,&context));
+    check(fort_scope_register_sections(context,1,1,&layout,sections,10,&buffer));
+    fort_scope_access work{};
+    work.read_count=work.write_count=10; work.reads=work.writes=sections;
+    void *pointer=nullptr, *stream=nullptr; int previous=0;
+    check(fort_scope_device_begin(context,buffer,&work,&pointer));
+    fort_scope_stats stats{}; check(fort_scope_stats_get(context,&stats));
+    assert(stats.allocations==1 && stats.uploads==3 && stats.upload_bytes==cells*sizeof(double));
+    check(fort_scope_gpu_enter(context,&previous,&stream));
+    stencil_union<<<3,128,0,static_cast<cudaStream_t>(stream)>>>(static_cast<double *>(pointer));
+    assert(cudaGetLastError()==cudaSuccess);
+    check(fort_scope_note_launch(context));
+    check(fort_scope_device_end(context,buffer));
+    check(fort_scope_gpu_leave(context,previous));
+    fort_scope_access whole{}; whole.flags=FORT_SCOPE_READ_ALL;
+    assert(fort_scope_host_begin(context,buffer,&whole)==FORT_SCOPE_UNINITIALIZED);
+    check(fort_scope_stats_get(context,&stats));
+    assert(stats.downloads==0 && stats.download_bytes==0);
+    fort_scope_access read{}; read.read_count=10; read.reads=sections;
+    check(fort_scope_host_begin(context,buffer,&read));
+    check(fort_scope_host_end(context,buffer));
+    check(fort_scope_stats_get(context,&stats));
+    assert(stats.uploads==3 && stats.downloads==3 && stats.launches==1);
+    assert(stats.upload_bytes==cells*sizeof(double) && stats.download_bytes==cells*sizeof(double));
+    check(fort_scope_close(context));
+    for (int n=0;n<8*7*6;++n) assert(host[n]==n+(touched[n]?1000:0));
+    std::puts("coalesced stencil: exact coverage; negative bounds; undefined corners; three copies each");
 }
 void pinned_control(const char *mode) {
     fort_staging::Result occupied;
@@ -226,7 +285,8 @@ int main(int argc,char **argv) {
     }
     if (argc>1 && !std::strcmp(argv[1],"probe")) return 0;
     if (argc>1 && !std::strncmp(argv[1],"pinned-",7)) { pinned_control(argv[1]); return 0; }
-    if (argc>1 && !std::strcmp(argv[1],"sections")) sections(); else chain();
+    if (argc>1 && !std::strcmp(argv[1],"coalesced-stencil")) coalesced_stencil();
+    else if (argc>1 && !std::strcmp(argv[1],"sections")) sections(); else chain();
 }
 '''
 
@@ -260,7 +320,7 @@ def cuda_runtime_executable(tmp_path_factory):
 
 
 @pytest.mark.cuda
-@pytest.mark.parametrize("mode", ["chain", "sections", "lazy", "pinned-budget", "pinned-allocation", "pinned-record"])
+@pytest.mark.parametrize("mode", ["chain", "sections", "coalesced-stencil", "lazy", "pinned-budget", "pinned-allocation", "pinned-record"])
 def test_scoped_cuda_public_consumers(cuda_runtime_executable, mode):
     result = subprocess.run([str(cuda_runtime_executable), mode], capture_output=True, text=True, timeout=30)
     if result.returncode == 77:

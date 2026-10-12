@@ -445,6 +445,10 @@ close. Registrations use explicit identities and allocation generations, validat
 layouts, and reject independently registered overlapping storage. Sections use
 zero-based physical coordinates with exclusive upper bounds. Access descriptors
 separate reads, possible writes, and proven overwrites.
+After bounded union and subtraction, adjacent rectangles merge only when their
+union is itself a rectangle. This reduces copy submissions without adding cells
+or filling holes. Execution and planning use the same normalized coverage; the
+32-rectangle and 1,024-intersection limits remain in force.
 
 `fort_scope_register_sections` accepts partially initialized host coverage.
 `fort_scope_forget_definition` discards old defined/current coverage while
