@@ -2038,7 +2038,6 @@ class SourceEffects:
 
     def structure(self, requested):
         """Return one reusable local skeleton without expanding its callees."""
-        from compiler.frontend.structured_effects import admit_cached_structure, build_structure
         self._analysis_started = True
         syntax = self._source_syntax.checkpoint()
         routine = self._require_original(requested, _syntax=syntax)
@@ -2046,21 +2045,29 @@ class SourceEffects:
         digest = sha256(_canonical(authority).encode()).hexdigest()
         key = requested, digest
         if key not in self._structures:
-            graph = build_structure(self, routine, digest)
-            cache_authority = {**authority, "payload_role": "structured_source"}
-            cached = self._summary_cache.lookup(cache_authority, requested)
-            if cached is not None:
-                try:
-                    admit_cached_structure(cached["structure"], graph)
-                except (KeyError, TypeError, ValueError):
-                    self._cache_rejections += 1
-                    cached = None
-            if cached is None:
-                self._summary_cache.store(cache_authority, requested, {"structure": graph.public()})
+            graph, store = self._structure_candidate(requested, routine, authority, digest)
+            if store is not None:
+                self._summary_cache.store(*store)
             if len(self._structures) >= self.procedure_limit:
                 self._structures.pop(next(iter(self._structures)))
             self._structures[key] = graph
         return self._structures[key]
+
+    def _structure_candidate(self, requested, routine, authority, digest):
+        """Build and rebind metadata without publishing a parser graph."""
+        from compiler.frontend.structured_effects import admit_cached_structure, build_structure
+        graph = build_structure(self, routine, digest)
+        cache_authority = {**authority, "payload_role": "structured_source"}
+        cached = self._summary_cache.lookup(cache_authority, requested)
+        if cached is not None:
+            try:
+                admit_cached_structure(cached["structure"], graph)
+            except (KeyError, TypeError, ValueError):
+                self._cache_rejections += 1
+                cached = None
+        store = ((cache_authority, requested, {"structure": graph.public()})
+                 if cached is None else None)
+        return graph, store
 
     def _selected_source(self, requested, selected):
         graph = self.structure(requested)
@@ -2574,6 +2581,7 @@ class SourceEffects:
         return frozenset(proof.module_roots) if proof is not None else frozenset()
 
     def descriptor_stability(self, requested):
+        from compiler.frontend.source_functions import _scope_roles, _validate_scope, _validate_scope_roles
         from compiler.frontend.structured_effects import descriptor_stability
         proof = self._window_descriptor_proof(requested)
         selected = getattr(self, "_selected_descriptor_window", None)
@@ -2595,9 +2603,72 @@ class SourceEffects:
                 result.update({"resources": list(resources.values()), "descriptor_window_identity": proof.identity,
                                "module_descriptor_authority": "complete original child within selected source window"})
             return result
-        graph = self.structure(requested)
+        self._analysis_started = True
+        roles = _scope_roles(self)
+        syntax = self._require_original_global()
+        canonical = _canonical(self._summary_authority(_syntax=syntax))
+        authority = json.loads(canonical)
+        digest = sha256(canonical.encode()).hexdigest()
+        graphs, scopes, stores = {}, {}, []
+
+        def namespace(scope):
+            # Cover original parents and visible module/reexport namespaces,
+            # including equal-looking Binding replacements, without rejecting
+            # unrelated private projections or marking new summary scopes used.
+            pending = [scope]
+            while pending:
+                current = pending.pop()
+                if current is None or id(current) in scopes:
+                    continue
+                _validate_scope(self, current, track=False)
+                scopes[id(current)] = current
+                pending.append(current.parent)
+                modules = {*current.wildcards, *(module for module, _name in current.imports.values())}
+                pending.extend(self.modules[module] for module in modules if module in self.modules)
+
+        def structure(name):
+            if name not in graphs:
+                routine = self._require_original_routine(name, _syntax=syntax)
+                namespace(routine.scope)
+                graph = self._structures.get((name, digest))
+                if graph is None:
+                    graph, store = self._structure_candidate(name, routine, authority, digest)
+                    if store is not None:
+                        stores.append(store)
+                for node in graph.nodes.values():
+                    if node.kind == "associate":
+                        original, = graph.source_nodes(node.id)
+                        record = self._associate_scopes.get(id(original))
+                        if record is not None and record.available:
+                            namespace(record.scope)
+                graphs[name] = graph
+            return graphs[name]
+
+        graph = structure(requested)
+        # A cached public result has no retained validation context. Walk its
+        # bounded closure again so every consulted callee/namespace is fresh;
+        # the graphs and global authentication are shared only within this call.
+        result = descriptor_stability(self, requested, _structure=structure)
+        # The local syntax memo and canonical authority expire with this one
+        # synchronous closure. Nothing computed here grants cached authority
+        # until fresh source, namespace and complete configuration checks pass.
+        _validate_scope_roles(self, roles, scopes)
+        for scope in scopes.values():
+            _validate_scope(self, scope, track=False)
+        final_syntax = self._require_original_global()
+        for name in graphs:
+            self._require_original_routine(name, _syntax=final_syntax)
+        if _canonical(self._summary_authority(_syntax=final_syntax)) != canonical:
+            raise CompilationError("source authority changed during descriptor structure demand")
+        for store in stores:
+            self._summary_cache.store(*store)
+        for name, local_graph in graphs.items():
+            key = name, digest
+            if key not in self._structures:
+                if len(self._structures) >= self.procedure_limit:
+                    self._structures.pop(next(iter(self._structures)))
+                self._structures[key] = local_graph
         if graph.identity not in self._descriptor_proofs:
-            result = descriptor_stability(self, requested)
             if len(self._descriptor_proofs) >= self.procedure_limit:
                 self._descriptor_proofs.pop(next(iter(self._descriptor_proofs)))
             self._descriptor_proofs[graph.identity] = result

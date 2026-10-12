@@ -95,7 +95,26 @@ def _validate_scope(analysis, scope, *, track=True):
         analysis._source_function_used_scopes.add(id(scope))
 
 
-def _validate_resolution(analysis, scope, nodes, *, tick=None, names=()):
+def _scope_roles(analysis):
+    """Retain current role objects for one immediate namespace demand."""
+    roles = {("module", name): scope for name, scope in analysis.modules.items()}
+    roles.update((("routine", name), routine.scope) for name, routine in analysis.routines.items())
+    roles.update((("numerical_helper", name), routine.scope)
+                 for name, routine in analysis.numerical_helpers.items())
+    roles.update((("associate", identity), record.scope)
+                 for identity, record in analysis._associate_scopes.items() if record.available)
+    return roles
+
+
+def _validate_scope_roles(analysis, roles, consulted):
+    # Authenticating a retained scope alone does not bind a registry that was
+    # replaced by an equal-looking scope while this demand was running.
+    current = _scope_roles(analysis)
+    if any(current.get(role) is not scope for role, scope in roles.items() if id(scope) in consulted):
+        raise CompilationError("native source function original resolution authority changed")
+
+
+def _validate_resolution(analysis, scope, nodes, *, tick=None, names=(), _scope_validator=None):
     visited, checked = set(), set()
 
     def resolve(current, name, depth=0):
@@ -107,7 +126,10 @@ def _validate_resolution(analysis, scope, nodes, *, tick=None, names=()):
         if len(visited) > analysis.operation_limit or depth >= analysis.depth_limit:
             raise CompilationError("native source function resolution budget exhausted")
         if id(current) not in checked:
-            _validate_scope(analysis, current)
+            if _scope_validator is None:
+                _validate_scope(analysis, current)
+            else:
+                _scope_validator(current)
             checked.add(id(current))
         if (name in current.bindings or name in current.procedures or name in current.procedure_arguments
                 or name in current.intrinsic_procedures or name in current.generics):

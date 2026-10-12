@@ -23,7 +23,13 @@ from compiler.frontend.native_group_structure import NativeGroupCandidate, group
 from compiler.frontend.native_intrinsics import NativePredicateProof
 from compiler.frontend.native_prefix import NativePrefixProof
 from compiler.frontend.numerical_completion import NumericalCompletionProof
-from compiler.frontend.source_functions import _validate_resolution, _validate_scope, _walk
+from compiler.frontend.source_functions import (
+    _scope_roles,
+    _validate_resolution,
+    _validate_scope,
+    _validate_scope_roles,
+    _walk,
+)
 from compiler.frontend.source_objects import _TypeBuilder
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
@@ -59,9 +65,11 @@ def _hash(value):
 class _Check:
     def __init__(self, analysis):
         self.analysis = analysis
+        self.scope_roles = _scope_roles(analysis)
         self.nodes = self.operations = 0
         self.resolution_units = self.resolution_work = 0
         self.resolution_syntax = self.resolution_lookups = 0
+        self.resolution_scopes = {}
         self.active, self.checked = [], {}
         self.functions = {}
         self.predicates = {}
@@ -190,7 +198,27 @@ class _Check:
         # syntax and resolution transitions spend the existing overall source
         # scan budget; splitting units cannot hide aggregate unbounded work.
         self.resolution_units += 1
-        _validate_resolution(self.analysis, routine.scope, _walk(originals), tick=self.resolution_tick, names=names)
+        _validate_resolution(self.analysis, routine.scope, _walk(originals), tick=self.resolution_tick, names=names,
+                             _scope_validator=self.scope_authority)
+
+    def scope_authority(self, scope):
+        # Retained exact objects, local to this one original-analysis query.
+        # Lookup transitions and their per-unit limits are never memoized.
+        if id(scope) not in self.resolution_scopes:
+            _validate_scope(self.analysis, scope)
+            self.resolution_scopes[id(scope)] = scope
+
+    def publish(self, procedure, authority):
+        # A later syntax/lookup tick may mutate a previously checked scope.
+        # No charged callbacks follow this fresh publication fence.
+        _validate_scope_roles(self.analysis, self.scope_roles, self.resolution_scopes)
+        for scope in self.resolution_scopes.values():
+            _validate_scope(self.analysis, scope)
+        syntax = self.analysis._require_original_global()
+        for name in (procedure, *self.checked):
+            self.analysis._require_original_routine(name, _syntax=syntax)
+        if _hash(self.analysis._summary_authority(_syntax=syntax)) != authority:
+            raise CompilationError("descriptor window original source authority changed")
 
     def declaration_resolution(self, routine):
         specification = next((part for part in _children(routine.scope.node)
@@ -376,7 +404,7 @@ class _Check:
         # complete original child is still visited below, including every true
         # declaration bound; USE/definition spellings and unrelated CONTAINS
         # bodies are not synthetic whole-procedure lookup units.
-        _validate_scope(self.analysis, routine.scope)
+        self.scope_authority(routine.scope)
         proofs = [proof for proof in getattr(self.analysis, "_native_prefix_proofs", {}).values()
                   if isinstance(proof, NativePrefixProof) and proof.procedure == name]
         if proofs:
@@ -448,7 +476,7 @@ def _module_binding(analysis, routine, root, check):
         if scope is None or id(scope) in visited:
             return
         check.tick()
-        _validate_scope(analysis, scope)
+        check.scope_authority(scope)
         visited.add(id(scope))
         for name in (*scope.bindings, *scope.imports):
             check.tick()
@@ -472,15 +500,14 @@ def _module_binding(analysis, routine, root, check):
 
 
 def _derive(analysis, procedure, identities, roots, module_roots=()):
-    routine = analysis._require_original(procedure)
-    graph = analysis.structure(procedure)
-    if not graph.available:
-        raise CompilationError("descriptor window requires a bounded original structured graph")
     if (not isinstance(identities, tuple) or not identities or len(identities) > analysis.operation_limit
             or any(not isinstance(identity, str) for identity in identities)):
         raise CompilationError("descriptor window requires exact original structured node IDs")
-    _graph, selected = analysis._selected_source(procedure, identities)
-    _validate_scope(analysis, routine.scope)
+    # Selection already authenticates the exact original routine and graph.
+    graph, selected = analysis._selected_source(procedure, identities)
+    routine = analysis.routines[procedure]
+    check = _Check(analysis)
+    check.scope_authority(routine.scope)
     sequences = []
     for parent in graph.nodes.values():
         if parent.kind == "sequence" and selected[0] in parent.children:
@@ -502,7 +529,6 @@ def _derive(analysis, procedure, identities, roots, module_roots=()):
         raise CompilationError("descriptor window requires bounded unique original formal roots")
     bindings = {binding.root: binding for binding in routine.scope.bindings.values() if binding.name in routine.arguments}
     states = []
-    check = _Check(analysis)
     for root in roots:
         binding = bindings.get(root)
         if (binding is None or "allocatable" not in binding.attributes or binding.attributes & _UNSAFE
@@ -530,8 +556,15 @@ def _derive(analysis, procedure, identities, roots, module_roots=()):
                        "requires_original_runtime_bounds": True,
                        "execution_requires_runtime_guard": True, "entry_definition_authority": False})
     check.active.append(procedure)
-    check.joined_groups(routine, graph, selected)
-    check.visit(routine, graph, selected)
+    try:
+        check.joined_groups(routine, graph, selected)
+        check.visit(routine, graph, selected)
+    except DescriptorWindowUnsupported:
+        # A soft semantic decline must not hide source/namespace mutation
+        # after a cached scope check. Hard failures and budget exits stay hard.
+        check.publish(procedure, graph.authority_identity)
+        raise
+    check.publish(procedure, graph.authority_identity)
     return {"schema_version": DESCRIPTOR_WINDOW_VERSION, "procedure": procedure,
             "source_identity": analysis.inputs.identity(), "structured_identity": graph.identity,
             "analysis_identity": graph.authority_identity, "selected_node_ids": list(selected),
