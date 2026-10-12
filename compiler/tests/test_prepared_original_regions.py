@@ -371,6 +371,67 @@ def test_cold_and_validation_work_is_charged_and_parent_budget_is_hard(tmp_path)
         prepared.validate(analysis, ENTRY, selection, consume=exhausted)
 
 
+def test_large_calibration_data_keeps_full_identity_without_spending_statement_budget(tmp_path):
+    from compiler.numerical_contract import numerical_build_contract
+
+    _path, analysis, _provider, selection = fixture(tmp_path)
+    profile = {"numerical_contract": numerical_build_contract(), "retained_observations": list(range(70000))}
+    config = replace(CONFIG, profile=profile)
+    provider = NumericalPreparationProvider(analysis, options=OPTIONS, config=config, environment_root=ENTRY)
+    prepared = provider.prepare(analysis, ENTRY, selection)
+    prepared.validate(analysis, ENTRY, selection)
+    assert provider.public()["schema_version"] == 2
+    profile["retained_observations"][-1] += 1
+    with pytest.raises(CompilationError, match="policy changed"):
+        prepared.validate_configuration(options=OPTIONS, config=config, environment_root=ENTRY)
+    with pytest.raises(CompilationError):
+        prepared.validate(analysis, ENTRY, selection)
+
+
+@pytest.mark.parametrize("defect", ["nonfinite", "cycle", "object", "oversized"])
+def test_profile_identity_rejects_invalid_or_over_budget_data(tmp_path, monkeypatch, defect):
+    from compiler.numerical_contract import numerical_build_contract
+
+    _path, analysis, _provider, _selection = fixture(tmp_path)
+    profile = {"numerical_contract": numerical_build_contract()}
+    if defect == "nonfinite":
+        profile["raw"] = float("nan")
+    elif defect == "cycle":
+        profile["raw"] = profile
+    elif defect == "object":
+        profile["raw"] = object()
+    else:
+        monkeypatch.setattr(numerical_preparation, "_PROFILE_TEXT_LIMIT", 1024)
+        profile["raw"] = "x" * 2048
+    with pytest.raises(CompilationError, match="profile.*(identity|budget)"):
+        NumericalPreparationProvider(analysis, options=OPTIONS, config=replace(CONFIG, profile=profile),
+                                     environment_root=ENTRY)
+
+
+def test_budget_callback_cannot_change_already_fingerprinted_profile(tmp_path, monkeypatch):
+    from compiler.numerical_contract import numerical_build_contract
+
+    _path, analysis, _provider, _selection = fixture(tmp_path)
+    profile = {"numerical_contract": numerical_build_contract(), "raw": [1, 2, 3]}
+    config = replace(CONFIG, profile=profile)
+    provider = NumericalPreparationProvider(analysis, options=OPTIONS, config=config, environment_root=ENTRY)
+    fingerprint = numerical_preparation._profile_identity
+    state = {"profile_hashed": False}
+
+    def tracked(*args, **kwargs):
+        result = fingerprint(*args, **kwargs)
+        state["profile_hashed"] = True
+        return result
+
+    def mutate(_count):
+        if state.pop("profile_hashed", False):
+            profile["raw"][-1] += 1
+
+    monkeypatch.setattr(numerical_preparation, "_profile_identity", tracked)
+    with pytest.raises(CompilationError, match="profile changed"):
+        provider.validate(analysis, consume=mutate)
+
+
 def test_repeated_derivation_reuses_exact_token_without_avoiding_work(tmp_path):
     _path, analysis, provider, selection = fixture(tmp_path)
     cold, reused = [], []

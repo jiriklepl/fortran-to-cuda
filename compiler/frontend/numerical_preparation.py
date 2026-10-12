@@ -14,9 +14,10 @@ from hashlib import sha256
 
 from compiler.ir import CompilationError
 
-NUMERICAL_PREPARATION_VERSION = 1
+NUMERICAL_PREPARATION_VERSION = 2
 _SCAN_LIMIT = 65536
 _IDENTITY_TEXT_LIMIT = 4 * 1024 * 1024
+_PROFILE_TEXT_LIMIT = 32 * 1024 * 1024
 
 
 class NumericalPreparationUnsupported(CompilationError):
@@ -87,6 +88,29 @@ def _registry(analysis, name):
     return value
 
 
+def _profile_identity(profile, budget):
+    """Hash retained calibration data separately from executable source nodes."""
+    if profile is None:
+        return None
+    digest, size, charged = sha256(), 0, 0
+    budget.tick()
+    try:
+        encoder = json.JSONEncoder(sort_keys=True, separators=(",", ":"), allow_nan=False)
+        for chunk in encoder.iterencode(profile):
+            encoded = chunk.encode("ascii")
+            size += len(encoded)
+            if size > _PROFILE_TEXT_LIMIT:
+                raise CompilationError("original numerical preparation profile text budget exhausted")
+            blocks = size // 4096
+            while charged < blocks:
+                budget.tick()
+                charged += 1
+            digest.update(encoded)
+    except (TypeError, ValueError, OverflowError, RecursionError) as error:
+        raise CompilationError("invalid original numerical preparation profile identity") from error
+    return {"private_identity_kind": "calibration_profile_sha256_v1", "bytes": size, "sha256": digest.hexdigest()}
+
+
 def _configuration(options, config, environment_root, immutable_inputs, budget):
     from compiler.driver.options import CompilerOptions
     from compiler.offload.config import OffloadConfig
@@ -100,7 +124,16 @@ def _configuration(options, config, environment_root, immutable_inputs, budget):
         if not isinstance(resource, str) or not hasattr(token, "validate") or not isinstance(getattr(token, "identity", None), str):
             raise CompilationError("original numerical preparation requires typed immutable-input associations")
         immutable.append((resource, token.identity))
-    return _digest((options, config, environment_root, tuple(immutable)), budget)
+    # Observations remain fully authenticated on every demand, but their
+    # JSON fields are data, not additional executable statements. No profile
+    # acceptance flag or retained hash can substitute for this fresh digest.
+    profile = _profile_identity(config.profile, budget)
+    structural = _digest((options, replace(config, profile=None), environment_root, tuple(immutable)), budget)
+    # Budget consumers may run compiler callbacks. Rehash after their final
+    # invocation without external callbacks, including previously encoded rows.
+    if _profile_identity(config.profile, _Budget()) != profile:
+        raise CompilationError("calibration profile changed while accounting original numerical preparation")
+    return _digest((structural, profile), _Budget())
 
 
 def _walk(node, budget):
