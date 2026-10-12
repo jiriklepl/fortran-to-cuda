@@ -161,6 +161,34 @@ void invocation_reuse() {
     }
     std::puts("invocation reuse: changed data and bounds; fresh uploads; bounded idle resources");
 }
+void close_publication(bool host_boundary) {
+    double a[8],b[8]={},out[8]={};
+    for (int i=0;i<8;++i) a[i]=i+1;
+    fort_scope_t context=0; check(fort_scope_create(0,&context));
+    size_t extents[1]={8}; int64_t bounds[1]={-5};
+    fort_scope_layout layout{1,FORT_SCOPE_REAL64,8,a,extents,bounds,1};
+    fort_buffer_t ha=0,hb=0,ho=0;
+    check(fort_scope_register(context,1,1,&layout,1,&ha));
+    layout.host=b; check(fort_scope_register(context,2,1,&layout,0,&hb));
+    layout.host=out; check(fort_scope_register(context,3,1,&layout,0,&ho));
+    check(producer(context,ha,hb)); check(consumer(context,ha,hb,ho));
+    fort_scope_scratch_lease_v1 scratch{};
+    check(fort_scope_scratch_acquire_v1(context,256,&scratch));
+    check(fort_scope_scratch_release_v1(context,scratch.token));
+    if (host_boundary) {
+        fort_scope_access read{}; read.flags=FORT_SCOPE_READ_ALL;
+        check(fort_scope_host_begin(context,hb,&read));
+        for (int i=0;i<8;++i) assert(b[i]==2*a[i]);
+        check(fort_scope_host_end(context,hb));
+        fort_scope_stats stats{}; check(fort_scope_stats_get(context,&stats));
+        assert(stats.waits==1 && stats.downloads==1);
+    }
+    check(fort_scope_close(context));
+    for (int i=0;i<8;++i) assert(b[i]==2*a[i] && out[i]==3*a[i]);
+    int supported=0;
+    assert(cudaDeviceGetAttribute(&supported,cudaDevAttrMemoryPoolsSupported,0)==cudaSuccess);
+    std::printf("expected waits: %d\n",host_boundary || !supported ? 2 : 1);
+}
 void sections() {
     double host[256];
     for (int i=0;i<256;++i) host[i]=i;
@@ -319,7 +347,9 @@ int main(int argc,char **argv) {
     }
     if (argc>1 && !std::strcmp(argv[1],"probe")) return 0;
     if (argc>1 && !std::strncmp(argv[1],"pinned-",7)) { pinned_control(argv[1]); return 0; }
-    if (argc>1 && !std::strcmp(argv[1],"invocation-reuse")) invocation_reuse();
+    if (argc>1 && (!std::strcmp(argv[1],"close-publication") || !std::strcmp(argv[1],"publish-boundary")))
+        close_publication(!std::strcmp(argv[1],"publish-boundary"));
+    else if (argc>1 && !std::strcmp(argv[1],"invocation-reuse")) invocation_reuse();
     else if (argc>1 && !std::strcmp(argv[1],"coalesced-stencil")) coalesced_stencil();
     else if (argc>1 && !std::strcmp(argv[1],"sections")) sections(); else chain();
 }
@@ -372,3 +402,19 @@ def test_native_only_and_empty_scope_with_cuda_devices_hidden(cuda_runtime_execu
                             env={**os.environ, "CUDA_VISIBLE_DEVICES": "", "FORT_RUNTIME_TRACE": "1"}, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "initialize" not in result.stderr
+
+
+@pytest.mark.cuda
+@pytest.mark.parametrize("mode", ["close-publication", "publish-boundary"])
+def test_close_combines_stream_ordered_retirement_without_delaying_host_boundary(cuda_runtime_executable, mode):
+    import os
+    import re
+
+    result = subprocess.run([str(cuda_runtime_executable), mode], capture_output=True, text=True,
+                            env={**os.environ, "FORT_RUNTIME_TRACE": "1"}, timeout=30)
+    if result.returncode == 77:
+        pytest.skip(result.stderr.strip())
+    assert result.returncode == 0, result.stdout + result.stderr
+    expected = int(re.search(r"expected waits: (\d+)", result.stdout)[1])
+    assert len(re.findall(r"^FORT_SCOPED wait ", result.stderr, re.MULTILINE)) == expected
+    assert len(re.findall(r"^FORT_SCOPED download ", result.stderr, re.MULTILINE)) == 2
