@@ -2213,7 +2213,8 @@ class SourceEffects:
         if key in self._segments:
             return deepcopy(self._segments[key])
         analysis, _routine, guard = self._segment_projection(requested, identities,
-            include_entry=include_entry, capture_locals=capture_locals, descriptor_window=descriptor_window)
+            include_entry=include_entry, capture_locals=capture_locals, descriptor_window=descriptor_window,
+            _graph=graph if descriptor_window is None else None)
         summary = analysis.summarize(requested)
         summary["structured_identity"] = graph.identity
         summary["selected_node_ids"] = list(identities)
@@ -2435,7 +2436,8 @@ class SourceEffects:
         if graph.deferred_native_descendants(identities):
             raise CompilationError("deferred native sections require the exact whole original source selection")
         analysis, routine, _guard = self._segment_projection(requested, identities,
-            include_entry=include_entry, capture_locals=capture_locals, descriptor_window=descriptor_window)
+            include_entry=include_entry, capture_locals=capture_locals, descriptor_window=descriptor_window,
+            _graph=graph if descriptor_window is None and completion is None else None)
         # The section analyzer needs original descriptor declarations even
         # though this inner operation does not execute their entry expressions.
         specification = _part(self.routines[requested].scope.node, "Specification_Part")
