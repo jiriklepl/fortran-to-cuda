@@ -148,6 +148,7 @@ class ScopeBuilder:
         # admitted through the caller's lexical scope or source spans.
         self.region_owners = {self.entry.qualified: self.inline}
         self.coordinators, self.coordinator_reasons = {}, {}
+        self.coordinator_attempts = set()
         self.coordinator_visiting = []
         from compiler.scopes.ordinary_consumption import _ordinary_pair_state
         self._ordinary_pair_state = _ordinary_pair_state()
@@ -710,8 +711,10 @@ class ScopeBuilder:
             return self.coordinators[procedure]
         if self.inline_for(procedure) is not None or procedure in self.coordinator_visiting:
             return None
-        if len(self.coordinator_visiting) >= 8 or len(self.coordinators) >= self.analysis.procedure_limit:
+        if (len(self.coordinator_visiting) >= 8 or (procedure not in self.coordinator_attempts
+                and len(self.coordinator_attempts) >= self.analysis.procedure_limit)):
             return None
+        self.coordinator_attempts.add(procedure)
         routine = self.analysis.routines[procedure]
         if self.numerical(procedure):
             self.coordinators[procedure] = None
@@ -2463,19 +2466,39 @@ class ScopeBuilder:
                 dict(self.clones), dict(self.queries), dict(self.generated), dict(self.numerical_reasons),
                 dict(self.numerical_ir), dict(self.batch_chains), self.variants.checkpoint(), dict(self.view_generated),
                 dict(self.view_clones), dict(self.view_queries),
-                {procedure: (set(registry.used), dict(registry.original_numerical_regions))
+                {procedure: (registry, set(registry.used), dict(registry.original_numerical_regions))
                  for procedure, registry in self.region_owners.items()},
-                dict(self.runtime_provenance.records))
+                dict(self.runtime_provenance.records), dict(self.coordinators), dict(self.coordinator_reasons))
 
     def restore_scope_checkpoint(self, checkpoint):
         (self.outputs, self.edits, self.clones, self.queries,
          self.generated, self.numerical_reasons, self.numerical_ir, self.batch_chains, variants, self.view_generated,
-         self.view_clones, self.view_queries, registries, provenance) = checkpoint
+         self.view_clones, self.view_queries, registries, provenance, coordinators, coordinator_reasons) = checkpoint
         self.runtime_provenance.records.clear()
         self.runtime_provenance.records.update(provenance)
         self.variants.restore(variants)
+        # A negative availability result carries no generated capability. Keep
+        # it as before, including its diagnostic, rather than retrying it over
+        # a retained original-body companion for the same procedure.
+        unavailable = {procedure: None for procedure, value in self.coordinators.items() if value is None}
+        unavailable_reasons = {procedure: reason for procedure, reason in self.coordinator_reasons.items()
+                               if procedure in unavailable}
+        self.coordinators.clear()
+        self.coordinators.update(unavailable)
+        self.coordinators.update(coordinators)
+        self.coordinator_reasons.clear()
+        self.coordinator_reasons.update(unavailable_reasons)
+        self.coordinator_reasons.update(coordinator_reasons)
+        # Restore exact owners of retained capabilities. New empty registries
+        # retain spent work, which replacement registries must carry forward.
+        for procedure, (registry, _used, _regions) in registries.items():
+            spent = self.region_owners.get(procedure)
+            if spent is not None:
+                registry.attempts = max(registry.attempts, spent.attempts)
+                registry.operations = max(registry.operations, spent.operations)
+            self.region_owners[procedure] = registry
         for procedure, registry in self.region_owners.items():
-            used, regions = registries.get(procedure, ((), {}))
+            _original, used, regions = registries.get(procedure, (None, (), {}))
             registry.used = set(used)
             registry.original_numerical_regions = dict(regions)
         consumer = self._ordinary_pair_state.active

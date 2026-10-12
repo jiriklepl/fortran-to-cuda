@@ -124,7 +124,7 @@ def emit_borrowed_team_fixture(directory, **options):
     return paths, outputs, report, builder
 
 
-def borrowed_team_launch_counts(builder, report):
+def borrowed_team_launch_counts(builder, report, *, rejected_actual=None):
     """Bind launch expectations to complete original coverage and public units."""
     from fparser.two.utils import walk
 
@@ -152,6 +152,11 @@ def borrowed_team_launch_counts(builder, report):
         assert units[procedure] == 1
     calls = [call for call in report["resolved_calls"]
              if call["caller"] == ENTRY and call["procedure"] in units]
+    if rejected_actual is not None:
+        rejected, = [call for call in calls
+                     if call["actual_arguments"][0].replace(" ", "").lower() == rejected_actual]
+        assert rejected["procedure"] == SCALER
+        calls = [call for call in calls if call is not rejected]
     assert len(calls) == 6
     return root_launches, sum(units[call["procedure"]] for call in calls)
 

@@ -27,7 +27,9 @@ class InlineRegions:
         self.original_numerical_regions = {}
         self.collective_regions = set()
         self.computations = {}
-        self.attempts = self.operations = 0
+        previous = getattr(builder, "region_owners", {}).get(builder.entry.qualified)
+        self.attempts = previous.attempts if previous is not None else 0
+        self.operations = previous.operations if previous is not None else 0
         # These identities authorize projections made here, never an arbitrary
         # AST carrying a plausible span or fort_inline_region attribute.
         self.source_selections = {}
