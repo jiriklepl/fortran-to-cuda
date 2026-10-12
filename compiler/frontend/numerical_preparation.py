@@ -176,11 +176,21 @@ def _input_identity(analysis, budget):
 
 def _source_authority(analysis, procedure, selection, helpers, budget):
     """Authenticate consulted source namespaces and exact original bindings."""
+    from fparser.two.utils import Base
+
     from compiler.frontend.source_functions import _original, _validate_resolution, _validate_scope
     routine = analysis._require_original(procedure)
-    originals = {id(node): node for node in _walk(routine.execution, budget)}
-    if not selection or any(originals.get(id(node)) is not node for node in selection):
+    if not selection:
         raise CompilationError("original numerical preparation requires exact original selected nodes")
+    for node in selection:
+        budget.tick()
+        if not isinstance(node, Base):
+            raise CompilationError("original numerical preparation requires exact original selected nodes")
+    # The fresh structured-source lookup authenticates exact original objects,
+    # including joined groups, lexical aliases and accompanying comments. Its
+    # string-ID interface is deliberately excluded above: this consumer requires
+    # parser objects. Walking every unrelated expression in the owner again
+    # adds no membership authority and can exhaust a small region's budget.
     graph, identities = analysis._selected_source(procedure, selection)
     scope_ids = set()
 

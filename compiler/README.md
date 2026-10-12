@@ -1806,6 +1806,12 @@ missing-span rejection, while avoiding repeated subtree walks for enclosing
 branches and loop backedges. Cached lookups still spend the existing local and
 parent work budgets. Every new demand rebuilds the index; source authority,
 capture definitions and execution eligibility remain separate checks.
+Numerical preparation uses that fresh structured-source authority to check its
+exact original parser selection, rather than repeatedly scanning unrelated
+owner expressions for membership. String graph IDs, copied parser nodes and
+foreign selections do not grant numerical preparation authority. Selected
+expressions, helpers, complete source provenance and final publication checks
+still spend their existing budgets and revalidate every demand.
 
 Supported groups are a combined `PARALLEL DO`, or one flat `PARALLEL` containing
 up to 32 complete numerical worksharing `DO` units. The latter preserves every
