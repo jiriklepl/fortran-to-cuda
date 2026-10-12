@@ -1672,6 +1672,14 @@ limits. All operands of one unit share its lookup budget. Declaration
 dependencies and requested module-storage visibility retain original namespace
 authority. Syntax and lookup work also spend the existing aggregate source-scan
 budget; public diagnostics report both counts and the configured limits.
+One interval proof reuses successful authentication of each exact consulted
+namespace across its semantic units. It still charges every syntax visit and
+lookup transition. After the last charged operation, fresh namespace, source,
+routine and complete authority checks gate publication of the proof.
+Whole-procedure descriptor closures similarly share one source checkpoint and
+canonical authority across their bounded recursive graph walk. New graphs and
+cache writes remain local until fresh exit validation succeeds. Each subsequent
+query authenticates again; private projections retain their separate authority.
 Every reached native child still receives a complete descriptor/escape scan,
 and registered readonly functions retain their complete body proof. Unrelated
 internal siblings and declaration/import spellings are not executable lookup

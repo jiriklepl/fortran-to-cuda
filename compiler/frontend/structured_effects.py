@@ -381,13 +381,16 @@ def mapped_resource(resource, mapping):
     return None if actual is None else actual + resource[len(formal):]
 
 
-def descriptor_stability(analysis, requested):
+def descriptor_stability(analysis, requested, *, _structure=None):
     """Prove original allocatable descriptors unchanged on every source path.
 
     This proof is independent of payload effects and does not authorize an
     unallocated/present/aliased actual. Those checks remain at original callers.
     Unknown effects conservatively prevent borrowing any relevant descriptor.
     """
+    # Only SourceEffects' synchronous descriptor demand supplies this private
+    # lookup. Independent calls retain fresh public structure authentication.
+    structure = analysis.structure if _structure is None else _structure
     cache, active, unknown = {}, [], set()
 
     def prove(name):
@@ -399,7 +402,7 @@ def descriptor_stability(analysis, requested):
         if name in active or len(active) >= analysis.depth_limit or len(cache) + len(active) >= analysis.procedure_limit:
             unknown.add(name)
             return {root: ["bounded descriptor closure or recursion unavailable"] for root in resources}
-        graph = analysis.structure(name)
+        graph = structure(name)
         if not graph.available:
             unknown.add(name)
             return {root: ["bounded descriptor source skeleton unavailable"] for root in resources}
@@ -470,7 +473,7 @@ def descriptor_stability(analysis, requested):
         return resources
 
     resources = prove(requested)
-    graph = analysis.structure(requested)
+    graph = structure(requested)
     return {"procedure": requested, "structured_identity": graph.identity,
             "analysis_identity": graph.authority_identity,
             "complete": graph.available and requested not in unknown and all(not reasons for reasons in resources.values()),
