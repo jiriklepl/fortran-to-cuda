@@ -34,8 +34,8 @@ class CompilerOptions:
             raise CompilationError("memory model must be call or scoped")
         if self.memory_model == "scoped" and self.gpu_policy not in {"sections", "auto"}:
             raise CompilationError("scoped memory currently requires sections or auto GPU policy")
-        if self.scope_transfers not in {"direct", "pinned", "pipelined", "auto"}:
-            raise CompilationError("scope transfers must be direct, pinned, pipelined, or auto")
+        if self.scope_transfers not in {"direct", "pinned", "pipelined", "auto", "coalesced"}:
+            raise CompilationError("scope transfers must be direct, pinned, pipelined, auto, or coalesced")
         if self.scope_transfers != "direct" and self.memory_model != "scoped":
             raise CompilationError("nondefault scope transfers require scoped memory")
         if self.scope_execution not in {"bounded", "reached"}:

@@ -205,7 +205,7 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--gpu-policy {always,sections,auto,chunked,hybrid}` | `always` | Select the ordinary-call transfer and execution prototype |
 | `--calibration-profile FILE` | none | Explicit reusable hardware calibration for automatic decisions |
 | `--memory-model {call,scoped}` | `call` | Shared-buffer numerical entry prototype with `scoped`; requires sections/auto |
-| `--scope-transfers {direct,pinned,pipelined,auto}` | `direct` | Scoped transfer choice, separate from CPU/GPU placement |
+| `--scope-transfers {direct,pinned,pipelined,auto,coalesced}` | `direct` | Scoped transfer choice, separate from CPU/GPU placement |
 | `--scope-execution {bounded,reached}` | `bounded` | Opt-in reached ownership in original lexical procedures; requires `--form-scopes` |
 | `--analyze-effects` | off | Bounded native source effects without requiring GPU lowering; writes no artifacts |
 | `--form-scopes` | off | Emit bounded serial source scopes, original-module helpers, and public source/build manifests |
@@ -502,6 +502,17 @@ waiting for another caller to release budget, and releases it before native
 procedure execution. A pre-copy resource failure uses direct transfers with an
 explicit reason; a failure after enqueue poisons the context and cannot replay
 numerical work.
+
+The experimental `coalesced` control can replace multiple physical upload
+copies with one dense physical span when it adds at most 12.5% bytes and the
+whole canonical source resource is defined and host current. It uses no pinned staging and
+keeps original layouts and coordinates. Ineligible uploads use exact direct
+copies with `coalesced_upload_ineligible`; downloaded outputs remain exact.
+Actual upload counters include the extra bytes, while `upload_requested` and
+`upload_coalesced` trace events distinguish required and copied bytes.
+Cost-selected schedules retain exact direct transfers until coalesced costs
+are calibrated. This control does not change default or automatic transfer
+selection.
 
 `--scope-transfers` requires scoped memory for nondefault modes and remains
 independent of `--gpu-policy`. Forced `sections` can use `pinned` without a

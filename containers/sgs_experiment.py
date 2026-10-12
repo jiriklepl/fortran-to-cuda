@@ -189,7 +189,7 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
     """
     if threads < 1 or jobs < 1 or repeats < 1 or warmups < 0 or timeout < 1 or (steps is not None and steps < 1):
         raise ValueError("positive threads and valid jobs/repetition/time budgets required")
-    if scope_transfers not in {"direct", "pinned", "pipelined", "auto"}:
+    if scope_transfers not in {"direct", "pinned", "pipelined", "auto", "coalesced"}:
         raise ValueError("unsupported compiler scope transfer policy")
     app_root, compiler_root, pipeline_root = (Path(path).resolve(strict=True)
                                               for path in (app_root, compiler_root, pipeline_root))
@@ -437,7 +437,7 @@ def main(argv=None):
     parser.add_argument("--cuda-host")
     parser.add_argument("--cuda-runtime-dir")
     parser.add_argument("--gpu-arch")
-    parser.add_argument("--scope-transfers", choices=("direct", "pinned", "pipelined", "auto"), default="direct")
+    parser.add_argument("--scope-transfers", choices=("direct", "pinned", "pipelined", "auto", "coalesced"), default="direct")
     parser.add_argument("--build-arg", action="append", default=[])
     parser.add_argument("--jobs", type=int, default=8)
     parser.add_argument("--threads", type=int, default=4)

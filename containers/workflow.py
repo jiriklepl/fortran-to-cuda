@@ -348,7 +348,7 @@ def main():
             child.add_argument("--case", choices=("channel-simple", "channel"), default="channel-simple")
             child.add_argument("--config", type=Path)
             child.add_argument("--steps", type=int, help="Explicit smoke-run cap; default preserves original duration")
-            child.add_argument("--scope-transfers", choices=("direct", "pinned", "pipelined", "auto"), default="direct")
+            child.add_argument("--scope-transfers", choices=("direct", "pinned", "pipelined", "auto", "coalesced"), default="direct")
             child.add_argument("--threads", type=int, default=4)
             child.add_argument("--jobs", type=int, default=8)
             child.add_argument("--repeats", type=int, default=7)

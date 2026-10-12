@@ -30,7 +30,7 @@ class OffloadConfig:
             raise ValueError("Unknown GPU execution policy")
         if type(self.host_threads) is not int or self.host_threads < 1:
             raise ValueError("Host thread budget must be positive")
-        if self.scope_transfers not in {"direct", "pinned", "pipelined", "auto"}:
+        if self.scope_transfers not in {"direct", "pinned", "pipelined", "auto", "coalesced"}:
             raise ValueError("Unknown scope transfer mode")
         if self.scope_execution not in {"bounded", "reached"}:
             raise ValueError("Unknown source scope execution mode")
