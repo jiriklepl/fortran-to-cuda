@@ -184,6 +184,7 @@ def run_elmm(args):
                           "threads": args.threads, "jobs": args.jobs, "repeats": args.repeats,
                           "warmups": args.warmups, "architecture": args.arch,
                           "allow_native_variation": args.allow_native_variation,
+                          "scope_transfers": args.scope_transfers,
                           "output": str(args.output_dir / "experiment"), "work": str(args.work_dir),
                           "target_wall_ratio_to_original_native": .80, "executes_work": False}, indent=2))
         return
@@ -222,6 +223,7 @@ def run_elmm(args):
         "output": args.output_dir / "experiment", "work-dir": args.work_dir / "experiment",
         "case": args.case, "jobs": args.jobs, "threads": args.threads,
         "repeats": args.repeats, "warmups": args.warmups, "timeout": args.timeout,
+        "scope-transfers": args.scope_transfers,
         "nvcc": machine["toolchain"]["nvcc"], "cuda-host": machine["toolchain"]["cuda_host_cxx"],
         "gpu-arch": machine["toolchain"]["architecture"],
     }.items():
@@ -346,6 +348,7 @@ def main():
             child.add_argument("--case", choices=("channel-simple", "channel"), default="channel-simple")
             child.add_argument("--config", type=Path)
             child.add_argument("--steps", type=int, help="Explicit smoke-run cap; default preserves original duration")
+            child.add_argument("--scope-transfers", choices=("direct", "pinned", "pipelined", "auto"), default="direct")
             child.add_argument("--threads", type=int, default=4)
             child.add_argument("--jobs", type=int, default=8)
             child.add_argument("--repeats", type=int, default=7)

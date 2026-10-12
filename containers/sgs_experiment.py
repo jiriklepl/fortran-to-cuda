@@ -180,7 +180,7 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
                    native_library_dir, output, work_dir=None, config=None,
                    case="channel-simple", gpu_options=None, build_args=(), jobs=8,
                    threads=4, steps=None, timeout=900, repeats=7, warmups=1,
-                   allow_native_variation=False):
+                   allow_native_variation=False, scope_transfers="direct"):
     """Run one fresh paired experiment; return the immutable raw JSON receipt.
 
     ``output`` and ``work_dir`` must be absent. Default work is output/work.
@@ -189,6 +189,8 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
     """
     if threads < 1 or jobs < 1 or repeats < 1 or warmups < 0 or timeout < 1 or (steps is not None and steps < 1):
         raise ValueError("positive threads and valid jobs/repetition/time budgets required")
+    if scope_transfers not in {"direct", "pinned", "pipelined", "auto"}:
+        raise ValueError("unsupported compiler scope transfer policy")
     app_root, compiler_root, pipeline_root = (Path(path).resolve(strict=True)
                                               for path in (app_root, compiler_root, pipeline_root))
     # Preserve virtual-environment interpreter paths: resolving their symlinks
@@ -244,7 +246,7 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
                "started_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                "paths": {"app_root": str(app_root), "compiler_root": str(compiler_root),
                          "pipeline_root": str(pipeline_root), "work_dir": str(work), "output": str(output)},
-               "selection": {"entry": contract["entry"], "gpu_policy": "sections", "scope_transfers": "direct",
+               "selection": {"entry": contract["entry"], "gpu_policy": "sections", "scope_transfers": scope_transfers,
                              "scope_execution": "bounded", "host_threads": threads},
                "protocol": {"threads": threads, "jobs": jobs, "warmups": warmups, "repetitions": repeats,
                             "rotate": True, "explicit_steps": steps, "timeout_seconds": timeout,
@@ -435,6 +437,7 @@ def main(argv=None):
     parser.add_argument("--cuda-host")
     parser.add_argument("--cuda-runtime-dir")
     parser.add_argument("--gpu-arch")
+    parser.add_argument("--scope-transfers", choices=("direct", "pinned", "pipelined", "auto"), default="direct")
     parser.add_argument("--build-arg", action="append", default=[])
     parser.add_argument("--jobs", type=int, default=8)
     parser.add_argument("--threads", type=int, default=4)
