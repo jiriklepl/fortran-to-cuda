@@ -219,6 +219,12 @@ class JoinedTeam(StructuredScope):
         flush()
         return result
 
+    def validates_numerical_fallback_when_reached(self, call, operation):
+        """Only our exact numerical/native pair has a reached validation path."""
+        return (self.guarded.get(id(call.node)) is operation
+                and any(candidate is call for candidate, _proof, _span in self.numerical_units)
+                and any(candidate is operation for candidate in self.native))
+
     def public(self):
         result = super().public()
         result['joined_team'] = {'schema_version': 1, 'completion': self.completion.public(),
@@ -236,6 +242,12 @@ class JoinedTeam(StructuredScope):
                 'numerical_unit_limit': 32,
                 'effect_budget_role': 'each reached proof; expanded effects are not summed across ownership'},
             'native_abi': 'unchanged original body; absent borrowed controls are never read',
+            'numerical_fallback_definitions': {
+                'entry_whole_requirement': 'deferred only for the exact guarded numerical/native pair',
+                'gpu': 'exact query definitions validated before execution',
+                'native': 'conservative native definitions validated before host_begin when selected',
+                'failure': 'publish and disable before the original DO; continue the suffix once',
+                'additional_definition_authority': False},
             'failure_policy': 'publish and continue once before execution; never replay a completed prefix'}
         for operation, public in zip(self.native, result['native_operations'], strict=True):
             if hasattr(operation, 'indirect_sections'):

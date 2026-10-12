@@ -54,7 +54,16 @@ def summarize(scope, *, entry_undefined=()):
         effects, kills, writes = builder.roots_for(call)
         fallback = scope.guarded.get(id(call.node))
         if fallback is not None:
-            native(fallback, whole, undefined)
+            from compiler.scopes.joined_team import JoinedTeam
+
+            # A joined numerical fallback is selected and definition-validated
+            # at its original DO, before any native host access. Its coarse
+            # alternative must not impose whole-input coverage on the GPU
+            # query, which validates its own exact accesses when reached.
+            # No other native operation can defer its entry requirement here.
+            if not (isinstance(scope, JoinedTeam)
+                    and scope.validates_numerical_fallback_when_reached(call, fallback)):
+                native(fallback, whole, undefined)
         if call.region is not None:
             # Coverage comes from the original assignment syntax, not lowered
             # coordinates or an enclosing box of numerical accesses.

@@ -639,6 +639,31 @@ module stability or be registered before that window's fresh allocation,
 original-bound, layout and alias guards. The default remains `"invocation"`.
 Neither lifetime choice derives initialized payload from allocation presence.
 
+An optional capture `expected_descriptor` has exactly `lower_bounds` and
+`extents`: rank-matched lists of signed 64-bit integer lower bounds and
+nonnegative signed 64-bit extents. For example,
+`{"lower_bounds": [-3], "extents": [12]}` constrains the original reached
+descriptor. Original lexical owners check it after separate allocation,
+contiguity and integer ABI checks, before registration or numerical queries.
+Borrowed module calls check the original actual before dummy association;
+rebased dummy bounds do not replace this check. A mismatch publishes and closes
+the current owner and executes the original suffix once, without replay or
+reopening. Expectations do not establish initialized values or replace
+`initialized`/`sections` evidence. Synthetic owners, qualified collective owners
+and opaque native metadata currently reject this capture field. The additive public
+`capture_descriptor_expectations` version 1 capability and per-resource guard
+records distinguish enforcing compilers from older readers that ignore unknown
+fact keys; clients using this field must require that capability for generated
+owners.
+
+Inside an original joined team, a numerical DO and its exact native alternative
+validate their input definitions when selected. A conservative whole-array native
+fallback does not impose that requirement before an exact GPU query. Selecting
+the native alternative still validates its original read and preservation
+requirements before host access; failure publishes and closes ownership before
+the original DO and remaining suffix run once. This deferral adds no definitions
+and does not apply to other native operations or boundary inspectors.
+
 The compiler selects bounded source spans, generates source helpers in their
 original modules, and passes explicit context/root handles down call-only helper
 paths. Original native procedures remain available. Native operations execute

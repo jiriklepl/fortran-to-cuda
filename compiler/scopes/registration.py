@@ -16,6 +16,50 @@ class RegistrationCode:
     prepare: tuple[str, ...]
 
 
+def expected_descriptor(fact, rank):
+    """Validate an external descriptor constraint, without defining payload."""
+    if "expected_descriptor" not in fact:
+        return None
+    expected = fact["expected_descriptor"]
+    if (not 1 <= rank <= 15 or not isinstance(expected, dict)
+            or set(expected) != {"lower_bounds", "extents"}
+            or any(not isinstance(expected[key], list) or len(expected[key]) != rank
+                   for key in ("lower_bounds", "extents"))
+            or any(type(value) is not int or not -(2**63) <= value < 2**63
+                   for value in expected["lower_bounds"])
+            or any(type(value) is not int or not 0 <= value < 2**63 for value in expected["extents"])):
+        raise CompilationError("expected capture descriptor requires rank-matched signed64 lower bounds "
+                               "and nonnegative signed64 extents")
+    return expected
+
+
+def expected_descriptor_conditions(fact, rank, name):
+    """Render inquiries only for an already allocated, contiguous ABI-safe array."""
+    expected = expected_descriptor(fact, rank)
+    if expected is None:
+        return ()
+
+    def literal(value):
+        return "(-9223372036854775807_c_int64_t - 1_c_int64_t)" if value == -(2**63) else f"{value}_c_int64_t"
+
+    return tuple(condition for axis, (lower, extent) in enumerate(
+        zip(expected["lower_bounds"], expected["extents"], strict=True), 1)
+        for condition in (f"lbound({name}, {axis}, kind=c_int64_t) == {literal(lower)}",
+                          f"size({name}, {axis}, kind=c_int64_t) == {literal(extent)}"))
+
+
+def expected_descriptor_public(fact, rank):
+    expected = expected_descriptor(fact, rank)
+    return {} if expected is None else {
+        "expected_descriptor": {key: list(values) for key, values in expected.items()},
+        "descriptor_expectation_guard": {
+            "checked_at": "original reached descriptor after allocation, contiguity and integer ABI guards; "
+                          "before registration, query and borrowed dummy association",
+            "reason": "capture expected descriptor mismatch",
+            "fallback": "publish and close current owner; original suffix once; no reopening or prefix replay",
+            "definition_authority": False}}
+
+
 def build_registration(fact, rank, handle, prefix, key, layout, *, context="fort_context",
                        status="fort_status", on_error=("return",), parameters=None,
                        logical_lower_bounds=None):

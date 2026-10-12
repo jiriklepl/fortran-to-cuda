@@ -865,6 +865,9 @@ class ScopeBuilder:
         lifetime = fact.get("lifetime", "invocation")
         if not isinstance(lifetime, str) or lifetime not in {"invocation", "selected_window"}:
             raise CompilationError("unsupported scoped capture lifetime: " + binding.root)
+        from compiler.scopes.registration import expected_descriptor
+
+        expected_descriptor(fact, binding.rank)
         if fact["initialized"] == "sections":
             boxes = fact.get("sections")
             if not isinstance(boxes,list) or len(boxes) > 32:
@@ -1878,6 +1881,9 @@ class ScopeBuilder:
             handles[root] = "fort_handle_" + str(i)
             layouts[root] = "fort_layout_" + str(i)
             fact = self.capture(binding)
+            if "expected_descriptor" in fact:
+                raise CompilationError("expected capture descriptor requires original lexical caller guards; "
+                                       "synthetic owner is unsupported")
             if "source_sections" in fact or fact.get("requires_registered_handle"):
                 raise CompilationError("source activation sections require original lexical caller registration")
             flags[root] = int(fact["initialized"] == "whole")
@@ -2644,6 +2650,11 @@ class ScopeBuilder:
             self.outputs["scoped-runtime.json"] = json.dumps(self.runtime,indent=2)+"\n"
         report = {
             "schema_version":1, "entry":self.entry.qualified,
+            "capture_descriptor_expectations": {
+                "schema_version": 1, "enforcement": "original_descriptor_before_registration",
+                "definition_authority": False,
+                "supported_consumers": ["original_lexical", "original_module_companion"],
+                "unsupported_consumers": ["synthetic_owner", "qualified_collective_owner"]},
             "scope_execution": self.config.scope_execution,
             **({"reached_plan_schema_version": 1} if self.config.scope_execution == "reached" else {}),
             **({"reached_window_discovery": self.reached_window_discovery}
