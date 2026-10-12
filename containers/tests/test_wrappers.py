@@ -305,13 +305,13 @@ def test_docker_compatibility_command_uses_podman_flags(sandbox):
     stub("docker")
     stub("podman")
     result = invoke("run-docker.sh", "run-elmm", overrides={
-        "STUB_VERSION": "podman version 5.4.0", "CUDA_VISIBLE_DEVICES": "0,1", "SLURM_JOB_ID": "123",
+        "STUB_VERSION": "podman version 5.4.0", "CUDA_VISIBLE_DEVICES": "GPU-one,GPU-two", "SLURM_JOB_ID": "123",
     })
     assert result.returncode == 0, result.stderr
     record = json.loads(capture.read_text())
     assert Path(record["executable"]).name == "docker"
     assert "--gpus" not in record["argv"]
-    assert values(record["argv"], "--device") == ["nvidia.com/gpu=0", "nvidia.com/gpu=1"]
+    assert values(record["argv"], "--device") == ["nvidia.com/gpu=GPU-one", "nvidia.com/gpu=GPU-two"]
     assert values(record["argv"], "--unsetenv") == ["NVIDIA_VISIBLE_DEVICES", "CUDA_VISIBLE_DEVICES"]
     assert values(record["argv"], "--userns") == (["keep-id"] if os.getuid() else [])
 
@@ -356,27 +356,41 @@ def test_rootful_podman_keeps_existing_user_namespace_behavior(sandbox):
     assert "--userns" not in argv
 
 
+@pytest.mark.parametrize("engine,version", [
+    ("docker", "Docker version 28.0.0"), ("podman", "podman version 5.4.0"),
+    ("docker", "podman version 5.4.0"),
+])
 @pytest.mark.parametrize("job_variable,selection", [
     ("SLURM_JOB_ID", "0"), ("SLURM_JOBID", "0,1"), ("SLURM_JOB_ID", "GPU-selected,1"),
 ])
-def test_real_docker_rejects_ambiguous_slurm_gpu_ordinals(sandbox, job_variable, selection):
+def test_container_engine_rejects_ambiguous_slurm_gpu_ordinals(sandbox, engine, version, job_variable, selection):
     _, _, capture, stub, invoke = sandbox
-    stub("docker")
+    stub(engine)
     result = invoke("run-docker.sh", "run-elmm", overrides={
-        job_variable: "123", "CUDA_VISIBLE_DEVICES": selection,
+        job_variable: "123", "CUDA_VISIBLE_DEVICES": selection, "STUB_VERSION": version,
     })
     assert result.returncode != 0 and "GPU_DEVICES=GPU-UUID" in result.stderr
     assert not capture.exists()
 
 
-def test_real_docker_slurm_accepts_explicit_gpu_uuid(sandbox):
+@pytest.mark.parametrize("engine,version", [
+    ("docker", "Docker version 28.0.0"), ("podman", "podman version 5.4.0"),
+    ("docker", "podman version 5.4.0"),
+])
+def test_container_engine_slurm_accepts_explicit_gpu_uuid(sandbox, engine, version):
     _, _, capture, stub, invoke = sandbox
-    stub("docker")
+    stub(engine)
     result = invoke("run-docker.sh", "run-elmm", overrides={
         "SLURM_JOB_ID": "123", "CUDA_VISIBLE_DEVICES": "0", "GPU_DEVICES": "GPU-selected",
+        "STUB_VERSION": version,
     })
     assert result.returncode == 0, result.stderr
-    assert values(json.loads(capture.read_text())["argv"], "--gpus") == ['"device=GPU-selected"']
+    argv = json.loads(capture.read_text())["argv"]
+    if "podman" in version:
+        assert values(argv, "--device") == ["nvidia.com/gpu=GPU-selected"]
+        assert "--gpus" not in argv
+    else:
+        assert values(argv, "--gpus") == ['"device=GPU-selected"']
 
 
 def test_build_preserves_docker_compatibility_launcher(sandbox):

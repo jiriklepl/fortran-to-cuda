@@ -76,6 +76,29 @@ class PortableSGSChecks(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "diagnostic"):
             runner.summarize(rows)
 
+    def test_averaged_fields_are_required_when_native_emits_them(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "out.vtk").touch()
+            (root / "avg.vtk").touch()
+            reference = runner.read_outputs(root, lambda path: path.name)
+            self.assertEqual(set(reference), {"out.vtk", "avg.vtk"})
+            (root / "avg.vtk").unlink()
+            observed = runner.read_outputs(root, lambda path: path.name)
+            with self.assertRaisesRegex(ValueError, "output files differ"):
+                runner.compare_outputs(reference, observed, lambda *a, **kw: {"passed": True})
+
+    def test_averaged_only_mismatch_fails_complete_output_validation(self):
+        reference = {"out.vtk": 1., "avg.vtk": 2.}
+        observed = {"out.vtk": 1., "avg.vtk": 3.}
+        def compare(a, b, *, atol, rtol):
+            self.assertEqual((atol, rtol), (1e-6, 1e-5))
+            return {"passed": a == b}
+        result = runner.compare_outputs(reference, observed, compare)
+        self.assertFalse(result["passed"])
+        self.assertTrue(result["files"]["out.vtk"]["passed"])
+        self.assertFalse(result["files"]["avg.vtk"]["passed"])
+
 
 if __name__ == "__main__":
     unittest.main()

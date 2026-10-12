@@ -65,9 +65,9 @@ else
         run-elmm|elmm|run-benchmarks|benchmark) selection=all; requested=true ;;
     esac
 fi
-if [[ "$ENGINE_KIND" == docker && -n "${SLURM_JOB_ID:-${SLURM_JOBID:-}}" &&
+if [[ -n "${SLURM_JOB_ID:-${SLURM_JOBID:-}}" &&
       "$selection" =~ (^|,)[0-9]+(,|$) ]]; then
-    fail "SLURM GPU ordinals may differ from Docker device IDs; set GPU_DEVICES=GPU-UUID for the allocated GPU."
+    fail "SLURM GPU ordinals may differ from Docker/CDI device IDs; set GPU_DEVICES=GPU-UUID for the allocated GPU."
 fi
 if [[ "$requested" == true ]]; then
     case "$selection" in
