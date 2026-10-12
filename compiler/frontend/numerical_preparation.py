@@ -257,8 +257,8 @@ def _source_authority(analysis, procedure, selection, helpers, budget):
 def _environment_required(analysis, root, budget):
     from compiler.frontend.native_environment import intrinsic_export
     from compiler.frontend.source_functions import _validate_scope
-    checked = set()
-    syntax = analysis._source_syntax.checkpoint()
+    checked = {}
+    syntax = analysis._require_original_global()
 
     def scope_authority(scope):
         while scope is not None and id(scope) not in checked:
@@ -266,7 +266,7 @@ def _environment_required(analysis, root, budget):
             for _binding in scope.bindings:
                 budget.tick()
             _validate_scope(analysis, scope, track=False)
-            checked.add(id(scope))
+            checked[id(scope)] = scope
             scope = scope.parent
 
     # Environment lookup may consult original reexports. Authenticate their
@@ -279,9 +279,11 @@ def _environment_required(analysis, root, budget):
     def publish(required):
         # A budget callback can mutate syntax after its containing module was
         # checked. Recheck before every return without retaining either memo.
-        final_syntax = analysis._source_syntax.checkpoint()
+        for scope in checked.values():
+            _validate_scope(analysis, scope, track=False)
+        final_syntax = analysis._require_original_global()
         for procedure in sorted(visited | {root}):
-            analysis._require_original(procedure, _syntax=final_syntax)
+            analysis._require_original_routine(procedure, _syntax=final_syntax)
         return required
 
     while pending:
@@ -290,7 +292,7 @@ def _environment_required(analysis, root, budget):
             continue
         if len(visited) >= analysis.procedure_limit:
             return publish(True)
-        routine = analysis._require_original(name, _syntax=syntax)
+        routine = analysis._require_original_routine(name, _syntax=syntax)
         scope_authority(routine.scope)
         visited.add(name)
         for node in _source_calls(routine.execution, budget):

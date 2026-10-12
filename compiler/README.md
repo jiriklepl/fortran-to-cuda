@@ -1847,8 +1847,12 @@ Source, scope and numerical validation retain their existing work limits.
 Invocation-wide IEEE-state queries visit original lexical statements and
 single-line IF actions to find calls. Expression payloads retain their separate
 source and numerical checks without adding work to this call-only search.
-Each query shares syntax validation across callees, then uses a fresh checkpoint
-to revalidate its visited source before publishing the result.
+Each query authenticates configured files, source spans and module syntax once
+at entry, then checks each visited routine against that immediate checkpoint.
+Before every Boolean result, it revalidates consulted namespaces and takes a
+fresh global checkpoint to check all visited routines again. This avoids
+repeating whole-input authentication for every callee; public source demands
+remain fresh, and no successful authentication is cached across queries.
 Original liveness contexts reuse prepared-span aggregates only within one query.
 The index retains expression descendants, unmapped include coordinates and
 missing-span rejection, while avoiding repeated subtree walks for enclosing

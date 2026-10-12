@@ -1,5 +1,7 @@
 """Environment scans retain original CALLs without walking arithmetic trees."""
 
+from copy import copy
+
 import pytest
 from fparser.common.readfortran import FortranStringReader
 from fparser.two import Fortran2003 as F
@@ -178,7 +180,17 @@ def test_environment_queries_check_each_module_twice_without_rechecking_overlapp
     modules = tuple(scope.node for scope in analysis.modules.values())
     snapshot_type = type(analysis._source_syntax)
     original_layout = snapshot_type._layout
-    layouts = []
+    original_verify = analysis.inputs.verify
+    original_require = analysis._require_original_routine
+    layouts, verifications, routines = [], [], []
+
+    def verify():
+        verifications.append(True)
+        original_verify()
+
+    def require(procedure, *, _syntax):
+        routines.append(procedure)
+        return original_require(procedure, _syntax=_syntax)
 
     def layout(snapshot, node):
         if snapshot is analysis._source_syntax:
@@ -186,10 +198,36 @@ def test_environment_queries_check_each_module_twice_without_rechecking_overlapp
         return original_layout(snapshot, node)
 
     monkeypatch.setattr(snapshot_type, "_layout", layout)
+    monkeypatch.setattr(analysis.inputs, "verify", verify)
+    monkeypatch.setattr(analysis, "_require_original_routine", require)
     for demands in (1, 2):
         assert not numerical_preparation._environment_required(analysis, ENTRY, numerical_preparation._Budget())
+        assert len(verifications) == 2 * demands
+        assert routines.count(ENTRY) == 2 * demands
+        assert routines.count("environment_route::update_mode") == 2 * demands
         assert len(layouts) == 2 * demands * len(modules)
         assert all(sum(node is module for node in layouts) == 2 * demands for module in modules)
+
+
+def test_public_original_requirement_keeps_fresh_global_and_exact_routine_checks(tmp_path, monkeypatch):
+    _path, analysis, _provider, _selection = environment_fixture(tmp_path, ieee=False)
+    original_verify = analysis.inputs.verify
+    verifications = []
+
+    def verify():
+        verifications.append(True)
+        original_verify()
+
+    monkeypatch.setattr(analysis.inputs, "verify", verify)
+    for procedure in (ENTRY, "environment_route::update_mode"):
+        assert analysis._require_original(procedure) is analysis.routines[procedure]
+    assert len(verifications) == 2
+
+    routine = analysis.routines["environment_route::update_mode"]
+    routine.execution = copy(routine.execution)
+    with pytest.raises(CompilationError, match="original source-backed procedure authority"):
+        analysis._require_original(routine.qualified)
+    assert len(verifications) == 3
 
 
 @pytest.mark.parametrize("route", ["later_callee", "early_ieee", "procedure_limit", "operation_limit"])
@@ -199,10 +237,10 @@ def test_budget_callback_syntax_mutation_cannot_publish_any_environment_result(t
         setattr(analysis, route, 1)
     call, = walk(analysis.routines["environment_route::update_mode"].execution, F.Call_Stmt)
     assignment, = walk(analysis.routines[ENTRY].execution, F.Assignment_Stmt)
-    original_require = analysis._require_original
+    original_require = analysis._require_original_routine
     root_checked, changed, charged = False, False, []
 
-    def require(procedure, *, _syntax=None):
+    def require(procedure, *, _syntax):
         nonlocal root_checked
         routine = original_require(procedure, _syntax=_syntax)
         if procedure == ENTRY:
@@ -223,7 +261,7 @@ def test_budget_callback_syntax_mutation_cannot_publish_any_environment_result(t
                 # reject a changed original body before publishing that result.
                 assignment.items = (*assignment.items[:2], F.Int_Literal_Constant("0"))
 
-    monkeypatch.setattr(analysis, "_require_original", require)
+    monkeypatch.setattr(analysis, "_require_original_routine", require)
     with pytest.raises(CompilationError, match="original.*authority") as failure:
         numerical_preparation._environment_required(analysis, ENTRY, numerical_preparation._Budget(consume))
     assert not isinstance(failure.value, NumericalPreparationUnsupported)
@@ -232,16 +270,89 @@ def test_budget_callback_syntax_mutation_cannot_publish_any_environment_result(t
     assert all(amount == 1 for amount in charged)
 
 
-@pytest.mark.parametrize("change", ["module", "callee"])
+@pytest.mark.parametrize("change", ["source", "module", "provenance"])
+def test_mid_query_global_authority_mutation_cannot_publish_early_true(tmp_path, monkeypatch, change):
+    path, analysis, _provider, _selection = environment_fixture(tmp_path)
+    original_require = analysis._require_original_routine
+    root_checked, changed = False, False
+
+    def require(procedure, *, _syntax):
+        nonlocal root_checked
+        routine = original_require(procedure, _syntax=_syntax)
+        if procedure == ENTRY:
+            root_checked = True
+        return routine
+
+    def consume(_amount):
+        nonlocal changed
+        if not root_checked or changed:
+            return
+        changed = True
+        if change == "source":
+            path.write_text(path.read_text() + "! changed during environment query\n")
+        elif change == "module":
+            declaration = next(node for node in walk(analysis.modules["environment_exports"].node,
+                                                     F.Type_Declaration_Stmt) if "marker" in str(node).lower())
+            literal, = walk(declaration, F.Int_Literal_Constant)
+            literal.items = ("2", literal.items[1])
+        else:
+            call, = walk(analysis.routines["environment_route::update_mode"].execution, F.Call_Stmt)
+            call.item.fort_original_span = (1, 1)
+
+    monkeypatch.setattr(analysis, "_require_original_routine", require)
+    with pytest.raises(CompilationError) as failure:
+        numerical_preparation._environment_required(analysis, ENTRY, numerical_preparation._Budget(consume))
+    assert not isinstance(failure.value, NumericalPreparationUnsupported)
+    assert changed
+
+
+@pytest.mark.parametrize("change", ["reexport", "binding"])
+def test_mid_query_consulted_namespace_mutation_cannot_publish_early_true(tmp_path, monkeypatch, change):
+    _path, analysis, _provider, _selection = environment_fixture(tmp_path)
+    original_require = analysis._require_original_routine
+    root_checked, changed = False, False
+
+    def require(procedure, *, _syntax):
+        nonlocal root_checked
+        routine = original_require(procedure, _syntax=_syntax)
+        if procedure == ENTRY:
+            root_checked = True
+        return routine
+
+    def consume(_amount):
+        nonlocal changed
+        if root_checked and not changed:
+            changed = True
+            scope = analysis.modules["environment_exports"]
+            if change == "reexport":
+                # Both names require the same True result, but changed
+                # namespace authority still cannot publish that result.
+                scope.intrinsic_procedures["exposed"] = "$intrinsic::ieee_exceptions::ieee_get_halting_mode"
+            else:
+                scope.bindings["marker"] = copy(scope.bindings["marker"])
+
+    monkeypatch.setattr(analysis, "_require_original_routine", require)
+    with pytest.raises(CompilationError, match="original resolution authority changed") as failure:
+        numerical_preparation._environment_required(analysis, ENTRY, numerical_preparation._Budget(consume))
+    assert not isinstance(failure.value, NumericalPreparationUnsupported)
+    assert changed
+
+
+@pytest.mark.parametrize("change", ["module", "callee", "imports", "binding"])
 def test_each_environment_query_rechecks_original_syntax_from_a_fresh_checkpoint(tmp_path, change):
     _path, analysis, _provider, _selection = environment_fixture(tmp_path, ieee=False)
     assert not numerical_preparation._environment_required(analysis, ENTRY, numerical_preparation._Budget())
     if change == "module":
         statement, = walk(analysis.modules["environment_exports"].node, F.Module_Stmt)
         statement.items = (*statement.items[:-1], F.Name("changed_exports"))
-    else:
+    elif change == "callee":
         statement, = walk(analysis.routines[ENTRY].execution, F.Assignment_Stmt)
         statement.items = (*statement.items[:2], F.Int_Literal_Constant("0"))
+    elif change == "imports":
+        analysis.modules["environment_route"].imports["set_mode"] = ("environment_exports", "different_export")
+    else:
+        scope = analysis.modules["environment_exports"]
+        scope.bindings["marker"] = copy(scope.bindings["marker"])
     with pytest.raises(CompilationError, match="original.*authority") as failure:
         numerical_preparation._environment_required(analysis, ENTRY, numerical_preparation._Budget())
     assert not isinstance(failure.value, NumericalPreparationUnsupported)
