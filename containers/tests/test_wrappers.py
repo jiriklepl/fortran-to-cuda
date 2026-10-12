@@ -349,16 +349,26 @@ def test_node_payload_reaches_actual_apptainer_wrapper(sandbox):
 
 
 def test_docker_cpu_command_has_writable_output_without_tty(sandbox):
-    _, env, capture, stub, invoke = sandbox
+    tmp, env, capture, stub, invoke = sandbox
     stub("docker")
-    result = invoke("run-docker.sh", "doctor")
+    marker = tmp / "must-not-run"
+    command = ["doctor", "--label", f"literal & $(touch {marker})"]
+    result = invoke("run-docker.sh", *command)
     assert result.returncode == 0, result.stderr
     argv = json.loads(capture.read_text())["argv"]
     assert not any(flag in argv for flag in ("-it", "-t", "--tty", "--gpus"))
     assert values(argv, "--volume") == [f"{env['OUTPUT_DIR']}:/output"]
     assert "WORK_DIR=/output/work" in values(argv, "--env")
     assert "NVIDIA_VISIBLE_DEVICES=void" in values(argv, "--env")
-    assert argv[-1] == "doctor"
+    assert argv[-len(command):] == command
+    assert "Container runtime: docker (docker)" in result.stdout
+    assert "Image: fortran-abomination:latest" in result.stdout
+    assert f"Output directory: {env['OUTPUT_DIR']} -> /output" in result.stdout
+    assert f"User ID: {os.getuid()}:{os.getgid()}" in result.stdout
+    announced = next(line.removeprefix("Command:") for line in result.stdout.splitlines()
+                     if line.startswith("Command:"))
+    assert shlex.split(announced) == command
+    assert not marker.exists()
 
 
 def test_docker_sources_are_explicit_read_only_overrides(sandbox):
