@@ -128,8 +128,8 @@ def generate_cpp(function: FunctionIR, plan: ExecutionPlan, abi: tuple[AbiArgume
         "namespace generated_kernels {",
         "using namespace generated_kernels::indexing;",
         "",
-        'extern "C" void cpp_start_hot() {}',
-        'extern "C" void cpp_finish_hot() {}',
+        f'extern "C" void cpp_{function.name}_start_hot() {{}}',
+        f'extern "C" void cpp_{function.name}_finish_hot() {{}}',
         "",
         f'extern "C" void cpp_{function.name}(',
     ]

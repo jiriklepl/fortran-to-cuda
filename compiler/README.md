@@ -354,8 +354,13 @@ general constant folding and external module resolution remain unsupported.
 The ABI preserves the original dummy argument order, public names, and
 `cpp_<procedure>` C symbol. Array extents follow their array pointer in dimension
 order. The generated bridge keeps `knd` mapped to binary64 and retains
-`start_hot`/`finish_hot` timing hooks. Profiling starts disabled: `start_hot` resets
-and enables collection, and `finish_hot` reports and disables it. Ordinary
+`start_hot`/`finish_hot` timing hooks. The C timing exports are
+`cpp_<procedure>_start_hot` and
+`cpp_<procedure>_finish_hot`; the public Fortran hook names remain unchanged.
+Numerical CUDA kernels have translation-unit-local linkage, so independently
+generated entries link without adapter-side symbol rewriting.
+Profiling starts disabled: `start_hot` resets and enables collection, and
+`finish_hot` reports and disables it. Ordinary
 execution creates no profiling events or phase-by-phase profiling barriers.
 Profiled public CUDA calls serialize through a shared profiling lock. Unprofiled
 calls do not take that lock. The timing hooks delimit quiescent batches: start

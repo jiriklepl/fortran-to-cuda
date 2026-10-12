@@ -140,7 +140,7 @@ def generate_kernel(region: ParallelRegion, *, array_views: bool = False) -> lis
     parameters.append("std::size_t fort_internal_total")
     if schedule.tile_sizes:
         parameters.append("std::size_t fort_internal_tile_volume")
-    lines = [f"__global__ void {kernel_name(region)}("]
+    lines = [f"static __global__ void {kernel_name(region)}("]
     lines.extend(
         indent([parameter + ("," if index < len(parameters) - 1 else "") for index, parameter in enumerate(parameters)])
     )

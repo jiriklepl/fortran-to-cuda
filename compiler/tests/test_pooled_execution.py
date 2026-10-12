@@ -358,7 +358,7 @@ int main() {
     generated_kernels::cpp_entry(warm, 4, 4, 1);
     assert(fake::backing_allocations == 1 && fake::events == 0);
     constexpr int threads = 4, repeats = 7;
-    generated_kernels::cpp_start_hot();
+    generated_kernels::cpp_entry_start_hot();
     std::vector<std::thread> workers;
     for (int thread = 0; thread < threads; ++thread) workers.emplace_back([thread] {
         for (int repetition = 0; repetition < repeats; ++repetition) {
@@ -368,7 +368,7 @@ int main() {
         }
     });
     for (auto& worker : workers) worker.join();
-    generated_kernels::cpp_finish_hot();
+    generated_kernels::cpp_entry_finish_hot();
     assert(fake::backing_allocations == (POOL_SUPPORTED ? 1 : threads * repeats + 1));
     assert(fake::events > 0);
     const int events = fake::events.load();

@@ -59,6 +59,7 @@ def test_hybrid_preserves_logical_extents_and_namespaces_kernels(tmp_path):
     assert "slot.stream" in output.helpers
     assert "timing::measure_kernel" not in output.helpers
     assert "cudaDeviceSynchronize" not in output.helpers
+    assert "static __global__ void " in output.helpers
     cpu = output.helpers.split("__global__", 1)[0]
     assert "#pragma omp" not in cpu
     renamed = generate_hybrid(replace(function, name="different"), plan, analysis, policy="chunked")

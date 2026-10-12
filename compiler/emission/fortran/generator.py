@@ -94,9 +94,11 @@ def generate_fortran(function: FunctionIR, abi: tuple[AbiArgument, ...], *, offl
     lines.extend(
         [
             f"    end subroutine {c_entry}",
-            f"    subroutine {c_start}() bind(C, name='cpp_start_hot')",
+            f"    subroutine {c_start}() &",
+            f"      bind(C, name='cpp_{function.name}_start_hot')",
             f"    end subroutine {c_start}",
-            f"    subroutine {c_finish}() bind(C, name='cpp_finish_hot')",
+            f"    subroutine {c_finish}() &",
+            f"      bind(C, name='cpp_{function.name}_finish_hot')",
             f"    end subroutine {c_finish}",
             "  end interface",
             "",

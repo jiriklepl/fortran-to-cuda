@@ -145,8 +145,8 @@ def generate_cuda(
             lines.extend(lifecycle_definition(function, phase, operations, device=True, name=name))
     lines.extend(
         [
-            'extern "C" void cpp_start_hot() { reset_timing_vectors(); }',
-            'extern "C" void cpp_finish_hot() { print_timing_summary(); }',
+            f'extern "C" void cpp_{function.name}_start_hot() {{ reset_timing_vectors(); }}',
+            f'extern "C" void cpp_{function.name}_finish_hot() {{ print_timing_summary(); }}',
             "",
             f'extern "C" void cpp_{function.name}(',
         ]
