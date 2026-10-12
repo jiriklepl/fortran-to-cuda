@@ -275,6 +275,17 @@ def test_native_uses_newer_python_without_replacing_plot_python(sandbox):
     assert "compiler/pipeline Python: python3.12" in result.stdout
 
 
+def test_native_preserves_original_gfortran_preference(sandbox):
+    _, env, capture, stub, invoke = sandbox
+    fake_workspace(sandbox)
+    stub("gfortran-15")
+    env.pop("FC", None)
+    assert invoke("run_node.sh", "bw01", "--dry-run", "--runtime", "native").returncode == 0
+    result = execute_payload(sandbox, "bw01")
+    assert result.returncode == 0, result.stderr
+    assert json.loads(capture.read_text())["env"]["FC"] == "gfortran-15"
+
+
 def test_original_interactive_launch_preserves_account_and_resources(sandbox):
     _, _, capture, stub, invoke = sandbox
     fake_workspace(sandbox)

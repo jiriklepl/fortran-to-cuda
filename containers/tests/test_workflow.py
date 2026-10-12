@@ -121,6 +121,37 @@ def test_source_analysis_runs_in_prepared_parser_python(tmp_path, monkeypatch):
     assert "--steps" not in command
 
 
+def test_existing_prepared_pipeline_cache_is_reused(tmp_path, monkeypatch, capsys):
+    pipeline = tmp_path / "pipeline"
+    for name in ("setup.json", "repos/elmm/src/SConstruct", "repos/PoisFFT/src/SConstruct",
+                 "envs/local/bin/python", "envs/build/bin/python", "native/lib/ready"):
+        path = pipeline / ".cache" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    output = tmp_path / "output"
+    monkeypatch.setattr(workflow, "PIPELINE", pipeline)
+    monkeypatch.setattr(workflow, "guarded", lambda args: True)
+    monkeypatch.setattr(workflow, "doctor", lambda *a, **kw: {
+        "memory_headroom_bytes": {"host": 8 * 2**30}, "cpu_affinity": list(range(8)),
+        "toolchain": {"nvcc": "/cuda/nvcc", "cuda_host_cxx": "/tools/g++", "architecture": "120"}})
+    def unexpected_prepare(args):
+        pytest.fail("A prepared cache must not be downloaded or rebuilt")
+    monkeypatch.setattr(workflow, "prepare", unexpected_prepare)
+    monkeypatch.setattr(workflow, "plot_experiment", lambda *a: None)
+    calls = []
+    def execute(command, **kwargs):
+        calls.append(command)
+        path = output / "experiment/report.json"
+        path.parent.mkdir()
+        path.write_text(json.dumps({"summary": {}}))
+    monkeypatch.setattr(workflow.subprocess, "run", execute)
+    monkeypatch.setattr(sys, "argv", ["workflow.py", "run-elmm", "--output-dir", str(output)])
+    workflow.main()
+    assert calls[0][0] == str(pipeline / ".cache/envs/local/bin/python")
+    assert calls[0][calls[0].index("--app-root") + 1] == str(pipeline / ".cache/repos")
+    assert "Using prepared pipeline cache:" in capsys.readouterr().out
+
+
 def test_plotting_falls_back_without_changing_compiler_python(monkeypatch):
     monkeypatch.delenv("PLOT_PYTHON", raising=False)
     monkeypatch.setenv("PYTHON", "/module/python3.12")

@@ -70,6 +70,9 @@ importing compiler or pipeline source. Its selected interpreter is printed and
 recorded with the figures. An explicit `PLOT_PYTHON` is checked, never silently
 replaced. Existing source environments and system plotting packages are reused;
 the launcher does not install packages into a system Python on the headnode.
+An already prepared `elmm-pipeline/.cache` is reused, as in the original workflow;
+missing preparation uses writable work storage. Native execution also retains
+the original preference for `gfortran-15` when available, unless `FC` is supplied.
 
 `--runtime auto` uses Apptainer/Singularity when its image is available, otherwise
 the installed native toolchain on the **allocated worker**. Select
