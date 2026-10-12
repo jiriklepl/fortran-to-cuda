@@ -53,6 +53,7 @@ def _untiled_body(region: ParallelRegion) -> list[str]:
     lines.extend(_point_body(region, 2))
     lines.extend(
         [
+            "        if constexpr (!fort_internal_grid_stride_enabled) break;",
             "        if (fort_internal_total - fort_internal_point <= fort_internal_grid_stride) break;",
             "        fort_internal_point += fort_internal_grid_stride;",
             "    }",
@@ -140,7 +141,8 @@ def generate_kernel(region: ParallelRegion, *, array_views: bool = False) -> lis
     parameters.append("std::size_t fort_internal_total")
     if schedule.tile_sizes:
         parameters.append("std::size_t fort_internal_tile_volume")
-    lines = [f"__global__ void {kernel_name(region)}("]
+    lines = [] if schedule.tile_sizes else ["template<bool fort_internal_grid_stride_enabled>"]
+    lines.append(f"__global__ void {kernel_name(region)}(")
     lines.extend(
         indent([parameter + ("," if index < len(parameters) - 1 else "") for index, parameter in enumerate(parameters)])
     )
@@ -205,11 +207,24 @@ def generate_launch(
     if profile:
         lines.append("        timing::measure_kernel_executions([&]() {")
     configuration = "fort_internal_blocks, fort_internal_threads" + (f", 0, {stream}" if stream else "")
-    lines.append(f"            {kernel_name(region)}<<<{configuration}>>>(")
-    lines.extend(
-        indent([argument + ("," if index < len(arguments) - 1 else "") for index, argument in enumerate(arguments)], 4)
-    )
-    lines.append("            );")
+    calls = [(kernel_name(region), 3)] if schedule.tile_sizes else [
+        (kernel_name(region) + "<false>", 4), (kernel_name(region) + "<true>", 4),
+    ]
+    if not schedule.tile_sizes:
+        # A covering grid needs only one visit per thread. Keep the original
+        # grid-stride specialization when the existing block cap is reached.
+        lines.append("            if (fort_internal_needed_blocks <= 65535) {")
+    for index, (name, depth) in enumerate(calls):
+        if index:
+            lines.append("            } else {")
+        lines.extend(indent([f"{name}<<<{configuration}>>>("], depth))
+        lines.extend(indent([
+            argument + ("," if position < len(arguments) - 1 else "")
+            for position, argument in enumerate(arguments)
+        ], depth + 1))
+        lines.extend(indent([");"], depth))
+    if not schedule.tile_sizes:
+        lines.append("            }")
     if profile:
         lines.append("        });")
     lines.extend([

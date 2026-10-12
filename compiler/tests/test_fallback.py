@@ -131,9 +131,9 @@ end program
             sources = generate_sources(function, plan)
             source = sources.cuda.replace("#include <cuda_runtime.h>", '#include "cuda_runtime.h"')
             source, launches = re.subn(
-                r"(kernel_region_\d+_device)<<<([^>]+)>>>\(", r"fort_test_launch(\1, \2, ", source
+                r"(kernel_region_\d+_device(?:<(?:true|false)>)?)<<<([^>]+)>>>\(", r"fort_test_launch(\1, \2, ", source
             )
-            assert launches == len(plan.regions)
+            assert launches == sum(1 if region.schedule and region.schedule.tile_sizes else 2 for region in plan.regions)
             return replace(sources, cpp=source)
 
         monkeypatch.setattr(language, "generate_sources", simulated_sources)

@@ -221,7 +221,7 @@ def test_native_tails_signed_strides_arbitrary_rank(tmp_path: Path, backend: str
             "using namespace generated_kernels::indexing;\n" + kernel + '\nextern "C" void test(int* a) {\n'
             "  for (blockIdx.x = 0; blockIdx.x < gridDim.x; ++blockIdx.x)\n"
             "    for (threadIdx.x = 0; threadIdx.x < blockDim.x; ++threadIdx.x)\n"
-            f"      {kernel_name(region)}({', '.join(arguments)});\n"
+            f"      {kernel_name(region)}{'' if tile_sizes else '<true>'}({', '.join(arguments)});\n"
             "}\n"
         )
     else:
