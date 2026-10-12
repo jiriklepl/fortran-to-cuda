@@ -100,7 +100,7 @@ def _transfers(trace):
 
 def build_reached_numerical_binaries(tmp_path_factory, precision, resource_fallback, *,
                                     emit_fixture=emit_reached_numerical_fixture, prefix="reached_numerical_",
-                                    driver_source=None, expected_gpu_leaves=3):
+                                    driver_source=None, expected_gpu_leaves=3, expected_capture_states=None):
     """Build the same authenticated chain for source participation fixtures."""
     nvcc = shutil.which("nvcc")
     host = shutil.which("g++-14") or shutil.which("g++")
@@ -115,8 +115,10 @@ def build_reached_numerical_binaries(tmp_path_factory, precision, resource_fallb
     scope, = report["scopes"]
     assert len(scope["gpu_leaves"]) == expected_gpu_leaves
     builder = getattr(owner, "builder", owner)
-    assert builder.facts["captures"][ROOTS[1]]["initialized"] == "whole"
-    assert builder.facts["captures"][ROOTS[2]]["initialized"] == "none"
+    expected_capture_states = ({ROOTS[1]: "whole", ROOTS[2]: "none"}
+                               if expected_capture_states is None else expected_capture_states)
+    for root, state in expected_capture_states.items():
+        assert builder.facts["captures"][root]["initialized"] == state
     resources = {item["resource"]: item for item in scope["resource_bindings"]["resources"]}
     for name, text in outputs.items():
         artifact = directory / name

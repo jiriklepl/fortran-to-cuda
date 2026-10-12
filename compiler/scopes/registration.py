@@ -5,7 +5,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from compiler.frontend.native_sections import RECTANGLE_LIMIT, NativeResourceSections
+from compiler.frontend.capture_coverage import expected_descriptor as expected_descriptor
+from compiler.frontend.capture_coverage import physical_sections
+from compiler.frontend.native_sections import NativeResourceSections
 from compiler.ir import CompilationError
 from compiler.scopes.access import _statement_lines, build_native_access
 
@@ -14,23 +16,6 @@ from compiler.scopes.access import _statement_lines, build_native_access
 class RegistrationCode:
     specification: tuple[str, ...]
     prepare: tuple[str, ...]
-
-
-def expected_descriptor(fact, rank):
-    """Validate an external descriptor constraint, without defining payload."""
-    if "expected_descriptor" not in fact:
-        return None
-    expected = fact["expected_descriptor"]
-    if (not 1 <= rank <= 15 or not isinstance(expected, dict)
-            or set(expected) != {"lower_bounds", "extents"}
-            or any(not isinstance(expected[key], list) or len(expected[key]) != rank
-                   for key in ("lower_bounds", "extents"))
-            or any(type(value) is not int or not -(2**63) <= value < 2**63
-                   for value in expected["lower_bounds"])
-            or any(type(value) is not int or not 0 <= value < 2**63 for value in expected["extents"])):
-        raise CompilationError("expected capture descriptor requires rank-matched signed64 lower bounds "
-                               "and nonnegative signed64 extents")
-    return expected
 
 
 def expected_descriptor_conditions(fact, rank, name):
@@ -85,18 +70,9 @@ def build_registration(fact, rank, handle, prefix, key, layout, *, context="fort
         prepare += access.prepare
         pointer, count = access.access_name + "%overwrites", access.access_name + "%overwrite_count"
     elif initialized == "sections":
-        boxes = fact.get("sections")
-        if not isinstance(boxes, list) or len(boxes) > RECTANGLE_LIMIT:
-            raise CompilationError("registration requires bounded literal physical section facts")
+        boxes = physical_sections(fact, rank)
         spec += [f"type(fort_scope_section), target :: {prefix}_sections({max(1, len(boxes))})"]
         for index, box in enumerate(boxes, 1):
-            if (not isinstance(box, dict) or set(box) != {"lower", "upper"}
-                    or any(not isinstance(box[label], list) or len(box[label]) != rank
-                           for label in ("lower", "upper"))
-                    or any(type(value) is not int or not 0 <= value < 2**63
-                           for label in ("lower", "upper") for value in box[label])
-                    or any(lo > hi for lo, hi in zip(box["lower"], box["upper"], strict=True))):
-                raise CompilationError("registration requires valid literal physical section coordinates")
             for label in ("lower", "upper"):
                 name = f"{prefix}_{index}_{label}"
                 spec += [f"integer(c_size_t), target :: {name}({rank})"]

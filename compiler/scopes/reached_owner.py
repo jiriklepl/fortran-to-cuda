@@ -278,6 +278,7 @@ class ReachedWindowOwner(MappedReachedControl, LexicalOwner):
                     "prefix_eligibility": public["prefix_eligibility"],
                     "first_traversal_controls": public["first_traversal_controls"],
                     "entry_facts_identity": public["entry_facts_identity"],
+                    "entry_section_facts": public["entry_section_facts"],
                     "lifecycle": "one invocation; dormant -> active -> spent; no reopening",
                     "activation": "first reached selected source point; spend before eligibility and every guard",
                     "mandatory_close": public["mandatory_close"],

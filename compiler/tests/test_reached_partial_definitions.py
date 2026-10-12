@@ -57,7 +57,7 @@ def test_partial_producer_consumer_is_emitted_without_whole_initialization(tmp_p
     assert complete_state["coverage_on_return"] == "sections"
     assert len(complete_state["defined_sections_on_return"]) == (3 if source == PARTIAL_BOUNDARY_SOURCE else 1)
     assert proof.public()["native_definition_proof_identities"]
-    assert scope["reached_window"]["source_proof_version"] == 14
+    assert scope["reached_window"]["source_proof_version"] == 15
     public_state = next(item for item in scope["reached_window"]["defined_coverage"]
                         if item["resource"] == MODULE_ROOTS[1])
     assert public_state["on_activation"] == "none"
