@@ -20,6 +20,9 @@ select a partition; `--partition` overrides them. Check live availability with
 `sinfo` and choose an account with `--account` when needed.
 
 ```bash
+# Existing invocation: options may precede the node, as before.
+./run_on_node.sh -p gpu-short -A kdss bw01
+
 # Inspect the job script without submitting or executing numerical work.
 ./run_on_node.sh hopper01 --dry-run
 
@@ -47,6 +50,26 @@ performs no headnode package installation and never falls back to a local run
 when Slurm is missing. `--no-wait` submits without waiting; otherwise scheduler
 failure propagates to the caller. Extra experiment options follow `--`; checked
 path/resource options must precede it. Use `--config DIR` for a custom config.
+
+The launcher prints the output/work directories, report and figure locations,
+job script and Slurm log paths before submission, then the job ID and monitoring
+commands. Resource defaults remain 8 CPUs, 32G, one GPU and 01:30:00, in the
+original `#SBATCH` form so site/user `SBATCH_*` settings retain their precedence.
+`--jobs` defaults to the CPU request and is capped to a smaller actual allocation;
+an explicit `--jobs` is retained. `--interactive` uses `srun` with the same request.
+
+On the worker, the script initializes environment modules when necessary and
+loads `apptainer`, `cuda`, `gcc` and the original Python module alternatives
+before choosing the container runtime. Native execution selects an available
+Python 3.12 or newer unless `PYTHON` is supplied explicitly. Plotting may use a
+different interpreter with NumPy and Matplotlib; set `PLOT_PYTHON` to select it.
+Source extraction runs inside the prepared compiler/parser environment, so the
+newer system Python does not need fparser, NumPy or Matplotlib installed globally.
+The paired-result plotter accepts Python 3.9+ and reads JSON receipts without
+importing compiler or pipeline source. Its selected interpreter is printed and
+recorded with the figures. An explicit `PLOT_PYTHON` is checked, never silently
+replaced. Existing source environments and system plotting packages are reused;
+the launcher does not install packages into a system Python on the headnode.
 
 `--runtime auto` uses Apptainer/Singularity when its image is available, otherwise
 the installed native toolchain on the **allocated worker**. Select
@@ -143,6 +166,17 @@ fails the campaign; it does not weaken the candidate check or shorten the case.
 Native/GPU diagnostics precede timing and never
 enter timing medians. Smoke runs and other thread budgets cannot claim the gate.
 No policy is automatically promoted by this runner.
+
+For an explicitly requested timing series despite native roundoff variation:
+
+```bash
+./run_on_node.sh -p gpu-short -A kdss bw01 --case channel -- --allow-native-variation
+```
+
+This continues when native/native comparisons fail, retaining all original
+tolerances and comparison failures. Results and plots are labeled unvalidated;
+the timing summary is printed, but correctness and promotion gates remain unmet.
+GPU execution failures and source-definition errors still fail the run.
 
 Heavy commands are sequential under the maintained pipeline memory guard, which
 keeps a 3 GiB reserve using the tighter of host and applicable cgroup budgets.

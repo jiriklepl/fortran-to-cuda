@@ -65,4 +65,13 @@ fi
 for name in "${!APPTAINERENV_@}" "${!SINGULARITYENV_@}"; do
     [[ -z "$name" ]] || unset "$name"
 done
+printf 'Container runtime: %s\nSIF image: %s\nOutput directory: %s -> /output\n' \
+    "$ENGINE" "$SIF_FILE" "$OUTPUT_DIR"
+printf 'Command:'
+if (( $# )); then
+    printf ' %q' "$@"
+else
+    printf ' <image default>'
+fi
+printf '\n'
 exec "$ENGINE" "${flags[@]}" "$SIF_FILE" "$@"

@@ -3,6 +3,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location("sgs_experiment", Path(__file__).resolve().parents[1] / "sgs_experiment.py")
 runner = importlib.util.module_from_spec(spec)
@@ -10,6 +11,54 @@ spec.loader.exec_module(runner)
 
 
 class PortableSGSChecks(unittest.TestCase):
+    def validation_record(self, mode, passed):
+        return {"mode": mode, "validation": {"passed": passed}, "log": "/runs/" + mode + "/run.log"}
+
+    def test_native_variation_is_strict_by_default(self):
+        receipt = {"baseline_repeatability": None}
+        record = self.validation_record("native", False)
+        with self.assertRaisesRegex(RuntimeError, "native repeatability failed"):
+            runner.assess_validation(receipt, record)
+        self.assertIs(receipt["baseline_repeatability"], False)
+        self.assertFalse(record["validation"]["qualified"])
+
+    def test_explicit_variation_preserves_mismatches_without_qualification(self):
+        receipt = {"baseline_repeatability": None}
+        with patch("builtins.print") as output:
+            runner.assess_validation(receipt, self.validation_record("native", False), allow_native_variation=True)
+            candidate = self.validation_record("current", False)
+            runner.assess_validation(receipt, candidate, allow_native_variation=True)
+        self.assertFalse(candidate["validation"]["passed"])
+        self.assertFalse(candidate["validation"]["qualified"])
+        self.assertIn("not repeatable", candidate["validation"]["qualification_reason"])
+        self.assertEqual(len(receipt["validation_warnings"]), 2)
+        self.assertEqual(output.call_count, 2)
+        runner.assess_validation(receipt, self.validation_record("native", True), allow_native_variation=True)
+        self.assertIs(receipt["baseline_repeatability"], False)
+
+    def test_candidate_failure_remains_fatal_with_repeatable_native(self):
+        for allow in (False, True):
+            with self.subTest(allow_native_variation=allow):
+                receipt = {"baseline_repeatability": True}
+                with self.assertRaisesRegex(RuntimeError, "candidate validation failed"):
+                    runner.assess_validation(receipt, self.validation_record("current", False),
+                                             allow_native_variation=allow)
+
+    def test_nonrepeatable_timings_report_no_target_claim(self):
+        for repeatable in (True, False):
+            with self.subTest(repeatable=repeatable):
+                rows = [{"mode": mode, "warmup": False, "traced": False, "wall_seconds": seconds,
+                         "validation": {"passed": True}}
+                        for mode, seconds in (("native", 10.), ("current", 7.))]
+                receipt = {"baseline_repeatability": repeatable, "correctness": [], "runs": rows,
+                           "performance_eligible": True, "comparison_budget_eligible": True}
+                runner.complete_summary(receipt)
+                self.assertEqual(receipt["summary"]["current"]["median"], 7.)
+                self.assertEqual(receipt["status"], "passed" if repeatable else "completed_unvalidated")
+                self.assertIs(receipt["correctness_qualified"], repeatable)
+                self.assertIs(receipt["target_met"], True if repeatable else None)
+                self.assertFalse(receipt["automatic_policy_promoted"])
+
     def test_changed_include_rejects_contract_before_rebinding(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
