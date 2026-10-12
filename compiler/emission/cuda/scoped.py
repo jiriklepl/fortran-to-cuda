@@ -767,6 +767,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
     query_captures = {}
     query_arguments = {}
     query_helpers = []
+    query_cost_footprints = {}
     if query_available:
         for unit in units.values():
             control_symbols = set()
@@ -786,10 +787,20 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
             query_arguments[unit.region.id] = ("fort_context, fort_query_status, "
                                                + "".join(array_argument(s) + ", " for s in arrays)) + worker_arguments + "".join(
                 f", {s.cpp_name}" for s in query_captures[unit.region.id])
+            known_work = (unit.work_per_iteration is not None and not unit.work_is_upper_bound
+                          and not function.requires_numerical_environment)
+            model = unit.compute_model if not function.requires_numerical_environment else None
+            # Exact descriptors below repeat every footprint bound check. Keep
+            # the existing metadata path for full/uncertain/protected effects,
+            # whose conservative boxes can have additional empty-shape guards.
+            exact_effects = not protected_footprints[unit.region.id] and all(
+                fp.exact and not fp.full_upload and not fp.full_write for fp in unit.footprints)
+            query_cost_footprints[unit.region.id] = known_work or model is not None or not exact_effects
             helper = _metadata(function, OffloadAnalysis(True, None, (replace(unit, index=0),)),
                                query_signature, f"plan_unit_{unit.region.id}",
                                lambda expression: _query_expression(expression, {}),
-                               host_pointer=(lambda symbol: symbol.cpp_name + ".root") if root_views else None)
+                               host_pointer=(lambda symbol: symbol.cpp_name + ".root") if root_views else None,
+                               cost_footprints=query_cost_footprints[unit.region.id])
             axis = 0
             for line in helper:
                 query_helpers.append(line)
@@ -1087,6 +1098,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                      "layout_arrays": [s.name for s in arrays],
                      "source_effects": False, "preparation": "checked INTEGER/LOGICAL control slice",
                      "units": [{"region": r.id, "id": unit_ids[r.id], "work_per_iteration": units[r.id].work_per_iteration,
+                                "cost_footprints_prepared": query_cost_footprints.get(r.id, False),
                                 "workload_class": units[r.id].workload_class,
                                 "workload_features": units[r.id].workload_features.to_dict(),
                                 "compute_model": units[r.id].compute_model,

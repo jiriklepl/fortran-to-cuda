@@ -72,7 +72,8 @@ def _cpu_worker(unit, signature, name):
     return [*lines, "    }", "}"]
 
 
-def _metadata(function, analysis, signature, name, value=_value, *, host_pointer=None):
+def _metadata(function, analysis, signature, name, value=_value, *, host_pointer=None,
+              cost_footprints=True):
     arrays = [s for s in function.parameters if s.rank]
     array_indices = {s: i for i, s in enumerate(arrays)}
     lines = [f"static offload::Data {name}({signature}) {{", "    offload::Data d;"]
@@ -87,7 +88,7 @@ def _metadata(function, analysis, signature, name, value=_value, *, host_pointer
                   "        if (a.bytes && !a.host) d.valid = false;",
                   "        d.arrays.push_back(a);", "    }"]
     for unit in analysis.units:
-        lines += ["    {", "        offload::Unit u; u.arrays.resize(d.arrays.size());",
+        lines += ["    {", "        offload::Unit u;" + (" u.arrays.resize(d.arrays.size());" if cost_footprints else ""),
                   "        bool active = d.valid; std::size_t points = 1;"]
         for loop in unit.region.loops:
             stride = str(loop.step) + ".0L" if isinstance(loop.step, int) else value(loop.step)
@@ -109,6 +110,11 @@ def _metadata(function, analysis, signature, name, value=_value, *, host_pointer
                      f"        u.gpu_numerical_seconds = static_cast<double>(u.iterations) * {unit.gpu_numerical_seconds_per_iteration!r};"]
                     if unit.cpu_numerical_seconds_per_iteration or unit.gpu_numerical_seconds_per_iteration else []),
                   "        d.units.push_back(u);", "    }"]
+    if not cost_footprints:
+        # Definition-only scoped queries emit their exact access descriptors
+        # separately. Keep layout/domain validation and numerical costs, but do
+        # not construct a second set of boxes whose byte estimates are unused.
+        return [*lines, "    return d;", "}"]
     for unit in analysis.units:
         for footprint in unit.footprints:
             idx = array_indices[footprint.symbol]

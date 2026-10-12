@@ -34,7 +34,13 @@ def _untiled_body(region: ParallelRegion) -> list[str]:
         "    while (fort_internal_point < fort_internal_total) {",
         "        std::size_t fort_internal_index = fort_internal_point;",
     ]
-    for axis in schedule.axis_order:
+    for position, axis in enumerate(schedule.axis_order):
+        if position + 1 == len(schedule.axis_order):
+            # The checked product and point < total prove that the remaining
+            # quotient is already below this final extent. Its modulo is the
+            # identity, and the subsequent division would be unused.
+            lines.extend(indent([f"const std::size_t fort_internal_ordinal{axis} = fort_internal_index;"], 2))
+            continue
         lines.extend(
             indent(
                 [
