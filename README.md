@@ -220,7 +220,7 @@ Seven implementation variants of three momentum-advection stencil kernels
 (`Fortran`, `Fortran-OMP`, `Fortran-ACC`, `CUDA`, `CUDA-pinned`, `CPP`,
 `CPP-OMP`) across CDU, CDW, and CDV, driven by a unified GNU Make build system.
 Maintained sources live in `cases/`, compiler output in `generated/`, shared
-measurement code in `harness/`, and small external-tool recipes in `tools/`.
+measurement code in `harness/`.
 Includes:
 
 - Automated runner (`harness/run.py`) that sweeps grids, builds on demand, and
@@ -230,8 +230,8 @@ Includes:
 - Figure generator (`harness/plot.py`).
 - `harness/generate.py` — regenerates all CUDA/C++ sources from the Fortran
   originals via the compiler.
-- A [Loki/PSyclone comparison](benchmarks/docs/tool-comparison.md) with shared
-  correctness/timing drivers, fused Fortran/OpenACC and archived measurements.
+- A [native/local compiler comparison](benchmarks/docs/tool-comparison.md) with
+  shared correctness/timing drivers, CPU/CUDA sessions and archived measurements.
 
 → Full documentation: [`benchmarks/README.md`](benchmarks/README.md)
 

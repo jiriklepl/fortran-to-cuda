@@ -1,8 +1,8 @@
 # Benchmark suite
 
 Three momentum-advection kernels (CDU, CDV and CDW), seven implementation
-variants, and a [Loki/PSyclone comparison](docs/tool-comparison.md). Run all
-commands below from the repository root.
+variants, and a [native/local compiler comparison](docs/tool-comparison.md).
+Run all commands below from the repository root.
 
 ## Layout
 
@@ -18,18 +18,15 @@ benchmarks/
 ├── generated/<case>/          # committed compiler output: CPP, CPP-OMP, CUDA
 ├── common/                    # shared build flags and C++/CUDA support header
 ├── harness/                   # generation, builds, checking, timing and plotting
-├── tools/                     # Loki/PSyclone recipes and dependency pins
-├── tests/                     # harness and recipe regression tests
+├── tests/                     # harness regression tests
 ├── docs/                      # comparison method and interpretation
 ├── results/                   # baseline.csv, comparison JSON and figures/
 └── bin/                       # ignored build output
 ```
 
-Tool modules contain transformation logic and necessary parser compatibility
-handling. Argument parsing, input validation, provenance, drivers and measurements
-belong to the shared harness. Adding a tool does not require another benchmark
-runner or build tree. Comparison runs write generated sources and reports to
-their chosen output directory.
+The shared harness owns generation, input validation, provenance, drivers and
+measurements. Comparison runs write generated local implementations, native
+builds and reports to their chosen output directory.
 
 ## Build and run
 
@@ -79,23 +76,9 @@ tolerance `1e-10`; check the runner's output for unavailable build/runtime
 variants. Correctness builds append `_test_main` to the build directory name so
 they cannot replace timing executables. Figures report seconds per Gcell·iteration.
 
-For Loki/PSyclone, install the separate environments described in the
-[comparison guide](docs/tool-comparison.md), then use the shared commands:
-
-```bash
-/tmp/loki-env/bin/python -m benchmarks.harness.transform --tool loki \
-  --input benchmarks/cases/CDU/Fortran/cdu.f90 --case CDU \
-  --target openacc --output /tmp/cdu-loki.f90
-
-python -m benchmarks.harness.compare --output /tmp/tools-cpu \
-  --loki-python /tmp/loki-env/bin/python \
-  --psyclone-python /tmp/psyclone-env/bin/python
-
-python -m pytest benchmarks/tests
-```
-
-The comparison guide documents CPU/GPU modes, fusion, caller data residency,
-isolated recipe tests and the [archived measurements](results/tool-comparison-2026-10-02.json).
+Run the harness regression tests with `python -m pytest benchmarks/tests`.
+The [comparison guide](docs/tool-comparison.md) documents native/local CPU and
+GPU modes, caller data residency and archived measurements.
 
 Local comparisons build both the compiler's optimized default and an
 `--opt-level 0` baseline. Checked fusion produces one kernel per stencil instead
@@ -107,11 +90,11 @@ with `FORT_RUNTIME_TRACE=1`; tracing is disabled during timing.
 ```bash
 # Local-only CPU comparison, including persistent sessions.
 python -m benchmarks.harness.compare --output /tmp/local-cpu \
-  --tools --gpu off --resident
+  --gpu off --resident
 
 # Include CUDA resident batches where the GPU and OpenACC baseline are available.
 python -m benchmarks.harness.compare --output /tmp/local-gpu \
-  --tools --gpu run --resident
+  --gpu run --resident
 ```
 
 Archived reports describe the compiler revision recorded in each report. Rerun
@@ -135,15 +118,12 @@ include owned-buffer copies and were slower than ordinary CPU calls. CUDA builds
 passed, but the installed driver could not execute them, so this report contains
 no CUDA performance measurements.
 
-The [full CPU/GPU rerun](docs/tool-comparison.md#rerun-with-local-fusion-and-sessions-2026-10-02)
-now records **288 passing correctness checks** and **144 timing configurations**
-with both libraries, local optimization levels 0/1, and resident sessions.
-At `256x128x64`, optimized local C++ took **10.11–10.30 ms** per call; local CUDA
-took **12.82–14.55 ms** for ordinary calls and **1.31–1.39 ms** with resident
-batches. Each batch has 20 calls and includes setup, final retrieval and teardown.
-[Raw results](results/tool-comparison-rerun-20261002T155622Z/report.json) and
-[CSV samples](results/tool-comparison-rerun-20261002T155622Z/timings.csv) retain all measurements;
-the earlier capability report above remains unchanged.
+An [archived CPU/GPU rerun](results/tool-comparison-rerun-20261002T155622Z/report.json)
+records 288 correctness checks and 144 timing configurations from an earlier
+compiler revision. It includes external-tool experiments removed from the
+maintained runner. Its [CSV samples](results/tool-comparison-rerun-20261002T155622Z/timings.csv)
+remain available for historical analysis; they do not measure current compiler
+performance.
 
 ## Runtime scope and hybrid comparison
 

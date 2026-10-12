@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Compare Loki/PSyclone transformations by performance and source-edit effort.
+"""Compare native Fortran and local compiler implementations.
 
-Adapters run in separately pinned Python environments. All native builds and
-generated sources remain in a new output directory. Requested failures fail the
+Native builds and generated sources remain in a new output directory. Failures fail the
 comparison; GPU execution requires a positive in-device OpenACC probe.
 """
 
@@ -110,7 +109,7 @@ class Comparison:
                 self.tools["cuda_host_cxx"] = tool(args.cuda_host_cxx)
         self.report = {
             "status": "running",
-            "objective": "good performance with minimal original-source modifications",
+            "objective": "native and local compiler performance with unchanged benchmark sources",
             "gpu_mode": args.gpu,
             "compute_capability": args.compute_capability,
             "source_changes": 0,
@@ -124,7 +123,6 @@ class Comparison:
                 and path.suffix in {".py", ".hpp", ".cuh"}
                 and not {"tests", "debugging"}.intersection(path.relative_to(ROOT / "compiler").parts)
             },
-            "adapters": [],
             "correctness": [],
             "compilation": [],
             "timings": [],
@@ -327,37 +325,6 @@ class Comparison:
                     "openacc",
                 ),
             ]
-        for name in self.args.tools:
-            python = tool(getattr(self.args, f"{name}_python"))
-            for target in ["cpu", "openacc"] if self.args.gpu != "off" else ["cpu"]:
-                for fused in [True, False] if self.args.include_unfused and target == "openacc" else [True]:
-                    label = (
-                        name.capitalize() + ("-CPU" if target == "cpu" else "-OpenACC") + ("" if fused else "-unfused")
-                    )
-                    output = directory / f"{label}.f90"
-                    command = [
-                        python,
-                        "-m",
-                        "benchmarks.harness.transform",
-                        "--tool",
-                        name,
-                        "--input",
-                        source,
-                        "--case",
-                        case,
-                        "--output",
-                        output,
-                        "--target",
-                        target,
-                    ]
-                    if not fused:
-                        command.append("--no-fuse")
-                    self.run(command, ROOT)
-                    manifest = json.loads(output.with_suffix(".json").read_text())
-                    self.report["adapters"].append({"case": case, "variant": label, "manifest": manifest})
-                    variants.append(Variant(label, output, "openacc" if target == "openacc" else "gnu"))
-                    if target == "cpu" and self.args.gpu != "off":
-                        variants.append(Variant(label + "-NVHPC", output, "nvfortran"))
         return variants
 
     def validate(self, case: str, variants: list[Variant]) -> None:
@@ -495,15 +462,6 @@ class Comparison:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument(
-        "--tools",
-        nargs="*",
-        choices=["loki", "psyclone"],
-        default=["loki", "psyclone"],
-        help="External adapters to compare; pass --tools without names for local implementations only.",
-    )
-    parser.add_argument("--loki-python", default="python")
-    parser.add_argument("--psyclone-python", default="python")
     parser.add_argument("--cases", nargs="+", choices=list(SOURCES), default=list(SOURCES))
     parser.add_argument(
         "--grids",
@@ -518,11 +476,6 @@ def main() -> int:
         action="store_true",
         help="also test OpenACC data regions and local sessions keeping arrays resident across a timed batch",
     )
-    parser.add_argument(
-        "--include-unfused",
-        action="store_true",
-        help="also measure straightforward four-pass OpenACC transformations",
-    )
     parser.add_argument("--fc", default="gfortran")
     parser.add_argument("--cxx", default="g++")
     parser.add_argument("--acc-fc", default=nvhpc_default())
@@ -534,7 +487,7 @@ def main() -> int:
     parser.add_argument("--rounds", type=positive, default=5)
     parser.add_argument("--timeout", type=positive, default=180)
     args = parser.parse_args()
-    for field in ("cases", "tools", "grids", "timing_grids"):
+    for field in ("cases", "grids", "timing_grids"):
         setattr(args, field, list(dict.fromkeys(getattr(args, field))))
     if args.output.exists() and (not args.output.is_dir() or any(args.output.iterdir())):
         parser.error("--output must be a new or empty directory")

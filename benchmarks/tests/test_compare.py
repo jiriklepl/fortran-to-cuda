@@ -1,4 +1,4 @@
-"""Require actual GPU execution, including in resident-data validation."""
+"""Native/local preparation and actual GPU execution validation."""
 
 from pathlib import Path
 from types import SimpleNamespace
@@ -6,6 +6,35 @@ from types import SimpleNamespace
 import pytest
 
 from benchmarks.harness.compare import Comparison, Variant, cuda_trace, gpu_trace
+from benchmarks.harness.paths import CASES, ROOT, SOURCES
+
+
+@pytest.mark.parametrize("gpu", ["off", "compile"])
+def test_preparation_needs_only_native_and_local_implementations(tmp_path, gpu):
+    comparison = Comparison.__new__(Comparison)
+    comparison.args = SimpleNamespace(gpu=gpu)
+    comparison.output = tmp_path
+    commands = []
+    comparison.run = lambda command, cwd: commands.append((list(map(str, command)), cwd))
+    source = CASES / "CDU" / "Fortran" / SOURCES["CDU"]
+    original = source.read_bytes()
+    variants = comparison.prepare("CDU")
+    names = {variant.name for variant in variants}
+    assert {"Fortran-GNU", "Local-C++", "Local-C++-unoptimized"} <= names
+    assert len(commands) == 2
+    assert [command[command.index("--opt-level") + 1] for command, _cwd in commands] == ["1", "0"]
+    assert all(command[command.index("--input") + 1] == str(source) and cwd == ROOT
+               for command, cwd in commands)
+    assert source.read_bytes() == original
+    if gpu == "off":
+        assert len(variants) == 3
+        assert not any(variant.accelerator for variant in variants)
+    else:
+        assert names == {"Fortran-GNU", "Fortran-NVHPC", "Handwritten-OpenACC", "Local-C++",
+                         "Local-C++-unoptimized", "Local-CUDA", "Local-CUDA-unoptimized"}
+        assert {variant.name: variant.kernels_per_call for variant in variants if variant.backend == "cuda"} == {
+            "Local-CUDA": 1, "Local-CUDA-unoptimized": 4}
+    assert all(variant.supports_resident for variant in variants if variant.implementation is not None)
 
 
 def test_gpu_trace_rejects_silent_cpu_execution():
@@ -47,7 +76,7 @@ def test_local_cuda_trace_requires_kernels_and_counts_lifetime():
 @pytest.mark.parametrize(
     "variant",
     [
-        Variant("Loki-OpenACC", Path("kernel.f90"), "openacc"),
+        Variant("Handwritten-OpenACC", Path("kernel.f90"), "openacc"),
         Variant("Local-CUDA", Path("kernel.f90"), "cuda", Path("kernel.cu"), 1),
     ],
 )
