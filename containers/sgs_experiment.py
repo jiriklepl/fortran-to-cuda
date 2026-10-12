@@ -143,10 +143,44 @@ def compare_outputs(reference, observed, compare):
             "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."}
 
 
+def assess_validation(receipt, record, *, allow_native_variation=False, is_reference=False):
+    """Keep failed comparisons visible when explicitly timing a variable baseline."""
+    passed = record["validation"]["passed"]
+    if record["mode"] == "native" and not is_reference:
+        receipt["baseline_repeatability"] = passed and receipt.get("baseline_repeatability") is not False
+    variable_baseline = receipt.get("baseline_repeatability") is False
+    record["validation"]["qualified"] = passed and not variable_baseline
+    if variable_baseline:
+        record["validation"]["qualification_reason"] = "Native output is not repeatable at original VTK tolerances"
+    if not passed:
+        reason = "native repeatability failed" if record["mode"] == "native" else "candidate validation failed"
+        message = reason + " at original VTK tolerances: " + record["log"]
+        if not (allow_native_variation and variable_baseline):
+            raise RuntimeError(message)
+        receipt.setdefault("validation_warnings", []).append(message)
+        print("WARNING:", message, "Continuing unvalidated measurements by explicit request.", flush=True)
+
+
+def complete_summary(receipt):
+    """Report timing even for an explicitly permitted, unqualified baseline."""
+    summary = summarize(receipt["runs"])
+    ratio = summary["current"]["ratio_to_native"]
+    qualified = receipt.get("baseline_repeatability") is True and all(
+        row["validation"]["passed"] for row in receipt["correctness"] + receipt["runs"])
+    receipt.update(status="passed" if qualified else "completed_unvalidated", summary=summary,
+                   correctness_qualified=qualified, speedup_factor=1 / ratio,
+                   current_to_native_ratio=ratio, wall_reduction_percent=100 * (1 - ratio),
+                   target_native_ratio=.8, target_wall_seconds=.8 * summary["native"]["median"],
+                   target_met=ratio <= .8 if qualified and receipt["performance_eligible"]
+                       and receipt["comparison_budget_eligible"] else None,
+                   timings_reused=False, automatic_policy_promoted=False)
+
+
 def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_python,
                    native_library_dir, output, work_dir=None, config=None,
                    case="channel-simple", gpu_options=None, build_args=(), jobs=8,
-                   threads=4, steps=None, timeout=900, repeats=7, warmups=1):
+                   threads=4, steps=None, timeout=900, repeats=7, warmups=1,
+                   allow_native_variation=False):
     """Run one fresh paired experiment; return the immutable raw JSON receipt.
 
     ``output`` and ``work_dir`` must be absent. Default work is output/work.
@@ -213,7 +247,9 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
                "selection": {"entry": contract["entry"], "gpu_policy": "sections", "scope_transfers": "direct",
                              "scope_execution": "bounded", "host_threads": threads},
                "protocol": {"threads": threads, "jobs": jobs, "warmups": warmups, "repetitions": repeats,
-                            "rotate": True, "explicit_steps": steps, "timeout_seconds": timeout},
+                            "rotate": True, "explicit_steps": steps, "timeout_seconds": timeout,
+                            "allow_native_variation": allow_native_variation},
+               "baseline_repeatability": None, "correctness_qualified": False,
                "performance_eligible": steps is None and repeats >= 3 and warmups >= 1,
                "comparison_budget_eligible": threads == 4,
                "workload_label": "explicit step-cap smoke run" if steps is not None else "original configured duration",
@@ -327,6 +363,7 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
             log, elapsed = command(argv, cwd=directory, env=env, log=log_path, timeout=timeout)
             timing = validate_log(log, configuration["expected_max_steps"], expected_completed_steps=reference_steps)
             observed = read_outputs(directory / "output", read_vtk)
+            is_reference = reference is None
             if reference is None:
                 if mode != "native":
                     raise RuntimeError("original native reference must execute first")
@@ -337,10 +374,12 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
                       "round": round_number, "timing": timing, "validation": validation,
                       "environment": {key: env.get(key) for key in ("OMP_NUM_THREADS", "OMP_DYNAMIC", "OMP_PROC_BIND", "CUDA_VISIBLE_DEVICES")},
                       "diagnostic_wall_seconds" if round_number is None else "wall_seconds": elapsed}
-            if not validation["passed"]:
+            try:
+                assess_validation(receipt, record, allow_native_variation=allow_native_variation,
+                                  is_reference=is_reference)
+            except RuntimeError:
                 write(directory / "run.json", record)
-                reason = "native repeatability failed" if mode == "native" else "candidate validation failed"
-                raise RuntimeError(reason + " at original VTK tolerances: " + str(log_path))
+                raise
             if traced:
                 activity = gpu_activity(log, "local", [], scope_manifest=manifest)
                 record["gpu_activity"] = activity
@@ -370,13 +409,7 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
                                                 warmup=round_number < warmups, round_number=round_number))
                 write(report_path, receipt)
         check_inputs()
-        summary = summarize(receipt["runs"])
-        ratio = summary["current"]["ratio_to_native"]
-        receipt.update(status="passed", summary=summary, speedup_factor=1 / ratio,
-                       current_to_native_ratio=ratio, wall_reduction_percent=100 * (1 - ratio),
-                       target_native_ratio=.8, target_wall_seconds=.8 * summary["native"]["median"],
-                       target_met=ratio <= .8 if receipt["performance_eligible"] and receipt["comparison_budget_eligible"] else None,
-                       timings_reused=False, automatic_policy_promoted=False)
+        complete_summary(receipt)
     except BaseException as error:
         receipt.update(status="failed", error={"type": type(error).__name__, "reason": str(error)})
         raise
@@ -385,7 +418,8 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
         os.environ.update(original_environment)
         receipt["finished_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         write(report_path, receipt)
-    print(json.dumps({key: receipt[key] for key in ("status", "performance_eligible", "current_to_native_ratio",
+    print(json.dumps({key: receipt[key] for key in ("status", "baseline_repeatability", "correctness_qualified",
+                                                   "performance_eligible", "current_to_native_ratio",
                                                    "speedup_factor", "wall_reduction_percent", "target_native_ratio", "target_met")}))
     return receipt
 
@@ -408,6 +442,8 @@ def main(argv=None):
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--repeats", type=int, default=7)
     parser.add_argument("--warmups", type=int, default=1)
+    parser.add_argument("--allow-native-variation", action="store_true",
+                        help="Complete unvalidated timings if original native outputs are not repeatable; no target claim")
     args = vars(parser.parse_args(argv))
     args["gpu_options"] = {key: args.pop(flag) for flag, key in (("nvcc", "nvcc"), ("cuda_host", "cuda_host_cxx"),
                            ("cuda_runtime_dir", "cuda_runtime_dir"), ("gpu_arch", "architecture")) if args[flag] is not None}

@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import pty
+import shlex
 import shutil
 import subprocess
 import sys
@@ -21,6 +22,7 @@ def sandbox(tmp_path):
     # Deliberately omit real container and scheduler executables from PATH.
     for name in ("bash", "basename", "cat", "chmod", "date", "dirname", "env", "id", "mkdir", "realpath"):
         (commands / name).symlink_to(shutil.which(name))
+    (commands / "python3.12").symlink_to(sys.executable)
     capture = tmp_path / "capture.json"
     env = {key: value for key, value in os.environ.items()
            if key not in {"WORKSPACE_ROOT", "PIPELINE_ROOT", "COMPILER_ROOT", "OUTPUT_DIR", "WORK_DIR",
@@ -73,6 +75,12 @@ def execute_payload(sandbox, node="hopper01"):
                           capture_output=True, timeout=10)
 
 
+def batch_request(sandbox, node="hopper01"):
+    script = Path(sandbox[1]["OUTPUT_DIR"]) / f"submit-{node}.sh"
+    return dict(shlex.split(line.removeprefix("#SBATCH "))[0].removeprefix("--").split("=", 1)
+                for line in script.read_text().splitlines() if line.startswith("#SBATCH "))
+
+
 def test_node_default_submission_and_full_case(sandbox):
     _, env, capture, stub, invoke = sandbox
     fake_workspace(sandbox)
@@ -81,8 +89,12 @@ def test_node_default_submission_and_full_case(sandbox):
     assert result.returncode == 0, result.stderr
     submission = json.loads(capture.read_text())["argv"]
     assert "--parsable" in submission and "--wait" in submission
-    assert "--partition=gpu-ffa-gpulab" in submission
-    assert "--cpus-per-task=8" in submission
+    request = batch_request(sandbox)
+    assert request["partition"] == "gpu-ffa-gpulab"
+    assert request["cpus-per-task"] == "8"
+    assert request["mem"] == "32G" and request["gpus"] == "1"
+    assert request["time"] == "01:30:00"
+    assert not any(arg.startswith(("--partition", "--cpus-per-task", "--mem", "--gpus", "--time")) for arg in submission)
     assert execute_payload(sandbox).returncode == 0
     argv = json.loads(capture.read_text())["argv"]
     assert argv[0] == "run-elmm"
@@ -139,7 +151,7 @@ def test_node_job_script_is_immutable(sandbox):
 
 
 @pytest.mark.parametrize("args", [
-    ["--cpus", "4"], ["--threads", "9"], ["--jobs", "9"], ["--warmups", "-1"],
+    ["--cpus", "3"], ["--threads", "9"], ["--jobs", "9"], ["--warmups", "-1"],
     ["--repeats", "0"], ["--case", "wrong"], ["--runtime", "wrong"], ["--steps"],
 ])
 def test_node_rejects_invalid_resources_before_dispatch(sandbox, args):
@@ -171,7 +183,110 @@ def test_node_scheduler_status_and_no_wait(sandbox):
     assert result.returncode == 37
     argv = json.loads(capture.read_text())["argv"]
     assert "--parsable" in argv and "--wait" not in argv
-    assert "--account=account & literal" in argv
+    assert batch_request(sandbox, "bw01")["account"] == "account & literal"
+
+
+def test_original_top_level_command_preserves_site_defaults_and_prints_paths(sandbox):
+    _, env, capture, stub, invoke = sandbox
+    fake_workspace(sandbox)
+    stub("sbatch")
+    result = invoke("../run_on_node.sh", "-p", "gpu-short", "-A", "kdss", "bw01", overrides={
+        "STUB_STDOUT": "12345;cluster", "SBATCH_MEM_PER_NODE": "16000", "SBATCH_CPUS_PER_TASK": "4",
+    })
+    assert result.returncode == 0, result.stderr
+    request = batch_request(sandbox, "bw01")
+    assert {key:request[key] for key in ("partition", "account", "nodelist")} == {
+        "partition":"gpu-short", "account":"kdss", "nodelist":"bw01"}
+    record = json.loads(capture.read_text())
+    # Slurm retains its original environment-over-directive precedence.
+    assert record["env"]["SBATCH_MEM_PER_NODE"] == "16000"
+    assert record["env"]["SBATCH_CPUS_PER_TASK"] == "4"
+    assert record["argv"] == ["--parsable", "--wait", str(Path(env["OUTPUT_DIR"]) / "submit-bw01.sh")]
+    for expected in (env["OUTPUT_DIR"], "experiment/report.json", "experiment/figures",
+                     "Job ID: 12345", "slurm-12345.out", "slurm-12345.err", "squeue -j 12345", "scancel 12345"):
+        assert expected in result.stdout
+
+
+def test_reduced_cpu_request_defaults_build_jobs_to_that_budget(sandbox):
+    _, _, capture, _, invoke = sandbox
+    fake_workspace(sandbox)
+    result = invoke("run_node.sh", "bw01", "--dry-run", "-c", "4")
+    assert result.returncode == 0, result.stderr
+    assert batch_request(sandbox, "bw01")["cpus-per-task"] == "4"
+    assert execute_payload(sandbox, "bw01").returncode == 0
+    assert values(json.loads(capture.read_text())["argv"], "--jobs") == ["4"]
+
+
+def test_site_reduced_cpu_allocation_caps_default_build_jobs(sandbox):
+    _, env, capture, _, invoke = sandbox
+    fake_workspace(sandbox)
+    env["SLURM_CPUS_PER_TASK"] = "4"
+    assert invoke("run_node.sh", "bw01", "--dry-run").returncode == 0
+    result = execute_payload(sandbox, "bw01")
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(capture.read_text())["argv"]
+    assert values(argv, "--jobs") == ["4"]
+    assert values(argv, "--threads") == ["4"]
+
+
+def test_modules_are_loaded_before_automatic_apptainer_selection(sandbox):
+    tmp, env, capture, stub, invoke = sandbox
+    fake_workspace(sandbox)
+    module_bin = tmp / "module-tools"
+    stub("apptainer", directory=module_bin)
+    sif = tmp / "image.sif"
+    sif.touch()
+    module_log = tmp / "modules.log"
+    env.update(SIF_FILE=str(sif), MODULE_BIN=str(module_bin), MODULE_LOG=str(module_log))
+    env["BASH_FUNC_module%%"] = '''() { printf '%s\\n' "$*" >> "$MODULE_LOG";
+if [[ "$*" == "load apptainer" ]]; then export PATH="$MODULE_BIN:$PATH"; fi
+}'''
+    result = invoke("run_node.sh", "bw01", "--dry-run")
+    assert result.returncode == 0, result.stderr
+    result = execute_payload(sandbox, "bw01")
+    assert result.returncode == 0, result.stderr
+    assert module_log.read_text().splitlines() == ["load apptainer", "load cuda", "load gcc", "load python3.12"]
+    record = json.loads(capture.read_text())
+    assert Path(record["executable"]).name == "run-apptainer.sh"
+    assert "Results and logs:" in result.stdout
+
+
+def test_worker_reports_failure_and_retains_status(sandbox):
+    _, env, _, _, invoke = sandbox
+    fake_workspace(sandbox)
+    env["STUB_EXIT"] = "37"
+    assert invoke("run_node.sh", "bw01", "--dry-run").returncode == 0
+    result = execute_payload(sandbox, "bw01")
+    assert result.returncode == 37
+    assert "Job exit status: 37" in result.stdout
+    assert env["OUTPUT_DIR"] in result.stdout
+
+
+def test_native_uses_newer_python_without_replacing_plot_python(sandbox):
+    _, env, capture, _, invoke = sandbox
+    fake_workspace(sandbox)
+    env["PLOT_PYTHON"] = "/system/python3.9-with-plots"
+    assert invoke("run_node.sh", "bw01", "--dry-run", "--runtime", "native").returncode == 0
+    result = execute_payload(sandbox, "bw01")
+    assert result.returncode == 0, result.stderr
+    selected = json.loads(capture.read_text())["env"]
+    assert selected["PYTHON"] == "python3.12"
+    assert selected["PLOT_PYTHON"] == env["PLOT_PYTHON"]
+    assert "compiler/pipeline Python: python3.12" in result.stdout
+
+
+def test_original_interactive_launch_preserves_account_and_resources(sandbox):
+    _, _, capture, stub, invoke = sandbox
+    fake_workspace(sandbox)
+    stub("srun")
+    result = invoke("run_node.sh", "-p", "gpu-short", "-A", "kdss", "bw01", "--interactive")
+    assert result.returncode == 0, result.stderr
+    record = json.loads(capture.read_text())
+    assert Path(record["executable"]).name == "srun"
+    assert "--partition=gpu-short" in record["argv"]
+    assert "--account=kdss" in record["argv"]
+    assert "--cpus-per-task=8" in record["argv"]
+    assert record["argv"][-2] == "bash"
 
 
 def test_node_container_maps_external_config_and_scratch(sandbox):

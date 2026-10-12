@@ -163,6 +163,7 @@ def run_elmm(args):
                           "config": str(args.config) if args.config else None, "steps": args.steps,
                           "threads": args.threads, "jobs": args.jobs, "repeats": args.repeats,
                           "warmups": args.warmups, "architecture": args.arch,
+                          "allow_native_variation": args.allow_native_variation,
                           "output": str(args.output_dir / "experiment"), "work": str(args.work_dir),
                           "target_wall_ratio_to_original_native": .80, "executes_work": False}, indent=2))
         return
@@ -179,74 +180,74 @@ def run_elmm(args):
     args.output_dir.mkdir(parents=True, exist_ok=True)
     write(args.output_dir / "machine.json", machine)
     target = prepare(args) if args.app_root is None else PIPELINE
-    from sgs_experiment import run_experiment
     native = target / ".cache/native/lib"
-    result = run_experiment(app_root=args.app_root or target / ".cache/repos",
-        compiler_root=COMPILER, pipeline_root=PIPELINE,
-        python=args.compiler_python or target / ".cache/envs/local/bin/python",
-        scons_python=args.scons_python or target / ".cache/envs/build/bin/python",
-        native_library_dir=args.native_library_dir or native,
-        output=args.output_dir / "experiment", work_dir=args.work_dir / "experiment",
-        config=args.config, case=args.case, gpu_options=machine["toolchain"],
-        jobs=args.jobs, threads=args.threads, steps=args.steps, repeats=args.repeats,
-        warmups=args.warmups, timeout=args.timeout)
-    plot_experiment(args.output_dir / "experiment/report.json", args.output_dir / "experiment/figures")
+    compiler_python = args.compiler_python or target / ".cache/envs/local/bin/python"
+    # Source analysis needs the prepared parser environment, even when the
+    # node's newer system Python has no third-party packages installed.
+    command = [str(compiler_python), str(HERE / "sgs_experiment.py")]
+    for flag, value in {
+        "app-root": args.app_root or target / ".cache/repos", "compiler-root": COMPILER,
+        "pipeline-root": PIPELINE, "python": compiler_python,
+        "scons-python": args.scons_python or target / ".cache/envs/build/bin/python",
+        "native-library-dir": args.native_library_dir or native,
+        "output": args.output_dir / "experiment", "work-dir": args.work_dir / "experiment",
+        "case": args.case, "jobs": args.jobs, "threads": args.threads,
+        "repeats": args.repeats, "warmups": args.warmups, "timeout": args.timeout,
+        "nvcc": machine["toolchain"]["nvcc"], "cuda-host": machine["toolchain"]["cuda_host_cxx"],
+        "gpu-arch": machine["toolchain"]["architecture"],
+    }.items():
+        command.extend(["--" + flag, str(value)])
+    if args.config is not None:
+        command.extend(["--config", str(args.config)])
+    if args.steps is not None:
+        command.extend(["--steps", str(args.steps)])
+    if args.allow_native_variation:
+        command.append("--allow-native-variation")
+    print("Source-analysis interpreter:", compiler_python, flush=True)
+    subprocess.run(command, check=True)
+    result = json.loads((args.output_dir / "experiment/report.json").read_text())
     print(json.dumps(result.get("summary", result), indent=2))
+    print("Results:", args.output_dir / "experiment/report.json", flush=True)
+    plot_experiment(args.output_dir / "experiment/report.json", args.output_dir / "experiment/figures")
+
+
+def plotting_python():
+    """Choose plotting dependencies independently of the compiler interpreter."""
+    explicit = os.environ.get("PLOT_PYTHON")
+    candidates = ([explicit] if explicit is not None else
+                  [sys.executable, "python3", "python3.12", "python3.11", "python3.10", "python3.9",
+                   "/usr/bin/python3", "/usr/bin/python3.9"])
+    failures, seen = [], set()
+    probe = ("import sys; "
+             "assert sys.version_info >= (3, 9), 'plotting needs Python 3.9+'; "
+             "import matplotlib, numpy")
+    for candidate in candidates:
+        executable = shutil.which(candidate) if candidate else None
+        if not executable:
+            failures.append(str(candidate) + ": interpreter not found")
+            continue
+        if executable in seen:
+            continue
+        seen.add(executable)
+        try:
+            result = subprocess.run([executable, "-c", probe], capture_output=True, text=True, timeout=20)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            failures.append(executable + ": " + str(error))
+            continue
+        if result.returncode == 0:
+            return executable
+        failures.append(executable + ": " + (result.stderr.strip() or "Matplotlib/NumPy probe failed"))
+    prefix = "PLOT_PYTHON is unusable" if explicit is not None else "No plotting interpreter with Matplotlib/NumPy found"
+    raise RuntimeError(prefix + "; set PLOT_PYTHON to a Python 3.9+ interpreter with those packages. "
+                       + " | ".join(failures))
 
 
 def plot_experiment(report, output):
-    """Plot only this paired experiment, with no dependency on archived runs."""
-    from sgs_experiment import summarize
-    report = Path(report).resolve(strict=True)
-    value = json.loads(report.read_text())
-    if (value.get("status") != "passed" or value["summary"] != summarize(value["runs"])
-            or not value["gpu_evidence"]["verified"]
-            or not all(row["validation"]["passed"] for row in value["correctness"] + value["runs"])):
-        raise ValueError("successful fresh timing and GPU/VTK evidence required")
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    import numpy as np
-    output = Path(output)
-    output.mkdir(parents=True, exist_ok=False)
-    rows = [value["summary"][mode] for mode in ("native", "current")]
-    for relative in (False, True):
-        baseline = rows[0]["median"] if relative else 1
-        fig, ax = plt.subplots(figsize=(7, 7))
-        medians = [row["median"] / baseline for row in rows]
-        maximum = max(row["max"] / baseline for row in rows)
-        ax.bar([0, 1], medians, width=.58, color=["#475569", "#0284c7"],
-               yerr=[[median - row["min"] / baseline for median, row in zip(medians, rows)],
-                     [row["max"] / baseline - median for median, row in zip(medians, rows)]], capsize=5)
-        for position, row in enumerate(rows):
-            ax.scatter(position + np.linspace(-.12, .12, len(row["samples"])),
-                       np.array(row["samples"]) / baseline, s=30, color="white", edgecolor="#172033", zorder=3)
-            ax.text(position, row["max"] / baseline + .03 * maximum,
-                    f"{medians[position]:.3f}" + ("×" if relative else " s"), ha="center")
-        if relative:
-            ax.axhline(.8, color="#15803d", linestyle="--", label="20% lower wall time than original native")
-            ax.legend(loc="upper center", fontsize=10)
-        ax.set(xticks=[0, 1], xticklabels=["Original native", "SGS direct"], ylim=(0, 1.18 * maximum),
-               ylabel="Complete wall time / original native" if relative else "Complete wall time (s)",
-               title=f"{value['case']} · {value['protocol']['threads']} host threads")
-        ax.grid(axis="y", alpha=.2)
-        ax.set_axisbelow(True)
-        eligible = value["performance_eligible"] and value.get("comparison_budget_eligible", True)
-        fig.text(.5, .05, ("Fresh paired measurements" if eligible else "Smoke/separate-budget run; no target claim")
-                 + f" · n={rows[0]['repetitions']} · {value['protocol']['warmups']} excluded warmup(s)\n"
-                 "Dots: samples; bars: medians; whiskers: min–max. Startup/output/teardown included.\n"
-                 "Separate GPU diagnostics; VTK validation only. Automatic policy not promoted.",
-                 ha="center", fontsize=10, linespacing=1.5)
-        fig.subplots_adjust(bottom=.24, top=.90, left=.14, right=.97)
-        name = "complete-wall-relative" if relative else "complete-wall-absolute"
-        for extension in ("png", "svg", "pdf"):
-            fig.savefig(output / f"{name}.{extension}", dpi=180)
-        plt.close(fig)
-    write(output / "source.json", {"report": str(report),
-          "report_sha256": hashlib.sha256(report.read_bytes()).hexdigest(),
-          "plotter_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
-          "rendering_only": True, "measurement_started_utc": value["started_utc"],
-          "files_sha256": source_identity(output)["files"]})
+    """Render with an independent plotting Python; compiler Python is unchanged."""
+    interpreter = plotting_python()
+    print("Plotting interpreter:", interpreter, flush=True)
+    subprocess.run([interpreter, str(HERE / "plot_experiment.py"), "--report", str(report),
+                    "--output-dir", str(output)], check=True)
 
 
 def reproduce(args):
@@ -321,6 +322,8 @@ def main():
             child.add_argument("--repeats", type=int, default=7)
             child.add_argument("--warmups", type=int, default=1)
             child.add_argument("--timeout", type=int, default=900)
+            child.add_argument("--allow-native-variation", action="store_true",
+                               help="Complete unvalidated timings if native output varies; no target or promotion claim")
             child.add_argument("--app-root", type=Path, help="Explicit prepared source root with elmm/PoisFFT siblings")
             child.add_argument("--compiler-python", type=Path)
             child.add_argument("--scons-python", type=Path)
