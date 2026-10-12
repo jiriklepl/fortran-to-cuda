@@ -113,6 +113,21 @@ def apply_source_compute_costs(analysis, profile, native_participation, *, array
     Fortran identity and CPU placement are checked at the original caller and
     query respectively; a source model cannot authorize a different backend.
     """
+    from compiler.offload.cost_projection import _SourceCostProjection
+
+    try:
+        with _SourceCostProjection(profile) as projection:
+            return _apply_source_compute_costs(analysis, profile, native_participation,
+                array_views=array_views, source_applicability=source_applicability, projection=projection)
+    except NumericalCalibrationError as error:
+        # A late profile/identity change invalidates every model issued by this
+        # operation, including earlier units. No stale estimate is published.
+        return replace(analysis, units=tuple(replace(unit, work_per_iteration=None, compute_model=None,
+            work_estimate_reason=str(error)) for unit in analysis.units))
+
+
+def _apply_source_compute_costs(analysis, profile, native_participation, *, array_views,
+                              source_applicability, projection):
     units = []
     for unit in analysis.units:
         if (unit.compute_arithmetic_operations_per_iteration is None
@@ -133,14 +148,14 @@ def apply_source_compute_costs(analysis, profile, native_participation, *, array
             from compiler.offload.dependency_source import current_source_bundle_requested, dependency_source_model
             if current_source_bundle_requested(profile):
                 model = dependency_source_model(unit, profile, native_participation,
-                    source_applicability=source_applicability)
+                    source_applicability=source_applicability, _projection=projection)
             elif "numerical_execution" in profile:
                 from compiler.offload.numerical_execution import execution_compute_model
                 model = execution_compute_model(profile, tuple(sorted(primitives.items())),
                     workload_class=unit.workload_class, workload_features=unit.workload_features,
                     native_participation="fork_join" if native_participation == "fork_join_runtime" else native_participation)
             elif "cpu_dependency" in profile:
-                model = dependency_source_model(unit, profile, native_participation)
+                model = dependency_source_model(unit, profile, native_participation, _projection=projection)
             else:
                 model = numerical_compute_model(profile, tuple(sorted(primitives.items())),
                     workload_class=unit.workload_class, workload_features=unit.workload_features,

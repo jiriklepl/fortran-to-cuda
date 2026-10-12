@@ -2508,6 +2508,21 @@ Every validation rehashes it; changing any retained observation invalidates
 preparation. Large profiles do not consume the statement budget as if their
 measurement fields were source operations.
 
+One synchronous source-cost attachment shares raw reconstruction across its
+units and their native/generated implementation queries. Evidence is copied
+lazily after the source eligibility guards into an owned JSON snapshot; small
+validated cost sections are retained as immutable serialized data. Each query
+still checks its compiled form, workload, domains, features and access class.
+Returned dictionaries own their values. No snapshot survives the operation or
+supplies allocation freshness at application runtime.
+
+Before publishing any estimates, attachment checks the complete original profile
+and current reader/backend identities again. A change discards all estimates
+from that operation, including estimates for earlier units, and keeps AUTO
+native. Public cost queries continue to reconstruct evidence afresh. Rejected
+observations and acceptance thresholds are unchanged; reader changes still
+invalidate their calibration identities and do not relabel archived profiles.
+
 Source planning supplies complete compute seconds for all three implementations
 through `fort_scope_plan_add_compute_costs_v3`. Transfers, launches, allocation
 and coordination are charged separately. The unchanged compute-cost payload

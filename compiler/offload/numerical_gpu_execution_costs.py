@@ -61,7 +61,10 @@ def launch_build_commands(paths, architecture):
 
 
 def _identity(profile, identity):
-    parent = profile[gpu.SECTION]
+    _identity_from_parent(profile[gpu.SECTION], identity)
+
+
+def _identity_from_parent(parent, identity):
     if not isinstance(identity, dict):
         raise gpu.NumericalGpuExecutionError("GPU launch identity missing")
     # These fields are emitted by the unchanged original driver, on the actual
@@ -193,12 +196,17 @@ def _coordinate(row, recipe, size, precision, kind):
 
 def validate_launch_preflight(profile, identity, rows):
     gpu.validate_gpu_execution_profile(profile)
-    _identity(profile, identity)
-    recipe = next(r for r in profile[gpu.SECTION]["registry"] if r["name"] == "memory")
+    _launch_preflight_from_parent(profile[gpu.SECTION], profile["precision_bits"], identity, rows)
+
+
+def _launch_preflight_from_parent(parent, precision, identity, rows):
+    """Check controls after this demand has authenticated their exact parent."""
+    _identity_from_parent(parent, identity)
+    recipe = next(r for r in parent["registry"] if r["name"] == "memory")
     if not isinstance(rows, list) or len(rows) != len(CONTROL_SIZES):
         raise gpu.NumericalGpuExecutionError("GPU launch complete preflight required")
     for row, size in zip(rows, CONTROL_SIZES, strict=True):
-        _coordinate(row, recipe, size, profile["precision_bits"], PREFLIGHT_KIND)
+        _coordinate(row, recipe, size, precision, PREFLIGHT_KIND)
         if type(row.get("launches")) is not int or row["launches"] != int(size > 0):
             raise gpu.NumericalGpuExecutionError("GPU nonzero launch/zero skip proof differs")
 
@@ -208,9 +216,14 @@ def _build(profile, records, calibration):
     _hash(calibration)
     if not isinstance(records, list) or len(records) != MAX_RECORDS:
         raise gpu.NumericalGpuExecutionError("GPU launch requires four preflights and21 ordered raw batches")
+    gpu.validate_gpu_execution_profile(profile)
+    return _build_from_parent(profile[gpu.SECTION], profile["precision_bits"], records, calibration)
+
+
+def _build_from_parent(parent, precision, records, calibration):
+    """Derive unchanged costs after parent and record-envelope validation."""
     identity = records[0]
-    validate_launch_preflight(profile, identity, records[1:5])
-    parent = profile[gpu.SECTION]
+    _launch_preflight_from_parent(parent, precision, identity, records[1:5])
     target = Path(identity["build_paths"]["artifacts"])
     argv = ["taskset", "-c", ",".join(map(str, identity["sampling_cpu_affinity"])),
             str(target / "numerical-gpu-launch"), str(identity["device_ordinal"])]
@@ -243,7 +256,7 @@ def _build(profile, records, calibration):
     for order, row in enumerate(records[5:]):
         batch, offset = divmod(order, len(MEASURED_SIZES))
         size = MEASURED_SIZES[offset]
-        _coordinate(row, recipe, size, profile["precision_bits"], BATCH_KIND)
+        _coordinate(row, recipe, size, precision, BATCH_KIND)
         if (type(row.get("batch")) is not int or row["batch"] != batch
                 or type(row.get("global_order")) is not int or row["global_order"] != order
                 or type(row.get("repetitions")) is not int or not 0 < row["repetitions"] < 1 << 63
@@ -278,10 +291,10 @@ def _build(profile, records, calibration):
     families = {name: {"gpu": _family(recipe, costs, startup)} for name, recipe in fitting.items()}
     classes = {name: _class([r for r in parent["registry"] if r["role"] == "holdout"
                             and r["workload_class"] == name], costs, families, fitting, startup,
-                           profile["precision_bits"]) for name in CLASSES}
+                           precision) for name in CLASSES}
     domains = {name: _class([r for r in parent["registry"] if r["holdout_kind"] == "domain"
                             and r["family"] == name], costs, families, fitting, startup,
-                           profile["precision_bits"]) for name in ("sqrt", "acos", "cos")}
+                           precision) for name in ("sqrt", "acos", "cos")}
     return {"schema_version": SCHEMA_VERSION, "protocol_id": PROTOCOL_ID,
             "identity": deepcopy(identity), "measurements": deepcopy(records), "calibration": deepcopy(calibration),
             "startup": startup, "families": families, "workload_validation": classes, "domain_validation": domains,
@@ -305,6 +318,10 @@ def profile_from_gpu_launch_measurements(profile, records, calibration):
 
 def validate_gpu_execution_costs(profile):
     """Read historical costs without lowering, discovery or current-identity rebinding."""
+    _validated_gpu_cost_sections(profile)
+
+
+def _validated_gpu_cost_sections(profile):
     try:
         section = profile.get(SECTION)
         if (not isinstance(section, dict) or type(section.get("schema_version")) is not int
@@ -313,8 +330,22 @@ def validate_gpu_execution_costs(profile):
             raise gpu.NumericalGpuExecutionError("GPU execution costs missing")
         if section != _build(profile, section.get("measurements"), section.get("calibration")):
             raise gpu.NumericalGpuExecutionError("GPU costs differ from raw reconstruction")
+        return profile[gpu.SECTION], section
     except (KeyError, TypeError, ValueError, OverflowError) as error:
         raise gpu.NumericalGpuExecutionError(str(error)) from error
+
+
+def _current_gpu_cost_sections(profile):
+    """Issue detached current sections after one fresh raw validation demand."""
+    parent, section = _validated_gpu_cost_sections(profile)
+    identity = parent["identity"]
+    current = gpu.current_gpu_identities(profile["precision_bits"])
+    if (identity["source_generator_id"], identity["registry_id"], identity["generator_id"],
+            identity["renderer_sources"]) != current:
+        raise gpu.NumericalGpuExecutionError("GPU current source/renderer identity mismatch")
+    if section["identity"]["cost_sources"] != cost_sources():
+        raise gpu.NumericalGpuExecutionError("GPU cost implementation/access identity differs")
+    return deepcopy(parent), deepcopy(section)
 
 
 def gpu_execution_costs(profile, counts, *, workload_class, workload_features, access_class):
@@ -324,10 +355,14 @@ def gpu_execution_costs(profile, counts, *, workload_class, workload_features, a
     grants no CPU, existing-team, descriptor, definition or primitive-domain
     authority; those source applicability obligations remain independent.
     """
-    validate_gpu_execution_costs(profile)
-    parent = gpu.require_current_gpu_execution(profile)
-    section = profile[SECTION]
-    if section["identity"]["cost_sources"] != cost_sources() or access_class != ACCESS_CLASS:
+    parent, section = _current_gpu_cost_sections(profile)
+    return _gpu_costs_from_sections(parent, section, counts, workload_class=workload_class,
+        workload_features=workload_features, access_class=access_class)
+
+
+def _gpu_costs_from_sections(parent, section, counts, *, workload_class, workload_features, access_class):
+    """Select from a private detached projection; publication retains freshness."""
+    if access_class != ACCESS_CLASS:
         raise gpu.NumericalGpuExecutionError("GPU cost implementation/access identity differs")
     if not isinstance(counts, (dict, list, tuple)):
         raise gpu.NumericalGpuExecutionError("GPU primitive counts unavailable")

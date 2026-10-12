@@ -4,7 +4,8 @@ from copy import deepcopy
 
 from compiler.ir import ArrayAccess, Assignment, Reference
 from compiler.ir.nodes import walk_expr
-from compiler.offload.cpu_dependency_calibration import ACCESS_CLASS, CURRENT_PROTOCOL_ID, DOMAINS, cpu_dependency_costs
+from compiler.offload.cost_projection import _SourceCostProjection
+from compiler.offload.cpu_dependency_calibration import ACCESS_CLASS, CURRENT_PROTOCOL_ID, DOMAINS
 from compiler.offload.numerical_calibration import (
     COMPUTE_BACKEND_ID,
     COMPUTE_PRIVATE_LIMITS,
@@ -48,7 +49,17 @@ def current_source_bundle_requested(profile):
             or isinstance(dependency, dict) and dependency.get("protocol_id") == CURRENT_PROTOCOL_ID)
 
 
-def dependency_source_model(unit, profile, native_participation, *, source_applicability=None):
+def dependency_source_model(unit, profile, native_participation, *, source_applicability=None, _projection=None):
+    """Price a source unit within one fresh, guarded attachment operation."""
+    if _projection is None:
+        with _SourceCostProjection(profile) as projection:
+            return _dependency_source_model(unit, profile, native_participation,
+                source_applicability=source_applicability, projection=projection)
+    return _dependency_source_model(unit, profile, native_participation,
+        source_applicability=source_applicability, projection=_projection)
+
+
+def _dependency_source_model(unit, profile, native_participation, *, source_applicability, projection):
     """Keep legality, source semantics and cost applicability separate.
 
     The first memory contract admits one-dimensional contiguous pointwise
@@ -94,7 +105,7 @@ def dependency_source_model(unit, profile, native_participation, *, source_appli
     for role, backend in (("native_fortran", "native_" + native_participation), ("generated_cpu", "generated_cpu")):
         form = (source_applicability.native_compiled_form if role == "native_fortran"
                 else source_applicability.generated_compiled_form) if current else None
-        costs = cpu_dependency_costs(profile, graph, backend, workload_class=unit.workload_class,
+        costs = projection.cpu_costs(graph, backend, workload_class=unit.workload_class,
             workload_features=unit.workload_features, primitive_domains=domains, access_class=ACCESS_CLASS,
             **({"compiled_form": form} if current else {}))
         cpu[role] = {**costs, "compute_seconds_per_item": costs["seconds_per_item"],
@@ -103,7 +114,7 @@ def dependency_source_model(unit, profile, native_participation, *, source_appli
             "fixed_cost_coverage": costs["fixed_cost_coverage"] if current else "measured_execution_protocol_once_outside_max"}
 
     if current:
-        return _current_source_model(unit, profile, native_participation, cpu, source_applicability)
+        return _current_source_model(unit, profile, native_participation, cpu, source_applicability, projection)
 
     section = profile.get("numerical", {})
     validate_numerical_profile(section, profile)
@@ -140,13 +151,11 @@ def dependency_source_model(unit, profile, native_participation, *, source_appli
                                      for name in ("omp_wait_policy", "gomp_spincount")}}
 
 
-def _current_source_model(unit, profile, native_participation, cpu, applicability):
-    from compiler.offload.numerical_gpu_execution_costs import gpu_execution_costs
-
+def _current_source_model(unit, profile, native_participation, cpu, applicability, projection):
     primitives = dict(unit.intrinsic_work_per_iteration)
     if unit.compute_runtime_divisions_per_iteration:
         primitives["divide"] = unit.compute_runtime_divisions_per_iteration
-    gpu = gpu_execution_costs(profile, primitives, workload_class=unit.workload_class,
+    gpu = projection.gpu_costs(primitives, workload_class=unit.workload_class,
         workload_features=unit.workload_features, access_class=ACCESS_CLASS)
     affinity = cpu["native_fortran"]["cpu_affinity"]
     if cpu["generated_cpu"]["cpu_affinity"] != affinity or gpu["cpu_affinity"] != affinity:
