@@ -311,8 +311,9 @@ def _derive(analysis, procedure, selection, prepared, consume):
     prepared.validate(analysis, procedure, selection, consume=consume)
     if not prepared.all_runtime_guards_typed:
         raise NumericalEffectUnsupported("numerical effect requires typed authority for every original runtime guard")
-    routine = analysis._require_original(procedure)
     graph, identities = analysis._selected_source(procedure, selection)
+    # The selection lookup has just authenticated this exact original routine.
+    routine = analysis.routines[procedure]
     if not prepared.offload.available:
         raise NumericalEffectUnsupported("numerical effect physical analysis unavailable: "
                                          + str(prepared.offload.reason))
