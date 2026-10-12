@@ -206,6 +206,9 @@ if [[ -z "${PYTHON:-}" ]] || ! "$PYTHON" -c 'import sys; sys.exit(sys.version_in
     exit 2
 fi
 printf 'Running natively; compiler/pipeline Python: %s\n' "$PYTHON"
+if [[ -z "${FC:-}" ]] && command -v gfortran-15 >/dev/null; then
+    export FC=gfortran-15
+fi
 env WORKSPACE_ROOT="$workspace" WORK_DIR="$work" \
     "$workspace/containers/entrypoint.sh" "${workflow[@]}" \
     --output-dir "$output" --work-dir "$work"

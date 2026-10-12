@@ -149,6 +149,8 @@ def guarded(args):
     from elmm_pipeline.campaigns.guard import available
     if available() < 3 * 2**30:
         raise RuntimeError("less than 3 GiB effective available memory; no job started")
+    print("Output directory:", args.output_dir, flush=True)
+    print("Progress log:", args.output_dir / "run.log", flush=True)
     command = [sys.executable, "-m", "elmm_pipeline.campaigns.guard",
                "--record", str(args.output_dir / "guard.json"),
                "--log", str(args.output_dir / "run.log"), "--",
@@ -179,7 +181,16 @@ def run_elmm(args):
         raise ValueError("jobs/threads exceed the allocated CPU affinity")
     args.output_dir.mkdir(parents=True, exist_ok=True)
     write(args.output_dir / "machine.json", machine)
-    target = prepare(args) if args.app_root is None else PIPELINE
+    target = PIPELINE
+    if args.app_root is None:
+        cache = PIPELINE / ".cache"
+        prepared = all((cache / path).exists() for path in (
+            "setup.json", "repos/elmm/src/SConstruct", "repos/PoisFFT/src/SConstruct",
+            "envs/local/bin/python", "envs/build/bin/python", "native/lib"))
+        if prepared:
+            print("Using prepared pipeline cache:", cache, flush=True)
+        else:
+            target = prepare(args)
     native = target / ".cache/native/lib"
     compiler_python = args.compiler_python or target / ".cache/envs/local/bin/python"
     # Source analysis needs the prepared parser environment, even when the
