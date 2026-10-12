@@ -123,6 +123,56 @@ def test_unavailable_estimates_keep_safe_effect_queries_separate(tmp_path, repla
         assert "FORT_SCOPE_PLAN_WORKER" not in query_text(emitted)
 
 
+@pytest.mark.parametrize("numerical_environment", [False, True])
+def test_definition_only_query_skips_unused_cost_boxes_but_keeps_checked_effects(tmp_path, numerical_environment):
+    from dataclasses import replace
+
+    source = SOURCE.replace("a(i+1)=b(i+1)*coefficient+real(i,8)",
+                            "a(i+1)=sqrt(b(i+1)*b(i+1)+1.0_8)")
+    path = tmp_path / "definition_only.f90"
+    path.write_text(source)
+    function, plan = prepare_function(lower_file(path, "advance"), options=CompilerOptions(gpu_policy="auto"))
+    if numerical_environment:
+        function = replace(function, requires_numerical_environment=True)
+    emitted = generate_scoped(function, plan, OffloadConfig("auto", None, 4), "common_functions.cuh",
+                              runtime_id=read_scoped_runtime()[1]["runtime_id"])
+    query = query_text(emitted)
+    helper = emitted.cuda.split("static offload::Data plan_unit_0", 1)[1].split(
+        "static offload::Data plan_unit_1", 1)[0].split(
+        'extern "C" int ' + emitted.report["planning"]["entry"], 1)[0]
+    assert "append_box(" not in helper
+    assert "u.arrays.resize(" not in helper
+    # Layout, guarded domain and overflow validation remain in the helper;
+    # the exact physical sections remain in the public definition query.
+    assert "a.bytes && !a.host" in helper
+    assert "if (active) {" in helper
+    assert "offload::mul(points, extent, points)" in helper
+    assert "invalid checked planning footprint" in query
+    assert "fort_access.add(" in query
+    assert "FORT_SCOPE_PLAN_WORKER" in query
+    assert not emitted.report["planning"]["units"][0]["cost_footprints_prepared"]
+
+
+def test_costed_query_still_constructs_placement_footprints(tmp_path):
+    emitted = emit(tmp_path)
+    helper = emitted.cuda.split("static offload::Data plan_unit_0", 1)[1].split(
+        'extern "C" int ' + emitted.report["planning"]["entry"], 1)[0]
+    assert "append_box(" in helper
+    assert "u.arrays.resize(" in helper
+    assert "offload::box_bytes(" in helper
+    assert emitted.report["planning"]["units"][0]["cost_footprints_prepared"]
+
+
+def test_uncertain_effect_query_keeps_conservative_placement_guards(tmp_path):
+    emitted = emit(tmp_path, SOURCE.replace("a(i+1)=b(i+1)*coefficient+real(i,8)",
+                                           "if(b(i+1)>0) a(i+1)=b(i+1)"))
+    assert not emitted.report["planning"]["available"]
+    assert emitted.report["planning"]["units"][0]["cost_footprints_prepared"]
+    helper = emitted.cuda.split("static offload::Data plan_unit_0", 1)[1].split(
+        "static offload::Data plan_unit_1", 1)[0]
+    assert "append_box(" in helper
+
+
 def test_missing_or_old_runtime_calibration_cannot_select_gpu(tmp_path):
     emitted = emit(tmp_path)
     assert not emitted.report["automatic_estimate_available"]
@@ -196,6 +246,23 @@ end subroutine
 end module
 '''
 
+DEFINITION_ONLY_SOURCE = '''module definition_only_case
+contains
+subroutine advance(a,n,m,l)
+real(8),intent(inout)::a(:,:,:)
+integer,intent(in)::n,m,l
+integer::i,j,k
+do k=1,l
+ do j=1,m
+  do i=1,n
+   a(i,j,k)=sqrt(a(i,j,k)*a(i,j,k)+1.0_8)
+  enddo
+ enddo
+enddo
+end subroutine
+end module
+'''
+
 OUT_SOURCE = '''module planned_out_case
 contains
 subroutine advance(a,n)
@@ -223,7 +290,7 @@ def planning_library(tmp_path_factory):
     import shutil
 
     from compiler.emission.common.resources import read_common_header
-    from compiler.tests.test_scoped_runtime import TOKEN, Access, Layout, Stats
+    from compiler.tests.test_scoped_runtime import TOKEN, Access, Layout, Section, Stats
 
     nvcc, host, fortran = shutil.which("nvcc"), shutil.which("g++-14"), shutil.which("gfortran-15")
     if not nvcc or not host or not fortran:
@@ -238,12 +305,13 @@ def planning_library(tmp_path_factory):
     reports = {}
     for name, source in {"guarded": BEHAVIOR_SOURCE, "bounds": GUARDED_BOUNDS_SOURCE,
                          "out": OUT_SOURCE, "overflow": OUT_SOURCE.replace("i=1,n", "i=1,n+1"),
-                         "incompatible": OUT_SOURCE}.items():
+                         "incompatible": OUT_SOURCE, "definition_only": DEFINITION_ONLY_SOURCE}.items():
         subdirectory = directory / name
         subdirectory.mkdir()
         emitted = emit(subdirectory, source, calibration=calibration() if name == "incompatible" else None)
         reports[name] = emitted.report
-        assert emitted.report["planning"]["available"]
+        assert emitted.report["planning"]["query_available"]
+        assert emitted.report["planning"]["available"] == (name != "definition_only")
         (directory / f"{name}.cu").write_text(emitted.cuda)
         (directory / f"{name}.f90").write_text(emitted.fortran)
         _command([fortran, "-std=f2018", "-c", f"{name}.f90", "-o", f"{name}-interface.o"], directory)
@@ -261,7 +329,8 @@ def planning_library(tmp_path_factory):
     lib.fort_scope_error.restype = c.c_char_p
     for name, signature in {
         "create": [c.c_int, c.POINTER(TOKEN)], "register": [TOKEN, TOKEN, TOKEN, c.POINTER(Layout), c.c_int, c.POINTER(TOKEN)],
-        "plan_reset": [TOKEN], "wait": [TOKEN], "close": [TOKEN], "stats_get": [TOKEN, c.POINTER(Stats)],
+        "register_sections": [TOKEN, TOKEN, TOKEN, c.POINTER(Layout), c.POINTER(Section), c.c_size_t, c.POINTER(TOKEN)],
+        "plan_reset": [TOKEN], "plan_validate": [TOKEN], "wait": [TOKEN], "close": [TOKEN], "stats_get": [TOKEN, c.POINTER(Stats)],
         "host_begin": [TOKEN, TOKEN, c.POINTER(Access)], "host_end": [TOKEN, TOKEN],
         "device_begin": [TOKEN, TOKEN, c.POINTER(Access), c.POINTER(c.c_void_p)], "device_end": [TOKEN, TOKEN],
     }.items():
@@ -316,6 +385,37 @@ def test_query_only_records_out_without_mutating_definition_or_values(planning_l
     assert bytes(scope.stats()) == before
     scope.cpu_begin(buffer, access(flags=1))
     scope.cpu_end(buffer)
+    scope.close()
+
+
+@pytest.mark.native
+@pytest.mark.parametrize(("dimensions", "defined", "query_status", "proof_status"), [
+    ((2, 2, 1), [((0, 0, 0), (2, 2, 1))], 0, 0),
+    ((2, 2, 1), [], 0, 7),
+    ((5, 2, 1), [((0, 0, 0), (4, 3, 2))], 5, None),
+    ((2**31-1, 2**31-1, 2**31-1), [], 5, None),
+    ((2, 2, 0), [], 0, 0),
+])
+def test_definition_only_query_retains_exact_sections_and_domain_failures(
+        planning_library, dimensions, defined, query_status, proof_status):
+    import ctypes as c
+
+    from compiler.tests.test_scoped_runtime import Scope
+    lib, reports, _ = planning_library
+    scope = Scope(lib)
+    values = (c.c_double * 24)(*range(24))
+    status, buffer = scope.register(values, [4, 3, 2], lower=[-2, 3, -7], defined=defined)
+    scope.check(status)
+    n, m, depth = (c.c_int(value) for value in dimensions)
+    before = bytes(scope.stats())
+    scope.check(lib.fort_scope_plan_reset(scope.handle))
+    result = getattr(lib, reports["definition_only"]["planning"]["entry"])(
+        scope.handle, buffer, c.byref(n), c.byref(m), c.byref(depth))
+    assert result == query_status, lib.fort_scope_error().decode()
+    if proof_status is not None:
+        assert lib.fort_scope_plan_validate(scope.handle) == proof_status, lib.fort_scope_error().decode()
+    assert list(values) == list(range(24))
+    assert bytes(scope.stats()) == before
     scope.close()
 
 
@@ -490,6 +590,17 @@ query.argtypes=[TOKEN,TOKEN,c.POINTER(c.c_int),c.POINTER(c.c_int)]
 n=c.c_int(0)
 scope.check(lib.fort_scope_plan_reset(scope.handle))
 scope.check(query(scope.handle,buffer,c.byref(n),c.cast(pointer,c.POINTER(c.c_int))))
+assert list(values)==list(range(8))
+assert scope.stats().launches==0
+scope.close()
+scope=Scope(lib)
+status,buffer=scope.register(values,[2,2,2]); scope.check(status)
+query=getattr(lib,{reports["definition_only"]["planning"]["entry"]!r})
+query.argtypes=[TOKEN,TOKEN,c.POINTER(c.c_int),c.POINTER(c.c_int),c.POINTER(c.c_int)]
+l=c.c_int(0)
+scope.check(lib.fort_scope_plan_reset(scope.handle))
+scope.check(query(scope.handle,buffer,c.cast(pointer,c.POINTER(c.c_int)),
+                  c.cast(pointer,c.POINTER(c.c_int)),c.byref(l)))
 assert list(values)==list(range(8))
 assert scope.stats().launches==0
 scope.close()

@@ -228,15 +228,6 @@ Contiguous sections use flat copies; pitched rectangles use 2D or 3D copies.
 An interior 3D rectangle takes one runtime copy call instead of one per plane;
 higher ranks use one 3D copy per remaining coordinate. Transfer estimates count
 these same calls. Disjoint faces stay separate and copyback never fills gaps.
-In scoped direct mode, CUDA runtime and driver 13.4 or newer can submit two to
-64 disjoint physical copies for one canonical buffer as one exact copy batch.
-The copies retain original pitches and stream ordering. Unsupported versions
-and larger lists use the previous path before enqueue; failed batch submissions
-poison the context and are never replayed. Pinned transfers retain their existing
-behavior. Legacy transfer counters count operations within batches; trace event
-`copy_batch` adds actual `copy_submissions`, `copy_operations` and byte volume.
-Batching is disabled for cost-selected plans pending versioned batch-cost
-calibration; forced sections and manual contexts may use it.
 Overlapping sections are reduced to an exact disjoint union when worthwhile,
 with at most 32 rectangles and 1,024 intersection checks per array/direction.
 The same rectangles feed execution, cost estimates, and transfer traces.
@@ -272,6 +263,9 @@ in source order; each worker receives its current local scalar values.
 The public query evaluates only the checked INTEGER/LOGICAL slice needed for
 predicates, bounds, and footprints. It checks integer intermediates and immutable
 array indices, preserves nested guards, and never computes numerical REAL setup.
+Definition-only queries with exact bounded effects omit unused placement-cost
+footprints while retaining checked domains, exact effects and ordered definition
+validation. The planning manifest reports `cost_footprints_prepared` per unit.
 REAL-dependent decision expressions, host array writes, preparation reading
 arrays written by the entry, and sequential fallback regions remain native.
 LOGICAL query conversion is permitted only for inputs unconditionally readable
