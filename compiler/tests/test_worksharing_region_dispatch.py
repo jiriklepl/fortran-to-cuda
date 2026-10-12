@@ -110,12 +110,12 @@ def test_worksharing_dispatch_cannot_execute_with_serial_participation(tmp_path)
 
 
 def test_worksharing_preparation_rejects_copied_proof_before_lowering(tmp_path, monkeypatch):
-    from compiler.scopes import region_dispatch
+    from compiler import frontend
 
     builder, loops, joined = example(tmp_path)
     proof = builder.analysis.worksharing_completion(builder.entry.qualified, joined, (loops[1],))
     attempts = []
-    monkeypatch.setattr(region_dispatch, "lower_source", lambda *args, **kwargs: attempts.append(args))
+    monkeypatch.setattr(frontend, "lower_source", lambda *args, **kwargs: attempts.append(args))
     with pytest.raises(CompilationError, match="original-team authority"):
         builder.inline.prepare_worksharing(loops[1], replace(proof))
     assert not attempts
