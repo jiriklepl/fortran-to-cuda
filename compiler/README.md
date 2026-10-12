@@ -1430,6 +1430,19 @@ the manifest reports both the reached-proof bound and the expanded total.
 Automatic continuation through these teams remains native without compatible
 calibration for the complete original-team coordination protocol.
 
+An unsaved reusable source helper whose entire body is one supported complete
+numerical OpenMP group can retain that team when the original environment needs
+participant checks. Each call keeps its original arguments and borrowed handles,
+so the same helper can serve different arrays and dummy bounds. All original
+workers vote before the master prepares or queries numerical work. A native
+choice uses an independent complete source-effects plan: validation and host
+begin precede the unchanged body, and host end follows the team join. This worker
+never closes its borrowed context; failed native validation is a checked hard
+error. Original INTENT(OUT) definition loss still occurs at child entry. Whole
+return coverage requires the same exact group's independent source must-write
+proof and validated numerical equivalence; partial or conditional writes gain no
+whole-array credit.
+
 Numerical outlining uses a distinct registered completion proof when the
 original joined loop calls bounded source-backed PURE helpers. The complete
 transitive helper closure must finish synchronously, without unknown calls,
