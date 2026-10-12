@@ -3,9 +3,9 @@
 from copy import copy
 from types import SimpleNamespace
 
+import pytest
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import walk
-import pytest
 
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
@@ -51,9 +51,9 @@ def test_original_comment_selection_uses_one_authentication_pass(tmp_path, monke
     calls = []
     original = analysis._require_original
 
-    def counted(requested):
+    def counted(requested, *, _syntax=None):
         calls.append(requested)
-        return original(requested)
+        return original(requested, _syntax=_syntax)
 
     monkeypatch.setattr(analysis, "_require_original", counted)
     graph, identities = analysis._selected_source(routine.qualified, (*comments, assignment))
@@ -75,9 +75,9 @@ def test_segment_projection_authenticates_once_and_keeps_original_identity_check
     calls = []
     original = analysis._require_original
 
-    def counted(requested):
+    def counted(requested, *, _syntax=None):
         calls.append(requested)
-        return original(requested)
+        return original(requested, _syntax=_syntax)
 
     monkeypatch.setattr(analysis, "_require_original", counted)
     projected, projection, _guards = analysis._segment_projection(routine.qualified, identities)

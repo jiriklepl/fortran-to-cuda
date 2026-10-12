@@ -2006,12 +2006,9 @@ class SourceEffects:
         from compiler.frontend.component_bindings import source_scope_for
         return source_scope_for(self, node, default)
 
-    def _require_original(self, requested, *, _syntax=None):
-        """Only original parsed source, not lookalike ASTs, grants authority."""
+    def _require_original_global(self, *, _syntax=None):
+        """Check shared original files, provenance and module syntax freshly."""
         self.inputs.verify()
-        routine = self.routines.get(requested)
-        original = self._source_roles.get(requested)
-        numerical = self._numerical_roles.get(requested)
         syntax = _syntax if _syntax is not None else self._source_syntax.checkpoint()
         if any(getattr(node, "item", None) is not item or item.span != span
                or getattr(item, "fort_original_span", None) != original_span
@@ -2020,12 +2017,24 @@ class SourceEffects:
         if any(name not in self.modules or self.modules[name].node is not node or not syntax.unchanged(node)
                for name, (node, _text) in getattr(self, "_source_module_roles", {}).items()):
             raise CompilationError("structured effects require unchanged original source-backed module authority")
+        return syntax
+
+    def _require_original_routine(self, requested, *, _syntax):
+        """Check one exact routine inside an immediate authenticated demand."""
+        routine = self.routines.get(requested)
+        original = self._source_roles.get(requested)
+        numerical = self._numerical_roles.get(requested)
         if (routine is None or original is None or routine.execution is not original[0]
-                or self._routine_signature(routine) != original[1] or not syntax.unchanged(routine.execution)
+                or self._routine_signature(routine) != original[1] or not _syntax.unchanged(routine.execution)
                 or numerical is None or routine.scope.node is not numerical[0]
-                or not syntax.unchanged(routine.scope.node)):
+                or not _syntax.unchanged(routine.scope.node)):
             raise CompilationError("structured effects require original source-backed procedure authority")
         return routine
+
+    def _require_original(self, requested, *, _syntax=None):
+        """Only original parsed source, not lookalike ASTs, grants authority."""
+        syntax = self._require_original_global(_syntax=_syntax)
+        return self._require_original_routine(requested, _syntax=syntax)
 
     def structure(self, requested):
         """Return one reusable local skeleton without expanding its callees."""
