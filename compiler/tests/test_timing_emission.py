@@ -59,9 +59,9 @@ def test_generated_non_kernel_execution_counts_run_without_kernel_time(tmp_path,
     driver = """#include <cassert>
 int main() {
     int a[] = {1, 2, 3, 4};
-    generated_kernels::cpp_start_hot();
+    generated_kernels::cpp_entry_start_hot();
     generated_kernels::cpp_entry(a, 4, 0);
-    generated_kernels::cpp_finish_hot();
+    generated_kernels::cpp_entry_finish_hot();
     assert(a[0] == EXPECTED_FIRST && a[1] == 2 && a[2] == 3 && a[3] == 4);
     assert(fort_test_allocations == 1 && fort_test_frees == 1);
     assert(fort_test_uploads == 1 && fort_test_downloads == 1);
@@ -85,9 +85,9 @@ def test_generated_kernels_exclude_intervening_host_coherence_transfers(tmp_path
     driver = """#include <cassert>
 int main() {
     int a[] = {1, 2, 3, 4};
-    generated_kernels::cpp_start_hot();
+    generated_kernels::cpp_entry_start_hot();
     generated_kernels::cpp_entry(a, 4, 4);
-    generated_kernels::cpp_finish_hot();
+    generated_kernels::cpp_entry_finish_hot();
     assert(a[0] == 24 && a[1] == 6 && a[2] == 8 && a[3] == 10);
     assert(fort_test_uploads == 2 && fort_test_downloads == 2);
 }
@@ -110,14 +110,14 @@ def test_generated_branch_counts_only_executed_nonempty_launches(tmp_path):
     driver = """#include <cassert>
 int main() {
     int a[] = {1, 2, 3, 4};
-    generated_kernels::cpp_start_hot();
+    generated_kernels::cpp_entry_start_hot();
     generated_kernels::cpp_entry(a, 4, 4, true);
     assert(a[0] == 11 && a[1] == 12 && a[2] == 13 && a[3] == 14);
     generated_kernels::cpp_entry(a, 4, 4, false);
     assert(a[0] == 111 && a[1] == 12 && a[2] == 13 && a[3] == 14);
     generated_kernels::cpp_entry(a, 4, 0, true);
     assert(a[0] == 111 && a[1] == 12 && a[2] == 13 && a[3] == 14);
-    generated_kernels::cpp_finish_hot();
+    generated_kernels::cpp_entry_finish_hot();
     assert(fort_test_uploads == 3 && fort_test_downloads == 3);
 }
 """
@@ -144,7 +144,7 @@ int main() {
     std::atomic<int> ready{0};
     std::atomic<bool> go{false};
     std::vector<std::thread> workers;
-    generated_kernels::cpp_start_hot();
+    generated_kernels::cpp_entry_start_hot();
     for (int t = 0; t < threads; ++t) workers.emplace_back([&, t] {
         ++ready;
         while (!go.load()) std::this_thread::yield();
@@ -157,7 +157,7 @@ int main() {
     while (ready.load() != threads) std::this_thread::yield();
     go = true;
     for (auto& worker : workers) worker.join();
-    generated_kernels::cpp_finish_hot();
+    generated_kernels::cpp_entry_finish_hot();
     assert(fort_test_allocations == threads * repeats && fort_test_frees == threads * repeats);
     assert(fort_test_uploads == threads * repeats && fort_test_downloads == threads * repeats);
     assert(fort_test_events == threads * repeats * 10);

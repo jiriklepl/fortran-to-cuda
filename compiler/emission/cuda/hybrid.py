@@ -105,7 +105,7 @@ def _kernel(name, function, region, chunk):
         )
     parameters.extend(["std::size_t fort_hybrid_begin", "std::size_t fort_internal_total"])
     lines = [
-        f"__global__ void {name}(",
+        f"static __global__ void {name}(",
         *indent([p + ("," if i + 1 < len(parameters) else "") for i, p in enumerate(parameters)]),
         ") {",
         "    const std::size_t fort_hybrid_stride = static_cast<std::size_t>(gridDim.x) * blockDim.x;",
