@@ -62,7 +62,9 @@ On the worker, the script initializes environment modules when necessary and
 loads `apptainer`, `cuda`, `gcc` and the original Python module alternatives
 before choosing the container runtime. Native execution selects an available
 Python 3.12 or newer unless `PYTHON` is supplied explicitly. Plotting may use a
-different interpreter with NumPy and Matplotlib; set `PLOT_PYTHON` to select it.
+different interpreter with NumPy and Matplotlib; for native runs, set
+`PLOT_PYTHON` to select it. Container runs use their packaged plotting interpreter;
+host interpreter paths are not forwarded into the container.
 Source extraction runs inside the prepared compiler/parser environment, so the
 newer system Python does not need fparser, NumPy or Matplotlib installed globally.
 The paired-result plotter accepts Python 3.9+ and reads JSON receipts without
