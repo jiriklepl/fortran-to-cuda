@@ -14,6 +14,7 @@ from compiler.numerical_contract import require_explicit_cuda_environment, requi
 from compiler.tests.support.borrowed_numerical_team import (
     ENTRY,
     INITIALIZER,
+    OWNER_SOURCE,
     SCALER,
     borrowed_team_launch_counts,
     emit_borrowed_team_fixture,
@@ -53,7 +54,7 @@ integer,parameter::sizes(3)=[2,7,31]
 integer::shape,repeat,n,m,p,nx,ny,nz,low,i,j,k,unit,calls
 character(16)::path
 call get_command_argument(1,path)
-if(path/='eligible'.and.path/='empty') error stop 'unknown path'
+if(path/='eligible'.and.path/='empty'.and.path/='partial') error stop 'unknown path'
 calls=0
 open(newunit=unit,file='fields.bin',access='stream',form='unformatted',status='replace')
 do shape=1,size(sizes)
@@ -93,7 +94,7 @@ d=-103.0_{precision}
 gain=real(repeat+1,{precision})*0.125_{precision}
 calls=calls+1
 write(error_unit,'(a,i0)') 'BEGIN_CALL ',calls
-call advance(a,work,b,c,d,n,m,p,gain)
+call advance(a,work,b,c,d,n,m,p,gain,path=='partial')
 write(error_unit,'(a,i0)') 'END_CALL ',calls
 if(owner_visits/=calls) error stop 'original prefix replayed'
 write(unit)shape,repeat,n,m,p,owner_visits
@@ -118,21 +119,38 @@ def borrowed_team_binaries(tmp_path_factory, request):
         pytest.skip("native Fortran and CUDA toolchain required")
     require_explicit_cuda_environment()
     directory = tmp_path_factory.mktemp("borrowed_numerical_team_" + str(precision))
-    originals, outputs, report, builder = emit_borrowed_team_fixture(directory / "original", precision=precision)
+    source = OWNER_SOURCE.replace("n,m,p,gain)", "n,m,p,gain,reject_partial)", 1)
+    source = source.replace("logical::original_mask",
+                            "logical,intent(in)::reject_partial\nlogical::original_mask", 1)
+    source = source.replace("call reset(b,0)",
+        "if(reject_partial) call scale(work(:,:,0:0),gain)\ncall reset(b,0)", 1)
+    originals, outputs, report, builder = emit_borrowed_team_fixture(
+        directory / "original", precision=precision, owner_source=source)
     owner, = report["scopes"]
-    assert not owner["boundaries"], owner["boundaries"]
+    boundary, = owner["boundaries"]
+    assert boundary["reason"] == "native rectangular source-call mapping requires projected native hooks"
+    assert boundary["conditional_close"].lower() == "reject_partial"
+    assert boundary["reopen"] is False
+    emitted = outputs[report["sources"][str(originals[1])]["replacement"]].lower().replace(" ", "")
+    assert emitted.count("callscale(work(:,:,0:0),gain)") == 1
     assert not owner["module_coordinators"]
     children = {child["procedure"]: child for child in report["borrowed_source_coordinators"]}
     assert set(children) == {INITIALIZER, SCALER}
     assert all(child["ownership"]["close_count"] == 0 for child in children.values())
     assert all(builder.facts["captures"]["argument::" + name]["initialized"] == "none" for name in ("b", "c", "d"))
     resources = {item["resource"]: item for item in owner["resource_bindings"]["resources"]}
-    root_launches, helper_launches = borrowed_team_launch_counts(builder, report)
+    root_launches, helper_launches = borrowed_team_launch_counts(builder, report, rejected_actual="work(:,:,0:0)")
     calls = [call for call in report["resolved_calls"]
              if call["caller"] == ENTRY and call["procedure"] in {INITIALIZER, SCALER}]
-    assert len(calls) == 6
+    rejected, = [call for call in calls
+                 if call["actual_arguments"][0].replace(" ", "").lower() == "work(:,:,0:0)"]
+    assert rejected["procedure"] == SCALER
+    assert (rejected["first_line"], rejected["last_line"]) == (boundary["first_line"], boundary["last_line"])
+    assert len(calls) == 7
+    whole_calls = [call for call in calls if call is not rejected]
+    assert len(whole_calls) == 6
     for procedure in (INITIALIZER, SCALER):
-        assert {call["resource_mapping"]["argument::values"] for call in calls
+        assert {call["resource_mapping"]["argument::values"] for call in whole_calls
                 if call["procedure"] == procedure} == {"argument::b", "argument::c", "argument::d"}
     output, build, native_build = directory / "generated", directory / "build", directory / "native-build"
     output.mkdir()
@@ -208,6 +226,12 @@ def test_actual_participant_veto_keeps_coherent_native_helpers_after_gpu_prefix(
     _check_chain(borrowed_team_binaries, "eligible", veto=True)
 
 
+@pytest.mark.cuda
+@pytest.mark.parametrize("disabled", [False, True], ids=["cuda", "disabled"])
+def test_rejected_partial_helper_then_whole_calls_close_after_prefix_without_replay(borrowed_team_binaries, disabled):
+    _check_chain(borrowed_team_binaries, "partial", disabled=disabled)
+
+
 def _check_chain(binaries, path, *, disabled=False, veto=False):
     directory, candidate, native, wrapped, precision, resources, root_launches, helper_launches = binaries
     label = path + ("-veto" if veto else "-disabled" if disabled else "-cuda")
@@ -233,8 +257,8 @@ def _check_chain(binaries, path, *, disabled=False, veto=False):
     events = ("FORT_SCOPED launch ", "FORT_SCOPED upload ", "FORT_SCOPED download ")
     assert not any(line.startswith(events) for line in re.sub(pattern, "", trace, flags=re.DOTALL).splitlines())
     ids = {root: item["registration_identity"] for root, item in resources.items()}
-    numerical = not disabled and path == "eligible"
-    launches = root_launches + (0 if veto else helper_launches) if numerical else 0
+    numerical = not disabled and path != "empty"
+    launches = (1 if path == "partial" else root_launches + (0 if veto else helper_launches)) if numerical else 0
     for ordinal, call_trace in calls:
         assert call_trace.count("FORT_SCOPED launch ") == launches, call_trace
         gpu_events = [line for line in call_trace.splitlines() if line.startswith(events)]
@@ -250,13 +274,21 @@ def _check_chain(binaries, path, *, disabled=False, veto=False):
         whole = (n + 5) * 7 * 5 * precision
         up = {ids["argument::a"]: interior, ids["argument::work"]: interior}
         down = {ids["argument::work"]: interior}
-        for name in ("b", "c", "d"):
-            if veto:
-                up[ids["argument::" + name]] = 2 * interior
-            down[ids["argument::" + name]] = interior if veto else whole
+        if path != "partial":
+            for name in ("b", "c", "d"):
+                if veto:
+                    up[ids["argument::" + name]] = 2 * interior
+                down[ids["argument::" + name]] = interior if veto else whole
         transfers = _transfers(call_trace)
         assert dict(transfers["upload"]) == up, call_trace
         assert dict(transfers["download"]) == down, call_trace
+        if path == "partial":
+            assert call_trace.count("FORT_SCOPED create ") == 1
+            assert call_trace.count("FORT_SCOPED close ") == 1
+            close = call_trace.index("FORT_SCOPED close ")
+            assert call_trace.index("FORT_SCOPED launch ") < close
+            assert call_trace.rindex("FORT_SCOPED download ") < close
+            assert not any(line.startswith(events) for line in call_trace[close:].splitlines())
         if veto:
             votes = re.findall(r"TEST_BORROWED_TEAM_VOTE thread=(\d+) level=(\d+) supported=(\d+)", call_trace)
             assert Counter(votes) == Counter({("0", "1", "1"): 6, ("1", "1", "1"): 6,
@@ -268,6 +300,7 @@ def _check_chain(binaries, path, *, disabled=False, veto=False):
         "three_distinct_original_actual_mappings_reuse_two_team_workers": True,
         "original_out_entry_has_no_admitted_incoming_payload_definitions": True,
         "native_helpers_keep_same_context_after_non_idempotent_gpu_prefix": veto,
+        "rejected_partial_helper_publishes_gpu_prefix_then_runs_original_suffix_once": path == "partial" and numerical,
         "all_cuda_events_are_inside_call_markers_and_one_context_per_call": True,
         "launches_per_call": launches, "native_sha256": sha256(fields["native"]).hexdigest(),
         "candidate_sha256": sha256(fields["candidate"]).hexdigest(),

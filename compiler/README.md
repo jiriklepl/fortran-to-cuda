@@ -1972,6 +1972,10 @@ before child argument association can rebase bounds. The emitted child retains
 its original logical coordinates and declarations. Whole joined native groups
 require their separate original completion proof and remain indivisible; a
 coordinate proof alone cannot authorize a team or a cut inside one.
+Rolling back a rejected scope also discards newly cached successful child
+coordinators with their numerical proof pairs. Retained coordinators keep their
+original registry identities; rebuilding a discarded child does not refund the
+procedure, inline-attempt or operation search limits.
 In opt-in serial `--scope-execution reached` mode, incomplete whole-entry
 descriptor stability for original allocatable formals, or explicit selected-window
 module captures, triggers compiler-owned window discovery before inline
