@@ -26,18 +26,19 @@ def test_invalid_optimization_level_is_rejected(opt_level: int) -> None:
         CompilerOptions(opt_level=opt_level)
 
 
-def test_nondefault_scope_transfers_require_explicit_scoped_ownership():
+@pytest.mark.parametrize("transfers", ["pinned", "coalesced"])
+def test_nondefault_scope_transfers_require_explicit_scoped_ownership(transfers):
     from compiler.emission import generate_sources
     from compiler.ir import CompilationError
     from compiler.offload.config import OffloadConfig
 
     with pytest.raises(CompilationError, match="require scoped memory"):
-        CompilerOptions(gpu_policy="sections", scope_transfers="pinned")
-    options = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_transfers="pinned")
+        CompilerOptions(gpu_policy="sections", scope_transfers=transfers)
+    options = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_transfers=transfers)
     function, plan = prepare_function(lower_file(Path(__file__).parent / "fixtures" / "fill_array.f90", "fill_array"),
                                      options=options)
     with pytest.raises(CompilationError, match="require scoped memory"):
-        generate_sources(function, plan, offload_config=OffloadConfig("sections", scope_transfers="pinned"))
+        generate_sources(function, plan, offload_config=OffloadConfig("sections", scope_transfers=transfers))
 
 
 def test_invalid_scope_transfer_combination_preserves_public_outputs(tmp_path):

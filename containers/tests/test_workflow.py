@@ -96,7 +96,8 @@ def test_unmatched_cuda_device_fails_instead_of_picking_nvml_first(monkeypatch):
 
 
 @pytest.mark.parametrize("unvalidated", [False, True])
-def test_experiment_plots_preserve_validation_status(tmp_path, monkeypatch, unvalidated):
+@pytest.mark.parametrize("transfers", ["direct", "coalesced"])
+def test_experiment_plots_preserve_validation_status(tmp_path, monkeypatch, unvalidated, transfers):
     monkeypatch.delenv("PLOT_PYTHON", raising=False)
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
     from sgs_experiment import summarize
@@ -108,7 +109,8 @@ def test_experiment_plots_preserve_validation_status(tmp_path, monkeypatch, unva
              "target_met": None if unvalidated else True, "summary": summarize(runs), "runs": runs,
              "correctness": [], "gpu_evidence": {"verified": True}, "started_utc": "2026-10-12T00:00:00Z",
              "protocol": {"threads": 4, "warmups": 1, "allow_native_variation": unvalidated},
-             "performance_eligible": True, "comparison_budget_eligible": True}
+             "performance_eligible": True, "comparison_budget_eligible": True,
+             "selection": {"scope_transfers": transfers}}
     report = tmp_path / "report.json"
     report.write_text(json.dumps(value))
     output = tmp_path / "figures"
@@ -116,6 +118,7 @@ def test_experiment_plots_preserve_validation_status(tmp_path, monkeypatch, unva
     svg = (output / "complete-wall-relative.svg").read_text()
     assert ("UNVALIDATED: native outputs are not repeatable" in svg) is unvalidated
     assert ("no correctness or target claim" in svg) is unvalidated
+    assert "SGS " + transfers in svg
     assert (output / "source.json").is_file()
 
 
@@ -141,7 +144,8 @@ def test_run_elmm_dry_run_exposes_explicit_native_variation_option(tmp_path, mon
     assert not value["executes_work"]
 
 
-def test_source_analysis_runs_in_prepared_parser_python(tmp_path, monkeypatch):
+@pytest.mark.parametrize("transfers", ["pinned", "coalesced"])
+def test_source_analysis_runs_in_prepared_parser_python(tmp_path, monkeypatch, transfers):
     output = tmp_path / "results with spaces"
     parser_python = tmp_path / "prepared parser/bin/python"
     source_root = tmp_path / "prepared sources"
@@ -159,7 +163,7 @@ def test_source_analysis_runs_in_prepared_parser_python(tmp_path, monkeypatch):
     monkeypatch.setattr(workflow.subprocess, "run", execute)
     monkeypatch.setattr(sys, "argv", ["workflow.py", "run-elmm", "--case", "channel",
         "--output-dir", str(output), "--app-root", str(source_root),
-        "--compiler-python", str(parser_python), "--allow-native-variation", "--scope-transfers", "pinned"])
+        "--compiler-python", str(parser_python), "--allow-native-variation", "--scope-transfers", transfers])
     workflow.main()
     assert len(calls) == 1
     command = calls[0]
@@ -167,7 +171,7 @@ def test_source_analysis_runs_in_prepared_parser_python(tmp_path, monkeypatch):
     assert command[command.index("--python") + 1] == str(parser_python)
     assert command[command.index("--app-root") + 1] == str(source_root)
     assert command[command.index("--gpu-arch") + 1] == "120"
-    assert command[command.index("--scope-transfers") + 1] == "pinned"
+    assert command[command.index("--scope-transfers") + 1] == transfers
     assert "--allow-native-variation" in command
     assert "--steps" not in command
 

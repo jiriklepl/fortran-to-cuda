@@ -47,7 +47,7 @@ def configured(library, mode=1):
     return scope
 
 
-@pytest.mark.parametrize(("mode", "reason"), [(0, 0), (1, 0), (2, 2), (3, 1)])
+@pytest.mark.parametrize(("mode", "reason"), [(0, 0), (1, 0), (2, 2), (3, 1), (4, 0)])
 def test_configuration_and_readonly_statistics_do_not_initialize_cuda(pinned, mode, reason):
     scope = configured(pinned, mode)
     before = bytes(scope.stats())
@@ -57,7 +57,7 @@ def test_configuration_and_readonly_statistics_do_not_initialize_cuda(pinned, mo
     assert first.fallback_reason == reason
     assert first.fallbacks == bool(reason)
     assert bytes(scope.stats()) == before
-    assert pinned.fort_scope_set_transfers(scope.handle, 4) == 1
+    assert pinned.fort_scope_set_transfers(scope.handle, 5) == 1
     assert stats(scope).requested_mode == mode
     scope.close()
 
@@ -221,7 +221,10 @@ use iso_c_binding
 use fort_scoped_memory
 implicit none
 type(fort_scope_transfer_stats) :: stats
-print *, c_sizeof(stats), FORT_SCOPE_TRANSFER_ABI_VERSION, FORT_SCOPE_TRANSFERS_PINNED
+print *, c_sizeof(stats), FORT_SCOPE_TRANSFER_ABI_VERSION, &
+         FORT_SCOPE_TRANSFERS_DIRECT, FORT_SCOPE_TRANSFERS_PINNED, &
+         FORT_SCOPE_TRANSFERS_PIPELINED, FORT_SCOPE_TRANSFERS_AUTO, FORT_SCOPE_TRANSFERS_COALESCED, &
+         FORT_SCOPE_TRANSFER_COALESCED_INELIGIBLE
 end program
 """)
     runtime_source = Path(__file__).resolve().parents[1] / "runtime" / "scoped_memory.f90"
@@ -231,4 +234,4 @@ end program
     assert built.returncode == 0, built.stderr
     result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stderr
-    assert [int(value) for value in result.stdout.split()] == [c.sizeof(TransferStats), 1, 1]
+    assert [int(value) for value in result.stdout.split()] == [c.sizeof(TransferStats), 1, 0, 1, 2, 3, 4, 5]

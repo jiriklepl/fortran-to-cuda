@@ -33,6 +33,7 @@ def emit(tmp_path, transfers, *, profile=None, collective=False):
     ("direct", "direct", None, "DIRECT"), ("pinned", "pinned", None, "PINNED"),
     ("auto", "direct", "transfer_estimates_unavailable", "AUTO"),
     ("pipelined", "direct", "pipelined_not_available", "PIPELINED"),
+    ("coalesced", "runtime", None, "COALESCED"),
 ])
 def test_public_configuration_retains_requested_mode_without_initializing_cuda(tmp_path, requested, selected, reason, constant):
     emitted = emit(tmp_path, requested)
@@ -76,6 +77,23 @@ def test_direct_transfer_fallback_retains_calibrated_direct_placement(tmp_path, 
     assert "costs.valid = 1" in emitted.cuda
 
 
+def test_coalesced_uploads_keep_calibrated_exact_direct_placement(tmp_path):
+    emitted = emit(tmp_path, "coalesced", profile=calibration())
+    assert emitted.report["automatic_estimate_available"]
+    configuration = emitted.report["transfer_configuration"]
+    assert configuration["selected"] == "runtime"
+    assert configuration["placement_estimate_available"]
+    limits = configuration["coalesced"]
+    assert limits["minimum_physical_copies"] == 2
+    assert limits["maximum_extra_bytes_fraction"] == 0.125
+    assert "defined and host current" in limits["source_requirement"]
+    assert limits["pinning"] is False
+    assert "exact direct" in limits["placement"]
+    assert limits["fallback_reason"] == "coalesced_upload_ineligible"
+    assert "costs.valid = 1" in emitted.cuda
+    assert not emitted.report["batch_execution"]["enabled"]
+
+
 def source_scope(tmp_path, transfers, *, collective=False, structured=False, policy="sections", profile=None):
     source = tmp_path / "original.f90"
     text = TEAM_SOURCE if collective else TREE if structured else PROGRAM
@@ -108,7 +126,7 @@ def source_scope(tmp_path, transfers, *, collective=False, structured=False, pol
 
 
 @pytest.mark.parametrize("collective", [False, True])
-@pytest.mark.parametrize("transfers", ["direct", "pinned", "pipelined", "auto"])
+@pytest.mark.parametrize("transfers", ["direct", "pinned", "pipelined", "auto", "coalesced"])
 def test_owners_configure_once_before_registration_and_planning(tmp_path, collective, transfers):
     _, report, owner = source_scope(tmp_path, transfers, collective=collective)
     scope, = report["scopes"]

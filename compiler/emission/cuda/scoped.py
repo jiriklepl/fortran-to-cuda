@@ -102,7 +102,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         return f'fort_worker_trace.implementation("{implementation_ids[region.id, "generated_cpu"]}");'
     configure_name = c_name + "_configure"
     transfer_modes = {"direct": "FORT_SCOPE_TRANSFERS_DIRECT", "pinned": "FORT_SCOPE_TRANSFERS_PINNED",
-                      "pipelined": "FORT_SCOPE_TRANSFERS_PIPELINED", "auto": "FORT_SCOPE_TRANSFERS_AUTO"}
+                      "pipelined": "FORT_SCOPE_TRANSFERS_PIPELINED", "auto": "FORT_SCOPE_TRANSFERS_AUTO",
+                      "coalesced": "FORT_SCOPE_TRANSFERS_COALESCED"}
     transfer_reason = {"auto": "transfer_estimates_unavailable", "pipelined": "pipelined_not_available"}.get(config.scope_transfers)
     scalar_signature = [f"const {cpp_type(s)} *fort_scalar_{s.cpp_name}" for s in scalars]
     def array_parameter(symbol):
@@ -264,7 +265,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         # copy geometry. Planning v1 has no complete calibrated model for it.
         costs = None
         profile_reason = "transfer_estimates_unavailable"
-    if transfer_costs is None or config.scope_transfers == "direct":
+    if transfer_costs is None or config.scope_transfers in {"direct", "coalesced"}:
         lines += [f'extern "C" int {configure_name}(fort_scope_t fort_context) {{',
                   *(([f"    FORT_SHARED_CHECK(fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]}));",
                        f"    return {team_configure_name}(fort_context);"]) if config.collective else
@@ -1036,8 +1037,9 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
             "generated_cpu_fallback": "does not replace the original source for unsupported environments",
         },
         "transfer_configuration": {"abi_version": 1, "requested": config.scope_transfers,
-                                   "selected": "pinned" if config.scope_transfers == "pinned" else "direct",
-                                   "reason": transfer_reason, "available_modes": ["direct", "pinned"],
+                                   "selected": ("runtime" if config.scope_transfers == "coalesced" else
+                                                "pinned" if config.scope_transfers == "pinned" else "direct"),
+                                   "reason": transfer_reason, "available_modes": ["direct", "pinned", "coalesced"],
                                    "entry": configure_name, "fortran_procedure": "configure",
                                    "argument_order": ["context"],
                                    "position": "once per owning context before registration and planning",
@@ -1045,6 +1047,20 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                    "budget_scope": "process-wide including cached staging",
                                    "resource_fallback": "direct before this copy is enqueued; numerical work is never replayed",
                                    "runtime_stats": "fort_scope_transfer_stats_get_v1",
+                                   "coalesced": {
+                                       "experimental": True, "direction": "upload only; outputs remain exact",
+                                       "minimum_physical_copies": 2, "maximum_extra_bytes_fraction": 0.125,
+                                       "source_requirement": "whole canonical source resource is defined and host current",
+                                       "coordinates": "unchanged full-array layout and logical indices",
+                                       "pinning": False,
+                                       "initial_effective_mode": "direct",
+                                       "selected": "runtime eligibility per upload",
+                                       "placement": "cost-selected plans retain exact direct execution until calibrated",
+                                       "placement_fallback_reason": "transfer_estimates_unavailable",
+                                       "fallback": "exact direct transfer",
+                                       "fallback_reason": "coalesced_upload_ineligible",
+                                       "trace_events": {"upload_coalesced": "actual physical span bytes",
+                                                        "upload_requested": "required section bytes"}},
                                    "placement_estimate_available": bool(planning_available and costs is not None),
                                    "placement_estimate_reason": planning_reason or profile_reason},
         "batch_execution": {"abi_version": 1, "runtime_api": "fort_scope_batch_execute_v1",

@@ -144,7 +144,7 @@ def _parse_args() -> argparse.Namespace:
                         default="always", help="Opt-in ordinary-call transfer/execution policy.")
     parser.add_argument("--memory-model", choices=("call", "scoped"), default="call",
                         help="Emit shared-buffer numerical entry interfaces with scoped; requires sections or auto.")
-    parser.add_argument("--scope-transfers", choices=("direct", "pinned", "pipelined", "auto"), default="direct",
+    parser.add_argument("--scope-transfers", choices=("direct", "pinned", "pipelined", "auto", "coalesced"), default="direct",
                         help="Scoped transfer mode, independent of GPU placement (default: direct).")
     parser.add_argument("--scope-execution", choices=("bounded", "reached"), default="bounded",
                         help="Opt-in reached source execution; bounded retains existing source scopes.")

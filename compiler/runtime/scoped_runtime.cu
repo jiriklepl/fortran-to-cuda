@@ -354,6 +354,7 @@ const char *transfer_reason(uint32_t reason) noexcept {
         case FORT_SCOPE_TRANSFER_PIPELINED_UNAVAILABLE: return "pipelined_not_available";
         case FORT_SCOPE_TRANSFER_BUDGET: return "pinned_budget_exhausted";
         case FORT_SCOPE_TRANSFER_ALLOCATION: return "pinned_allocation_failed";
+        case FORT_SCOPE_TRANSFER_COALESCED_INELIGIBLE: return "coalesced_upload_ineligible";
         default: return "none";
     }
 }
@@ -565,6 +566,59 @@ void copy(Context &c, Buffer &b, const Box &box, bool upload) {
     c.pending = true;
     trace(c, upload ? "upload" : "download", &b, plan.bytes);
 }
+void copy_region(Context &c, Buffer &b, const Region &parts, bool upload) {
+    // Experimental upload-only transport. Logical coverage remains the exact
+    // requested union: extra physical bytes never establish device freshness.
+    // Full source freshness is deliberately stronger than span freshness, and
+    // prevents overwriting a newer device value in a gap between rectangles.
+    if (upload && !parts.empty() && c.transfer_stats.requested_mode == FORT_SCOPE_TRANSFERS_COALESCED) {
+        const auto full = b.full();
+        const bool source_full = b.initialized.size()==1 && contains(b.initialized.front(),full) &&
+            b.host_current.size()==1 && contains(b.host_current.front(),full);
+        size_t first=b.bytes, last=0, required_bytes=0, physical_copies=0;
+        if (source_full && !c.last_report && !c.batch_active) {
+            for (const auto &part : parts) {
+                const fort_physical::CopyPlan plan(b.element_bytes,b.extents,part.lo,part.hi);
+                require(plan.valid,FORT_SCOPE_ARGUMENT,"invalid physical transfer layout");
+                if (!plan.bytes) continue;
+                require(plan.bytes<=b.bytes-required_bytes &&
+                        plan.copies<=std::numeric_limits<size_t>::max()-physical_copies,
+                        FORT_SCOPE_ARGUMENT,"coalesced transfer extent overflow");
+                required_bytes+=plan.bytes; physical_copies+=plan.copies;
+                // Valid nonempty physical coordinates and the checked full
+                // allocation product bound both flat offsets by b.bytes.
+                size_t begin=0, end=b.element_bytes;
+                for (size_t k=0;k<b.extents.size();++k) {
+                    begin+=part.lo[k]*b.strides[k];
+                    end+=(part.hi[k]-1)*b.strides[k];
+                }
+                first=std::min(first,begin); last=std::max(last,end);
+            }
+        }
+        if (physical_copies>=2 && first<=last && last<=b.bytes &&
+            last-first>=required_bytes && last-first-required_bytes<=required_bytes/8) {
+            allocate(c,b);
+            auto *host=static_cast<char *>(b.host)+first, *device=static_cast<char *>(b.device)+first;
+            const auto bytes=last-first;
+#ifdef FORT_SCOPE_CPU_TEST
+            std::memcpy(device,host,bytes);
+#else
+            DeviceGuard guard(c);
+            cuda_check(c,cudaMemcpyAsync(device,host,bytes,cudaMemcpyHostToDevice,c.stream));
+#endif
+            ++c.stats.uploads; c.stats.upload_bytes+=bytes; c.pending=true;
+            c.transfer_stats.effective_mode=FORT_SCOPE_TRANSFERS_COALESCED;
+            trace(c,"upload_coalesced",&b,bytes);
+            trace(c,"upload_requested",&b,required_bytes);
+            trace(c,"upload",&b,bytes);
+            return;
+        }
+        c.transfer_stats.fallback_reason = c.last_report ? FORT_SCOPE_TRANSFER_ESTIMATES_UNAVAILABLE
+                                                       : FORT_SCOPE_TRANSFER_COALESCED_INELIGIBLE;
+        ++c.transfer_stats.fallbacks;
+    }
+    for (const auto &part : parts) copy(c,b,part,upload);
+}
 Region sections(const Buffer &b, const fort_scope_section *data, size_t count, bool full) {
     require(count <= rectangle_limit && (!count || data), FORT_SCOPE_ARGUMENT, "section list exceeds the bounded interface");
     Region result;
@@ -595,7 +649,7 @@ void reconcile(Context &c, Buffer &b, bool device) {
     // Every rectangle copied is current at the source. Copying already-current
     // destination cells is harmless; copying a stale enclosing box is not.
     const Region latest_other = device ? b.host_current : b.device_current;
-    for (const auto &part : latest_other) copy(c, b, part, device);
+    copy_region(c, b, latest_other, device);
     if (!device) wait(c);
     auto &chosen = device ? b.device_current : b.host_current;
     auto &other = device ? b.host_current : b.device_current;
@@ -613,7 +667,7 @@ void ensure(Context &c, Buffer &b, const Region &requested, bool device) {
                 "access reads an uninitialized section");
         const auto missing = difference(requested, chosen, budget);
         auto updated = unite(chosen, missing, budget);
-        for (const auto &part : missing) copy(c, b, part, device);
+        copy_region(c, b, missing, device);
         chosen = std::move(updated);
     } catch (const Fragmented &) {
         reconcile(c, b, device);
@@ -1885,7 +1939,7 @@ extern "C" int fort_scope_set_device_budget(fort_scope_t h, size_t bytes) {
 }
 extern "C" int fort_scope_set_transfers(fort_scope_t h, uint32_t mode) {
     return with(h, [&](Context &c) {
-        require(mode <= FORT_SCOPE_TRANSFERS_AUTO, FORT_SCOPE_ARGUMENT, "invalid scoped transfer mode");
+        require(mode <= FORT_SCOPE_TRANSFERS_COALESCED, FORT_SCOPE_ARGUMENT, "invalid scoped transfer mode");
         require(c.buffers.empty() && !c.ready && !c.plan_recording && !c.plan_installed,
                 FORT_SCOPE_STATE, "configure scoped transfers before registration and planning");
         auto &stats = c.transfer_stats;

@@ -19,9 +19,11 @@ module fort_scoped_memory
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRACE_ALL=63
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFERS_DIRECT=0, FORT_SCOPE_TRANSFERS_PINNED=1
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFERS_PIPELINED=2, FORT_SCOPE_TRANSFERS_AUTO=3
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFERS_COALESCED=4
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_NONE=0, FORT_SCOPE_TRANSFER_ESTIMATES_UNAVAILABLE=1
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_PIPELINED_UNAVAILABLE=2, FORT_SCOPE_TRANSFER_BUDGET=3
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_ALLOCATION=4
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_COALESCED_INELIGIBLE=5
 
   integer(c_int32_t), parameter, public :: FORT_SCOPE_PLANNING_ABI_VERSION=1
   integer(c_int32_t), parameter, public :: FORT_SCOPE_PLAN_NATIVE=0, FORT_SCOPE_PLAN_WORKER=1, FORT_SCOPE_PLAN_FORGET=2
