@@ -98,6 +98,13 @@ lookup without retaining proof state across compiler invocations. Replanning
 replaces the view and rebinds staged children; the existing generation
 transaction owns rollback.
 
+Ordinary lexical generation also reuses exact prepared/effect pairs within one
+read-only planning and emission pass. Newly issued pairs retain their fresh
+issuance checks; private lookups check the registered owner, tokens, facts and
+policy, then retained pairs are revalidated before the pass returns. Failed
+passes roll back candidate artifacts and fence publication. Public resolution,
+proof validation and later publication remain fresh demands.
+
 Package entry points remain `compiler.frontend.lower_file`,
 `compiler.analysis.build_execution_plan`, and `compiler.emission.generate_sources`.
 `compiler.driver.pipeline.prepare_function(function, *, options=CompilerOptions())`

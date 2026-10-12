@@ -301,7 +301,7 @@ class InlineRegions:
         from compiler.scopes.segments import original_roots
 
         sources = original_roots(self.original_selection(nodes))
-        region = self.builder.resolved_numerical_region(
+        region = self.builder._consume_numerical_region(
             self.builder.analysis, self.builder.entry.qualified, sources)
         if region is None:
             region = self.prepare_numerical_region(sources)
@@ -363,7 +363,11 @@ class InlineRegions:
         region = _ResolvedNumericalRegion(builder.entry.qualified, sources, prepared, effects)
         self.original_numerical_regions[tuple(id(node) for node in sources)] = region
         try:
-            return self.resolved_numerical_region(sources)
+            region = self.resolved_numerical_region(sources)
+            consumer = builder._ordinary_pair_state.active
+            if consumer is not None:
+                consumer.enroll(self, region)
+            return region
         except BaseException:
             del self.original_numerical_regions[tuple(id(node) for node in sources)]
             raise
@@ -395,7 +399,7 @@ class InlineRegions:
             # A serial caller's mask cannot establish the original workers'
             # masks. Keep the team for JoinedTeam's uniform reached preflight.
             raise CompilationError("original IEEE environment requires an original-team numerical preflight")
-        region = self.builder.resolved_numerical_region(
+        region = self.builder._consume_numerical_region(
             self.builder.analysis, self.builder.entry.qualified, sources)
         if region is not None:
             retained = region.prepared
@@ -578,7 +582,7 @@ class InlineRegions:
 
     def whole_definitions(self, call):
         """Must-write coverage authenticated against the original region."""
-        if self.builder.call_numerical_effect(call) is not None:
+        if self.builder._consume_call_numerical_effect(call) is not None:
             # Exact partial definition transfer belongs to the retained typed
             # effects proof. A bounding box never promotes a whole overwrite.
             return set()

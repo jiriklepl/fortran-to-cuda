@@ -623,7 +623,7 @@ class StructuredScope:
                     continue
                 if call.region is not None and (call.region.runtime_guards or call.region.requires_numerical_environment):
                     flush()
-                    numerical_effect = self.builder.call_numerical_effect(call)
+                    numerical_effect = self.builder._consume_call_numerical_effect(call)
                     if numerical_effect is not None:
                         # Conditional numerical sections cannot authorize the
                         # native operation when their geometry guards fail.

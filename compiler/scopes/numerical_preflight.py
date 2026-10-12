@@ -19,7 +19,7 @@ def preparation_preflight(builder, call, parameters):
 
     from compiler.scopes.segments import renamed
 
-    region = builder.call_numerical_region(call)
+    region = builder._consume_call_numerical_region(call)
     if region is None:
         raise CompilationError("numerical preflight requires registered exact physical effects")
     effect = region.effects

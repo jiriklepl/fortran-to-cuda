@@ -149,6 +149,8 @@ class ScopeBuilder:
         self.region_owners = {self.entry.qualified: self.inline}
         self.coordinators, self.coordinator_reasons = {}, {}
         self.coordinator_visiting = []
+        from compiler.scopes.ordinary_consumption import _ordinary_pair_state
+        self._ordinary_pair_state = _ordinary_pair_state()
 
     def inline_for(self, procedure):
         owner = self.region_owners.get(procedure.partition("#region")[0])
@@ -203,6 +205,9 @@ class ScopeBuilder:
         """Fence every projection sharing a failed or active parent's outputs."""
         builder, seen = self, set()
         while builder is not None and id(builder) not in seen:
+            ordinary = builder._ordinary_pair_state
+            if ordinary.active is not None or ordinary.failed:
+                raise CompilationError("source publication requires a completed successful ordinary numerical pass")
             if (getattr(builder, "_reached_consumption", None) is not None
                     or getattr(builder, "_reached_consumption_failed", False)):
                 raise CompilationError("source publication requires a completed successful reached consumption pass")
@@ -303,6 +308,32 @@ class ScopeBuilder:
 
     def call_numerical_effect(self, call):
         region = self.call_numerical_region(call)
+        return region.effects if region is not None else None
+
+    def _consume_numerical_region(self, analysis, procedure, selection):
+        """Private lexical lookup; public resolution remains a fresh demand."""
+        consumer = self._ordinary_pair_state.active
+        if consumer is None or getattr(self, "_reached_window_binding", None) is not None:
+            return self.resolved_numerical_region(analysis, procedure, selection)
+        if analysis is not self.analysis or procedure != self.entry.qualified:
+            self._ordinary_pair_state.failed = True
+            raise CompilationError("ordinary numerical consumer requires its original analysis and procedure")
+        if self.inline.builder is not self:
+            self._ordinary_pair_state.failed = True
+            raise CompilationError("ordinary numerical consumer requires its exact original inline owner")
+        return consumer.resolve(self.inline, selection)
+
+    def _consume_call_numerical_region(self, call):
+        if call.region is None:
+            return None
+        owner = self.inline_for(call.procedure)
+        if owner is None:
+            raise CompilationError("numerical effect lookup lacks an original inline owner")
+        originals = owner.original_selection(call.node)
+        return owner.builder._consume_numerical_region(owner.builder.analysis, owner.builder.entry.qualified, originals)
+
+    def _consume_call_numerical_effect(self, call):
+        region = self._consume_call_numerical_region(call)
         return region.effects if region is not None else None
 
     def descriptor_window_for(self, analysis, procedure, selection):
@@ -2447,6 +2478,9 @@ class ScopeBuilder:
             used, regions = registries.get(procedure, ((), {}))
             registry.used = set(used)
             registry.original_numerical_regions = dict(regions)
+        consumer = self._ordinary_pair_state.active
+        if consumer is not None:
+            consumer.retain()
 
     def scan(self, nodes):
         from compiler.scopes.segments import StructuredScope, statement_span
@@ -2552,33 +2586,71 @@ class ScopeBuilder:
         self.build_span(run)
 
     def _attempt_lexical_owner(self, nodes, *, finalize=False):
-        """Retain one lexical planning attempt separately from legacy fallback."""
+        """Isolate a lexical attempt before retaining or falling back from it."""
+        from compiler.scopes.generation_transaction import GenerationTransaction
         from compiler.scopes.lexical import LexicalOwner, lexical_attempt_diagnostics
 
-        before = self.scope_checkpoint()
         scope_count = len(self.scopes)
+        boundary_count = len(self.boundaries)
         inline_before = {"attempts": self.inline.attempts, "operations": self.inline.operations}
         owner = None
-        try:
-            owner = LexicalOwner(self)
+
+        def diagnostics(builder, outcome, error=None):
+            return lexical_attempt_diagnostics(builder, owner, outcome=outcome,
+                scope_count_before=scope_count, inline_before=inline_before, finalize=finalize, error=error)
+
+        def attempt(builder):
+            nonlocal owner
+            owner = LexicalOwner(builder)
             accepted = owner.run(nodes)
             outcome = "accepted" if accepted else "no_numerical_leaves"
-            scopes = self.scopes[scope_count:]
+            scopes = builder.scopes[scope_count:]
             if accepted and scopes and all(scope.get("automatic_preflight", {}).get("generated_owner_invoked") is False
                                            for scope in scopes):
                 outcome = "successful_native"
-            self.lexical_owner_attempt = lexical_attempt_diagnostics(
-                self, owner, outcome=outcome, scope_count_before=scope_count,
-                inline_before=inline_before, finalize=finalize)
-            if accepted:
-                return self.finish() if finalize else True
+            builder.lexical_owner_attempt = diagnostics(builder, outcome)
+            return (builder.finish() if finalize else True) if accepted else False
+
+        # Existing candidate callers already have an isolated generation graph.
+        # Their caller must reject a failed candidate; do not open an overlapping
+        # analysis transaction or fall back through its poisoned artifact maps.
+        if getattr(self, "_generation_transaction_marker", None) is not None:
+            try:
+                return attempt(self)
+            except CompilationError as error:
+                self.lexical_owner_attempt = diagnostics(self, "error", error)
+                self._ordinary_pair_state.failed = True
+                raise
+
+        candidate, adopted = None, False
+        try:
+            with GenerationTransaction(self) as transaction:
+                candidate = transaction.builder
+                result = attempt(candidate)
+                if result:
+                    transaction.adopt(candidate)
+            if result:
+                adopted = True
+                return (self.outputs, result[1]) if finalize else True
+            self.lexical_owner_attempt = deepcopy(candidate.lexical_owner_attempt)
+            self.boundaries.extend(deepcopy(candidate.boundaries[boundary_count:]))
         except CompilationError as error:
-            self.lexical_owner_attempt = lexical_attempt_diagnostics(
-                self, owner, outcome="error", scope_count_before=scope_count,
-                inline_before=inline_before, finalize=finalize, error=error)
-            self.restore_scope_checkpoint(before)
+            if candidate is None:
+                raise  # An unavailable transaction is not a native-owner decline.
+            self.lexical_owner_attempt = diagnostics(candidate, "error", error)
+            candidate._ordinary_pair_state.failed = True
+            self.boundaries.extend(deepcopy(candidate.boundaries[boundary_count:]))
             self.boundaries.append({"reason": "lexical owner unavailable: " + str(error),
                                     "fallback": "existing bounded source scopes"})
+        finally:
+            if candidate is not None and not adopted:
+                # Per-owner generation work remains charged after a declined
+                # attempt, even though its mutable artifact graph is discarded.
+                for procedure, registry in self.region_owners.items():
+                    spent = candidate.region_owners.get(procedure)
+                    if spent is not None:
+                        registry.attempts = max(registry.attempts, spent.attempts)
+                        registry.operations = max(registry.operations, spent.operations)
         return False
 
     def run(self):
