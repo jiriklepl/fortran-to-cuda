@@ -25,13 +25,25 @@ from compiler.frontend.source_functions import _validate_scope
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError
 
-REACHED_WINDOW_VERSION = 15
+REACHED_WINDOW_VERSION = 16
 _EFFECTS = {"read", "write", "overwrite", "descriptor_read", "definition_change"}
 _FORBIDDEN = {"pointer", "optional", "volatile", "asynchronous", "value"}
 
 
 class _NeedsNativeClose(CompilationError):
     """A source-authenticated operation lacks active-owner effect support."""
+
+
+def _managed_call_mapping(coordinates, state):
+    """Retain call associations without granting unused actuals storage facts.
+
+    An unmanaged IN/INOUT actual is harmless until an original reached effect
+    needs it; the normal effect checks close there. OUT is an entry event, so
+    it cannot wait for that first use or borrow an unproved alias check.
+    """
+    if any(root not in state for root in coordinates.entry_definition_changes):
+        raise _NeedsNativeClose("mapped reached child unmanaged OUT actual requires entry definition/alias authority")
+    return {formal: actual for formal, actual in coordinates.resource_mapping.items() if actual in state}
 
 
 def _hash(value):
@@ -641,6 +653,10 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                        for node in child_graph.nodes.values())
                 or any(binding.rank and binding.intent == "out" for name, binding in child_routine.scope.bindings.items()
                        if name in child_routine.arguments)
+                or any(item["formal_descriptor"]["rank"] and item["resource"] is not None
+                       and item["resource"] not in state
+                       and "parameter" not in item["actual_descriptor"]["attributes"]
+                       for item in graph.nodes[identity].details.get("resource_mappings", ()))
                 or any(_coverage_kind(boxes) != "whole" for boxes in state.values()))
             if needs_mapped and child_routine.source_kind == "module":
                 from compiler.frontend.native_definitions import prove_native_call_coordinates
@@ -657,9 +673,7 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                 work["calls"] += 1
                 if work["calls"] > analysis.procedure_limit:
                     raise CompilationError("mapped reached call traversal budget exhausted")
-                resource_mapping = mapping.resource_mapping
-                if any(actual not in state for actual in resource_mapping.values()):
-                    raise _NeedsNativeClose("mapped reached child actual lacks independent managed authority")
+                resource_mapping = _managed_call_mapping(mapping, state)
                 # Hidden resources retain their original module identity, but
                 # only when this child's original namespace exposes them.
                 scopes, scope = [], child.scope
@@ -679,6 +693,8 @@ def _derive(analysis, procedure, selection, roots, facts, planned_close_before=N
                 entry_input = {root: state[root] for root in (*resource_mapping.values(), *hidden)}
                 for root in mapping.entry_definition_changes:
                     entry_input[root] = ()
+                if not entry_input:
+                    raise _NeedsNativeClose("mapped reached child has no independently managed resource")
                 # A prior whole definition subsumes later same-resource
                 # partial writes. Keep that exact existing rectangle rather
                 # than requiring unrelated caller controls in this child.
@@ -1411,8 +1427,17 @@ class _MappedChildPlan:
     children: tuple = field(repr=False, compare=False)
 
     def public(self):
+        managed = {state["resource"] for state in self.record["states"]}
+        associations = self.coordinates.resource_mapping
         return {"schema_version": 1, "caller_node_id": self.node_id, "procedure": self.procedure,
                 "coordinate_proof": self.coordinates.public(), "plan": _thaw(self.record),
+                "managed_actual_projection": {
+                    "managed_associations": {formal: actual for formal, actual in associations.items() if formal in managed},
+                    "unmanaged_associations": {formal: actual for formal, actual in associations.items() if formal not in managed},
+                    "original_associations_preserved": True,
+                    "unmanaged_storage_authority": False,
+                    "unmanaged_first_effect": "publish and close before original operation",
+                    "unmanaged_out": "close at original caller before entry definition event"},
                 "return_contract": "conditional on shared owning context remaining enabled",
                 "unconditional_definition_summary": False}
 
