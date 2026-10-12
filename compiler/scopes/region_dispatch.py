@@ -24,6 +24,7 @@ class InlineRegions:
         self.element_operands = {}
         self.definition_proofs = {}
         self.prepared_regions = {}
+        self.compute_applicability = {}
         self.original_numerical_regions = {}
         self.collective_regions = set()
         self.computations = {}
@@ -438,8 +439,6 @@ class InlineRegions:
             # corrections that fail complete numerical legality must not use
             # the generation budget of a later supported worksharing unit.
             self._reserve(reservation)
-        function, plan = (self.artifact_ir(value, source_name, extraction.source_identity)
-                          for value in (function, plan))
         completion = extraction.completion
         if collective:
             native_participation = "existing_team"
@@ -448,7 +447,19 @@ class InlineRegions:
             native_participation = fork_join_participation(extraction.nodes)
         else:
             native_participation = "serial" if completion.get("available") else "unknown"
-        config = replace(self.builder.config, collective=collective, native_participation=native_participation)
+        from compiler.offload.dependency_source import current_source_bundle_requested
+        from compiler.offload.source_applicability import source_compute_applicability
+        applicability = (source_compute_applicability(self.builder.analysis, retained,
+                                                     native_participation=native_participation)
+                         if isinstance(self.builder.config.profile, dict)
+                         and current_source_bundle_requested(self.builder.config.profile) else None)
+        # Classify the exact original preparation before rewriting locations
+        # for artifact reuse. Lowered arithmetic alone cannot prove the native
+        # source's compiled form or participation protocol.
+        function, plan = (self.artifact_ir(value, source_name, extraction.source_identity)
+                          for value in (function, plan))
+        config = replace(self.builder.config, collective=collective, native_participation=native_participation,
+                         source_applicability=applicability)
         generated = generate_sources(function, plan, offload_config=config, memory_model="scoped")
         if generated.scoped is None:
             raise CompilationError("inline numerical candidate has no shared numerical entry")
@@ -460,11 +471,17 @@ class InlineRegions:
         # Identical arithmetic cannot share that artifact across serial,
         # fork/join and existing-team participation contracts.
         computation = sha256("\n".join(extraction.source.splitlines()[1:-1]).encode()).hexdigest()
-        canonical = self.computations.setdefault((collective, native_participation, computation), procedure)
+        cost_contract = ((applicability.native_compiled_form, applicability.generated_compiled_form,
+                          applicability.native_participation, applicability.access_class)
+                         if applicability is not None else None)
+        canonical = self.computations.setdefault((collective, native_participation, computation, cost_contract), procedure)
         if canonical != procedure:
             generated, function, plan = self.generated[canonical], *self.ir[canonical]
         self.regions[procedure], self.generated[procedure] = extraction, generated
         self.prepared_regions[procedure] = retained
+        # Each source region keeps its own provenance, even when identical
+        # work reuses an artifact issued for a different original region.
+        self.compute_applicability[procedure] = applicability
         self.ir[procedure], self.entries[procedure] = (function, plan), canonical
         if collective:
             self.collective_regions.add(procedure)
@@ -741,6 +758,9 @@ class InlineRegions:
                 "limits": {"regions": 32, "operations": 256},
                 "regions": [{**region.public(), "region_id": index + 1, "used": procedure in self.used,
                              "execution_participation": "qualified_original_team" if procedure in self.collective_regions else "serial_coordinator",
+                             "source_compute_applicability": (self.compute_applicability[procedure].public()
+                                 if self.compute_applicability[procedure] is not None else None),
+                             "shared_compute_applicability": self.generated[procedure].scoped["compute_estimates"]["source_applicability"],
                              "shared_computation": self.entries[procedure]} for index, (procedure, region) in enumerate(self.regions.items())],
                 "boundaries": ["unknown effects and allocation changes",
                                "saved or live scalar outputs", "unsupported numerical computation"]}

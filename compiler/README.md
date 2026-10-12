@@ -2483,6 +2483,31 @@ than borrowing an accepted older expression class. Numerical-v2-only profiles
 retain their existing path; these additions do not establish automatic SGS
 placement or an application speedup.
 
+A complete current `numerical_execution` / `cpu_dependency` /
+`numerical_execution_gpu` / `numerical_execution_gpu_costs` bundle takes the
+current source-cost path before the CPU-only placeholder. Original inline-region
+preparation can supply `source_compute_applicability_v1` metadata for a single
+helper-free direct loop with serial or fixed fork/join participation. The record
+is issued before artifact rewriting and carries original preparation and source
+identities; it grants no execution, capture or definition authority. Each region
+keeps its own provenance when identical work shares a worker, and the manifest
+identifies the shared artifact's issuing region separately. Reuse also requires
+the same compiled-form, participation and access contract. Whole-procedure
+lowering without an original-region preparation does not invent that evidence.
+
+This attachment still requires the exact one-dimensional pointwise memory class,
+observable dependency work, supported primitive domains and independently
+accepted native Fortran, generated CPU and GPU costs. It intersects their tested
+item ranges and requires matching CPU placement. Partial or incompatible current
+bundles retain native AUTO instead of borrowing legacy GPU costs. Unpriced
+numerical-environment guards remain unavailable. Optional source classification
+does not run for ordinary generation without a current cost bundle.
+Preparation schema 2 fingerprints the full raw calibration profile separately
+from executable syntax, with a 32 MiB JSON limit and charged hashing work.
+Every validation rehashes it; changing any retained observation invalidates
+preparation. Large profiles do not consume the statement budget as if their
+measurement fields were source operations.
+
 Source planning supplies complete compute seconds for all three implementations
 through `fort_scope_plan_add_compute_costs_v3`. Transfers, launches, allocation
 and coordination are charged separately. The unchanged compute-cost payload

@@ -4,7 +4,7 @@ from copy import deepcopy
 
 from compiler.ir import ArrayAccess, Assignment, Reference
 from compiler.ir.nodes import walk_expr
-from compiler.offload.cpu_dependency_calibration import ACCESS_CLASS, DOMAINS, cpu_dependency_costs
+from compiler.offload.cpu_dependency_calibration import ACCESS_CLASS, CURRENT_PROTOCOL_ID, DOMAINS, cpu_dependency_costs
 from compiler.offload.numerical_calibration import (
     COMPUTE_BACKEND_ID,
     COMPUTE_PRIVATE_LIMITS,
@@ -41,7 +41,14 @@ def _require_observable_assignments(region):
             live.update(node.symbol for node in walk_expr(expression) if isinstance(node, Reference))
 
 
-def dependency_source_model(unit, profile, native_participation):
+def current_source_bundle_requested(profile):
+    """A partial current bundle cannot silently fall back to legacy costs."""
+    dependency = profile.get("cpu_dependency")
+    return ("numerical_execution_gpu_costs" in profile or "numerical_execution_gpu" in profile
+            or isinstance(dependency, dict) and dependency.get("protocol_id") == CURRENT_PROTOCOL_ID)
+
+
+def dependency_source_model(unit, profile, native_participation, *, source_applicability=None):
     """Keep legality, source semantics and cost applicability separate.
 
     The first memory contract admits one-dimensional contiguous pointwise
@@ -65,13 +72,38 @@ def dependency_source_model(unit, profile, native_participation):
     if any(operation.family in {"sqrt", "acos", "cos", "divide_dynamic"} for operation in graph.operations):
         raise NumericalCalibrationError("source-backed primitive interval proof unavailable")
     domains = {"divide_constant": DOMAINS["divide_constant"]}
+    current = current_source_bundle_requested(profile)
+    if current:
+        from compiler.offload.source_applicability import SourceComputeApplicability
+
+        dependency = profile.get("cpu_dependency")
+        if (not isinstance(dependency, dict) or dependency.get("protocol_id") != CURRENT_PROTOCOL_ID
+                or "numerical_execution_gpu_costs" not in profile):
+            raise NumericalCalibrationError("complete current CPU dependency and GPU cost bundle unavailable")
+        if (type(source_applicability) is not SourceComputeApplicability
+                or source_applicability.native_compiled_form != "direct_loop"
+                or source_applicability.generated_compiled_form != "direct_loop"
+                or source_applicability.native_participation != native_participation
+                or source_applicability.access_class != ACCESS_CLASS
+                or any(not isinstance(value, str) or len(value) != 64
+                       or any(character not in "0123456789abcdef" for character in value)
+                       for value in (source_applicability.preparation_identity, source_applicability.source_identity,
+                                     source_applicability.extraction_source_identity))):
+            raise NumericalCalibrationError("independently proved original source compiled form unavailable")
     cpu = {}
     for role, backend in (("native_fortran", "native_" + native_participation), ("generated_cpu", "generated_cpu")):
+        form = (source_applicability.native_compiled_form if role == "native_fortran"
+                else source_applicability.generated_compiled_form) if current else None
         costs = cpu_dependency_costs(profile, graph, backend, workload_class=unit.workload_class,
-            workload_features=unit.workload_features, primitive_domains=domains, access_class=ACCESS_CLASS)
+            workload_features=unit.workload_features, primitive_domains=domains, access_class=ACCESS_CLASS,
+            **({"compiled_form": form} if current else {}))
         cpu[role] = {**costs, "compute_seconds_per_item": costs["seconds_per_item"],
             "arithmetic_seconds_per_operation": 0.0, "intrinsic_seconds_per_item": 0.0,
-            "memory_seconds_per_byte": None, "fixed_cost_coverage": "measured_execution_protocol_once_outside_max"}
+            "memory_seconds_per_byte": None,
+            "fixed_cost_coverage": costs["fixed_cost_coverage"] if current else "measured_execution_protocol_once_outside_max"}
+
+    if current:
+        return _current_source_model(unit, profile, native_participation, cpu, source_applicability)
 
     section = profile.get("numerical", {})
     validate_numerical_profile(section, profile)
@@ -103,6 +135,33 @@ def dependency_source_model(unit, profile, native_participation):
         "fortran": deepcopy(section["identity"]["fortran"]), "backend_id": "source-work-span-cpu-v1",
         "generator_id": cpu["native_fortran"]["generator_id"], "gpu_generator_id": section["generator_id"],
         "dependency_identity": graph.identity, "memory_access_class": ACCESS_CLASS, "require_unit_stride": True,
+        "cpu_protocol_environment_contract": "wait/spin environment fixed from process launch; live mismatch rejects",
+        "cpu_protocol_environment": {name: profile["cpu_dependency"]["execution_identity"][name]
+                                     for name in ("omp_wait_policy", "gomp_spincount")}}
+
+
+def _current_source_model(unit, profile, native_participation, cpu, applicability):
+    from compiler.offload.numerical_gpu_execution_costs import gpu_execution_costs
+
+    primitives = dict(unit.intrinsic_work_per_iteration)
+    if unit.compute_runtime_divisions_per_iteration:
+        primitives["divide"] = unit.compute_runtime_divisions_per_iteration
+    gpu = gpu_execution_costs(profile, primitives, workload_class=unit.workload_class,
+        workload_features=unit.workload_features, access_class=ACCESS_CLASS)
+    affinity = cpu["native_fortran"]["cpu_affinity"]
+    if cpu["generated_cpu"]["cpu_affinity"] != affinity or gpu["cpu_affinity"] != affinity:
+        raise NumericalCalibrationError("current CPU/GPU cost sampling placement differs")
+    lower = max(value["item_range"][0] for value in (*cpu.values(), gpu))
+    upper = min(value["item_range"][1] for value in (*cpu.values(), gpu))
+    if lower > upper:
+        raise NumericalCalibrationError("current CPU/GPU cost item ranges do not intersect")
+    return {**cpu, "gpu": gpu, "schema_version": 1, "cost_model": "source_work_span_cpu_gpu_v1",
+        "item_range": [lower, upper], "native_participation": native_participation,
+        "workload_class": unit.workload_class, "cpu_affinity": deepcopy(affinity),
+        "fortran": deepcopy(cpu["native_fortran"]["fortran"]), "backend_id": "source-work-span-cpu-gpu-v1",
+        "generator_id": cpu["native_fortran"]["generator_id"], "gpu_generator_id": gpu["gpu_generator_id"],
+        "dependency_identity": unit.compute_dependencies.identity, "memory_access_class": ACCESS_CLASS,
+        "require_unit_stride": True, "source_applicability": applicability.public(),
         "cpu_protocol_environment_contract": "wait/spin environment fixed from process launch; live mismatch rejects",
         "cpu_protocol_environment": {name: profile["cpu_dependency"]["execution_identity"][name]
                                      for name in ("omp_wait_policy", "gomp_spincount")}}

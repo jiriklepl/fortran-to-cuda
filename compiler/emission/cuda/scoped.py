@@ -152,7 +152,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         from compiler.offload.source_compute import apply_source_compute_costs
         numerical_analysis = apply_source_compute_costs(
             OffloadAnalysis(prep.analysis.available, prep.analysis.reason, tuple(units.values())),
-            config.profile, config.native_participation, array_views=root_views)
+            config.profile, config.native_participation, array_views=root_views,
+            source_applicability=config.source_applicability)
         units = {unit.region.id: unit for unit in numerical_analysis.units}
     elif not config.collective:
         from compiler.offload.numerical_calibration import apply_numerical_costs
@@ -1040,6 +1041,8 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         "compute_estimates": {"abi_version": 2 if source_compute else 0,
                               "runtime_api": "fort_scope_plan_add_compute_costs_v3" if source_compute else "fort_scope_plan_add_costs_v2",
                               "native_participation": config.native_participation,
+                              "source_applicability": (config.source_applicability.public()
+                                                       if config.source_applicability is not None else None),
                               "cpu_affinity": affinity,
                               "runtime_item_range_enforced": source_compute,
                               "memory_working_set": "checked per-resource union of exact physical sections; repeated touched root aliases unavailable",

@@ -105,7 +105,8 @@ def _native_participation(analysis, procedure, summary):
     return "unknown"
 
 
-def apply_source_compute_costs(analysis, profile, native_participation, *, array_views=False):
+def apply_source_compute_costs(analysis, profile, native_participation, *, array_views=False,
+                               source_applicability=None):
     """Attach total-compute coefficients without changing numerical legality.
 
     Runtime dimensions must still satisfy each model's item range. Original
@@ -129,13 +130,16 @@ def apply_source_compute_costs(analysis, profile, native_participation, *, array
             primitives = dict(unit.intrinsic_work_per_iteration)
             if unit.compute_runtime_divisions_per_iteration:
                 primitives["divide"] = unit.compute_runtime_divisions_per_iteration
-            if "numerical_execution" in profile:
+            from compiler.offload.dependency_source import current_source_bundle_requested, dependency_source_model
+            if current_source_bundle_requested(profile):
+                model = dependency_source_model(unit, profile, native_participation,
+                    source_applicability=source_applicability)
+            elif "numerical_execution" in profile:
                 from compiler.offload.numerical_execution import execution_compute_model
                 model = execution_compute_model(profile, tuple(sorted(primitives.items())),
                     workload_class=unit.workload_class, workload_features=unit.workload_features,
                     native_participation="fork_join" if native_participation == "fork_join_runtime" else native_participation)
             elif "cpu_dependency" in profile:
-                from compiler.offload.dependency_source import dependency_source_model
                 model = dependency_source_model(unit, profile, native_participation)
             else:
                 model = numerical_compute_model(profile, tuple(sorted(primitives.items())),
