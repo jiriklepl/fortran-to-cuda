@@ -60,8 +60,12 @@ an explicit `--jobs` is retained. `--interactive` uses `srun` with the same requ
 
 On the worker, the script initializes environment modules when necessary and
 loads `apptainer`, `cuda`, `gcc` and the original Python module alternatives
-before choosing the container runtime. Native execution selects an available
-Python 3.12 or newer unless `PYTHON` is supplied explicitly. Plotting may use a
+before choosing the container runtime. Module attempts and the loaded module
+list are saved to `modules.log`, whose path is printed on submission and worker
+exit. Missing optional modules remain
+nonfatal when inherited tools are available.
+Native execution selects an available Python 3.12 or newer unless `PYTHON` is
+supplied explicitly. Plotting may use a
 different interpreter with NumPy and Matplotlib; for native runs, set
 `PLOT_PYTHON` to select it. Container runs use their packaged plotting interpreter;
 host interpreter paths are not forwarded into the container.
@@ -171,6 +175,12 @@ fails the campaign; it does not weaken the candidate check or shorten the case.
 Native/GPU diagnostics precede timing and never
 enter timing medians. Smoke runs and other thread budgets cannot claim the gate.
 No policy is automatically promoted by this runner.
+
+If guarded execution fails, the launcher prints the end of `run.log` containing
+the worker's error and the full log/`guard.json` paths. The guard receipt stays
+on disk; it is not dumped into the Slurm console. Early module diagnostics are
+in `modules.log`. CUDA discovery accepts the GCC target `x86_64-redhat-linux`
+and uses the selected toolkit's normal `targets/x86_64-linux/lib` directory.
 
 For an explicitly requested timing series despite native roundoff variation:
 

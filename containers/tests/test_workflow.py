@@ -24,6 +24,56 @@ def test_source_identity_does_not_visit_results_or_caches(tmp_path, monkeypatch)
     assert set(first['files']) == {'pipeline.py'}
 
 
+@pytest.mark.parametrize("exit_code", [1, 37])
+def test_guard_failure_prints_cuda_root_cause_and_preserves_status(tmp_path, monkeypatch, capsys, exit_code):
+    from elmm_pipeline.campaigns import guard
+    monkeypatch.setattr(guard, "available", lambda: 8 * 2**30)
+    reason = ("error: CUDA runtime libcudart.so for host target 'x86_64-redhat-linux' was not found "
+              "beneath /usr/local/cuda-13.4; supply cuda_runtime_dir explicitly")
+    log = tmp_path / "run.log"
+    log.write_text("old diagnostic line\n" * 2000 + reason + "\n")
+    calls = []
+    def execute(command, **kwargs):
+        calls.append((command, kwargs))
+        return SimpleNamespace(returncode=exit_code, stderr="")
+    monkeypatch.setattr(workflow.subprocess, "run", execute)
+    with pytest.raises(SystemExit) as stopped:
+        workflow.guarded(SimpleNamespace(worker=False, output_dir=tmp_path))
+    assert stopped.value.code == exit_code
+    output = capsys.readouterr()
+    assert str(log) in output.err and reason in output.err
+    assert str(tmp_path / "guard.json") in output.err
+    assert "CalledProcessError" not in output.err
+    assert output.err.count("old diagnostic line") < 20
+    assert calls[0][1]["stdout"] == subprocess.DEVNULL
+    assert calls[0][1]["stderr"] == subprocess.PIPE
+
+
+def test_guard_bootstrap_failure_reports_stderr_without_a_progress_log(tmp_path, monkeypatch, capsys):
+    from elmm_pipeline.campaigns import guard
+    monkeypatch.setattr(guard, "available", lambda: 8 * 2**30)
+    reason = "another guarded campaign job is active; no process started"
+    monkeypatch.setattr(workflow.subprocess, "run", lambda *args, **kwargs:
+                        SimpleNamespace(returncode=1, stderr="old line\n" * 2000 + reason))
+    with pytest.raises(SystemExit, match="1"):
+        workflow.guarded(SimpleNamespace(worker=False, output_dir=tmp_path))
+    output = capsys.readouterr()
+    assert reason in output.err and "No progress log was created" in output.err
+    assert str(tmp_path / "run.log") in output.err
+    assert output.err.count("old line") < 20
+
+
+def test_successful_guard_keeps_normal_return_and_log_announcements(tmp_path, monkeypatch, capsys):
+    from elmm_pipeline.campaigns import guard
+    monkeypatch.setattr(guard, "available", lambda: 8 * 2**30)
+    monkeypatch.setattr(workflow.subprocess, "run", lambda *args, **kwargs:
+                        SimpleNamespace(returncode=0, stderr=""))
+    assert workflow.guarded(SimpleNamespace(worker=False, output_dir=tmp_path)) is False
+    output = capsys.readouterr()
+    assert str(tmp_path / "run.log") in output.out
+    assert not output.err
+
+
 def test_cuda_ordinal_is_not_nvml_physical_index(monkeypatch):
     monkeypatch.setattr(workflow.shutil, 'which', lambda name: '/tools/' + name)
     monkeypatch.setattr(workflow.subprocess, 'run', lambda *a, **kw: SimpleNamespace(stdout=(
