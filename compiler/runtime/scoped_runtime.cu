@@ -30,6 +30,7 @@
 #ifndef FORT_SCOPE_CPU_TEST
 #include <cuda_runtime.h>
 #include "staging.hpp"
+#include "scoped_cuda_resources.hpp"
 #endif
 
 namespace {
@@ -221,19 +222,14 @@ void initialize(Context &c) {
     if (c.ready) return;
 #ifndef FORT_SCOPE_CPU_TEST
     DeviceGuard guard(c);
-    cuda_check(c, cudaStreamCreateWithFlags(&c.stream, cudaStreamNonBlocking), true);
-    c.ready = true; // A partially initialized context still owns this stream.
-#if CUDART_VERSION >= 11020
-    int supported = 0;
-    cuda_check(c, cudaDeviceGetAttribute(&supported, cudaDevAttrMemoryPoolsSupported, c.device));
-    if (supported) {
-        cudaMemPoolProps properties{};
-        properties.allocType = cudaMemAllocationTypePinned;
-        properties.location.type = cudaMemLocationTypeDevice;
-        properties.location.id = c.device;
-        cuda_check(c, cudaMemPoolCreate(&c.pool, &properties), true);
-    }
-#endif
+    fort_scoped::cuda_resources::Resources resources;
+    const bool reused = fort_scoped::cuda_resources::acquire(c.device, resources);
+    const auto status = reused ? cudaSuccess : fort_scoped::cuda_resources::create(c.device, resources);
+    c.stream = resources.stream;
+    c.pool = resources.pool;
+    c.ready = c.stream != nullptr; // Own partial initialization even on failure.
+    cuda_check(c, status, true);
+    if (reused) trace(c, "initialize_reuse", nullptr, resources.retained_bytes);
 #endif
     c.ready = true;
     { std::lock_guard<std::mutex> lock(driver_mutex); initialized_devices.insert(c.device); }
@@ -2477,8 +2473,11 @@ extern "C" int fort_scope_close(fort_scope_t h) {
 #ifndef FORT_SCOPE_CPU_TEST
         if (c.ready) {
             DeviceGuard guard(c);
-            if (c.pool) cuda_check(c, cudaMemPoolDestroy(c.pool));
-            cuda_check(c, cudaStreamDestroy(c.stream));
+            fort_scoped::cuda_resources::Resources resources{c.stream, c.pool};
+            const auto status = fort_scoped::cuda_resources::retire(c.device, resources);
+            c.stream = resources.stream; c.pool = resources.pool;
+            cuda_check(c, status);
+            c.ready = false;
         }
 #endif
         c.buffers.clear(); c.identities.clear(); c.closed = true;
