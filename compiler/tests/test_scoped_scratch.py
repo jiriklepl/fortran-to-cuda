@@ -370,6 +370,42 @@ def test_failed_growth_wait_poison_prohibits_replay(scratch_runtime, monkeypatch
 
 
 @pytest.mark.native
+def test_scope_close_publishes_multiple_fields_and_retires_idle_scratch(scratch_runtime):
+    scope = Scope(scratch_runtime)
+    fields = [(c.c_double * 8)(*range(8)), (c.c_double * 8)(*range(8))]
+    for identity, host in enumerate(fields, 1):
+        status, handle = scope.register(host, [8], identity=identity, lower=[-identity])
+        scope.check(status)
+        device = scope.gpu(handle, access(flags=3))
+        for i in range(8):
+            device[i] = 100*identity+i
+        scope.gpu_end(handle)
+    lease = acquire(scope, 256)
+    release(scope, lease)
+    scope.close()
+    assert [list(host) for host in fields] == [[100*identity+i for i in range(8)] for identity in (1, 2)]
+    assert scratch_runtime.fort_scope_wait(scope.handle) == 2
+
+
+@pytest.mark.native
+def test_scope_close_wait_failure_prohibits_replay(scratch_runtime, monkeypatch):
+    scope = Scope(scratch_runtime)
+    host = (c.c_double * 8)(*range(8))
+    status, handle = scope.register(host, [8])
+    scope.check(status)
+    device = scope.gpu(handle, access(flags=3))
+    device[0] = 100
+    scope.gpu_end(handle)
+    lease = acquire(scope, 256)
+    release(scope, lease)
+    monkeypatch.setenv("FORT_SCOPE_TEST_FAIL_WAIT", "1")
+    assert scratch_runtime.fort_scope_close(scope.handle) == 6
+    assert scratch_runtime.fort_scope_host_begin(scope.handle, handle, c.byref(access(flags=1))) == 6
+    scope.check(scratch_runtime.fort_scope_abandon(scope.handle))
+    assert scratch_runtime.fort_scope_wait(scope.handle) == 2
+
+
+@pytest.mark.native
 @pytest.mark.parametrize("active", [False, True])
 def test_abandon_retires_scratch_without_publishing_failed_fields(scratch_runtime, active):
     scope = Scope(scratch_runtime)

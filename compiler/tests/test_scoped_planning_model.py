@@ -83,6 +83,10 @@ int main(int argc, char **argv) {
         Operation forget{FORT_SCOPE_PLAN_FORGET,0,{{1,{}}},0,0,false};
         Effects overwrite{{},full,full};
         in.operations={worker(1,1,overwrite),forget,worker(2,1,overwrite)};
+    } else if (scenario=="close_async" || scenario=="close_sync") {
+        in.asynchronous_release=scenario=="close_async";
+        in.resources.push_back(resource(2,{512}));
+        in.operations[0].bindings.push_back({2,rw(full)});
     } else if (scenario=="retained_peak") {
         in.resources.push_back(resource(2,{1024}));
         in.operations.push_back(worker(2,2,rw(in.resources[1].initialized)));
@@ -253,7 +257,18 @@ def test_definition_forget_discards_values_and_retains_allocation(model):
     assert result["uploads"] == 0
     assert result["downloads"] == result["allocations"] == 1
     assert result["download_bytes"] == result["peak"] == 4096
-    assert result["waits"] == 3
+    assert result["waits"] == 2 # Definition boundary plus one terminal wait.
+
+
+def test_stream_ordered_close_combines_publication_and_release_waits(model):
+    asynchronous, synchronous = model("close_async"), model("close_sync")
+    for result in (asynchronous, synchronous):
+        assert result["choices"] == [1]
+        assert result["allocations"] == result["downloads"] == 2
+        assert result["download_bytes"] == 8192
+    assert asynchronous["waits"] == 1
+    assert synchronous["waits"] == 2
+    assert asynchronous["seconds"] == pytest.approx(synchronous["seconds"] - 1e-6)
 
 
 def test_peak_counts_full_retained_allocations(model):

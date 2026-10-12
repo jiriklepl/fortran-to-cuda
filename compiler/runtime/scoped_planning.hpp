@@ -481,7 +481,8 @@ inline void close(State &s, const Inputs &input, const fort_scope_plan_costs &co
         if (sink) {
             EvidenceEvent event; event.event = "export"; event.phase = "scope_close"; event.resource = &b; (*sink)(event);
         }
-        work = add(work, 1); ensure(s, b, b.initialized, false, input, costs, sink, 0, "scope_close"); wait(s, costs);
+        work = add(work, 1); ensure(s, b, b.initialized, false, input, costs, sink, 0, "scope_close");
+        if (!input.asynchronous_release) wait(s, costs);
     }
     for (auto &b : s.resources) if (b.allocated) {
         seconds(s.time, costs.release_seconds); b.allocated = false;

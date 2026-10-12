@@ -228,6 +228,15 @@ Contiguous sections use flat copies; pitched rectangles use 2D or 3D copies.
 An interior 3D rectangle takes one runtime copy call instead of one per plane;
 higher ranks use one 3D copy per remaining coordinate. Transfer estimates count
 these same calls. Disjoint faces stay separate and copyback never fills gaps.
+In scoped direct mode, CUDA runtime and driver 13.4 or newer can submit two to
+64 disjoint physical copies for one canonical buffer as one exact copy batch.
+The copies retain original pitches and stream ordering. Unsupported versions
+and larger lists use the previous path before enqueue; failed batch submissions
+poison the context and are never replayed. Pinned transfers retain their existing
+behavior. Legacy transfer counters count operations within batches; trace event
+`copy_batch` adds actual `copy_submissions`, `copy_operations` and byte volume.
+Batching is disabled for cost-selected plans pending versioned batch-cost
+calibration; forced sections and manual contexts may use it.
 Overlapping sections are reduced to an exact disjoint union when worthwhile,
 with at most 32 rectangles and 1,024 intersection checks per array/direction.
 The same rectangles feed execution, cost estimates, and transfer traces.
@@ -446,6 +455,10 @@ and freshness are rebuilt for every invocation. Poisoned or incomplete scopes
 never enter this cache. `FORT_RUNTIME_TRACE=1` reports `initialize_reuse` with the
 retained byte capacity; legacy allocation counters still count logical field
 allocations. The cache is lazy, so native-only execution does not query CUDA.
+At scope close, stream-ordered pools queue final field downloads and field/scratch
+retirement before one completion wait. Native access hooks and unregister still
+publish synchronously; devices without memory-pool support retain the original
+synchronous allocator path.
 
 The public C/Fortran API provides explicit contexts, canonical buffer handles,
 host/device access begin/end, completion, and close. Buffers borrow stable

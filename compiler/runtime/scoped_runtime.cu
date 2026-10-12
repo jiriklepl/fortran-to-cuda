@@ -115,6 +115,8 @@ struct Context {
 #ifndef FORT_SCOPE_CPU_TEST
     cudaStream_t stream = nullptr;
     cudaMemPool_t pool = nullptr;
+    int direct_copy_driver = 0;
+    bool direct_copy_driver_checked = false;
 #endif
 };
 bool actual_team_matches(const Context &c) {
@@ -166,13 +168,17 @@ void trace_id(char (&destination)[65], const char *source) noexcept {
         destination[64] = '\0';
     }
 }
-void trace(const Context &c, const char *operation, const Buffer *b = nullptr, size_t bytes = 0) noexcept {
+void trace(const Context &c, const char *operation, const Buffer *b = nullptr, size_t bytes = 0,
+           size_t copy_operations = 0) noexcept {
     if (!trace_enabled()) return;
     try {
         std::lock_guard<std::mutex> lock(trace_mutex);
         std::cerr << "FORT_SCOPED " << operation;
         if (b) std::cerr << " buffer=" << b->identity << " generation=" << b->generation;
         std::cerr << " bytes=" << bytes << " provenance_version=1 context=" << c.handle;
+        if (copy_operations)
+            std::cerr << " copy_submissions=1 copy_operations=" << copy_operations
+                      << " backend=cudaMemcpy3DBatchAsync";
         if (b) std::cerr << " buffer_handle=" << b->handle;
         const auto &p = c.provenance;
         for (const auto &[name, value] : {
@@ -565,6 +571,78 @@ void copy(Context &c, Buffer &b, const Box &box, bool upload) {
     c.pending = true;
     trace(c, upload ? "upload" : "download", &b, plan.bytes);
 }
+bool copy_direct_batch(Context &c, Buffer &b, const Region &region, bool upload) {
+#if !defined(FORT_SCOPE_CPU_TEST) && CUDART_VERSION >= 13040
+    // Existing placement profiles price individual copies. Do not change a
+    // selected plan's execution protocol without validated batch-copy costs.
+    if (c.last_report || c.transfer_stats.requested_mode != FORT_SCOPE_TRANSFERS_DIRECT ||
+        !b.device || region.empty()) return false;
+    constexpr size_t operation_limit = 64;
+    std::array<cudaMemcpy3DBatchOp, operation_limit> operations;
+    size_t count = 0, bytes = 0;
+    // Region algebra supplies disjoint boxes. Check that prerequisite before
+    // submitting a batch, whose internal copy order is deliberately unspecified.
+    Budget budget;
+    for (size_t i=0; i<region.size(); ++i)
+        for (size_t j=i+1; j<region.size(); ++j)
+            if (intersection(region[i], region[j], budget)) return false;
+    for (const auto &box : region) {
+        const fort_physical::CopyPlan plan(b.element_bytes, b.extents, box.lo, box.hi);
+        require(plan.valid, FORT_SCOPE_ARGUMENT, "invalid physical batch transfer layout");
+        require(bytes <= b.bytes && plan.bytes <= b.bytes-bytes,
+                FORT_SCOPE_ARGUMENT, "physical batch transfer byte overflow");
+        bytes += plan.bytes;
+        if (!plan.visit([&](const fort_physical::CopyOperation &op) {
+            if (count == operation_limit) return false;
+            auto &value = operations[count++];
+            value = {};
+            value.src.type = value.dst.type = cudaMemcpyOperandTypePointer;
+            value.src.op.ptr.ptr = static_cast<char *>(upload ? b.host : b.device)+op.offset;
+            value.dst.op.ptr.ptr = static_cast<char *>(upload ? b.device : b.host)+op.offset;
+            value.src.op.ptr.rowLength = value.dst.op.ptr.rowLength = op.pitch;
+            value.src.op.ptr.layerHeight = value.dst.op.ptr.layerHeight =
+                op.depth > 1 ? op.physical_height : op.height;
+            value.extent = make_cudaExtent(op.width, op.height, op.depth);
+            value.srcAccessOrder = cudaMemcpySrcAccessOrderStream;
+            return true;
+        })) return false; // Over-budget copies retain the old path before enqueue.
+    }
+    if (count < 2) return false;
+    DeviceGuard guard(c);
+    if (!c.direct_copy_driver_checked) {
+        cuda_check(c, cudaDriverGetVersion(&c.direct_copy_driver));
+#ifdef FORT_SCOPE_TEST_FAULTS
+        if (const auto *version = std::getenv("FORT_SCOPE_TEST_DIRECT_COPY_DRIVER"))
+            c.direct_copy_driver = std::atoi(version);
+#endif
+        c.direct_copy_driver_checked = true;
+    }
+    if (c.direct_copy_driver < 13040) return false;
+#ifdef FORT_SCOPE_TEST_FAULTS
+    if (std::getenv("FORT_SCOPE_TEST_FAIL_DIRECT_COPY_BATCH"))
+        cuda_check(c, cudaErrorInvalidValue);
+#endif
+    // Every pointer, pitch and exact footprint is ready before the one enqueue.
+    // A failed call poisons the context; an ambiguous batch is never replayed.
+    cuda_check(c, cudaMemcpy3DBatchAsync(count, operations.data(), 0, c.stream));
+    if (upload) { c.stats.uploads += count; c.stats.upload_bytes += bytes; }
+    else { c.stats.downloads += count; c.stats.download_bytes += bytes; }
+    c.pending = true;
+    trace(c, "copy_batch", &b, bytes, count);
+    for (const auto &box : region) {
+        const fort_physical::CopyPlan plan(b.element_bytes, b.extents, box.lo, box.hi);
+        trace(c, upload ? "upload" : "download", &b, plan.bytes);
+    }
+    return true;
+#else
+    (void)c; (void)b; (void)region; (void)upload;
+    return false;
+#endif
+}
+void copy_region(Context &c, Buffer &b, const Region &region, bool upload) {
+    if (copy_direct_batch(c, b, region, upload)) return;
+    for (const auto &box : region) copy(c, b, box, upload);
+}
 Region sections(const Buffer &b, const fort_scope_section *data, size_t count, bool full) {
     require(count <= rectangle_limit && (!count || data), FORT_SCOPE_ARGUMENT, "section list exceeds the bounded interface");
     Region result;
@@ -595,7 +673,7 @@ void reconcile(Context &c, Buffer &b, bool device) {
     // Every rectangle copied is current at the source. Copying already-current
     // destination cells is harmless; copying a stale enclosing box is not.
     const Region latest_other = device ? b.host_current : b.device_current;
-    for (const auto &part : latest_other) copy(c, b, part, device);
+    copy_region(c, b, latest_other, device);
     if (!device) wait(c);
     auto &chosen = device ? b.device_current : b.host_current;
     auto &other = device ? b.host_current : b.device_current;
@@ -613,7 +691,7 @@ void ensure(Context &c, Buffer &b, const Region &requested, bool device) {
                 "access reads an uninitialized section");
         const auto missing = difference(requested, chosen, budget);
         auto updated = unite(chosen, missing, budget);
-        for (const auto &part : missing) copy(c, b, part, device);
+        copy_region(c, b, missing, device);
         chosen = std::move(updated);
     } catch (const Fragmented &) {
         reconcile(c, b, device);
@@ -650,9 +728,12 @@ void end(Context &c, Buffer &b, bool device) {
     b.prepared.reset();
     trace(c, device ? "device_commit" : "host_commit", &b);
 }
-void publish(Context &c, Buffer &b) {
+void queue_publication(Context &c, Buffer &b) {
     require(!b.prepared, FORT_SCOPE_STATE, "unfinished buffer access at scope boundary");
     ensure(c, b, b.initialized, false);
+}
+void publish(Context &c, Buffer &b) {
+    queue_publication(c, b);
     wait(c);
 }
 void release(Context &c, Buffer &b) {
@@ -809,9 +890,10 @@ const fort_scoped::planning::Inputs &planning_inputs(Context &c, fort_scope_t ha
     input.asynchronous_release = false;
 #else
 #if CUDART_VERSION >= 11020
-    // New scopes use the stream-ordered pool on supported devices. Charging
-    // its extra completion wait is conservative if the runtime uses cudaFree.
-    input.asynchronous_release = !c.ready || c.pool != nullptr;
+    // Stream-ordered pools combine terminal publication and retirement into
+    // one wait. Until initialization, use the conservative synchronous model
+    // because devices without pool support retain per-buffer publication.
+    input.asynchronous_release = c.ready && c.pool != nullptr;
 #else
     input.asynchronous_release = false;
 #endif
@@ -2463,13 +2545,25 @@ extern "C" int fort_scope_close(fort_scope_t h) {
         require(!c.scratch_token, FORT_SCOPE_STATE, "scope closed with an active scratch lease");
         require(!c.plan_installed || c.worker_cursor == c.schedule.size(), FORT_SCOPE_STATE,
                 "scope closed before its scheduled workers completed");
-        for (auto &entry : c.buffers) publish(c, *entry.second);
+        bool ordered_release = false;
+#ifndef FORT_SCOPE_CPU_TEST
+#if CUDART_VERSION >= 11020
+        ordered_release = c.pool != nullptr;
+#endif
+#endif
+        // Close has no intervening host consumer. Queue every publication and
+        // retirement on the same stream before its one completion wait. Keep
+        // immediate publication for the synchronous allocator/reference path.
+        for (auto &entry : c.buffers) {
+            if (ordered_release) queue_publication(c, *entry.second);
+            else publish(c, *entry.second);
+        }
         for (auto &entry : c.buffers) release(c, *entry.second);
         // Complete scratch uses before retiring the idle arena. Scratch is
         // never registered, defined, reconciled, or published to host storage.
+        if (ordered_release) release_scratch(c);
         wait(c);
-        release_scratch(c);
-        wait(c);
+        if (!ordered_release) { release_scratch(c); wait(c); }
 #ifndef FORT_SCOPE_CPU_TEST
         if (c.ready) {
             DeviceGuard guard(c);
