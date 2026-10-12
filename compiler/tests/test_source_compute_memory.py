@@ -53,6 +53,20 @@ end subroutine
 end module
 """
 
+POINTWISE = """module total_memory_query
+contains
+subroutine evaluate(a,b,out,n)
+real(8),intent(in)::a(:),b(:)
+real(8),intent(out)::out(:)
+integer,intent(in)::n
+integer::i
+do i=1,n
+out(i)=2d0*a(i)+b(i)
+enddo
+end subroutine
+end module
+"""
+
 
 def function_text(source, start):
     """Select complete compiler-emitted functions, including nested lambdas."""
@@ -93,7 +107,10 @@ def queries(tmp_path_factory):
                       "unknown": (INDIRECT, False), "view": (SOURCE, True),
                       "view_aliases": (ALIASES, True),
                       "runtime_schedule": (SOURCE.replace("generic_source_compute", "schedule_source_compute"), False),
-                      "per_role": (SOURCE.replace("generic_source_compute", "role_ranges"), False)}
+                      "per_role": (SOURCE.replace("generic_source_compute", "role_ranges"), False),
+                      **{name: (POINTWISE, False) for name in (
+                          "gpu_total", "gpu_total_no_cpu", "gpu_total_no_gpu", "gpu_total_no_native", "gpu_total_only",
+                          "gpu_total_small_gain", "gpu_total_missing_contract")}}
     from compiler.offload import source_compute
 
     original_model = source_compute.numerical_compute_model
@@ -108,6 +125,40 @@ def queries(tmp_path_factory):
         memory["working_set_range"] = [value * 4 for value in memory["working_set_range"]]
         return result
 
+    def total_model(name, *args, **kwargs):
+        # Synthetic accepted payloads isolate composition in the actual public
+        # query/planner. They establish no hardware calibration acceptance.
+        result = deepcopy(original_model(*args, **kwargs))
+        for role in ("native_fortran", "generated_cpu", "gpu"):
+            coefficients = result[role]
+            coefficients["arithmetic_seconds_per_operation"] = 1e-12
+            coefficients["intrinsic_seconds_per_item"] = 0.0
+            for knot in coefficients["memory_cost_model"]["knots"]:
+                knot["seconds_per_traffic_byte"] = 1e-18
+            coefficients["fixed_seconds"] = .1 if role == "generated_cpu" else .01
+        result["native_fortran"]["fixed_seconds"] = .006 if name == "gpu_total_small_gain" else .01
+        gpu = result["gpu"]
+        gpu["fixed_seconds"] = .001
+        gpu["launch_enqueue_included"] = True
+        gpu["memory_combination"] = "max_fixed_compute_total_memory_v1"
+        memory = gpu["memory_cost_model"]
+        gpu["memory_cost_model"] = {"kind": "piecewise_gpu_total_memory_v1",
+            "traffic_equals_working_set": True, "working_set_range": memory["working_set_range"],
+            "knots": [{"working_set_bytes": row["working_set_bytes"], "total_seconds": .005}
+                      for row in memory["knots"]]}
+        if name == "gpu_total_no_cpu":
+            result["generated_cpu"] = None
+        elif name == "gpu_total_no_gpu":
+            result["gpu"] = None
+        elif name in {"gpu_total_no_native", "gpu_total_only"}:
+            result["native_fortran"] = None
+            if name == "gpu_total_only":
+                result["generated_cpu"] = None
+                result["fortran"] = result["generator_id"] = result["cpu_protocol_environment"] = None
+        elif name == "gpu_total_missing_contract":
+            del gpu["memory_combination"]
+        return result
+
     for name, (source, root_views) in specifications.items():
         function = lower_source(source, "evaluate", source_name=name + ".f90")
         plan = build_execution_plan(function)
@@ -117,6 +168,9 @@ def queries(tmp_path_factory):
                 patch.setattr(source_compute, "numerical_compute_model", per_role_model)
             elif name == "runtime_schedule":
                 selected_profile, participation = schedule_profile(patch), "fork_join_runtime"
+            elif name.startswith("gpu_total"):
+                patch.setattr(source_compute, "numerical_compute_model",
+                              lambda *args, name=name, **kwargs: total_model(name, *args, **kwargs))
             emitted[name] = generate_scoped(function, plan,
                 OffloadConfig("auto", selected_profile, native_participation=participation), "common_functions.cuh",
                 runtime_id=runtime_id, root_views=root_views, root_view_abi=2)
@@ -171,7 +225,7 @@ extern "C" void capture_get(fort_scope_compute_costs_v1 *value,double *traffic,s
     callables = {}
     for name, value in emitted.items():
         query = getattr(lib, value.report["planning"]["entry"])
-        count = {"aliases": 3, "unknown": 2, "view_aliases": 3}.get(name, 1)
+        count = {"aliases": 3, "unknown": 2, "view_aliases": 3}.get(name, 3 if name.startswith("gpu_total") else 1)
         handles = [c.POINTER(View) if specifications[name][1] else TOKEN] * count
         query.argtypes = [TOKEN, *handles, c.POINTER(c.c_int)]
         callables[name] = query
@@ -184,10 +238,96 @@ def recorded(lib):
     return value, traffic.value, calls.value
 
 
+@pytest.mark.parametrize("changed", [None, "affinity", "environment"])
+def test_later_cpu_role_retains_placement_guard_after_gpu_only_unit(monkeypatch, changed):
+    from compiler.offload import source_compute
+
+    profile = profile_v2()
+    original_model = source_compute.numerical_compute_model
+    count = 0
+
+    def partial_model(*args, **kwargs):
+        nonlocal count
+        result = deepcopy(original_model(*args, **kwargs))
+        result["cpu_affinity"] = [0, 1, 2, 3]
+        result["cpu_protocol_environment"] = {"omp_wait_policy": "PASSIVE", "gomp_spincount": "7"}
+        if count == 0:
+            result["native_fortran"] = result["generated_cpu"] = None
+            result["fortran"] = result["generator_id"] = result["cpu_protocol_environment"] = None
+        elif changed == "affinity":
+            result["cpu_affinity"] = [4, 5, 6, 7]
+        elif changed == "environment":
+            # Add a third CPU-bearing unit with a conflicting environment.
+            result["cpu_protocol_environment"]["omp_wait_policy"] = "ACTIVE" if count == 2 else "PASSIVE"
+        count += 1
+        return result
+
+    body = POINTWISE[POINTWISE.index("do i=1,n"):POINTWISE.index("end subroutine")]
+    source = POINTWISE.replace(body, body * 3)
+    function = lower_source(source, "evaluate", source_name="partial_placement.f90")
+    plan = build_execution_plan(function)
+    monkeypatch.setattr(source_compute, "numerical_compute_model", partial_model)
+    emitted = generate_scoped(function, plan, OffloadConfig("auto", profile, native_participation="serial"),
+                              "common_functions.cuh", runtime_id=read_scoped_runtime()[1]["runtime_id"])
+    assert count == 3
+    units = emitted.report["planning"]["units"]
+    assert units[0]["compute_model"]["native_fortran"] is None
+    assert units[1]["compute_model"]["native_fortran"] is not None
+    if changed is None:
+        assert 'std::strcmp(std::getenv("OMP_WAIT_POLICY"), "PASSIVE")' in emitted.cuda
+        assert 'std::strcmp(std::getenv("GOMP_SPINCOUNT"), "7")' in emitted.cuda
+    else:
+        assert not emitted.report["automatic_scope_available"]
+        assert emitted.report["planning"]["reason"] == "source_compute_placement_contracts_differ"
+        assert "static bool scoped_compute_placement_compatible() { return false; }" in emitted.cuda
+
+
 def validate_native_only_query(scope):
     scope.check(scope.lib.fort_scope_plan_validate(scope.handle))
     stats = scope.stats()
     assert stats.upload_bytes == stats.download_bytes == stats.allocations == stats.launches == 0
+
+
+@pytest.mark.parametrize(("name", "bits", "gpu_units"), [
+    ("gpu_total", 15, 1), ("gpu_total_no_cpu", 13, 1), ("gpu_total_no_gpu", 3, 0),
+    ("gpu_total_small_gain", 15, 0), ("gpu_total_missing_contract", 3, 0),
+    ("gpu_total_no_native", 14, 0), ("gpu_total_only", 12, 0)])
+def test_total_memory_public_query_composes_once_and_preserves_backend_and_gain_gates(queries, name, bits, gpu_units):
+    lib, callables, _ = queries
+    scope = Scope(lib)
+    items = 262144
+    arrays = [(c.c_double * items)() for _ in range(3)]
+    handles = []
+    for index, values in enumerate(arrays):
+        status, handle = scope.register(values, [items], identity=index + 1, initialized=index < 2)
+        scope.check(status)
+        handles.append(handle)
+    scope.check(lib.fort_scope_plan_reset(scope.handle))
+    lib.capture_reset()
+    scope.check(callables[name](scope.handle, *handles, c.byref(c.c_int(items))))
+    value, traffic, calls = recorded(lib)
+    assert value.known_backends == bits
+    assert value.version == 2
+    assert traffic == items * 3 * 8
+    assert calls == 1
+    if bits & 4:
+        assert value.gpu_seconds == pytest.approx(.005)
+        assert value.gpu_seconds != pytest.approx(.006)  # F must not be added to total memory.
+    else:
+        assert value.gpu_seconds == 0
+    if not bits & 2:
+        assert value.generated_cpu_seconds == 0
+    validate_native_only_query(scope)
+    decision = Decision()
+    parameters = costs()
+    parameters.launch_enqueue_seconds = 1.0
+    scope.check(lib.fort_scope_plan_select(scope.handle, c.byref(parameters), -1, c.byref(decision)))
+    assert bool(decision.available) == bool(bits & 1)
+    assert decision.gpu_units == gpu_units
+    if gpu_units:
+        assert decision.estimated_seconds < .006  # No separate enqueue or fixed-memory charge.
+    assert scope.stats().launches == scope.stats().allocations == 0
+    scope.close()
 
 
 @pytest.mark.parametrize(("items", "bits"), [(0, 0), (65536, 0), (196607, 0), (196608, 7),
@@ -323,8 +463,12 @@ def test_each_backend_requires_its_own_memory_applicability(queries):
     assert value.generated_cpu_seconds == 0
     validate_native_only_query(scope)
     decision = Decision()
-    scope.check(lib.fort_scope_plan_select(scope.handle, c.byref(costs()), -1, c.byref(decision)))
-    assert not decision.available
+    calibration = costs()
+    # A rejected generated-CPU estimate cannot block the original native
+    # fallback. Make startup dominate so this test needs no numerical work.
+    calibration.gpu_setup_seconds = value.native_fortran_seconds + 1
+    scope.check(lib.fort_scope_plan_select(scope.handle, c.byref(calibration), -1, c.byref(decision)))
+    assert decision.available
     assert not decision.gpu_units
     scope.close()
 

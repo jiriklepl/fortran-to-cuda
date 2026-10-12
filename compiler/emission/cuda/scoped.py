@@ -174,6 +174,14 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
     compute_models = [unit.compute_model for unit in units.values() if unit.compute_model is not None]
     source_compute = config.native_participation is not None
     affinity = compute_models[0]["cpu_affinity"] if compute_models else None
+    protocol_environments = [model["cpu_protocol_environment"] for model in compute_models
+                             if model.get("cpu_protocol_environment") is not None]
+    placement_consistent = (all(model["cpu_affinity"] == affinity for model in compute_models)
+                            and all(environment == protocol_environments[0]
+                                    for environment in protocol_environments[1:]))
+    if not placement_consistent:
+        planning_available = False
+        planning_reason = "source_compute_placement_contracts_differ"
     runtime_schedule = any(model.get("runtime_schedule") is not None for model in compute_models)
     if runtime_schedule:
         lines += ["static bool scoped_compute_schedule_compatible() {",
@@ -181,14 +189,15 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                   "    omp_get_schedule(&schedule, &chunk);",
                   "    const auto kind = static_cast<unsigned int>(schedule) & 0x7fffffffU;",
                   "    return kind == static_cast<unsigned int>(omp_sched_static) && chunk == 0;", "}"]
-    if affinity is not None:
+    if not placement_consistent:
+        lines += ["static bool scoped_compute_placement_compatible() { return false; }"]
+    elif affinity is not None:
         lines.insert(0, '#include <sched.h>')
-        protocol_environment = compute_models[0].get("cpu_protocol_environment")
         environment_guard = ""
-        if protocol_environment is not None:
+        if protocol_environments:
             lines[0:0] = ['#include <cstdlib>', '#include <cstring>']
             for field, variable in (("omp_wait_policy", "OMP_WAIT_POLICY"), ("gomp_spincount", "GOMP_SPINCOUNT")):
-                value = protocol_environment[field]
+                value = protocol_environments[0][field]
                 environment_guard += (f' && !std::getenv("{variable}")' if value is None else
                     f' && std::getenv("{variable}") && !std::strcmp(std::getenv("{variable}"), {json.dumps(value)})')
         lines += ["static bool scoped_compute_placement_compatible() {",
@@ -737,8 +746,15 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         if unit.compute_model is None:
             continue
         for role in ("native_fortran", "generated_cpu", "gpu"):
-            memory_model = unit.compute_model[role].get("memory_cost_model", {})
-            if memory_model.get("kind") == "piecewise_bandwidth_v1":
+            coefficients = unit.compute_model[role]
+            if coefficients is None:
+                continue
+            memory_model = coefficients.get("memory_cost_model", {})
+            if memory_model.get("kind") == "piecewise_gpu_total_memory_v1" and (
+                    role != "gpu" or coefficients.get("memory_combination") != "max_fixed_compute_total_memory_v1"
+                    or coefficients.get("launch_enqueue_included") is not True):
+                continue
+            if memory_model.get("kind") in {"piecewise_bandwidth_v1", "piecewise_gpu_total_memory_v1"}:
                 helper = "fort_compute_memory_" + role + "_" + sha256(str(unit.region.id).encode()).hexdigest()[:12]
                 memory_helpers[unit.region.id, role] = helper
                 lines += generate_compute_memory(helper, memory_model)
@@ -883,14 +899,22 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                               ("generated_cpu", "FORT_SCOPE_COMPUTE_GENERATED_CPU"),
                                               ("gpu", "FORT_SCOPE_COMPUTE_GPU")):
                                 coefficients = model[role]
+                                if coefficients is None:
+                                    continue
                                 arithmetic = units[step.id].compute_arithmetic_operations_per_iteration
                                 seconds = coefficients.get("compute_seconds_per_item",
                                     arithmetic * coefficients["arithmetic_seconds_per_operation"] + coefficients["intrinsic_seconds_per_item"])
                                 helper = memory_helpers.get((step.id, role))
+                                if coefficients.get("memory_cost_model", {}).get("kind") == "piecewise_gpu_total_memory_v1" and helper is None:
+                                    continue
                                 if helper is not None:
+                                    total_memory = coefficients.get("memory_cost_model", {}).get("kind") == "piecewise_gpu_total_memory_v1"
+                                    compute_seconds = f"static_cast<double>(unit.units[0].iterations) * {seconds!r}"
+                                    estimate = (f"std::max({coefficients['fixed_seconds']!r} + {compute_seconds}, fort_memory_seconds)"
+                                        if total_memory else f"std::max({compute_seconds}, fort_memory_seconds) + {coefficients['fixed_seconds']!r}")
                                     record += ["            {", "                double fort_memory_seconds = 0.0;",
                                                f"                if (fort_working_set_available && {helper}(unit.units[0].memory_bytes, fort_working_set_bytes, fort_memory_seconds)) {{",
-                                               f"                    fort_compute.{role}_seconds = std::max(static_cast<double>(unit.units[0].iterations) * {seconds!r}, fort_memory_seconds) + {coefficients['fixed_seconds']!r};",
+                                               f"                    fort_compute.{role}_seconds = {estimate};",
                                                f"                    fort_compute.known_backends |= {bit};"]
                                     if role == "gpu" and coefficients.get("launch_enqueue_included") is True:
                                         record += ["                    fort_compute.known_backends |= FORT_SCOPE_COMPUTE_GPU_LAUNCH_INCLUDED;"]

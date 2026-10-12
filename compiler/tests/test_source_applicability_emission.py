@@ -29,7 +29,7 @@ def test_current_costs_reach_public_queries_from_original_preparation(tmp_path, 
     public = generated.scoped
     assert public["compute_estimates"]["source_applicability"] == applicability.public()
     unit, = public["planning"]["units"]
-    assert unit["compute_model"]["cost_model"] == "source_work_span_cpu_gpu_v1"
+    assert unit["compute_model"]["cost_model"] == "source_work_span_cpu_gpu_v2"
     assert unit["compute_model"]["gpu"]["launch_enqueue_included"]
     assert public["planning"]["available"]
     cuda = next(text for path, text in generated.artifacts.items()

@@ -65,6 +65,9 @@ struct Result {
     bool driver_initialized = false;
     // A fresh host-only native choice needs no coherence-state simulation.
     bool native_startup_shortcut = false;
+    // A fresh all-native source plan executes the original Fortran body. Its
+    // alternative generated CPU workers need not have a validated estimate.
+    bool original_native_fallback = false;
     // Fresh collective owners can close metadata and execute original calls.
     bool collective_whole_owner_margin = false;
     fort_scope_plan_report report{};
@@ -127,6 +130,10 @@ inline bool valid_compute_costs(const fort_scope_compute_costs_v1 &costs) {
 inline bool gpu_launch_included(const Operation &op) {
     return op.compute_costs && op.compute_costs->version == 2 &&
         (op.compute_costs->known_backends & FORT_SCOPE_COMPUTE_GPU_LAUNCH_INCLUDED);
+}
+inline bool gpu_estimate_available(const Operation &op) {
+    return op.kind == FORT_SCOPE_PLAN_WORKER && op.gpu_available &&
+        (!op.compute_costs || (op.compute_costs->known_backends & FORT_SCOPE_COMPUTE_GPU));
 }
 inline double compute(const Operation &op, const fort_scope_plan_costs &costs, bool gpu) {
     if (op.compute_costs) {
@@ -243,10 +250,9 @@ inline void validate_metadata(const Inputs &input, bool check_work, bool check_c
                 if (!definition_only(op)) {
                     const auto known = op.compute_costs->known_backends;
                     require(known & FORT_SCOPE_COMPUTE_NATIVE_FORTRAN, "native_fortran_compute_unavailable");
-                    require(known & FORT_SCOPE_COMPUTE_GENERATED_CPU, op.kind == FORT_SCOPE_PLAN_NATIVE ?
-                            "coordinated_host_compute_unavailable" : "generated_cpu_compute_unavailable");
-                    if (op.kind == FORT_SCOPE_PLAN_WORKER && op.gpu_available)
-                        require(known & FORT_SCOPE_COMPUTE_GPU, "gpu_compute_unavailable");
+                    // Alternative backend costs are checked when that backend
+                    // is used. Missing generated-CPU or GPU evidence cannot
+                    // invalidate a separately priced original-native fallback.
                 }
             }
         }
@@ -612,7 +618,7 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
             }
         };
         const bool gpu_supported = std::any_of(input.operations.begin(), input.operations.end(), [](const Operation &op) {
-            return op.kind == FORT_SCOPE_PLAN_WORKER && op.gpu_available;
+            return detail::gpu_estimate_available(op);
         });
         const bool fresh = !input.device_ready && !input.pending &&
             std::none_of(input.resources.begin(), input.resources.end(), [](const Resource &b) {
@@ -626,6 +632,7 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
         const bool original_native_fallback = fresh && !input.continuation &&
             (input.team_costs || std::any_of(input.operations.begin(), input.operations.end(),
                 [](const Operation &op) { return op.compute_costs.has_value(); }));
+        result.original_native_fallback = original_native_fallback;
         // A fresh scope with any GPU work must pay at least setup and one
         // enqueue, plus cold driver startup if it is not already initialized.
         // Even zero GPU compute/transfers cannot beat this lower bound. Prove
@@ -633,7 +640,7 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
         // A launch-inclusive worker does not owe the separate enqueue price.
         // Omitting it here is a conservative lower bound even in mixed plans.
         const bool inclusive_launch = std::any_of(input.operations.begin(), input.operations.end(), [](const Operation &op) {
-            return op.kind == FORT_SCOPE_PLAN_WORKER && op.gpu_available && detail::gpu_launch_included(op);
+            return detail::gpu_estimate_available(op) && detail::gpu_launch_included(op);
         });
         const double gpu_lower_bound = costs.gpu_setup_seconds + (inclusive_launch ? 0 : costs.launch_enqueue_seconds) +
             (input.driver_initialized ? 0 : costs.cold_driver_startup_seconds);
@@ -687,16 +694,23 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
         }
         const auto initial_terminal = input.continuation ? detail::entry_terminal(input, costs, work)
                                                         : fort_scope_terminal_cost{};
-        auto all_native = detail::simulate(input, costs, result.gpu_workers, work);
+        detail::State all_native;
         if (original_native_fallback) {
             // A whole-native choice executes the untouched original procedures
             // after the fresh context is closed. It does not call generated CPU
             // workers, their entry protocols, or their per-array hooks.
-            auto fallback = detail::initial(input, costs);
-            detail::seconds(fallback.time, native);
-            all_native.time = all_native.execution_time = fallback.time;
-            all_native.terminal = {};
-        }
+            if (!input.definitions_validated) {
+                const auto proof = validate_definitions(input);
+                detail::require(proof.status == FORT_SCOPE_OK, proof.reason);
+            }
+            all_native = detail::initial(input, costs);
+            detail::seconds(all_native.time, native);
+            all_native.execution_time = all_native.time;
+            all_native.choices = result.gpu_workers;
+            // Keep the same logical accounting as the former full simulation.
+            work = detail::add(work, input.operations.size());
+            work = detail::add(work, input.resources.size());
+        } else all_native = detail::simulate(input, costs, result.gpu_workers, work);
         auto report = [&](const detail::State &state, double planning) {
             result.report.available = 1;
             result.report.execution_seconds = state.execution_time + planning;
@@ -721,7 +735,9 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
             result.decision.candidates = 1; result.decision.simulated_operations = work;
             result.decision.native_seconds = native; result.decision.estimated_seconds = all_native.time;
             detail::seconds(result.decision.estimated_seconds, double(work)*costs.planning_operation_seconds);
-            result.reason = "native_no_supported_gpu_workers";
+            result.reason = std::any_of(input.operations.begin(), input.operations.end(), [](const Operation &op) {
+                return op.kind == FORT_SCOPE_PLAN_WORKER && op.gpu_available;
+            }) ? "native_gpu_compute_unavailable" : "native_no_supported_gpu_workers";
             report(all_native, double(work)*costs.planning_operation_seconds);
             return result;
         }
@@ -732,9 +748,9 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
         size_t worker = 0;
         for (size_t k=0; k<input.operations.size();) {
             if (input.operations[k].kind != FORT_SCOPE_PLAN_WORKER) { ++k; continue; }
-            if (!input.operations[k].gpu_available) { ++worker; ++k; continue; }
+            if (!detail::gpu_estimate_available(input.operations[k])) { ++worker; ++k; continue; }
             const size_t first = worker;
-            while (k<input.operations.size() && input.operations[k].kind == FORT_SCOPE_PLAN_WORKER && input.operations[k].gpu_available) { ++worker; ++k; }
+            while (k<input.operations.size() && detail::gpu_estimate_available(input.operations[k])) { ++worker; ++k; }
             auto choices = result.gpu_workers;
             for (size_t j=first; j<worker; ++j) choices[j] = true;
             try {
@@ -753,16 +769,16 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
                     auto s = prefix; detail::execute(s, op, false, input, costs, work); detail::retain(fronts[k+1], std::move(s));
                 } catch (const detail::Unavailable &error) { unavailable(error.reason); }
                   catch (const coherence::Fragmented &) { unavailable("region_fragmentation_unavailable"); }
-                if (op.kind != FORT_SCOPE_PLAN_WORKER || !op.gpu_available) continue;
+                if (!detail::gpu_estimate_available(op)) continue;
                 // Adjacent GPU transitions would silently create an interval
                 // longer than four. Admit the complete block explicitly.
                 if (k && input.operations[k-1].kind == FORT_SCOPE_PLAN_WORKER && !prefix.choices.empty() && prefix.choices.back()) continue;
                 size_t end = k;
-                while (end<input.operations.size() && input.operations[end].kind == FORT_SCOPE_PLAN_WORKER && input.operations[end].gpu_available) ++end;
+                while (end<input.operations.size() && detail::gpu_estimate_available(input.operations[end])) ++end;
                 std::vector<size_t> lengths;
                 for (size_t n=1; n<=4 && k+n<=end; ++n) lengths.push_back(n);
                 const size_t length = end-k;
-                if (length > 4 && (!k || input.operations[k-1].kind != FORT_SCOPE_PLAN_WORKER || !input.operations[k-1].gpu_available)) lengths.push_back(length);
+                if (length > 4 && (!k || !detail::gpu_estimate_available(input.operations[k-1]))) lengths.push_back(length);
                 for (size_t n : lengths) try {
                     auto s = prefix; const size_t first = s.choices.size();
                     for (size_t j=k; j<k+n; ++j) detail::execute(s, input.operations[j], true, input, costs, work);
@@ -788,16 +804,16 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
                 auto choices = c.state.choices; double cpu = 0;
                 for (size_t j=interval.first; j<interval.second; ++j) choices[j] = false;
                 const bool other_gpu = std::any_of(choices.begin(), choices.end(), [](bool gpu) { return gpu; });
-                for (size_t j=interval.first; j<interval.second; ++j) {
-                    const auto &op = *worker_ops[j];
-                    // Once an owner has GPU work, replacing this interval
-                    // executes coordinated CPU workers, never the original
-                    // whole-entry fallback. Apply the margin to that actual
-                    // incremental work rather than another backend's rate.
-                    detail::seconds(cpu, detail::incremental_native_compute(op, input, costs,
-                        input.continuation || other_gpu));
-                }
                 try {
+                    for (size_t j=interval.first; j<interval.second; ++j) {
+                        const auto &op = *worker_ops[j];
+                        // Once an owner has GPU work, replacing this interval
+                        // executes coordinated CPU workers, never the original
+                        // whole-entry fallback. Apply the margin to that actual
+                        // incremental work rather than another backend's rate.
+                        detail::seconds(cpu, detail::incremental_native_compute(op, input, costs,
+                            input.continuation || other_gpu));
+                    }
                     const double time = input.continuation || other_gpu
                         ? detail::simulate(input, costs, choices, work).time : native;
                     c.gates.push_back({time, cpu, other_gpu});
@@ -868,6 +884,11 @@ inline void evidence(const Inputs &input, const fort_scope_plan_costs &costs,
         EvidenceEvent event; event.event = "snapshot"; event.phase = "initial"; event.resource = &resource; sink(event);
     }
     if (!result.decision.available || result.native_startup_shortcut) return;
+    if (result.original_native_fallback && !result.decision.gpu_units) {
+        EvidenceEvent event; event.event = "native_fallback"; event.phase = "original_fortran";
+        event.seconds = result.report.execution_seconds; sink(event);
+        return;
+    }
     uint64_t ignored_work = 0;
     auto state = detail::initial(input, costs); size_t worker = 0;
     for (const auto &op : input.operations) {

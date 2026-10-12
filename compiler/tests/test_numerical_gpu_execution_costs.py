@@ -102,6 +102,8 @@ def test_complete_fixed_and_variable_costs_preserve_parent_and_do_not_add_enqueu
     assert all(r["status"] == "accepted" for r in section["workload_validation"].values())
     result = query(profile, monkeypatch, {"sqrt": 2})
     assert result["launch_enqueue_included"] is True
+    assert result["memory_combination"] == "max_fixed_compute_total_memory_v1"
+    assert result["memory_cost_model"]["kind"] == costs.TOTAL_MEMORY_KIND
     assert result["fixed_seconds"] == pytest.approx(FIXED)
     assert result["fixed_seconds"] != pytest.approx(FIXED + .1 / 50000)
     assert result["intrinsic_seconds_per_item"] == pytest.approx(2 * INTRINSIC)

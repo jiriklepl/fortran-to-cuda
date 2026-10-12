@@ -274,6 +274,29 @@ def test_later_unit_profile_mutation_discards_earlier_attached_models(profile, s
     assert all(value.region is unit.region and value.footprints == unit.footprints for value in result.units)
 
 
+@pytest.mark.parametrize("mutation", ["profile", "identity"])
+def test_unavailable_role_cannot_hide_final_attachment_mutation(profile, source, monkeypatch, mutation):
+    analysis, applicability = source
+    changed = False
+
+    def unavailable(*_arguments, **_keywords):
+        nonlocal changed
+        changed = True
+        if mutation == "profile":
+            change_profile(profile, "raw")
+        else:
+            monkeypatch.setattr(cost_projection, "_cpu_identity", lambda: ("changed-after-CPU-query",))
+        raise NumericalCalibrationError("independent GPU holdout rejected")
+
+    monkeypatch.setattr(_SourceCostProjection, "gpu_costs", unavailable)
+    result = apply_source_compute_costs(analysis, profile, "serial", source_applicability=applicability)
+    assert changed
+    unit, = result.units
+    assert unit.compute_model is None
+    assert unit.work_per_iteration is None
+    assert "changed during source cost attachment" in unit.work_estimate_reason
+
+
 @pytest.mark.parametrize("gate", ["form", "primitive"])
 def test_source_gates_decline_before_invalid_evidence_is_demanded(tmp_path, profile, source, gate):
     profile["cpu_dependency"]["measurements"] = object()

@@ -32,7 +32,9 @@ from compiler.offload.numerical_execution import (
 
 SECTION = "numerical_execution_gpu_costs"
 SCHEMA_VERSION = 1
-PROTOCOL_ID = "production-cuda-nonzero-launch-inclusive-v1"
+LEGACY_PROTOCOL_ID = "production-cuda-nonzero-launch-inclusive-v1"
+PROTOCOL_ID = "production-cuda-total-memory-launch-inclusive-v2"
+TOTAL_MEMORY_KIND = "piecewise_gpu_total_memory_v1"
 PREFLIGHT_KIND = "numerical_gpu_launch_preflight_v1"
 BATCH_KIND = "numerical_gpu_launch_batch_v1"
 CONTROL_SIZES = (0, 1, 8, 17)
@@ -75,7 +77,7 @@ def _identity_from_parent(parent, identity):
     if any(identity.get(k) != parent["identity"][k]
            or type(identity.get(k)) is not type(parent["identity"][k]) for k in keys):
         raise gpu.NumericalGpuExecutionError("GPU launch actual identity differs from parent")
-    if (identity.get("launch_protocol_id") != PROTOCOL_ID
+    if (identity.get("launch_protocol_id") not in (LEGACY_PROTOCOL_ID, PROTOCOL_ID)
             or identity.get("parent_evidence_sha256") != _hash(parent)):
         raise gpu.NumericalGpuExecutionError("GPU launch parent/protocol identity differs")
     gpu._digest_map(identity.get("cost_sources"), "cost implementation")
@@ -125,7 +127,46 @@ def _holdout(result, row, predicted):
         result["reason_codes"].append("holdout_error")
 
 
-def _family(recipe, costs, startup):
+def total_memory_seconds(model, traffic_bytes, working_set_bytes):
+    """Interpolate a complete memory launch interval, never a bandwidth rate.
+
+    The current pointwise class has exactly one access per physical element.
+    Scaling a launch interval by repeated traffic would duplicate its fixed
+    cost, so a different traffic/working-set relation has no estimate here.
+    """
+    traffic = _number(traffic_bytes, "GPU total-memory traffic", zero=True)
+    if (type(working_set_bytes) is not int or not 0 <= working_set_bytes <= 1 << 53
+            or traffic != working_set_bytes):
+        raise gpu.NumericalGpuExecutionError("GPU total-memory requires traffic equal to working set")
+    if (not isinstance(model, dict) or model.get("kind") != TOTAL_MEMORY_KIND
+            or model.get("traffic_equals_working_set") is not True):
+        raise gpu.NumericalGpuExecutionError("GPU total-memory model unavailable")
+    knots = model.get("knots")
+    if not isinstance(knots, list) or not 2 <= len(knots) <= 8:
+        raise gpu.NumericalGpuExecutionError("GPU total-memory knot budget invalid")
+    previous = 0
+    for knot in knots:
+        if (not isinstance(knot, dict) or type(knot.get("working_set_bytes")) is not int
+                or not previous < knot["working_set_bytes"] <= 1 << 53):
+            raise gpu.NumericalGpuExecutionError("GPU total-memory knot coordinates invalid")
+        previous = knot["working_set_bytes"]
+        _number(knot.get("total_seconds"), "GPU total-memory interval")
+    if model.get("working_set_range") != [knots[0]["working_set_bytes"], knots[-1]["working_set_bytes"]]:
+        raise gpu.NumericalGpuExecutionError("GPU total-memory range mismatch")
+    if not knots[0]["working_set_bytes"] <= working_set_bytes <= knots[-1]["working_set_bytes"]:
+        raise gpu.NumericalGpuExecutionError("GPU working set outside total-memory calibrated range")
+    for index, right in enumerate(knots):
+        if working_set_bytes == right["working_set_bytes"]:
+            return float(right["total_seconds"])
+        if working_set_bytes < right["working_set_bytes"]:
+            left = knots[index - 1]
+            fraction = (working_set_bytes - left["working_set_bytes"]) / (right["working_set_bytes"] - left["working_set_bytes"])
+            return _number(left["total_seconds"] + fraction * (right["total_seconds"] - left["total_seconds"]),
+                           "GPU total-memory interpolated interval")
+    raise gpu.NumericalGpuExecutionError("GPU total-memory interpolation unavailable")
+
+
+def _family(recipe, costs, startup, *, protocol):
     result = _result()
     if startup["status"] != "accepted":
         result["reason_codes"] = ["startup_rejected"]
@@ -136,6 +177,17 @@ def _family(recipe, costs, startup):
         return result
     fixed = startup["fixed_seconds"]
     training = [row for row in rows if row["items"] in recipe["fit_sizes"]]
+    if recipe["role"] == "memory" and protocol == PROTOCOL_ID:
+        knots = [{"working_set_bytes": row["working_set_bytes"],
+                  "total_seconds": _number(statistics.median(row["seconds"]), "GPU total-memory training interval")}
+                 for row in training]
+        result["model"] = {"kind": TOTAL_MEMORY_KIND, "knots": knots,
+            "working_set_range": [knots[0]["working_set_bytes"], knots[-1]["working_set_bytes"]],
+            "traffic_equals_working_set": True, "fixed_cost_coverage": FIXED_COVERAGE}
+        for row in rows:
+            if row["items"] not in recipe["fit_sizes"]:
+                _holdout(result, row, total_memory_seconds(result["model"], row["traffic_bytes"], row["working_set_bytes"]))
+        return _finish(result)
     variable = [statistics.median(row["seconds"]) - fixed for row in training]
     if any(not math.isfinite(v) or v <= 0 for v in variable):
         result["reason_codes"] = ["measured_startup_exceeds_training_time"]
@@ -163,7 +215,16 @@ def _family(recipe, costs, startup):
     return _finish(result)
 
 
-def _class(recipes, costs, families, fits, startup, precision):
+def _predict_total(recipe, size, coefficients, fixed, precision):
+    compute = _number(recipe["arithmetic"] * coefficients["arithmetic_seconds_per_operation"] + math.fsum(
+        count * coefficients["intrinsic_seconds_per_operation"][name] for name, count in recipe["intrinsics"].items()),
+        "GPU per-item compute duration", zero=True)
+    traffic = 3 * size * (precision // 8)
+    return _number(max(fixed + size * compute,
+        total_memory_seconds(coefficients["memory_cost_model"], traffic, traffic)), "GPU total predicted duration")
+
+
+def _class(recipes, costs, families, fits, startup, precision, *, protocol):
     result = _result()
     if not recipes:
         result["reason_codes"] = ["independent_holdouts_missing"]
@@ -176,7 +237,8 @@ def _class(recipes, costs, families, fits, startup, precision):
         return result
     for recipe in recipes:
         for size in recipe["sizes"]:
-            _holdout(result, costs[recipe["name"], size], _predict(recipe, size, coefficients,
+            predict = _predict_total if protocol == PROTOCOL_ID else _predict
+            _holdout(result, costs[recipe["name"], size], predict(recipe, size, coefficients,
                      startup["fixed_seconds"], precision))
     return _finish(result)
 
@@ -224,6 +286,7 @@ def _build_from_parent(parent, precision, records, calibration):
     """Derive unchanged costs after parent and record-envelope validation."""
     identity = records[0]
     _launch_preflight_from_parent(parent, precision, identity, records[1:5])
+    protocol = identity["launch_protocol_id"]
     target = Path(identity["build_paths"]["artifacts"])
     argv = ["taskset", "-c", ",".join(map(str, identity["sampling_cpu_affinity"])),
             str(target / "numerical-gpu-launch"), str(identity["device_ordinal"])]
@@ -288,18 +351,19 @@ def _build_from_parent(parent, precision, records, calibration):
                 "agreement_passed": all(r["agreement_passed"] for r in rows),
                 "seconds": [r["resident_event_seconds"] / r["launches"] for r in rows]}
     fitting = {r["family"]: r for r in parent["registry"] if r["role"] in {"coefficient", "memory"}}
-    families = {name: {"gpu": _family(recipe, costs, startup)} for name, recipe in fitting.items()}
+    families = {name: {"gpu": _family(recipe, costs, startup, protocol=protocol)} for name, recipe in fitting.items()}
     classes = {name: _class([r for r in parent["registry"] if r["role"] == "holdout"
                             and r["workload_class"] == name], costs, families, fitting, startup,
-                           precision) for name in CLASSES}
+                           precision, protocol=protocol) for name in CLASSES}
     domains = {name: _class([r for r in parent["registry"] if r["holdout_kind"] == "domain"
                             and r["family"] == name], costs, families, fitting, startup,
-                           precision) for name in ("sqrt", "acos", "cos")}
-    return {"schema_version": SCHEMA_VERSION, "protocol_id": PROTOCOL_ID,
+                           precision, protocol=protocol) for name in ("sqrt", "acos", "cos")}
+    return {"schema_version": SCHEMA_VERSION, "protocol_id": protocol,
             "identity": deepcopy(identity), "measurements": deepcopy(records), "calibration": deepcopy(calibration),
             "startup": startup, "families": families, "workload_validation": classes, "domain_validation": domains,
             "holdout_error_ceiling": MAX_RELATIVE_ERROR, "metric": "resident_event_seconds_per_launch",
             "fixed_cost_coverage": FIXED_COVERAGE, "launch_enqueue_included": True,
+            **({"memory_combination": "max_fixed_compute_total_memory_v1"} if protocol == PROTOCOL_ID else {}),
             "cost_model_available": any(r["status"] == "accepted" for r in classes.values()),
             "unpriced": ["cold driver/setup", "allocation", "transfers", "runtime notification", "team coordination", "wait API"],
             "scope": "GPU execution costs; other AUTO roles and source applicability are independently required"}
@@ -309,6 +373,9 @@ def profile_from_gpu_launch_measurements(profile, records, calibration):
     if SECTION in profile:
         raise gpu.NumericalGpuExecutionError("preserve existing GPU costs; use an unmodified parent")
     try:
+        if (not isinstance(records, list) or not records or not isinstance(records[0], dict)
+                or records[0].get("launch_protocol_id") != PROTOCOL_ID):
+            raise gpu.NumericalGpuExecutionError("new GPU costs require the current total-memory protocol")
         result = deepcopy(profile)
         result[SECTION] = _build(profile, records, calibration)
         return result
@@ -338,6 +405,8 @@ def _validated_gpu_cost_sections(profile):
 def _current_gpu_cost_sections(profile):
     """Issue detached current sections after one fresh raw validation demand."""
     parent, section = _validated_gpu_cost_sections(profile)
+    if section["protocol_id"] != PROTOCOL_ID:
+        raise gpu.NumericalGpuExecutionError("GPU current total-memory cost protocol required")
     identity = parent["identity"]
     current = gpu.current_gpu_identities(profile["precision_bits"])
     if (identity["source_generator_id"], identity["registry_id"], identity["generator_id"],
@@ -398,6 +467,7 @@ def _gpu_costs_from_sections(parent, section, counts, *, workload_class, workloa
         raise gpu.NumericalGpuExecutionError(str(error)) from error
     return {**components, "backend_identity": "gpu", "fixed_seconds": section["startup"]["fixed_seconds"],
             "fixed_cost_coverage": FIXED_COVERAGE, "launch_enqueue_included": True,
+            "memory_combination": section["memory_combination"],
             "intrinsic_seconds_per_item": sum(count * components["intrinsic_seconds_per_operation"][name] for name, count in pairs),
             "item_range": [min(SIZES), max(SIZES)], "access_class": ACCESS_CLASS,
             "cpu_affinity": deepcopy(parent["identity"]["sampling_cpu_affinity"]),
