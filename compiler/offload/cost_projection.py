@@ -173,7 +173,8 @@ class _SourceCostProjection:
                 self._precision = profile["precision_bits"]
                 self._gpu = (_json({key: parent[key] for key in ("registry", "identity")}),
                     _json(_without_holdouts({key: section[key] for key in
-                        ("identity", "startup", "families", "workload_validation", "domain_validation")})))
+                        ("identity", "startup", "families", "workload_validation", "domain_validation",
+                         "memory_combination")})))
             except NumericalCalibrationError as error:
                 self._gpu_error = str(error)
                 raise

@@ -160,7 +160,8 @@ def _apply_source_compute_costs(analysis, profile, native_participation, *, arra
                 model = numerical_compute_model(profile, tuple(sorted(primitives.items())),
                     workload_class=unit.workload_class, workload_features=unit.workload_features,
                     native_participation="fork_join" if native_participation == "fork_join_runtime" else native_participation)
-            if (any(model[role].get("memory_cost_model", {}).get("kind") == "piecewise_bandwidth_v1"
+            if (any(model[role] is not None and model[role].get("memory_cost_model", {}).get("kind") in
+                    {"piecewise_bandwidth_v1", "piecewise_gpu_total_memory_v1"}
                     for role in ("native_fortran", "generated_cpu", "gpu"))
                     and any(not footprint.exact or footprint.full_upload or footprint.full_write
                             for footprint in unit.footprints)):

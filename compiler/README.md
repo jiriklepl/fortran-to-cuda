@@ -2424,8 +2424,12 @@ header and driver, then builds only a launch-control driver. Zero/one/eight/seve
 item preflights check outputs and sentinels; seven global rounds of at least
 200 ms measure the three nonempty sizes. One item fits a launch-inclusive fixed
 interval; eight and seventeen items validate it independently. The original
-production observations supply variable costs and independent expression,
+production observations supply compute costs and independent expression,
 helper, private-array and domain holdouts, with the same 25% error ceiling.
+Cost protocol v2 interpolates total GPU memory-launch intervals without subtracting
+the separate fixed estimate, then uses `max(fixed + compute, total_memory)`;
+only the tested pointwise traffic-equals-working-set class is priced. Historical
+v1 profiles retain their original reconstruction and cannot supply v2 queries.
 The cost query requires current source identities and accepted families, classes,
 domains, features and size ranges. Resident-event intervals already include
 enqueue starvation, so their separately recorded enqueue time is not added again.
@@ -2483,8 +2487,7 @@ than borrowing an accepted older expression class. Numerical-v2-only profiles
 retain their existing path; these additions do not establish automatic SGS
 placement or an application speedup.
 
-A complete current `numerical_execution` / `cpu_dependency` /
-`numerical_execution_gpu` / `numerical_execution_gpu_costs` bundle takes the
+A profile requesting current `cpu_dependency` or GPU execution costs takes the
 current source-cost path before the CPU-only placeholder. Original inline-region
 preparation can supply `source_compute_applicability_v1` metadata for a single
 helper-free direct loop with serial or fixed fork/join participation. The record
@@ -2497,9 +2500,11 @@ lowering without an original-region preparation does not invent that evidence.
 
 This attachment still requires the exact one-dimensional pointwise memory class,
 observable dependency work, supported primitive domains and independently
-accepted native Fortran, generated CPU and GPU costs. It intersects their tested
-item ranges and requires matching CPU placement. Partial or incompatible current
-bundles retain native AUTO instead of borrowing legacy GPU costs. Unpriced
+accepted costs for each implementation that a candidate uses. Source model schema
+2 records unavailable native Fortran, generated CPU or GPU estimates as `null`
+with separate rejection reasons. It intersects known estimates' tested item
+ranges and requires matching CPU placement and native Fortran identities.
+Missing current evidence never borrows legacy costs. Unpriced
 numerical-environment guards remain unavailable. Optional source classification
 does not run for ordinary generation without a current cost bundle.
 Preparation schema 2 fingerprints the full raw calibration profile separately
@@ -2523,7 +2528,7 @@ native. Public cost queries continue to reconstruct evidence afresh. Rejected
 observations and acceptance thresholds are unchanged; reader changes still
 invalidate their calibration identities and do not relabel archived profiles.
 
-Source planning supplies complete compute seconds for all three implementations
+Source planning supplies complete compute seconds for known implementations
 through `fort_scope_plan_add_compute_costs_v3`. Transfers, launches, allocation
 and coordination are charged separately. The unchanged compute-cost payload
 layout accepts versions 1 and 2. Version 2 can mark a known GPU total with
@@ -2532,8 +2537,11 @@ operation's separate enqueue charge. Legacy neighbors retain their own launch
 costs. The cheap native-rejection bound also respects this coverage, while all
 setup, transfer and synchronization charges remain. A native operation inside an active
 owner uses its actual coordinated host cost, including candidate-only inspectors;
-that differs from the whole-original native fallback. Missing preparation costs
-keep AUTO unavailable. Continuations compare against coherent host execution
+that differs from the whole-original native fallback. A fresh owner can compare
+the original native body with an all-GPU alternative without pricing unused
+generated CPU workers. Mixed candidates require each coordinated CPU cost they
+use; missing preparation costs reject those candidates. A missing original
+native estimate keeps AUTO unavailable. Continuations compare against coherent host execution
 and cannot replay an earlier GPU prefix. The existing v2 additive-cost ABI and
 legacy calibration reader remain available (`--numerical-version 1`), but C++
 measurements cannot establish original Fortran costs.

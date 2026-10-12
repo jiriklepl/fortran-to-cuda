@@ -1,4 +1,4 @@
-"""Current source costs require original form and both independent backends."""
+"""Current source costs preserve independent backend availability and authority."""
 
 from copy import deepcopy
 from dataclasses import FrozenInstanceError, replace
@@ -11,7 +11,9 @@ from compiler.frontend.source_effects import SourceEffects
 from compiler.offload import numerical_gpu_execution as gpu
 from compiler.offload import numerical_gpu_execution_costs as gpu_costs
 from compiler.offload.config import OffloadConfig
+from compiler.offload.cost_projection import _SourceCostProjection
 from compiler.offload.cpu_dependency_calibration import profile_from_dependency_measurements
+from compiler.offload.numerical_calibration import NumericalCalibrationError
 from compiler.offload.numerical_execution import _hash
 from compiler.offload.source_applicability import source_compute_applicability
 from compiler.offload.source_compute import apply_source_compute_costs
@@ -101,7 +103,8 @@ def test_current_complete_bundle_precedes_cpu_only_placeholder(tmp_path, bundle,
     result = model(prepared, bundle, applicability, participation)
     costs = result.compute_model
     assert costs is not None, result.work_estimate_reason
-    assert costs["cost_model"] == "source_work_span_cpu_gpu_v1"
+    assert costs["cost_model"] == "source_work_span_cpu_gpu_v2"
+    assert costs["schema_version"] == 2
     assert costs["source_applicability"] == applicability.public()
     assert costs["native_fortran"]["compiled_form"] == "direct_loop"
     assert costs["generated_cpu"]["compiled_form"] == "direct_loop"
@@ -110,6 +113,7 @@ def test_current_complete_bundle_precedes_cpu_only_placeholder(tmp_path, bundle,
     assert costs["cpu_affinity"] == bundle["numerical_execution"]["identity"]["cpu_affinity"]
     assert costs["fortran"] == bundle["numerical_execution"]["identity"]["fortran"]
     assert costs["item_range"] == [65536, 1048576]
+    assert costs["estimate_reasons"] == {}
     assert result.region is prepared.offload.units[0].region
     assert result.footprints == prepared.offload.units[0].footprints
     assert bundle == before
@@ -118,11 +122,51 @@ def test_current_complete_bundle_precedes_cpu_only_placeholder(tmp_path, bundle,
 @pytest.mark.parametrize("missing", ["cpu_dependency", "numerical_execution_gpu_costs", "numerical_execution_gpu"])
 def test_partial_bundle_never_borrows_legacy_gpu(tmp_path, bundle, missing):
     _, _, prepared, applicability = prepared_source(tmp_path)
+    expected = model(prepared, bundle, applicability).compute_model
     profile = deepcopy(bundle)
     del profile[missing]
     result = model(prepared, profile, applicability)
+    costs = result.compute_model
+    assert costs is not None, result.work_estimate_reason
+    unavailable = {"native_fortran", "generated_cpu"} if missing == "cpu_dependency" else {"gpu"}
+    assert set(costs["estimate_reasons"]) == unavailable
+    for role in ("native_fortran", "generated_cpu", "gpu"):
+        if role in unavailable:
+            assert costs[role] is None
+            assert costs["estimate_reasons"][role]
+        else:
+            assert costs[role] == expected[role]
+    assert costs["item_range"] == expected["item_range"]
+    assert result.footprints == prepared.offload.units[0].footprints
+    if missing == "cpu_dependency":
+        assert costs["fortran"] is None
+        assert costs["generator_id"] is None
+        assert costs["cpu_protocol_environment"] is None
+        assert all("current CPU dependency protocol unavailable" in reason
+                   for reason in costs["estimate_reasons"].values())
+    else:
+        assert costs["gpu_generator_id"] is None
+
+
+def test_legacy_cpu_section_cannot_price_current_bundle_roles(tmp_path, bundle):
+    _, _, prepared, applicability = prepared_source(tmp_path)
+    profile = deepcopy(bundle)
+    profile["cpu_dependency"]["protocol_id"] = "legacy-protocol"
+    costs = model(prepared, profile, applicability).compute_model
+    assert costs is not None
+    assert costs["native_fortran"] is None
+    assert costs["generated_cpu"] is None
+    assert costs["gpu"] is not None
+    assert set(costs["estimate_reasons"]) == {"native_fortran", "generated_cpu"}
+
+
+def test_partial_bundle_still_requires_original_form_witness(tmp_path, bundle):
+    _, _, prepared, _ = prepared_source(tmp_path)
+    profile = deepcopy(bundle)
+    del profile["cpu_dependency"]
+    result = model(prepared, profile, None)
     assert result.compute_model is None
-    assert result.work_per_iteration is None
+    assert "proved original source compiled form" in result.work_estimate_reason
 
 
 @pytest.mark.parametrize("defect", ["missing", "form", "identity", "participation", "access"])
@@ -170,8 +214,9 @@ def test_pointwise_domain_and_traversal_restrictions_remain(tmp_path, bundle, bo
 
 
 @pytest.mark.parametrize("backend", ["native_serial", "generated_cpu", "gpu"])
-def test_rejected_independent_backend_cannot_supply_complete_model(tmp_path, bundle, backend):
+def test_rejected_independent_backend_preserves_other_roles(tmp_path, bundle, backend):
     _, _, prepared, applicability = prepared_source(tmp_path)
+    expected = model(prepared, bundle, applicability).compute_model
     profile = deepcopy(bundle)
     if backend == "gpu":
         previous = profile.pop(gpu_costs.SECTION)
@@ -187,8 +232,15 @@ def test_rejected_independent_backend_cannot_supply_complete_model(tmp_path, bun
                 scale(row, 3)
         profile = profile_from_dependency_measurements(profile, rows, profile["cpu_dependency"]["execution_identity"])
     result = model(prepared, profile, applicability)
-    assert result.compute_model is None
-    assert result.work_per_iteration is None
+    costs = result.compute_model
+    assert costs is not None, result.work_estimate_reason
+    unavailable = "native_fortran" if backend == "native_serial" else backend
+    assert costs[unavailable] is None
+    assert set(costs["estimate_reasons"]) == {unavailable}
+    assert costs["estimate_reasons"][unavailable]
+    for role in ("native_fortran", "generated_cpu", "gpu"):
+        if role != unavailable:
+            assert costs[role] == expected[role]
 
 
 @pytest.mark.parametrize("backend", ["cpu", "gpu"])
@@ -202,8 +254,66 @@ def test_current_backend_identity_is_required_for_composed_costs(tmp_path, bundl
         monkeypatch.setattr(gpu, "current_gpu_identities", lambda _: (
             "f" * 64, identity["registry_id"], identity["generator_id"], identity["renderer_sources"]))
     result = model(prepared, profile, applicability)
+    costs = result.compute_model
+    assert costs is not None, result.work_estimate_reason
+    unavailable = {"native_fortran", "generated_cpu"} if backend == "cpu" else {"gpu"}
+    assert set(costs["estimate_reasons"]) == unavailable
+    for role in ("native_fortran", "generated_cpu", "gpu"):
+        assert (costs[role] is None) == (role in unavailable)
+
+
+def test_no_available_backend_leaves_no_cost_model(tmp_path, bundle):
+    _, _, prepared, applicability = prepared_source(tmp_path)
+    profile = deepcopy(bundle)
+    profile["cpu_dependency"]["generator_id"] = "f" * 64
+    del profile[gpu_costs.SECTION]
+    result = model(prepared, profile, applicability)
     assert result.compute_model is None
     assert result.work_per_iteration is None
+    assert "current source costs unavailable" in result.work_estimate_reason
+    assert all(role + ":" in result.work_estimate_reason for role in ("native_fortran", "generated_cpu", "gpu"))
+
+
+def test_unavailable_role_does_not_constrain_available_item_ranges(tmp_path, bundle, monkeypatch):
+    _, _, prepared, applicability = prepared_source(tmp_path)
+    original = _SourceCostProjection.cpu_costs
+
+    def selected(projection, graph, backend, **arguments):
+        if backend == "native_serial":
+            raise NumericalCalibrationError("native form holdout rejected")
+        return {**original(projection, graph, backend, **arguments), "item_range": [131072, 524288]}
+
+    monkeypatch.setattr(_SourceCostProjection, "cpu_costs", selected)
+    costs = model(prepared, bundle, applicability).compute_model
+    assert costs is not None
+    assert costs["native_fortran"] is None
+    assert costs["item_range"] == [131072, 524288]
+    assert costs["estimate_reasons"] == {"native_fortran": "native form holdout rejected"}
+
+
+def test_disjoint_available_item_ranges_reject_entire_model(tmp_path, bundle, monkeypatch):
+    _, _, prepared, applicability = prepared_source(tmp_path)
+    original = _SourceCostProjection.cpu_costs
+
+    def selected(projection, graph, backend, **arguments):
+        costs = original(projection, graph, backend, **arguments)
+        return {**costs, "item_range": [1, 17]} if backend == "generated_cpu" else costs
+
+    monkeypatch.setattr(_SourceCostProjection, "cpu_costs", selected)
+    result = model(prepared, bundle, applicability)
+    assert result.compute_model is None
+    assert "item ranges do not intersect" in result.work_estimate_reason
+
+
+def test_unexpected_query_error_is_not_treated_as_unavailable_cost(tmp_path, bundle, monkeypatch):
+    _, _, prepared, applicability = prepared_source(tmp_path)
+
+    def broken(*_arguments, **_keywords):
+        raise RuntimeError("reader implementation failure")
+
+    monkeypatch.setattr(_SourceCostProjection, "gpu_costs", broken)
+    with pytest.raises(RuntimeError, match="reader implementation failure"):
+        model(prepared, bundle, applicability)
 
 
 def test_independently_valid_gpu_placement_must_match_cpu_cost_placement(tmp_path, bundle):

@@ -4,14 +4,21 @@ from __future__ import annotations
 import ctypes as c
 import json
 import math
-from pathlib import Path
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 
-from compiler.tests.test_scoped_planning_runtime import (
-    Binding, Scope, TOKEN, access, costs, planning, runtime, select,
+from compiler.tests.test_scoped_planning_runtime import (  # noqa: F401 - pytest fixtures.
+    TOKEN,
+    Binding,
+    Scope,
+    access,
+    costs,
+    planning,
+    runtime,
+    select,
 )
 
 NATIVE, CPU, GPU = 1, 2, 4
@@ -24,7 +31,7 @@ class Compute(c.Structure):
 
 
 @pytest.fixture
-def compute_api(planning):
+def compute_api(planning):  # noqa: F811 - pytest resolves the imported fixture.
     planning.fort_scope_plan_add_compute_costs_v3.argtypes = [
         TOKEN, c.c_uint32, TOKEN, c.POINTER(Binding), c.c_size_t, c.c_double, c.c_double,
         c.c_int, c.POINTER(Compute)]
@@ -42,7 +49,7 @@ def consume(scope, expected):
     assert choice.value == expected
 
 
-@pytest.mark.parametrize("native,cpu,gpu,expected", [
+@pytest.mark.parametrize(("native", "cpu", "gpu", "expected"), [
     (10., 100., 1., 1), (1., 100., 2., 0), (10., .01, 1., 1),
 ])
 @pytest.mark.parametrize("version", [1, 2])
@@ -55,7 +62,8 @@ def test_original_counterfactual_and_generated_worker_have_distinct_costs(comput
     values.native_fortran_seconds = values.generated_cpu_seconds = 0
     values.gpu_seconds = 1000
     decision = select(scope, costs())
-    assert decision.available and decision.gpu_units == expected
+    assert decision.available
+    assert decision.gpu_units == expected
     assert decision.native_seconds == pytest.approx(native)
     assert decision.estimated_seconds == pytest.approx(gpu if expected else native, abs=1e-6)
     assert scope.stats().allocations == scope.stats().launches == 0
@@ -63,21 +71,24 @@ def test_original_counterfactual_and_generated_worker_have_distinct_costs(comput
     scope.close()
 
 
-@pytest.mark.parametrize("missing", [NATIVE, CPU, GPU])
-def test_missing_backend_estimate_preserves_definitions_but_declines_auto(compute_api, missing):
+@pytest.mark.parametrize(("missing", "available", "gpu"), [(NATIVE, False, 0), (CPU, True, 1), (GPU, True, 0)])
+def test_missing_backend_disables_only_alternatives_that_use_it(compute_api, missing, available, gpu):
     scope = Scope(compute_api)
     scope.check(compute_api.fort_scope_plan_reset(scope.handle))
     scope.check(add(scope, Compute(1, 7 ^ missing, 10., 10., 1.)))
     scope.check(compute_api.fort_scope_plan_validate(scope.handle))
     decision = select(scope, costs())
-    assert not decision.available and not decision.gpu_units
+    assert bool(decision.available) == available
+    assert decision.gpu_units == gpu
     assert scope.stats().allocations == scope.stats().upload_bytes == scope.stats().launches == 0
+    if decision.available:
+        consume(scope, gpu)
     scope.close()
 
 
-@pytest.mark.parametrize("preparation,known,available,expected", [
+@pytest.mark.parametrize(("preparation", "known", "available", "expected"), [
     (0., NATIVE | CPU, True, 1), (20., NATIVE | CPU, True, 0),
-    (0., NATIVE, False, 0),
+    (0., NATIVE, True, 0),
 ])
 def test_native_inspection_is_extra_candidate_work(compute_api, preparation, known, available, expected):
     scope = Scope(compute_api)
@@ -93,7 +104,7 @@ def test_native_inspection_is_extra_candidate_work(compute_api, preparation, kno
     scope.close()
 
 
-@pytest.mark.parametrize("field,bad", [
+@pytest.mark.parametrize(("field", "bad"), [
     ("version", 0), ("version", 3), ("known_backends", 8),
     *[(field, bad) for field in ("native_fortran_seconds", "generated_cpu_seconds", "gpu_seconds")
       for bad in (-1., math.inf, math.nan)],
@@ -107,7 +118,9 @@ def test_invalid_total_payload_is_rejected_before_recording(compute_api, field, 
     scope.check(add(scope, Compute(1, 7, 10., 10., 1.)))
     scope.check(compute_api.fort_scope_plan_validate(scope.handle))
     decision = select(scope, costs())
-    assert decision.available and decision.gpu_units == 1 and decision.cpu_units == 0
+    assert decision.available
+    assert decision.gpu_units == 1
+    assert decision.cpu_units == 0
     assert scope.stats().allocations == scope.stats().launches == 0
     consume(scope, 1)
     scope.close()
@@ -130,7 +143,8 @@ def test_missing_continuation_cost_does_not_replay_gpu_prefix(compute_api):
     scope.check(add(scope, Compute(1, NATIVE | GPU, .01, 0., .001), bindings=bindings, count=1))
     scope.check(compute_api.fort_scope_plan_validate(scope.handle))
     decision = select(scope, costs())
-    assert not decision.available and not decision.gpu_units
+    assert not decision.available
+    assert not decision.gpu_units
     choice = c.c_int(-1)
     scope.check(compute_api.fort_scope_plan_next(scope.handle, 101, bindings, 1, c.byref(choice)))
     assert choice.value == 0
@@ -140,6 +154,47 @@ def test_missing_continuation_cost_does_not_replay_gpu_prefix(compute_api):
     scope.cpu_end(handle)
     scope.close()
     assert list(host) == [index + 11 for index in range(8)]
+
+
+def test_missing_cpu_estimate_keeps_original_fallback_and_exact_gpu_effects(compute_api):
+    scope = Scope(compute_api)
+    host = (c.c_double * 8)(*range(8))
+    status, handle = scope.register(host, [8])
+    scope.check(status)
+    effects = access(flags=3)
+    bindings = (Binding * 1)(Binding(handle, effects))
+    scope.check(compute_api.fort_scope_plan_reset(scope.handle))
+    scope.check(add(scope, Compute(1, NATIVE | GPU, 10., 0., 1.), bindings=bindings, count=1))
+    decision = select(scope, costs())
+    assert decision.available
+    assert decision.gpu_units == 1
+    assert scope.stats().allocations == scope.stats().upload_bytes == 0
+    choice = c.c_int(-1)
+    scope.check(compute_api.fort_scope_plan_next(scope.handle, 101, bindings, 1, c.byref(choice)))
+    assert choice.value == 1
+    device = scope.gpu(handle, effects)
+    for index in range(8):
+        device[index] += 7
+    scope.gpu_end(handle)
+    scope.close()
+    assert list(host) == [index + 7 for index in range(8)]
+
+
+def test_original_fallback_evidence_never_simulates_unknown_cpu_workers(compute_api, monkeypatch, capfd):
+    monkeypatch.setenv("FORT_RUNTIME_TRACE", "1")
+    scope = Scope(compute_api)
+    scope.check(compute_api.fort_scope_plan_reset(scope.handle))
+    scope.check(add(scope, Compute(1, NATIVE | GPU, 10., 0., 8.1)))
+    decision = select(scope, costs())
+    rows = [json.loads(line.removeprefix("FORT_SCOPED evidence "))
+            for line in capfd.readouterr().err.splitlines() if line.startswith("FORT_SCOPED evidence ")]
+    assert decision.available
+    assert not decision.gpu_units
+    assert any(row["event"] == "native_fallback" and row["phase"] == "original_fortran" for row in rows)
+    assert not any(row["event"] in {"operation", "copy"} for row in rows)
+    assert rows[-1]["event"] == "end"
+    assert rows[-1]["complete"]
+    scope.close()
 
 
 DRIVER = r'''
@@ -188,6 +243,41 @@ int main(int argc,char **argv) {
             in.operations.back().unit=2;
         }
     }
+    else if(scenario=="partial_gpu_only" || scenario=="partial_margin" ||
+            scenario=="partial_startup" || scenario=="partial_complete_block") {
+        in.operations[0].compute_costs->known_backends=5;
+        in.operations[0].compute_costs->generated_cpu_seconds=0;
+        if(scenario=="partial_margin") in.operations[0].compute_costs->gpu_seconds=8.1;
+        if(scenario=="partial_startup") c.gpu_setup_seconds=20;
+        if(scenario=="partial_complete_block") {
+            for(uint64_t k=2;k<=6;++k) {
+                in.operations.push_back(op(FORT_SCOPE_PLAN_WORKER,5,10,0,1));
+                in.operations.back().unit=k;
+            }
+        }
+    }
+    else if(scenario=="partial_no_gpu" || scenario=="partial_only_native") {
+        in.operations[0].compute_costs->known_backends=scenario=="partial_no_gpu"?3:1;
+    }
+    else if(scenario=="partial_gpu_middle" || scenario=="partial_counterfactual") {
+        in.operations={op(FORT_SCOPE_PLAN_WORKER,scenario=="partial_counterfactual"?5:7,10,10,.1),
+                       op(FORT_SCOPE_PLAN_WORKER,3,1,1,0), op(FORT_SCOPE_PLAN_WORKER,7,10,10,.1)};
+        in.operations[1].unit=2; in.operations[2].unit=3;
+    }
+    else if(scenario=="partial_undefined_fallback" || scenario=="partial_undefined_startup" ||
+            scenario=="partial_defined_fallback" || scenario=="partial_defined_startup") {
+        const bool startup=scenario.find("startup")!=std::string::npos;
+        const bool full=scenario.find("_defined_")!=std::string::npos;
+        Resource r; r.handle=1; r.element_bytes=8; r.bytes=64; r.extents={8};
+        r.initialized=r.host_current={Box{{0},{8}}}; in.resources={r};
+        const Region written={Box{{0},{full?8ULL:4ULL}}};
+        auto first=op(FORT_SCOPE_PLAN_WORKER,startup?5:1,.001,0,.0001);
+        first.bindings={{1,Effects{{},written,written}}};
+        auto second=first; second.unit=2;
+        second.bindings={{1,Effects{{Box{{0},{8}}},{},{}}}};
+        in.operations={Operation{FORT_SCOPE_PLAN_FORGET,0,{{1,{}}},0,0,false},first,second};
+        if(startup) c.gpu_setup_seconds=1;
+    }
     else if(scenario=="unknown_preparation") in.operations.push_back(op(FORT_SCOPE_PLAN_NATIVE,1,0,0,0));
     else if(scenario=="known_preparation") in.operations.push_back(op(FORT_SCOPE_PLAN_NATIVE,3,0,20,0));
     else if(scenario=="continuation" || scenario=="continuation_native" || scenario=="continuation_margin") {
@@ -196,14 +286,19 @@ int main(int argc,char **argv) {
         c.gpu_setup_seconds=1; c.launch_enqueue_seconds=.1;
         if(scenario=="continuation_native") in.operations[0].gpu_available=false;
         if(scenario=="continuation_margin") in.operations[0].compute_costs->gpu_seconds=85;
-    } else if(scenario=="team") {
+    } else if(scenario=="team" || scenario=="team_partial" || scenario=="team_partial_native") {
         fort_scope_team_costs t{}; t.version=1;t.valid=1;t.cpu_threads=4;t.expected_omp_level=1;
         t.protocol_id=FORT_SCOPE_TEAM_PROTOCOL_ID;t.native_cpu_flops=t.native_cpu_bandwidth=1;
         t.native_worker_seconds=3;t.cpu_worker_seconds=4;t.gpu_worker_seconds=5; in.team_costs=t;
-        const auto &worker=in.operations[0]; auto state=detail::initial(in,c); uint64_t work=0;
-        const double before=state.time; detail::execute(state,worker,false,in,c,work);
-        std::cout<<std::setprecision(17)<<"{\"original\":"<<detail::native_compute(worker,in,c)
-                 <<",\"cpu\":"<<state.time-before<<"}\n"; return 0;
+        if(scenario=="team") {
+            const auto &worker=in.operations[0]; auto state=detail::initial(in,c); uint64_t work=0;
+            const double before=state.time; detail::execute(state,worker,false,in,c,work);
+            std::cout<<std::setprecision(17)<<"{\"original\":"<<detail::native_compute(worker,in,c)
+                     <<",\"cpu\":"<<state.time-before<<"}\n"; return 0;
+        }
+        in.operations[0].compute_costs->known_backends=5;
+        in.operations[0].compute_costs->generated_cpu_seconds=0;
+        if(scenario=="team_partial_native") in.operations[0].compute_costs->gpu_seconds=12;
     } else if(scenario=="legacy") {
         in.operations[0].compute_costs.reset(); in.operations[0].cpu_numerical_seconds=3;
         in.operations[0].gpu_numerical_seconds=1;
@@ -254,29 +349,87 @@ def test_total_costs_are_used_once_and_do_not_add_legacy_roofline(model):
 def test_unknown_native_preparation_is_not_common_excluded(model):
     unknown = model("unknown_preparation")
     assert unknown["definitions"] == 0
-    assert not unknown["available"] and not unknown["gpu"] and not unknown["common_excluded"]
-    assert unknown["reason"] == "coordinated_host_compute_unavailable"
+    assert unknown["available"]
+    assert not unknown["gpu"]
+    assert not unknown["common_excluded"]
+    assert unknown["reason"] == "native_coordinated_host_compute_unavailable"
     known = model("known_preparation")
-    assert known["available"] and not known["gpu"] and not known["common_excluded"]
-    assert known["native"] == 10 and known["native_execution"] == pytest.approx(10, abs=1e-6)
+    assert known["available"]
+    assert not known["gpu"]
+    assert not known["common_excluded"]
+    assert known["native"] == 10
+    assert known["native_execution"] == pytest.approx(10, abs=1e-6)
+
+
+def test_partial_backend_costs_price_only_reached_alternatives(model):
+    assert model("partial_gpu_only")["gpu"] == 1
+    complete = model("partial_complete_block")
+    assert complete["available"]
+    assert complete["gpu"] == 6
+    assert complete["execution"] == pytest.approx(6, abs=1e-6)
+    for scenario in ("partial_no_gpu", "partial_only_native"):
+        native = model(scenario)
+        assert native["available"]
+        assert not native["gpu"]
+        assert native["reason"] == "native_gpu_compute_unavailable"
+        assert native["execution"] == pytest.approx(10, abs=1e-6)
+    for scenario, reason in (("partial_margin", "native_20_percent_margin_not_met"),
+                             ("partial_startup", "native_gpu_startup_lower_bound")):
+        native = model(scenario)
+        assert native["available"]
+        assert not native["gpu"]
+        assert native["reason"] == reason
+
+
+@pytest.mark.parametrize(("scenario", "gpu", "seconds"), [("team_partial", 1, 6), ("team_partial_native", 0, 13)])
+def test_partial_backend_costs_preserve_existing_team_coordination(model, scenario, gpu, seconds):
+    result = model(scenario)
+    assert result["available"]
+    assert result["gpu"] == gpu
+    assert result["native"] == pytest.approx(13, abs=1e-6)
+    assert result["execution"] == pytest.approx(seconds, abs=1e-6)
+
+
+def test_unknown_gpu_cost_splits_intervals_and_unknown_counterfactual_is_not_zero(model):
+    assert model("partial_gpu_middle")["gpu"] == 2
+    # The two-GPU-interval candidate would need an unknown coordinated CPU
+    # counterfactual. A complete one-interval alternative remains provable.
+    partial = model("partial_counterfactual")
+    assert partial["available"]
+    assert partial["gpu"] == 1
+
+
+@pytest.mark.parametrize("path", ["fallback", "startup"])
+@pytest.mark.parametrize("defined", [False, True])
+def test_partial_backend_costs_do_not_bypass_ordered_definitions(model, path, defined):
+    result = model("partial_" + ("defined" if defined else "undefined") + "_" + path)
+    assert result["definitions"] == (0 if defined else 7)
+    assert bool(result["available"]) == defined
+    assert not result["gpu"]
+    if not defined:
+        assert result["reason"] == "uninitialized_read"
 
 
 def test_continuation_uses_coordinated_cpu_for_startup_and_native_baseline(model):
     selected = model("continuation")
-    assert selected["available"] and selected["gpu"]
+    assert selected["available"]
+    assert selected["gpu"]
     assert selected["required_saving"] == pytest.approx(20)
     native = model("continuation_native")
-    assert native["available"] and not native["gpu"]
+    assert native["available"]
+    assert not native["gpu"]
     assert native["execution"] == pytest.approx(100, abs=1e-6)
     assert native["native_execution"] == pytest.approx(100, abs=1e-6)
     borderline = model("continuation_margin")
-    assert borderline["available"] and not borderline["gpu"]
+    assert borderline["available"]
+    assert not borderline["gpu"]
     assert borderline["reason"] == "native_20_percent_margin_not_met"
 
 
 def test_legacy_additional_cost_contract_is_unchanged(model):
     result = model("legacy")
-    assert result["available"] and result["gpu"]
+    assert result["available"]
+    assert result["gpu"]
     assert result["native"] == pytest.approx(3, abs=1e-6)
 
 

@@ -64,7 +64,7 @@ def test_private_selectors_match_full_public_queries_with_one_raw_demand(monkeyp
     # Neither the detached sections nor a returned cost payload alias raw
     # profile metadata or later results from the same private projection.
     first = results[0]
-    first["memory_cost_model"]["knots"][0]["seconds_per_traffic_byte"] *= 2
+    first["memory_cost_model"]["knots"][0]["total_seconds"] *= 2
     first["cpu_affinity"].append(99)
     assert costs._gpu_costs_from_sections(parent, section, {}, **arguments()) == costs.gpu_execution_costs(
         profile, {}, **arguments())

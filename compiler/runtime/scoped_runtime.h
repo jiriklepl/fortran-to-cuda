@@ -369,7 +369,9 @@ int fort_scope_plan_add_costs_v2(fort_scope_t context, uint32_t kind, uint64_t u
  * inspection/preparation. Unknown preparation must leave that bit unset,
  * never be excluded as common original-native work. All supplied numbers must
  * be finite and nonnegative. Missing estimates do not prevent independent
- * definition validation, but automatic placement remains unavailable. */
+ * definition validation. Automatic placement requires the native baseline
+ * and every implementation cost used by the candidate and its margin checks;
+ * unused alternative estimates may remain unavailable. */
 int fort_scope_plan_add_compute_costs_v3(fort_scope_t context, uint32_t kind, uint64_t unit,
                         const fort_scope_plan_binding *bindings, size_t count,
                         double flops, double memory_bytes, int gpu_available,

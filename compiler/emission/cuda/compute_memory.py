@@ -11,10 +11,14 @@ import re
 COMPUTE_MEMORY_INCLUDES = ("#include <cmath>", "#include <cstddef>",
                            "#include <cstdint>", "#include <limits>")
 _MAX_COORDINATE = (1 << 64) - 1
+GPU_TOTAL_MEMORY_KIND = "piecewise_gpu_total_memory_v1"
 
 
 def _piecewise_model(model):
-    if not isinstance(model, dict) or model.get("kind") != "piecewise_bandwidth_v1":
+    if not isinstance(model, dict) or model.get("kind") not in ("piecewise_bandwidth_v1", GPU_TOTAL_MEMORY_KIND):
+        return None
+    total = model["kind"] == GPU_TOTAL_MEMORY_KIND
+    if total and model.get("traffic_equals_working_set") is not True:
         return None
     knots = model.get("knots")
     if not isinstance(knots, (list, tuple)) or not 2 <= len(knots) <= 8:
@@ -23,8 +27,9 @@ def _piecewise_model(model):
     for row in knots:
         if not isinstance(row, dict):
             return None
-        coordinate, rate = row.get("working_set_bytes"), row.get("seconds_per_traffic_byte")
-        if type(coordinate) is not int or not 0 < coordinate <= _MAX_COORDINATE:
+        coordinate = row.get("working_set_bytes")
+        rate = row.get("total_seconds" if total else "seconds_per_traffic_byte")
+        if type(coordinate) is not int or not 0 < coordinate <= (1 << 53 if total else _MAX_COORDINATE):
             return None
         if isinstance(rate, bool) or not isinstance(rate, (int, float)):
             return None
@@ -41,7 +46,7 @@ def _piecewise_model(model):
             or len(bounds) != 2 or any(type(value) is not int for value in bounds)
             or list(bounds) != [coordinates[0], coordinates[-1]]):
         return None
-    return coordinates, rates
+    return coordinates, rates, total
 
 
 def generate_compute_memory(name, memory_cost_model):
@@ -61,7 +66,7 @@ def generate_compute_memory(name, memory_cost_model):
     model = _piecewise_model(memory_cost_model)
     if model is None:
         return tuple((*lines, "    (void)traffic_bytes; (void)working_set_bytes;", "    return false;", "}"))
-    coordinates, rates = model
+    coordinates, rates, total = model
     lines += ["    if (!std::isfinite(traffic_bytes) || traffic_bytes < 0.0) return false;",
               "    static constexpr std::uint64_t coordinates[] = {" +
               ", ".join(str(value) + "ULL" for value in coordinates) + "};",
@@ -70,6 +75,7 @@ def generate_compute_memory(name, memory_cost_model):
               "    if (coordinates[count-1] > static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) return false;",
               "    const std::uint64_t working_set = static_cast<std::uint64_t>(working_set_bytes);",
               "    if (working_set < coordinates[0] || working_set > coordinates[count-1]) return false;",
+              *(["    if (traffic_bytes != static_cast<double>(working_set)) return false;"] if total else []),
               "    double rate = 0.0;",
               "    for (std::size_t i=0; i+1<count; ++i) {",
               "        if (working_set > coordinates[i+1]) continue;",
@@ -83,8 +89,8 @@ def generate_compute_memory(name, memory_cost_model):
               "        break;",
               "    }",
               "    if (!std::isfinite(rate) || rate <= 0.0) return false;",
-              "    if (rate > 1.0 && traffic_bytes > std::numeric_limits<double>::max()/rate) return false;",
-              "    const double result = traffic_bytes * rate;",
+              *([] if total else ["    if (rate > 1.0 && traffic_bytes > std::numeric_limits<double>::max()/rate) return false;"]),
+              "    const double result = " + ("rate;" if total else "traffic_bytes * rate;"),
               "    if (!std::isfinite(result) || (traffic_bytes > 0.0 && result <= 0.0)) return false;",
               "    seconds = result;",
               "    return true;", "}"]

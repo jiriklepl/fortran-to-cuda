@@ -1,14 +1,15 @@
 """Bounded emitted memory costs use unique working sets and repeated traffic."""
 
-from copy import deepcopy
 import math
 import shutil
 import subprocess
+from copy import deepcopy
 
 import pytest
 
 from compiler.emission.cuda.compute_memory import COMPUTE_MEMORY_INCLUDES, generate_compute_memory
 from compiler.offload.numerical_calibration import memory_compute_seconds
+from compiler.offload.numerical_gpu_execution_costs import TOTAL_MEMORY_KIND, total_memory_seconds
 
 
 def model(coordinates=(100, 300, 1000), rates=(0.25, 0.75, 0.5)):
@@ -116,3 +117,51 @@ def test_bounded_model_matches_python_reader_formula(tmp_path, count):
 def test_helper_name_is_not_interpreted_as_source(name):
     with pytest.raises(ValueError, match="identifier"):
         generate_compute_memory(name, model())
+
+
+def total_model():
+    return {"kind": TOTAL_MEMORY_KIND, "traffic_equals_working_set": True,
+            "working_set_range": [100, 1000], "knots": [
+                {"working_set_bytes": 100, "total_seconds": .5},
+                {"working_set_bytes": 300, "total_seconds": .4},
+                {"working_set_bytes": 1000, "total_seconds": .9}]}
+
+
+def test_total_intervals_match_reader_without_traffic_scaling_or_extrapolation(tmp_path):
+    value = total_model()
+    assertions = []
+    for size in (100, 125, 300, 650, 1000):
+        expected = total_memory_seconds(value, size, size)
+        assertions.append(f"assert(estimate({size},{size},seconds)); "
+                          f"assert(std::abs(seconds-{expected.hex()}) < 1e-14);")
+    for traffic, size in ((0, 300), (600, 300), (99, 99), (1001, 1001), (0, 0)):
+        with pytest.raises(ValueError, match="GPU (total-memory|working set)"):
+            total_memory_seconds(value, traffic, size)
+        assertions.append(f"seconds=7; assert(!estimate({traffic},{size},seconds) && seconds==0);")
+    assertions.extend([
+        "seconds=7; assert(!estimate(std::numeric_limits<double>::infinity(),300,seconds) && seconds==0);",
+        "seconds=7; assert(!estimate(std::numeric_limits<double>::quiet_NaN(),300,seconds) && seconds==0);"])
+    run_cpp(tmp_path, generate_compute_memory("estimate", value), "double seconds=0;\n" + "\n".join(assertions))
+
+
+def test_malformed_total_curves_never_gain_variable_bandwidth_semantics(tmp_path):
+    malformed = []
+    for defect in ("marker", "zero", "bool", "nonfinite", "range", "coordinate"):
+        value = total_model()
+        if defect == "marker":
+            value["traffic_equals_working_set"] = 1
+        elif defect == "range":
+            value["working_set_range"] = [100, 999]
+        elif defect == "coordinate":
+            value["knots"][-1]["working_set_bytes"] = (1 << 53) + 1
+            value["working_set_range"][-1] = (1 << 53) + 1
+        else:
+            value["knots"][0]["total_seconds"] = {"zero": 0, "bool": True, "nonfinite": math.inf}[defect]
+        with pytest.raises(ValueError, match="GPU total-memory"):
+            total_memory_seconds(value, 300, 300)
+        malformed.append(value)
+    helpers, assertions = [], []
+    for index, value in enumerate(malformed):
+        helpers.extend(generate_compute_memory("invalid_total_" + str(index), value))
+        assertions.append(f"seconds=7; assert(!invalid_total_{index}(300,300,seconds) && seconds==0);")
+    run_cpp(tmp_path, helpers, "double seconds=0;\n" + "\n".join(assertions))
