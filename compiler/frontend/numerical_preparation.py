@@ -211,7 +211,14 @@ def _source_authority(analysis, procedure, selection, helpers, budget):
     """Authenticate consulted source namespaces and exact original bindings."""
     from fparser.two.utils import Base
 
-    from compiler.frontend.source_functions import _original, _validate_resolution, _validate_scope
+    from compiler.frontend.source_functions import (
+        _original,
+        _scope_roles,
+        _validate_resolution,
+        _validate_scope,
+        _validate_scope_roles,
+    )
+    scope_roles = _scope_roles(analysis)
     if not selection:
         raise CompilationError("original numerical preparation requires exact original selected nodes")
     for node in selection:
@@ -227,7 +234,11 @@ def _source_authority(analysis, procedure, selection, helpers, budget):
     # Selection authenticates this original routine and its source namespaces.
     # Read that same routine without starting an adjacent full-source demand.
     routine = analysis.routines[procedure]
-    scope_ids = set()
+    scope_ids, consulted_scopes = set(), {}
+
+    def resolution_scope_authority(scope):
+        _validate_scope(analysis, scope)
+        consulted_scopes[id(scope)] = scope
 
     def scope_authority(scope):
         while scope is not None and id(scope) not in scope_ids:
@@ -238,6 +249,7 @@ def _source_authority(analysis, procedure, selection, helpers, budget):
                 budget.tick()
             _validate_scope(analysis, scope, track=False)
             scope_ids.add(id(scope))
+            consulted_scopes[id(scope)] = scope
             scope = scope.parent
 
     owners = [(routine, selection)]
@@ -256,13 +268,26 @@ def _source_authority(analysis, procedure, selection, helpers, budget):
                    for part in node.items[1:] if type(part).__name__ in {"Name", "Part_Ref"}}
         omitted.update(id(part.items[0]) for node in nodes if type(node).__name__ == "Data_Ref"
                        for part in node.items[1:] if type(part).__name__ == "Part_Ref")
-        _validate_resolution(analysis, owner.scope, (node for node in nodes if id(node) not in omitted), tick=budget.tick)
+        _validate_resolution(analysis, owner.scope, (node for node in nodes if id(node) not in omitted), tick=budget.tick,
+                             _scope_validator=resolution_scope_authority)
         for node in nodes:
             if type(node).__name__ != "Data_Ref":
                 continue
-            from compiler.frontend.component_bindings import _typename, component_access
+            from compiler.frontend.component_bindings import ComponentAccessUnsupported, _typename, component_access
             from compiler.frontend.source_objects import _TypeBuilder
-            access = component_access(analysis, owner.scope, node)
+            try:
+                access = component_access(analysis, owner.scope, node)
+            except ComponentAccessUnsupported as error:
+                # Parent budget callbacks ran after the initial source check.
+                # Reauthenticate without callbacks before treating this known
+                # syntax limit as a support-only numerical decline.
+                analysis._selected_source(procedure, selection)
+                for helper in helpers:
+                    _original(analysis, helper)
+                for scope in consulted_scopes.values():
+                    _validate_scope(analysis, scope, track=False)
+                _validate_scope_roles(analysis, scope_roles, consulted_scopes)
+                raise NumericalPreparationUnsupported(str(error)) from error
             if access is None:
                 raise CompilationError("original numerical preparation component authority is unavailable")
             authority = _TypeBuilder(analysis)

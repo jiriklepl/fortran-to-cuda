@@ -1904,6 +1904,12 @@ owner expressions for membership. String graph IDs, copied parser nodes and
 foreign selections do not grant numerical preparation authority. Selected
 expressions, helpers, complete source provenance and final publication checks
 still spend their existing budgets and revalidate every demand.
+Indexed fields of arrays of derived objects remain outside numerical lowering.
+Their typed support decline reauthenticates the selected source, consulted
+namespaces and registry roles after budget callbacks, then tries the original
+native proof. This can preserve a reached path with a conservative native
+boundary; it grants no GPU metadata capture. Source, token, budget and other
+component failures remain fatal. Explicit native metadata proofs are unchanged.
 
 Supported groups are a combined `PARALLEL DO`, or one flat `PARALLEL` containing
 up to 32 complete numerical worksharing `DO` units. The latter preserves every

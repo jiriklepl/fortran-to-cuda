@@ -17,6 +17,10 @@ from fparser.two.utils import Base
 from compiler.ir import CompilationError, SourceLocation
 
 
+class ComponentAccessUnsupported(CompilationError):
+    """A selector syntax support limit, never source or budget authority."""
+
+
 def _kind(node):
     return type(node).__name__
 
@@ -208,7 +212,7 @@ def component_access(analysis, scope, node):
         from compiler.frontend.native_metadata import access
         return access(analysis, scope, node)
     if len(parts) < 2 or _kind(parts[0]) != "Name":
-        raise CompilationError("source component needs one scalar variable object: " + str(node))
+        raise ComponentAccessUnsupported("source component needs one scalar variable object: " + str(node))
     root = analysis._binding(scope, parts[0])
     if root is None:
         raise CompilationError("source component object is unresolved: " + str(parts[0]))
