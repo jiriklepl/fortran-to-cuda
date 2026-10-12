@@ -124,6 +124,25 @@ def summarize(runs):
     return summary
 
 
+def read_outputs(directory, reader):
+    """Retain final fields and averaged fields when the application emits them."""
+    directory = Path(directory)
+    paths = [directory / "out.vtk"]
+    if (directory / "avg.vtk").is_file():
+        paths.append(directory / "avg.vtk")
+    return {path.name: reader(path) for path in paths}
+
+
+def compare_outputs(reference, observed, compare):
+    if reference.keys() != observed.keys():
+        raise ValueError("Final/averaged VTK output files differ from the native reference")
+    files = {name: compare(expected, observed[name], atol=1e-6, rtol=1e-5)
+             for name, expected in reference.items()}
+    return {"schema_version": 2, "passed": all(row["passed"] for row in files.values()),
+            "atol": 1e-6, "rtol": 1e-5, "files": files,
+            "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."}
+
+
 def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_python,
                    native_library_dir, output, work_dir=None, config=None,
                    case="channel-simple", gpu_options=None, build_args=(), jobs=8,
@@ -199,7 +218,8 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
                "comparison_budget_eligible": threads == 4,
                "workload_label": "explicit step-cap smoke run" if steps is not None else "original configured duration",
                "field_validation_kind": "VTK", "full_array_halos_validated": False,
-               "validation": {"atol": 1e-6, "rtol": 1e-5, "scope": "Complete final VTK fields; float32 output, no float64 halo claim"},
+               "validation": {"atol": 1e-6, "rtol": 1e-5, "native_repeatability_required": True,
+                              "scope": "Complete final and available averaged VTK fields; float32 output, no float64 halo claim"},
                "wall_includes": "process startup, computation, native solver, transfers, output and teardown",
                "contract_sha256": digest(DEFAULT_CONTRACT), "script_sha256": digest(__file__),
                "original_input_sha256": source_hashes, "build_args": list(build_args),
@@ -306,12 +326,12 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
             print(("VERIFY" if traced or round_number is None else "TIMING"), mode, label, flush=True)
             log, elapsed = command(argv, cwd=directory, env=env, log=log_path, timeout=timeout)
             timing = validate_log(log, configuration["expected_max_steps"], expected_completed_steps=reference_steps)
-            observed = read_vtk(directory / "output/out.vtk")
+            observed = read_outputs(directory / "output", read_vtk)
             if reference is None:
                 if mode != "native":
                     raise RuntimeError("original native reference must execute first")
                 reference, reference_steps = observed, timing["completed_steps"]
-            validation = compare_vtk(reference, observed, atol=1e-6, rtol=1e-5)
+            validation = compare_outputs(reference, observed, compare_vtk)
             record = {"mode": mode, "argv": argv, "cwd": str(directory), "log": str(log_path),
                       "log_sha256": digest(log_path), "traced": traced, "warmup": warmup,
                       "round": round_number, "timing": timing, "validation": validation,
@@ -319,7 +339,8 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
                       "diagnostic_wall_seconds" if round_number is None else "wall_seconds": elapsed}
             if not validation["passed"]:
                 write(directory / "run.json", record)
-                raise RuntimeError("original-tolerance VTK mismatch: " + str(log_path))
+                reason = "native repeatability failed" if mode == "native" else "candidate validation failed"
+                raise RuntimeError(reason + " at original VTK tolerances: " + str(log_path))
             if traced:
                 activity = gpu_activity(log, "local", [], scope_manifest=manifest)
                 record["gpu_activity"] = activity
@@ -336,6 +357,9 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
             return record
 
         receipt["correctness"].append(execute("native", "reference", traced=False))
+        write(report_path, receipt)
+        receipt["correctness"].append(execute("native", "repeatability", traced=False))
+        write(report_path, receipt)
         receipt["correctness"].append(execute("current", "gpu-validation", traced=True))
         receipt["gpu_evidence"] = receipt["correctness"][-1]["gpu_activity"]
         write(report_path, receipt)

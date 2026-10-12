@@ -3,7 +3,8 @@
 `./run_on_node.sh` remains the top-level Slurm command. It forwards to
 `containers/run_node.sh`; local, Docker/Podman and Apptainer entrypoints run the
 same experiment. The experiment builds **pristine upstream native ELMM and a
-fresh compiler-generated SGS sections/direct variant**, checks final VTK fields,
+fresh compiler-generated SGS sections/direct variant**, checks final and available
+averaged VTK fields,
 verifies actual GPU launches separately, then measures complete process time.
 The target is 20% less wall time than original native (`GPU/native <= 0.80`),
 not another 20% over the previous SGS result. Reports also give the speedup factor.
@@ -89,8 +90,8 @@ Images are prepared from current source files, including the independent
 
 Docker commands that are Podman compatibility launchers are detected and use
 Podman CDI GPU flags. Podman GPU runs require a configured NVIDIA CDI runtime.
-For real Docker inside Slurm, use `GPU_DEVICES=GPU-UUID`; scheduler-local numeric
-ordinals are not safe physical Docker device selectors. Apptainer/native runs
+For Docker or Podman inside Slurm, use `GPU_DEVICES=GPU-UUID`; scheduler-local
+numeric ordinals are not safe physical Docker/CDI device selectors. Apptainer/native runs
 preserve the scheduler's CUDA visibility and resolve its CUDA ordinals to UUIDs.
 CPU-only `doctor`, plotting and tests do not require a GPU.
 
@@ -136,7 +137,10 @@ source/artifact/configuration hashes, separate correctness/GPU diagnostics,
 raw timings, medians and target status. Generated CUDA retains the compiler's
 strict separate-arithmetic build contract. Final VTK comparison uses the existing
 `atol=1e-6, rtol=1e-5`; this float32 output check does **not** establish float64
-full-array or halo agreement. Native/GPU diagnostics precede timing and never
+full-array or halo agreement. Two native diagnostic runs must agree at those same
+tolerances before GPU diagnostics and timing. A nonrepeatable native reference
+fails the campaign; it does not weaken the candidate check or shorten the case.
+Native/GPU diagnostics precede timing and never
 enter timing medians. Smoke runs and other thread budgets cannot claim the gate.
 No policy is automatically promoted by this runner.
 
