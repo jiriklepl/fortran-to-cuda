@@ -89,7 +89,7 @@ struct buffers {
         return true;
     }
 };
-struct sample { unsigned long long repetitions{}; double elapsed{}; };
+struct sample { unsigned long long repetitions{}; double elapsed{}; unsigned global_order{}; };
 struct close_file { void operator()(std::FILE* file) const noexcept { std::fclose(file); } };
 static sample measure(buffers& data, int backend, int threads) {
     sample result;
@@ -107,7 +107,8 @@ static void print_samples(const std::array<sample, 7>& rows) {
         if (i) std::cout << ',';
         std::cout << "{\"batch\":" << i << ",\"repetitions\":" << rows[i].repetitions
                   << ",\"elapsed_seconds\":" << rows[i].elapsed
-                  << ",\"wall_seconds\":" << rows[i].elapsed << '}';
+                  << ",\"wall_seconds\":" << rows[i].elapsed
+                  << ",\"global_order\":" << rows[i].global_order << '}';
     }
     std::cout << ']';
 }
@@ -116,14 +117,15 @@ static bool save_raw_sample(std::FILE* file, const dependency_recipe& recipe, in
     const int written = std::fprintf(file,
         "{\"kind\":\"cpu_dependency_batch_v1\",\"recipe\":%s,\"recipe_identity\":%s,"
         "\"backend\":%s,\"items\":%d,\"role\":%s,\"batch\":%d,\"repetitions\":%llu,"
-        "\"elapsed_seconds\":%.17g,\"wall_seconds\":%.17g,\"agreement_passed\":%s}\n",
+        "\"elapsed_seconds\":%.17g,\"wall_seconds\":%.17g,\"global_order\":%u,\"agreement_passed\":%s}\n",
         quoted(recipe.name).c_str(), quoted(recipe.identity).c_str(), quoted(backends[backend]).c_str(),
         n, quoted(training(recipe, n) ? "fit" : "holdout").c_str(), batch, value.repetitions,
-        value.elapsed, value.elapsed, agreement ? "true" : "false");
+        value.elapsed, value.elapsed, value.global_order, agreement ? "true" : "false");
     return written > 0 && std::fflush(file) == 0;
 }
 static bool registry_valid() {
-    if (std::size(dependency_recipes) != 26 || std::size(dependency_fit_sizes) != 3 ||
+    if ((std::size(dependency_recipes) != 26 && std::size(dependency_recipes) != 49) ||
+        std::size(dependency_fit_sizes) != 3 ||
         std::size(dependency_holdout_sizes) != 2 || (sizeof(real) != 4 && sizeof(real) != 8)) return false;
     std::set<std::string> names, identities;
     for (const auto& recipe : dependency_recipes) {
@@ -134,7 +136,8 @@ static bool registry_valid() {
         const std::string identity(recipe.identity), role(recipe.role);
         if (!names.insert(recipe.name).second || !identities.insert(identity).second || identity.size() != 64 ||
             identity.find_first_not_of("0123456789abcdef") != std::string::npos ||
-            (role != "basis" && role != "structural_holdout" && role != "domain_holdout")) return false;
+            (role != "basis" && role != "structural_holdout" && role != "domain_holdout" &&
+             role != "width_holdout" && role != "original_holdout")) return false;
         for (const auto count : {recipe.training_a_count, recipe.training_d_count, recipe.training_reference_count,
                                  recipe.holdout_a_count, recipe.holdout_d_count, recipe.holdout_reference_count})
             if (count < 1 || count > 256) return false;
@@ -225,7 +228,7 @@ int main(int argc, char** argv) {
     // Identity and smoke create no numerical measurement artifacts.
     std::unique_ptr<std::FILE, close_file> raw(std::fopen("cpu-dependency-raw-samples.jsonl", "wx"));
     if (!raw) { std::cerr << "cannot create fresh dependency raw observations\n"; return 4; }
-    constexpr std::size_t cell_count = 26 * 5;
+    constexpr std::size_t cell_count = std::size(dependency_recipes) * 5;
     std::array<std::array<std::array<sample, 7>, 3>, cell_count> samples{};
     std::array<std::array<bool, 3>, cell_count> agreements;
     for (auto& agreement : agreements) agreement.fill(true);
@@ -239,6 +242,7 @@ int main(int argc, char** argv) {
                 const int backend = (batch + order) % 3;
                 auto& observation = samples[cell][backend][batch];
                 observation = measure(data, backend, threads);
+                observation.global_order = unsigned(batch * cell_count * 3 + cell * 3 + order);
                 const bool agreement = data.agrees();
                 agreements[cell][backend] = agreements[cell][backend] && agreement;
                 if (!save_raw_sample(raw.get(), recipe, n, backend, batch, observation, agreement)) {

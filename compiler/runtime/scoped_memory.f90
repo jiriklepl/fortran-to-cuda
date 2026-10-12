@@ -26,9 +26,10 @@ module fort_scoped_memory
   integer(c_int32_t), parameter, public :: FORT_SCOPE_PLANNING_ABI_VERSION=1
   integer(c_int32_t), parameter, public :: FORT_SCOPE_PLAN_NATIVE=0, FORT_SCOPE_PLAN_WORKER=1, FORT_SCOPE_PLAN_FORGET=2
   integer(c_int32_t), parameter, public :: FORT_SCOPE_PLAN_DISCARD=3, FORT_SCOPE_VIEW_ABI_VERSION=1
-  integer(c_int32_t), parameter, public :: FORT_SCOPE_COMPUTE_ABI_VERSION=1
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_COMPUTE_ABI_VERSION=2
   integer(c_int32_t), parameter, public :: FORT_SCOPE_COMPUTE_NATIVE_FORTRAN=1, FORT_SCOPE_COMPUTE_GENERATED_CPU=2
   integer(c_int32_t), parameter, public :: FORT_SCOPE_COMPUTE_GPU=4, FORT_SCOPE_COMPUTE_ALL=7
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_COMPUTE_GPU_LAUNCH_INCLUDED=8
 
   type, bind(C), public :: fort_scope_trace_state_v1
     integer(c_int32_t) :: version=0, reserved=0

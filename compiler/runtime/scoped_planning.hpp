@@ -114,11 +114,19 @@ inline void seconds(double &value, double delta) {
     value += delta; require(std::isfinite(value), "arithmetic_overflow");
 }
 inline bool valid_compute_costs(const fort_scope_compute_costs_v1 &costs) {
-    if (costs.version != FORT_SCOPE_COMPUTE_ABI_VERSION ||
-        (costs.known_backends & ~uint32_t(FORT_SCOPE_COMPUTE_ALL))) return false;
+    if (costs.version != 1 && costs.version != FORT_SCOPE_COMPUTE_ABI_VERSION) return false;
+    const uint32_t flags = FORT_SCOPE_COMPUTE_ALL |
+        (costs.version == 2 ? uint32_t(FORT_SCOPE_COMPUTE_GPU_LAUNCH_INCLUDED) : uint32_t(0));
+    if ((costs.known_backends & ~flags) ||
+        ((costs.known_backends & FORT_SCOPE_COMPUTE_GPU_LAUNCH_INCLUDED) &&
+         !(costs.known_backends & FORT_SCOPE_COMPUTE_GPU))) return false;
     for (double value : {costs.native_fortran_seconds, costs.generated_cpu_seconds, costs.gpu_seconds})
         if (!std::isfinite(value) || value < 0) return false;
     return true;
+}
+inline bool gpu_launch_included(const Operation &op) {
+    return op.compute_costs && op.compute_costs->version == 2 &&
+        (op.compute_costs->known_backends & FORT_SCOPE_COMPUTE_GPU_LAUNCH_INCLUDED);
 }
 inline double compute(const Operation &op, const fort_scope_plan_costs &costs, bool gpu) {
     if (op.compute_costs) {
@@ -449,7 +457,8 @@ inline void execute(State &s, const Operation &op, bool gpu,
         seconds(s.time, gpu ? team.gpu_worker_seconds : team.cpu_worker_seconds);
     }
     if (gpu) {
-        seconds(s.time, costs.launch_enqueue_seconds); s.count.launches = add(s.count.launches, 1); s.pending = true;
+        if (!gpu_launch_included(op)) seconds(s.time, costs.launch_enqueue_seconds);
+        s.count.launches = add(s.count.launches, 1); s.pending = true;
     }
     for (size_t k=0; k<op.bindings.size(); ++k) {
         auto &b = s.resources[s.index.at(op.bindings[k].buffer)]; auto &p = prepared[k];
@@ -621,7 +630,12 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
         // enqueue, plus cold driver startup if it is not already initialized.
         // Even zero GPU compute/transfers cannot beat this lower bound. Prove
         // the native result before constructing expensive candidate states.
-        const double gpu_lower_bound = costs.gpu_setup_seconds + costs.launch_enqueue_seconds +
+        // A launch-inclusive worker does not owe the separate enqueue price.
+        // Omitting it here is a conservative lower bound even in mixed plans.
+        const bool inclusive_launch = std::any_of(input.operations.begin(), input.operations.end(), [](const Operation &op) {
+            return op.kind == FORT_SCOPE_PLAN_WORKER && op.gpu_available && detail::gpu_launch_included(op);
+        });
+        const double gpu_lower_bound = costs.gpu_setup_seconds + (inclusive_launch ? 0 : costs.launch_enqueue_seconds) +
             (input.driver_initialized ? 0 : costs.cold_driver_startup_seconds);
         double native_startup_comparison = 0;
         for (const auto &op : input.operations) if (!detail::definition_only(op))
