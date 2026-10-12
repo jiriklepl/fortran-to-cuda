@@ -914,6 +914,14 @@ class LexicalOwner:
             disable=False, reason="original owning invocation end", span=(last, last))))+"\n")
 
     def run(self, nodes):
+        if getattr(self.builder, "_reached_window_binding", None) is not None:
+            return self._run_lexical(nodes)
+        from compiler.scopes.ordinary_consumption import _OrdinaryPairConsumption
+
+        with _OrdinaryPairConsumption(self.builder):
+            return self._run_lexical(nodes)
+
+    def _run_lexical(self, nodes):
         builder = self.builder
         checkpoint = builder.scope_checkpoint()
         self.active.append(self.routine.qualified)

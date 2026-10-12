@@ -290,7 +290,7 @@ class CombinedNumericalTeam(StructuredScope):
         self.original_nodes = original_roots(builder.inline.original_selection(nodes))
         self.partition = _source_partition(builder, self.original_nodes)
         facade = builder.inline.prepare_combined_team(self.original_nodes)
-        region = builder.resolved_numerical_region(
+        region = builder._consume_numerical_region(
             builder.analysis, builder.entry.qualified, self.original_nodes)
         if region is None:
             raise CompilationError("combined numerical team requires registered original preparation")
@@ -299,7 +299,7 @@ class CombinedNumericalTeam(StructuredScope):
             raise CompilationError("combined numerical team requires original joined completion")
         self.first, self.last = self.partition["first"], self.partition["last"]
         call = builder.inline.call(facade)
-        outlined = builder.call_numerical_region(call)
+        outlined = builder._consume_call_numerical_region(call)
         if outlined is None or outlined.prepared is not self.prepared or outlined.effects is not self.effect:
             raise CompilationError("combined numerical team requires exact registered physical effects")
         self.completion = self.prepared.completion_proof
@@ -315,7 +315,7 @@ class CombinedNumericalTeam(StructuredScope):
 
     def _validate(self):
         builder = self.builder
-        region = builder.resolved_numerical_region(builder.analysis, builder.entry.qualified, self.original_nodes)
+        region = builder._consume_numerical_region(builder.analysis, builder.entry.qualified, self.original_nodes)
         if region is None or region.prepared is not self.prepared or region.effects is not self.effect:
             raise CompilationError("combined numerical team lost its registered prepared/effect pair")
         if _source_partition(builder, self.original_nodes) != self.partition:
