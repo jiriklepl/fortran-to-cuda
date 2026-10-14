@@ -122,11 +122,9 @@ class ScopeBuilder:
                         continue
                     stable_module_allocatables.add(binding.root)
         self.analysis.authorize_stable_module_allocatables(stable_module_allocatables)
-        # The active compilation session owns read-only original parser syntax.
-        # Generated projections are separate mutable copies. Repeated proof
-        # queries need only original-node identity here; configured sources,
-        # namespaces, captures and options retain their independent checks.
-        self.analysis._source_syntax = self.analysis._source_syntax.seal()
+        # Own the parsed graph and captured edit text once. Private projections
+        # and caches remain separate; finish reauthenticates live input files.
+        self.analysis.seal_session()
         self.packages = load_numerical_sources(numerical_sources, self.analysis)
         self.device_budget = facts.get("device_budget_bytes", 256*1024*1024)
         if type(self.device_budget) is not int or not 0 <= self.device_budget < 2**63:
@@ -2120,7 +2118,7 @@ class ScopeBuilder:
             owner_actuals.append(fallback_flag)
         replacement = "\n".join(_call(name,owner_actuals)) + "\n"
         if caller_fallback:
-            original_source = "".join(routine.scope.path.read_text().splitlines(keepends=True)[first-1:last])
+            original_source = "".join(self.analysis.source_text(routine.scope.path).splitlines(keepends=True)[first-1:last])
             replacement = ("block\nlogical :: " + fallback_flag + "\n" + replacement
                            + "if (" + fallback_flag + ") then\n" + original_source
                            + "endif\nend block\n")
@@ -2132,7 +2130,7 @@ class ScopeBuilder:
             if allocated_roots:
                 replacement = "block\nuse iso_c_binding, only: " + caller_kind + " => c_int64_t\nintrinsic :: lbound" + private_intrinsics + "\n" + replacement + "end block\n"
             else:
-                original_source = "".join(routine.scope.path.read_text().splitlines(keepends=True)[first-1:last])
+                original_source = "".join(self.analysis.source_text(routine.scope.path).splitlines(keepends=True)[first-1:last])
                 replacement = ("block\nuse iso_c_binding, only: " + caller_kind + " => c_int64_t\n"
                                "use fort_scoped_memory, only: " + serial + " => fort_scope_serial_caller\n"
                                "intrinsic :: lbound" + private_intrinsics + "\nif (" + serial + "() == 0) then\n" + original_source
@@ -2152,7 +2150,7 @@ class ScopeBuilder:
                 planning_reason = compute_identity.reason
             if compute_identity.required:
                 from compiler.scopes.segments import fortran_lines
-                original_source = "".join(routine.scope.path.read_text().splitlines(keepends=True)[first-1:last])
+                original_source = "".join(self.analysis.source_text(routine.scope.path).splitlines(keepends=True)[first-1:last])
                 replacement = "\n".join(fortran_lines([
                     "block", *compute_identity.imports, "if (" + compute_identity.expression + ") then",
                     *replacement.splitlines(), "else", *original_source.splitlines(), "endif", "end block"])) + "\n"
@@ -2162,7 +2160,7 @@ class ScopeBuilder:
             # descriptor/IEEE guards or duplicating the native loop in arms
             # which can never reach a device worker. The unused owning helper
             # retains its public identity and is not called by this source.
-            replacement = "".join(routine.scope.path.read_text().splitlines(keepends=True)[first-1:last])
+            replacement = "".join(self.analysis.source_text(routine.scope.path).splitlines(keepends=True)[first-1:last])
         self.add_edit(routine.scope.path, first, last, replacement)
         scope = {"owner": name, "owner_variant": owner_variant.identity,
                 "path": str(routine.scope.path), "first_line": first, "last_line": last,
@@ -2368,7 +2366,7 @@ class ScopeBuilder:
         # Passing an unallocated actual to this ordinary assumed-shape
         # owner is already too early. Inspect only allocation state here,
         # at the original caller, after proving serial participation.
-        original = "".join(routine.scope.path.read_text().splitlines(keepends=True)[first-1:last])
+        original = "".join(self.analysis.source_text(routine.scope.path).splitlines(keepends=True)[first-1:last])
         if not original.endswith("\n"):
             original += "\n"
         conditions = ["allocated(" + self.visible(routine, root) + ")" for root in allocated_roots]
@@ -2606,7 +2604,7 @@ class ScopeBuilder:
                     run = []
                     self.boundaries.append({"analysis_first_line":node.item.span[0],"reason":str(error)})
                     continue
-                original = self.entry.scope.path.read_text().splitlines()
+                original = self.analysis.source_text(self.entry.scope.path).splitlines()
                 text = original[first-1:last]
                 if run and any(line.lstrip().startswith("#") for line in original[_span(run[-1])[1]:first-1]):
                     self.build_span(run)
@@ -2734,7 +2732,7 @@ class ScopeBuilder:
         self._check_reached_publication()
         self._validate_reached_window_fresh()
         self._validate_numerical_regions()
-        self.analysis.inputs.verify()
+        self.analysis.verify_publication()
         if any(sha256(package.path.read_bytes()).hexdigest() != package.digest for package in self.packages.values()):
             raise CompilationError("normalized source changed while scope artifacts were being prepared")
         for registry in self.region_owners.values():
@@ -2744,7 +2742,7 @@ class ScopeBuilder:
         provenance = {}
         patches = []
         for path, edits in self.edits.items():
-            source = path.read_text()
+            source = self.analysis.source_text(path)
             lines = source.splitlines(keepends=True)
             # Group insertions at the same boundary; preserve discovery order.
             grouped = {}
@@ -2820,6 +2818,7 @@ class ScopeBuilder:
                 for name in self.outputs if name.endswith((".cu",".f90"))
             ],
         }
+        self.analysis.verify_publication()
         self.outputs["scope-manifest.json"] = json.dumps(report,indent=2)+"\n"
         return self.outputs, report
 

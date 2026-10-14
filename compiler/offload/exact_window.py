@@ -21,8 +21,8 @@ from pathlib import Path
 from compiler.ir import CompilationError
 from compiler.offload.collective_calibration import normalize_fortran_options
 
-VERSION = 2
-PROTOCOL = "complete-original-window-cold-v2"
+VERSION = 3
+PROTOCOL = "complete-original-window-cold-v3"
 SAMPLES = 7
 HOLDOUTS = 2
 ENVIRONMENT = (
@@ -246,11 +246,15 @@ def prepare(owner):
     request = builder.config.exact_window
     if request is None:
         return None
-    if owner.parent is not None or len(owner.members) != 1 or owner.boundaries:
+    plan = owner.execution_plan
+    if plan is None:
+        raise CompilationError("exact window requires the checked owning execution plan")
+    units = plan.units(owner)
+    if owner.parent is not None or len(plan.members) != 1 or owner.boundaries:
         raise CompilationError("exact window requires one complete owner without child owners or closures")
     if getattr(builder, "_reached_window_binding", None) is not None:
         raise CompilationError("exact window currently requires the complete original invocation")
-    if not owner.units or sum(len(unit.scope.calls) for unit in owner.units) < 2:
+    if not units or sum(len(unit.scope.calls) for unit in units) < 2:
         raise CompilationError("exact window requires at least two admitted numerical operations")
     participation = original_team_contract(owner)
     # Payload-dependent branches, calls and changing lifetimes need independent
@@ -358,7 +362,7 @@ def prepare(owner):
         or call.region.numerical_helpers
         or call.region.tile_domains
         or call.region.requires_numerical_environment
-        for unit in owner.units
+        for unit in units
         for call in unit.scope.calls
     ):
         raise CompilationError("exact-window helper/tile/numerical-environment coverage unavailable")
@@ -408,12 +412,12 @@ def prepare(owner):
                 expressions.append(f"{inquiry}({binding.name},{axis},kind=c_int64_t)")
     if not arrays or len(key) > 256:
         raise CompilationError("exact-window descriptor inventory unavailable")
-    actual = {root for unit in owner.units for root in unit.arrays}
+    actual = {root for unit in units for root in unit.arrays}
     if actual - arrays:
         raise CompilationError("exact-window module/local storage needs lifetime and key coverage")
     # Require source-bound workers already prepared by the normal compiler.
     workers = {}
-    for unit in owner.units:
+    for unit in units:
         for leaf in unit.leaves:
             generated = builder.numerical(leaf)
             if generated is None:
@@ -449,6 +453,7 @@ def prepare(owner):
         "entry": routine.qualified,
         "sources": dict(sorted(builder.analysis.sources.items())),
         "source_graph": owner.graph.identity,
+        "checked_execution_identity": plan.execution_identity,
         "workers": workers,
         "runtime": builder.runtime["runtime_id"],
         "implementation": implementation_identity(),
@@ -474,14 +479,19 @@ def prepare(owner):
         if capture
         else evidence_decision(request.get("evidence"), contract)
     )
-    owner.exact_window = {
+    from compiler.frontend.immutable_graph import freeze_graph
+
+    # Placement is an immutable result, separate from the admitted execution
+    # graph. In particular, evidence key/identity containers must not retain
+    # writable aliases into the caller's calibration document.
+    owner.emission.exact_window = freeze_graph({
         "contract": contract,
         "contract_sha256": digest(contract),
         **decision,
         "expressions": expressions,
         "guards": guards,
         "capture": capture,
-    }
+    })
     return owner.exact_window
 
 

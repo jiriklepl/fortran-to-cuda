@@ -12,6 +12,7 @@ from compiler.frontend.reached_windows import plan_reached_window, prove_reached
 from compiler.frontend.structured_effects import _freeze
 from compiler.ir import CompilationError
 from compiler.offload.config import OffloadConfig
+from compiler.scopes.generation_transaction import GenerationTransaction
 from compiler.scopes.reached_owner import ReachedWindowOwner
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_configured_sources import inputs
@@ -273,16 +274,26 @@ def test_registered_single_if_rejects_changed_original_authority(tmp_path, mutat
     _graph, parent = original_if(builder, conditional_point(proof))
     if mutation == "file":
         path.write_text(source + "\n! changed after registration\n")
+        assert proof.validate(builder.analysis, ENTRY, originals) is proof
+        with GenerationTransaction(builder) as transaction:
+            owner = ReachedWindowOwner(transaction.builder, proof, originals)
+            with pytest.raises(CompilationError, match="source changed"):
+                owner.run()
     elif mutation == "binding":
-        builder.entry.scope.bindings["bad"] = copy(builder.entry.scope.bindings["bad"])
+        with pytest.raises(CompilationError):
+            builder.entry.scope.bindings["bad"] = copy(builder.entry.scope.bindings["bad"])
     elif mutation == "condition":
-        parent.items = (copy(parent.items[0]), parent.items[1])
+        with pytest.raises(CompilationError):
+            parent.items = (copy(parent.items[0]), parent.items[1])
     elif mutation == "action":
-        parent.items = (parent.items[0], copy(parent.items[1]))
+        with pytest.raises(CompilationError):
+            parent.items = (parent.items[0], copy(parent.items[1]))
     else:
-        parent.item.fort_original_span = (parent.item.span[0] + 1, parent.item.span[1] + 1)
-    with pytest.raises(CompilationError):
-        proof.validate(builder.analysis, ENTRY, originals)
+        with pytest.raises(CompilationError):
+            parent.item.fort_original_span = (parent.item.span[0] + 1, parent.item.span[1] + 1)
+    assert not builder.outputs
+    assert not builder.edits
+    assert not builder.scopes
 
 
 @pytest.mark.parametrize("field", ["condition_node_id", "action_node_id", "condition_source_sha256",

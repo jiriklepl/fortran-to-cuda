@@ -162,9 +162,10 @@ def _source_partition(builder, originals):
     if not first < body_first <= body_last <= last:
         raise CompilationError("combined numerical team source association is unordered")
     source = builder.entry.scope.path
-    if source.stat().st_size > 32 * 1024**2:
+    captured = builder.analysis.source_text(source)
+    if len(captured.encode()) > 32 * 1024**2:
         raise CompilationError("combined numerical team original source byte budget exhausted")
-    lines = source.read_text().splitlines(keepends=True)
+    lines = captured.splitlines(keepends=True)
     raw = "".join(lines[first-1:last])
     if (last > len(lines) or len(raw.encode()) > NATIVE_GROUP_SCAN_LIMIT
             or any(line.lstrip().startswith("#") for line in lines[first-1:last])):

@@ -107,6 +107,7 @@ def test_selected_unallocated_module_descriptor_is_not_inquired_before_allocatio
 @pytest.mark.parametrize("mutation", ["source", "expectation"])
 def test_selected_descriptor_guard_cannot_use_stale_source_or_fact_authority(tmp_path, mutation):
     from compiler.frontend.reached_windows import prove_reached_window
+    from compiler.scopes.generation_transaction import GenerationTransaction
     from compiler.scopes.reached_owner import ReachedWindowOwner
 
     path, builder = module_fixture(tmp_path)
@@ -115,10 +116,14 @@ def test_selected_descriptor_guard_cannot_use_stale_source_or_fact_authority(tmp
     proof = prove_reached_window(builder.analysis, builder.entry.qualified, selection, MODULE_ROOTS, builder.facts)
     if mutation == "source":
         path.write_text(path.read_text() + "! changed original source\n")
+        with GenerationTransaction(builder) as transaction:
+            owner = ReachedWindowOwner(transaction.builder, proof, selection)
+            with pytest.raises(CompilationError, match="source changed"):
+                owner.run()
     else:
         builder.facts["captures"][MODULE_ROOTS[0]]["expected_descriptor"]["extents"][0] = 13
-    with pytest.raises(CompilationError):
-        ReachedWindowOwner(builder, proof, selection)
+        with pytest.raises(CompilationError):
+            ReachedWindowOwner(builder, proof, selection)
     assert not builder.outputs
     assert not builder.edits
 

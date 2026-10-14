@@ -66,13 +66,15 @@ def _native_analysis(analysis):
     """
     from compiler.frontend.summary_cache import SummaryCache
 
-    result = copy.copy(analysis)
+    result = analysis.private_projection()
     for name in ("summaries", "_closures", "_native_sections", "_structures", "_segments",
                  "_descriptor_proofs", "_joined_completions", "_numerical_completions",
                  "_worksharing_completions", "_worksharing_native_completions", "_reduction_proofs",
                  "_reduction_candidates", "_omp_reduction_proofs", "_source_scopes", "_associate_scopes",
                  "_source_provenance", "_allocation_authorizations"):
-        setattr(result, name, dict(getattr(analysis, name)))
+        if (getattr(analysis, "_source_session", None) is None
+                or name not in analysis._source_session.roots):
+            setattr(result, name, dict(getattr(analysis, name)))
     result._native_environments = dict(analysis._native_environments)
     result._native_environment_states = dict(analysis._native_environment_states)
     result._native_predicates = dict(analysis._native_predicates)
@@ -463,7 +465,7 @@ def renamed(builder, node, parameters, *, lexical_scope=None, native_metadata=Fa
     """Rewrite resolved variable AST nodes, never string substrings."""
     if native_metadata:
         builder = copy.copy(builder)
-        builder.analysis = copy.copy(builder.analysis)
+        builder.analysis = builder.analysis.private_projection()
         builder.analysis._native_metadata = True
     def rename_comment(value):
         def clause(match):
@@ -560,7 +562,7 @@ class StructuredScope:
         if len(self.calls) > 32 or self.operation_count > 256:
             raise CompilationError("bounded structured owner exceeds call/operation budget")
         self.first, self.last = statement_span(nodes[0])[0], statement_span(nodes[-1])[1]
-        original = builder.entry.scope.path.read_text().splitlines()[self.first - 1:self.last]
+        original = builder.analysis.source_text(builder.entry.scope.path).splitlines()[self.first - 1:self.last]
         if any(line.lstrip().startswith("#") for line in original):
             # Only the original lexical owner can surround a complete native
             # group without reproducing its preprocessing side effects. Its

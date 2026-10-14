@@ -61,7 +61,7 @@ def emit_child_team(directory, *, mixed, complete_window):
         assert all(not member.boundaries for member in owner.members.values())
         # The admitted whole-window selector is deliberately outside this
         # emitter test. No generated source is published or executed here.
-        owner.exact_window = {} if complete_window else None
+        owner.emission.exact_window = {} if complete_window else None
         child = owner.members["joined_owner::step::advance"]
         assert child.exact_window is None
         assert child.owner is owner

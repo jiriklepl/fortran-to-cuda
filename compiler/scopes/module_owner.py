@@ -190,8 +190,8 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
                 "array_registration": "admitted reached resources; original OUT actuals registered before unconditional entry invalidation",
                 "argument_rendering": "original source arguments; compiler controls appended by keyword",
                 "planning_segments": [{"segment_id": index, "first_line": unit.scope.first,
-                    "last_line": unit.scope.last, "operations": unit.scope.public()}
-                    for index, unit in enumerate(self.units)],
+                    "last_line": unit.scope.last, "operations": self.owner.execution_plan.operations(self, index)}
+                    for index, unit in enumerate(self.owner.execution_plan.units(self))],
                 "mapped_reached_plan": (self.builder._mapped_reached_child.public()
                     if hasattr(self.builder, "_mapped_reached_child") else None),
                 "limits": "ordinary numeric formals and read-only optional scalars; one canonical mapping; original saved locals remain native"}

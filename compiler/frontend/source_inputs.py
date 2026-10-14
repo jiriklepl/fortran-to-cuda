@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 from hashlib import sha256
+from io import StringIO
 from pathlib import Path
 
-from fparser.two.utils import walk
+from fparser.common.readfortran import FortranFileReader
+from fparser.two.parser import ParserFactory
+from fparser.two.utils import FortranSyntaxError, walk
 
-from compiler.frontend.lowering import _parse_file
-from compiler.ir import CompilationError
+from compiler.ir import CompilationError, SourceLocation
 
 
 class SourceInputs:
@@ -25,9 +27,12 @@ class SourceInputs:
     def __init__(self, paths, document=None):
         try:
             self.paths=list(dict.fromkeys(Path(path).resolve(strict=True) for path in paths))
-            self.sources={str(path):sha256(path.read_bytes()).hexdigest() for path in self.paths}
-        except OSError as error:
+            raw={str(path):path.read_bytes() for path in self.paths}
+            self.sources={path:sha256(data).hexdigest() for path,data in raw.items()}
+            self._texts={path:data.decode().replace("\r\n", "\n").replace("\r", "\n") for path,data in raw.items()}
+        except (OSError, UnicodeError) as error:
             raise CompilationError("original analysis source is unavailable") from error
+        self._external_readers=set()
         self.entries={}
         self.dependencies={}
         self.configuration=None
@@ -67,13 +72,15 @@ class SourceInputs:
                 if not Path(item["path"]).is_absolute():
                     raise ValueError("absolute prepared source required")
                 path=Path(item["path"]).resolve(strict=True)
-                text=path.read_text()
+                data=path.read_bytes()
+                text=data.decode().replace("\r\n", "\n").replace("\r", "\n")
             except (KeyError,TypeError,OSError,ValueError) as error:
                 raise CompilationError("configured analysis source path is unavailable") from error
-            if sha256(path.read_bytes()).hexdigest()!=item.get("sha256"):
+            if sha256(data).hexdigest()!=item.get("sha256"):
                 raise CompilationError("configured analysis source hash differs")
             mapping=item.get("line_map")
-            count=len(Path(source).read_text().splitlines())
+            self._texts[str(path)]=text
+            count=len(self._texts[source].splitlines())
             if (not isinstance(mapping,list) or len(mapping)!=len(text.splitlines())
                     or any(value is not None and (type(value) is not int or not 1<=value<=count) for value in mapping)):
                 raise CompilationError("configured analysis source has an invalid original line map")
@@ -89,7 +96,23 @@ class SourceInputs:
         return Path(item["path"]) if item else original
 
     def parse(self, original):
-        tree=_parse_file(self.path(original),require_markers=False)
+        path = self.path(original)
+        # The filename still determines source form/include lookup and error
+        # locations, but the parser consumes the exact bytes already hashed.
+        source = StringIO(self._texts[str(path)])
+        source.name = str(path)
+        try:
+            reader = FortranFileReader(source, ignore_comments=False)
+            tree = ParserFactory().create(std="f2008")(reader)
+        except FortranSyntaxError as error:
+            raise CompilationError(f"invalid Fortran syntax: {error}", SourceLocation(str(path))) from error
+        # fparser expands raw Fortran INCLUDE through an independent live
+        # reader. Standalone analysis keeps that behavior, but such bytes are
+        # not the captured root text and cannot authorize an immutable session.
+        readers = [getattr(getattr(node, "item", None), "reader", None) for node in walk(tree)]
+        readers.append(getattr(reader, "reader", None))
+        self._external_readers.update(str(getattr(item, "id", "external include"))
+                                      for item in readers if item is not None and item is not reader)
         record=self.entries.get(str(original))
         if record:
             for node in walk(tree):
@@ -102,7 +125,24 @@ class SourceInputs:
                                          if mapping and all(value is not None for value in mapping) else None)
         return tree
 
+    def require_captured_parsing(self):
+        if self._external_readers:
+            raise CompilationError("immutable source session requires captured prepared text for INCLUDE: "
+                                   + ", ".join(sorted(self._external_readers)))
+
+    def source_text(self, path, *, captured=False):
+        path = str(Path(path).resolve())
+        if captured:
+            if path not in self._texts:
+                raise CompilationError("source text is outside the compilation session: " + path)
+            return self._texts[path]
+        return Path(path).read_text()
+
     def verify(self):
+        """Standalone input validation is always fresh, even for frozen copies."""
+        self.verify_live()
+
+    def verify_live(self):
         try:
             for path,digest in {**self.sources,**self.dependencies}.items():
                 if sha256(Path(path).read_bytes()).hexdigest()!=digest:

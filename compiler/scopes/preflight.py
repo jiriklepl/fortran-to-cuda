@@ -115,7 +115,7 @@ def preflight_scope(builder, *, follow_calls=True, observer=None):
     an interrupted pass cannot advertise them as a complete preflight.
     """
     analysis = builder.analysis
-    analysis.inputs.verify()
+    analysis.verify_source()
     facts_identity = _digest(builder.facts)
     provider = NumericalPreparationProvider(analysis, options=builder.options, config=builder.config,
                                            environment_root=builder.entry.qualified)
@@ -277,7 +277,7 @@ def preflight_scope(builder, *, follow_calls=True, observer=None):
     # mutated input aborts the entire snapshot; it is never just one blocker.
     provider.validate_configuration(options=builder.options, config=builder.config,
                                     environment_root=builder.entry.qualified)
-    analysis.inputs.verify()
+    analysis.verify_source()
     if facts_identity != _digest(builder.facts):
         raise CompilationError("scope preflight capture facts changed during inspection")
     report = {"schema_version": 1, "entry": builder.entry.qualified,

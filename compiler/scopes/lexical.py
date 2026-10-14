@@ -120,8 +120,19 @@ class Unit:
     native_source: str | None = None
     publication_only: bool = False
     host_metadata: object = None
+
+
+@dataclass
+class UnitEmission:
+    """Results produced while emitting an already admitted immutable unit."""
     compute_identity: dict | None = None
     native_preflight: dict | None = None
+
+
+class OwnerEmission:
+    def __init__(self):
+        self.exact_window = None
+        self.units = {}
 
 
 class LexicalOwner:
@@ -150,10 +161,11 @@ class LexicalOwner:
         self.control_guard = parent.control_guard if parent else None
         self.forwarded_handles = parent.forwarded_handles if parent else set()
         self.units, self.boundaries, self.patches = [], [], []
-        self.exact_window = None
+        self.emission = OwnerEmission()
+        self.execution_plan = None
         self.numerical_team_declines, self.numerical_team_decline_count = [], 0
         self.counted_controls = []
-        self.lines = self.routine.scope.path.read_text().splitlines(keepends=True)
+        self.lines = self.builder.analysis.source_text(self.routine.scope.path).splitlines(keepends=True)
         check_structured_entry(self.routine)
         statement = _part(self.routine.scope.node, "Subroutine_Stmt")
         if (statement is None or statement.items[3] is not None
@@ -174,6 +186,16 @@ class LexicalOwner:
     def refresh(self):
         if self.parent is not None:
             self.builder.inline.refresh(self.owner.builder)
+
+    @property
+    def exact_window(self):
+        return self.emission.exact_window
+
+    def unit_emission(self, unit):
+        ordinal = next((index for index, admitted in enumerate(self.units) if admitted is unit), None)
+        if ordinal is None:
+            raise CompilationError("emission result requires this owner's admitted unit")
+        return self.emission.units.setdefault(ordinal, UnitEmission())
 
     @property
     def price_units(self):
@@ -595,6 +617,7 @@ class LexicalOwner:
 
     def emit_unit(self, unit, index):
         self.refresh()
+        result = self.unit_emission(unit)
         builder, arrays = self.builder, unit.arrays
         from compiler.scopes.combined_team import CombinedNumericalTeam
 
@@ -670,7 +693,7 @@ class LexicalOwner:
             for leaf in sorted(unit.leaves):
                 builder.numerical(leaf)
             identity = compute_identity_guard(builder, unit.leaves, caller=self.routine)
-            unit.compute_identity = identity.public()
+            result.compute_identity = identity.public()
             if identity.required:
                 imports += list(identity.imports)
                 prepare += ["if (.not. (" + identity.expression + ")) then",
@@ -717,7 +740,7 @@ class LexicalOwner:
                         "exit " + block, "endif"]
         from compiler.scopes.segments import Segment
         if self.price_units and unit.definition_summary.changes:
-            unit.native_preflight = {"abi_version": 1, "available": False,
+            result.native_preflight = {"abi_version": 1, "available": False,
                 "reason": "ordered definition changes require reached registration and validation"}
         if (self.price_units and not combined_team and not unit.definition_summary.changes
                 and not unit.scope.native and len(unit.scope.tree) == 1
@@ -726,7 +749,7 @@ class LexicalOwner:
             from compiler.scopes.native_preflight import source_native_preflight
             preflight = source_native_preflight(builder, unit.scope.calls, unit.leaves, parameters,
                                                original_descriptors=True)
-            unit.native_preflight = preflight.public
+            result.native_preflight = preflight.public
             if preflight.expression is not None:
                 metadata_native = "fort_metadata_native_" + block.rsplit("_", 1)[-1]
                 scope = self.routine.scope
@@ -735,7 +758,7 @@ class LexicalOwner:
                         or metadata_native in scope.imports or metadata_native in scope.ambiguous_imports
                         or metadata_native in scope.generics):
                     metadata_native = None
-                    unit.native_preflight = {"abi_version": 1, "available": False,
+                    result.native_preflight = {"abi_version": 1, "available": False,
                                              "reason": "metadata flag conflicts with original source"}
                 else:
                     imports += list(preflight.imports)
@@ -951,23 +974,11 @@ class LexicalOwner:
         self.leaves = {leaf for member in self.members.values() for unit in member.units for leaf in unit.leaves}
         if not self.leaves:
             return False
+        from compiler.scopes.execution_plan import build_execution_plan
+        plan = build_execution_plan(self)
         from compiler.offload.exact_window import prepare as prepare_exact_window
-        self.exact_window = prepare_exact_window(self)
-        native_reason = (None if self.exact_window is not None
-                         else builder.automatic_native_preflight(self.leaves))
-        if builder.config.policy == "auto" and self.exact_window is None and any(operation.host_only_reads
-                for member in self.members.values() for unit in member.units for operation in unit.scope.native):
-            native_reason = "host-only native range preparation lacks compatible offline cost estimates"
-        if builder.config.policy == "auto" and self.exact_window is None and any(operation.native_environment
-                for member in self.members.values() for unit in member.units for operation in unit.scope.native):
-            native_reason = "original IEEE environment coordination lacks compatible offline cost estimates"
-        if builder.config.policy == "auto" and self.exact_window is None and any(call.region is not None and call.region.scalar_element_captures
-                for member in self.members.values() for unit in member.units for call in unit.scope.calls):
-            native_reason = "immutable element preparation lacks compatible offline cost estimates"
-        if builder.config.policy == "auto" and self.exact_window is None and any(
-                getattr(operation, "indirect_sections", None) is not None
-                for member in self.members.values() for unit in member.units for operation in unit.scope.native):
-            native_reason = "native indirect inspector preparation lacks compatible offline cost estimates"
+        prepare_exact_window(self)
+        native_reason = plan.automatic_native_reason(complete_window=self.exact_window is not None)
         if native_reason:
             # No reached runtime fact can make these alternatives estimable.
             # Preserve the lexical owner, including declarations and internal
@@ -982,6 +993,7 @@ class LexicalOwner:
                 "gpu_leaves": sorted(self.leaves), "mode": "auto", "estimate_available": False,
                 "planning_reason": native_reason,
                 "source_authority": {"version": 1, "structured_summary_identity": self.graph.identity},
+                "checked_execution_plan": plan.public(),
                 "automatic_preflight": {
                     "selection": "native", "successful": True, "reason": native_reason,
                     "authority": "compiler-produced offline estimate availability for every numerical alternative",
@@ -994,6 +1006,7 @@ class LexicalOwner:
                 "transfer_configuration": transfer_configuration,
                 "boundaries": self.boundaries})
             return True
+        plan.validate()
         # One shared implementation identity, independent of the count of
         # reached source segments. Original native control/storage stays here.
         variant = builder.variants.register(self.routine.qualified, interface="lexical_owner_v1", role="coordinator",
@@ -1001,8 +1014,8 @@ class LexicalOwner:
             requirements=("one original invocation", "reached descriptor guards", "native continuation without prefix replay"),
             shared_artifacts=("sources/" + _name("source_", str(self.routine.scope.path)) + ".f90",))
         target_declarations = {}
-        for member in self.members.values():
-            declared = [binding for unit in member.units
+        for member in plan.members:
+            declared = [binding for unit in plan.units(member)
                         for binding in {**unit.arrays, **(unit.host_metadata or {})}.values()]
             declared += [mapping.binding for arrays in getattr(member, "original_actual_registrations", {}).values()
                          for mapping in arrays]
@@ -1036,9 +1049,9 @@ class LexicalOwner:
                 prefix = str(dtype) + (", " + ", ".join(qualifiers) if qualifiers else "")
                 lines += fortran_lines([prefix + " :: " + ", ".join(names)])
             builder.add_edit(path, first,last, "\n".join(lines) + "\n")
-        for member in self.members.values():
-            edits = [edit for index,unit in enumerate(member.units) for edit in member.emit_unit(unit,index)]
-            for first,last,text in [*member.patches, *edits]:
+        for member in plan.members:
+            edits = [edit for index,unit in enumerate(plan.units(member)) for edit in member.emit_unit(unit,index)]
+            for first,last,text in [*plan.patches(member), *edits]:
                 from compiler.scopes.call_registration import finish_original_registrations
                 text = finish_original_registrations(member, text)
                 builder.add_edit(member.routine.scope.path, first,last,text)
@@ -1060,11 +1073,13 @@ class LexicalOwner:
             "path": str(self.routine.scope.path), "first_line": first, "last_line": last,
             "gpu_leaves": sorted(self.leaves), "mode": builder.config.policy,
             "estimate_available": all(unit.scope.planning_status()[0] and
-                                      (unit.compute_identity is None or unit.compute_identity["available"])
+                                      (member.unit_emission(unit).compute_identity is None
+                                       or member.unit_emission(unit).compute_identity["available"])
                                       for member in self.members.values() for unit in member.units),
-            "planning_reason": native_reason or next((unit.compute_identity["reason"]
+            "planning_reason": native_reason or next((member.unit_emission(unit).compute_identity["reason"]
                 for member in self.members.values() for unit in member.units
-                if unit.compute_identity is not None and not unit.compute_identity["available"]), None),
+                if member.unit_emission(unit).compute_identity is not None
+                and not member.unit_emission(unit).compute_identity["available"]), None),
             "ownership": {"lifetime": "one original invocation", "planning_mode": "continuation",
                           "retained_resources": list(self.resources), "end_reason": "reached boundary or original invocation end"},
             "counted_controls": [{"procedure": member.routine.qualified, **control}
@@ -1080,6 +1095,7 @@ class LexicalOwner:
                                   if root in self.scalar_element_resources else {})}
                               for root, (binding, number) in self.resources.items()]},
             "source_authority": {"version": 1, "structured_summary_identity": self.graph.identity},
+            "checked_execution_plan": plan.public(),
             "internal_coordinators": [{"procedure": member.routine.qualified,
                 "structured_summary_identity": member.graph.identity,
                 "control": "host association; original declarations and body",
@@ -1087,9 +1103,9 @@ class LexicalOwner:
                 "planning_segments": [{"segment_id": index, "first_line": unit.scope.first,
                     "last_line": unit.scope.last, "resources": list(unit.arrays),
                     "gpu_leaves": sorted(unit.leaves), "ordered_definitions": unit.definition_summary.public(),
-                    "compute_identity": unit.compute_identity,
-                    "native_preflight": unit.native_preflight,
-                    "operations": unit.scope.public()}
+                    "compute_identity": member.unit_emission(unit).compute_identity,
+                    "native_preflight": member.unit_emission(unit).native_preflight,
+                    "operations": plan.operations(member, index)}
                     for index, unit in enumerate(member.units)]}
                 for member in self.members.values() if member is not self and not hasattr(member, "emit_companion")],
             "module_coordinators": [member.public() for member in self.members.values() if hasattr(member, "emit_companion")],
@@ -1097,9 +1113,9 @@ class LexicalOwner:
             "planning_segments": [{"segment_id": index, "first_line": unit.scope.first, "last_line": unit.scope.last,
                                    "resources": list(unit.arrays), "gpu_leaves": sorted(unit.leaves),
                                    "ordered_definitions": unit.definition_summary.public(),
-                                   "compute_identity": unit.compute_identity,
-                                   "native_preflight": unit.native_preflight,
-                                   "operations": unit.scope.public()} for index,unit in enumerate(self.units)],
+                                   "compute_identity": self.unit_emission(unit).compute_identity,
+                                   "native_preflight": self.unit_emission(unit).native_preflight,
+                                   "operations": plan.operations(self, index)} for index,unit in enumerate(plan.units(self))],
             "boundaries": self.boundaries, "native_continuation": "original lexical scope; no replay and no synthetic argument association",
             "registration": "first reached use after original allocation and descriptor guards",
             "reopen_after_boundary": False})

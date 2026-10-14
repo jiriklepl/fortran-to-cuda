@@ -502,7 +502,7 @@ class InlineRegions:
         calls, their arguments or normalized numerical INTENT declarations.
         """
         analysis, routine = self.builder.analysis, self.builder.entry
-        analysis.inputs.verify()
+        analysis.verify_source()
         role = analysis._source_roles.get(routine.qualified)
         if (analysis.routines.get(routine.qualified) is not routine or role is None
                 or routine.execution is not role[0] or analysis._routine_signature(routine) != role[1]

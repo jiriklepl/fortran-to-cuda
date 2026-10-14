@@ -9,6 +9,7 @@ from compiler.driver.options import CompilerOptions
 from compiler.frontend.reached_windows import prove_reached_window
 from compiler.ir import CompilationError
 from compiler.offload.config import OffloadConfig
+from compiler.scopes.generation_transaction import GenerationTransaction
 from compiler.scopes.reached_owner import ReachedWindowOwner
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT
@@ -192,15 +193,24 @@ def test_prepared_selection_cannot_skip_reorder_or_extend_the_proved_window(tmp_
 @pytest.mark.parametrize("mutation", ["facts", "source"])
 def test_later_source_or_capture_fact_mutation_invalidates_emission(tmp_path, mutation):
     path, builder, proof, originals = window_fixture(tmp_path)
-    owner = ReachedWindowOwner(builder, proof, originals)
-    if mutation == "facts":
-        builder.facts["captures"][ROOTS[0]]["initialized"] = "none"
-        reason = "facts|authority"
-    else:
-        path.write_text(SOURCE + "\n! changed\n")
-        reason = "source changed"
     before = proof.public()
-    with pytest.raises(CompilationError, match=reason):
+    if mutation == "source":
+        path.write_text(SOURCE + "\n! changed\n")
+        with GenerationTransaction(builder) as transaction:
+            owner = ReachedWindowOwner(transaction.builder, proof, originals)
+            with pytest.raises(CompilationError, match="source changed"):
+                owner.run()
+            path.write_text(SOURCE)
+            with pytest.raises(CompilationError, match="failed reached consumption candidate"):
+                owner.run()
+        assert proof.public() == before
+        assert not builder.edits
+        assert not builder.outputs
+        assert not builder.scopes
+        return
+    owner = ReachedWindowOwner(builder, proof, originals)
+    builder.facts["captures"][ROOTS[0]]["initialized"] = "none"
+    with pytest.raises(CompilationError, match="facts|authority"):
         owner.run()
     builder.facts["captures"][ROOTS[0]]["initialized"] = "whole"
     path.write_text(SOURCE)

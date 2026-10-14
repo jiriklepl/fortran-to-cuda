@@ -120,16 +120,24 @@ def test_combined_source_and_configuration_mutation_remain_hard(tmp_path, author
     paths, _outputs, _report, owner = emit_combined_team_fixture(tmp_path)
     scope = combined_units(owner)[0].scope
     if authority == "source":
+        prior_outputs = dict(owner.builder.outputs)
         paths[1].write_text(paths[1].read_text() + "! changed source\n")
+        scope._validate()
+        with pytest.raises(CompilationError, match="source changed"):
+            owner.builder.finish()
+        assert owner.builder.outputs == prior_outputs
     elif authority == "binding":
-        original = scope.builder.entry.scope.bindings["n"]
-        scope.builder.entry.scope.bindings["n"] = replace(original, attributes=original.attributes | {"volatile"})
+        binding = copy(scope.builder.entry.scope.bindings["n"])
+        binding.attributes |= {"volatile"}
+        with pytest.raises(CompilationError):
+            scope.builder.entry.scope.bindings["n"] = binding
     elif authority == "configuration":
         scope.builder.config = replace(scope.builder.config, host_threads=2)
+        with pytest.raises(CompilationError):
+            scope._validate()
     else:
-        scope.partition = {**scope.partition, "body": scope.partition["body"] + "! invented native body\n"}
-    with pytest.raises(CompilationError):
-        scope._validate()
+        with pytest.raises(CompilationError):
+            scope.partition = {**scope.partition, "body": scope.partition["body"] + "! invented native body\n"}
 
 
 def test_combined_partition_scan_limit_is_a_hard_failure(tmp_path, monkeypatch):

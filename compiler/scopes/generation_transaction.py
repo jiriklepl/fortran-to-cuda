@@ -65,6 +65,17 @@ class _GenerationCopy:
         if isinstance(value, SourceEffects):
             self.analysis(value)
             return value
+        from compiler.frontend.immutable_graph import FrozenDict, FrozenList, sealed
+        if isinstance(value, FrozenDict):
+            result = FrozenDict()
+            self.memo[identity] = result
+            dict.update(result, ((self(key), self(item)) for key, item in value.items()))
+            return result
+        if isinstance(value, FrozenList):
+            result = FrozenList()
+            self.memo[identity] = result
+            list.extend(result, (self(item) for item in value))
+            return result
         if isinstance(value, Enum):
             return value
         kind = type(value)
@@ -102,7 +113,14 @@ class _GenerationCopy:
             result = SimpleNamespace() if kind is SimpleNamespace else object.__new__(kind)
             self.memo[identity] = result
             if hasattr(value, "__dict__"):
-                result.__dict__.update((name, self(item)) for name, item in vars(value).items())
+                state = {name: self(item) for name, item in vars(value).items()}
+                if sealed(value):
+                    # Retain immutability while rebinding builder/owner edges.
+                    # Ordinary copy() intentionally returns mutable projections;
+                    # transactional adoption must preserve the checked handoff.
+                    object.__setattr__(result, "__dict__", state)
+                else:
+                    result.__dict__.update(state)
             else:
                 for field in fields(value):
                     object.__setattr__(result, field.name, self(getattr(value, field.name)))
@@ -140,7 +158,9 @@ class GenerationTransaction:
         _ACTIVE_ANALYSES.add(analysis)
         original = dict(vars(analysis))
         self._analyses[analysis] = original
-        clone = _GenerationCopy(self._analysis)
+        session = getattr(analysis, "_source_session", None)
+        clone = _GenerationCopy(self._analysis, memo=(
+            {id(value): value for value in session.roots.values()} if session is not None else None))
         # Register first: cached proof objects can refer to this same analysis.
         detached = {name: clone(value) for name, value in original.items() if name != "_summary_cache"}
         cache = original["_summary_cache"]
@@ -191,7 +211,7 @@ class GenerationTransaction:
             raise CompilationError("generation candidate changed independently admitted source facts")
         winner._validate_reached_window_fresh()
         winner._validate_numerical_regions()
-        winner.analysis.inputs.verify()
+        winner.analysis.verify_source()
         # Rebind every nested builder, inline registry and bound closure to the
         # adopted root while retaining their internal alias relationships.
         copier = _GenerationCopy(self._analysis, {id(self.builder): self.parent, id(winner): self.parent})

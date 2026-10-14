@@ -545,7 +545,7 @@ class CollectiveScopeBuilder(ScopeBuilder):
         return [argument(name) for name in order]
 
     def caller_dispatch(self, site, owner, controller, arrays, parameters, *, origin_roots=()):
-        original = "".join(site.source.read_text().splitlines(keepends=True)[site.first_line - 1:site.last_line])
+        original = "".join(self.analysis.source_text(site.source).splitlines(keepends=True)[site.first_line - 1:site.last_line])
         if not original.endswith("\n"):
             original += "\n"
         prefix = _name("fort_dispatch_", self.entry.qualified + ":" + str(site.first_line))

@@ -426,6 +426,61 @@ class SourceEffects:
             [*(scope.node for scope in self.modules.values()),
              *(routine.scope.node for routine in self.numerical_helpers.values())])
 
+    @property
+    def session_identity(self):
+        session = getattr(self, "_source_session", None)
+        if session is None:
+            return None
+        session.verify(self)
+        return session.identity
+
+    def seal_session(self):
+        """Own the original graph once; keep projections and proof caches private."""
+        from compiler.frontend.source_session import SourceSession
+        if getattr(self, "_source_session", None) is None:
+            self._source_session = SourceSession.create(self)
+        self._source_session.verify(self)
+        return self._source_session.identity
+
+    def verify_source(self):
+        """Authenticate this exact session, or freshly validate standalone inputs."""
+        session = getattr(self, "_source_session", None)
+        if session is not None:
+            session.verify(self)
+        else:
+            self.inputs.verify()
+
+    def source_text(self, path):
+        session = getattr(self, "_source_session", None)
+        if session is not None:
+            session.verify(self)
+        return self.inputs.source_text(path, captured=session is not None)
+
+    def verify_publication(self):
+        if getattr(self, "_source_session", None) is not None:
+            self._source_session.verify(self)
+        self.inputs.verify_live()
+
+    def private_projection(self, *, routines=False):
+        """Fork mutable analysis state without lending original declaration authority.
+
+        A routine override uses a small explicit map over the immutable session
+        registry. Ordinary metadata/native forks continue to share the original
+        graph; their cache/token isolation remains the caller's responsibility.
+        """
+        from compiler.frontend.source_session import ProjectedRoutines
+        result = copy(self)
+        session = getattr(self, "_source_session", None)
+        if session is not None:
+            session.verify(self)
+            if isinstance(self.routines, ProjectedRoutines):
+                result.routines = copy(self.routines)
+            elif routines:
+                result.routines = ProjectedRoutines(self.routines)
+        elif routines:
+            result.routines = dict(self.routines)
+        return result
+
     def _register_routine(self, parent, node, *, source_kind="module"):
         _attach_execution_directives(node)
         stmt = _part(node, "Subroutine_Stmt")
@@ -508,8 +563,11 @@ class SourceEffects:
         return {"available": reason is None, "kind": "source-proven implicit interface" if reason is None else "explicit interface required",
                 "reason": reason, "caller_interface_proof": False, "keyword_arguments": False}
 
-    @staticmethod
-    def _routine_signature(routine):
+    def _routine_signature(self, routine):
+        session = getattr(self, "_source_session", None)
+        if session is not None and session.contains(routine):
+            session.verify(self)
+            return self._numerical_roles[routine.qualified][1]
         return _canonical({"arguments": routine.arguments, "issues": routine.issues, "source_kind": routine.source_kind,
                            "bindings": {name: binding.public() for name, binding in routine.scope.bindings.items()},
                            "lexical_procedures": dict(routine.scope.procedures),
@@ -531,26 +589,31 @@ class SourceEffects:
         from compiler.frontend.source_objects import SOURCE_OBJECT_VERSION
         from compiler.frontend.structured_effects import STRUCTURED_EFFECT_VERSION
         syntax = _syntax if _syntax is not None else self._source_syntax.checkpoint()
-        projections = []
-        for name, routine in self.routines.items():
-            original = self._source_roles.get(name)
-            signature = self._routine_signature(routine)
-            if (original is None or routine.execution is not original[0] or signature != original[1]
-                    or not syntax.unchanged(routine.execution)):
-                projections.append({"procedure": name, "signature": signature,
-                                    "execution": str(routine.execution)})
-        for name, routine in self.numerical_helpers.items():
-            if routine.source_kind not in {"function", "internal_function"}:
-                continue
-            original = self._numerical_roles.get(name)
-            signature = self._routine_signature(routine)
-            if (original is None or routine.scope.node is not original[0] or signature != original[1]
-                    or not syntax.unchanged(routine.scope.node)):
-                projections.append({"procedure": name, "signature": signature,
-                                    "function_source": str(routine.scope.node)})
-        projections.extend(resolution_changes(self))
+        session = getattr(self, "_source_session", None)
+        if session is not None:
+            projections = session.projections(self)
+        else:
+            projections = []
+            for name, routine in self.routines.items():
+                original = self._source_roles.get(name)
+                signature = self._routine_signature(routine)
+                if (original is None or routine.execution is not original[0] or signature != original[1]
+                        or not syntax.unchanged(routine.execution)):
+                    projections.append({"procedure": name, "signature": signature,
+                                        "execution": str(routine.execution)})
+            for name, routine in self.numerical_helpers.items():
+                if routine.source_kind not in {"function", "internal_function"}:
+                    continue
+                original = self._numerical_roles.get(name)
+                signature = self._routine_signature(routine)
+                if (original is None or routine.scope.node is not original[0] or signature != original[1]
+                        or not syntax.unchanged(routine.scope.node)):
+                    projections.append({"procedure": name, "signature": signature,
+                                        "function_source": str(routine.scope.node)})
+            projections.extend(resolution_changes(self))
         window = getattr(self, "_selected_descriptor_window", None)
-        return {"summary_version": SOURCE_SUMMARY_VERSION, "sources": self.inputs.identity(),
+        return {"summary_version": SOURCE_SUMMARY_VERSION,
+                "sources": ({"compilation_session_v1": session.identity} if session else self.inputs.identity()),
                 "structured_version": STRUCTURED_EFFECT_VERSION,
                 "descriptor_window_version": DESCRIPTOR_WINDOW_VERSION,
                 "selected_descriptor_window": ({"procedure": window[1], "selected_node_ids": list(window[2]),
@@ -698,7 +761,7 @@ class SourceEffects:
                 raise CompilationError("stable allocation proof requires a supported canonical module array: " + root)
             authorizations[root] = {"resource": root, "source": str(module.path),
                                     "source_sha256": self.sources[str(module.path)]}
-        self.inputs.verify()
+        self.verify_source()
         # Commit only after every root and the original input identities pass.
         self._stable_module_allocatables = frozenset(roots)
         self._allocation_authorizations = authorizations
@@ -1153,6 +1216,9 @@ class SourceEffects:
         return sorted(prove(_children(routine.execution)))
 
     def _original_syntax_unchanged(self, syntax):
+        if getattr(self, "_source_session", None) is not None:
+            self._source_session.verify(self)
+            return True
         return (all(name in self.modules and self.modules[name].node is node and syntax.unchanged(node)
                     for name, (node, _text) in self._source_module_roles.items())
                 and all(syntax.unchanged(role[0]) for role in self._numerical_roles.values()))
@@ -1163,7 +1229,7 @@ class SourceEffects:
         # rejected branches cannot exhaust it or leave apparently complete,
         # empty summaries behind. Cache a closure only in its original context.
         if _closure is None:
-            self.inputs.verify()
+            self.verify_source()
             syntax = self._source_syntax.checkpoint()
             # Authenticate containing modules first so execution/function
             # checks below reuse this demand's descendant comparisons.
@@ -1187,7 +1253,7 @@ class SourceEffects:
                 if syntax is not None:
                     # Authority construction may be instrumented. Recheck
                     # before publishing a local hit after priming its memo.
-                    self.inputs.verify()
+                    self.verify_source()
                     final_syntax = self._source_syntax.checkpoint()
                     if (not self._original_syntax_unchanged(final_syntax)
                             or _canonical(self._summary_authority(_syntax=final_syntax)) != authority):
@@ -1208,7 +1274,7 @@ class SourceEffects:
                     # Instrumentation must not turn a mid-demand source change
                     # into authorized cached evidence. Recheck before storing
                     # any shared closure or adopting the local candidate.
-                    self.inputs.verify()
+                    self.verify_source()
                     final_syntax = self._source_syntax.checkpoint()
                     if (not self._original_syntax_unchanged(final_syntax)
                             or _canonical(self._summary_authority(_syntax=final_syntax)) != authority):
@@ -1988,7 +2054,7 @@ class SourceEffects:
     def native_sections(self, requested, *, _syntax=None, _authority=None):
         """Return typed original references without parsing explanatory strings."""
         self._analysis_started = True
-        self.inputs.verify()
+        self.verify_source()
         if requested not in self.routines:
             raise CompilationError("source procedure unavailable: " + requested)
         canonical = (_canonical(self._summary_authority(_syntax=_syntax)) if _authority is None
@@ -2008,8 +2074,11 @@ class SourceEffects:
 
     def _require_original_global(self, *, _syntax=None):
         """Check shared original files, provenance and module syntax freshly."""
-        self.inputs.verify()
+        self.verify_source()
         syntax = _syntax if _syntax is not None else self._source_syntax.checkpoint()
+        if getattr(self, "_source_session", None) is not None:
+            self._source_session.verify(self)
+            return syntax
         # Sealing authenticated these same item identities and source spans,
         # then made them immutable. Only mutable standalone analyses need a
         # fresh full provenance walk; file and namespace checks remain fresh.
@@ -2024,6 +2093,8 @@ class SourceEffects:
 
     def _require_original_routine(self, requested, *, _syntax):
         """Check one exact routine inside an immediate authenticated demand."""
+        if getattr(self, "_source_session", None) is not None:
+            return self._source_session.routine(self, requested)
         routine = self.routines.get(requested)
         original = self._source_roles.get(requested)
         numerical = self._numerical_roles.get(requested)
@@ -2142,8 +2213,7 @@ class SourceEffects:
         original = self.routines[requested]
         if descriptor_window is not None:
             self._validate_descriptor_window(requested, identities, descriptor_window)
-        analysis = copy(self)
-        analysis.routines = dict(self.routines)
+        analysis = self.private_projection(routines=True)
         analysis.summaries, analysis._closures, analysis._native_sections = {}, {}, {}
         analysis._structures, analysis._segments, analysis._descriptor_proofs = {}, {}, {}
         analysis._descriptor_source = (getattr(self, "_descriptor_source", self)
@@ -2679,7 +2749,7 @@ class SourceEffects:
 
     def summarize_span(self, procedures):
         """Prove a candidate span with one budget for its distinct closure."""
-        self.inputs.verify()
+        self.verify_source()
         closure = _Closure()
         for procedure in procedures:
             summary = self.summarize(procedure, _closure=closure)
@@ -2701,7 +2771,7 @@ class SourceEffects:
         if len(matches) != 1:
             raise CompilationError(f"native effect entry {entry!r} is unavailable or ambiguous")
         if not materialize:
-            self.inputs.verify()
+            self.verify_source()
             authority = self._summary_authority()
             authority_identity = sha256(_canonical(authority).encode()).hexdigest()
             if authority["role"] == "source":
@@ -2748,7 +2818,7 @@ class SourceEffects:
                                 "resource_mappings": operation.get("resource_mappings", [])}
                                for item in records for index, operation in enumerate(item["operations"])
                                if operation["kind"] == "call"]}
-            self.inputs.verify()
+            self.verify_source()
             return deepcopy({"schema_version": 2, "summary_version": SOURCE_SUMMARY_VERSION,
                     "entry": matches[0], "complete": False, "closure_complete_available": False,
                     "closure_materialization": "not_requested",
@@ -2806,7 +2876,7 @@ class SourceEffects:
             structured = {"available": False, "reason": "private projection has no original structural authority"}
             requested_reductions = []
             requested_omp_reductions = []
-        self.inputs.verify()
+        self.verify_source()
         cache_stats = self._summary_cache.stats
         cache_delta = {name: cache_stats[name] - self._cache_started.get(name, 0) for name in cache_stats}
         cache_delta["rejected"] = cache_delta.get("rejected", 0) + self._cache_rejections

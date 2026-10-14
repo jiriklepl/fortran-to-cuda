@@ -14,7 +14,7 @@ from compiler.ir import CompilationError
 from compiler.scopes.generation_transaction import GenerationTransaction
 from compiler.scopes.reached_owner import ReachedWindowOwner
 
-DISCOVERY_VERSION = 6
+DISCOVERY_VERSION = 7
 MAX_ADJACENT_UNITS = 4
 MAX_ATTEMPTS = 16
 
@@ -40,44 +40,6 @@ def _candidates(graph):
                 originals = tuple(original for identity in identities for original in graph.source_nodes(identity))
                 if originals:
                     yield identities, originals
-
-
-def _numerical_calls(owner):
-    """Count admitted numerical invocations, including repeated shared leaves."""
-    direct = {name: sum(bool(member.builder.closure(call.procedure)[0])
-                       for unit in member.units for call in unit.scope.calls)
-              for name, member in owner.members.items()}
-    if not any(getattr(member.builder, "_mapped_reached_child", None) is not None
-               for member in owner.members.values()):
-        return sum(direct.values())
-    edges, seen, visits = {}, set(), 0
-    for name, member in owner.members.items():
-        for site in getattr(member, "call_sites", ()):
-            identity = site.get("mapped_call_node_id")
-            if identity is None:
-                continue
-            caller = owner.members.get(site["caller"])
-            span = site["first_line"], site["last_line"]
-            if caller is None or getattr(caller, "mapped_call_patches", {}).get(span) != identity:
-                raise CompilationError("numerical invocation count lacks its retained original call site")
-            key = site["caller"], identity
-            if key in seen:
-                raise CompilationError("numerical invocation count repeats one original call site")
-            seen.add(key)
-            visits += 1
-            if visits > owner.builder.analysis.procedure_limit:
-                raise CompilationError("numerical invocation call traversal budget exhausted")
-            edges.setdefault(site["caller"], []).append(name)
-    counts = {}
-
-    def count(name, active=()):
-        if name in active or len(active) >= owner.builder.analysis.depth_limit:
-            raise CompilationError("numerical invocation call depth or recursion budget exhausted")
-        if name not in counts:
-            counts[name] = direct[name] + sum(count(child, (*active, name)) for child in edges.get(name, ()))
-        return counts[name]
-
-    return count(owner.routine.qualified)
 
 
 def _source_declines(owner):
@@ -174,7 +136,10 @@ def discover_reached_window(builder):
                 if not owner.run():
                     raise _no_implementation(owner, attempt,
                                              "selected source window has no admitted numerical implementation")
-                calls = _numerical_calls(owner)
+                plan = owner.execution_plan
+                if plan is None:
+                    raise CompilationError("selected window lacks its checked execution plan")
+                calls = plan.numerical_invocations
                 if calls < 2:
                     raise _no_implementation(owner, attempt,
                                              "selected source window needs two admitted numerical invocations")
@@ -184,6 +149,7 @@ def discover_reached_window(builder):
                     raise CompilationError("selected window has no available automatic GPU alternative: "
                                            + scope["automatic_preflight"]["reason"])
                 attempt.update({"accepted": True, "proof_identity": proof.identity,
+                                "execution_plan_identity": plan.identity,
                                 "numerical_invocations": calls,
                                 "planned_closures": proof.public()["planned_closures"]})
                 scope["reached_window"]["automatic_discovery"] = True

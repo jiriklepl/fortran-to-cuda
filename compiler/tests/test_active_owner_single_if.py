@@ -9,6 +9,7 @@ import pytest
 
 from compiler.frontend.reached_windows import plan_reached_window, prove_reached_window
 from compiler.ir import CompilationError
+from compiler.scopes.generation_transaction import GenerationTransaction
 from compiler.scopes.reached_owner import ReachedWindowOwner
 from compiler.tests.test_planned_reached_closures import (
     ENTRY,
@@ -165,20 +166,29 @@ def test_conditional_close_rejects_changed_original_authority_without_emission(t
     _point, _graph, parent = close_point(builder, proof)
     if mutation == "source":
         path.write_text(SINGLE_SOURCE + "\n! changed after registration\n")
+        with GenerationTransaction(builder) as transaction:
+            owner = ReachedWindowOwner(transaction.builder, proof, originals)
+            with pytest.raises(CompilationError, match="source changed"):
+                owner.run()
     elif mutation == "binding":
-        builder.entry.scope.bindings["bad"] = copy(builder.entry.scope.bindings["bad"])
+        with pytest.raises(CompilationError):
+            builder.entry.scope.bindings["bad"] = copy(builder.entry.scope.bindings["bad"])
     elif mutation == "condition":
-        parent.items = (copy(parent.items[0]), parent.items[1])
+        with pytest.raises(CompilationError):
+            parent.items = (copy(parent.items[0]), parent.items[1])
     elif mutation == "action":
-        parent.items = (parent.items[0], copy(parent.items[1]))
+        with pytest.raises(CompilationError):
+            parent.items = (parent.items[0], copy(parent.items[1]))
     elif mutation == "span":
         first, last = parent.item.span
-        parent.item.fort_original_span = (first + 1, last + 1)
+        with pytest.raises(CompilationError):
+            parent.item.fort_original_span = (first + 1, last + 1)
     else:
         builder.facts["captures"][ROOTS[0]]["initialized"] = "none"
-    with pytest.raises(CompilationError):
-        ReachedWindowOwner(builder, proof, originals)
+        with pytest.raises(CompilationError):
+            ReachedWindowOwner(builder, proof, originals)
     assert not builder.edits
+    assert not builder.outputs
     assert not builder.scopes
 
 

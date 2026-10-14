@@ -72,6 +72,9 @@ def register_source_function_authority(analysis):
 
 
 def resolution_changes(analysis):
+    if getattr(analysis, "_source_session", None) is not None:
+        analysis._source_session.verify(analysis)
+        return []
     changes = []
     for key in sorted(analysis._source_function_used_scopes):
         scope, node, parent, state, bindings = analysis._source_function_scopes[key]
@@ -85,6 +88,14 @@ def resolution_changes(analysis):
 
 
 def _validate_scope(analysis, scope, *, track=True):
+    session = getattr(analysis, "_source_session", None)
+    if session is not None:
+        session.verify(analysis)
+        if not session.contains(scope) or id(scope) not in analysis._source_function_scopes:
+            raise CompilationError("native source function original resolution authority changed")
+        if track:
+            analysis._source_function_used_scopes.add(id(scope))
+        return
     original = analysis._source_function_scopes.get(id(scope))
     if (original is None or original[0] is not scope or original[1] is not scope.node
             or original[2] is not scope.parent or original[3] != _resolution(scope)
@@ -95,8 +106,21 @@ def _validate_scope(analysis, scope, *, track=True):
         analysis._source_function_used_scopes.add(id(scope))
 
 
+@dataclass(frozen=True, slots=True)
+class _SessionScopeRoles:
+    session: object
+    overrides: tuple
+
+
 def _scope_roles(analysis):
-    """Retain current role objects for one immediate namespace demand."""
+    """Retain original authority and only the explicitly projected role changes."""
+    session = getattr(analysis, "_source_session", None)
+    if session is not None:
+        session.verify(analysis)
+        from compiler.frontend.source_session import ProjectedRoutines
+        overrides = (tuple((name, routine.scope) for name, routine in sorted(analysis.routines.overrides.items()))
+                     if isinstance(analysis.routines, ProjectedRoutines) else ())
+        return _SessionScopeRoles(session, overrides)
     roles = {("module", name): scope for name, scope in analysis.modules.items()}
     roles.update((("routine", name), routine.scope) for name, routine in analysis.routines.items())
     roles.update((("numerical_helper", name), routine.scope)
@@ -110,6 +134,15 @@ def _validate_scope_roles(analysis, roles, consulted):
     # Authenticating a retained scope alone does not bind a registry that was
     # replaced by an equal-looking scope while this demand was running.
     current = _scope_roles(analysis)
+    if isinstance(roles, _SessionScopeRoles):
+        if (not isinstance(current, _SessionScopeRoles) or current.session is not roles.session
+                or len(current.overrides) != len(roles.overrides)
+                or any(left[0] != right[0] or left[1] is not right[1]
+                       for left, right in zip(current.overrides, roles.overrides, strict=True))):
+            raise CompilationError("native source function original resolution authority changed")
+        return
+    if isinstance(current, _SessionScopeRoles):
+        raise CompilationError("native source function original resolution authority changed")
     if any(current.get(role) is not scope for role, scope in roles.items() if id(scope) in consulted):
         raise CompilationError("native source function original resolution authority changed")
 
@@ -166,7 +199,13 @@ def _origin(analysis):
 def _original(analysis, procedure):
     if procedure in analysis.routines:
         return analysis._require_original(procedure)
-    analysis.inputs.verify()
+    session = getattr(analysis, "_source_session", None)
+    if session is not None:
+        routine = session.routine(analysis, procedure, function=True)
+        if routine.source_kind not in {"function", "internal_function"}:
+            raise CompilationError("native source function requires original lexical source authority")
+        return routine
+    analysis.verify_source()
     syntax = analysis._source_syntax.checkpoint()
     routine = analysis.numerical_helpers.get(procedure)
     role = analysis._numerical_roles.get(procedure)
@@ -187,6 +226,13 @@ def _original(analysis, procedure):
 
 
 def _source_identity(analysis, routine):
+    session = getattr(analysis, "_source_session", None)
+    if session is not None:
+        session.verify(analysis)
+        if not session.contains(routine):
+            raise CompilationError("native source function requires original lexical source authority")
+        return _hash({"version": SOURCE_FUNCTION_VERSION, "session": session.identity,
+                      "procedure": routine.qualified})
     return _hash({"version": SOURCE_FUNCTION_VERSION, "sources": analysis.inputs.identity(),
                   "procedure": routine.qualified, "signature": analysis._routine_signature(routine),
                   "source": str(routine.scope.node)})
@@ -224,7 +270,7 @@ def _projection(analysis, routine):
     from compiler.scopes.segments import _native_analysis
 
     projected = _native_analysis(analysis)
-    projected.routines = dict(analysis.routines)
+    projected = projected.private_projection(routines=True)
     projected.routines[routine.qualified] = routine
     projected.summaries, projected._closures, projected._native_sections = {}, {}, {}
     projected._summary_cache = SummaryCache(max_entries=0)

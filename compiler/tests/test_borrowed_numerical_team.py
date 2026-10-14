@@ -164,15 +164,22 @@ def test_borrowed_team_retains_fresh_source_and_configuration_authority(tmp_path
     paths, _outputs, _report, builder = emit_borrowed_team_fixture(tmp_path)
     child = builder.coordinators[SCALER]
     if mutation == "source":
+        prior_outputs = dict(builder.outputs)
         paths[0].write_text(paths[0].read_text() + "! original source changed\n")
+        child.scope._validate()
+        with pytest.raises(CompilationError, match="source changed"):
+            builder.finish()
+        assert builder.outputs == prior_outputs
     elif mutation == "binding":
         scope = child.routine.scope
-        binding = scope.bindings["factor"]
-        scope.bindings["factor"] = replace(binding, attributes=binding.attributes | {"volatile"})
+        binding = copy(scope.bindings["factor"])
+        binding.attributes |= {"volatile"}
+        with pytest.raises(CompilationError):
+            scope.bindings["factor"] = binding
     else:
         child.builder.config = replace(child.builder.config, host_threads=2)
-    with pytest.raises(CompilationError):
-        child.scope._validate()
+        with pytest.raises(CompilationError):
+            child.scope._validate()
 
 
 def test_partial_out_helper_cannot_grant_whole_definition(tmp_path):

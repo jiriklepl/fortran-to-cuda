@@ -2090,6 +2090,37 @@ at every reached consumer, without globally blessing their allocations.
 Discovery neither invents capture facts nor proves whole-stage residency.
 Original descriptor and partial-definition proofs remain separate gates.
 
+Reached owners now hand one checked ordered execution plan from admission to
+placement, emission and discovery. Its owned operation graph is immutable,
+including native effects, source edits, control guards, resource associations
+and child owners. Builders, proof registries and emission results are separate
+state. Discovery version 7 counts numerical invocations from this same plan;
+it no longer reconstructs an independent call inventory. The additive
+`checked_execution_plan` schema-version-1 record binds source/configuration and
+capture identities, ordered operations and canonical resources. Its JSON is a
+diagnostic view, not importable proof authority. Missing prices still select
+native; a checked plan alone grants no automatic GPU placement or transfer saving.
+The complete diagnostic `identity` includes the issuing compilation's proof
+tokens. A separate `execution_identity` fingerprints the admitted executable
+semantics for calibration reuse across independent compilations. It binds the
+same source, configuration, captures and immutable operation graph without
+mistaking process-local token identities for changes in execution. Registered
+proofs retain their exact in-process validation in both paths.
+Calibration reuse remains limited to the complete-original-window admission
+class below; the fingerprint does not expand that class to reached suffixes.
+
+The compilation session shares one authenticated immutable original source
+graph across private lowering and generation transactions. Original syntax,
+declarations, namespaces, source text and configured-source identities are
+sealed together; private projections and analysis caches remain explicit.
+Queries authenticate session membership, while publication rechecks live source
+and configuration inputs. Standalone mutable analyses retain fresh checks.
+Parsing consumes the captured original or prepared text. Unexpanded Fortran
+INCLUDE readers outside that snapshot block session sealing; the configured
+source-export path supplies preexpanded text and authenticated dependencies.
+Reusing a frozen object outside its issuing source session grants no source
+authority, and failed speculative generation cannot mutate the original graph.
+
 For a bounded diagnostic pass before source generation, add `--scope-preflight`
 to a serial `--form-scopes` command. Its schema-version-1 `preflight` report
 inspects original procedures independently, preserving source order, both sides
@@ -2821,12 +2852,13 @@ python -m compiler.offload.exact_window_calibration \
 ```
 
 Add `--original-teams` to retain three original four-thread joined loops in the
-native control. Complete-window protocol 2 binds independent source completion
+native control. Complete-window protocol 3 binds the checked plan's portable
+execution fingerprint and independent source completion
 proofs for every original team and measures their startup, worksharing and joins
 inside the same complete invocation. It does not borrow serial or per-loop
 coefficients. Runtime thread limits, active-level limits and OpenMP placement
 environment are part of the identity; incompatible limits select native before
-CUDA work. Protocol 1 observations do not authorize this expanded class.
+CUDA work. Protocol 1 and 2 observations do not authorize this plan-bound class.
 Original PRIVATE arrays contribute their entry-time sizes and lower bounds to
 the exact cost key, once per array even when several teams reuse it. This also
 covers unused PRIVATE storage that may incur allocation costs. Descriptor
