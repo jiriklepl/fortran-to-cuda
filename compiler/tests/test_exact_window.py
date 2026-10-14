@@ -80,6 +80,7 @@ def test_exact_complete_window_has_real_workers_and_current_host_native_reader(p
         == record["contract"]["common_functions_sha256"]
     )
     assert not report["scopes"][0]["boundaries"]
+    assert record["contract"]["checked_execution_identity"] == report["scopes"][0]["checked_execution_plan"]["execution_identity"]
     text = next(value for name, value in outputs.items() if name.startswith("sources/"))
     assert text.count("audit=sum(a(:,1,1))") == 1
     assert "fort_mode = 1" in text
@@ -100,10 +101,27 @@ def test_only_independently_profitable_complete_observations_select_resident(pre
     assert not evidence_decision(None, contract)["available"]
 
 
+@pytest.mark.parametrize("original_teams", [False, True], ids=["serial", "original-teams"])
+def test_independent_capture_and_production_share_portable_execution_identity(tmp_path, original_teams):
+    source = tmp_path / "original.f90"
+    source.write_text(fixture_source(original_teams=original_teams))
+    _outputs, capture_report, capture = emit(source, {"calibration": True})
+    _outputs, repeat_report, repeated = emit(source, {"calibration": True})
+    execution = capture_report["scopes"][0]["checked_execution_plan"]["execution_identity"]
+    assert repeat_report["scopes"][0]["checked_execution_plan"]["execution_identity"] == execution
+    assert repeated["contract"] == capture["contract"]
+    # Synthetic profitable rows test the contract handoff, never performance.
+    _outputs, production_report, production = emit(source, {"evidence": observations(capture["contract"])})
+    assert production_report["scopes"][0]["checked_execution_plan"]["execution_identity"] == execution
+    assert production["contract"]["checked_execution_identity"] == execution
+    assert production["selection"] == "resident"
+
+
 @pytest.mark.parametrize(
     "change",
     [
         "source",
+        "execution",
         "header",
         "rows",
         "order",
@@ -121,6 +139,8 @@ def test_invalid_or_stale_observations_cannot_enable_a_window(prepared, change):
     evidence = copy.deepcopy(observations(contract))
     if change == "source":
         evidence["contract"]["source_graph"] = "changed"
+    elif change == "execution":
+        evidence["contract"]["checked_execution_identity"] = "0" * 64
     elif change == "header":
         evidence["contract"]["common_functions_sha256"] = "changed"
     elif change == "rows":

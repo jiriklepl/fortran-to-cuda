@@ -128,7 +128,12 @@ def _configuration(options, config, environment_root, immutable_inputs, budget):
     # JSON fields are data, not additional executable statements. No profile
     # acceptance flag or retained hash can substitute for this fresh digest.
     profile = _profile_identity(config.profile, budget)
-    structural = _digest((options, replace(config, profile=None), environment_root, tuple(immutable)), budget)
+    # Complete-window observations choose between already admitted alternatives
+    # at the owning interval. They are not an input to numerical lowering or
+    # effects. Including them here would change every prepared proof when a
+    # calibration is later consumed for that exact same checked program.
+    structural = _digest((options, replace(config, profile=None, exact_window=None),
+                          environment_root, tuple(immutable)), budget)
     # Budget consumers may run compiler callbacks. Rehash after their final
     # invocation without external callbacks, including previously encoded rows.
     if _profile_identity(config.profile, _Budget()) != profile:
@@ -182,6 +187,11 @@ def _source_calls(node, budget):
 
 def _input_identity(analysis, budget):
     """Fingerprint line-map data without charging it as executable syntax."""
+    session = getattr(analysis, "_source_session", None)
+    if session is not None:
+        session.verify(analysis)
+        budget.tick()
+        return {"compilation_session_version": 1, "identity": session.identity}
     identity = analysis.inputs.identity()
     for entry in identity["entries"]:
         budget.tick()
@@ -308,7 +318,13 @@ def _source_authority(analysis, procedure, selection, helpers, budget):
                         raise CompilationError("original numerical preparation component type changed")
             for _visit in range(authority.visits):
                 budget.tick()
-        source.append((owner.qualified, analysis._routine_signature(owner), str(owner.scope.node)))
+        session = getattr(analysis, "_source_session", None)
+        if session is not None:
+            if not session.contains(owner):
+                raise CompilationError("original numerical preparation requires original source authority")
+            source.append((owner.qualified, session.identity))
+        else:
+            source.append((owner.qualified, analysis._routine_signature(owner), str(owner.scope.node)))
     return routine, graph, identities, _digest((_input_identity(analysis, budget), tuple(source)), budget)
 
 

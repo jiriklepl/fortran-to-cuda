@@ -117,8 +117,8 @@ class JoinedTeam(StructuredScope):
             after = next((value for value in mapping[last:] if value is not None), None)
             original_first = before + 1 if before is not None else None
             if before is not None:
-                original_lines = self.builder.entry.scope.path.read_text().splitlines()
-                prepared_lines = self.builder.analysis.inputs.path(self.builder.entry.scope.path).read_text().splitlines()
+                original_lines = self.builder.analysis.source_text(self.builder.entry.scope.path).splitlines()
+                prepared_lines = self.builder.analysis.source_text(self.builder.analysis.inputs.path(self.builder.entry.scope.path)).splitlines()
                 # Configured preprocessing can retain a mapped blank marker
                 # for INCLUDE followed by its unmapped expansion. Surround
                 # that original directive itself, never a prepared coordinate.

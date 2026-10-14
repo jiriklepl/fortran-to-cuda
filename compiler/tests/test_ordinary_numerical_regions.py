@@ -128,18 +128,26 @@ def test_ordinary_pair_rejects_stale_or_copied_authority_before_publication(tmp_
     region = builder.inline.prepare_numerical_region(selection)
     if mutation == "source":
         paths[1].write_text(paths[1].read_text() + "! source changed\n")
+        assert builder.resolved_numerical_region(builder.analysis, CHILD, selection) is region
+        with pytest.raises(CompilationError, match="source changed"):
+            builder.finish()
     elif mutation == "binding":
         scope = builder.entry.scope
-        scope.bindings["n"] = replace(scope.bindings["n"], attributes=scope.bindings["n"].attributes | {"volatile"})
-    elif mutation == "configuration":
-        builder.config = replace(builder.config, host_threads=2)
+        binding = copy(scope.bindings["n"])
+        binding.attributes |= {"volatile"}
+        with pytest.raises(CompilationError):
+            scope.bindings["n"] = binding
+        assert builder.resolved_numerical_region(builder.analysis, CHILD, selection) is region
     else:
-        builder.inline.original_numerical_regions[tuple(id(node) for node in selection)] = replace(
-            region, **{mutation: copy(getattr(region, mutation))})
-    with pytest.raises(CompilationError):
-        builder.resolved_numerical_region(builder.analysis, CHILD, selection)
-    with pytest.raises(CompilationError):
-        builder.finish()
+        if mutation == "configuration":
+            builder.config = replace(builder.config, host_threads=2)
+        else:
+            builder.inline.original_numerical_regions[tuple(id(node) for node in selection)] = replace(
+                region, **{mutation: copy(getattr(region, mutation))})
+        with pytest.raises(CompilationError):
+            builder.resolved_numerical_region(builder.analysis, CHILD, selection)
+        with pytest.raises(CompilationError):
+            builder.finish()
     assert not builder.outputs
     assert not builder.edits
 
@@ -160,23 +168,23 @@ def test_ordinary_pair_registry_rolls_back_with_candidate_scope_and_transaction(
     assert not builder.edits
 
 
-def test_transaction_revalidates_original_pair_before_adoption(tmp_path):
+def test_transaction_rejects_original_binding_mutation_and_rolls_back_prepared_pair(tmp_path):
     _paths, parent = ordinary_numerical_fixture(tmp_path)
     selection, _accumulation = numerical_groups(parent)
     binding = parent.entry.scope.bindings["n"]
+    replacement = copy(binding)
+    replacement.attributes |= {"volatile"}
 
     def attempt():
         with GenerationTransaction(parent) as transaction:
             candidate = transaction.builder
             candidate.inline.prepare_numerical_region(selection)
-            candidate.entry.scope.bindings["n"] = replace(binding, attributes=binding.attributes | {"volatile"})
+            candidate.entry.scope.bindings["n"] = replacement
             transaction.adopt(candidate)
 
-    try:
-        with pytest.raises(CompilationError):
-            attempt()
-    finally:
-        parent.entry.scope.bindings["n"] = binding
+    with pytest.raises(CompilationError):
+        attempt()
+    assert parent.entry.scope.bindings["n"] is binding
     assert not parent.inline.original_numerical_regions
     assert not parent.outputs
     assert not parent.edits

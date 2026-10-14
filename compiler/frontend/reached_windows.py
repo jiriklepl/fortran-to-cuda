@@ -83,7 +83,7 @@ def _single_if_action_source(analysis, routine, graph, identity, *, consume=None
         raise CompilationError("conditional prefix action lacks its exact original edit span")
     if str(routine.scope.path) not in analysis.sources:
         raise CompilationError("conditional prefix action lacks its original source file")
-    lines = routine.scope.path.read_text().splitlines(keepends=True)
+    lines = analysis.source_text(routine.scope.path).splitlines(keepends=True)
     if span[1] > len(lines):
         raise CompilationError("conditional prefix action exceeds its original source span")
     source = lines[span[0] - 1:span[1]]

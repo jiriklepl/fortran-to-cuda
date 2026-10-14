@@ -22,6 +22,8 @@ _ITEM_FIELDS = frozenset({"span", "fort_original_span", "label", "name", "line",
 class FrozenList(tuple):
     """A parser list whose order cannot change after source authentication."""
 
+    __slots__ = ()
+
     def _reject(self, *args, **kwargs):
         raise CompilationError("original compilation-session syntax is immutable")
 

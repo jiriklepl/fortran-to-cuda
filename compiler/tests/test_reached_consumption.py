@@ -2,7 +2,6 @@
 
 from contextlib import ExitStack
 from copy import copy, deepcopy
-from dataclasses import replace
 from hashlib import sha256
 
 import pytest
@@ -150,11 +149,13 @@ def test_adoption_cannot_publish_an_active_consumption(tmp_path):
     assert not parent.edits
 
 
-def test_mutation_before_owner_return_rejects_even_restored_candidate_adoption(tmp_path, monkeypatch):
+def test_rejected_mutation_before_owner_return_still_blocks_candidate_adoption(tmp_path, monkeypatch):
     _path, parent, proof, originals, _bound = bound_window(tmp_path)
     parent_state = dict(vars(parent))
     registry = parent.analysis._reached_window_proofs
     original_binding = parent.entry.scope.bindings["n"]
+    replacement = copy(original_binding)
+    replacement.attributes |= {"volatile"}
     emit = LexicalOwner.run
     staged = []
 
@@ -164,8 +165,7 @@ def test_mutation_before_owner_return_rejects_even_restored_candidate_adoption(t
             assert result
             assert self.builder.outputs
             staged.append(self)
-            parent.entry.scope.bindings["n"] = replace(
-                original_binding, attributes=original_binding.attributes | {"volatile"})
+            parent.entry.scope.bindings["n"] = replacement
         return result
 
     monkeypatch.setattr(LexicalOwner, "run", mutate_before_return)
@@ -175,9 +175,9 @@ def test_mutation_before_owner_return_rejects_even_restored_candidate_adoption(t
             with pytest.raises(CompilationError):
                 owner.run()
             assert staged == [owner]
-            # Restoring source metadata does not make a failed speculative pass
-            # publishable. A retry must start from a fresh candidate transaction.
-            parent.entry.scope.bindings["n"] = original_binding
+            # The rejected write left source metadata intact, but the failed
+            # speculative pass still requires a fresh candidate transaction.
+            assert parent.entry.scope.bindings["n"] is original_binding
             transaction.adopt(owner.builder)
 
     with pytest.raises(CompilationError, match="completed successful reached consumption"):
@@ -194,6 +194,8 @@ def test_failed_direct_owner_cannot_publish_through_its_original_parent(tmp_path
     path, parent, proof, originals, _bound = bound_window(tmp_path)
     sibling = parent.bind_reached_window(proof, originals)
     original_binding = parent.entry.scope.bindings["n"]
+    replacement = copy(original_binding)
+    replacement.attributes |= {"volatile"}
     emit = LexicalOwner.run
     staged = []
 
@@ -206,8 +208,7 @@ def test_failed_direct_owner_cannot_publish_through_its_original_parent(tmp_path
                 sibling.finish()
             with pytest.raises(CompilationError), GenerationTransaction(sibling):
                 pytest.fail("a sibling of an active pass was copied into speculative generation")
-            parent.entry.scope.bindings["n"] = replace(
-                original_binding, attributes=original_binding.attributes | {"volatile"})
+            parent.entry.scope.bindings["n"] = replacement
         return result
 
     monkeypatch.setattr(LexicalOwner, "run", mutate_before_return)
@@ -215,7 +216,7 @@ def test_failed_direct_owner_cannot_publish_through_its_original_parent(tmp_path
     with pytest.raises(CompilationError):
         owner.run()
     assert staged == [owner]
-    parent.entry.scope.bindings["n"] = original_binding
+    assert parent.entry.scope.bindings["n"] is original_binding
     with pytest.raises(CompilationError):
         parent.finish()
     with pytest.raises(CompilationError):
@@ -276,17 +277,18 @@ def test_public_and_pass_state_copies_cannot_mutate_registered_coverage(tmp_path
     assert proof.public() == original
 
 
-def test_standalone_proof_access_remains_fresh_after_private_pass(tmp_path):
+def test_session_proof_access_remains_immutable_after_private_pass(tmp_path):
     _path, builder, proof, _originals, bound = bound_window(tmp_path)
     with bound.consume_reached_plan():
         assert bound.capture(builder.entry.scope.bindings["a"])["initialized"] == "whole"
     state = proof.capture_state(RESOURCES[0])
     state["initialized"] = "none"
     assert proof.capture_state(RESOURCES[0])["initialized"] == "whole"
-    binding = builder.entry.scope.bindings["n"]
-    builder.entry.scope.bindings["n"] = replace(binding, attributes=binding.attributes | {"volatile"})
+    binding = copy(builder.entry.scope.bindings["n"])
+    binding.attributes |= {"volatile"}
     with pytest.raises(CompilationError):
-        proof.capture_state(RESOURCES[0])
+        builder.entry.scope.bindings["n"] = binding
+    assert proof.capture_state(RESOURCES[0])["initialized"] == "whole"
 
 
 @pytest.mark.parametrize("phase", ["entry", "final"])

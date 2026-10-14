@@ -324,8 +324,14 @@ def test_mapped_child_support_boundary_closes_one_whole_original_team(tmp_path):
     assert point["selected_node_ids"] == boundary["original_node_ids"]
     assert point["span"] == [boundary["first_line"], boundary["last_line"]]
     assert len(owner.owner.leaves) == 2
-    child.boundaries = [{**boundary, "original_node_ids": boundary["original_node_ids"][:1]},
-                        {**boundary, "original_node_ids": boundary["original_node_ids"][1:]}]
+    split = [{**boundary, "original_node_ids": boundary["original_node_ids"][:1]},
+             {**boundary, "original_node_ids": boundary["original_node_ids"][1:]}]
+    with pytest.raises(CompilationError, match="immutable"):
+        child.boundaries = split
+    # A private mutable projection still cannot manufacture a valid close plan.
+    from copy import copy
+    child = copy(child)
+    child.boundaries = split
     with pytest.raises(CompilationError, match="staged closes"):
         child.validate_mapped_plan()
 

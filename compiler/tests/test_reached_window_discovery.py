@@ -56,6 +56,8 @@ def test_public_reached_path_discovers_window_and_keeps_original_prefix_and_tail
     assert "move_alloc" in str(builder.analysis.structure(ENTRY).source_nodes(cut["node_id"])[0]).lower()
     assert discovery["attempts"][-1]["numerical_invocations"] == 2
     scope, = report["scopes"]
+    assert discovery["attempts"][-1]["execution_plan_identity"] == scope["checked_execution_plan"]["identity"]
+    assert scope["checked_execution_plan"]["numerical_invocations"] == 2
     assert scope["reached_window"]["automatic_discovery"]
     assert scope["reached_window"]["proof_identity"] == discovery["proof_identity"]
     text = outputs[report["sources"][str(path)]["replacement"]]

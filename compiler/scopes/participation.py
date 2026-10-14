@@ -28,8 +28,8 @@ def _span(node):
     return tuple(span)
 
 
-def _digest_span(path, first, last):
-    lines = path.read_text().splitlines(keepends=True)
+def _digest_span(path, first, last, *, analysis=None):
+    lines = (analysis.source_text(path) if analysis is not None else path.read_text()).splitlines(keepends=True)
     if not 1 <= first <= last <= len(lines):
         raise CompilationError("collective participation span is outside its original source")
     return sha256("".join(lines[first - 1:last]).encode()).hexdigest()
@@ -234,10 +234,10 @@ def _site(analysis, entry, record, captures, host_threads, threadprivate):
     if not team_first < first <= last < team_last:
         raise CompilationError("collective call must lie inside its lexical team")
     path = Path(source)
-    digest = _digest_span(path, first, last)
+    digest = _digest_span(path, first, last, analysis=analysis)
     if record.get("span_sha256") != digest:
         raise CompilationError("collective call-site span hash differs")
-    team_digest = _digest_span(path, team_first, team_last)
+    team_digest = _digest_span(path, team_first, team_last, analysis=analysis)
     if "team_span_sha256" in record and record["team_span_sha256"] != team_digest:
         raise CompilationError("collective team span hash differs")
     candidates = []
@@ -390,5 +390,5 @@ def verify_collective_participation(analysis: SourceEffects, entry, facts, *, ho
     ordered = sorted(keys)
     if any(a[0] == b[0] and a[2] >= b[1] for a, b in zip(ordered, ordered[1:], strict=False)):
         raise CompilationError("collective call-site edit spans overlap")
-    analysis.inputs.verify()
+    analysis.verify_source()
     return CollectiveParticipation(routine.qualified, host_threads, sites)

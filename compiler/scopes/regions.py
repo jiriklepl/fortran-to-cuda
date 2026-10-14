@@ -701,7 +701,7 @@ def allocation_guard(analysis, routine, binding, preceding):
 def extract_region(analysis, routine, node, *, preceding=(), following=(), cyclic_following=(),
                    worksharing=None, immutable_inputs=None):
     """Construct a bounded loop candidate with its original participation proof."""
-    analysis.inputs.verify()
+    analysis.verify_source()
     role = analysis._source_roles.get(routine.qualified)
     if (analysis.routines.get(routine.qualified) is not routine or role is None
             or routine.execution is not role[0] or analysis._routine_signature(routine) != role[1]
@@ -919,7 +919,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     # Following native statements need a read/liveness proof, not numerical
     # eligibility. Original fixed metadata fields can carry index reads here
     # without becoming captures or authorizing their own GPU computation.
-    following_analysis = copy.copy(analysis)
+    following_analysis = analysis.private_projection()
     following_analysis._native_metadata = True
     live_scalars = (_upward_reads(following_analysis, routine, following)
                     | _upward_reads(following_analysis, routine, cyclic_following))
@@ -1272,7 +1272,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                                    *declarations, *"\n".join(body).splitlines(),
                                    *(["contains", *"\n".join(helper_sources).splitlines()] if helper_sources else []),
                                    "end subroutine", "end module"])) + "\n"
-    analysis.inputs.verify()
+    analysis.verify_source()
     return RegionExtraction(source_nodes, span, source, module + "::" + procedure, tuple(parameters),
                             tuple(sorted(captures.values(), key=lambda item: item.root)), frozenset(writes),
                             tuple(binding.name for binding in private.values() if not binding.rank), tuple(guards), identity, completion,

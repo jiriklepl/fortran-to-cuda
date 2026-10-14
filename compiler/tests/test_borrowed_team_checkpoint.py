@@ -205,14 +205,16 @@ end subroutine
     current.worker()
 
 
-def test_new_demand_after_restore_still_rejects_changed_original_file(tmp_path):
+def test_new_demand_after_restore_uses_snapshot_but_rejects_changed_file_at_publication(tmp_path):
     paths, builder = borrowed_team_fixture(tmp_path)
     checkpoint = builder.scope_checkpoint()
     assert builder.coordinator(INITIALIZER) is not None
     builder.restore_scope_checkpoint(checkpoint)
     paths[0].write_text(paths[0].read_text().replace("values(:,:,plane)=seed", "values(:,:,plane)=seed+1"))
-    with pytest.raises(CompilationError, match="source changed"):
-        builder.coordinator(INITIALIZER)
+    with GenerationTransaction(builder) as transaction:
+        assert transaction.builder.coordinator(INITIALIZER) is not None
+        with pytest.raises(CompilationError, match="source changed"):
+            transaction.builder.finish()
     assert INITIALIZER not in builder.coordinators
     assert not builder.outputs
     assert not builder.edits

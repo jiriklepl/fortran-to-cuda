@@ -171,7 +171,7 @@ def prove_existing_team_worksharing(analysis: SourceEffects, qualified_procedure
             assertion.get(field) != proof[field] for field in ("source", "source_sha256", "kind", "completion"))):
         return boundary("supplied native participation assertion disagrees with original source role")
     try:
-        analysis.inputs.verify()
+        analysis.verify_source()
     except CompilationError as error:
         return boundary(str(error))
     proof["available"] = True

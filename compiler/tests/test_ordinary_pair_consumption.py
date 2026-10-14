@@ -110,10 +110,11 @@ def test_private_lookups_reuse_pair_but_public_lookup_remains_fresh(tmp_path, mo
     assert calls == [pair.effects.identity] * 3
     assert builder.resolved_numerical_region(builder.analysis, ENTRY, selections[0]) is pair
     assert calls == [pair.effects.identity] * 4
-    binding = builder.entry.scope.bindings["n"]
-    builder.entry.scope.bindings["n"] = replace(binding, attributes=binding.attributes | {"volatile"})
+    binding = copy(builder.entry.scope.bindings["n"])
+    binding.attributes |= {"volatile"}
     with pytest.raises(CompilationError):
-        builder.resolved_numerical_region(builder.analysis, ENTRY, selections[0])
+        builder.entry.scope.bindings["n"] = binding
+    assert builder.resolved_numerical_region(builder.analysis, ENTRY, selections[0]) is pair
 
 
 def test_copied_foreign_and_expired_consumers_cannot_reuse_pair(tmp_path):
@@ -209,11 +210,13 @@ def test_explicit_scope_rollback_discards_only_speculative_pair_enrollment(tmp_p
 
 
 @pytest.mark.parametrize("mutation", ["syntax", "file", "binding", "configuration", "facts", "exception"])
-def test_mid_emission_failure_rolls_back_and_cannot_adopt_after_restore(tmp_path, monkeypatch, mutation):
+def test_mid_emission_mutations_cannot_publish_and_preserve_transaction_rollback(tmp_path, monkeypatch, mutation):
     path, parent, _selections = subject(tmp_path)
     assignment = walk(parent.entry.execution, F.Assignment_Stmt)[0]
     items = assignment.items
     binding = parent.entry.scope.bindings["n"]
+    replacement = copy(binding)
+    replacement.attributes |= {"volatile"}
     original_emit = LexicalOwner.emit_unit
     triggered = False
 
@@ -227,8 +230,7 @@ def test_mid_emission_failure_rolls_back_and_cannot_adopt_after_restore(tmp_path
             elif mutation == "file":
                 path.write_text(SOURCE + "! changed during original emission\n")
             elif mutation == "binding":
-                owner.builder.entry.scope.bindings["n"] = replace(
-                    binding, attributes=binding.attributes | {"volatile"})
+                owner.builder.entry.scope.bindings["n"] = replacement
             elif mutation == "configuration":
                 owner.builder.config = replace(owner.builder.config, host_threads=2)
             elif mutation == "facts":
@@ -243,26 +245,31 @@ def test_mid_emission_failure_rolls_back_and_cannot_adopt_after_restore(tmp_path
             candidate = transaction.builder
             facts = {root: dict(value) for root, value in candidate.facts["captures"].items()}
             configuration = candidate.config
-            with pytest.raises(CompilationError):
-                LexicalOwner(candidate).run(tuple(candidate.entry.execution.content))
-            assert triggered
-            assignment.items = items
-            path.write_text(SOURCE)
-            candidate.entry.scope.bindings["n"] = binding
-            candidate.config = configuration
-            candidate.facts["captures"] = facts
-            assert not candidate.outputs
-            assert not candidate.edits
-            assert not candidate.scopes
-            assert not candidate.inline.original_numerical_regions
-            with pytest.raises(CompilationError):
-                candidate.finish()
-            with pytest.raises(CompilationError):
-                transaction.adopt(candidate)
+            if mutation == "file":
+                assert LexicalOwner(candidate).run(tuple(candidate.entry.execution.content))
+                assert triggered
+                with pytest.raises(CompilationError, match="source changed"):
+                    candidate.finish()
+            else:
+                with pytest.raises(CompilationError):
+                    LexicalOwner(candidate).run(tuple(candidate.entry.execution.content))
+                assert triggered
+                assert assignment.items is items
+                assert candidate.entry.scope.bindings["n"] is binding
+                candidate.config = configuration
+                candidate.facts["captures"] = facts
+                assert not candidate.outputs
+                assert not candidate.edits
+                assert not candidate.scopes
+                assert not candidate.inline.original_numerical_regions
+                with pytest.raises(CompilationError):
+                    candidate.finish()
+                with pytest.raises(CompilationError):
+                    transaction.adopt(candidate)
     finally:
-        assignment.items = items
+        assert assignment.items is items
         path.write_text(SOURCE)
-        parent.entry.scope.bindings["n"] = binding
+        assert parent.entry.scope.bindings["n"] is binding
     assert not parent.outputs
     assert not parent.edits
     assert not parent.scopes

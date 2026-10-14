@@ -65,6 +65,9 @@ def _source_state(analysis, procedure):
     authority = analysis._summary_authority()
     if authority["role"] != "source":
         raise CompilationError("native prefix requires unchanged original source authority")
+    if getattr(analysis, "_source_session", None) is not None:
+        analysis._source_session.verify(analysis)
+        return authority
     scopes = analysis._source_function_scopes
     if len(scopes) > _SCAN_LIMIT:
         raise CompilationError("native prefix original scope budget exhausted")
@@ -82,7 +85,7 @@ def _source_state(analysis, procedure):
 
 
 def _fork(analysis, roots):
-    result = copy.copy(analysis)
+    result = analysis.private_projection()
     # Detach every top-level mutable container, including source-only caches.
     # Original parser nodes remain shared, read-only and source-authenticated.
     for name, value in vars(analysis).items():

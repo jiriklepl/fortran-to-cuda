@@ -30,7 +30,7 @@ class _Selector:
 
 def extract_array_operation(analysis, routine, node, *, preceding=(), following=()):
     """Normalize one original assignment; runtime checks run at its source point."""
-    analysis.inputs.verify()
+    analysis.verify_source()
     role = analysis._source_roles.get(routine.qualified)
     if (role is None or analysis.routines.get(routine.qualified) is not routine
             or routine.execution is not role[0] or analysis._routine_signature(routine) != role[1]
@@ -268,7 +268,7 @@ def extract_array_operation(analysis, routine, node, *, preceding=(), following=
     source = "\n".join(fortran_lines([f"module {module}", "implicit none", "contains", "subroutine region(" +
         ",".join(parameter.name for parameter in parameters) + ")", *declarations,
         "integer :: " + ",".join(iterators), *body, "end subroutine", "end module"])) + "\n"
-    analysis.inputs.verify()
+    analysis.verify_source()
     return RegionExtraction((node,), statement_span(node), source, module + "::region", tuple(parameters),
                             tuple(bindings.values()), frozenset((output.binding.root,)), (),
                             tuple(allocation_guards), identity,
