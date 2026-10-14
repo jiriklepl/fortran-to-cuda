@@ -175,6 +175,18 @@ class LexicalOwner:
         if self.parent is not None:
             self.builder.inline.refresh(self.owner.builder)
 
+    @property
+    def price_units(self):
+        """Placement belongs to the invocation, including its original children.
+
+        A checked complete-window decision prices the retained interval once.
+        Its units still validate geometry, definitions, and original-team
+        participation, but must not independently reselect placement from leaf
+        estimates that omit the surrounding ownership. This property does not
+        admit any additional complete-window source shapes.
+        """
+        return self.builder.config.policy == "auto" and self.owner.exact_window is None
+
     def canonical(self, binding):
         return self.canonical_bindings.get(binding.root, binding)
 
@@ -615,7 +627,7 @@ class LexicalOwner:
                 "type(c_ptr) :: fort_pointer", "type(fort_scope_layout) :: fort_layout",
                 "type(fort_scope_access) :: fort_access", "type(fort_scope_plan_decision) :: fort_decision",
                 f"type(fort_scope_plan_binding), target :: fort_bindings({max(1,len(arrays))})",
-                f"integer(c_int), parameter :: fort_mode = {1 if builder.config.policy == 'sections' or self.exact_window is not None else 2}"]
+                f"integer(c_int), parameter :: fort_mode = {1 if builder.config.policy == 'sections' or self.owner.exact_window is not None else 2}"]
         prepare = ["fort_status = FORT_SCOPE_OK", "fort_can = .true."]
         failure = [*close(), "exit " + block]
         capture_facts = {root: builder.capture(binding) for root, binding in arrays.items()}
@@ -650,7 +662,7 @@ class LexicalOwner:
             prepare += [f"if (.not. {element_active}) exit {block}"]
         metadata_native = None
         preflight = None
-        if builder.config.policy == "auto" and self.exact_window is None:
+        if self.price_units:
             from compiler.scopes.compute_identity import compute_identity_guard
             # An earlier rejected candidate can roll back artifact maps while
             # retaining reusable child proofs. Restore only this admitted
@@ -704,10 +716,10 @@ class LexicalOwner:
                         *close(reason="original numerical preparation guard failed"),
                         "exit " + block, "endif"]
         from compiler.scopes.segments import Segment
-        if builder.config.policy == "auto" and self.exact_window is None and unit.definition_summary.changes:
+        if self.price_units and unit.definition_summary.changes:
             unit.native_preflight = {"abi_version": 1, "available": False,
                 "reason": "ordered definition changes require reached registration and validation"}
-        if (builder.config.policy == "auto" and self.exact_window is None and not combined_team and not unit.definition_summary.changes
+        if (self.price_units and not combined_team and not unit.definition_summary.changes
                 and not unit.scope.native and len(unit.scope.tree) == 1
                 and isinstance(unit.scope.tree[0], Segment)
                 and unit.scope.tree[0].query and unit.scope.tree[0].query[0]):
@@ -815,7 +827,7 @@ class LexicalOwner:
             return [renamed(builder, value, values) if value is not None else "None" for value in call.actuals]
 
         selector = None
-        if builder.config.policy == "auto" and self.exact_window is None:
+        if self.price_units:
             selector, _ = builder.entry_artifacts(sorted(self.owner.leaves)[0])
             imports += [f"use {selector['fortran_module']}, only: fort_choose => {selector['planning']['fortran_selector']}"]
         from compiler.scopes.joined_team import JoinedTeam
@@ -826,12 +838,13 @@ class LexicalOwner:
         joined_copyback = []
         if combined_team:
             extra, joined_patches, joined_prepare, joined_copyback = unit.scope.emit_original(
-                self, unit, handles, values, imports, spec, preparation=prepare, block=block)
+                self, unit, handles, values, imports, spec, preparation=prepare, block=block,
+                price_units=self.price_units)
             spec += extra
             execution = (joined_prepare, [])
         elif joined_team:
             extra, joined_patches, joined_prepare, joined_copyback = unit.scope.emit_original(
-                self, unit, handles, values, imports, spec)
+                self, unit, handles, values, imports, spec, price_units=self.price_units)
             spec += extra
             execution = (joined_prepare, ["fort_status = fort_scope_wait(fort_context)",
                               "if (fort_status /= FORT_SCOPE_OK) error stop 'original team completion failed'"])
