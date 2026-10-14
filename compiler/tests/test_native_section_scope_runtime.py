@@ -62,7 +62,9 @@ end subroutine
 subroutine native_unknown(b,last)
 real(8),contiguous,intent(inout)::b(-2:)
 integer,intent(in)::last
-b(0:last)=9.d0+real(lbound(b,1),8)
+! Non-affine bound remains outside exact native-section refinement.
+! With the caller's last=3 this still writes the same four elements.
+b(0:last*last/3)=9.d0+real(lbound(b,1),8)
 end subroutine
 subroutine native_out(b)
 real(8),contiguous,intent(out)::b(-2:)
