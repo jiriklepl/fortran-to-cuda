@@ -57,7 +57,7 @@ def test_explicit_version_runs_only_its_own_producer(tmp_path, monkeypatch, vers
 
 @pytest.mark.parametrize("gpu_observations", [False, True])
 def test_new_unavailable_protocol_cannot_borrow_accepted_v2_costs(monkeypatch, gpu_observations):
-    from compiler.offload import numerical_execution, source_compute
+    from compiler.offload import dependency_source, numerical_execution, source_compute
 
     original = profile_v2()
     evidence = deepcopy(original)
@@ -68,10 +68,15 @@ def test_new_unavailable_protocol_cannot_borrow_accepted_v2_costs(monkeypatch, g
     seen = []
 
     def incomplete(profile, counts, **kwargs):
-        seen.append((profile, counts, kwargs))
+        seen.append(("execution", profile, counts, kwargs))
         raise NumericalCalibrationError("numerical execution GPU evidence unavailable")
 
+    def incomplete_current(unit, profile, participation, **kwargs):
+        seen.append(("dependency_source", profile, unit, participation, kwargs))
+        raise NumericalCalibrationError("dependency source GPU evidence unavailable")
+
     monkeypatch.setattr(numerical_execution, "execution_compute_model", incomplete)
+    monkeypatch.setattr(dependency_source, "dependency_source_model", incomplete_current)
     monkeypatch.setattr(source_compute, "numerical_compute_model",
                         lambda *args, **kwargs: pytest.fail("new protocol borrowed older coefficients"))
     _, _, analysis = source_analysis()
@@ -79,10 +84,13 @@ def test_new_unavailable_protocol_cannot_borrow_accepted_v2_costs(monkeypatch, g
     unit, = result.units
     assert unit.compute_model is None
     assert unit.work_per_iteration is None
-    assert unit.work_estimate_reason == "numerical execution GPU evidence unavailable"
+    assert unit.work_estimate_reason == ("dependency source GPU evidence unavailable" if gpu_observations
+                                         else "numerical execution GPU evidence unavailable")
     assert unit.region is analysis.units[0].region
     assert unit.footprints == analysis.units[0].footprints
     assert len(seen) == 1
+    assert seen[0][0] == ("dependency_source" if gpu_observations else "execution")
+    assert seen[0][1] is evidence
     assert original == {key: value for key, value in evidence.items()
                         if key not in {"numerical_execution", "numerical_execution_gpu"}}
 

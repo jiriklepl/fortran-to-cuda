@@ -150,7 +150,10 @@ def generate(case, checkout, transfers, policy):
     if policy == "auto":
         assert json.loads(profile.read_text())["scoped"]["runtime_id"] == manifest["runtime"]["runtime_id"]
         assert not scope["estimate_available"]
-        assert scope["transfer_configuration"]["placement_estimate_reason"] == "transfer_estimates_unavailable"
+        # This legacy fixture lacks source-compute evidence, so that earlier
+        # prerequisite is reported before optional pinned transfer calibration.
+        assert scope["transfer_configuration"]["placement_estimate_reason"] == (
+            "native Fortran compute requires numerical calibration v2")
     return original, output, manifest
 
 

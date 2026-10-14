@@ -72,8 +72,8 @@ def test_final_schedule_evidence_explains_mirrors_faces_and_exports(planning, mo
     assert requirements[0]["preservation_reads"] == [{"lower": [2], "upper": [30]}]
     assert requirements[1]["writes"] == [{"lower": [0], "upper": [2]}, {"lower": [30], "upper": [32]}]
     assert requirements[1]["preservation_reads"] == []
-    assert requirements[-1]["host_current"] == [
-        {"lower": [0], "upper": [2]}, {"lower": [30], "upper": [32]}, {"lower": [2], "upper": [30]}]
+    # Adjacent current sections now retain the same exact coverage as one box.
+    assert requirements[-1]["host_current"] == [{"lower": [0], "upper": [32]}]
     assert requirements[-1]["device_current"] == [{"lower": [2], "upper": [30]}]
     copies = [row for row in rows if row["event"] == "copy"]
     assert [(row["direction"], row["phase"], row["unit"]) for row in copies] == [
