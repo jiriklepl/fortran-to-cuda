@@ -361,7 +361,7 @@ class CombinedNumericalTeam(StructuredScope):
             })
         return result
 
-    def emit_original(self, owner, unit, handles, values, imports, specification, *, preparation, block):
+    def emit_original(self, owner, unit, handles, values, imports, specification, *, preparation, block, price_units):
         """Prepare inside the actual team; never exit an enclosing OpenMP block."""
         self._validate()
         close_owner = copy(owner)
@@ -378,7 +378,7 @@ class CombinedNumericalTeam(StructuredScope):
                  f"{owner.enabled} = fort_team_enabled",
                  *[f"fort_buffer_{owner.resources[root][1]} = {handle}" for root, handle in handles.items()], "endif"]
         lines, generated = self._emit_team(handles, values, imports, [*specification, *extra],
-            preparation=preparation, block=block, failure=failure)
+            preparation=preparation, block=block, failure=failure, price_units=price_units)
         _narrow_runtime_imports(imports, [*specification, *extra], [*before, *generated, *after])
         _check_generated_names(self.original_nodes, [*specification, *extra], imports, generated, block)
         replacement = "\n".join(fortran_lines(lines)) + "\n"
@@ -430,12 +430,12 @@ class CombinedNumericalTeam(StructuredScope):
                   "fort_native_ready = fort_mode /= 0_c_int"]
         lines, generated = self._emit_team(handles, values, imports, [*specification, *extra], preparation=preparation,
             block=block, failure=["fort_native_ready = .false."], native_begin=native_begin,
-            native_end=native_end)
+            native_end=native_end, price_units=self.builder.config.policy == "auto")
         # The caller adds entry definition events before this team. Finalize
         # imports and names only after that complete worker has been assembled.
         return extra, [*before, *lines], [*before, *generated]
 
-    def _emit_team(self, handles, values, imports, specification, *, preparation, block, failure,
+    def _emit_team(self, handles, values, imports, specification, *, preparation, block, failure, price_units,
                    native_begin=(), native_end=()):
         """One original participant protocol for owning and borrowed workers."""
         builder = self.builder
@@ -460,7 +460,7 @@ class CombinedNumericalTeam(StructuredScope):
                  *builder.inline.emit_call(call, handles, values, imports, query=True),
                  "endif",
                  "if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_plan_validate(fort_context)"]
-        if builder.config.policy == "auto":
+        if price_units:
             public, _ = builder.entry_artifacts(call.procedure)
             imports.append(f"use {public['fortran_module']}, only: fort_team_choose => {public['planning']['fortran_selector']}")
             lines += ["if (fort_status == FORT_SCOPE_OK) fort_status = fort_team_choose(fort_context, fort_decision)",

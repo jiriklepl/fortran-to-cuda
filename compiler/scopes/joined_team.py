@@ -264,7 +264,7 @@ class JoinedTeam(StructuredScope):
         return (*declared_names(specification),
                 'fort_native_ready', 'fort_team_run', 'fort_team_native')
 
-    def emit_original(self, owner, unit, handles, values, imports, specification):
+    def emit_original(self, owner, unit, handles, values, imports, specification, *, price_units):
         """Return additional specifications and exact original-source patches."""
         from compiler.scopes.access import build_native_accesses
         from compiler.scopes.source import _checked
@@ -385,11 +385,11 @@ class JoinedTeam(StructuredScope):
                           'fort_status = fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)',
                           *builder.inline.emit_call(call, handles, values, imports, query=True),
                           'if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_plan_validate(fort_context)']
-                if builder.config.policy == 'auto':
+                if price_units:
                     public, _ = builder.entry_artifacts(call.procedure)
                     imports.append(f"use {public['fortran_module']}, only: fort_team_choose_{number} => {public['planning']['fortran_selector']}")
                     lines += [f'if (fort_status == FORT_SCOPE_OK) fort_status = fort_team_choose_{number}(fort_context, fort_decision)']
-                selected = 'fort_decision%gpu_units > 0' if builder.config.policy == 'auto' else '.true.'
+                selected = 'fort_decision%gpu_units > 0' if price_units else '.true.'
                 lines += ['if (fort_status /= FORT_SCOPE_OK) then', *fail(),
                           'else', 'fort_team_run = ' + selected, 'endif', 'endif',
                           'if (fort_native_ready .and. .not. fort_team_run) then', *prepare, 'endif']
