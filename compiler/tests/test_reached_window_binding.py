@@ -96,9 +96,13 @@ def test_excluded_prefix_or_tail_cannot_borrow_selected_descriptor_authority(tmp
 
 def test_changed_original_source_invalidates_source_position_capture(tmp_path):
     builder, _selected, _proof, proxy = bound(tmp_path)
+    captured = proxy.capture(builder.entry.scope.bindings["a"])
     builder.entry.scope.path.write_text(builder.entry.scope.path.read_text().replace("counter=2", "counter=3"))
-    with pytest.raises(CompilationError):
-        proxy.capture(builder.entry.scope.bindings["a"])
+    assert proxy.capture(builder.entry.scope.bindings["a"]) == captured
+    with pytest.raises(CompilationError, match="source changed"):
+        proxy.finish()
+    assert not builder.outputs
+    assert not builder.edits
 
 
 def test_child_builder_cannot_reuse_parent_window_authority(tmp_path):

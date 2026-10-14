@@ -11,7 +11,7 @@ from types import MappingProxyType
 from fparser.common.readfortran import FortranReaderBase
 from fparser.two.utils import Base
 
-from compiler.ir import CompilationError
+from compiler.frontend.immutable_graph import ImmutableGraphMutation
 
 _TYPES = {}
 _ORIGINAL_TYPES = {}
@@ -25,7 +25,7 @@ class FrozenList(tuple):
     __slots__ = ()
 
     def _reject(self, *args, **kwargs):
-        raise CompilationError("original compilation-session syntax is immutable")
+        raise ImmutableGraphMutation("original compilation-session syntax is immutable")
 
     __setitem__ = __delitem__ = append = extend = insert = pop = remove = clear = sort = reverse = _reject
     __iadd__ = __imul__ = _reject
@@ -85,18 +85,18 @@ def _node_setattr(self, name, value):
     if name == "parent":
         object.__setattr__(self, name, value)
         return
-    raise CompilationError("original compilation-session syntax is immutable: " + name)
+    raise ImmutableGraphMutation("original compilation-session syntax is immutable: " + name)
 
 
 def _item_setattr(self, name, value):
     if name not in _ITEM_FIELDS and name not in {"__dict__", "__class__"}:
         object.__setattr__(self, name, value)
         return
-    raise CompilationError("original compilation-session provenance is immutable: " + name)
+    raise ImmutableGraphMutation("original compilation-session provenance is immutable: " + name)
 
 
 def _delattr(self, name):
-    raise CompilationError("original compilation-session syntax is immutable: " + name)
+    raise ImmutableGraphMutation("original compilation-session syntax is immutable: " + name)
 
 
 def _sealed_type(original, *, item=False):

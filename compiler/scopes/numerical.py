@@ -34,6 +34,7 @@ class NumericalSource:
     entry: str
     parameters: tuple[Parameter, ...]
     digest: str
+    text: str
 
     @property
     def arrays(self):
@@ -118,6 +119,10 @@ def load_numerical_sources(document, analysis):
         if digest != item.get("sha256"):
             raise CompilationError("normalized numerical source hash differs from its package")
         normalized = SourceEffects([path])
+        if normalized.sources[str(path)] != digest:
+            raise CompilationError("normalized numerical source changed during capture")
+        normalized.inputs.require_captured_parsing()
+        text = normalized.inputs.source_text(path, captured=True)
         entry = item.get("entry")
         target = normalized.routines.get(entry)
         if target is None or not isinstance(item.get("parameters"), list):
@@ -183,5 +188,5 @@ def load_numerical_sources(document, analysis):
                     raise CompilationError("numerical source packages require read-only external scalars")
                 if access_intents.get(operation["resource"]) != "inout":
                     raise CompilationError("numerical source mapping omits an original written resource")
-        result[procedure] = NumericalSource(procedure, path, entry, tuple(parameters), digest)
+        result[procedure] = NumericalSource(procedure, path, entry, tuple(parameters), digest, text)
     return result

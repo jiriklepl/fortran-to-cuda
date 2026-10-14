@@ -217,8 +217,6 @@ def test_mapped_original_joined_group_retains_whole_completion(tmp_path):
 
 
 def test_repeated_identical_child_reuses_original_body_variant(tmp_path):
-    from compiler.scopes.window_discovery import _numerical_calls
-
     source = PARENT_SOURCE.replace("call renamed_bridge(b,a,n,bad)",
                                   "call renamed_bridge(b,a,n,bad)\ncall renamed_bridge(b,a,n,bad)")
     paths, outputs, _report, owner = emit_mapped_child_window(tmp_path, parent_source=source)
@@ -226,7 +224,7 @@ def test_repeated_identical_child_reuses_original_body_variant(tmp_path):
     assert len(child.call_sites) == 2
     assert len(owner.members) == 2
     assert len(owner.window_proof.public()["planned_closures"]["mapped_child_plans"]) == 2
-    assert _numerical_calls(owner) == 5  # one parent kernel and two calls to the two-kernel child
+    assert owner.execution_plan.numerical_invocations == 5  # one parent kernel and two two-kernel child calls
     assert sum(text.count("entry " + child.entry) for name, text in outputs.items()
                if name.endswith(".f90")) == 1
     assert paths[0].read_text() == CHILD_SOURCE
@@ -235,8 +233,11 @@ def test_repeated_identical_child_reuses_original_body_variant(tmp_path):
 def test_original_child_source_mutation_invalidates_root_plan(tmp_path):
     paths, builder, proof, originals = mapped_child_fixture(tmp_path)
     paths[0].write_text(CHILD_SOURCE.replace("2.0_8*x(i)", "3.0_8*x(i)"))
+    assert proof.validate(builder.analysis, ENTRY, originals) is proof
     with pytest.raises(CompilationError, match="source|original|changed"):
-        proof.validate(builder.analysis, ENTRY, originals)
+        builder.finish()
+    assert not builder.outputs
+    assert not builder.edits
 
 
 def test_nested_unused_out_kills_caller_definition_before_read(tmp_path):

@@ -120,17 +120,22 @@ def test_original_source_binding_and_emission_configuration_cannot_go_stale(tmp_
     prepared = provider.prepare(builder.analysis, CHILD, selection)
     if mutation == "source":
         paths[0].write_text(paths[0].read_text().replace("g(1)=value", "g(1)=2.0_8*value"))
+        assert prepared.validate(builder.analysis, CHILD, selection) is prepared
+        with pytest.raises(CompilationError, match="source changed"):
+            builder.finish()
     elif mutation == "binding":
         helper = builder.analysis.numerical_helpers["quartz_math::profile_cell"]
-        binding = helper.scope.bindings["value"]
-        helper.scope.bindings["value"] = replace(binding, attributes=binding.attributes | {"volatile"})
+        binding = copy(helper.scope.bindings["value"])
+        binding.attributes |= {"volatile"}
+        with pytest.raises(CompilationError, match="immutable"):
+            helper.scope.bindings["value"] = binding
+        assert prepared.validate(builder.analysis, CHILD, selection) is prepared
     else:
         builder.config = replace(builder.config, host_threads=2)
         with pytest.raises(CompilationError):
             ReachedWindowOwner(builder, proof, originals).run()
-        return
-    with pytest.raises(CompilationError):
-        prepared.validate(builder.analysis, CHILD, selection)
+    assert not builder.outputs
+    assert not builder.edits
 
 
 def test_nested_out_event_does_not_resurrect_the_producers_old_interior(tmp_path):

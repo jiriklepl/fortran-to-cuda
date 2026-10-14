@@ -242,16 +242,24 @@ def test_prefix_authority_and_budget_failures_remain_hard(tmp_path, mutation):
     path, builder, proof, originals = preowner_window_fixture(tmp_path)
     if mutation == "source":
         path.write_text(PREOWNER_SOURCE + "\n! changed original\n")
+        assert proof.validate(builder.analysis, ENTRY, originals) is proof
+        with pytest.raises(CompilationError, match="changed"):
+            builder.finish()
     elif mutation == "binding":
-        builder.entry.scope.bindings["a"] = copy(builder.entry.scope.bindings["a"])
+        with pytest.raises(CompilationError, match="immutable"):
+            builder.entry.scope.bindings["a"] = copy(builder.entry.scope.bindings["a"])
     elif mutation == "declaring_scope":
-        builder.entry.scope.bindings["a"].declaring_scope = builder.analysis.modules["renamed_prefix"]
+        with pytest.raises(CompilationError, match="immutable"):
+            builder.entry.scope.bindings["a"].declaring_scope = builder.analysis.modules["renamed_prefix"]
     elif mutation == "imports":
-        builder.entry.scope.imports["alias"] = ("other", "field")
+        with pytest.raises(CompilationError, match="immutable"):
+            builder.entry.scope.imports["alias"] = ("other", "field")
     else:
         builder.analysis.operation_limit = 1
-    with pytest.raises(CompilationError, match="changed|authority|budget|complete bounded original structure"):
-        proof.validate(builder.analysis, ENTRY, originals)
+        with pytest.raises(CompilationError, match="budget|complete bounded original structure"):
+            proof.validate(builder.analysis, ENTRY, originals)
+    assert not builder.outputs
+    assert not builder.edits
 
 
 def test_foreign_prefix_proof_has_no_emission_authority(tmp_path):
@@ -269,7 +277,12 @@ def test_native_only_fast_result_revalidates_source_and_facts(tmp_path, mutation
     owner = ReachedWindowOwner(builder, proof, originals)
     if mutation == "source":
         path.write_text(PREOWNER_SOURCE + "\n! changed after owner construction\n")
+        assert not owner.run()
+        with pytest.raises(CompilationError, match="changed"):
+            owner.builder.finish()
     else:
         owner.builder.facts["captures"][ROOTS[0]]["initialized"] = "none"
-    with pytest.raises(CompilationError, match="changed|facts|authority"):
-        owner.run()
+        with pytest.raises(CompilationError, match="facts|authority"):
+            owner.run()
+    assert not owner.builder.outputs
+    assert not owner.builder.edits

@@ -1,7 +1,6 @@
 """Mapped serial pointwise loops retain conditional numerical effects."""
 
 from copy import copy
-from dataclasses import replace
 
 import pytest
 
@@ -41,13 +40,12 @@ def test_plain_consumer_has_exact_registered_effects_without_output_entry_defini
     assert proof.validate(builder.analysis, ENTRY, originals) is proof
     with pytest.raises(CompilationError):
         copy(prepared).validate(builder.analysis, CHILD, selection)
-    binding = builder.analysis.routines[CHILD].scope.bindings["b"]
-    builder.analysis.routines[CHILD].scope.bindings["b"] = replace(
-        binding, attributes=binding.attributes | {"volatile"})
-    with pytest.raises(CompilationError):
-        prepared.validate(builder.analysis, CHILD, selection)
-    with pytest.raises(CompilationError):
-        proof.validate(builder.analysis, ENTRY, originals)
+    binding = copy(builder.analysis.routines[CHILD].scope.bindings["b"])
+    binding.attributes |= {"volatile"}
+    with pytest.raises(CompilationError, match="immutable"):
+        builder.analysis.routines[CHILD].scope.bindings["b"] = binding
+    assert prepared.validate(builder.analysis, CHILD, selection) is prepared
+    assert proof.validate(builder.analysis, ENTRY, originals) is proof
 
 
 def test_plain_environment_guard_closes_before_original_without_whole_output_read(tmp_path):

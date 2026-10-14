@@ -209,15 +209,21 @@ def test_mutable_source_authority_is_not_converted_into_native_close(tmp_path, m
     path, builder, proof, originals = planned_window_fixture(tmp_path)
     if mutation == "source":
         path.write_text(PLANNED_SOURCE + "\n! source mutation\n")
+        assert proof.validate(builder.analysis, ENTRY, originals) is proof
+        with pytest.raises(CompilationError, match="changed"):
+            builder.finish()
     elif mutation == "binding":
         scope = builder.analysis.routines["renamed_stage::face_update"].scope
-        scope.bindings["a"] = copy(scope.bindings["a"])
+        with pytest.raises(CompilationError, match="immutable"):
+            scope.bindings["a"] = copy(scope.bindings["a"])
     elif mutation == "declaring_scope":
-        builder.entry.scope.bindings["a"].declaring_scope = builder.analysis.modules["renamed_stage"]
+        with pytest.raises(CompilationError, match="immutable"):
+            builder.entry.scope.bindings["a"].declaring_scope = builder.analysis.modules["renamed_stage"]
     else:
-        builder.entry.scope.imports["mystery"] = ("unknown", "mystery")
-    with pytest.raises(CompilationError, match="changed|authority"):
-        proof.validate(builder.analysis, ENTRY, originals)
+        with pytest.raises(CompilationError, match="immutable"):
+            builder.entry.scope.imports["mystery"] = ("unknown", "mystery")
+    assert not builder.outputs
+    assert not builder.edits
 
 
 def test_partial_or_excluded_close_nodes_are_not_accepted(tmp_path):
@@ -269,7 +275,7 @@ def test_public_discovery_adopts_planned_branch_without_full_child_summary(tmp_p
     _outputs, report = builder.run()
     discovery = report["reached_window_discovery"]
     assert discovery["selected"], discovery
-    assert discovery["schema_version"] == 6
+    assert discovery["schema_version"] == 7
     scope, = report["scopes"]
     assert scope["reached_window"]["automatic_discovery"]
     assert scope["reached_window"]["planned_closures"]["closed_path_possible"]
@@ -352,7 +358,6 @@ def test_forced_nested_cut_cannot_be_silently_ignored_by_a_loop_unit(tmp_path):
 
 def test_later_generation_cut_revalidates_exact_emission_and_recounts_live_kernels(tmp_path, monkeypatch):
     from compiler.scopes.lexical import LexicalOwner
-    from compiler.scopes.window_discovery import _numerical_calls
 
     path, builder, proof, originals = planned_window_fixture(tmp_path)
     admit = LexicalOwner.admit
@@ -373,7 +378,7 @@ def test_later_generation_cut_revalidates_exact_emission_and_recounts_live_kerne
     assert scope["reached_window"]["validated_emission_proof_identity"] == owner.window_proof.identity
     assert len(scope["reached_window"]["planned_closures"]["close_points"]) == 2
     assert len(scope["gpu_leaves"]) == 1
-    assert _numerical_calls(owner) == 1
+    assert owner.execution_plan.numerical_invocations == 1
     text = outputs[report["sources"][str(path)]["replacement"]]
     assert "a(i)=2.0_8*b(i)" in text
 

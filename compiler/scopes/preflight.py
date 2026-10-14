@@ -277,7 +277,7 @@ def preflight_scope(builder, *, follow_calls=True, observer=None):
     # mutated input aborts the entire snapshot; it is never just one blocker.
     provider.validate_configuration(options=builder.options, config=builder.config,
                                     environment_root=builder.entry.qualified)
-    analysis.verify_source()
+    analysis.verify_publication()
     if facts_identity != _digest(builder.facts):
         raise CompilationError("scope preflight capture facts changed during inspection")
     report = {"schema_version": 1, "entry": builder.entry.qualified,

@@ -142,8 +142,11 @@ def test_changed_unused_original_association_invalidates_projection_proof(tmp_pa
     sources = projected_sources()
     paths, builder, proof, originals = mapped_child_fixture(tmp_path, **sources)
     paths[0].write_text(paths[0].read_text().replace("z(-7:)", "z(-9:)"))
+    assert proof.validate(builder.analysis, builder.entry.qualified, originals) is proof
     with pytest.raises(CompilationError, match="source|original|changed"):
-        proof.validate(builder.analysis, builder.entry.qualified, originals)
+        builder.finish()
+    assert not builder.outputs
+    assert not builder.edits
 
 
 def test_changed_managed_subset_cannot_reuse_an_incompatible_companion(tmp_path):

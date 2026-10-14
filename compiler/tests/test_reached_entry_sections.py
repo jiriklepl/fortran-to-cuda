@@ -182,6 +182,10 @@ enddo
 def test_changed_source_invalidates_partial_entry_proof(tmp_path):
     path, builder, originals = entry_sections_fixture(tmp_path)
     proof = prove_reached_window(builder.analysis, ENTRY, originals, ROOTS, builder.facts)
+    sections = proof.activation_sections(ROOTS[0])
     path.write_text(path.read_text().replace("i=-3,5", "i=-3,6"))
+    assert proof.activation_sections(ROOTS[0]) == sections
     with pytest.raises(CompilationError, match="source changed"):
-        proof.activation_sections(ROOTS[0])
+        builder.finish()
+    assert not builder.outputs
+    assert not builder.edits
