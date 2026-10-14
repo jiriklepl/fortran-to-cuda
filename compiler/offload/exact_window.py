@@ -21,8 +21,8 @@ from pathlib import Path
 from compiler.ir import CompilationError
 from compiler.offload.collective_calibration import normalize_fortran_options
 
-VERSION = 3
-PROTOCOL = "complete-original-window-cold-v3"
+VERSION = 4
+PROTOCOL = "complete-original-window-cold-v4"
 SAMPLES = 7
 HOLDOUTS = 2
 ENVIRONMENT = (
@@ -72,6 +72,18 @@ def implementation_identity():
     }
 
 
+def valid_effective_schedule(schedule):
+    """Keep the complete OpenMP kind, including its monotonic modifier bit."""
+    return (
+        type(schedule) is dict
+        and set(schedule) == {"kind", "chunk"}
+        and type(schedule["kind"]) is int
+        and schedule["kind"] in {kind | modifier for kind in (1, 2, 3, 4) for modifier in (0, 0x80000000)}
+        and type(schedule["chunk"]) is int
+        and 0 <= schedule["chunk"] < 2**31
+    )
+
+
 def evidence_decision(evidence, contract):
     """Reconstruct acceptance from raw paired observations; no trusted flag."""
     try:
@@ -99,6 +111,7 @@ def evidence_decision(evidence, contract):
             "affinity",
             "threads",
             "dynamic",
+            "effective_schedule",
             "proc_bind",
             "thread_limit",
             "max_active_levels",
@@ -122,6 +135,9 @@ def evidence_decision(evidence, contract):
             or any(value is not None and not isinstance(value, str) for value in identity["environment"].values())
         ):
             raise ValueError("complete-window placement identity invalid")
+        schedule = identity["effective_schedule"]
+        if not valid_effective_schedule(schedule):
+            raise ValueError("complete-window effective OpenMP schedule invalid")
         if (
             identity["threads"] != contract["threads"]
             or identity["dynamic"] != 0
@@ -150,6 +166,7 @@ def evidence_decision(evidence, contract):
                 identity["max_active_levels"],
             ],
             "affinity": identity["affinity"],
+            "effective_schedule": schedule,
             "environment": identity["environment"],
         }
         values = {"native": [], "resident": []}
@@ -158,14 +175,20 @@ def evidence_decision(evidence, contract):
                 raise ValueError("complete-window observation must be an object")
             round_index, turn = divmod(order, 2)
             mode = ("native", "resident")[(round_index + turn) % 2]
+            observed_cpu = row.get("observed_cpu_identity")
+            observed_identity = row.get("identity")
             if (
                 row.get("round") != round_index
                 or row.get("mode") != mode
                 or row.get("role") != ("fit" if round_index < SAMPLES else "holdout")
                 or row.get("key") != key
-                or row.get("identity") != identity
+                or type(observed_identity) is not dict
+                or not valid_effective_schedule(observed_identity.get("effective_schedule"))
+                or observed_identity != identity
                 or row.get("agreement") is not True
-                or row.get("observed_cpu_identity") != expected_cpu
+                or type(observed_cpu) is not dict
+                or not valid_effective_schedule(observed_cpu.get("effective_schedule"))
+                or observed_cpu != expected_cpu
                 or row.get("observed_key") != key
             ):
                 raise ValueError("complete-window observation order/identity/agreement differs")
@@ -577,6 +600,10 @@ extern "C" int @NAME@(const int64_t *key,const char *version,const char *options
             ||!fort_scope_numerical_environment_supported()) return 0;
     @KEYCHECK@
     @FORTRANCHECK@
+    omp_sched_t schedule_kind; int schedule_chunk;
+    omp_get_schedule(&schedule_kind,&schedule_chunk);
+    const uint32_t effective_kind=static_cast<uint32_t>(schedule_kind);
+    @SCHEDULECHECK@
     cudaDeviceProp p{}; int device=-1,runtime=0,driver=0;
     if(cudaGetDevice(&device)!=cudaSuccess||cudaGetDeviceProperties(&p,device)!=cudaSuccess
             ||cudaRuntimeGetVersion(&runtime)!=cudaSuccess||cudaDriverGetVersion(&driver)!=cudaSuccess) return 0;
@@ -597,6 +624,7 @@ extern "C" int @NAME@(const int64_t *key,const char *version,const char *options
     identity<<"{\"affinity\":"<<a.str()<<",\"cpu_name\":"<<quoted(cpu_name)<<",\"cuda_compiler\":"
         <<quoted(std::to_string(__CUDACC_VER_MAJOR__)+"."+std::to_string(__CUDACC_VER_MINOR__)+"."+std::to_string(__CUDACC_VER_BUILD__))
         <<",\"cuda_driver\":"<<driver<<",\"cuda_runtime\":"<<runtime<<",\"dynamic\":"<<omp_get_dynamic()
+        <<",\"effective_schedule\":{\"chunk\":"<<schedule_chunk<<",\"kind\":"<<effective_kind<<"}"
         <<",\"environment\":"<<environment.str()<<",\"fortran_options\":"<<quoted(@FORTRANOPTIONS@)
         <<",\"fortran_version\":"<<quoted(version)<<",\"gpu_name\":"<<quoted(p.name)
         <<",\"gpu_uuid\":"<<quoted(uuid.str())<<",\"host_compiler\":"<<quoted(__VERSION__)
@@ -635,6 +663,12 @@ extern "C" int @NAME@(const int64_t *key,const char *version,const char *options
         "ATTESTATION": "FORT_EXACT_WINDOW_BUILD_" + record["contract_sha256"],
         "THREADS": str(record["contract"]["threads"]),
         "KEYCHECK": keycheck,
+        "SCHEDULECHECK": (
+            ""
+            if capture
+            else "if(effective_kind!=" + str(expected["effective_schedule"]["kind"]) + "U||schedule_chunk!="
+            + str(expected["effective_schedule"]["chunk"]) + ")return 0;"
+        ),
         "FORTRANCHECK": (
             ""
             if capture

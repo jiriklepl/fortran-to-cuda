@@ -24,7 +24,15 @@ from compiler.numerical_contract import require_explicit_cuda_environment
 from compiler.offload.calibrate import cpu_identity
 from compiler.offload.collective_calibration import normalize_fortran_options
 from compiler.offload.config import OffloadConfig
-from compiler.offload.exact_window import ENVIRONMENT, HOLDOUTS, PROTOCOL, SAMPLES, build_contract, evidence_decision
+from compiler.offload.exact_window import (
+    ENVIRONMENT,
+    HOLDOUTS,
+    PROTOCOL,
+    SAMPLES,
+    build_contract,
+    evidence_decision,
+    valid_effective_schedule,
+)
 from compiler.scopes.source import ScopeBuilder
 
 
@@ -85,11 +93,19 @@ end module
 DRIVER = """program measure
 use exact_fixture, only:advance
 use iso_fortran_env,only:int64,compiler_version,compiler_options
+use iso_c_binding,only:c_int
 use omp_lib
 implicit none
+interface
+subroutine fort_get_schedule(kind,chunk) bind(C,name='omp_get_schedule')
+import c_int
+integer(c_int),intent(out)::kind,chunk
+end subroutine
+end interface
 real(8),allocatable::a(:,:,:),b(:,:,:),d(:,:,:),out(:,:,:)
 real(8)::audit
 integer::n,seed,i,j,k,unit
+integer(c_int)::schedule_kind,schedule_chunk
 integer(int64)::start,finish,rate
 character(32)::argument
 call get_command_argument(1,argument)
@@ -107,6 +123,9 @@ enddo
 b=-3._8
 d=-5._8
 out=-7._8
+! GNU's legacy Fortran wrapper omits the monotonic modifier. Query the C API
+! used by the selector, preserving all 32 kind bits in the independent sample.
+call fort_get_schedule(schedule_kind,schedule_chunk)
 call system_clock(start,rate)
 call advance(a,b,d,out,n,audit)
 call system_clock(finish)
@@ -115,6 +134,7 @@ print '(a,a)', 'FORTRAN_VERSION ',compiler_version()
 print '(a,a)', 'FORTRAN_OPTIONS ',compiler_options()
 print '(a,5(i0,1x))', 'CPU_TEAM ',omp_get_max_threads(),merge(1,0,omp_get_dynamic()),omp_get_proc_bind(), &
 omp_get_thread_limit(),omp_get_max_active_levels()
+print '(a,2(i0,1x))', 'CPU_SCHEDULE ',iand(int(schedule_kind,int64),int(z'FFFFFFFF',int64)),schedule_chunk
 print '(a,25(i0,1x))', 'NATIVE_KEY ',size(a,1),lbound(a,1),size(a,2),lbound(a,2),size(a,3),lbound(a,3), &
 size(b,1),lbound(b,1),size(b,2),lbound(b,2),size(b,3),lbound(b,3), &
 size(d,1),lbound(d,1),size(d,2),lbound(d,2),size(d,3),lbound(d,3), &
@@ -251,6 +271,21 @@ def build_native(directory, source, environment, *, fortran, **_tools):
     return binary, receipt
 
 
+def observed_schedule(stdout):
+    """Read the independently queried native or resident task's schedule ICV."""
+    matches = re.findall(r"^CPU_SCHEDULE ([^\n]+)$", stdout, re.MULTILINE)
+    try:
+        if len(matches) != 1:
+            raise ValueError
+        kind, chunk = map(int, matches[0].split())
+        schedule = {"kind": kind, "chunk": chunk}
+        if not valid_effective_schedule(schedule):
+            raise ValueError
+        return schedule
+    except ValueError:
+        raise RuntimeError("actual effective OpenMP schedule missing or invalid") from None
+
+
 def collect(binary, native, directory, environment, size, contract):
     observations = []
     for round_index in range(SAMPLES + HOLDOUTS):
@@ -294,6 +329,7 @@ def collect(binary, native, directory, environment, size, contract):
                     "fortran_version": version,
                     "fortran_options": normalize_fortran_options(options),
                     "team": team,
+                    "effective_schedule": observed_schedule(result.stdout),
                     "affinity": sorted(os.sched_getaffinity(0)),
                     "environment": {name: environment.get(name) for name in ENVIRONMENT},
                 },
@@ -317,6 +353,7 @@ def collect(binary, native, directory, environment, size, contract):
                 resident["identity"]["max_active_levels"],
             ],
             "affinity": resident["identity"]["affinity"],
+            "effective_schedule": resident["identity"]["effective_schedule"],
             "environment": resident["identity"]["environment"],
         }
         for row in observations[-2:]:
@@ -400,6 +437,7 @@ def validate_production(automatic, native, directory, environment, size, evidenc
             identity["max_active_levels"],
         ],
         "affinity": identity["affinity"],
+        "effective_schedule": identity["effective_schedule"],
         "environment": identity["environment"],
     }
     rows = []
@@ -427,6 +465,7 @@ def validate_production(automatic, native, directory, environment, size, evidenc
                 "fortran_version": version,
                 "fortran_options": normalize_fortran_options(options),
                 "team": team,
+                "effective_schedule": observed_schedule(result.stdout),
                 "affinity": sorted(os.sched_getaffinity(0)),
                 "environment": {name: environment.get(name) for name in ENVIRONMENT},
             }
