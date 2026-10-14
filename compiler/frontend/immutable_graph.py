@@ -14,12 +14,16 @@ from compiler.ir import CompilationError
 _TYPES, _ORIGINAL_TYPES = {}, {}
 
 
+class ImmutableGraphMutation(CompilationError):
+    """An attempted authority mutation, never a numerical support decline."""
+
+
 class FrozenDict(dict):
     """Read-only JSON-compatible map with no shadowable instance methods."""
     __slots__ = ()
 
     def _reject(self, *args, **kwargs):
-        raise CompilationError("owned compilation graph is immutable")
+        raise ImmutableGraphMutation("owned compilation graph is immutable")
 
     __setitem__ = __delitem__ = clear = pop = popitem = setdefault = update = __ior__ = _reject
 
@@ -38,7 +42,7 @@ class FrozenList(list):
     __slots__ = ()
 
     def _reject(self, *args, **kwargs):
-        raise CompilationError("owned compilation graph is immutable")
+        raise ImmutableGraphMutation("owned compilation graph is immutable")
 
     __setitem__ = __delitem__ = append = extend = insert = pop = remove = clear = sort = reverse = _reject
     __iadd__ = __imul__ = _reject
@@ -108,7 +112,7 @@ def _deepcopy(value, memo):
 
 
 def _reject(self, name, value=None):
-    raise CompilationError("owned compilation graph is immutable: " + name)
+    raise ImmutableGraphMutation("owned compilation graph is immutable: " + name)
 
 
 def _getattribute(self, name):

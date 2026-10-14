@@ -86,9 +86,13 @@ def test_facade_attributes_text_and_spans_cannot_grant_authority(tmp_path, kind)
 
 def test_source_change_invalidates_prepared_authority(tmp_path):
     builder, _, _, facade, path = prepared(tmp_path)
+    selection = builder.inline.original_selection(facade)
     path.write_text(path.read_text().replace("a(i)+1", "a(i)+2"))
-    with pytest.raises(CompilationError):
-        builder.inline.original_selection(facade)
+    assert builder.inline.original_selection(facade) == selection
+    with pytest.raises(CompilationError, match="source changed"):
+        builder.finish()
+    assert not builder.outputs
+    assert not builder.edits
 
 
 def test_joined_directive_projection_recovers_original_loop_once(tmp_path):

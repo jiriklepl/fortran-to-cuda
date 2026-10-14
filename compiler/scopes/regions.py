@@ -958,7 +958,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             raise CompilationError("inline private array is live after the region")
         if joined and root not in explicit_private:
             raise CompilationError("inline OpenMP array writes need proven PRIVATE storage")
-    private = {root: used[root] for root in scalar_writes | local_arrays}
+    private = {root: used[root] for root in sorted(scalar_writes | local_arrays)}
     occupied = {binding.name for binding in used.values()}
     occupied.update(name for helper in helpers.values() for name in helper.scope.bindings)
     from compiler.scopes.immutable_inputs import scalar_element_captures

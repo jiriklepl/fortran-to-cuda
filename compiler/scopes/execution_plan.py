@@ -10,7 +10,7 @@ JSON is a diagnostic view and cannot be imported as execution authority.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, is_dataclass, replace
+from dataclasses import dataclass, fields, is_dataclass, replace
 from hashlib import sha256
 from types import MappingProxyType, SimpleNamespace
 
@@ -62,7 +62,7 @@ def _portable_numerical_references(analysis):
             return [portable(item) for item in value]
         return value
 
-    for proof in analysis._numerical_preparations.values():
+    for proof in getattr(analysis, "_numerical_preparations", {}).values():
         public = proof.public()
         public.pop("preparation_identity")
         references[proof.identity] = _digest({
@@ -98,6 +98,93 @@ def _unit_row(member, unit, ordinal):
     }
 
 
+def _registered_authorities(owner, owned_types):
+    """Retain only existing source/proof authorities from execution services.
+
+    This classifies graph ownership; existing consumers still validate each
+    proof with its original source selection and analysis. A method called
+    ``validate`` cannot turn arbitrary frontend metadata into an authority.
+    """
+    from fparser.two.utils import Base
+
+    from compiler.frontend.descriptor_windows import DescriptorWindowProof
+    from compiler.frontend.native_call_coordinates import NativeCallCoordinatesProof
+    from compiler.frontend.native_completion import NativeCompletionProof
+    from compiler.frontend.native_definitions import NativeDefinitionProof
+    from compiler.frontend.native_environment import NativeEnvironmentProof, NativeLocalStateProof
+    from compiler.frontend.native_intrinsics import NativePredicateProof
+    from compiler.frontend.native_prefix import NativePrefixProof
+    from compiler.frontend.numerical_completion import NumericalCompletionProof
+    from compiler.frontend.numerical_effects import NumericalEffectProof
+    from compiler.frontend.numerical_preparation import NumericalPreparationProvider, PreparedOriginalRegion
+    from compiler.frontend.omp_reductions import OpenMPReductionProof
+    from compiler.frontend.reached_windows import ReachedWindowProof
+    from compiler.frontend.reductions import ReductionProof
+    from compiler.frontend.source_effects import SourceEffects
+    from compiler.frontend.source_functions import NativeSourceFunctionProof
+    from compiler.frontend.structured_effects import StructuredSummary
+    from compiler.frontend.worksharing_completion import WorksharingCompletionProof, WorksharingNativeCompletionProof
+    from compiler.scopes.lexical import OwnerEmission
+    from compiler.scopes.source import ScopeBuilder
+
+    registries = {
+        DescriptorWindowProof: "_descriptor_window_proofs",
+        NativeCallCoordinatesProof: "_native_definition_proofs",
+        NativeCompletionProof: "_joined_completions",
+        NativeDefinitionProof: "_native_definition_proofs",
+        NativeEnvironmentProof: "_native_environments",
+        NativeLocalStateProof: "_native_environment_states",
+        NativePredicateProof: "_native_predicates",
+        NativePrefixProof: "_native_prefix_proofs",
+        NumericalCompletionProof: "_numerical_completions",
+        NumericalEffectProof: "_numerical_effect_proofs",
+        NumericalPreparationProvider: "_numerical_preparation_providers",
+        PreparedOriginalRegion: "_numerical_preparations",
+        OpenMPReductionProof: "_omp_reduction_proofs",
+        ReachedWindowProof: "_reached_window_proofs",
+        ReductionProof: "_reduction_proofs",
+        NativeSourceFunctionProof: "_native_functions",
+        WorksharingCompletionProof: "_worksharing_completions",
+        WorksharingNativeCompletionProof: "_worksharing_native_completions",
+    }
+    session = owner.builder.analysis._source_session
+    pending, seen, analyses = [owner], set(), {}
+    while pending:
+        value = pending.pop()
+        if id(value) in seen:
+            continue
+        seen.add(id(value))
+        if isinstance(value, SourceEffects):
+            analyses[id(value)] = value
+            origin = getattr(value, "_descriptor_source", None)
+            if origin is not None:
+                pending.append(origin)
+        elif isinstance(value, ScopeBuilder):
+            pending.append(value.analysis)
+        elif (isinstance(value, (Base, OwnerEmission, StructuredSummary))
+              or type(value) in registries or session is not None and session.contains(value)):
+            continue
+        elif isinstance(value, (dict, MappingProxyType)):
+            pending.extend(value.values())
+            pending.extend(value.keys())
+        elif isinstance(value, (list, tuple, set, frozenset)):
+            pending.extend(value)
+        elif isinstance(value, owned_types) or is_dataclass(value):
+            pending.extend(vars(value).values() if hasattr(value, "__dict__") else
+                           (getattr(value, part.name) for part in fields(value)))
+    authorities = {id(member.graph): member.graph for member in owner.members.values()}
+    for analysis in analyses.values():
+        for kind, registry in registries.items():
+            for value in getattr(analysis, registry, {}).values():
+                key = id(value) if kind is NumericalPreparationProvider else getattr(value, "identity", None)
+                if type(value) is kind and getattr(analysis, registry).get(key) is value:
+                    authorities[id(value)] = value
+        for graph in analysis._structures.values():
+            if type(graph) is StructuredSummary:
+                authorities[id(graph)] = graph
+    return authorities, (*registries, StructuredSummary)
+
+
 def _seal_execution(owner):
     """Freeze admitted data; builders and registered proof services stay separate.
 
@@ -110,20 +197,22 @@ def _seal_execution(owner):
     from compiler.frontend.immutable_graph import GraphFreezer, original_type
     from compiler.frontend.sealed_syntax import seal as seal_syntax
     from compiler.frontend.source_effects import Binding, Routine, Scope, SourceEffects
-    from compiler.frontend.structured_effects import StructuredSummary
     from compiler.scopes.lexical import LexicalOwner, OwnerEmission, Unit
     from compiler.scopes.procedures import BorrowedCoordinator
     from compiler.scopes.segments import Association, Branch, Delegated, Native, Segment, StructuredScope
     from compiler.scopes.source import Call, ScopeBuilder
 
     session = owner.builder.analysis._source_session
+    owned_types = (LexicalOwner, Unit, StructuredScope, Native, Segment, Branch, Association,
+                   Delegated, Call, BorrowedCoordinator)
+    authorities, authority_types = _registered_authorities(owner, owned_types)
     syntax = {}
     portable_numerical = _portable_numerical_references(owner.builder.analysis)
     # Prepared extractions belong to registered numerical authority. They share
     # identity-sensitive completion/precondition objects with their proof;
     # changing those aliases would invalidate rather than strengthen the proof.
     extractions = {id(proof.extraction): proof for proof in
-                   owner.builder.analysis._numerical_preparations.values()}
+                   getattr(owner.builder.analysis, "_numerical_preparations", {}).values()}
     numerical_authorities = {}
 
     def borrowed(value):
@@ -144,16 +233,15 @@ def _seal_execution(owner):
             proof = extractions[id(value)]
             numerical_authorities[proof.identity] = proof
             return True
-        # These are registered, independently validated authorities, not
-        # execution containers. Freezing their caches would change authority.
-        return (isinstance(value, StructuredSummary)
-                or is_dataclass(value) and type(value).__module__.startswith("compiler.frontend.")
-                and callable(getattr(value, "validate", None)))
+        if authorities.get(id(value)) is value:
+            return True
+        if type(value) in authority_types:
+            raise CompilationError("execution plan requires an exact registered source/proof authority")
+        return False
 
     external = (ScopeBuilder, SourceEffects, OwnerEmission)
     freezer = GraphFreezer(
-        owned_types=(LexicalOwner, Unit, StructuredScope, Native, Segment, Branch, Association,
-                     Delegated, Call, BorrowedCoordinator),
+        owned_types=owned_types,
         own_if=is_dataclass, borrowed_types=external, borrow_if=borrowed)
     freezer.freeze(owner)
 

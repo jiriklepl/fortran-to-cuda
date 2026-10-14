@@ -89,8 +89,11 @@ def test_counted_body_requires_original_registered_node_and_unchanged_source(tmp
     with pytest.raises(CompilationError, match="original node or approved"):
         reached_counted_body(builder, copy(node))
     builder.entry.scope.path.write_text(COUNTED_SOURCE+"! changed source\n")
+    assert reached_counted_body(builder, node).nodes
     with pytest.raises(CompilationError, match="changed|identity|hash"):
-        reached_counted_body(builder, node)
+        builder.finish()
+    assert not builder.outputs
+    assert not builder.edits
 
 
 @pytest.mark.parametrize("directive", ["!$omp simd", "!$omp single", "!$acc parallel loop", "!$ call outside()"])

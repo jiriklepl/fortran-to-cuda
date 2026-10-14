@@ -1,5 +1,6 @@
 """Numerical classification reuses source evidence only until fresh publication."""
 
+from copy import copy, deepcopy
 from dataclasses import replace
 from hashlib import sha256
 
@@ -14,6 +15,7 @@ from compiler.ir import CompilationError
 from compiler.offload import source_compute
 from compiler.offload.config import OffloadConfig
 from compiler.scopes import source
+from compiler.scopes.generation_transaction import GenerationTransaction
 
 ENTRY = "local_classification::evaluate"
 SOURCE = """module local_classification
@@ -147,8 +149,14 @@ def test_mid_classification_mutation_is_hard_and_cannot_adopt_generated_artifact
         return result
 
     monkeypatch.setattr(source, "generate_sources", generate)
-    with pytest.raises(CompilationError, match="changed|authority"):
-        builder.numerical(ENTRY)
+    if change == "file":
+        with GenerationTransaction(builder) as transaction:
+            assert transaction.builder.numerical(ENTRY) is not None
+            with pytest.raises(CompilationError, match="source changed"):
+                transaction.builder.finish()
+    else:
+        with pytest.raises(CompilationError, match="changed|authority"):
+            builder.numerical(ENTRY)
     assert len(generated) == 1
     assert generated[0].scoped
     assert ENTRY not in builder.generated
@@ -157,7 +165,17 @@ def test_mid_classification_mutation_is_hard_and_cannot_adopt_generated_artifact
     assert builder.outputs == {}
 
 
-def test_standalone_helpers_stay_fresh_and_keep_private_projection_semantics(subject, monkeypatch):
+def private_execution(builder):
+    analysis = builder.analysis.private_projection(routines=True)
+    routine = copy(analysis.routines[ENTRY])
+    routine.execution = deepcopy(routine.execution)
+    analysis.routines[ENTRY] = routine
+    builder.analysis = analysis
+    assignment, = walk(routine.execution, F.Assignment_Stmt)
+    assignment.items = (*assignment.items[:2], assignment.items[0])
+
+
+def test_helpers_keep_explicit_private_projection_semantics(subject, monkeypatch):
     _path, builder = subject
     summaries = record_demands(monkeypatch, builder)
     builder.check_numerical_capture_origins(ENTRY)
@@ -167,20 +185,21 @@ def test_standalone_helpers_stay_fresh_and_keep_private_projection_semantics(sub
     assert {summary["summary_role"] for summary in summaries} == {"source"}
     original_identity = summaries[-1]["analysis_identity"]
 
-    assignment, = walk(builder.analysis.routines[ENTRY].execution, F.Assignment_Stmt)
-    assignment.items = (*assignment.items[:2], assignment.items[0])
+    private_execution(builder)
+    # Replace the copied observer, whose closure still points at the original.
+    monkeypatch.delattr(builder.analysis, "summarize")
+    projected = record_demands(monkeypatch, builder)
     builder.check_numerical_capture_origins(ENTRY)
     assert builder.native_effects(ENTRY) == original_effects
     assert source_compute.native_participation(builder.analysis, ENTRY) == "serial"
-    assert len(summaries) == 6
-    assert {summary["summary_role"] for summary in summaries[3:]} == {"private_projection"}
-    assert all(summary["analysis_identity"] != original_identity for summary in summaries[3:])
+    assert len(projected) == 3
+    assert {summary["summary_role"] for summary in projected} == {"private_projection"}
+    assert all(summary["analysis_identity"] != original_identity for summary in projected)
 
 
 def test_private_execution_cannot_be_adopted_as_original_generated_source(subject):
     _path, builder = subject
-    assignment, = walk(builder.analysis.routines[ENTRY].execution, F.Assignment_Stmt)
-    assignment.items = (*assignment.items[:2], assignment.items[0])
+    private_execution(builder)
     assert builder.analysis.summarize(ENTRY)["summary_role"] == "private_projection"
     with pytest.raises(CompilationError, match="original source.*authority"):
         builder.numerical(ENTRY)

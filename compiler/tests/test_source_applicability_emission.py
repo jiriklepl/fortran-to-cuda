@@ -100,9 +100,14 @@ def test_identical_regions_share_worker_but_keep_each_original_cost_provenance(t
 
 def test_optional_cost_metadata_does_not_replace_hard_source_validation(tmp_path, bundle):
     path, builder = inline_builder(tmp_path, bundle)
+    facade = next(iter(builder.inline.nodes.values()))
+    selection = builder.inline.original_selection(facade)
     path.write_text(path.read_text().replace("out(i)=", "out(i)=1d0+"))
-    with pytest.raises(CompilationError):
-        builder.inline.original_selection(next(iter(builder.inline.nodes.values())))
+    assert builder.inline.original_selection(facade) == selection
+    with pytest.raises(CompilationError, match="source changed"):
+        builder.finish()
+    assert not builder.outputs
+    assert not builder.edits
 
 
 def test_equal_arithmetic_with_different_cost_contracts_does_not_reuse_query(tmp_path, bundle, monkeypatch):

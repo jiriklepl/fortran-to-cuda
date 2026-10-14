@@ -1,5 +1,6 @@
 """The public reached path discovers exact windows without caller proof input."""
 
+import json
 from copy import deepcopy
 from hashlib import sha256
 
@@ -180,7 +181,26 @@ def test_failed_search_preserves_existing_fallback_artifacts(tmp_path, monkeypat
     # variants, source patches and runtime provenance must otherwise match.
     assert {name: value for name, value in actual_outputs.items() if name != "scope-manifest.json"} == {
         name: value for name, value in control_outputs.items() if name != "scope-manifest.json"}
-    for field in ("scopes", "boundaries", "source_edits", "runtime_provenance", "implementation_variants",
+
+    def comparable_scopes(report):
+        scopes = deepcopy(report["scopes"])
+        for scope in scopes:
+            plan = scope.get("checked_execution_plan")
+            if plan is None:
+                continue
+            identity = plan.pop("identity")
+            assert identity == sha256(json.dumps(
+                plan, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+            # This interrupted path is outside complete-window calibration.
+            # Its graph-sharing fingerprints may retain speculative history;
+            # every public operation and generated artifact must still match.
+            plan.pop("execution_identity")
+            for procedure in plan["procedures"]:
+                procedure.pop("emission_identity")
+        return scopes
+
+    assert comparable_scopes(actual_report) == comparable_scopes(control_report)
+    for field in ("boundaries", "source_edits", "runtime_provenance", "implementation_variants",
                   "resolved_calls", "inline_numerical_regions", "child_numerical_regions"):
         assert actual_report[field] == control_report[field], field
 

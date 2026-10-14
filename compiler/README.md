@@ -2115,11 +2115,18 @@ declarations, namespaces, source text and configured-source identities are
 sealed together; private projections and analysis caches remain explicit.
 Queries authenticate session membership, while publication rechecks live source
 and configuration inputs. Standalone mutable analyses retain fresh checks.
-Parsing consumes the captured original or prepared text. Unexpanded Fortran
+Parsing and later numerical lowering consume the captured original or prepared
+text. Normalized numerical packages retain the exact text checked against their
+package hash; temporary live-file edits cannot enter lowering and then escape a
+publication hash check by being restored. Unexpanded Fortran
 INCLUDE readers outside that snapshot block session sealing; the configured
 source-export path supplies preexpanded text and authenticated dependencies.
 Reusing a frozen object outside its issuing source session grants no source
 authority, and failed speculative generation cannot mutate the original graph.
+Only explicitly registered proof classes and exact registered objects may be
+borrowed by the execution plan. Unknown metadata is frozen as owned data or
+rejected. Calibration portability is checked across independent Python processes
+and hash seeds; PRIVATE inventories have deterministic order.
 
 For a bounded diagnostic pass before source generation, add `--scope-preflight`
 to a serial `--form-scopes` command. Its schema-version-1 `preflight` report

@@ -185,6 +185,44 @@ def test_unknown_opaque_metadata_cannot_silently_escape_sealing(tmp_path):
         pytest.fail("opaque mutable metadata was admitted")
 
 
+def test_unknown_frontend_dataclass_is_metadata_not_registered_authority(tmp_path):
+    from dataclasses import dataclass, field
+
+    @dataclass
+    class FutureProof:
+        semantic: list = field(default_factory=lambda: ["original"])
+
+        def validate(self):
+            raise AssertionError("not an issued proof")
+
+        def public(self):
+            return {"role": "future-proof"}
+
+    FutureProof.__module__ = "compiler.frontend.future_proof"
+    proof = FutureProof()
+    retained_alias = proof.semantic
+    with scanned(tmp_path, lambda owner: setattr(owner.units[0], "future_metadata", proof)) as (owner, plan):
+        expected = plan.execution_identity
+        retained_alias.append("changed retained alias")
+        assert owner.units[0].future_metadata.semantic == ["original"]
+        with pytest.raises(CompilationError, match="immutable"):
+            owner.units[0].future_metadata.semantic.append("changed after handoff")
+        assert plan.validate() is plan
+    with scanned(tmp_path, lambda owner: setattr(owner.units[0], "future_metadata",
+                                                FutureProof(["different semantics"]))) as (_owner, changed):
+        assert changed.execution_identity != expected
+
+
+def test_unregistered_prepared_proof_copy_cannot_be_borrowed(tmp_path):
+    def install_copy(owner):
+        proof = next(iter(owner.builder.analysis._numerical_preparations.values()))
+        owner.units[0].future_authority = replace(proof)
+
+    with (pytest.raises(CompilationError, match="exact registered"),
+          scanned(tmp_path, install_copy)):
+        pytest.fail("unregistered proof copy was borrowed")
+
+
 def test_foreign_or_replaced_plan_has_no_emission_authority(tmp_path):
     with scanned(tmp_path) as (owner, plan):
         for foreign in (replace(plan, identity="0" * 64), replace(plan, _issuer=object())):

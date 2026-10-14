@@ -117,6 +117,39 @@ def test_independent_capture_and_production_share_portable_execution_identity(tm
     assert production["selection"] == "resident"
 
 
+def test_complete_window_fingerprint_is_portable_across_process_hash_seeds(tmp_path):
+    import json
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    for mode in ("serial", "teams"):
+        (tmp_path / (mode + ".f90")).write_text(fixture_source(original_teams=mode == "teams"))
+    program = """
+import json
+from pathlib import Path
+import sys
+from compiler.offload.exact_window_calibration import emit
+root = Path(sys.argv[1])
+records = {}
+for mode in ('serial', 'teams'):
+    _, report, exact = emit(root / (mode + '.f90'), {'calibration': True})
+    plan = report['scopes'][0]['checked_execution_plan']
+    records[mode] = {'execution_identity': plan['execution_identity'],
+                     'contract_sha256': exact['contract_sha256']}
+print(json.dumps(records, sort_keys=True))
+"""
+    records = []
+    for seed in (1, 91237):
+        result = subprocess.run([sys.executable, "-c", program, str(tmp_path)],
+            cwd=Path(__file__).resolve().parents[2],
+            env={**os.environ, "PYTHONHASHSEED": str(seed)},
+            check=True, capture_output=True, text=True)
+        records.append(json.loads(result.stdout))
+    assert records[0] == records[1]
+
+
 @pytest.mark.parametrize(
     "change",
     [

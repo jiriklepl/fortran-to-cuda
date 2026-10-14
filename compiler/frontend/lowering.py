@@ -7,6 +7,7 @@ arguments to their actual storage identities before any dependence analysis.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -1469,14 +1470,22 @@ class _Lowerer:
         return ScalarType.INTEGER
 
 
-def _parse_file(path: Path, *, require_markers: bool) -> Any:
+def _parse_file(path: Path, *, require_markers: bool, source_text: str | None = None) -> Any:
     path = Path(path)
     try:
         if require_markers:
-            with path.open(encoding="utf-8") as source:
-                if source.readline().strip().lower() != "! kernels":
-                    raise CompilationError("kernel files must begin with '! kernels'", SourceLocation(str(path)))
-        reader = FortranFileReader(str(path), ignore_comments=False)
+            if source_text is None:
+                with path.open(encoding="utf-8") as source:
+                    first_line = source.readline()
+            else:
+                first_line = source_text.split("\n", 1)[0]
+            if first_line.strip().lower() != "! kernels":
+                raise CompilationError("kernel files must begin with '! kernels'", SourceLocation(str(path)))
+        source = str(path)
+        if source_text is not None:
+            source = StringIO(source_text)
+            source.name = str(path)
+        reader = FortranFileReader(source, ignore_comments=False)
         return ParserFactory().create(std="f2008")(reader)
     except OSError as error:
         raise CompilationError(f"cannot read source: {error}", SourceLocation(str(path))) from error
@@ -1484,15 +1493,19 @@ def _parse_file(path: Path, *, require_markers: bool) -> Any:
         raise CompilationError(f"invalid Fortran syntax: {error}", SourceLocation(str(path))) from error
 
 
-def lower_file(path: str | Path, entry_name: str, *, require_markers: bool = False) -> FunctionIR:
+def lower_file(path: str | Path, entry_name: str, *, require_markers: bool = False,
+               source_text: str | None = None) -> FunctionIR:
     """Lower an entry and its reachable same-module helpers into typed IR.
 
     Markers are optional unless ``require_markers`` is selected. The entry can
     be qualified as ``module::procedure`` to disambiguate a multi-module file.
     Unreachable procedures are parsed but their unsupported semantics are ignored.
+    When supplied, captured text replaces the live root file while its filename
+    retains source form and diagnostic identity. The caller authenticates text
+    and any expanded include dependencies before using this route.
     """
     path = Path(path)
-    tree = _parse_file(path, require_markers=require_markers)
+    tree = _parse_file(path, require_markers=require_markers, source_text=source_text)
     return _lower_tree(tree, path, entry_name, require_markers=require_markers)
 
 

@@ -24,6 +24,7 @@ from compiler.emission.fortran.formatting import _fortran_line, _fortran_list
 from compiler.frontend import lower_file
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.frontend.component_bindings import references
+from compiler.frontend.immutable_graph import ImmutableGraphMutation
 from compiler.frontend.source_effects import SourceEffects, _canonical, _children, _kind, _part
 from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.integers import integer_literal
@@ -583,12 +584,13 @@ class ScopeBuilder:
                     effects, _, _ = self._native_effects(procedure, summary=summary)
                     if not set(effects).issubset(package.arrays):
                         raise CompilationError("numerical source package omits original array effects")
-                    function = lower_file(package.path, package.entry)
+                    function = lower_file(package.path, package.entry, source_text=package.text)
                 else:
                     effects, _, _ = self._native_effects(procedure, summary=summary)
                     if any(not root.startswith("argument::") for root in effects):
                         raise CompilationError("hidden numerical arrays require a normalized source package")
-                    function = lower_file(self.analysis.inputs.path(routine.scope.path), procedure)
+                    path = self.analysis.inputs.path(routine.scope.path)
+                    function = lower_file(path, procedure, source_text=analysis.source_text(path))
                 function, plan = prepare_function(function, options=self.options)
                 if plan.regions:
                     from compiler.offload.source_compute import _native_participation
@@ -601,6 +603,8 @@ class ScopeBuilder:
                         reason = "numerical source has no supported shared entry"
                 else:
                     reason = "numerical source has no parallel region"
+            except ImmutableGraphMutation as error:
+                raise CompilationError("source authority mutation during numerical classification: " + str(error)) from error
             except CompilationError as error:
                 reason = str(error) # Supported native effects do not imply GPU eligibility.
         if result is not None:
