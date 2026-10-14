@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "status": "frozen compiler feature checkpoint; applications unqualified",
+  "created_utc": "2026-10-14T20:25:59.491536+00:00",
+  "compiler_commit": "9fe23c7bb78ac8e4727396e1a5c9f814b271de3e",
+  "comparison_commit": "62a1d028952561c4c1dd7d0c51d91c9d060f571f",
+  "compatible_pipeline_commit": "0876bf8c10660f474509d73af8d335d5798709d1",
+  "capabilities": [
+    "complete original joined-team observation binding",
+    "native automatic PRIVATE descriptor preservation",
+    "exact PRIVATE size/lbound cost keys deduplicated across teams"
+  ],
+  "source_binding": {
+    "inventory": "validation/integrated/source-inventory.json",
+    "stability_receipt": "validation/integrated/source-verification.json",
+    "commit_match": "validation/integrated/commit-match.json",
+    "compiler_files": 531,
+    "original_sources": [
+      "advection.f90",
+      "filters.f90"
+    ],
+    "changes_during_recorded_integration": 0
+  },
+  "validation": {
+    "authoritative_integrated": {
+      "passed": 7,
+      "seconds": 286.17,
+      "log": "validation/integrated/cuda-native-probes.log",
+      "command": "FORT_TEST_ELMM_SOURCE=/home/jirka/research/fortran-abomination/elmm-pipeline/.cache/repos/elmm/src taskset -c 4,5,10,11 /home/jirka/research/fortran-abomination/.venv/bin/python -m pytest compiler/tests/test_exact_window_teams_cuda.py compiler/tests/test_native_automatic_private.py::test_generated_owner_preserves_entry_bounds_empty_storage_and_native_team compiler/tests/test_native_automatic_private.py::test_primary_source_bodies_retain_native_automatic_private_arrays -q",
+      "cwd": "/tmp/fortran-residency-e2e-20261014",
+      "cpu_affinity": [
+        4,
+        5,
+        10,
+        11
+      ],
+      "scope": "Two CUDA tests, one native fallback/no-replay test, four extracted original-source body probes; all 531 compiler file hashes stable and equal delivered commit."
+    },
+    "supplemental_host": {
+      "passed": 261,
+      "skipped": 4,
+      "deselected": 2,
+      "seconds": 183.23,
+      "log": "validation/integrated/host.log",
+      "exact_invocation": null,
+      "dedicated_source_inventory": null,
+      "limitation": "Exact invocation and separately preserved host source inventory are unavailable. This log is supplemental, not the source-stable integrated attestation. Four missing-source skips are covered by the separately attested original-source probes."
+    },
+    "earlier_repair_archive": {
+      "base_commit": "368b8f6f752bc75194d3168ae9009477b5b0399b",
+      "host_passed": 37,
+      "host_seconds": 124.61,
+      "cuda_passed": 1,
+      "cuda_seconds": 139.29,
+      "host_log": "validation/repair/host.log",
+      "cuda_log": "validation/repair/cuda.log",
+      "source_inventory": "validation/repair/source-inventory.json",
+      "verification": "validation/repair/source-verification.json",
+      "scope": "Descriptor-key repair in an immutable git archive, before integration with sealed syntax and owner placement. Final import-order-only adjustment is recorded in its receipt."
+    }
+  },
+  "diagnostic_binaries": [
+    {
+      "role": "original-teams-native",
+      "binary_sha256": "1b12bdcf3360d64710aaec7e62c1ad1a00a020bf53b720b3865b7ac48fa1e3bd",
+      "build_receipt": "validation/integrated/build-receipts/original-teams-native.json",
+      "binary_still_matched_receipt_at_curation": true,
+      "payload_archived": false
+    },
+    {
+      "role": "original-teams-candidate",
+      "binary_sha256": "9e193b63a1f63aaf109a74cf5ea9fc3dee79e1047350e5c8bc81f6b2b8a59c21",
+      "build_receipt": "validation/integrated/build-receipts/original-teams-candidate.json",
+      "binary_still_matched_receipt_at_curation": true,
+      "payload_archived": false
+    },
+    {
+      "role": "private-native",
+      "binary_sha256": "adac6dc854967c7f730b289abf577e556b32307657dc40a5a7886ac42122dbf9",
+      "build_receipt": "validation/integrated/build-receipts/private-native.json",
+      "binary_still_matched_receipt_at_curation": true,
+      "payload_archived": false
+    },
+    {
+      "role": "private-capture",
+      "binary_sha256": "ab48709c49c588df7df5704557e2fbc5ebd4cea9e30bb781cd3ad5a94c68a08f",
+      "build_receipt": "validation/integrated/build-receipts/private-capture.json",
+      "binary_still_matched_receipt_at_curation": true,
+      "payload_archived": false
+    },
+    {
+      "role": "private-production",
+      "binary_sha256": "62e2cb6272428b20e9b1ad79a60ea47fbcf38962263547ca5431601c2361fabd",
+      "build_receipt": "validation/integrated/build-receipts/private-production.json",
+      "binary_still_matched_receipt_at_curation": true,
+      "payload_archived": false
+    }
+  ],
+  "calibration": {
+    "measured_new_class_calibration": false,
+    "synthetic_profitable_guard_rows": true,
+    "usage": "Synthetic rows exercise production descriptor rejection only; never calibration or performance evidence."
+  },
+  "application": {
+    "generation_claim": false,
+    "performance_claim": false,
+    "transfer_saving_claim": false,
+    "configuration_campaign": null,
+    "primary_cases": {
+      "channel-simple": "unqualified",
+      "channel": "unqualified"
+    },
+    "remaining_exact_window_boundaries": [
+      "reached suffixes",
+      "child owners",
+      "calls",
+      "branches",
+      "module/local numerical storage"
+    ],
+    "build_consumer": "independent calibration producer only; pipeline receipts do not enable application selector"
+  },
+  "figure": {
+    "svg": "capabilities.svg",
+    "png": "capabilities.png",
+    "renderer": "render.py",
+    "kind": "before/after feature map; no performance axes"
+  },
+  "prior_report": "../source-session-20261014/README.md",
+  "archive_policy": "Only logs, inventories, receipts, diagrams and their hashes; no source-session payload duplication or binary payloads.",
+  "archived_evidence_sha256": {
+    "validation/integrated/build-receipts/original-teams-candidate.json": "f06cfa4249d33c1dee07634c4a7fd4801cf581007ead0a26dc7edc8a15f29a4b",
+    "validation/integrated/build-receipts/original-teams-native.json": "c81ca3a0b297a1e319fd20c5c06416b74ea6b82f454e51367fb9f7a808cb6002",
+    "validation/integrated/build-receipts/private-capture.json": "b80f280104e2bc5f93aacea25e97583bb8e93295e9d32bf623e09158864f8d2b",
+    "validation/integrated/build-receipts/private-native.json": "cec3301fa6c9979bb3374a42e7c041994fe9aaed6098ddc1e687b93ccd3d0884",
+    "validation/integrated/build-receipts/private-production.json": "bf0e435d6d330ab2acb07395706dafb6e564f7f9570eb02e9cf595e1dd9d6071",
+    "validation/integrated/commit-match.json": "373050174a102cf59a252d04263e40295adec7078a53f46a9b38686a2fe0f6c0",
+    "validation/integrated/cuda-native-probes.log": "ef8b85dcb146737a462d92a13e82358a7262e6dee0fa2c9e6e1a34acb4ae5970",
+    "validation/integrated/host.log": "a509550269aaf40280bbad8d9408b06e9f6b80f16a256a3e9b5d999a9973d4c8",
+    "validation/integrated/source-inventory.json": "52cd7937881dbe2f97dc92042c38314bfde112ca07beb3e5e4dcd143a7b81893",
+    "validation/integrated/source-verification.json": "c3318e922f2223b0661cde7c125fab75b3e083445120a196d35e3bec8e38e4aa",
+    "validation/repair/cuda.log": "9b7a1e78393b067e9c76f94763c7c8bea907a7e9245d3fc44885d0e85363053c",
+    "validation/repair/host.log": "4c1308bdfa10df89046b94fb7f9c7d6f17b4c8dc7c6b5d28f5f08a185a0a62fb",
+    "validation/repair/source-inventory.json": "479a56bb18f97761da60bf1f4c4b43f058ef6b1357b7a8b2880b744aca3a8aaf",
+    "validation/repair/source-verification.json": "01a1e8fe48aca78de387599ee0aeaf7029233390e1182d8eecf82018b1c7c332"
+  }
+}

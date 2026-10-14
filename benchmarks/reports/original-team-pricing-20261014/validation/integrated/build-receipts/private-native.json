@@ -1,0 +1,35 @@
+{
+  "commands": [
+    [
+      "/usr/bin/gfortran-15",
+      "-O3",
+      "-std=f2018",
+      "-fopenmp",
+      "-ffp-contract=off",
+      "-J/tmp/pytest-of-jirka/pytest-1643/test_changed_automatic_private0/native",
+      "-I",
+      "/tmp/pytest-of-jirka/pytest-1643/test_changed_automatic_private0/native",
+      "-c",
+      "/tmp/pytest-of-jirka/pytest-1643/test_changed_automatic_private0/original.f90",
+      "/tmp/pytest-of-jirka/pytest-1643/test_changed_automatic_private0/native/driver.f90"
+    ],
+    [
+      "/usr/bin/gfortran-15",
+      "-O3",
+      "-std=f2018",
+      "-fopenmp",
+      "-ffp-contract=off",
+      "/tmp/pytest-of-jirka/pytest-1643/test_changed_automatic_private0/native/original.o",
+      "/tmp/pytest-of-jirka/pytest-1643/test_changed_automatic_private0/native/driver.o",
+      "-o",
+      "/tmp/pytest-of-jirka/pytest-1643/test_changed_automatic_private0/native/native"
+    ]
+  ],
+  "binary": "/tmp/pytest-of-jirka/pytest-1643/test_changed_automatic_private0/native/native",
+  "binary_sha256": "adac6dc854967c7f730b289abf577e556b32307657dc40a5a7886ac42122dbf9",
+  "objects": {
+    "/tmp/pytest-of-jirka/pytest-1643/test_changed_automatic_private0/native/original.o": "81c81ff544ffaf323c92093c078031b3e0eb031ddd889156f90a98133d61b269",
+    "/tmp/pytest-of-jirka/pytest-1643/test_changed_automatic_private0/native/driver.o": "8ba1c3470da6d68ce6036f343ddde4d0a3711e4bc31ed378e0c36c9f30e98d53"
+  },
+  "original_source_sha256": "a939e51f1638f9c54e3d1dc4d46f7eb32a0d66483325b3ad2eb40987581edd92"
+}

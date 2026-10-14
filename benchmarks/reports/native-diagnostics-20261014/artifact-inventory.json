@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "files_sha256": {
+    "README.md": "6b00aaa233fd389e88a81958e34fa2f761176a535ff885cf7038bb33c8d51ec0",
+    "data.json": "d1ceb463032f32a9006f2728c2da8b91174b8c8ce7a89801bea6b8713aef961b",
+    "evidence/aborted-overlap.json": "8bbc50d86295621832b5b4490e3801171dc891fda1e3026d2238e852f374a10f",
+    "evidence/channel-simple-full-fields.json": "2ed90ac9f12b733b18a5c686c5bcf9370200ad7d8ce5b8632a46a3c8786ddbfd",
+    "evidence/dump-command-receipts/745ab794806c47cb9b274db60b3b0583.json": "7947316a1a8323c7be4cc7342df75f0e5fe24ff917a3297d8302cdebc400b3be",
+    "evidence/dump-command-receipts/b6da20221aa143e3867d7279061f4302.json": "8d1ae8ae1b57c65be8697fc3a70a1f470029c976d7e90b6eecb86f74185a85e2",
+    "evidence/dump-driver.json": "cc345bc13ed1053ebc40886a91c9f3333cbee4111ebd4ad477c3f9d5711df3e7",
+    "evidence/dump-main.f90": "40170565640fff2ba4416638dc8aa365255ead71558b64c1b9caf52735b4255c",
+    "evidence/dump-relink-plan.json": "0d5cc2f0bae94b3bd7e8f8fa6b3c6576910879a037c664e4845fb969d4c6ddb5",
+    "evidence/dump-reproduce.py": "26eb6e3986195ff563c4c654108cefff7d3c683da0a8453c33251938559e1e67",
+    "evidence/raw-fields-plot-reproduce.py": "3bfca5482bfd636e6da6ac7aa2973bb4e1f11fdc6486657c16f95978d2acb8c9",
+    "evidence/repair-full-rebuild-reproduce.py": "0c44007f8976cf29df312f939ebdcadce7ec45e40b93c88ec6eb6665f11c8d39",
+    "evidence/repair-full-rebuild.json": "00835ab3d582ca9ca09296ad6045d570c6a38f87c126a64102997246bf776c4e",
+    "evidence/repair-path-data-audit.json": "69d3207c5b3e3f0c21ff8229a0e7b24a6ea6cd15a6cb1c734fe36d38b83d4b70",
+    "evidence/repair-path-data-reproduce.py": "7ab7ebd1eb150dfc6a5b95f2427a01f5cc838c5be01bb5ec8ac0b499b8eb9f9f",
+    "evidence/repair-single-object.json": "35accac6bbff9be0e628a0032d4fced1ff27234eb8b318625023690191e1b63c",
+    "evidence/repair-source.patch": "57102e96312c97f0748201674bc011a7bf0c8d965545e3170536b56464ca8c10",
+    "native-checkpoint.pdf": "31a964c8559ef5b98de4a88767bb26872055188d23449a90c16b40cc86cf2ddf",
+    "native-checkpoint.png": "87f08800f8ea9d01421941634b22832be5ca8cc8f13e33e8cf8c75aff1e93a4f",
+    "native-checkpoint.svg": "7d9ee4818b45562dda2ef0ae26c729899ae770b1b221d46be830eafd2742b392",
+    "render.py": "b216bf9d1b873085b025ccb7c33d6fbeadfaad0c88b9d971df3b3f93eec7ce0a",
+    "report.json": "5e1488b680a74381ab340174c0e67ac03c4507aa6b4715fd32fa40591ceb94a1"
+  },
+  "identity": "f8c13cb7419908617be0bf3c5f04e08dab4ff4e84bf18f7679520b269c739cb4"
+}

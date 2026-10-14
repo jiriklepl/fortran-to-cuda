@@ -1,0 +1,8 @@
+{
+  "pid": 183249,
+  "binary": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint/ELMM-diagnostic",
+  "event": "intentionally_aborted",
+  "time_ns": 1792008221861188887,
+  "reason": "avoid concurrent OpenMP contention with root native diagnostic; no numerical result; preserved partial run",
+  "performance_sample": false
+}

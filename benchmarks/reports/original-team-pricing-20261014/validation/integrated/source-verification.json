@@ -1,0 +1,26 @@
+{
+  "checked_at_utc": "2026-10-14T20:18:23.978287+00:00",
+  "head_before": "62a1d028952561c4c1dd7d0c51d91c9d060f571f",
+  "head_after": "62a1d028952561c4c1dd7d0c51d91c9d060f571f",
+  "source_inventory": "/tmp/combined-team-private-integration-source.json",
+  "source_inventory_sha256": "52cd7937881dbe2f97dc92042c38314bfde112ca07beb3e5e4dcd143a7b81893",
+  "compiler_files": 531,
+  "changed": [],
+  "added": [],
+  "external_sources_changed": [],
+  "log": "/tmp/combined-team-private-integration-tests.log",
+  "log_sha256": "ef8b85dcb146737a462d92a13e82358a7262e6dee0fa2c9e6e1a34acb4ae5970",
+  "result": ".......                                                                  [100%]\n7 passed in 286.17s (0:04:46)",
+  "cpu_affinity": [
+    4,
+    5,
+    10,
+    11
+  ],
+  "coverage": [
+    "original teams CUDA fields and complete transfer ledger",
+    "PRIVATE descriptors production mismatch and empty extent fallback",
+    "native automatic PRIVATE descriptor/fallback and no replay",
+    "original CD4divU/CD4divV/CD4divW/Filter3ord native effects probes"
+  ]
+}

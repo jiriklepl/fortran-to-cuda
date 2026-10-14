@@ -1,0 +1,26 @@
+{
+  "tested_base": "368b8f6",
+  "checked_at_utc": "2026-10-14T20:12:04.173107+00:00",
+  "source_inventory": "/tmp/exact-private-descriptor-key-source.json",
+  "source_inventory_sha256": "479a56bb18f97761da60bf1f4c4b43f058ef6b1357b7a8b2880b744aca3a8aaf",
+  "source_count": 528,
+  "changed": [],
+  "logs": {
+    "/tmp/exact-private-descriptor-key-host-tests.log": {
+      "sha256": "4c1308bdfa10df89046b94fb7f9c7d6f17b4c8dc7c6b5d28f5f08a185a0a62fb",
+      "result": ".....................................                                    [100%]\n37 passed in 124.61s (0:02:04)"
+    },
+    "/tmp/exact-private-descriptor-key-cuda-tests.log": {
+      "sha256": "9b7a1e78393b067e9c76f94763c7c8bea907a7e9245d3fc44885d0e85363053c",
+      "result": ".                                                                        [100%]\n1 passed in 139.29s (0:02:19)"
+    }
+  },
+  "post_test_change": "Reordered json/os test imports only; ruff passes.",
+  "patch_sha256": "b8e0f0d4b8f24b9419ac996a1ad44f69ad162e15d510c529c1fe61977a9aadbb",
+  "final_file_sha256": {
+    "compiler/offload/exact_window.py": "23fd1e40360082680da9161e3a7beb7359e0a2d62d4095a55e1a4219475563a0",
+    "compiler/tests/test_exact_window.py": "9a875acf0f78d6cb43452dfdf898f51e0a814291b9def19c531f7a00801ed537",
+    "compiler/tests/test_exact_window_teams_cuda.py": "6c1e254cb245bee8007dc4161ee22232f970e1c81ca49cfb335c29afc99cf071",
+    "compiler/README.md": "c659b772de649299161d6a42f920ef2f7f4240deee4fec903bfecbb7316c0736"
+  }
+}

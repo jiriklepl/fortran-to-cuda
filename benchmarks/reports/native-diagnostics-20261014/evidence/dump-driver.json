@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "kind": "private-main-full-field-diagnostic",
+  "performance_measured": false,
+  "original_build_identity": "95d77a25d590c9d06ae45c9b97736b024d33bbd56ea976fe2cee8c1004bd5dc4",
+  "original_binary": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/ELMM",
+  "binary": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/ELMM-diagnostic",
+  "maintained_fields": [
+    "U",
+    "V",
+    "W",
+    "Pr",
+    "Viscosity",
+    "U2",
+    "V2",
+    "W2",
+    "Ustar",
+    "Vstar",
+    "Wstar"
+  ],
+  "additional_fields": [
+    "Temperature",
+    "Moisture",
+    "Scalar",
+    "TDiff",
+    "U_avg",
+    "V_avg",
+    "W_avg",
+    "Pr_avg",
+    "Scalar_avg"
+  ],
+  "original_numerical_sources_modified": false,
+  "tolerance_provenance": {
+    "campaign": "/home/jirka/research/fortran-abomination/benchmarks/results/generic-residency-30pct-20261009/milestones/20261010T132625Z-three-case-strict-correctness/evidence/campaign/campaign.json",
+    "driver": "application-channel-simple"
+  },
+  "driver": {
+    "dtype": "float64",
+    "rtol": 1e-05,
+    "atol": 1e-06,
+    "metadata_format": "storage-shape-bounds-v1",
+    "field_count": 20
+  },
+  "files_sha256": {
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/reproduce.py": "26eb6e3986195ff563c4c654108cefff7d3c683da0a8453c33251938559e1e67",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/diagnostic-main.f90": "40170565640fff2ba4416638dc8aa365255ead71558b64c1b9caf52735b4255c",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/ELMM-diagnostic": "add04c16fb3d3971ba7109c506d4261a97223d4a732752636099ba1b3ce50087",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/diagnostic-main.o": "47328cfc469e24d03eea4f0c0de611ff9a5c1be7aef284ebf023efbcb4dab139",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/relink-plan.json": "0d5cc2f0bae94b3bd7e8f8fa6b3c6576910879a037c664e4845fb969d4c6ddb5",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/build-receipts.json": "d70b0641284c769a243033b280914a219cf14ed2ca27b2faf7e2658aa85d4130",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/generic-residency-30pct-20261009/milestones/20261010T132625Z-three-case-strict-correctness/evidence/campaign/campaign.json": "67f3160600a584708183a1c3f98ed6a98bf6397c9e06097f609edc9aeb1b0f5b",
+    "/tmp/fortran-residency-e2e-20261014/elmm-pipeline/elmm_pipeline/campaigns/halos.py": "8a882afa59e9fd8c45d447b5605a6adc208d4ba8296ec5b99481407ab488e4d0",
+    "/tmp/fortran-residency-e2e-20261014/elmm-pipeline/elmm_pipeline/campaigns/driver_link.py": "6e54cbc79f4fbaf2f6f6ae54507a0c6df7060453a02fd27739aff902c2a35d6f",
+    "/tmp/fortran-residency-e2e-20261014/elmm-pipeline/elmm_pipeline/build_receipts.py": "a46dc118862fcb66e8f4202e1580e47121bcb192cab657168919429636a1a3d2",
+    "/tmp/fortran-residency-e2e-20261014/containers/sgs_experiment.py": "258ff616a9214a8a586bbd46f922aca934e3fef26d80ca101fcfe8c04fb6e57b"
+  }
+}

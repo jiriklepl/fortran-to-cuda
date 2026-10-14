@@ -1,0 +1,802 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "application_executed": false,
+  "original_build_identity": "95d77a25d590c9d06ae45c9b97736b024d33bbd56ea976fe2cee8c1004bd5dc4",
+  "repaired_build_identity": "689a6bcdafb0a08e2b2493bd11f1175e0e9000574fb993d6eff195e1a7fd341d",
+  "all_72_object_executable_sections_identical": true,
+  "all_72_nondebug_relocation_sections_identical": true,
+  "remaining_nondebug_differences": "Only source-root spellings in allocated runtime diagnostic strings, alignment padding, and symbol offsets to those strings.",
+  "objects": [
+    {
+      "object": "P/fft.o",
+      "section": ".rodata.str1.8",
+      "normalized_strings_equal": true,
+      "changed_symbol_offsets": [
+        {
+          "index": 14,
+          "name": ".LC2",
+          "original_offset": 96,
+          "repaired_offset": 104,
+          "normalized_target": "Error when initializing FFTW for threads."
+        },
+        {
+          "index": 16,
+          "name": ".LC4",
+          "original_offset": 144,
+          "repaired_offset": 152,
+          "normalized_target": "Data allocate error, fftw_malloc returned NULL."
+        },
+        {
+          "index": 18,
+          "name": ".LC8",
+          "original_offset": 192,
+          "repaired_offset": 200,
+          "normalized_target": "<snapshot>/PoisFFT/src/plan_new-inc.f90"
+        },
+        {
+          "index": 19,
+          "name": ".LC10",
+          "original_offset": 352,
+          "repaired_offset": 360,
+          "normalized_target": "Error: not enough flags when creating PoisFFT_PlanXD, there must be one per dimension."
+        },
+        {
+          "index": 21,
+          "name": ".LC9",
+          "original_offset": 296,
+          "repaired_offset": 304,
+          "normalized_target": "Error: not enough flags when creating PoisFFT_PlanXD"
+        }
+      ],
+      "changed_strings": [
+        {
+          "original": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/fft-inc.f90",
+          "repaired": "/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/fft-inc.f90"
+        },
+        {
+          "original": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/plan_new-inc.f90",
+          "repaired": "/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/plan_new-inc.f90"
+        }
+      ]
+    },
+    {
+      "object": "P/poisfft.o",
+      "section": ".rodata.str1.8",
+      "normalized_strings_equal": true,
+      "changed_symbol_offsets": [
+        {
+          "index": 177,
+          "name": ".LC83",
+          "original_offset": 4768,
+          "repaired_offset": 4920,
+          "normalized_target": "Unknown combination of boundary conditions."
+        },
+        {
+          "index": 181,
+          "name": ".LC42",
+          "original_offset": 552,
+          "repaired_offset": 568,
+          "normalized_target": "At line 169 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 183,
+          "name": ".LC41",
+          "original_offset": 424,
+          "repaired_offset": 440,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 169"
+        },
+        {
+          "index": 184,
+          "name": ".LC43",
+          "original_offset": 672,
+          "repaired_offset": 696,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 170"
+        },
+        {
+          "index": 185,
+          "name": ".LC40",
+          "original_offset": 304,
+          "repaired_offset": 312,
+          "normalized_target": "At line 168 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 186,
+          "name": ".LC38",
+          "original_offset": 176,
+          "repaired_offset": 184,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 168"
+        },
+        {
+          "index": 187,
+          "name": ".LC74",
+          "original_offset": 3648,
+          "repaired_offset": 3768,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 649"
+        },
+        {
+          "index": 188,
+          "name": ".LC72",
+          "original_offset": 3400,
+          "repaired_offset": 3512,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 633"
+        },
+        {
+          "index": 189,
+          "name": ".LC71",
+          "original_offset": 3280,
+          "repaired_offset": 3384,
+          "normalized_target": "At line 632 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 190,
+          "name": ".LC73",
+          "original_offset": 3528,
+          "repaired_offset": 3640,
+          "normalized_target": "At line 648 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 191,
+          "name": ".LC58",
+          "original_offset": 1664,
+          "repaired_offset": 1720,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 395"
+        },
+        {
+          "index": 192,
+          "name": ".LC57",
+          "original_offset": 1544,
+          "repaired_offset": 1592,
+          "normalized_target": "At line 394 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 193,
+          "name": ".LC56",
+          "original_offset": 1416,
+          "repaired_offset": 1464,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 377"
+        },
+        {
+          "index": 194,
+          "name": ".LC55",
+          "original_offset": 1296,
+          "repaired_offset": 1336,
+          "normalized_target": "At line 376 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 195,
+          "name": ".LC66",
+          "original_offset": 2656,
+          "repaired_offset": 2744,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 478"
+        },
+        {
+          "index": 196,
+          "name": ".LC65",
+          "original_offset": 2536,
+          "repaired_offset": 2616,
+          "normalized_target": "At line 477 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 197,
+          "name": ".LC49",
+          "original_offset": 920,
+          "repaired_offset": 952,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 274"
+        },
+        {
+          "index": 198,
+          "name": ".LC48",
+          "original_offset": 800,
+          "repaired_offset": 824,
+          "normalized_target": "At line 273 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 199,
+          "name": ".LC69",
+          "original_offset": 3032,
+          "repaired_offset": 3128,
+          "normalized_target": "At line 560 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 200,
+          "name": ".LC78",
+          "original_offset": 4144,
+          "repaired_offset": 4280,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 746"
+        },
+        {
+          "index": 201,
+          "name": ".LC68",
+          "original_offset": 2904,
+          "repaired_offset": 3000,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 545"
+        },
+        {
+          "index": 202,
+          "name": ".LC67",
+          "original_offset": 2784,
+          "repaired_offset": 2872,
+          "normalized_target": "At line 544 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 203,
+          "name": ".LC70",
+          "original_offset": 3152,
+          "repaired_offset": 3256,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 561"
+        },
+        {
+          "index": 204,
+          "name": ".LC60",
+          "original_offset": 1912,
+          "repaired_offset": 1976,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 420"
+        },
+        {
+          "index": 205,
+          "name": ".LC59",
+          "original_offset": 1792,
+          "repaired_offset": 1848,
+          "normalized_target": "At line 419 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 206,
+          "name": ".LC62",
+          "original_offset": 2160,
+          "repaired_offset": 2232,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 438"
+        },
+        {
+          "index": 207,
+          "name": ".LC53",
+          "original_offset": 1168,
+          "repaired_offset": 1208,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 292"
+        },
+        {
+          "index": 208,
+          "name": ".LC52",
+          "original_offset": 1048,
+          "repaired_offset": 1080,
+          "normalized_target": "At line 291 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 209,
+          "name": ".LC64",
+          "original_offset": 2408,
+          "repaired_offset": 2488,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 460"
+        },
+        {
+          "index": 210,
+          "name": ".LC63",
+          "original_offset": 2288,
+          "repaired_offset": 2360,
+          "normalized_target": "At line 459 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 211,
+          "name": ".LC77",
+          "original_offset": 4024,
+          "repaired_offset": 4152,
+          "normalized_target": "At line 745 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 212,
+          "name": ".LC76",
+          "original_offset": 3896,
+          "repaired_offset": 4024,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 730"
+        },
+        {
+          "index": 213,
+          "name": ".LC82",
+          "original_offset": 4640,
+          "repaired_offset": 4792,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 843"
+        },
+        {
+          "index": 214,
+          "name": ".LC75",
+          "original_offset": 3776,
+          "repaired_offset": 3896,
+          "normalized_target": "At line 729 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 215,
+          "name": ".LC61",
+          "original_offset": 2040,
+          "repaired_offset": 2104,
+          "normalized_target": "At line 437 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 216,
+          "name": ".LC80",
+          "original_offset": 4392,
+          "repaired_offset": 4536,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 827"
+        },
+        {
+          "index": 217,
+          "name": ".LC79",
+          "original_offset": 4272,
+          "repaired_offset": 4408,
+          "normalized_target": "At line 826 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 218,
+          "name": ".LC81",
+          "original_offset": 4520,
+          "repaired_offset": 4664,
+          "normalized_target": "At line 842 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 221,
+          "name": ".LC96",
+          "original_offset": 6096,
+          "repaired_offset": 6248,
+          "normalized_target": "At line 1814 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 222,
+          "name": ".LC98",
+          "original_offset": 6352,
+          "repaired_offset": 6504,
+          "normalized_target": "At line 1816 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 223,
+          "name": ".LC97",
+          "original_offset": 6224,
+          "repaired_offset": 6376,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 1815"
+        },
+        {
+          "index": 224,
+          "name": ".LC86",
+          "original_offset": 4944,
+          "repaired_offset": 5096,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 1638"
+        },
+        {
+          "index": 225,
+          "name": ".LC99",
+          "original_offset": 6480,
+          "repaired_offset": 6632,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 1817"
+        },
+        {
+          "index": 226,
+          "name": ".LC101",
+          "original_offset": 6736,
+          "repaired_offset": 6888,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 1854"
+        },
+        {
+          "index": 227,
+          "name": ".LC102",
+          "original_offset": 6864,
+          "repaired_offset": 7016,
+          "normalized_target": "At line 1854 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 228,
+          "name": ".LC100",
+          "original_offset": 6608,
+          "repaired_offset": 6760,
+          "normalized_target": "At line 1853 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 229,
+          "name": ".LC94",
+          "original_offset": 5968,
+          "repaired_offset": 6120,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 1739"
+        },
+        {
+          "index": 230,
+          "name": ".LC85",
+          "original_offset": 4816,
+          "repaired_offset": 4968,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 1636"
+        },
+        {
+          "index": 231,
+          "name": ".LC87",
+          "original_offset": 5072,
+          "repaired_offset": 5224,
+          "normalized_target": "At line 1702 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 232,
+          "name": ".LC88",
+          "original_offset": 5200,
+          "repaired_offset": 5352,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 1703"
+        },
+        {
+          "index": 233,
+          "name": ".LC89",
+          "original_offset": 5328,
+          "repaired_offset": 5480,
+          "normalized_target": "At line 1703 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 234,
+          "name": ".LC90",
+          "original_offset": 5456,
+          "repaired_offset": 5608,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 1704"
+        },
+        {
+          "index": 235,
+          "name": ".LC91",
+          "original_offset": 5584,
+          "repaired_offset": 5736,
+          "normalized_target": "At line 1720 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 236,
+          "name": ".LC92",
+          "original_offset": 5712,
+          "repaired_offset": 5864,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 1721"
+        },
+        {
+          "index": 237,
+          "name": ".LC93",
+          "original_offset": 5840,
+          "repaired_offset": 5992,
+          "normalized_target": "At line 1738 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 238,
+          "name": ".LC103",
+          "original_offset": 6992,
+          "repaired_offset": 7144,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 1855"
+        },
+        {
+          "index": 239,
+          "name": ".LC104",
+          "original_offset": 7120,
+          "repaired_offset": 7272,
+          "normalized_target": "At line 1855 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 240,
+          "name": ".LC105",
+          "original_offset": 7248,
+          "repaired_offset": 7400,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 1856"
+        },
+        {
+          "index": 241,
+          "name": ".LC109",
+          "original_offset": 7376,
+          "repaired_offset": 7528,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 1504"
+        },
+        {
+          "index": 242,
+          "name": ".LC112",
+          "original_offset": 7632,
+          "repaired_offset": 7784,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 1300"
+        },
+        {
+          "index": 243,
+          "name": ".LC111",
+          "original_offset": 7504,
+          "repaired_offset": 7656,
+          "normalized_target": "In file '<snapshot>/PoisFFT/src/poisfft.f90', around line 1299"
+        },
+        {
+          "index": 244,
+          "name": ".LC113",
+          "original_offset": 7760,
+          "repaired_offset": 7912,
+          "normalized_target": "Attempt to DEALLOCATE unallocated '%s'"
+        },
+        {
+          "index": 245,
+          "name": ".LC114",
+          "original_offset": 7800,
+          "repaired_offset": 7952,
+          "normalized_target": "At line 1065 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 246,
+          "name": ".LC115",
+          "original_offset": 7928,
+          "repaired_offset": 8080,
+          "normalized_target": "At line 1073 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 247,
+          "name": ".LC117",
+          "original_offset": 8184,
+          "repaired_offset": 8336,
+          "normalized_target": "At line 1931 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "index": 248,
+          "name": ".LC116",
+          "original_offset": 8056,
+          "repaired_offset": 8208,
+          "normalized_target": "At line 1929 of file <snapshot>/PoisFFT/src/poisfft-inc.f90"
+        }
+      ],
+      "changed_strings": [
+        {
+          "original": "At line 167 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 167 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 168",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 168"
+        },
+        {
+          "original": "At line 168 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 168 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 169",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 169"
+        },
+        {
+          "original": "At line 169 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 169 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 170",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 170"
+        },
+        {
+          "original": "At line 273 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 273 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 274",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 274"
+        },
+        {
+          "original": "At line 291 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 291 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 292",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 292"
+        },
+        {
+          "original": "At line 376 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 376 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 377",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 377"
+        },
+        {
+          "original": "At line 394 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 394 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 395",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 395"
+        },
+        {
+          "original": "At line 419 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 419 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 420",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 420"
+        },
+        {
+          "original": "At line 437 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 437 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 438",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 438"
+        },
+        {
+          "original": "At line 459 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 459 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 460",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 460"
+        },
+        {
+          "original": "At line 477 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 477 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 478",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 478"
+        },
+        {
+          "original": "At line 544 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 544 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 545",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 545"
+        },
+        {
+          "original": "At line 560 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 560 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 561",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 561"
+        },
+        {
+          "original": "At line 632 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 632 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 633",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 633"
+        },
+        {
+          "original": "At line 648 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 648 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 649",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 649"
+        },
+        {
+          "original": "At line 729 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 729 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 730",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 730"
+        },
+        {
+          "original": "At line 745 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 745 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 746",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 746"
+        },
+        {
+          "original": "At line 826 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 826 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 827",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 827"
+        },
+        {
+          "original": "At line 842 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 842 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 843",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 843"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1636",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1636"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1638",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1638"
+        },
+        {
+          "original": "At line 1702 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 1702 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1703",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1703"
+        },
+        {
+          "original": "At line 1703 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 1703 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1704",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1704"
+        },
+        {
+          "original": "At line 1720 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 1720 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1721",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1721"
+        },
+        {
+          "original": "At line 1738 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 1738 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1739",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1739"
+        },
+        {
+          "original": "At line 1814 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 1814 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1815",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1815"
+        },
+        {
+          "original": "At line 1816 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 1816 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1817",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1817"
+        },
+        {
+          "original": "At line 1853 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 1853 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1854",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1854"
+        },
+        {
+          "original": "At line 1854 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 1854 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1855",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1855"
+        },
+        {
+          "original": "At line 1855 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 1855 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1856",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1856"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1504",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1504"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1299",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1299"
+        },
+        {
+          "original": "In file '/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1300",
+          "repaired": "In file '/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft.f90', around line 1300"
+        },
+        {
+          "original": "At line 1065 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 1065 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "At line 1073 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 1073 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "At line 1929 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 1929 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        },
+        {
+          "original": "At line 1931 of file /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90",
+          "repaired": "At line 1931 of file /tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/PoisFFT/src/poisfft-inc.f90"
+        }
+      ]
+    }
+  ],
+  "comparison_sha256": "00835ab3d582ca9ca09296ad6045d570c6a38f87c126a64102997246bf776c4e",
+  "reproducer_sha256": "7ab7ebd1eb150dfc6a5b95f2427a01f5cc838c5be01bb5ec8ac0b499b8eb9f9f",
+  "limitations": [
+    "Binary bytes and linked displacements are not claimed identical.",
+    "Corrected source is an explicit application repair; this is not an unchanged-source proof.",
+    "No repaired application execution, numerical validation, or performance qualification."
+  ]
+}

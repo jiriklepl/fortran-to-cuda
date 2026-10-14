@@ -1,0 +1,35 @@
+{
+  "commands": [
+    [
+      "/usr/bin/gfortran-15",
+      "-O3",
+      "-std=f2018",
+      "-fopenmp",
+      "-ffp-contract=off",
+      "-J/tmp/pytest-of-jirka/pytest-1643/test_original_teams_fields_tra0/native",
+      "-I",
+      "/tmp/pytest-of-jirka/pytest-1643/test_original_teams_fields_tra0/native",
+      "-c",
+      "/tmp/pytest-of-jirka/pytest-1643/test_original_teams_fields_tra0/original.f90",
+      "/tmp/pytest-of-jirka/pytest-1643/test_original_teams_fields_tra0/native/driver.f90"
+    ],
+    [
+      "/usr/bin/gfortran-15",
+      "-O3",
+      "-std=f2018",
+      "-fopenmp",
+      "-ffp-contract=off",
+      "/tmp/pytest-of-jirka/pytest-1643/test_original_teams_fields_tra0/native/original.o",
+      "/tmp/pytest-of-jirka/pytest-1643/test_original_teams_fields_tra0/native/driver.o",
+      "-o",
+      "/tmp/pytest-of-jirka/pytest-1643/test_original_teams_fields_tra0/native/native"
+    ]
+  ],
+  "binary": "/tmp/pytest-of-jirka/pytest-1643/test_original_teams_fields_tra0/native/native",
+  "binary_sha256": "1b12bdcf3360d64710aaec7e62c1ad1a00a020bf53b720b3865b7ac48fa1e3bd",
+  "objects": {
+    "/tmp/pytest-of-jirka/pytest-1643/test_original_teams_fields_tra0/native/original.o": "2b353c093bc388bd98d61fc01b118dc3d5150ed2624260df194804b5d4239bc4",
+    "/tmp/pytest-of-jirka/pytest-1643/test_original_teams_fields_tra0/native/driver.o": "3b3d0d551a54f6e66312bc24f08954e16bf06d83daa25a148d22dff7167a851b"
+  },
+  "original_source_sha256": "fdbab0eeb872d0957e34b9e7f999b044adaa3da91504dfc1ccb1bb05165275e5"
+}

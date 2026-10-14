@@ -1,0 +1,1609 @@
+{
+  "schema_version": 1,
+  "status": "passed",
+  "performance_measured": false,
+  "qualification": false,
+  "case": "channel-simple",
+  "driver_sha256": "cc345bc13ed1053ebc40886a91c9f3333cbee4111ebd4ad477c3f9d5711df3e7",
+  "configuration": {
+    "source": "/tmp/fortran-residency-e2e-20261014/containers/cases/channel-simple",
+    "overrides": {},
+    "advection_method": 2,
+    "expected_max_steps": null,
+    "runtime_arguments": [
+      "output_dir='output/'"
+    ]
+  },
+  "configuration_sha256": {
+    "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+    "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+    "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+    "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05",
+    "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+    "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+    "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+    "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+    "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+    "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421"
+  },
+  "affinity": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "environment": {
+    "OMP_NUM_THREADS": "4",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_SCHEDULE": "static",
+    "OMP_PROC_BIND": "false"
+  },
+  "unchanged_original_vtk_reference": "/home/jirka/research/fortran-abomination/benchmarks/results/e2e-native-checkpoint-20261014/channel-simple/native-0",
+  "unchanged_original_vtk_sha256": {
+    "/home/jirka/research/fortran-abomination/benchmarks/results/e2e-native-checkpoint-20261014/channel-simple/native-0/output/W.vtk": "63e6bf6430eeec531bffb1c9f558393553a25a2d6de3252eed5429405df60306",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/e2e-native-checkpoint-20261014/channel-simple/native-0/output/U.vtk": "7e42d08dbd9d47f15100f13f43d1db2c1fa5b637153124c488f695d37be63fe0",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/e2e-native-checkpoint-20261014/channel-simple/native-0/output/V.vtk": "71c38e46fa9a436e3586e49a5e8f412617c462ea6582557df978a30201d2ee35",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/e2e-native-checkpoint-20261014/channel-simple/native-0/output/avg.vtk": "905d332fbb25e561227ab528d96ccb69956515358ec6dcaf9a4230b246f7c78d",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/e2e-native-checkpoint-20261014/channel-simple/native-0/output/out.vtk": "09165acfd84e015a643c368b7cd45618a6d8d7755ccf71d2f06008937f1fd41f"
+  },
+  "runs": [
+    {
+      "number": 0,
+      "argv": [
+        "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/ELMM-diagnostic",
+        "output_dir='output/'"
+      ],
+      "timing": {
+        "completed_steps": 109,
+        "natural_end": true,
+        "time_steps_seconds": 128.89,
+        "poisson_seconds": 3.6
+      },
+      "diagnostic_wall_seconds": 131.27716953300114,
+      "performance_sample": false,
+      "original_binary_vtk_agreement": {
+        "schema_version": 2,
+        "passed": true,
+        "atol": 1e-06,
+        "rtol": 1e-05,
+        "files": {
+          "out.vtk": {
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "fields": {
+              "X_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 64
+              },
+              "p": {
+                "max_absolute_error": 7.450580596923828e-09,
+                "failed_values": 0,
+                "values": 524288
+              },
+              "u": {
+                "max_absolute_error": 2.9802322387695312e-08,
+                "failed_values": 0,
+                "values": 1572864
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds."
+          },
+          "avg.vtk": {
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "fields": {
+              "X_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 64
+              },
+              "p": {
+                "max_absolute_error": 2.9103830456733704e-11,
+                "failed_values": 0,
+                "values": 524288
+              },
+              "u": {
+                "max_absolute_error": 3.725290298461914e-09,
+                "failed_values": 0,
+                "values": 1572864
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds."
+          }
+        },
+        "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."
+      },
+      "comparisons": {
+        "fields-Moisture.bin": {
+          "values": 0,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              0,
+              0,
+              0
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "fields-U_avg.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          }
+        },
+        "fields-V.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          }
+        },
+        "fields-W_avg.bin": {
+          "values": 647220,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              69
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              66
+            ]
+          }
+        },
+        "fields-Viscosity.bin": {
+          "values": 610368,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              132,
+              68,
+              68
+            ],
+            "lower_bounds": [
+              -1,
+              -1,
+              -1
+            ],
+            "upper_bounds": [
+              130,
+              66,
+              66
+            ]
+          }
+        },
+        "fields-W.bin": {
+          "values": 647220,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              69
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              66
+            ]
+          }
+        },
+        "fields-Scalar.bin": {
+          "values": 0,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "fields-Wstar.bin": {
+          "values": 647220,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              69
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              66
+            ]
+          }
+        },
+        "fields-U2.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          }
+        },
+        "fields-Vstar.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          }
+        },
+        "fields-W2.bin": {
+          "values": 647220,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              69
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              66
+            ]
+          }
+        },
+        "fields-Scalar_avg.bin": {
+          "values": 0,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "fields-V_avg.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          }
+        },
+        "fields-Pr_avg.bin": {
+          "values": 524288,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              128,
+              64,
+              64
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              128,
+              64,
+              64
+            ]
+          }
+        },
+        "fields-Ustar.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          }
+        },
+        "fields-Pr.bin": {
+          "values": 610368,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              132,
+              68,
+              68
+            ],
+            "lower_bounds": [
+              -1,
+              -1,
+              -1
+            ],
+            "upper_bounds": [
+              130,
+              66,
+              66
+            ]
+          }
+        },
+        "fields-Temperature.bin": {
+          "values": 0,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              0,
+              0,
+              0
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "fields-U.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          }
+        },
+        "fields-V2.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          }
+        },
+        "fields-TDiff.bin": {
+          "values": 0,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              0,
+              0,
+              0
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "files_sha256": {
+        "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+        "fields-Moisture.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+        "fields-U_avg.bin": "97443f7b39d7a8316621895756f73d3ecbca162b2f0a6a3ff2edc5d7d922626e",
+        "fields-W.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "stdout.log": "c23647c611c72300ff45f0cc61499e7e578d9e149e1de247cd06b00e80fb3cfd",
+        "fields-Moisture.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "fields-V.bin": "29fcb7f1da2d4bfc613099fbc7503177d8df02f676da9cd44832d60f417d7f42",
+        "fields-W_avg.bin": "51acfdfade75c53934eb6c68988313fd7c385e144befbb3023623f0b2521947e",
+        "fields-Viscosity.bin": "9168407bb51cc5ae42a8d6842f1855bec2b91ab69f3e5989597d8cac5f7d147b",
+        "fields-W.bin": "8c9c5793835b7ead7080121ba243030a47dbc56c44a0dcda1a263fa3a6ebf043",
+        "fields-Wstar.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "fields-Scalar_avg.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+        "fields-TDiff.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+        "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05",
+        "fields-V2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-V.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "fields-Scalar.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "fields-Viscosity.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+        "fields-U2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-Wstar.bin": "0ff8334aa7ef565cd340a0af2782ec6cd287803fe518a8dd4a6dfae44547d6f5",
+        "fields-U.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-U2.bin": "e63f2f5709bc6ad8a708bd4a1d074b014d9681d92e63621290b94ce899ea1a31",
+        "fields-W_avg.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+        "fields-Vstar.bin": "77b523a9289b09c62aba79e5469381eaf31e65176cc6f732d690d4bcc356d1b1",
+        "fields-V_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-Vstar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+        "fields-U_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+        "fields-W2.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "fields-W2.bin": "1b17cdd75de001e8ce6b21bca9734697b63ce016749441c41e79106f127b96e2",
+        "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+        "fields-Scalar_avg.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "fields-V_avg.bin": "2348e4962a7251b76c42eec09d242af38690b14acfc4b47ea294116113f276ef",
+        "fields-Pr_avg.bin": "30d65a443d6b68587aef57e54147c74e89d3a1aaf36b907080c1095d41ac1eff",
+        "fields-Temperature.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "fields-Ustar.bin": "c4c1b2f4d7c7e2b1944b228adb8ae01a2afde1ee2311aa59d728182f80518046",
+        "fields-Pr.bin": "0e807a4afeccab3a7b0f46f024ea5f5688810554a0822e366cb2b3427fd00ae5",
+        "fields-Scalar.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+        "fields-Temperature.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "fields-Pr.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+        "fields-U.bin": "0feedf78a8dc619e7fc55ad4233aa4179078504cdb764f7ad91209f983100b54",
+        "fields-Pr_avg.shape": "3196fd7ddeb27f50d5ccb0303f770f61c9bdf1e94505ed7d6c6d0a1758246be8",
+        "fields-V2.bin": "c6009fe75a154d0db494297eb10aa9ae85680bb8241cdabad0c8707498dfde08",
+        "fields-Ustar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-TDiff.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output/W.vtk": "0715bba3fc298e4ba8b536863f3fe4103f7c136e80b90a10b7aab4e43cce8a46",
+        "output/U.vtk": "1c669949e7f40b8c1fc786f986068e9747b6579a70dc7425a6e29cb0aa7eb23b",
+        "output/times.unf": "f5c4840632124b19d9631e4d1eb99ef981d68fb687b00f742ee1598bbd042ba1",
+        "output/V.vtk": "458771d89f37f100b416582bc30e41e1f6d1d5d544fcd7bef38331341dd00166",
+        "output/avg.vtk": "76c2ed327aa9a50872b89347114ec602d5d35fcf03738fd1eac597b0d4841446",
+        "output/out.vtk": "7a996d6fcebedb46907c529812f91a5272d25e68030a64a5ed3f0b1c2bff0125"
+      },
+      "passed": true
+    },
+    {
+      "number": 1,
+      "argv": [
+        "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/ELMM-diagnostic",
+        "output_dir='output/'"
+      ],
+      "timing": {
+        "completed_steps": 109,
+        "natural_end": true,
+        "time_steps_seconds": 91.6,
+        "poisson_seconds": 3.08
+      },
+      "diagnostic_wall_seconds": 92.81618517699826,
+      "performance_sample": false,
+      "original_binary_vtk_agreement": {
+        "schema_version": 2,
+        "passed": true,
+        "atol": 1e-06,
+        "rtol": 1e-05,
+        "files": {
+          "out.vtk": {
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "fields": {
+              "X_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 64
+              },
+              "p": {
+                "max_absolute_error": 1.4901161193847656e-08,
+                "failed_values": 0,
+                "values": 524288
+              },
+              "u": {
+                "max_absolute_error": 1.1920928955078125e-07,
+                "failed_values": 0,
+                "values": 1572864
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds."
+          },
+          "avg.vtk": {
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "fields": {
+              "X_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 64
+              },
+              "p": {
+                "max_absolute_error": 9.313225746154785e-10,
+                "failed_values": 0,
+                "values": 524288
+              },
+              "u": {
+                "max_absolute_error": 1.862645149230957e-09,
+                "failed_values": 0,
+                "values": 1572864
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds."
+          }
+        },
+        "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."
+      },
+      "comparisons": {
+        "fields-Moisture.bin": {
+          "values": 0,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              0,
+              0,
+              0
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "fields-U_avg.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 9.702061376515303e-11,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          }
+        },
+        "fields-V.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 1.7235390892267333e-10,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          }
+        },
+        "fields-W_avg.bin": {
+          "values": 647220,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 2.6957665266724717e-11,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              69
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              66
+            ]
+          }
+        },
+        "fields-Viscosity.bin": {
+          "values": 610368,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 3.5803034677066824e-10,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              132,
+              68,
+              68
+            ],
+            "lower_bounds": [
+              -1,
+              -1,
+              -1
+            ],
+            "upper_bounds": [
+              130,
+              66,
+              66
+            ]
+          }
+        },
+        "fields-W.bin": {
+          "values": 647220,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 1.6511580991362962e-10,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              69
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              66
+            ]
+          }
+        },
+        "fields-Scalar.bin": {
+          "values": 0,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "fields-Wstar.bin": {
+          "values": 647220,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 2.8145132090597394e-08,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              69
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              66
+            ]
+          }
+        },
+        "fields-U2.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 3.9218361891357745e-10,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          }
+        },
+        "fields-Vstar.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 1.2023149262643806e-07,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          }
+        },
+        "fields-W2.bin": {
+          "values": 647220,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 1.6546575221099147e-10,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              69
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              66
+            ]
+          }
+        },
+        "fields-Scalar_avg.bin": {
+          "values": 0,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "fields-V_avg.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 2.2993162929196842e-11,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          }
+        },
+        "fields-Pr_avg.bin": {
+          "values": 524288,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 1.6345660935890294e-11,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              128,
+              64,
+              64
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              128,
+              64,
+              64
+            ]
+          }
+        },
+        "fields-Ustar.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 4.5044574398245274e-07,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          }
+        },
+        "fields-Pr.bin": {
+          "values": 610368,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 2.6480884152135786e-09,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              132,
+              68,
+              68
+            ],
+            "lower_bounds": [
+              -1,
+              -1,
+              -1
+            ],
+            "upper_bounds": [
+              130,
+              66,
+              66
+            ]
+          }
+        },
+        "fields-Temperature.bin": {
+          "values": 0,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              0,
+              0,
+              0
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        "fields-U.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 3.9675729368582324e-10,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          }
+        },
+        "fields-V2.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 1.688240658381801e-10,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          }
+        },
+        "fields-TDiff.bin": {
+          "values": 0,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              0,
+              0,
+              0
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "files_sha256": {
+        "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+        "fields-Moisture.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+        "fields-U_avg.bin": "cd617de897161181fe61b3577deb4b4e04231b6d28381fd5351a4a25d0f839a7",
+        "fields-W.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "stdout.log": "a50307cab185d8baa002d3521b692a1ce79f5130b7197485ade6987fc810931e",
+        "fields-Moisture.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "fields-V.bin": "cd4b95ece9dcf44d4c7a66c474f9a1f16f5f5f7bfc2993b3c425285e186367d5",
+        "fields-W_avg.bin": "0d9fe5f00e4efcd843a1956d578038c57eac24d1fccbc924c3d2961de055adf4",
+        "fields-Viscosity.bin": "35c1843f5416b90466f71e8ffa08b8c1eb0dd02adadf7a3668d8c8096c20e4c4",
+        "fields-W.bin": "1c0670df9d65f5750d643b8f3c5f58a5b6ff39436301b417cb59a50b3c3b3f81",
+        "fields-Wstar.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "fields-Scalar_avg.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+        "fields-TDiff.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+        "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05",
+        "fields-V2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-V.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "fields-Scalar.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "fields-Viscosity.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+        "fields-U2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-Wstar.bin": "b1d56754b878145a9752ed4f3c290b485895f2228c8f56e9aec81a5519dc2b28",
+        "fields-U.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-U2.bin": "1863dde588449a2616f7744c47e1150e723d4927d46a4af76244399376a60c9a",
+        "fields-W_avg.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+        "fields-Vstar.bin": "475e2b891b8d1ca07ad22a31146108156f4eb92bc34f7478ab818e58fc748ecd",
+        "fields-V_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-Vstar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+        "fields-U_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+        "fields-W2.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "fields-W2.bin": "a0780c86cb0cf078c03556a791e993a994b4cbba114ec31b5bd90248bb55e303",
+        "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+        "fields-Scalar_avg.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "fields-V_avg.bin": "db44c3c22dbc3d9bd71cbcb78e41c61366699618eb5ea2a280ededbd22b35fa4",
+        "fields-Pr_avg.bin": "5f7be3cce162cdb0891d81d4505b3982062f8b23f52782b19298cb3b569fea36",
+        "fields-Temperature.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "fields-Ustar.bin": "099d713dc980ecf8719f72e437adf7a1c0f823fac71fac158d9f7a9fca1cd3a2",
+        "fields-Pr.bin": "b0db984e4bcbb4a1a8257034db26ba26a5cf0c0c7abfe6c7a7223a39340395d1",
+        "fields-Scalar.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+        "fields-Temperature.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "fields-Pr.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+        "fields-U.bin": "e8b68ef8ef1d73b91e3692d6d7eb2c10f27df2ea823cee1aa87d2420ea753cab",
+        "fields-Pr_avg.shape": "3196fd7ddeb27f50d5ccb0303f770f61c9bdf1e94505ed7d6c6d0a1758246be8",
+        "fields-V2.bin": "55032f6690fae6ca3225c804f5335053f7f0238cd2f21fb7ae9aedd37e186237",
+        "fields-Ustar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-TDiff.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "output/W.vtk": "7183d66f78464c89ee33e9c6efc0b41fefa572c7cb10b74370b57a69bf18e086",
+        "output/U.vtk": "8af7ba2e8217e55583b11bc1f4a80a9ec507f2ec4470151ec27fede43298a840",
+        "output/times.unf": "e010dd50b03e609a6fc0cbb9b06690a82e3b15cfac9abfec93f9990766b62b8b",
+        "output/V.vtk": "a92381e12543f7c5e473423885f1c20c4d4fcc02c66c93f83478b111f566a066",
+        "output/avg.vtk": "90d465c7d787e5e14d26c80833bfc4bf1d4d6bd92831630fc65178bd1bdcc25d",
+        "output/out.vtk": "12b04ca0b4ccf58abd79c7500a0f74dd88c773b6d8285e7e59c5c5e474ebe31e"
+      },
+      "passed": true
+    }
+  ]
+}

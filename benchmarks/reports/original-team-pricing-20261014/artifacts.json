@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "status": "frozen feature and correctness report; application targets unqualified",
+  "compiler_commit": "9fe23c7bb78ac8e4727396e1a5c9f814b271de3e",
+  "compatible_pipeline_commit": "0876bf8c10660f474509d73af8d335d5798709d1",
+  "sha256": {
+    "README.md": "e88ff654a158a6e80f4c9fe577adce90deddac3b2808e5fb422050babe546dc7",
+    "capabilities.png": "bb04bde807f4be04d0810c3c0914b61ecbb2541c7eab0a6f45166e71d58c8e59",
+    "capabilities.svg": "d5c6da15b7e01281d130ac6a77898d1dba3c63f8408d5d7ea6288b92d11c9aa5",
+    "evidence.json": "678e82d75eeacb4b0f1b64b18d5b90d445662c17e5ceeaac9f63dcaf243d2f09",
+    "render.py": "9e0e5fd8b1c0817918ed49a8ba17bcf84d0a61f7001e7656736a4e7f3452e6c8",
+    "validation/integrated/build-receipts/original-teams-candidate.json": "f06cfa4249d33c1dee07634c4a7fd4801cf581007ead0a26dc7edc8a15f29a4b",
+    "validation/integrated/build-receipts/original-teams-native.json": "c81ca3a0b297a1e319fd20c5c06416b74ea6b82f454e51367fb9f7a808cb6002",
+    "validation/integrated/build-receipts/private-capture.json": "b80f280104e2bc5f93aacea25e97583bb8e93295e9d32bf623e09158864f8d2b",
+    "validation/integrated/build-receipts/private-native.json": "cec3301fa6c9979bb3374a42e7c041994fe9aaed6098ddc1e687b93ccd3d0884",
+    "validation/integrated/build-receipts/private-production.json": "bf0e435d6d330ab2acb07395706dafb6e564f7f9570eb02e9cf595e1dd9d6071",
+    "validation/integrated/commit-match.json": "373050174a102cf59a252d04263e40295adec7078a53f46a9b38686a2fe0f6c0",
+    "validation/integrated/cuda-native-probes.log": "ef8b85dcb146737a462d92a13e82358a7262e6dee0fa2c9e6e1a34acb4ae5970",
+    "validation/integrated/host.log": "a509550269aaf40280bbad8d9408b06e9f6b80f16a256a3e9b5d999a9973d4c8",
+    "validation/integrated/source-inventory.json": "52cd7937881dbe2f97dc92042c38314bfde112ca07beb3e5e4dcd143a7b81893",
+    "validation/integrated/source-verification.json": "c3318e922f2223b0661cde7c125fab75b3e083445120a196d35e3bec8e38e4aa",
+    "validation/repair/cuda.log": "9b7a1e78393b067e9c76f94763c7c8bea907a7e9245d3fc44885d0e85363053c",
+    "validation/repair/host.log": "4c1308bdfa10df89046b94fb7f9c7d6f17b4c8dc7c6b5d28f5f08a185a0a62fb",
+    "validation/repair/source-inventory.json": "479a56bb18f97761da60bf1f4c4b43f058ef6b1357b7a8b2880b744aca3a8aaf",
+    "validation/repair/source-verification.json": "01a1e8fe48aca78de387599ee0aeaf7029233390e1182d8eecf82018b1c7c332"
+  }
+}

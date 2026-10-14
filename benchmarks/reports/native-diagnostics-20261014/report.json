@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "kind": "native-full-fields-and-private-source-repair-diagnostics",
+  "status": "completed",
+  "performance_measured": false,
+  "qualification": false,
+  "compatible_repositories": {
+    "parent": "62a1d028952561c4c1dd7d0c51d91c9d060f571f",
+    "pipeline": "0876bf8c10660f474509d73af8d335d5798709d1",
+    "validation": "Relevant parent configuration/output-reader and every pipeline Python source checked byte-for-byte against these commits. No compiler generation was invoked in this native diagnostic."
+  },
+  "repository_file_sha256": {
+    "containers/sgs_experiment.py": "258ff616a9214a8a586bbd46f922aca934e3fef26d80ca101fcfe8c04fb6e57b",
+    "containers/cases/channel-simple/boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+    "containers/cases/channel-simple/grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+    "containers/cases/channel-simple/inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+    "containers/cases/channel-simple/large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+    "containers/cases/channel-simple/les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+    "containers/cases/channel-simple/main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+    "containers/cases/channel-simple/origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+    "containers/cases/channel-simple/output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+    "containers/cases/channel-simple/scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+    "containers/cases/channel-simple/time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05",
+    "elmm-pipeline/elmm_pipeline/gpu_profiling.py": "afb0ae46a7a4626d585abc8c6c9ed3e76525717fc04c78219880f2f602c3c300",
+    "elmm-pipeline/elmm_pipeline/bootstrap.py": "5dc8d3bd294ddb1364e2c9f3805ebb13b9ccd37095d01ce0e2289145490fd405",
+    "elmm-pipeline/elmm_pipeline/gpu_calls.py": "56f83a872c4dc102946aaa9a5a10f9b7a6511fce1b57d6b3fd07c134fbf1536c",
+    "elmm-pipeline/elmm_pipeline/instrumentation.py": "35f76f401fa44a3b8f05c936942ddc8661e28719f1cd84d71e117c9aa79d37e1",
+    "elmm-pipeline/elmm_pipeline/configuration.py": "93b411788e234300adbdcd0f5a42c3ef1e7291dbf519e3b25d0e44eba1a2b538",
+    "elmm-pipeline/elmm_pipeline/gpu_discovery.py": "dbb4ba404e57d1272d0209351cbcf4695fb5fe5dbee1642f18aa95c0ec4c917b",
+    "elmm-pipeline/elmm_pipeline/validation.py": "e9ff836586ec8ff66513701e134ebba9ca7f339a469e50acbfbbc774d553b15f",
+    "elmm-pipeline/elmm_pipeline/gpu_toolchain.py": "e3547941b9e883a90c9b9230f7182e4202de4848c07086ff068ab044cd88d6ea",
+    "elmm-pipeline/elmm_pipeline/__init__.py": "4cebed4cdcc8c3e84d79d32b6cf544c88a2d1cdfcfb94cf7ebe11d87f7a1166c",
+    "elmm-pipeline/elmm_pipeline/scoped_adaptation.py": "3b70f5096c90c93e0fb0b3bc51b1e14e98456b7a966045dcc5ecbdf83e7bc51c",
+    "elmm-pipeline/elmm_pipeline/build.py": "e3b8f015d9875ee787e6b2ccd6094ed2a820284be8da3b3a0086c23878575645",
+    "elmm-pipeline/elmm_pipeline/scope_extraction.py": "5b161df7bf9545a5bafd52203986d7f1ad9300d7286f2afae5e53ee39c0a3ac6",
+    "elmm-pipeline/elmm_pipeline/structural.py": "1333c348471659511fa255bf582d3a470f283d9fd69e843cdc103e3148823879",
+    "elmm-pipeline/elmm_pipeline/gpu_validation.py": "8e1cf21aff1ae868f02082ef077fee225cb4626a682ae8f6c408ca84381756cf",
+    "elmm-pipeline/elmm_pipeline/gpu_backend.py": "e5894076420104d8d1d8b0862eee407ded98a051b094766b592d531388efbc23",
+    "elmm-pipeline/elmm_pipeline/discovery.py": "e135f8a9b5c4792987b0e1f6499b606a6a80962b06d47b70debc95a76c7494c7",
+    "elmm-pipeline/elmm_pipeline/common.py": "e628477fc9c08af1e58414217bd53d98ac88579fcea2ddab686349a5fcce2536",
+    "elmm-pipeline/elmm_pipeline/local_adapter.py": "fe82fa655d14546aff50deb6de1bc5a8a6e891f72955c6f70ad134eb102dbf0e",
+    "elmm-pipeline/elmm_pipeline/build_receipts.py": "a46dc118862fcb66e8f4202e1580e47121bcb192cab657168919429636a1a3d2",
+    "elmm-pipeline/elmm_pipeline/cli.py": "f66ba9d73a5c8824e23cb25935a591ae407e63b9c88771820090f743ebed04f9",
+    "elmm-pipeline/elmm_pipeline/adaptation.py": "cd3a52a40d6ab914c02660cc63952c4193bb8fcf1c9c95546612b58531882992",
+    "elmm-pipeline/elmm_pipeline/report.py": "035752ab72c2fdba5200fa2d93da6390b2ed48f7c6f52fd0bb62c0d356597236",
+    "elmm-pipeline/elmm_pipeline/scoped_provenance.py": "a608875efd7b71bfcfb9876a03765c64c401d5361fda4068b67c5c55c62a5598",
+    "elmm-pipeline/elmm_pipeline/tool_workers/discovery_worker.py": "c36e5e666db2ed5ab224d75d2191373d8c9f82db5414a7de2607332ce81757b5",
+    "elmm-pipeline/elmm_pipeline/tool_workers/__init__.py": "53b8cb2ea4e5f5bc90d0a755d90ccdc449f1642214ffd84748c28d22e4149bcf",
+    "elmm-pipeline/elmm_pipeline/tool_workers/scope_worker.py": "dbc0df5937a4f579ac0dba054b4f0c4ad8ca7947e478c7666fcac2e387bcd8c9",
+    "elmm-pipeline/elmm_pipeline/campaigns/checkpoint.py": "f416642d113df69c12df440870f2e9b8221542b74f730086866b628b53de8f9f",
+    "elmm-pipeline/elmm_pipeline/campaigns/transfers.py": "6e9f07d60790f7b0445487f72fa4d71f4402a4e09d78d3a4c98e1ae86e8f7002",
+    "elmm-pipeline/elmm_pipeline/campaigns/identity.py": "f04a9e3e8bcf35c5a3043a1d2704744eef72865ac351d144f61c5e9533512868",
+    "elmm-pipeline/elmm_pipeline/campaigns/__init__.py": "a97923347d16e21dc7368bb358bce116d5adc1ae1967ca6b19e99aa788799470",
+    "elmm-pipeline/elmm_pipeline/campaigns/python_stacks.py": "3ad773aabf76a2a5e989cb0043f6ab13898bf4c1c97cb861b4b1962fb22eeda3",
+    "elmm-pipeline/elmm_pipeline/campaigns/targets.py": "cea1640f9eb99684284b540bf09de0da3739bb1973e3b770d8a38c6854b0a027",
+    "elmm-pipeline/elmm_pipeline/campaigns/launch_environment.py": "3f3b9feb5a3cb72ec02246b9294cd82a13693fdf15ab8ea02c52f3e555ce8fac",
+    "elmm-pipeline/elmm_pipeline/campaigns/batches.py": "d2529c57fe6d22827ac48b090407ef8c3bde0a23af4cfb843587cf60cef80618",
+    "elmm-pipeline/elmm_pipeline/campaigns/run.py": "16e608357bf0a7476dd273b487effcda7368f468b833a8a8827261967239033e",
+    "elmm-pipeline/elmm_pipeline/campaigns/halos.py": "8a882afa59e9fd8c45d447b5605a6adc208d4ba8296ec5b99481407ab488e4d0",
+    "elmm-pipeline/elmm_pipeline/campaigns/prepare.py": "c80cfb06b6025eaeff6f59ab12f3668dde5a25631165f846d0f5a2af8eb4ad0b",
+    "elmm-pipeline/elmm_pipeline/campaigns/driver_link.py": "6e54cbc79f4fbaf2f6f6ae54507a0c6df7060453a02fd27739aff902c2a35d6f",
+    "elmm-pipeline/elmm_pipeline/campaigns/guard.py": "bd662767a4c269c71001e5810aee09a23b8de8856c7c51de5c40a2bddd876f3b",
+    "elmm-pipeline/elmm_pipeline/campaigns/profile.py": "a152c17d708d102b54e57d8eec87b3b596dc6f15a58924bc509fd840307b8f20",
+    "elmm-pipeline/elmm_pipeline/campaigns/__main__.py": "6aaaadc4f961c7b55b6e90c7a76ddfa16d5e072384a53c1d8b11758f16615b9a",
+    "elmm-pipeline/elmm_pipeline/campaigns/report.py": "1f31447019ea63d8b38f03e8961bd3ea2f0c1a61da95b552fe49d680d2b2c1c3"
+  },
+  "application_source_commits": {
+    "ELMM": "ddb426fca5b020216083f02a218292fea70c1df2",
+    "PoisFFT": "256a2338254c08f611881b2df5e72bdfa73bc257"
+  },
+  "source_identities": {
+    "pristine_build_receipt_identity": "95d77a25d590c9d06ae45c9b97736b024d33bbd56ea976fe2cee8c1004bd5dc4",
+    "pristine_main_sha256": "fd7cec94940953166a913cb49b6ef0d5d95d9c2b9e1bb74e78b78f4d3dca7c17",
+    "dump_only_main_sha256": "40170565640fff2ba4416638dc8aa365255ead71558b64c1b9caf52735b4255c",
+    "pristine_advection_sha256": "6437b7e3a1e748eb39f4fcb8c865f23aafccfbfa0842838bd16c0c54b95c10ca",
+    "six_intent_repaired_advection_sha256": "e32b9a1d7bd1c39711ff0dbd5f93938217feed40b34b86f41d42dc2cc080658d",
+    "repair_patch_sha256": "57102e96312c97f0748201674bc011a7bf0c8d965545e3170536b56464ca8c10",
+    "repaired_build_receipt_identity": "689a6bcdafb0a08e2b2493bd11f1175e0e9000574fb993d6eff195e1a7fd341d"
+  },
+  "binary_sha256": {
+    "pristine": "184a669518ecd8ecc1e04cb0520bf84dcaed8e586060afbafe9bad436f6e941b",
+    "dump_only": "add04c16fb3d3971ba7109c506d4261a97223d4a732752636099ba1b3ce50087",
+    "repaired": "c02226278a595193e31cbc05983b187e4b64c6fbf8ff4649168375bccb03b96c"
+  },
+  "full_field_validation": {
+    "case": "channel-simple",
+    "source_set": "pristine numerical objects with dump-only main",
+    "runs": 2,
+    "natural_completed_steps": [
+      109,
+      109
+    ],
+    "threads": 4,
+    "arrays": 20,
+    "values": 9586704,
+    "atol": 1e-06,
+    "rtol": 1e-05,
+    "failed_values": 0,
+    "nonfinite_values": 0,
+    "max_absolute_error": 4.5044574398245274e-07,
+    "max_tolerance_fraction": 0.3055676843294239,
+    "original_bounds_and_halos_checked": true,
+    "final_and_averaged_vtk_match_pristine_binary": true
+  },
+  "private_rebuild_validation": {
+    "application_executed": false,
+    "objects": 72,
+    "changed_executable_objects": [],
+    "changed_nondebug_relocation_objects": [],
+    "changed_allocated_objects": [
+      "P/fft.o",
+      "P/poisfft.o"
+    ],
+    "allocated_changes": "Only source-root spellings in runtime-diagnostic string data, alignment padding and 71 symbol offsets; audited separately.",
+    "all_compiler_and_semantic_argv_equal": true,
+    "link_argv_equal_after_path_normalization": true
+  },
+  "limitations": [
+    "No automatic resident candidate was generated or evaluated here.",
+    "No repaired application was executed; source correction remains an explicit reviewable option.",
+    "Native repeatability does not establish Fortran definedness.",
+    "Channel full-field validation is not included.",
+    "An earlier overlapping simple run was intentionally aborted; its evidence is excluded.",
+    "Diagnostic timings include shared-hardware contention and are not performance samples."
+  ],
+  "external_build_receipts": {
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/build-receipts.json": "d70b0641284c769a243033b280914a219cf14ed2ca27b2faf7e2658aa85d4130",
+    "/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/build/build-receipts.json": "cfc95f69b0bf0e3ab9a1166fa049bc9ac3997723ddd9d2abf5a391e4de76b2ce"
+  },
+  "copied_evidence_origins": {
+    "data.json": {
+      "path": "/tmp/fortran-residency-e2e-20261014/native-diagnostic-visuals/data.json",
+      "sha256": "d1ceb463032f32a9006f2728c2da8b91174b8c8ce7a89801bea6b8713aef961b"
+    },
+    "evidence/dump-driver.json": {
+      "path": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/driver.json",
+      "sha256": "cc345bc13ed1053ebc40886a91c9f3333cbee4111ebd4ad477c3f9d5711df3e7"
+    },
+    "evidence/dump-relink-plan.json": {
+      "path": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/relink-plan.json",
+      "sha256": "0d5cc2f0bae94b3bd7e8f8fa6b3c6576910879a037c664e4845fb969d4c6ddb5"
+    },
+    "evidence/dump-main.f90": {
+      "path": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/diagnostic-main.f90",
+      "sha256": "40170565640fff2ba4416638dc8aa365255ead71558b64c1b9caf52735b4255c"
+    },
+    "evidence/dump-reproduce.py": {
+      "path": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/reproduce.py",
+      "sha256": "26eb6e3986195ff563c4c654108cefff7d3c683da0a8453c33251938559e1e67"
+    },
+    "evidence/channel-simple-full-fields.json": {
+      "path": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/report.json",
+      "sha256": "2ed90ac9f12b733b18a5c686c5bcf9370200ad7d8ce5b8632a46a3c8786ddbfd"
+    },
+    "evidence/repair-full-rebuild.json": {
+      "path": "/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/comparison.json",
+      "sha256": "00835ab3d582ca9ca09296ad6045d570c6a38f87c126a64102997246bf776c4e"
+    },
+    "evidence/repair-path-data-audit.json": {
+      "path": "/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/path-data-audit.json",
+      "sha256": "69d3207c5b3e3f0c21ff8229a0e7b24a6ea6cd15a6cb1c734fe36d38b83d4b70"
+    },
+    "evidence/repair-full-rebuild-reproduce.py": {
+      "path": "/tmp/fortran-residency-e2e-20261014/rebuild-intent-repair.py",
+      "sha256": "0c44007f8976cf29df312f939ebdcadce7ec45e40b93c88ec6eb6665f11c8d39"
+    },
+    "evidence/repair-path-data-reproduce.py": {
+      "path": "/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/audit-path-data.py",
+      "sha256": "7ab7ebd1eb150dfc6a5b95f2427a01f5cc838c5be01bb5ec8ac0b499b8eb9f9f"
+    },
+    "evidence/repair-source.patch": {
+      "path": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic/source.patch",
+      "sha256": "57102e96312c97f0748201674bc011a7bf0c8d965545e3170536b56464ca8c10"
+    },
+    "evidence/repair-single-object.json": {
+      "path": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic/report.json",
+      "sha256": "35accac6bbff9be0e628a0032d4fced1ff27234eb8b318625023690191e1b63c"
+    },
+    "evidence/raw-fields-plot-reproduce.py": {
+      "path": "/tmp/fortran-residency-e2e-20261014/native-diagnostic-visuals/render.py",
+      "sha256": "3bfca5482bfd636e6da6ac7aa2973bb4e1f11fdc6486657c16f95978d2acb8c9"
+    },
+    "evidence/aborted-overlap.json": {
+      "path": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint/abort.json",
+      "sha256": "8bbc50d86295621832b5b4490e3801171dc891fda1e3026d2238e852f374a10f"
+    },
+    "evidence/dump-command-receipts/745ab794806c47cb9b274db60b3b0583.json": {
+      "path": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/command-receipts/745ab794806c47cb9b274db60b3b0583.json",
+      "sha256": "7947316a1a8323c7be4cc7342df75f0e5fe24ff917a3297d8302cdebc400b3be"
+    },
+    "evidence/dump-command-receipts/b6da20221aa143e3867d7279061f4302.json": {
+      "path": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/command-receipts/b6da20221aa143e3867d7279061f4302.json",
+      "sha256": "8d1ae8ae1b57c65be8697fc3a70a1f470029c976d7e90b6eecb86f74185a85e2"
+    }
+  }
+}

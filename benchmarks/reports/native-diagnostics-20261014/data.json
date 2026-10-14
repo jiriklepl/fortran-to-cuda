@@ -1,0 +1,599 @@
+{
+  "schema_version": 1,
+  "performance_measured": false,
+  "qualification": false,
+  "source_files_sha256": {
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/report.json": "2ed90ac9f12b733b18a5c686c5bcf9370200ad7d8ce5b8632a46a3c8786ddbfd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/driver.json": "cc345bc13ed1053ebc40886a91c9f3333cbee4111ebd4ad477c3f9d5711df3e7",
+    "/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/comparison.json": "00835ab3d582ca9ca09296ad6045d570c6a38f87c126a64102997246bf776c4e",
+    "/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/path-data-audit.json": "69d3207c5b3e3f0c21ff8229a0e7b24a6ea6cd15a6cb1c734fe36d38b83d4b70",
+    "/tmp/fortran-residency-e2e-20261014/native-diagnostic-visuals/render.py": "3bfca5482bfd636e6da6ac7aa2973bb4e1f11fdc6486657c16f95978d2acb8c9",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Moisture.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-U_avg.bin": "97443f7b39d7a8316621895756f73d3ecbca162b2f0a6a3ff2edc5d7d922626e",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-W.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Moisture.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-V.bin": "29fcb7f1da2d4bfc613099fbc7503177d8df02f676da9cd44832d60f417d7f42",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-W_avg.bin": "51acfdfade75c53934eb6c68988313fd7c385e144befbb3023623f0b2521947e",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Viscosity.bin": "9168407bb51cc5ae42a8d6842f1855bec2b91ab69f3e5989597d8cac5f7d147b",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-W.bin": "8c9c5793835b7ead7080121ba243030a47dbc56c44a0dcda1a263fa3a6ebf043",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Wstar.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Scalar_avg.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-TDiff.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-V2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-V.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Scalar.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Viscosity.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-U2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Wstar.bin": "0ff8334aa7ef565cd340a0af2782ec6cd287803fe518a8dd4a6dfae44547d6f5",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-U.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-U2.bin": "e63f2f5709bc6ad8a708bd4a1d074b014d9681d92e63621290b94ce899ea1a31",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-W_avg.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Vstar.bin": "77b523a9289b09c62aba79e5469381eaf31e65176cc6f732d690d4bcc356d1b1",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-V_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Vstar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-U_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-W2.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-W2.bin": "1b17cdd75de001e8ce6b21bca9734697b63ce016749441c41e79106f127b96e2",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Scalar_avg.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-V_avg.bin": "2348e4962a7251b76c42eec09d242af38690b14acfc4b47ea294116113f276ef",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Pr_avg.bin": "30d65a443d6b68587aef57e54147c74e89d3a1aaf36b907080c1095d41ac1eff",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Temperature.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Ustar.bin": "c4c1b2f4d7c7e2b1944b228adb8ae01a2afde1ee2311aa59d728182f80518046",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Pr.bin": "0e807a4afeccab3a7b0f46f024ea5f5688810554a0822e366cb2b3427fd00ae5",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Scalar.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Temperature.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Pr.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-U.bin": "0feedf78a8dc619e7fc55ad4233aa4179078504cdb764f7ad91209f983100b54",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Pr_avg.shape": "3196fd7ddeb27f50d5ccb0303f770f61c9bdf1e94505ed7d6c6d0a1758246be8",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-V2.bin": "c6009fe75a154d0db494297eb10aa9ae85680bb8241cdabad0c8707498dfde08",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-Ustar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-0/fields-TDiff.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Moisture.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-U_avg.bin": "cd617de897161181fe61b3577deb4b4e04231b6d28381fd5351a4a25d0f839a7",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-W.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Moisture.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-V.bin": "cd4b95ece9dcf44d4c7a66c474f9a1f16f5f5f7bfc2993b3c425285e186367d5",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-W_avg.bin": "0d9fe5f00e4efcd843a1956d578038c57eac24d1fccbc924c3d2961de055adf4",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Viscosity.bin": "35c1843f5416b90466f71e8ffa08b8c1eb0dd02adadf7a3668d8c8096c20e4c4",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-W.bin": "1c0670df9d65f5750d643b8f3c5f58a5b6ff39436301b417cb59a50b3c3b3f81",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Wstar.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Scalar_avg.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-TDiff.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-V2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-V.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Scalar.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Viscosity.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-U2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Wstar.bin": "b1d56754b878145a9752ed4f3c290b485895f2228c8f56e9aec81a5519dc2b28",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-U.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-U2.bin": "1863dde588449a2616f7744c47e1150e723d4927d46a4af76244399376a60c9a",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-W_avg.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Vstar.bin": "475e2b891b8d1ca07ad22a31146108156f4eb92bc34f7478ab818e58fc748ecd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-V_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Vstar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-U_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-W2.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-W2.bin": "a0780c86cb0cf078c03556a791e993a994b4cbba114ec31b5bd90248bb55e303",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Scalar_avg.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-V_avg.bin": "db44c3c22dbc3d9bd71cbcb78e41c61366699618eb5ea2a280ededbd22b35fa4",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Pr_avg.bin": "5f7be3cce162cdb0891d81d4505b3982062f8b23f52782b19298cb3b569fea36",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Temperature.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Ustar.bin": "099d713dc980ecf8719f72e437adf7a1c0f823fac71fac158d9f7a9fca1cd3a2",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Pr.bin": "b0db984e4bcbb4a1a8257034db26ba26a5cf0c0c7abfe6c7a7223a39340395d1",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Scalar.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Temperature.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Pr.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-U.bin": "e8b68ef8ef1d73b91e3692d6d7eb2c10f27df2ea823cee1aa87d2420ea753cab",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Pr_avg.shape": "3196fd7ddeb27f50d5ccb0303f770f61c9bdf1e94505ed7d6c6d0a1758246be8",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-V2.bin": "55032f6690fae6ca3225c804f5335053f7f0238cd2f21fb7ae9aedd37e186237",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-Ustar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/full-field-checkpoint-02/channel-simple/native-1/fields-TDiff.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "full_field_runs": 2,
+  "completed_steps": [
+    109,
+    109
+  ],
+  "array_count": 20,
+  "values": 9586704,
+  "tolerances": {
+    "atol": 1e-06,
+    "rtol": 1e-05
+  },
+  "fields": [
+    {
+      "field": "Pr",
+      "values": 610368,
+      "max_tolerance_fraction": 0.0022281488695753246,
+      "max_absolute_error": 2.6480884152135786e-09,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          132,
+          68,
+          68
+        ],
+        "lower_bounds": [
+          -1,
+          -1,
+          -1
+        ],
+        "upper_bounds": [
+          130,
+          66,
+          66
+        ]
+      }
+    },
+    {
+      "field": "Pr_avg",
+      "values": 524288,
+      "max_tolerance_fraction": 9.637225297645519e-06,
+      "max_absolute_error": 1.6345660935890294e-11,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          128,
+          64,
+          64
+        ],
+        "lower_bounds": [
+          1,
+          1,
+          1
+        ],
+        "upper_bounds": [
+          128,
+          64,
+          64
+        ]
+      }
+    },
+    {
+      "field": "U",
+      "values": 656600,
+      "max_tolerance_fraction": 3.7944322602506166e-05,
+      "max_absolute_error": 3.9675729368582324e-10,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      }
+    },
+    {
+      "field": "U2",
+      "values": 656600,
+      "max_tolerance_fraction": 3.703709730685729e-05,
+      "max_absolute_error": 3.9218361891357745e-10,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      }
+    },
+    {
+      "field": "U_avg",
+      "values": 656600,
+      "max_tolerance_fraction": 1.092028990460628e-05,
+      "max_absolute_error": 9.702061376515303e-11,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      }
+    },
+    {
+      "field": "Ustar",
+      "values": 656600,
+      "max_tolerance_fraction": 0.3055676843294239,
+      "max_absolute_error": 4.5044574398245274e-07,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      }
+    },
+    {
+      "field": "V",
+      "values": 656600,
+      "max_tolerance_fraction": 7.936786453164354e-05,
+      "max_absolute_error": 1.7235390892267333e-10,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      }
+    },
+    {
+      "field": "V2",
+      "values": 656600,
+      "max_tolerance_fraction": 9.156740481524087e-05,
+      "max_absolute_error": 1.688240658381801e-10,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      }
+    },
+    {
+      "field": "V_avg",
+      "values": 656600,
+      "max_tolerance_fraction": 1.5091613663562943e-05,
+      "max_absolute_error": 2.2993162929196842e-11,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      }
+    },
+    {
+      "field": "Viscosity",
+      "values": 610368,
+      "max_tolerance_fraction": 0.00035797920688397054,
+      "max_absolute_error": 3.5803034677066824e-10,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          132,
+          68,
+          68
+        ],
+        "lower_bounds": [
+          -1,
+          -1,
+          -1
+        ],
+        "upper_bounds": [
+          130,
+          66,
+          66
+        ]
+      }
+    },
+    {
+      "field": "Vstar",
+      "values": 656600,
+      "max_tolerance_fraction": 0.10313542182456932,
+      "max_absolute_error": 1.2023149262643806e-07,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      }
+    },
+    {
+      "field": "W",
+      "values": 647220,
+      "max_tolerance_fraction": 7.755150532189651e-05,
+      "max_absolute_error": 1.6511580991362962e-10,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          134,
+          70,
+          69
+        ],
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          66
+        ]
+      }
+    },
+    {
+      "field": "W2",
+      "values": 647220,
+      "max_tolerance_fraction": 8.541459300488793e-05,
+      "max_absolute_error": 1.6546575221099147e-10,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          134,
+          70,
+          69
+        ],
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          66
+        ]
+      }
+    },
+    {
+      "field": "W_avg",
+      "values": 647220,
+      "max_tolerance_fraction": 1.8778719522137406e-05,
+      "max_absolute_error": 2.6957665266724717e-11,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          134,
+          70,
+          69
+        ],
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          66
+        ]
+      }
+    },
+    {
+      "field": "Wstar",
+      "values": 647220,
+      "max_tolerance_fraction": 0.027832568274028434,
+      "max_absolute_error": 2.8145132090597394e-08,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          134,
+          70,
+          69
+        ],
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          66
+        ]
+      }
+    },
+    {
+      "field": "Moisture",
+      "values": 0,
+      "max_tolerance_fraction": 0.0,
+      "max_absolute_error": 0.0,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          0,
+          0,
+          0
+        ],
+        "lower_bounds": [
+          1,
+          1,
+          1
+        ],
+        "upper_bounds": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "field": "Scalar",
+      "values": 0,
+      "max_tolerance_fraction": 0.0,
+      "max_absolute_error": 0.0,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "lower_bounds": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "upper_bounds": [
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "field": "Scalar_avg",
+      "values": 0,
+      "max_tolerance_fraction": 0.0,
+      "max_absolute_error": 0.0,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "lower_bounds": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "upper_bounds": [
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "field": "TDiff",
+      "values": 0,
+      "max_tolerance_fraction": 0.0,
+      "max_absolute_error": 0.0,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          0,
+          0,
+          0
+        ],
+        "lower_bounds": [
+          1,
+          1,
+          1
+        ],
+        "upper_bounds": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "field": "Temperature",
+      "values": 0,
+      "max_tolerance_fraction": 0.0,
+      "max_absolute_error": 0.0,
+      "layout": {
+        "bits": 64,
+        "shape": [
+          0,
+          0,
+          0
+        ],
+        "lower_bounds": [
+          1,
+          1,
+          1
+        ],
+        "upper_bounds": [
+          0,
+          0,
+          0
+        ]
+      }
+    }
+  ],
+  "original_build_identity": "95d77a25d590c9d06ae45c9b97736b024d33bbd56ea976fe2cee8c1004bd5dc4",
+  "repaired_build_identity": "689a6bcdafb0a08e2b2493bd11f1175e0e9000574fb993d6eff195e1a7fd341d",
+  "repaired_application_executed": false,
+  "plots_sha256": {
+    "native-checkpoint.pdf": "47a14f0f73e8d44e181e28e4151793e07cf30a495af82f245ef436df73a356b6",
+    "native-checkpoint.svg": "8ac8681d4ec0c91e373e7372cf4e4f7a9c736a6d8ef63f91546c35ec06fb4c24",
+    "native-checkpoint.png": "87f08800f8ea9d01421941634b22832be5ca8cc8f13e33e8cf8c75aff1e93a4f"
+  }
+}

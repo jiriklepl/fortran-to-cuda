@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "compiler_commit": "9fe23c7bb78ac8e4727396e1a5c9f814b271de3e",
+  "source_inventory": "source-inventory.json",
+  "source_inventory_sha256": "52cd7937881dbe2f97dc92042c38314bfde112ca07beb3e5e4dcd143a7b81893",
+  "compared_files": 531,
+  "mismatches": [],
+  "method": "Compare every inventoried file SHA256 against the corresponding file extracted by git archive of the committed compiler tree.",
+  "note": "Tests ran on the staged combined integration above HEAD 62a1d02; their exact bytes were subsequently committed as 9fe23c7."
+}

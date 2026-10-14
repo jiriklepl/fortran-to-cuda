@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="1008pt" height="648pt" viewBox="0 0 1008 648" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 648 
+L 1008 648 
+L 1008 0 
+L 0 0 
+z
+" style="fill: #f6f8fb"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 53.3376 218.2464 
+L 436.2624 218.2464 
+Q 443.1744 218.2464 443.1744 211.3344 
+L 443.1744 144.288 
+Q 443.1744 137.376 436.2624 137.376 
+L 53.3376 137.376 
+Q 46.4256 137.376 46.4256 144.288 
+L 46.4256 211.3344 
+Q 46.4256 218.2464 53.3376 218.2464 
+z
+" clip-path="url(#p3902a988a3)" style="fill: #ffffff; stroke: #d7dfe8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 540.6336 218.2464 
+L 954.6624 218.2464 
+Q 961.5744 218.2464 961.5744 211.3344 
+L 961.5744 144.288 
+Q 961.5744 137.376 954.6624 137.376 
+L 540.6336 137.376 
+Q 533.7216 137.376 533.7216 144.288 
+L 533.7216 211.3344 
+Q 533.7216 218.2464 540.6336 218.2464 
+z
+" clip-path="url(#p3902a988a3)" style="fill: #eaf6f0; stroke: #bedccd; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 461.073375 178.1568 
+Q 486.720437 178.1568 510.578645 178.1568 
+" clip-path="url(#p3902a988a3)" style="fill: none; stroke: #71859a; stroke-width: 1.6; stroke-linecap: round"/>
+    <path d="M 503.778645 174.7568 
+L 510.578645 178.1568 
+L 503.778645 181.5568 
+z
+" clip-path="url(#p3902a988a3)" style="fill: #71859a; stroke: #71859a; stroke-width: 1.6; stroke-linecap: round"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 53.3376 308.1024 
+L 436.2624 308.1024 
+Q 443.1744 308.1024 443.1744 301.1904 
+L 443.1744 234.144 
+Q 443.1744 227.232 436.2624 227.232 
+L 53.3376 227.232 
+Q 46.4256 227.232 46.4256 234.144 
+L 46.4256 301.1904 
+Q 46.4256 308.1024 53.3376 308.1024 
+z
+" clip-path="url(#p3902a988a3)" style="fill: #ffffff; stroke: #d7dfe8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 540.6336 308.1024 
+L 954.6624 308.1024 
+Q 961.5744 308.1024 961.5744 301.1904 
+L 961.5744 234.144 
+Q 961.5744 227.232 954.6624 227.232 
+L 540.6336 227.232 
+Q 533.7216 227.232 533.7216 234.144 
+L 533.7216 301.1904 
+Q 533.7216 308.1024 540.6336 308.1024 
+z
+" clip-path="url(#p3902a988a3)" style="fill: #eaf6f0; stroke: #bedccd; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 461.073375 268.0128 
+Q 486.720437 268.0128 510.578645 268.0128 
+" clip-path="url(#p3902a988a3)" style="fill: none; stroke: #71859a; stroke-width: 1.6; stroke-linecap: round"/>
+    <path d="M 503.778645 264.6128 
+L 510.578645 268.0128 
+L 503.778645 271.4128 
+z
+" clip-path="url(#p3902a988a3)" style="fill: #71859a; stroke: #71859a; stroke-width: 1.6; stroke-linecap: round"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 53.3376 397.9584 
+L 436.2624 397.9584 
+Q 443.1744 397.9584 443.1744 391.0464 
+L 443.1744 324 
+Q 443.1744 317.088 436.2624 317.088 
+L 53.3376 317.088 
+Q 46.4256 317.088 46.4256 324 
+L 46.4256 391.0464 
+Q 46.4256 397.9584 53.3376 397.9584 
+z
+" clip-path="url(#p3902a988a3)" style="fill: #ffffff; stroke: #d7dfe8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 540.6336 397.9584 
+L 954.6624 397.9584 
+Q 961.5744 397.9584 961.5744 391.0464 
+L 961.5744 324 
+Q 961.5744 317.088 954.6624 317.088 
+L 540.6336 317.088 
+Q 533.7216 317.088 533.7216 324 
+L 533.7216 391.0464 
+Q 533.7216 397.9584 540.6336 397.9584 
+z
+" clip-path="url(#p3902a988a3)" style="fill: #eaf6f0; stroke: #bedccd; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 461.073375 357.8688 
+Q 486.720437 357.8688 510.578645 357.8688 
+" clip-path="url(#p3902a988a3)" style="fill: none; stroke: #71859a; stroke-width: 1.6; stroke-linecap: round"/>
+    <path d="M 503.778645 354.4688 
+L 510.578645 357.8688 
+L 503.778645 361.2688 
+z
+" clip-path="url(#p3902a988a3)" style="fill: #71859a; stroke: #71859a; stroke-width: 1.6; stroke-linecap: round"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 53.3376 465.696 
+L 954.6624 465.696 
+Q 961.5744 465.696 961.5744 458.784 
+L 961.5744 420.0768 
+Q 961.5744 413.1648 954.6624 413.1648 
+L 53.3376 413.1648 
+Q 46.4256 413.1648 46.4256 420.0768 
+L 46.4256 458.784 
+Q 46.4256 465.696 53.3376 465.696 
+z
+" clip-path="url(#p3902a988a3)" style="fill: #eaf0f7; stroke: #d7dfe8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_12">
+    <path d="M 53.3376 598.4064 
+L 954.6624 598.4064 
+Q 961.5744 598.4064 961.5744 591.4944 
+L 961.5744 488.5056 
+Q 961.5744 481.5936 954.6624 481.5936 
+L 53.3376 481.5936 
+Q 46.4256 481.5936 46.4256 488.5056 
+L 46.4256 591.4944 
+Q 46.4256 598.4064 53.3376 598.4064 
+z
+" clip-path="url(#p3902a988a3)" style="fill: #fff5e4; stroke: #ead5ad; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 23px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #172b4d" x="44.352" y="50.290719" transform="rotate(-0 44.352 50.290719)">Original teams + native PRIVATE storage</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #52647a" x="44.352" y="75.03765" transform="rotate(-0 44.352 75.03765)">Compiler capability checkpoint  ·  2026-10-14  ·  No application performance claim</text>
+   </g>
+   <g id="text_3">
+    <text style="font-weight: 700; font-size: 14px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #52647a" x="54.72" y="121.300175" transform="rotate(-0 54.72 121.300175)">BEFORE  ·  62a1d02</text>
+   </g>
+   <g id="text_4">
+    <text style="font-weight: 700; font-size: 14px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #166d54" x="542.016" y="121.300175" transform="rotate(-0 542.016 121.300175)">AFTER  ·  9fe23c7</text>
+   </g>
+   <g id="text_5">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #172b4d" x="65.088" y="164.67375" transform="rotate(-0 65.088 164.67375)">Whole-window cost evidence</text>
+   </g>
+   <g id="text_6">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #52647a" transform="translate(65.088 185.294913)">Serial, branchless complete owner</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #52647a" transform="translate(65.088 201.794913)">Original OpenMP teams rejected</text>
+   </g>
+   <g id="text_7">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #172b4d" x="552.384" y="164.67375" transform="rotate(-0 552.384 164.67375)">Whole-window cost evidence</text>
+   </g>
+   <g id="text_8">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #172b4d" transform="translate(552.384 185.294913)">Proved complete original joined teams</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #172b4d" transform="translate(552.384 201.794913)">Startup, worksharing and joins included</text>
+   </g>
+   <g id="text_9">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #172b4d" x="65.088" y="253.320375" transform="rotate(-0 65.088 253.320375)">Native PRIVATE arrays</text>
+   </g>
+   <g id="text_10">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #52647a" transform="translate(65.088 275.150913)">Small fixed shapes</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #52647a" transform="translate(65.088 291.650913)">Runtime extents rejected</text>
+   </g>
+   <g id="text_11">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #172b4d" x="552.384" y="253.320375" transform="rotate(-0 552.384 253.320375)">Native PRIVATE arrays</text>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #172b4d" transform="translate(552.384 275.150913)">Original automatic explicit-shape storage</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #172b4d" transform="translate(552.384 291.650913)">Entry-time bounds retained on the CPU</text>
+   </g>
+   <g id="text_13">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #172b4d" x="65.088" y="343.176375" transform="rotate(-0 65.088 343.176375)">Exact cost key</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #52647a" transform="translate(65.088 365.006912)">Formal array descriptors</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #52647a" transform="translate(65.088 381.506912)">Integer input controls</text>
+   </g>
+   <g id="text_15">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #172b4d" x="552.384" y="343.176375" transform="rotate(-0 552.384 343.176375)">Exact cost key</text>
+   </g>
+   <g id="text_16">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #172b4d" transform="translate(552.384 366.072537)">+ PRIVATE sizes and lower bounds</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #172b4d" transform="translate(552.384 381.506912)">Once per array, including unused storage</text>
+   </g>
+   <g id="text_17">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #172b4d" x="65.088" y="436.891713" transform="rotate(-0 65.088 436.891713)">Preserved: numerical and effect proofs · original order and joins · exact coherence · guards · no replay</text>
+   </g>
+   <g id="text_18">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #52647a" x="65.088" y="457.292975" transform="rotate(-0 65.088 457.292975)">Integrated validation: 7 CUDA/native/source-probe tests passed; all 531 compiler source hashes stayed unchanged.</text>
+   </g>
+   <g id="text_19">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #805516" x="65.088" y="509.476613" transform="rotate(-0 65.088 509.476613)">APPLICATION BOUNDARIES REMAIN</text>
+   </g>
+   <g id="text_20">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #172b4d" x="65.088" y="533.659713" transform="rotate(-0 65.088 533.659713)">Exact pricing still excludes reached suffixes, child owners, calls, branches and module/local numerical storage.</text>
+   </g>
+   <g id="text_21">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #172b4d" x="65.088" y="557.851712" transform="rotate(-0 65.088 557.851712)">The independent calibration producer is the supported build consumer; application build receipts are insufficient.</text>
+   </g>
+   <g id="text_22">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #172b4d" x="65.088" y="582.000744" transform="rotate(-0 65.088 582.000744)">channel-simple and channel: no resident application generation or target qualification established here.</text>
+   </g>
+   <g id="text_23">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #52647a" x="47.808" y="625.945775" transform="rotate(-0 47.808 625.945775)">Synthetic profitable rows in guard tests are not measured calibration or performance evidence.</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p3902a988a3">
+   <rect x="20.16" y="12.96" width="967.68" height="622.08"/>
+  </clipPath>
+ </defs>
+</svg>
