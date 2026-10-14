@@ -52,7 +52,9 @@ def test_environment_operations_do_not_close_owner_or_capture_logical_state(tmp_
 
 
 def test_automatic_environment_path_declines_unpriced_coordination_without_instrumentation(tmp_path):
-    path, outputs, report = emit(tmp_path, environment_source(team=True), policy="auto")
+    from compiler.tests.test_source_compute_costs import profile_v2
+
+    path, outputs, report = emit(tmp_path, environment_source(team=True), policy="auto", profile=profile_v2())
     owner, = report["scopes"]
     assert owner["automatic_preflight"]["successful"]
     assert "IEEE environment coordination" in owner["planning_reason"]

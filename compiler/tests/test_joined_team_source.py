@@ -11,7 +11,7 @@ import pytest
 from compiler.driver.options import CompilerOptions
 from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
-from compiler.tests.test_source_scopes import FACT
+from compiler.tests.test_source_scopes import FACT, assert_uncalibrated_native
 
 PRODUCER = '''!$omp do
 do i=-2,n-3
@@ -299,16 +299,10 @@ def test_every_joined_unit_completes_pending_work_before_reached_validation(tmp_
 
 def test_missing_calibration_auto_elides_instrumentation_and_keeps_original_worksharing(tmp_path):
     _, outputs, report, text = emit(tmp_path, policy='auto')
-    owner, = report['scopes']
-    preflight = owner['automatic_preflight']
-    assert preflight['successful']
-    assert preflight['selection'] == 'native'
-    assert preflight['caller_source_unchanged']
-    assert preflight['contexts_created'] == preflight['registrations'] == preflight['queries_constructed'] == 0
+    assert_uncalibrated_native(report)
     assert text == SOURCE
     assert 'fort_scope_' not in text
-    assert all(item['role'] in {'original_source', 'common_runtime'} for item in report['build_sources'])
-    assert not any(path.startswith('entries/') for path in outputs)
+    assert list(outputs) == ['scope-manifest.json']
 
 
 def module_source():

@@ -116,7 +116,9 @@ def test_managed_numerical_use_and_native_read_share_real_capture_facts(tmp_path
 
 
 def test_automatic_execution_does_not_guess_unpriced_range_preparation(tmp_path):
-    path, outputs, report = emit(tmp_path, HOST_SOURCE, policy="auto")
+    from compiler.tests.test_source_compute_costs import profile_v2
+
+    path, outputs, report = emit(tmp_path, HOST_SOURCE, policy="auto", profile=profile_v2())
     owner, = report["scopes"]
     assert not owner["estimate_available"]
     assert owner["planning_reason"] == "host-only native range preparation lacks compatible offline cost estimates"

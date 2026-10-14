@@ -102,7 +102,8 @@ def generate(tmp_path, *, source=SOURCE, mode="sections", threads=4, facts_chang
 def test_reached_request_preserves_collective_native_source_with_explicit_reason(tmp_path):
     _, outputs, report, replacement = generate(tmp_path, scope_execution="reached")
     assert replacement == SOURCE
-    assert not report['source_edits'] and not report['build_sources']
+    assert not report['source_edits']
+    assert not report['build_sources']
     assert report['scope_count'] == 0
     assert any('serial original caller' in item['reason'] for item in report['boundaries'])
 
@@ -188,12 +189,14 @@ def test_collective_entry_preparation_uses_effect_records_without_native_call_ma
 
 
 def test_automatic_team_execution_awaits_matching_offline_calibration(tmp_path):
+    from compiler.tests.test_source_scopes import assert_uncalibrated_native
+
     _, outputs, report, text = generate(tmp_path, mode="auto")
     assert report["scope_count"] == 0
     assert not outputs.get("scoped_runtime.cu")
     assert text == SOURCE
     assert report["participation"]["kind"] == "omp_full_team"
-    assert "collective synchronization calibration" in report["boundaries"][0]["reason"]
+    assert_uncalibrated_native(report)
 
 
 @pytest.mark.parametrize("directive", ["do nowait", "parallel do", "do schedule(dynamic)"])
@@ -223,11 +226,14 @@ def test_native_assertion_does_not_authorize_a_different_source_role(tmp_path):
 
 
 def test_an_uncalibrated_serial_profile_cannot_sneak_into_collective_costs(tmp_path):
+    from compiler.tests.test_source_compute_costs import profile_v2
+
     # Public source automatic availability is false even when numerical work
     # estimates are available; CPU fallback is an explicit successful result.
-    _, _, report, _ = generate(tmp_path, mode="auto")
+    _, _, report, _ = generate(tmp_path, mode="auto", hardware_profile=profile_v2())
     assert not report["automatic_estimate_available"]
     assert all(item["available"] for item in report["collective_roles"])
+    assert "collective synchronization calibration" in report["boundaries"][0]["reason"]
 
 
 def test_calibrated_auto_team_configures_before_registration_and_preserves_original_fallback(tmp_path):

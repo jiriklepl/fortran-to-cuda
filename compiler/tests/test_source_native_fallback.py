@@ -11,6 +11,7 @@ import pytest
 
 from compiler.tests.test_module_allocatable_scopes_runtime import ROOT, _run
 from compiler.tests.test_runtime_allocation_bounds_cuda import _driver, _facts, _normalized, _package, _source
+from compiler.tests.test_source_scopes import assert_uncalibrated_native
 
 
 def generate(directory, *, structured=False, policy="sections"):
@@ -32,8 +33,12 @@ def generate(directory, *, structured=False, policy="sections"):
     (directory / "public.json").write_text(response.stdout)
     public = json.loads(response.stdout)
     assert public["supported"], public
-    scope, = public["scopes"]["scopes"]
-    assert scope["native_fallback"]["position"] == "original caller after owning helper returns"
+    if policy == "sections":
+        scope, = public["scopes"]["scopes"]
+        assert scope["native_fallback"]["position"] == "original caller after owning helper returns"
+    else:
+        assert_uncalibrated_native(public["scopes"])
+        assert source.read_text() == text
     return source, output, public["scopes"]
 
 
@@ -41,6 +46,10 @@ def generate(directory, *, structured=False, policy="sections"):
 @pytest.mark.parametrize("policy", ["sections", "auto"])
 def test_hidden_numerical_fallback_is_returned_to_original_caller(tmp_path, structured, policy):
     source, output, manifest = generate(tmp_path, structured=structured, policy=policy)
+    if policy == "auto":
+        assert_uncalibrated_native(manifest)
+        assert [path.name for path in output.iterdir()] == ["scope-manifest.json"]
+        return
     scope, = manifest["scopes"]
     text = (output / manifest["sources"][str(source)]["replacement"]).read_text()
     owner = text[text.index("subroutine " + scope["owner"]):text.index("end subroutine " + scope["owner"])]
@@ -50,14 +59,6 @@ def test_hidden_numerical_fallback_is_returned_to_original_caller(tmp_path, stru
     assert "call produce(" not in owner.lower()
     assert "call consume(" not in owner.lower()
     caller = text[text.index("subroutine step"):text.index("end subroutine", text.index("subroutine step"))]
-    if policy == "auto":
-        original = source.read_text()
-        original_caller = original[original.index("subroutine step"):original.index("end subroutine", original.index("subroutine step"))]
-        assert caller == original_caller
-        assert scope["automatic_preflight"]["caller_source_unchanged"]
-        assert not scope["automatic_preflight"]["caller_guards_evaluated"]
-        assert not scope["automatic_preflight"]["generated_owner_invoked"]
-        return
     fallback = caller[caller.index("call " + scope["owner"]):]
     assert fallback.index("if (fort_native_") < fallback.index("call produce(")
     assert "logical :: fort_native_" in caller
@@ -80,6 +81,11 @@ def fallback_binaries(tmp_path_factory):
         _run([*flags, str(source), str(driver), "-o", str(native)], output)
         reference = _run([str(native), "fields"], output, env={**os.environ, "OMP_NUM_THREADS": "4"}).stdout
         (output / "native.stdout").write_text(reference)
+        if policy == "auto":
+            assert_uncalibrated_native(manifest)
+            # The public decision requests no transformed build or runtime.
+            targets[label] = native, output, reference
+            continue
         objects = []
         for role in ("common_runtime", "shared_entry", "original_source"):
             for unit in manifest["build_sources"]:
@@ -128,7 +134,7 @@ def test_hidden_numerical_bounds_and_fields_survive_caller_fallback(fallback_bin
     assert "FIELDS_OK" in result.stdout
     assert "array temporary" not in result.stderr.lower()
     if mode == "create-failure":
-        # Missing-profile straight selection returns before context creation.
+        # The uncalibrated automatic path has no generated owner or runtime.
         assert result.stderr.count("FIXTURE_CREATE_FAILURE") == (0 if label == "automatic" else 8)
     if mode != "gpu" or label == "automatic":
         assert "FORT_SCOPED launch" not in result.stderr

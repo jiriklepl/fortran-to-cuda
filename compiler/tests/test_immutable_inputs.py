@@ -78,12 +78,12 @@ def region_fixture(tmp_path, **options):
     return analysis, routine, associations, region, paths
 
 
-def emit(paths, *, policy="sections"):
+def emit(paths, *, policy="sections", profile=None):
     facts = {"schema_version": 1, "participation": "serial",
              "sources": {str(path): sha256(path.read_bytes()).hexdigest() for path in paths},
              "captures": {"argument::" + name: FACT for name in ("a", "out")}}
     return ScopeBuilder(paths, "owner_lib::advance", facts=facts, options=CompilerOptions(),
-                        config=OffloadConfig(policy=policy, scope_execution="reached")).run()
+                        config=OffloadConfig(policy=policy, profile=profile, scope_execution="reached")).run()
 
 
 @pytest.mark.parametrize("precision", [4, 8])
@@ -255,8 +255,10 @@ def test_query_and_dispatch_do_not_read_parameter_payload(tmp_path):
 
 
 def test_preparation_cost_is_unavailable_and_auto_keeps_original_native_body(tmp_path):
+    from compiler.tests.test_source_compute_costs import profile_v2
+
     _, _, _, _, _, paths = source_fixture(tmp_path)
-    outputs, report = emit(paths, policy="auto")
+    outputs, report = emit(paths, policy="auto", profile=profile_v2())
     owner, = report["scopes"]
     assert owner["automatic_preflight"]["selection"] == "native"
     assert owner["automatic_preflight"]["caller_source_unchanged"]

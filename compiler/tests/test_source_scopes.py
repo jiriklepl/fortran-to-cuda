@@ -87,6 +87,10 @@ def run(command, *, cwd, env=None, timeout=120):
 def generate(directory, source=PROGRAM, *, mode="sections", entry="step", facts=None, checkout=None, profile=None,
              scope_execution="bounded"):
     directory.mkdir(parents=True,exist_ok=True)
+    if isinstance(profile, dict):
+        profile_path = directory / "synthetic-profile.json"
+        profile_path.write_text(json.dumps(profile))
+        profile = profile_path
     original = directory/"original.f90"
     original.write_text(source)
     captures = {"argument::a":FACT,
@@ -108,6 +112,19 @@ def generate(directory, source=PROGRAM, *, mode="sections", entry="step", facts=
     manifest = json.loads((output/"scope-manifest.json").read_text())
     assert manifest == report["scopes"]
     return original,output,manifest
+
+
+def assert_uncalibrated_native(manifest):
+    assert manifest["scope_count"] == 0
+    assert not manifest["scopes"]
+    assert not manifest["source_edits"]
+    assert not manifest["sources"]
+    assert not manifest["build_sources"]
+    assert manifest["runtime"] is None
+    assert not manifest["automatic_estimate_available"]
+    assert any("no calibration profile or exact-window evidence supplied; "
+               "automatic policy retains unchanged native source" in item["reason"]
+               for item in manifest["boundaries"])
 
 
 def test_source_scope_has_public_artifacts_and_original_native_operations(tmp_path):
@@ -168,17 +185,15 @@ def test_missing_capture_proof_keeps_original_source(tmp_path):
 @pytest.mark.parametrize("mode", ["sections", "auto"])
 def test_allocatable_owning_roots_are_guarded_at_original_caller(tmp_path, mode):
     original, output, manifest = generate(tmp_path, ALLOCATABLE_PROGRAM, mode=mode)
+    if mode == "auto":
+        assert_uncalibrated_native(manifest)
+        assert original.read_text() == ALLOCATABLE_PROGRAM
+        return
     assert manifest["scope_count"] == 1, manifest["boundaries"]
     scope, = manifest["scopes"]
     assert scope["allocation_preflight"]["resources"] == ["argument::a", "argument::b", "argument::out"]
     edit = next(edit for edit in manifest["source_edits"] if edit["first_line"] <= edit["last_line"])
     guarded = edit["replacement"]
-    if mode == "auto":
-        span = "".join(original.read_text().splitlines(keepends=True)[edit["first_line"]-1:edit["last_line"]])
-        assert guarded == span
-        assert scope["automatic_preflight"]["caller_source_unchanged"]
-        assert not scope["automatic_preflight"]["caller_guards_evaluated"]
-        return
     assert guarded.startswith("block\n")
     coordinator_import = next(line for line in guarded.splitlines()
                               if line.startswith("use fort_scoped_memory, only:"))
@@ -402,26 +417,23 @@ def test_collective_scope_is_rejected_without_source_changes(tmp_path):
 
 def test_automatic_unknown_cost_selects_original_native_span(tmp_path):
     original,output,manifest = generate(tmp_path,mode="auto")
-    assert manifest["scope_count"] == 1
-    assert not manifest["automatic_estimate_available"]
-    assert manifest["scopes"][0]["placement"].startswith("native;")
-    replacement = (output/manifest["sources"][str(original)]["replacement"]).read_text()
-    owner = replacement[replacement.index("subroutine fort_scope_owner_"):]
-    assert "call producer(" in owner
-    assert "call transform(" in owner
-    assert "call consumer(" in owner
-    assert "fort_status = fort_scope_create" not in owner
+    assert_uncalibrated_native(manifest)
+    assert original.read_text() == PROGRAM
+    assert [path.name for path in output.iterdir()] == ["scope-manifest.json"]
 
 
 @pytest.mark.parametrize("mode", ["sections", "auto"])
 @pytest.mark.parametrize("body", ["b(2:size(b)-1)=4.d0", "b=4.d0\nb=b+1.d0"])
 @pytest.mark.parametrize("wrapped", [False, True])
 def test_native_out_partial_writes_and_later_reads_keep_original_source(tmp_path, mode, body, wrapped):
+    from compiler.tests.test_source_compute_costs import profile_v2
+
     source = (WRAPPER_PROGRAM if wrapped else PROGRAM).replace(
         "real(8),intent(inout)::b(:)\nb=3*b", "real(8),intent(out)::b(:)\n" + body)
     # Only the defined interior is consumed after the partial native OUT write.
     source = source.replace("do i=1,n\nout(i)=a(i)+b(i)", "do i=2,n-1\nout(i)=a(i)+b(i)")
-    original, output, manifest = generate(tmp_path, source, mode=mode)
+    original, output, manifest = generate(tmp_path, source, mode=mode,
+                                          profile=profile_v2() if mode == "auto" else None)
     assert manifest["scope_count"] == 0
     assert not manifest["source_edits"]
     assert not (output / "entries").exists()
@@ -432,8 +444,10 @@ def test_native_out_partial_writes_and_later_reads_keep_original_source(tmp_path
 
 @pytest.mark.parametrize("mode", ["sections", "auto"])
 def test_native_out_whole_write_without_reads_remains_supported(tmp_path, mode):
+    from compiler.tests.test_source_compute_costs import profile_v2
+
     source = PROGRAM.replace("real(8),intent(inout)::b(:)\nb=3*b", "real(8),intent(out)::b(:)\nb=4.d0")
-    _, _, manifest = generate(tmp_path, source, mode=mode)
+    _, _, manifest = generate(tmp_path, source, mode=mode, profile=profile_v2() if mode == "auto" else None)
     assert manifest["scope_count"] == 1, manifest["boundaries"]
     scope, = manifest["scopes"]
     assert scope["gpu_leaves"] == ["original::consumer", "original::producer"]
@@ -442,9 +456,11 @@ def test_native_out_whole_write_without_reads_remains_supported(tmp_path, mode):
 
 @pytest.mark.parametrize("mode", ["sections", "auto"])
 def test_numerical_out_partial_write_workers_remain_supported(tmp_path, mode):
+    from compiler.tests.test_source_compute_costs import profile_v2
+
     source = PARTIAL_PROGRAM.replace("intent(inout)::b", "intent(out)::b").replace(
         "intent(inout)::out", "intent(out)::out")
-    _, _, manifest = generate(tmp_path, source, mode=mode)
+    _, _, manifest = generate(tmp_path, source, mode=mode, profile=profile_v2() if mode == "auto" else None)
     assert manifest["scope_count"] == 1, manifest["boundaries"]
     assert manifest["scopes"][0]["gpu_leaves"] == ["original::consumer", "original::producer"]
 
@@ -452,13 +468,15 @@ def test_numerical_out_partial_write_workers_remain_supported(tmp_path, mode):
 @pytest.mark.parametrize("mode", ["sections", "auto"])
 @pytest.mark.parametrize("order", [("whole_out", "partial_out"), ("partial_out", "whole_out")])
 def test_native_nested_out_changes_cannot_reuse_an_earlier_overwrite_proof(tmp_path, mode, order):
+    from compiler.tests.test_source_compute_costs import profile_v2
+
     source = PROGRAM.replace("real(8),intent(inout)::b(:)\nb=3*b",
                              "real(8),intent(out)::b(:)\n" + "\n".join("call " + name + "(b)" for name in order))
     source = source.replace("do i=1,n\nout(i)=a(i)+b(i)", "do i=2,n-1\nout(i)=a(i)+b(i)")
     helpers = ("subroutine whole_out(b)\nreal(8),intent(out)::b(:)\nb=4.d0\nend subroutine\n"
                "subroutine partial_out(b)\nreal(8),intent(out)::b(:)\nb(2:size(b)-1)=5.d0\nend subroutine\n")
     source = source.replace("end module", helpers + "end module")
-    original, _, manifest = generate(tmp_path, source, mode=mode)
+    original, _, manifest = generate(tmp_path, source, mode=mode, profile=profile_v2() if mode == "auto" else None)
     assert not manifest["source_edits"]
     assert not manifest["automatic_scope_available"]
     assert original.read_text() == source
@@ -921,6 +939,14 @@ def compiled(tmp_path_factory):
         checks = "-fcheck=all,array-temps" if label.startswith("allocated") else "-fcheck=all"
         profile = os.environ.get("FORT_TEST_SCOPED_PROFILE") if label == "allocated_auto" else None
         original,output,manifest=generate(case,program,mode=mode,facts=facts,checkout=checkout,profile=profile)
+        if mode == "auto" and profile is None:
+            assert_uncalibrated_native(manifest)
+            driver = output / "caller.f90"
+            driver.write_text(driver_source)
+            target = output / "caller"
+            run([fortran,"-std=f2018","-fopenmp",checks,str(original),str(driver),"-o",str(target)],cwd=output)
+            targets[label] = target, output
+            continue
         assert manifest["scope_count"] == (2 if label == "indexed" else 1)
         objects=[]
         # Build common interface first, then generated interfaces, then the
