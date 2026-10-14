@@ -1,0 +1,515 @@
+diff --git a/compiler/README.md b/compiler/README.md
+index dbeb2c7..d2d47d0 100644
+--- a/compiler/README.md
++++ b/compiler/README.md
+@@ -2871,13 +2871,22 @@ python -m compiler.offload.exact_window_calibration \
+ ```
+ 
+ Add `--original-teams` to retain three original four-thread joined loops in the
+-native control. Complete-window protocol 3 binds the checked plan's portable
++native control. Complete-window protocol 4 binds the checked plan's portable
+ execution fingerprint and independent source completion
+ proofs for every original team and measures their startup, worksharing and joins
+ inside the same complete invocation. It does not borrow serial or per-loop
+ coefficients. Runtime thread limits, active-level limits and OpenMP placement
+ environment are part of the identity; incompatible limits select native before
+-CUDA work. Protocol 1 and 2 observations do not authorize this plan-bound class.
++CUDA work. The independent native measurement and resident selector both query
++`omp_get_schedule`: the effective kind (including the monotonic modifier bit)
++and chunk size must match, even when `OMP_SCHEDULE` is unchanged. Kinds use an
++unsigned 32-bit representation; zero is a valid static chunk size. The independent
++native sample uses a C-bound getter because GNU's legacy Fortran getter omits
++the monotonic modifier. A production
++schedule mismatch selects native before CUDA identity queries or ownership.
++Protocols 1–3 observations do not authorize this execution identity. The current
++complete-owner admission excludes calls that could change the schedule inside
++the measured interval; this check does not admit larger intervals.
+ Original PRIVATE arrays contribute their entry-time sizes and lower bounds to
+ the exact cost key, once per array even when several teams reuse it. This also
+ covers unused PRIVATE storage that may incur allocation costs. Descriptor
+diff --git a/compiler/offload/exact_window.py b/compiler/offload/exact_window.py
+index 9e5e856..6f43c29 100644
+--- a/compiler/offload/exact_window.py
++++ b/compiler/offload/exact_window.py
+@@ -21,8 +21,8 @@ from pathlib import Path
+ from compiler.ir import CompilationError
+ from compiler.offload.collective_calibration import normalize_fortran_options
+ 
+-VERSION = 3
+-PROTOCOL = "complete-original-window-cold-v3"
++VERSION = 4
++PROTOCOL = "complete-original-window-cold-v4"
+ SAMPLES = 7
+ HOLDOUTS = 2
+ ENVIRONMENT = (
+@@ -72,6 +72,18 @@ def implementation_identity():
+     }
+ 
+ 
++def valid_effective_schedule(schedule):
++    """Keep the complete OpenMP kind, including its monotonic modifier bit."""
++    return (
++        type(schedule) is dict
++        and set(schedule) == {"kind", "chunk"}
++        and type(schedule["kind"]) is int
++        and schedule["kind"] in {kind | modifier for kind in (1, 2, 3, 4) for modifier in (0, 0x80000000)}
++        and type(schedule["chunk"]) is int
++        and 0 <= schedule["chunk"] < 2**31
++    )
++
++
+ def evidence_decision(evidence, contract):
+     """Reconstruct acceptance from raw paired observations; no trusted flag."""
+     try:
+@@ -99,6 +111,7 @@ def evidence_decision(evidence, contract):
+             "affinity",
+             "threads",
+             "dynamic",
++            "effective_schedule",
+             "proc_bind",
+             "thread_limit",
+             "max_active_levels",
+@@ -122,6 +135,9 @@ def evidence_decision(evidence, contract):
+             or any(value is not None and not isinstance(value, str) for value in identity["environment"].values())
+         ):
+             raise ValueError("complete-window placement identity invalid")
++        schedule = identity["effective_schedule"]
++        if not valid_effective_schedule(schedule):
++            raise ValueError("complete-window effective OpenMP schedule invalid")
+         if (
+             identity["threads"] != contract["threads"]
+             or identity["dynamic"] != 0
+@@ -150,6 +166,7 @@ def evidence_decision(evidence, contract):
+                 identity["max_active_levels"],
+             ],
+             "affinity": identity["affinity"],
++            "effective_schedule": schedule,
+             "environment": identity["environment"],
+         }
+         values = {"native": [], "resident": []}
+@@ -158,14 +175,20 @@ def evidence_decision(evidence, contract):
+                 raise ValueError("complete-window observation must be an object")
+             round_index, turn = divmod(order, 2)
+             mode = ("native", "resident")[(round_index + turn) % 2]
++            observed_cpu = row.get("observed_cpu_identity")
++            observed_identity = row.get("identity")
+             if (
+                 row.get("round") != round_index
+                 or row.get("mode") != mode
+                 or row.get("role") != ("fit" if round_index < SAMPLES else "holdout")
+                 or row.get("key") != key
+-                or row.get("identity") != identity
++                or type(observed_identity) is not dict
++                or not valid_effective_schedule(observed_identity.get("effective_schedule"))
++                or observed_identity != identity
+                 or row.get("agreement") is not True
+-                or row.get("observed_cpu_identity") != expected_cpu
++                or type(observed_cpu) is not dict
++                or not valid_effective_schedule(observed_cpu.get("effective_schedule"))
++                or observed_cpu != expected_cpu
+                 or row.get("observed_key") != key
+             ):
+                 raise ValueError("complete-window observation order/identity/agreement differs")
+@@ -577,6 +600,10 @@ extern "C" int @NAME@(const int64_t *key,const char *version,const char *options
+             ||!fort_scope_numerical_environment_supported()) return 0;
+     @KEYCHECK@
+     @FORTRANCHECK@
++    omp_sched_t schedule_kind; int schedule_chunk;
++    omp_get_schedule(&schedule_kind,&schedule_chunk);
++    const uint32_t effective_kind=static_cast<uint32_t>(schedule_kind);
++    @SCHEDULECHECK@
+     cudaDeviceProp p{}; int device=-1,runtime=0,driver=0;
+     if(cudaGetDevice(&device)!=cudaSuccess||cudaGetDeviceProperties(&p,device)!=cudaSuccess
+             ||cudaRuntimeGetVersion(&runtime)!=cudaSuccess||cudaDriverGetVersion(&driver)!=cudaSuccess) return 0;
+@@ -597,6 +624,7 @@ extern "C" int @NAME@(const int64_t *key,const char *version,const char *options
+     identity<<"{\"affinity\":"<<a.str()<<",\"cpu_name\":"<<quoted(cpu_name)<<",\"cuda_compiler\":"
+         <<quoted(std::to_string(__CUDACC_VER_MAJOR__)+"."+std::to_string(__CUDACC_VER_MINOR__)+"."+std::to_string(__CUDACC_VER_BUILD__))
+         <<",\"cuda_driver\":"<<driver<<",\"cuda_runtime\":"<<runtime<<",\"dynamic\":"<<omp_get_dynamic()
++        <<",\"effective_schedule\":{\"chunk\":"<<schedule_chunk<<",\"kind\":"<<effective_kind<<"}"
+         <<",\"environment\":"<<environment.str()<<",\"fortran_options\":"<<quoted(@FORTRANOPTIONS@)
+         <<",\"fortran_version\":"<<quoted(version)<<",\"gpu_name\":"<<quoted(p.name)
+         <<",\"gpu_uuid\":"<<quoted(uuid.str())<<",\"host_compiler\":"<<quoted(__VERSION__)
+@@ -635,6 +663,12 @@ extern "C" int @NAME@(const int64_t *key,const char *version,const char *options
+         "ATTESTATION": "FORT_EXACT_WINDOW_BUILD_" + record["contract_sha256"],
+         "THREADS": str(record["contract"]["threads"]),
+         "KEYCHECK": keycheck,
++        "SCHEDULECHECK": (
++            ""
++            if capture
++            else "if(effective_kind!=" + str(expected["effective_schedule"]["kind"]) + "U||schedule_chunk!="
++            + str(expected["effective_schedule"]["chunk"]) + ")return 0;"
++        ),
+         "FORTRANCHECK": (
+             ""
+             if capture
+diff --git a/compiler/offload/exact_window_calibration.py b/compiler/offload/exact_window_calibration.py
+index 5d8d8b8..21d8aeb 100644
+--- a/compiler/offload/exact_window_calibration.py
++++ b/compiler/offload/exact_window_calibration.py
+@@ -24,7 +24,15 @@ from compiler.numerical_contract import require_explicit_cuda_environment
+ from compiler.offload.calibrate import cpu_identity
+ from compiler.offload.collective_calibration import normalize_fortran_options
+ from compiler.offload.config import OffloadConfig
+-from compiler.offload.exact_window import ENVIRONMENT, HOLDOUTS, PROTOCOL, SAMPLES, build_contract, evidence_decision
++from compiler.offload.exact_window import (
++    ENVIRONMENT,
++    HOLDOUTS,
++    PROTOCOL,
++    SAMPLES,
++    build_contract,
++    evidence_decision,
++    valid_effective_schedule,
++)
+ from compiler.scopes.source import ScopeBuilder
+ 
+ 
+@@ -85,11 +93,19 @@ end module
+ DRIVER = """program measure
+ use exact_fixture, only:advance
+ use iso_fortran_env,only:int64,compiler_version,compiler_options
++use iso_c_binding,only:c_int
+ use omp_lib
+ implicit none
++interface
++subroutine fort_get_schedule(kind,chunk) bind(C,name='omp_get_schedule')
++import c_int
++integer(c_int),intent(out)::kind,chunk
++end subroutine
++end interface
+ real(8),allocatable::a(:,:,:),b(:,:,:),d(:,:,:),out(:,:,:)
+ real(8)::audit
+ integer::n,seed,i,j,k,unit
++integer(c_int)::schedule_kind,schedule_chunk
+ integer(int64)::start,finish,rate
+ character(32)::argument
+ call get_command_argument(1,argument)
+@@ -107,6 +123,9 @@ enddo
+ b=-3._8
+ d=-5._8
+ out=-7._8
++! GNU's legacy Fortran wrapper omits the monotonic modifier. Query the C API
++! used by the selector, preserving all 32 kind bits in the independent sample.
++call fort_get_schedule(schedule_kind,schedule_chunk)
+ call system_clock(start,rate)
+ call advance(a,b,d,out,n,audit)
+ call system_clock(finish)
+@@ -115,6 +134,7 @@ print '(a,a)', 'FORTRAN_VERSION ',compiler_version()
+ print '(a,a)', 'FORTRAN_OPTIONS ',compiler_options()
+ print '(a,5(i0,1x))', 'CPU_TEAM ',omp_get_max_threads(),merge(1,0,omp_get_dynamic()),omp_get_proc_bind(), &
+ omp_get_thread_limit(),omp_get_max_active_levels()
++print '(a,2(i0,1x))', 'CPU_SCHEDULE ',iand(int(schedule_kind,int64),int(z'FFFFFFFF',int64)),schedule_chunk
+ print '(a,25(i0,1x))', 'NATIVE_KEY ',size(a,1),lbound(a,1),size(a,2),lbound(a,2),size(a,3),lbound(a,3), &
+ size(b,1),lbound(b,1),size(b,2),lbound(b,2),size(b,3),lbound(b,3), &
+ size(d,1),lbound(d,1),size(d,2),lbound(d,2),size(d,3),lbound(d,3), &
+@@ -251,6 +271,21 @@ def build_native(directory, source, environment, *, fortran, **_tools):
+     return binary, receipt
+ 
+ 
++def observed_schedule(stdout):
++    """Read the independently queried native or resident task's schedule ICV."""
++    matches = re.findall(r"^CPU_SCHEDULE ([^\n]+)$", stdout, re.MULTILINE)
++    try:
++        if len(matches) != 1:
++            raise ValueError
++        kind, chunk = map(int, matches[0].split())
++        schedule = {"kind": kind, "chunk": chunk}
++        if not valid_effective_schedule(schedule):
++            raise ValueError
++        return schedule
++    except ValueError:
++        raise RuntimeError("actual effective OpenMP schedule missing or invalid") from None
++
++
+ def collect(binary, native, directory, environment, size, contract):
+     observations = []
+     for round_index in range(SAMPLES + HOLDOUTS):
+@@ -294,6 +329,7 @@ def collect(binary, native, directory, environment, size, contract):
+                     "fortran_version": version,
+                     "fortran_options": normalize_fortran_options(options),
+                     "team": team,
++                    "effective_schedule": observed_schedule(result.stdout),
+                     "affinity": sorted(os.sched_getaffinity(0)),
+                     "environment": {name: environment.get(name) for name in ENVIRONMENT},
+                 },
+@@ -317,6 +353,7 @@ def collect(binary, native, directory, environment, size, contract):
+                 resident["identity"]["max_active_levels"],
+             ],
+             "affinity": resident["identity"]["affinity"],
++            "effective_schedule": resident["identity"]["effective_schedule"],
+             "environment": resident["identity"]["environment"],
+         }
+         for row in observations[-2:]:
+@@ -400,6 +437,7 @@ def validate_production(automatic, native, directory, environment, size, evidenc
+             identity["max_active_levels"],
+         ],
+         "affinity": identity["affinity"],
++        "effective_schedule": identity["effective_schedule"],
+         "environment": identity["environment"],
+     }
+     rows = []
+@@ -427,6 +465,7 @@ def validate_production(automatic, native, directory, environment, size, evidenc
+                 "fortran_version": version,
+                 "fortran_options": normalize_fortran_options(options),
+                 "team": team,
++                "effective_schedule": observed_schedule(result.stdout),
+                 "affinity": sorted(os.sched_getaffinity(0)),
+                 "environment": {name: environment.get(name) for name in ENVIRONMENT},
+             }
+diff --git a/compiler/tests/test_exact_window.py b/compiler/tests/test_exact_window.py
+index 7e4baab..3342af1 100644
+--- a/compiler/tests/test_exact_window.py
++++ b/compiler/tests/test_exact_window.py
+@@ -31,6 +31,7 @@ def observations(contract, *, resident=0.1, native=1.0):
+         "affinity": [0, 1, 2, 3],
+         "threads": 4,
+         "dynamic": 0,
++        "effective_schedule": {"kind": 1, "chunk": 0},
+         "proc_bind": 0,
+         "thread_limit": 2147483647,
+         "max_active_levels": 1,
+@@ -43,6 +44,7 @@ def observations(contract, *, resident=0.1, native=1.0):
+         "fortran_options": normalize_fortran_options(identity["fortran_options"]),
+         "team": [4, 0, 0, 2147483647, 1],
+         "affinity": identity["affinity"],
++        "effective_schedule": identity["effective_schedule"],
+         "environment": identity["environment"],
+     }
+     rows = []
+@@ -163,6 +165,8 @@ print(json.dumps(records, sort_keys=True))
+         "control",
+         "placement",
+         "native_cpu",
++        "native_schedule",
++        "old_protocol",
+         "native_key",
+         "fields",
+     ],
+@@ -190,6 +194,13 @@ def test_invalid_or_stale_observations_cannot_enable_a_window(prepared, change):
+         evidence["identity"]["dynamic"] = 1
+     elif change == "native_cpu":
+         evidence["observations"][0]["observed_cpu_identity"] = {}
++    elif change == "native_schedule":
++        evidence["observations"][0]["observed_cpu_identity"] = {
++            **evidence["observations"][0]["observed_cpu_identity"],
++            "effective_schedule": {"kind": 2, "chunk": 1},
++        }
++    elif change == "old_protocol":
++        evidence["protocol"] = "complete-original-window-cold-v3"
+     elif change == "native_key":
+         evidence["observations"][0]["observed_key"] = [1]
+     elif change == "fields":
+@@ -383,6 +394,107 @@ def test_malformed_execution_identity_fails_closed(prepared, field, value):
+     assert not decision["available"]
+ 
+ 
++@pytest.mark.parametrize("schedule", [
++    None, {}, {"kind": 1}, {"chunk": 0}, {"kind": 1, "chunk": 0, "extra": 0},
++    {"kind": True, "chunk": 0}, {"kind": 1, "chunk": False},
++    {"kind": -2147483647, "chunk": 0}, {"kind": 2**32 + 1, "chunk": 0},
++    {"kind": 0, "chunk": 0}, {"kind": 5, "chunk": 0},
++    {"kind": 1, "chunk": -1}, {"kind": 1, "chunk": 2**31},
++    {"kind": 1.0, "chunk": 0}, {"kind": 1, "chunk": 0.0},
++])
++@pytest.mark.parametrize("location", ["identity", "observed_cpu_identity", "observed_identity"])
++def test_malformed_effective_schedule_fails_closed(prepared, schedule, location):
++    contract = prepared[-1]["contract"]
++    evidence = copy.deepcopy(observations(contract))
++    if location == "identity":
++        evidence["identity"]["effective_schedule"] = schedule
++    else:
++        key = "identity" if location == "observed_identity" else location
++        evidence["observations"][0][key] = {**evidence["observations"][0][key], "effective_schedule": schedule}
++    decision = evidence_decision(evidence, contract)
++    assert not decision["available"]
++    assert decision["selection"] == "native"
++
++
++@pytest.mark.parametrize("schedule", [
++    {"kind": 1, "chunk": 0}, {"kind": 0x80000001, "chunk": 0},
++    {"kind": 2, "chunk": 1}, {"kind": 0x80000003, "chunk": 2**31 - 1}, {"kind": 4, "chunk": 0},
++])
++def test_effective_schedule_preserves_modifier_and_zero_chunk(prepared, schedule):
++    contract = prepared[-1]["contract"]
++    evidence = observations(contract)
++    evidence["identity"]["effective_schedule"] = schedule
++    for row in evidence["observations"]:
++        row["observed_cpu_identity"]["effective_schedule"] = schedule
++    assert evidence_decision(evidence, contract)["selection"] == "resident"
++
++
++def test_production_schedule_guard_precedes_cuda_queries(prepared):
++    source, _outputs, _report, record = prepared
++    outputs, _, _ = emit(source, {"evidence": observations(record["contract"])})
++    selector = next(text for name, text in outputs.items() if name.startswith("exact/") and name.endswith(".cu"))
++    assert selector.index("omp_get_schedule(") < selector.index("if(effective_kind!=1U||schedule_chunk!=0)")
++    assert selector.index("if(effective_kind!=1U||schedule_chunk!=0)") < selector.index("cudaGetDevice(")
++
++
++@pytest.mark.native
++def test_independent_driver_preserves_actual_monotonic_modifier(tmp_path, monkeypatch):
++    import os
++    import shutil
++
++    from compiler.offload import exact_window_calibration as producer
++
++    fortran = shutil.which("gfortran-15") or shutil.which("gfortran")
++    if not fortran:
++        pytest.skip("Fortran toolchain required")
++    source = tmp_path / "original.f90"
++    source.write_text(fixture_source(original_teams=True).replace("schedule(static)", "schedule(runtime)"))
++    monkeypatch.setattr(producer, "DRIVER", producer.DRIVER.replace(
++        "call fort_get_schedule(", "call omp_set_schedule(ibset(omp_sched_static,31),0)\ncall fort_get_schedule(", 1
++    ))
++    environment = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "OMP_SCHEDULE": "static"}
++    native, _ = producer.build_native(tmp_path / "native", source, environment, fortran=fortran)
++    result = producer._run([str(native), "16", "9"], cwd=tmp_path, environment=environment)
++    assert producer.observed_schedule(result.stdout) == {"kind": 0x80000001, "chunk": 0}
++
++
++@pytest.mark.parametrize("phase", ["collect", "production"])
++@pytest.mark.parametrize("changed_mode", ["native", "resident"])
++def test_independent_measurement_rejects_changed_effective_schedule(prepared, tmp_path, monkeypatch, phase, changed_mode):
++    import json
++    from hashlib import sha256
++    from types import SimpleNamespace
++
++    from compiler.offload import exact_window_calibration as producer
++
++    evidence = observations(prepared[-1]["contract"])
++    payload = b"same complete fields and same environment"
++    for row in evidence["observations"]:
++        row["fields_sha256"] = sha256(payload).hexdigest()
++    monkeypatch.setattr(producer, "cpu_identity", lambda: "fixture CPU")
++    monkeypatch.setattr(producer.os, "sched_getaffinity", lambda _pid: {0, 1, 2, 3})
++
++    def measured(command, *, cwd, environment):
++        mode = "native" if command[0] == "native" else "resident"
++        (cwd / "fields.bin").write_bytes(payload)
++        schedule = "2 1" if mode == changed_mode else "1 0"
++        metadata = {"identity": evidence["identity"], "key": evidence["key"]}
++        return SimpleNamespace(
++            stdout="WINDOW_SECONDS 0.1\nFORTRAN_VERSION fixture\n"
++            "FORTRAN_OPTIONS -O3 -fopenmp -ffp-contract=off\nCPU_TEAM 4 0 0 2147483647 1\n"
++            f"CPU_SCHEDULE {schedule}\nNATIVE_KEY " + " ".join(map(str, evidence["key"])) + "\n",
++            stderr="FORT_EXACT_OBSERVATION " + json.dumps(metadata) + "\n" if phase == "collect" and mode == "resident" else "",
++        )
++
++    monkeypatch.setattr(producer, "_run", measured)
++    if phase == "collect":
++        with pytest.raises(RuntimeError, match="identity"):
++            producer.collect("resident", "native", tmp_path, {}, 96, evidence["contract"])
++    else:
++        with pytest.raises(RuntimeError, match="identity"):
++            producer.validate_production("resident", "native", tmp_path, {}, 96, evidence, {"selection": "resident"})
++
++
+ @pytest.mark.parametrize(("automatic_seconds", "model_miss"), [(0.1, False), (2.0, True)])
+ def test_actual_production_validation_reports_model_miss_without_revising_decision(
+     prepared, tmp_path, monkeypatch, automatic_seconds, model_miss
+@@ -406,7 +518,7 @@ def test_actual_production_validation_reports_model_miss_without_revising_decisi
+         seconds = automatic_seconds if command[0] == "automatic" else 1.0
+         return SimpleNamespace(
+             stdout=f"WINDOW_SECONDS {seconds}\nFORTRAN_VERSION fixture\n"
+-            "FORTRAN_OPTIONS -O3 -fopenmp -ffp-contract=off\nCPU_TEAM 4 0 0 2147483647 1\n"
++            "FORTRAN_OPTIONS -O3 -fopenmp -ffp-contract=off\nCPU_TEAM 4 0 0 2147483647 1\nCPU_SCHEDULE 1 0\n"
+             "NATIVE_KEY " + " ".join(map(str, evidence["key"])) + "\n",
+             stderr="",
+         )
+diff --git a/compiler/tests/test_exact_window_teams_cuda.py b/compiler/tests/test_exact_window_teams_cuda.py
+index 2debd6f..b2a75d1 100644
+--- a/compiler/tests/test_exact_window_teams_cuda.py
++++ b/compiler/tests/test_exact_window_teams_cuda.py
+@@ -116,6 +116,7 @@ audit=sum(a(:,1,1))""")
+         "fortran_options": calibration.normalize_fortran_options(identity["fortran_options"]),
+         "team": [identity[key] for key in ("threads", "dynamic", "proc_bind", "thread_limit", "max_active_levels")],
+         "affinity": identity["affinity"], "environment": identity["environment"],
++        "effective_schedule": identity["effective_schedule"],
+     }
+     # Synthetic profitable observations exercise production guard behavior.
+     # They are not measurements, calibration evidence, or performance claims.
+@@ -137,3 +138,85 @@ audit=sum(a(:,1,1))""")
+         assert "FORT_EXACT_OBSERVATION" not in result.stderr
+         if launches == 0:
+             assert not re.search(r"^FORT_SCOPED (upload|download) ", result.stderr, re.MULTILINE)
++
++
++@pytest.mark.cuda
++def test_effective_runtime_schedule_selects_before_ownership_with_unchanged_environment(tmp_path, monkeypatch):
++    from compiler.offload import exact_window_calibration as calibration
++    from compiler.tests.test_exact_window import observations
++
++    tools = {
++        "nvcc": shutil.which("nvcc"),
++        "cxx": shutil.which("g++-14") or shutil.which("g++"),
++        "fortran": shutil.which("gfortran-15") or shutil.which("gfortran"),
++    }
++    if not all(tools.values()):
++        pytest.skip("CUDA, C++ and Fortran toolchain required")
++    require_explicit_cuda_environment()
++    profile = actual_profile(tmp_path, tools["nvcc"], tools["cxx"])
++    architecture = "sm_" + profile["hardware"]["compute_capability"].replace(".", "")
++    source = tmp_path / "original.f90"
++    source.write_text(fixture_source(original_teams=True).replace("schedule(static)", "schedule(runtime)"))
++    # Change the task's schedule ICV outside the admitted invocation. The
++    # environment is identical in capture, matching and all rejected executions.
++    driver = calibration.DRIVER.replace("allocate(a(", """call get_command_argument(3,argument)
++read(argument,*)i
++select case(i)
++case(0)
++call omp_set_schedule(omp_sched_static,0)
++case(1)
++call omp_set_schedule(omp_sched_dynamic,1)
++case(2)
++call omp_set_schedule(omp_sched_static,7)
++case(3)
++call omp_set_schedule(ibset(omp_sched_static,31),0)
++end select
++allocate(a(""", 1)
++    monkeypatch.setattr(calibration, "DRIVER", driver)
++    environment = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "OMP_PROC_BIND": "FALSE",
++                   "OMP_THREAD_LIMIT": "4", "OMP_MAX_ACTIVE_LEVELS": "1", "OMP_SCHEDULE": "static"}
++    for name in ("FORT_RUNTIME_TRACE", "FORT_EXACT_CALIBRATION_MODE"):
++        environment.pop(name, None)
++    outputs, report, record = emit(source, {"calibration": True, "build_contract": build_contract(architecture)})
++    native, _ = build_native(tmp_path / "native", source, environment, **tools)
++    candidate, _ = build(tmp_path / "capture", outputs, report, environment, architecture=architecture, **tools)
++    measured = tmp_path / "diagnostic"
++    measured.mkdir()
++    captured = _run([str(candidate), "16", "9", "0"], cwd=measured,
++                    environment={**environment, "FORT_EXACT_CALIBRATION_MODE": "resident"})
++    metadata, = [json.loads(line.removeprefix("FORT_EXACT_OBSERVATION "))
++                 for line in captured.stderr.splitlines() if line.startswith("FORT_EXACT_OBSERVATION ")]
++    identity = metadata["identity"]
++    assert identity["effective_schedule"] == {"kind": 1, "chunk": 0}
++    assert calibration.observed_schedule(captured.stdout) == identity["effective_schedule"]
++    expected_cpu = {
++        "cpu_name": identity["cpu_name"], "fortran_version": identity["fortran_version"],
++        "fortran_options": calibration.normalize_fortran_options(identity["fortran_options"]),
++        "team": [identity[key] for key in ("threads", "dynamic", "proc_bind", "thread_limit", "max_active_levels")],
++        "affinity": identity["affinity"], "environment": identity["environment"],
++        "effective_schedule": identity["effective_schedule"],
++    }
++    # Synthetic profitable evidence isolates selection; no timing or calibration
++    # claim is made. Actual identities and exact float64 fields remain checked.
++    evidence = observations(record["contract"])
++    evidence.update(metadata)
++    for row in evidence["observations"]:
++        row.update(metadata, observed_key=metadata["key"], observed_cpu_identity=expected_cpu)
++    outputs, report, automatic = emit(source, {"evidence": evidence})
++    assert automatic["selection"] == "resident"
++    production, _ = build(tmp_path / "production", outputs, report, environment, architecture=architecture, **tools)
++    for setting, kind, chunk, launches in ((0, 1, 0, 3), (1, 2, 1, 0), (2, 1, 7, 0), (3, 0x80000001, 0, 0)):
++        arguments = ["16", "9", str(setting)]
++        native_result = _run([str(native), *arguments], cwd=measured, environment=environment)
++        expected = (measured / "fields.bin").read_bytes()
++        result = _run([str(production), *arguments], cwd=measured,
++                      environment={**environment, "FORT_RUNTIME_TRACE": "1"})
++        assert calibration.observed_schedule(native_result.stdout) == {"kind": kind, "chunk": chunk}
++        assert calibration.observed_schedule(result.stdout) == {"kind": kind, "chunk": chunk}
++        # Accumulation changes out on every invocation; bytewise comparison
++        # also rejects replay of a completed invocation or accumulation.
++        assert (measured / "fields.bin").read_bytes() == expected
++        assert len(re.findall(r"^FORT_SCOPED launch ", result.stderr, re.MULTILINE)) == launches
++        assert "FORT_EXACT_OBSERVATION" not in result.stderr
++        if launches == 0:
++            assert not re.search(r"^FORT_SCOPED ", result.stderr, re.MULTILINE)

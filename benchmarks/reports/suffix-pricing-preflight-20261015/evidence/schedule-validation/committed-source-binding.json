@@ -1,0 +1,12 @@
+{
+  "mismatches": [],
+  "parent_base_commit": "3e48c9dc6b310584738577b72d47679bed966003",
+  "patch_equals_committed_base_to_final_diff": true,
+  "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+  "qualification": "Final99 host checks and selected1 real-CUDA schedule test, not full final CUDA file or application qualification.",
+  "schema_version": 1,
+  "source_commit": "9a027f87ac58a5a8132eaa57ac6db93722deb038",
+  "source_inventory_sha256": "dacdf999795eb1dcf3062959fe63e1481df36ddce565fad9c71a4907095e7a4d",
+  "source_patch_sha256": "2b37217e2ed856e8ea698b6369cf84d776ddaef91dd8bad7ead774737ae60d06",
+  "verified_compiler_files": 539
+}

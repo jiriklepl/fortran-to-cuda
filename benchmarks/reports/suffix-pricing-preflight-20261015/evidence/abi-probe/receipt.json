@@ -1,0 +1,39 @@
+{
+  "application_or_performance_evidence": false,
+  "artifact_sha256": {
+    "probe": "3aecfb7426deb1922ed764c17b07946d3a80d9fa422f4b801b9b714d0446361c",
+    "probe.cpp": "5eac72fc6be98de9758204227bcb13cb931e24a084cb7bdfca949edb3b2af75f",
+    "probe.f90": "ccd1e4949849432cb3e38f3058b6e3b995cc5d7932003536b93507b4660f5553",
+    "probe.o": "bcd4b6bcfc35ecf32bbeef31889d46e5c457f6938a914dcf5768bb6934b8ac6b"
+  },
+  "build_commands": [
+    [
+      "g++-14",
+      "-fopenmp",
+      "-c",
+      "/tmp/effective-schedule-abi-20261015/probe.cpp",
+      "-o",
+      "/tmp/effective-schedule-abi-20261015/probe.o"
+    ],
+    [
+      "gfortran-15",
+      "-fopenmp",
+      "/tmp/effective-schedule-abi-20261015/probe.f90",
+      "/tmp/effective-schedule-abi-20261015/probe.o",
+      "-o",
+      "/tmp/effective-schedule-abi-20261015/probe"
+    ]
+  ],
+  "compiler_versions": {
+    "g++-14": "g++-14 (Debian 14.4.0-3) 14.4.0",
+    "gfortran-15": "GNU Fortran (Debian 15.3.0-4) 15.3.0"
+  },
+  "execution_command": [
+    "/tmp/effective-schedule-abi-20261015/probe"
+  ],
+  "exit_code": 0,
+  "observation": "Fortran getter returned kind1 while C getter returned2147483649 after either setter; explicit C binding preserved2147483649.",
+  "provenance": "Small diagnostic executed once interactively and once to preserve this exact output; build commands are recorded from the preceding successful tool invocation.",
+  "purpose": "Compare GNU Fortran wrapper and C API effective OpenMP schedule observations.",
+  "schema_version": 1
+}

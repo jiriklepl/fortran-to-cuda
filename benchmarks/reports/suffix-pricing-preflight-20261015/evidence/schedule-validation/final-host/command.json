@@ -1,0 +1,25 @@
+{
+  "affinity": [
+    0,
+    1,
+    6,
+    7
+  ],
+  "application_admission_claim": false,
+  "command": [
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "compiler/tests/test_exact_window.py",
+    "--basetemp=/home/jirka/research/fortran-abomination/benchmarks/results/effective-schedule-validation-20261015/verified/host/pytest"
+  ],
+  "cwd": "/home/jirka/research/fortran-abomination",
+  "kind": "focused final host correctness diagnostic",
+  "parent_base_commit": "3e48c9dc6b310584738577b72d47679bed966003",
+  "performance_claim": false,
+  "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+  "schema_version": 1,
+  "source_inventory_sha256": "dacdf999795eb1dcf3062959fe63e1481df36ddce565fad9c71a4907095e7a4d",
+  "working_tree_patch_sha256": "2b37217e2ed856e8ea698b6369cf84d776ddaef91dd8bad7ead774737ae60d06"
+}

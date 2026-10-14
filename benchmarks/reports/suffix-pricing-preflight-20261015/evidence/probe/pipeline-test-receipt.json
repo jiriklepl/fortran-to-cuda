@@ -1,0 +1,24 @@
+{
+  "attempts": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=elmm-pipeline/src .venv/bin/python -m pytest -q elmm-pipeline/tests/test_checked_execution_plan.py",
+      "exit_code": 2,
+      "result": "Collection failed: ModuleNotFoundError: No module named elmm_pipeline (incorrect PYTHONPATH).",
+      "tests_executed": 0
+    },
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=elmm-pipeline .venv/bin/python -m pytest -q elmm-pipeline/tests/test_checked_execution_plan.py",
+      "elapsed_pytest_seconds": 0.52,
+      "exit_code": 0,
+      "passed": 53,
+      "stdout": ".....................................................                    [100%]\n53 passed in 0.52s\n"
+    }
+  ],
+  "change": "Parameterize exact-window build-contract rejection for schema versions 3 and 4; no admission relaxation.",
+  "file": "tests/test_checked_execution_plan.py",
+  "file_matches_commit": true,
+  "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+  "run_revision": "WIP bytes later committed unchanged; no rerun claimed after commit.",
+  "schema_version": 1,
+  "sha256": "f744d8fdc89f42c5c3a22a0be762e5228bbf818094e72ef80bf44e18ce17c4ad"
+}

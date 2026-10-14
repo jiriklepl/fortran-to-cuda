@@ -1,0 +1,30 @@
+{
+  "extended-output.jsonl": {
+    "bytes": 2359,
+    "sha256": "1b95f89a8382c6db26dc76f8dd675644c18305df6d1f0306cbac63b73e71cc97"
+  },
+  "initial-output-excerpt.txt": {
+    "bytes": 699,
+    "sha256": "3ddae349808957ebbb9b4aa65bf30711fa8f3867336c39d947e01d61d8135af2"
+  },
+  "inputs.json": {
+    "bytes": 35280,
+    "sha256": "d650d1815ff96c37b1d73368953ecb4ea43c23bad37506aacf0a52ce98f0c98b"
+  },
+  "pipeline-test-receipt.json": {
+    "bytes": 1176,
+    "sha256": "831205c750409535ce8f524211c4e5d8234a3c4ff96388734070b6025c8d0631"
+  },
+  "probe-receipt.json": {
+    "bytes": 4479,
+    "sha256": "ade17bcabaa81114d7b9ec71af7d31e2444cbefbc8fe1cfc117f09b92d0e0647"
+  },
+  "probe.py": {
+    "bytes": 3417,
+    "sha256": "8224326418ed4b59b9e623195f50c6997d5f5a2018b6c04431df56d80b97218f"
+  },
+  "source-inventory.json": {
+    "bytes": 8628,
+    "sha256": "633403604546f24b0824dc6e2c647cdb2b81b359837e624c71307a7b0d660852"
+  }
+}

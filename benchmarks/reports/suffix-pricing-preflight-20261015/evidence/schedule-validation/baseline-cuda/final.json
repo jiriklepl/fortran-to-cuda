@@ -1,0 +1,31 @@
+{
+  "affinity": [
+    4,
+    5,
+    10,
+    11
+  ],
+  "application_admission_claim": false,
+  "changed_paths": [],
+  "command": [
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "compiler/tests/test_exact_window_teams_cuda.py",
+    "--basetemp=/home/jirka/research/fortran-abomination/benchmarks/results/effective-schedule-validation-20261015/pytest"
+  ],
+  "cwd": "/home/jirka/research/fortran-abomination",
+  "elapsed_seconds": 117.3018939120011,
+  "exit_code": 1,
+  "inventory_stable": true,
+  "kind": "focused real CUDA correctness diagnostic",
+  "log_sha256": "d481ff471e532941b083b2a7666908eb3e56e6e53edbc88482bec7bef17866b7",
+  "parent_base_commit": "3e48c9dc6b310584738577b72d47679bed966003",
+  "performance_claim": false,
+  "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+  "schema_version": 1,
+  "source_inventory_sha256": "94664f06dec91ebf446a59c7987b271e69d0bc66084c64275c7a0ee14dd8ffe0",
+  "timed_out": false,
+  "working_tree_patch_sha256": "36408f9fe1659f7995e0c7c46f9153f6c893175c460290fcb17b5e02d49e6a97"
+}

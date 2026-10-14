@@ -1,0 +1,124 @@
+{
+  "application_probe": {
+    "accumulation_definitions": "native physical sections require assumed-shape array dummies",
+    "accumulation_joined_completion": "proved",
+    "application_built": false,
+    "application_executed": false,
+    "cap_seconds": 60,
+    "diffusion_if_prefix": "native physical sections require assumed-shape array dummies",
+    "elapsed_seconds": 41.586,
+    "evidence": "evidence/probe/probe-receipt.json",
+    "explicit_shape_formals": [
+      "beta(1:3)",
+      "rho(1:3)"
+    ],
+    "generation_attempted": false,
+    "provenance_limit": "No before/after whole-repository inventory; concurrent pricing edits explicitly recorded.",
+    "reason_source": "compiler/frontend/native_sections.py formal declaration scan",
+    "source_identity_check": "Publication authentication passed; 178 prior frozen inputs and 80 selected compiler files checked after the probe.",
+    "status": "completed_with_proof_rejection"
+  },
+  "baseline_compiler_commit": "3e48c9dc6b310584738577b72d47679bed966003",
+  "calibration_protocol": "complete-original-window-cold-v4",
+  "claims": {
+    "application_speedup": false,
+    "automatic_application_residency": false,
+    "performance_targets_met": false
+  },
+  "compiler_commit": "9a027f87ac58a5a8132eaa57ac6db93722deb038",
+  "figure_footer": "Compiler 9a027f8 \u00b7 pipeline bbe44c1 \u00b7 application residency and performance targets remain unqualified",
+  "interval": "Original explicit_diffusion branch followed by the complete accumulation OpenMP team",
+  "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+  "remaining_gates": [
+    {
+      "gate": "discovery",
+      "reason": "Ordinary stable formals do not trigger discovery; complete teams must be indivisible candidate units.",
+      "sources": [
+        "compiler/scopes/window_discovery.py"
+      ]
+    },
+    {
+      "gate": "native_prefix_and_selected_team",
+      "reason": "Selected top-level teams rejected; fixed-shape control arrays prevent native definition refinement; unsupported unconditional prefix disables activation.",
+      "sources": [
+        "compiler/frontend/reached_windows.py",
+        "compiler/frontend/native_sections.py"
+      ]
+    },
+    {
+      "gate": "native_diffusion_corrections",
+      "reason": "Indirect wall corrections remain within tiled diffusion; complete effects, completion and measured section traffic required.",
+      "sources": [
+        "compiler/scopes/indirect_access.py"
+      ]
+    },
+    {
+      "gate": "complete_interval_calibration",
+      "reason": "Reached suffixes, children, branches/calls, tiles/helpers, module storage and application build/calibration are not admitted.",
+      "sources": [
+        "compiler/offload/exact_window.py",
+        "compiler/offload/exact_window_calibration.py"
+      ]
+    },
+    {
+      "gate": "reached_selection_emission",
+      "reason": "Reached control emission does not emit the complete-window selector; deleting admission restrictions would not insert selection.",
+      "sources": [
+        "compiler/scopes/reached_owner.py"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "status": "verified_pricing_prerequisite_application_suffix_not_admitted",
+  "title": "Diffusion suffix joint preflight and effective schedule pricing identity",
+  "validation": {
+    "abi_probe": {
+      "evidence": "evidence/abi-probe/receipt.json",
+      "exit_code": 0,
+      "result": "Fortran wrapper strips monotonic modifier; explicit C API binding preserves complete kind."
+    },
+    "pipeline_consumer": {
+      "binding": "Tested working-tree file matches committed bytes; initial collection failure preserved.",
+      "evidence": "evidence/probe/pipeline-test-receipt.json",
+      "failed": 0,
+      "passed": 53,
+      "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+      "scope": "Complete checked execution plan consumer test file"
+    },
+    "schedule_cuda": {
+      "checks": [
+        "Matching schedule selects resident fixture with three launches.",
+        "Changed kind, chunk or monotonic modifier with unchanged environment selects native.",
+        "All complete float64 fixture fields match native; rejected runs emit no residency events."
+      ],
+      "evidence": "evidence/schedule-validation/final-cuda/final.json",
+      "failed": 0,
+      "passed": 1,
+      "performance_evidence": false,
+      "scope": "Focused effective-runtime-schedule GPU test with matching and three rejected states; not full CUDA suite.",
+      "skipped": 0,
+      "source_inventory_unchanged": true
+    },
+    "schedule_history": {
+      "baseline_cuda_failed": 1,
+      "baseline_cuda_passed": 2,
+      "baseline_host_passed": 98,
+      "evidence": "evidence/schedule-validation/metadata.json",
+      "failures": [
+        "Test driver used a monotonic constant unavailable in the installed Fortran module.",
+        "Fortran wrapper omitted monotonic bit from the independent native measurement."
+      ],
+      "final_full_cuda_file_rerun": false,
+      "intermediate_cuda_failed": 1,
+      "intermediate_host_passed": 98
+    },
+    "schedule_host_native": {
+      "evidence": "evidence/schedule-validation/final-host/final.json",
+      "failed": 0,
+      "passed": 99,
+      "scope": "Complete exact-window test file, including actual native driver regression; not full compiler suite.",
+      "skipped": 0,
+      "source_inventory_unchanged": true
+    }
+  }
+}

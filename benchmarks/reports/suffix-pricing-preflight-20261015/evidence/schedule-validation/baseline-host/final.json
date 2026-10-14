@@ -1,0 +1,36 @@
+{
+  "affinity": [
+    0,
+    1,
+    6,
+    7
+  ],
+  "application_admission_claim": false,
+  "command": [
+    "taskset",
+    "-c",
+    "0,1,6,7",
+    ".venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "compiler/tests/test_exact_window.py"
+  ],
+  "cwd": "/home/jirka/research/fortran-abomination",
+  "exit_code": 0,
+  "kind": "focused host correctness checks",
+  "log_provenance": "Concatenated stdout chunks returned by exec session 88825; no shell log was configured for this first focused run.",
+  "log_sha256": "2dd1eb9e0c862014a4b26236b6ae322ac3decbdba17c38eec3477b224f4dd268",
+  "parent_base_commit": "3e48c9dc6b310584738577b72d47679bed966003",
+  "passed": 98,
+  "performance_claim": false,
+  "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+  "pytest_reported_seconds": 120.0,
+  "schema_version": 1,
+  "selected_source_sha256": {
+    "compiler/offload/exact_window.py": "39cf37684529db0bb5d22bf4f73107651b0ea3a60dcb5166e9fc3d49fe5d97b3",
+    "compiler/offload/exact_window_calibration.py": "4a0bf85c18a0420386ba817a5723a640c955b137a8df8d6e18cd719412c54be5",
+    "compiler/tests/test_exact_window.py": "19dedf3e804239579866109afad8c190f6beac8c5927630f1cae90b373d8270e"
+  },
+  "source_binding_note": "Selected files and production compiler sources stayed unchanged during this execution. Selected hashes recorded at completion; CUDA runner separately records full before/after inventory. A comment in the unselected CUDA test changed during the host run."
+}

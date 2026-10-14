@@ -1,0 +1,10 @@
+Preserved tool-output excerpt; original stdin script and traceback frames were not saved.
+The diagnostic printer failed, so this attempt did not reach suffix proof or publication verification.
+
+{"phase":"source_session","seconds":42.107055418004165,"original_inputs":69,"session":true}
+{"phase":"discovery_trigger","selected":false,"record_created":false,"allocatable_formals":[],"selected_window_facts":[]}
+{"kind":"If_Construct","span":[356,417],"opening":"IF (advection_method > 0) THEN"}
+IndexError: list index out of range
+
+Failure site: str(node).splitlines()[0] on an empty/comment node, stdin line 18.
+Exit code: 1. Session: 89049. Cap: 60 seconds. No cap increase or full-entry generation.

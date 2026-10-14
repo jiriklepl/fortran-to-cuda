@@ -1,0 +1,79 @@
+{
+  "abi_probe": "../abi-probe/receipt.json",
+  "baseline_failure": "GFortran15 omp_lib did not export omp_sched_monotonic. Test-only driver now sets bit31 with ibset(omp_sched_static,31); no assertion was weakened.",
+  "claim_limits": [
+    "No application admission, calibration, performance or target qualification claim.",
+    "The full CUDA file was tested on the intermediate source: two existing tests passed and the new test failed to compile.",
+    "Final CUDA validation selects only the new effective-schedule test; it is not a complete final CUDA-file rerun.",
+    "The CUDA selection test uses synthetic profitable costs and real execution identity, native fields and trace checks."
+  ],
+  "executions": {
+    "baseline-cuda": {
+      "failed": 1,
+      "inventory": "source-inventory-baseline.json",
+      "passed": 2,
+      "patch": "source-baseline.patch",
+      "pytest_seconds": 116.96,
+      "receipt": "baseline-cuda/final.json"
+    },
+    "baseline-host": {
+      "failed": 0,
+      "inventory": "selected source hashes in receipt; captured at completion",
+      "passed": 98,
+      "pytest_seconds": 120.0,
+      "receipt": "baseline-host/final.json"
+    },
+    "final-cuda": {
+      "failed": 0,
+      "inventory": "source-inventory-final.json",
+      "passed": 1,
+      "patch": "source-final.patch",
+      "pytest_seconds": 76.78,
+      "receipt": "final-cuda/final.json",
+      "selection": "test_effective_runtime_schedule_selects_before_ownership_with_unchanged_environment only"
+    },
+    "final-host": {
+      "failed": 0,
+      "inventory": "source-inventory-final.json",
+      "passed": 99,
+      "patch": "source-final.patch",
+      "pytest_seconds": 123.99,
+      "receipt": "final-host/final.json"
+    },
+    "intermediate-cuda": {
+      "detail": "Matching schedule, changed kind and changed chunk iterations passed. The modifier iteration failed: the legacy Fortran getter reported 1 instead of 2147483649. The subsequent C/Fortran ABI probe identified modifier loss in that getter; the final C-bound sampler preserves it. The expected assertion was retained.",
+      "failed": 1,
+      "inventory": "source-inventory-intermediate.json",
+      "passed": 0,
+      "patch": "source-intermediate.patch",
+      "pytest_seconds": 76.28,
+      "receipt": "intermediate-cuda/final.json"
+    },
+    "intermediate-host": {
+      "failed": 0,
+      "inventory": "source-inventory-intermediate.json",
+      "passed": 98,
+      "patch": "source-intermediate.patch",
+      "pytest_seconds": 123.93,
+      "receipt": "intermediate-host/final.json"
+    }
+  },
+  "final_changes_from_baseline": [
+    "Format calibration imports for Ruff.",
+    "Move phase conditional outside pytest.raises.",
+    "Use ibset for documented modifier bit in the CUDA fixture."
+  ],
+  "final_changes_from_intermediate": [
+    "Independent native sampler calls bind(C,name=omp_get_schedule), preserving modifier bit stripped by GNU legacy Fortran getter.",
+    "Native executable regression verifies actual monotonic modifier metadata.",
+    "README explains C-bound independent sampling."
+  ],
+  "final_source_binding": "committed-source-binding.json",
+  "final_source_commit": "9a027f87ac58a5a8132eaa57ac6db93722deb038",
+  "final_source_inventory_sha256": "dacdf999795eb1dcf3062959fe63e1481df36ddce565fad9c71a4907095e7a4d",
+  "final_validation_status": "complete: final host99 passed and selected CUDA1 passed; all final source inventories stable and identical",
+  "parent_base_commit": "3e48c9dc6b310584738577b72d47679bed966003",
+  "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+  "purpose": "Protocol4 effective OpenMP schedule identity and preexecution native fallback correctness",
+  "schema_version": 1
+}

@@ -1,0 +1,78 @@
+..F                                                                      [100%]
+=================================== FAILURES ===================================
+_ test_effective_runtime_schedule_selects_before_ownership_with_unchanged_environment _
+
+tmp_path = PosixPath('/home/jirka/research/fortran-abomination/benchmarks/results/effective-schedule-validation-20261015/pytest/test_effective_runtime_schedul0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x780cba868510>
+
+    @pytest.mark.cuda
+    def test_effective_runtime_schedule_selects_before_ownership_with_unchanged_environment(tmp_path, monkeypatch):
+        from compiler.offload import exact_window_calibration as calibration
+        from compiler.tests.test_exact_window import observations
+    
+        tools = {
+            "nvcc": shutil.which("nvcc"),
+            "cxx": shutil.which("g++-14") or shutil.which("g++"),
+            "fortran": shutil.which("gfortran-15") or shutil.which("gfortran"),
+        }
+        if not all(tools.values()):
+            pytest.skip("CUDA, C++ and Fortran toolchain required")
+        require_explicit_cuda_environment()
+        profile = actual_profile(tmp_path, tools["nvcc"], tools["cxx"])
+        architecture = "sm_" + profile["hardware"]["compute_capability"].replace(".", "")
+        source = tmp_path / "original.f90"
+        source.write_text(fixture_source(original_teams=True).replace("schedule(static)", "schedule(runtime)"))
+        # Change the task's schedule ICV outside the admitted invocation. The
+        # environment is identical in capture, matching and all rejected executions.
+        driver = calibration.DRIVER.replace("allocate(a(", """call get_command_argument(3,argument)
+    read(argument,*)i
+    select case(i)
+    case(0)
+    call omp_set_schedule(omp_sched_static,0)
+    case(1)
+    call omp_set_schedule(omp_sched_dynamic,1)
+    case(2)
+    call omp_set_schedule(omp_sched_static,7)
+    case(3)
+    call omp_set_schedule(ior(omp_sched_static,omp_sched_monotonic),0)
+    end select
+    allocate(a(""", 1)
+        monkeypatch.setattr(calibration, "DRIVER", driver)
+        environment = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "OMP_PROC_BIND": "FALSE",
+                       "OMP_THREAD_LIMIT": "4", "OMP_MAX_ACTIVE_LEVELS": "1", "OMP_SCHEDULE": "static"}
+        for name in ("FORT_RUNTIME_TRACE", "FORT_EXACT_CALIBRATION_MODE"):
+            environment.pop(name, None)
+        outputs, report, record = emit(source, {"calibration": True, "build_contract": build_contract(architecture)})
+>       native, _ = build_native(tmp_path / "native", source, environment, **tools)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+compiler/tests/test_exact_window_teams_cuda.py:181: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+compiler/offload/exact_window_calibration.py:245: in build_native
+    _run(command, cwd=directory, environment=environment)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+command = ['/usr/bin/gfortran-15', '-O3', '-std=f2018', '-fopenmp', '-ffp-contract=off', '-J/home/jirka/research/fortran-abomination/benchmarks/results/effective-schedule-validation-20261015/pytest/test_effective_runtime_schedul0/native', ...]
+cwd = PosixPath('/home/jirka/research/fortran-abomination/benchmarks/results/effective-schedule-validation-20261015/pytest/test_effective_runtime_schedul0/native')
+environment = {'SHELL': '/bin/bash', 'COLORTERM': '', 'WSL2_GUI_APPS_ENABLED': '1', 'WSL_DISTRO_NAME': 'Debian', ...}
+
+    def _run(command, *, cwd, environment):
+        result = subprocess.run(command, cwd=cwd, env=environment, capture_output=True, text=True, timeout=180)
+        if result.returncode:
+>           raise RuntimeError("command failed: " + repr(command) + "\n" + result.stdout + result.stderr)
+E           RuntimeError: command failed: ['/usr/bin/gfortran-15', '-O3', '-std=f2018', '-fopenmp', '-ffp-contract=off', '-J/home/jirka/research/fortran-abomination/benchmarks/results/effective-schedule-validation-20261015/pytest/test_effective_runtime_schedul0/native', '-I', '/home/jirka/research/fortran-abomination/benchmarks/results/effective-schedule-validation-20261015/pytest/test_effective_runtime_schedul0/native', '-c', '/home/jirka/research/fortran-abomination/benchmarks/results/effective-schedule-validation-20261015/pytest/test_effective_runtime_schedul0/original.f90', '/home/jirka/research/fortran-abomination/benchmarks/results/effective-schedule-validation-20261015/pytest/test_effective_runtime_schedul0/native/driver.f90']
+E           /home/jirka/research/fortran-abomination/benchmarks/results/effective-schedule-validation-20261015/pytest/test_effective_runtime_schedul0/native/driver.f90:27:62:
+E           
+E              27 | call omp_set_schedule(ior(omp_sched_static,omp_sched_monotonic),0)
+E                 |                                                              1
+E           Error: Symbol ‘omp_sched_monotonic’ at (1) has no IMPLICIT type; did you mean ‘omp_sched_dynamic’?
+E           /home/jirka/research/fortran-abomination/benchmarks/results/effective-schedule-validation-20261015/pytest/test_effective_runtime_schedul0/native/driver.f90:27:62:
+E           
+E              27 | call omp_set_schedule(ior(omp_sched_static,omp_sched_monotonic),0)
+E                 |                                                              1
+E           Error: Symbol ‘omp_sched_monotonic’ at (1) has no IMPLICIT type; did you mean ‘omp_sched_dynamic’?
+
+compiler/offload/exact_window_calibration.py:166: RuntimeError
+=========================== short test summary info ============================
+FAILED compiler/tests/test_exact_window_teams_cuda.py::test_effective_runtime_schedule_selects_before_ownership_with_unchanged_environment
+1 failed, 2 passed in 116.96s (0:01:56)
