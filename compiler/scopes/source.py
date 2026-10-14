@@ -1865,9 +1865,35 @@ class ScopeBuilder:
         # private to this owner and map whole-variable actuals by root identity.
         parameters = {root: _name("fort_capture_", digest) + "_" + str(i)
                       for i, root in enumerate((*arrays, *scalars))}
+        private = {name for call in calls if call.region is not None
+                   for name in (*call.region.private_scalars, *call.region.private_arrays)}
+        native_private = ({binding.name: binding for operation in structure.native
+                           for binding in operation.private_bindings.values()} if structure else {})
+        private.update(native_private)
+        private_shapes, private_bounds = {}, {}
+        for private_name in sorted(private):
+            binding = routine.scope.bindings[private_name]
+            if not binding.rank:
+                continue
+            from compiler.scopes.regions import _fixed_shape
+            try:
+                private_shapes[private_name] = _fixed_shape(routine, binding)
+            except CompilationError:
+                if private_name not in native_private:
+                    raise
+                from compiler.frontend.native_private import original_private_array
+                original_private_array(routine, binding)
+                bounds_name = _name("fort_private_bounds_", digest + ":" + private_name)
+                if self.analysis._binding(routine.scope, bounds_name):
+                    raise CompilationError("native private descriptor namespace conflicts with original storage") from None
+                private_bounds[private_name] = bounds_name
+                private_shapes[private_name] = tuple(
+                    f"{bounds_name}(1,{axis}):{bounds_name}(2,{axis})"
+                    for axis in range(1, binding.rank + 1))
         formal_names = list(parameters.values())
         bounds = {root: parameters[root] + "_lower" for root in arrays} if structure or borrowed or regional else {}
         formal_names += list(bounds.values())
+        formal_names += list(private_bounds.values())
         if caller_fallback:
             formal_names.append("fort_native_required")
         views = {root: parameters[root] + "_view" if root in arrays else parameters[root]
@@ -1897,6 +1923,8 @@ class ScopeBuilder:
         if structure or borrowed or regional:
             spec += [f"integer(c_int64_t), intent(in) :: {bounds[root]}({binding.rank})"
                      for root, binding in arrays.items()]
+        spec += [f"integer(c_int64_t), intent(in) :: {bound}(2,{routine.scope.bindings[name].rank})"
+                 for name, bound in private_bounds.items()]
         if structure:
             spec += ["logical :: fort_branch"]
             if structure.guarded:
@@ -1938,15 +1966,9 @@ class ScopeBuilder:
             dtype = "logical" if binding.signature()[:2] == ("logical",4) else DTYPES[binding.signature()[:2]][0]
             intent = "in" if binding.intent == "in" or "parameter" in binding.attributes else "inout"
             spec += [f"{dtype}, intent({intent}) :: {parameters[root]}"]
-        private = {name for call in calls if call.region is not None
-                   for name in (*call.region.private_scalars, *call.region.private_arrays)}
-        if structure:
-            private.update(binding.name for operation in structure.native
-                           for binding in operation.private_bindings.values())
         for private_name in sorted(private):
             binding = routine.scope.bindings[private_name]
-            from compiler.scopes.regions import _fixed_shape
-            shape = "(" + ",".join(_fixed_shape(routine, binding)) + ")" if binding.rank else ""
+            shape = "(" + ",".join(private_shapes[private_name]) + ")" if binding.rank else ""
             signature = binding.signature()[:2]
             dtype = (DTYPES[signature][0] if signature in DTYPES else
                      "integer(c_int64_t)" if signature == ("integer", 8) else
@@ -2088,6 +2110,11 @@ class ScopeBuilder:
         self.append_procedure(routine.scope.parent, name, text)
         owner_actuals = [*names, *["[" + ",".join(f"lbound({self.visible(routine, root)},{axis},kind={caller_kind})"
                                                   for axis in range(1, arrays[root].rank + 1)) + "]" for root in bounds]]
+        owner_actuals += ["reshape([" + ",".join(
+            f"{inquiry}({private_name},{axis},kind={caller_kind})"
+            for axis in range(1, routine.scope.bindings[private_name].rank + 1)
+            for inquiry in ("lbound", "ubound"))
+            + f"],[2,{routine.scope.bindings[private_name].rank}])" for private_name in private_bounds]
         fallback_flag = _name("fort_native_", digest)
         if caller_fallback:
             owner_actuals.append(fallback_flag)
@@ -2101,13 +2128,14 @@ class ScopeBuilder:
             # Metadata is obtained from the original descriptor. The intrinsic
             # declaration also prevents an original local name from shadowing
             # the generated inquiry, before owner dummy association rebases it.
+            private_intrinsics = ", ubound, reshape" if private_bounds else ""
             if allocated_roots:
-                replacement = "block\nuse iso_c_binding, only: " + caller_kind + " => c_int64_t\nintrinsic :: lbound\n" + replacement + "end block\n"
+                replacement = "block\nuse iso_c_binding, only: " + caller_kind + " => c_int64_t\nintrinsic :: lbound" + private_intrinsics + "\n" + replacement + "end block\n"
             else:
                 original_source = "".join(routine.scope.path.read_text().splitlines(keepends=True)[first-1:last])
                 replacement = ("block\nuse iso_c_binding, only: " + caller_kind + " => c_int64_t\n"
                                "use fort_scoped_memory, only: " + serial + " => fort_scope_serial_caller\n"
-                               "intrinsic :: lbound\nif (" + serial + "() == 0) then\n" + original_source
+                               "intrinsic :: lbound" + private_intrinsics + "\nif (" + serial + "() == 0) then\n" + original_source
                                + "else\n" + replacement + "endif\nend block\n")
         caller_guards = () if structure else runtime_guards
         if allocated_roots or origin_roots or caller_guards:

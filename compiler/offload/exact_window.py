@@ -1,10 +1,12 @@
 """Measured, source-bound alternatives for a complete original lexical window.
 
 This deliberately has no per-item coefficients or size interpolation. Its first
-admission class is a complete branchless serial owner with stable array formals,
+admission class is a complete branchless owner with stable array formals,
 integer input controls, and original scalar outputs. The existing compiler still
 proves every numerical operation, effect and definition. Costs authorize only
-placement. Missing/mismatching evidence leaves the original owner native.
+placement. Original joined teams require independent completion proofs and
+whole-invocation observations. Missing/mismatching evidence leaves the original
+owner native.
 """
 
 from __future__ import annotations
@@ -19,8 +21,8 @@ from pathlib import Path
 from compiler.ir import CompilationError
 from compiler.offload.collective_calibration import normalize_fortran_options
 
-VERSION = 1
-PROTOCOL = "complete-original-window-cold-v1"
+VERSION = 2
+PROTOCOL = "complete-original-window-cold-v2"
 SAMPLES = 7
 HOLDOUTS = 2
 ENVIRONMENT = (
@@ -30,6 +32,11 @@ ENVIRONMENT = (
     "OMP_WAIT_POLICY",
     "GOMP_SPINCOUNT",
     "OMP_SCHEDULE",
+    "OMP_THREAD_LIMIT",
+    "OMP_MAX_ACTIVE_LEVELS",
+    "OMP_NESTED",
+    "OMP_PLACES",
+    "GOMP_CPU_AFFINITY",
     "CUDA_VISIBLE_DEVICES",
 )
 
@@ -93,6 +100,8 @@ def evidence_decision(evidence, contract):
             "threads",
             "dynamic",
             "proc_bind",
+            "thread_limit",
+            "max_active_levels",
             "environment",
         }:
             raise ValueError("complete-window execution identity incomplete")
@@ -117,6 +126,10 @@ def evidence_decision(evidence, contract):
             identity["threads"] != contract["threads"]
             or identity["dynamic"] != 0
             or identity["proc_bind"] != 0
+            or type(identity["thread_limit"]) is not int
+            or identity["thread_limit"] < contract["threads"]
+            or type(identity["max_active_levels"]) is not int
+            or identity["max_active_levels"] < 1
             or not identity["affinity"]
             or any(type(cpu) is not int or not 0 <= cpu < 1024 for cpu in identity["affinity"])
             or identity["affinity"] != sorted(set(identity["affinity"]))
@@ -129,7 +142,13 @@ def evidence_decision(evidence, contract):
             "cpu_name": identity["cpu_name"],
             "fortran_version": identity["fortran_version"],
             "fortran_options": normalize_fortran_options(identity["fortran_options"]),
-            "team": [identity["threads"], identity["dynamic"], identity["proc_bind"]],
+            "team": [
+                identity["threads"],
+                identity["dynamic"],
+                identity["proc_bind"],
+                identity["thread_limit"],
+                identity["max_active_levels"],
+            ],
             "affinity": identity["affinity"],
             "environment": identity["environment"],
         }
@@ -182,12 +201,46 @@ def evidence_decision(evidence, contract):
         return {"available": False, "selection": "native", "reason": str(error)}
 
 
+def original_team_contract(owner):
+    """Authenticate complete original teams before pricing their execution.
+
+    Only top-level joined groups are admitted here. Their completion proofs
+    preserve private state, worksharing and final joins; calibration measures
+    the actual native groups rather than borrowing serial or per-loop rates.
+    This does not provide numerical or native-section execution authority.
+    """
+    from fparser.two.utils import walk
+
+    from compiler.frontend.source_effects import _children
+    from compiler.scopes.segments import directive, grouped_nodes
+
+    builder, routine = owner.builder, owner.routine
+    covered, teams = set(), []
+    for group in grouped_nodes(_children(routine.execution)):
+        if not isinstance(group, tuple):
+            continue
+        directives = [node for node in walk(group) if directive(node) is not None]
+        if not directives:
+            continue
+        proof = builder.analysis.joined_completion(routine.qualified, group)
+        _, selection = builder.analysis._selected_source(routine.qualified, group)
+        proof.validate(builder.analysis, routine.qualified, selection)
+        teams.append(proof.public())
+        covered.update(map(id, directives))
+    if any(directive(node) is not None and id(node) not in covered for node in walk(routine.execution)):
+        raise CompilationError("exact-window directive lacks a complete original joined-team proof")
+    return {
+        "kind": "original_joined_teams" if teams else "serial",
+        "teams": teams,
+        "coverage": "complete invocation; original team startup, worksharing and final joins included",
+    }
+
+
 def prepare(owner):
     """Bind one admitted complete owner, without extending source legality."""
     from fparser.two.utils import walk
 
     from compiler.frontend.source_effects import _kind
-    from compiler.scopes.segments import directive
 
     builder, routine = owner.builder, owner.routine
     request = builder.config.exact_window
@@ -199,6 +252,7 @@ def prepare(owner):
         raise CompilationError("exact window currently requires the complete original invocation")
     if not owner.units or sum(len(unit.scope.calls) for unit in owner.units) < 2:
         raise CompilationError("exact window requires at least two admitted numerical operations")
+    participation = original_team_contract(owner)
     # Payload-dependent branches, calls and changing lifetimes need independent
     # coverage. They are not inferred from descriptor or source identity.
     forbidden = {
@@ -255,9 +309,6 @@ def prepare(owner):
     for node in nodes:
         if _kind(node) in forbidden:
             raise CompilationError("exact-window control/effect coverage unavailable: " + _kind(node))
-        text = directive(node)
-        if text is not None:
-            raise CompilationError("exact-window original team protocol not calibrated")
         if _kind(node) == "Loop_Control":
             if node.items[0] is not None or node.items[1] is None:
                 raise CompilationError("exact-window requires fixed counted loops")
@@ -333,6 +384,28 @@ def prepare(owner):
             expressions.append(f"int({name},c_int64_t)")
         elif binding.intent != "out":
             raise CompilationError("exact-window scalar state requires an independent control contract")
+    # PRIVATE storage can change the native work/allocation cost even when its
+    # payload is unused. Its original automatic descriptor already exists at
+    # procedure entry; never re-evaluate specification expressions, whose
+    # inputs may have changed since that descriptor was established. The same
+    # array can belong to several original teams but needs only one key entry.
+    private_arrays = {
+        item["resource"]
+        for team in participation["teams"]
+        for item in team.get("original_private_arrays", ())
+    }
+    original_bindings = {binding.root: binding for binding in routine.scope.bindings.values()}
+    for root in sorted(private_arrays):
+        from compiler.frontend.native_private import original_private_array
+
+        binding = original_bindings.get(root)
+        if binding is None:
+            raise CompilationError("exact-window original PRIVATE descriptor unavailable")
+        original_private_array(routine, binding)
+        for axis in range(1, binding.rank + 1):
+            for inquiry in ("size", "lbound"):
+                key.append({"resource": root, "property": inquiry, "axis": axis})
+                expressions.append(f"{inquiry}({binding.name},{axis},kind=c_int64_t)")
     if not arrays or len(key) > 256:
         raise CompilationError("exact-window descriptor inventory unavailable")
     actual = {root for unit in owner.units for root in unit.arrays}
@@ -386,11 +459,12 @@ def prepare(owner):
         "numerical_contract": numerical_build_contract(),
         "build_contract": expected_build,
         "threads": builder.config.host_threads,
+        "original_participation": participation,
         "transfers": builder.config.scope_transfers,
         "device_budget_bytes": builder.device_budget,
         "key": key,
         "coverage": "one complete cold invocation including guards, transfers, native effects and publication",
-        "admission": "branchless serial original owner; stable real formals; integer controls",
+        "admission": "branchless original owner with proved joined teams; stable real formals; integer controls",
     }
     capture = request.get("calibration") is True
     if capture and builder.config.policy != "auto":
@@ -489,6 +563,7 @@ extern "C" int @NAME@(const int64_t *key,const char *version,const char *options
     #endif
     if (!key||!version||!options||omp_get_level()!=0||omp_get_dynamic()
             ||omp_get_max_threads()!=@THREADS@||omp_get_proc_bind()!=omp_proc_bind_false
+            ||omp_get_thread_limit()<@THREADS@||omp_get_max_active_levels()<1
             ||!fort_scope_numerical_environment_supported()) return 0;
     @KEYCHECK@
     @FORTRANCHECK@
@@ -515,7 +590,9 @@ extern "C" int @NAME@(const int64_t *key,const char *version,const char *options
         <<",\"environment\":"<<environment.str()<<",\"fortran_options\":"<<quoted(@FORTRANOPTIONS@)
         <<",\"fortran_version\":"<<quoted(version)<<",\"gpu_name\":"<<quoted(p.name)
         <<",\"gpu_uuid\":"<<quoted(uuid.str())<<",\"host_compiler\":"<<quoted(__VERSION__)
-        <<",\"proc_bind\":"<<int(omp_get_proc_bind())<<",\"threads\":"<<omp_get_max_threads()<<"}";
+        <<",\"max_active_levels\":"<<omp_get_max_active_levels()
+        <<",\"proc_bind\":"<<int(omp_get_proc_bind())<<",\"thread_limit\":"<<omp_get_thread_limit()
+        <<",\"threads\":"<<omp_get_max_threads()<<"}";
     @DECISION@
 }
 """

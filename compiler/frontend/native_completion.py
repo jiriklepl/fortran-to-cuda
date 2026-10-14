@@ -11,9 +11,9 @@ from fparser.two.utils import walk
 
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError, SourceLocation
-from compiler.ir.integers import INTEGER_MAX, INTEGER_MIN, integer_literal
+from compiler.ir.integers import integer_literal
 
-NATIVE_COMPLETION_VERSION = 6
+NATIVE_COMPLETION_VERSION = 7
 
 
 def _kind(node):
@@ -75,6 +75,7 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
     private, explicit_private, written, peeled, uniform_reads = set(), set(), set(), {}, {}
     section_count = 0
     environment = {}
+    private_arrays = {}
 
     def content(node):
         return peeled.get(id(node), _children(node))
@@ -150,19 +151,8 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
             if any(binding.root in proof.state_roots for proof in environment.values()):
                 analysis.native_environment_state(procedure, binding).validate(analysis, procedure, binding)
                 return
-            total = 1
-            for axis in binding.shape_nodes:
-                if _kind(axis) != "Explicit_Shape_Spec":
-                    raise CompilationError("native PRIVATE array requires original fixed bounds")
-                lo, hi = axis.items
-                location = SourceLocation(str(routine.scope.path))
-                lower = 1 if lo is None else routine.scope.kinds.integer(lo, location)
-                upper = routine.scope.kinds.integer(hi, location)
-                if not INTEGER_MIN <= lower <= INTEGER_MAX or not INTEGER_MIN <= upper <= INTEGER_MAX:
-                    raise CompilationError("native PRIVATE array bounds exceed the INTEGER ABI")
-                total *= max(0, upper - lower + 1)
-                if total > 256:
-                    raise CompilationError("native PRIVATE array exceeds bounded fixed storage")
+            from compiler.frontend.native_private import original_private_array
+            private_arrays[binding.root] = original_private_array(routine, binding)
 
     def clauses(text):
         remainder = text.strip()
@@ -446,6 +436,8 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
               "has_openmp_in_closure": True, "has_opaque_calls_in_closure": False,
               "join": "implicit combined-loop completion" if implicit_join else "explicit original parallel end",
               "retains_original_team_and_directives": True}
+    if private_arrays:
+        record["original_private_arrays"] = [private_arrays[root] for root in sorted(private_arrays)]
     if uniform_reads:
         record.update(uniform_array_reads=list(uniform_reads.values()),
                       uniform_array_read_contract="fixed-rank-one-shared-constant-point-v1",

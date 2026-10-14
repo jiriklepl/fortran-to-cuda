@@ -1422,10 +1422,21 @@ token. The token retains the original team, worksharing directives, private
 storage and final join; a serialized completion claim cannot authorize native
 section hooks. Uniform branches may contribute bounded unions of possible
 reads and writes, while conditional writes receive no overwrite claim. Original
-private scalars and fixed arrays stay private native state and are excluded from
+private scalars and arrays stay private native state and are excluded from
 owner captures. Detached work, unresolved calls, nonuniform conditions and
 unsupported directives remain boundaries. A token for an entire joined group
 cannot be reused for one of its unfinished child loops.
+
+Native completion schema 7 admits original unsaved explicit-shape automatic
+arrays as private native storage, including runtime extents. An outlined owner
+receives their already allocated original descriptor bounds and recreates the
+same private shape; it never evaluates the original specification expressions
+again. Changes to their scalar inputs after procedure entry therefore cannot
+change the private shape. Empty arrays retain their zero extent. This removes
+the numerical scalarization limit from native storage without granting GPU
+array lowering, registration, or payload capture. Pointer, allocatable, saved,
+target, optional and volatile storage remain unsupported by this private proof.
+Source summary version 21 invalidates earlier cached effects.
 
 Native completion schema 4 also proves uniform reads of shared rank-one REAL
 or INTEGER array elements with literal or source-backed INTEGER PARAMETER
@@ -2809,6 +2820,18 @@ python -m compiler.offload.exact_window_calibration \
   --output /tmp/exact-window-observations --sizes 16,192 --architecture sm_86
 ```
 
+Add `--original-teams` to retain three original four-thread joined loops in the
+native control. Complete-window protocol 2 binds independent source completion
+proofs for every original team and measures their startup, worksharing and joins
+inside the same complete invocation. It does not borrow serial or per-loop
+coefficients. Runtime thread limits, active-level limits and OpenMP placement
+environment are part of the identity; incompatible limits select native before
+CUDA work. Protocol 1 observations do not authorize this expanded class.
+Original PRIVATE arrays contribute their entry-time sizes and lower bounds to
+the exact cost key, once per array even when several teams reuse it. This also
+covers unused PRIVATE storage that may incur allocation costs. Descriptor
+inquiries never re-evaluate specification expressions or register the payload.
+
 The experimental `OffloadConfig.exact_window` route consumes the measured record
 at one original lexical entry. It selects residency only when every measured
 resident interval beats every native interval by at least 5%. It never scales a
@@ -2827,10 +2850,11 @@ until they can enforce the complete performance build contract; enforcing only
 floating-point flags is insufficient. Calibration overrides exist only in
 explicit diagnostic artifacts, never in the resulting automatic selector.
 
-This first admission class contains a complete branchless serial owner with
-stable real array formals, integer input controls and affine counted loops.
-Payload-dependent bounds/indices, hidden state controlling work, original teams,
-helpers, numerical-domain-sensitive primitives, allocation changes and child
+This admission class contains a complete branchless original owner with stable
+real array formals, integer input controls, affine counted loops and independently
+proved top-level joined OpenMP teams. Payload-dependent bounds/indices, hidden
+state controlling work, helpers, numerical-domain-sensitive primitives,
+allocation changes and child
 owners remain unsupported. In particular, this fixture does **not** establish
 automatic offloading or performance for either channel application. The
 maintained application controls and their broader cost models remain separate.

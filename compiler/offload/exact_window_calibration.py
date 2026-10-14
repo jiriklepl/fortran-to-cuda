@@ -28,9 +28,9 @@ from compiler.offload.exact_window import ENVIRONMENT, HOLDOUTS, PROTOCOL, SAMPL
 from compiler.scopes.source import ScopeBuilder
 
 
-def fixture_source():
+def fixture_source(*, original_teams=False):
     arithmetic = "\n".join("v=v*1.000001_8+0.000001_8" for _ in range(192))
-    return (
+    source = (
         """module exact_fixture
 implicit none
 contains
@@ -72,6 +72,14 @@ end subroutine
 end module
 """
     )
+    if original_teams:
+        # Keep the original native control genuinely parallel. These are the
+        # exact directives compiled into both the untouched native routine and
+        # the source-backed candidate, including their joins and private state.
+        source = source.replace("do k=1,n\n", "!$omp parallel do private(i,j,k,v) schedule(static)\ndo k=1,n\n", 1)
+        source = source.replace("do k=2,n-1\n", "!$omp parallel do private(i,j,k) schedule(static)\ndo k=2,n-1\n")
+        source = source.replace("enddo\nenddo\nenddo\n", "enddo\nenddo\nenddo\n!$omp end parallel do\n")
+    return source
 
 
 DRIVER = """program measure
@@ -105,7 +113,8 @@ call system_clock(finish)
 print '(a,es24.16)', 'WINDOW_SECONDS ',real(finish-start,8)/real(rate,8)
 print '(a,a)', 'FORTRAN_VERSION ',compiler_version()
 print '(a,a)', 'FORTRAN_OPTIONS ',compiler_options()
-print '(a,3(i0,1x))', 'CPU_TEAM ',omp_get_max_threads(),merge(1,0,omp_get_dynamic()),omp_get_proc_bind()
+print '(a,5(i0,1x))', 'CPU_TEAM ',omp_get_max_threads(),merge(1,0,omp_get_dynamic()),omp_get_proc_bind(), &
+omp_get_thread_limit(),omp_get_max_active_levels()
 print '(a,25(i0,1x))', 'NATIVE_KEY ',size(a,1),lbound(a,1),size(a,2),lbound(a,2),size(a,3),lbound(a,3), &
 size(b,1),lbound(b,1),size(b,2),lbound(b,2),size(b,3),lbound(b,3), &
 size(d,1),lbound(d,1),size(d,2),lbound(d,2),size(d,3),lbound(d,3), &
@@ -304,6 +313,8 @@ def collect(binary, native, directory, environment, size, contract):
                 resident["identity"]["threads"],
                 resident["identity"]["dynamic"],
                 resident["identity"]["proc_bind"],
+                resident["identity"]["thread_limit"],
+                resident["identity"]["max_active_levels"],
             ],
             "affinity": resident["identity"]["affinity"],
             "environment": resident["identity"]["environment"],
@@ -381,7 +392,13 @@ def validate_production(automatic, native, directory, environment, size, evidenc
         "cpu_name": identity["cpu_name"],
         "fortran_version": identity["fortran_version"],
         "fortran_options": normalize_fortran_options(identity["fortran_options"]),
-        "team": [identity["threads"], identity["dynamic"], identity["proc_bind"]],
+        "team": [
+            identity["threads"],
+            identity["dynamic"],
+            identity["proc_bind"],
+            identity["thread_limit"],
+            identity["max_active_levels"],
+        ],
         "affinity": identity["affinity"],
         "environment": identity["environment"],
     }
@@ -453,6 +470,7 @@ def main(argv=None):
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--sizes", default="16,192")
     parser.add_argument("--architecture", default="sm_86")
+    parser.add_argument("--original-teams", action="store_true", help="calibrate the original four-thread joined loops")
     args = parser.parse_args(argv)
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -461,7 +479,7 @@ def main(argv=None):
     environment.pop("FORT_RUNTIME_TRACE", None)
     environment.pop("FORT_EXACT_CALIBRATION_MODE", None)
     source = output / "original.f90"
-    source.write_text(fixture_source())
+    source.write_text(fixture_source(original_teams=args.original_teams))
     outputs, report, record = emit(source, {"calibration": True, "build_contract": build_contract(args.architecture)})
     tools = {
         "nvcc": shutil.which("nvcc"),
