@@ -1,0 +1,67 @@
+from dataclasses import dataclass, field, replace
+from pathlib import Path
+import json
+import os
+import subprocess
+import sys
+
+import pytest
+
+from compiler.ir import CompilationError
+from compiler.tests.test_checked_execution_plan import scanned
+from compiler.offload.exact_window_calibration import fixture_source
+
+
+def test_unknown_frontend_dataclass_is_metadata_not_registered_authority(tmp_path):
+    @dataclass
+    class FutureProof:
+        semantic: list = field(default_factory=lambda: ['original'])
+
+        def validate(self):
+            raise AssertionError('not an issued proof')
+
+        def public(self):
+            return {'role': 'future-proof'}
+
+    FutureProof.__module__ = 'compiler.frontend.future_proof'
+    proof = FutureProof()
+    with scanned(tmp_path, lambda owner: setattr(owner.units[0], 'future_metadata', proof)) as (owner, plan):
+        with pytest.raises(CompilationError, match='immutable'):
+            owner.units[0].future_metadata.semantic.append('changed after handoff')
+        assert plan.validate() is plan
+
+
+def test_unregistered_prepared_proof_copy_cannot_be_borrowed(tmp_path):
+    def install_copy(owner):
+        proof = next(iter(owner.builder.analysis._numerical_preparations.values()))
+        owner.units[0].future_authority = replace(proof)
+    with pytest.raises(CompilationError, match='exact registered'):
+        with scanned(tmp_path, install_copy):
+            pytest.fail('unregistered proof copy was borrowed')
+
+
+def test_complete_window_fingerprint_is_portable_across_process_hash_seeds(tmp_path):
+    for mode in ('serial', 'teams'):
+        (tmp_path / (mode + '.f90')).write_text(fixture_source(original_teams=mode == 'teams'))
+    program = '''
+import json
+from pathlib import Path
+import sys
+from compiler.offload.exact_window_calibration import emit
+root = Path(sys.argv[1])
+records = {}
+for mode in ('serial', 'teams'):
+    _, report, exact = emit(root / (mode + '.f90'), {'calibration': True})
+    plan = report['scopes'][0]['checked_execution_plan']
+    records[mode] = {'execution_identity': plan['execution_identity'],
+                     'contract_sha256': exact['contract_sha256']}
+print(json.dumps(records, sort_keys=True))
+'''
+    records = []
+    for seed in (1, 91237):
+        result = subprocess.run([sys.executable, '-c', program, str(tmp_path)],
+            cwd='/home/jirka/research/fortran-abomination',
+            env={**os.environ, 'PYTHONHASHSEED': str(seed)},
+            check=True, capture_output=True, text=True)
+        records.append(json.loads(result.stdout))
+    assert records[0] == records[1]

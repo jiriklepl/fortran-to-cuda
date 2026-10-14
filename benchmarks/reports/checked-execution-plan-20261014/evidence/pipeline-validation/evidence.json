@@ -1,0 +1,82 @@
+{
+  "application_performance_qualification": false,
+  "claim": "Pipeline integration for the recorded commit pair; subsequent compiler corrections are pending.",
+  "collection_failure": {
+    "cause": "Implicit pytest discovery traversed retained independent compiler copies in pipeline/work.",
+    "classification": "diagnostic runner collection only; no test items executed",
+    "collection_errors": 2396,
+    "correction": "New runner explicitly selected the complete pipeline tests directory.",
+    "full_failed_log_included": false,
+    "note": "collection-only/collection-only-note.json",
+    "original_full_log": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/checked-plan-portable-validation-20261014/final.log",
+    "original_full_log_sha256": "3e49e8568975678aec5d99bae1bbcbfedb0acb3edeb9af1f0d49636dc1e38d21",
+    "production_source_changed": false,
+    "receipt": "collection-only/final.json",
+    "source_inventory_equal_to_successful_run": true,
+    "source_inventory_sha256": "a910b6898bb1e6e600592463d32e460b6002986269910ae5f95ae0db517b62e7",
+    "tests_executed": 0,
+    "warnings": 65
+  },
+  "commit_verification": "commit-verification.json",
+  "copied_artifacts": {
+    "collection-only/collection-only-note.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/checked-plan-portable-validation-20261014/collection-only-note.json",
+      "sha256": "5f12615881cdc7e95e59bbfc7622b1410ec55c3ee4b8e835b13a0ef8cc4de698"
+    },
+    "collection-only/command.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/checked-plan-portable-validation-20261014/command.json",
+      "sha256": "b6222c37c75d5a5450e9df96496b34c32a279e740a6e91b372f5947b67563885"
+    },
+    "collection-only/final.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/checked-plan-portable-validation-20261014/final.json",
+      "sha256": "92042dfc0ff700b4c9467a3e65f1cdbca53bba94de79fb2e2417685411add8f0"
+    },
+    "collection-only/run.py": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/checked-plan-portable-validation-20261014/run.py",
+      "sha256": "96537e752c9e6245d91ac6f4e298be272b976ea19858ce5e9e05e3b66e118038"
+    },
+    "successful/command.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/checked-plan-portable-validation-20261014-v2/command.json",
+      "sha256": "58cf445e5c7a0d7649d93a46c5fd81a378af3a9c1dc0f7782c5959d10ee3b512"
+    },
+    "successful/final.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/checked-plan-portable-validation-20261014-v2/final.json",
+      "sha256": "89db1037352879e9e8f1cba82d1740cf12b4c3e0f80235700a8764e5d0b6b51f"
+    },
+    "successful/final.log": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/checked-plan-portable-validation-20261014-v2/final.log",
+      "sha256": "013acd65da458fe928d576b7930435f02fd5a35364c24052d835d0711d42059d"
+    },
+    "successful/run.py": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/checked-plan-portable-validation-20261014-v2/run.py",
+      "sha256": "99db14ff7d47518b9bf4f1927567cd81211f9af29bc4a69562c555539e973968"
+    },
+    "successful/source-files-after.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/checked-plan-portable-validation-20261014-v2/source-files-after.json",
+      "sha256": "a910b6898bb1e6e600592463d32e460b6002986269910ae5f95ae0db517b62e7"
+    },
+    "successful/source-files-before.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/checked-plan-portable-validation-20261014-v2/source-files-before.json",
+      "sha256": "a910b6898bb1e6e600592463d32e460b6002986269910ae5f95ae0db517b62e7"
+    }
+  },
+  "corrected_release_qualification": false,
+  "later_compiler_issues": [
+    "hash-seed portability",
+    "overbroad proof borrowing"
+  ],
+  "schema_version": 1,
+  "scope_note": "This receipt does not claim these later issues are fixed; no later source revision is covered.",
+  "successful_run": {
+    "log": "successful/final.log",
+    "parent_commit": "c16d01a0e2028c0f610f1291277f37df413344c9",
+    "pipeline_commit": "494df4e9221b61d3c8f28c7f86ab7dd07cd6908f",
+    "pytest_seconds": 98.14,
+    "receipt": "successful/final.json",
+    "source_inventory_sha256": "a910b6898bb1e6e600592463d32e460b6002986269910ae5f95ae0db517b62e7",
+    "source_inventory_unchanged": true,
+    "subtests_passed": 265,
+    "tests_passed": 616,
+    "tests_skipped": 22
+  }
+}

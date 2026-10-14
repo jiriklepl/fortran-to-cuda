@@ -1,0 +1,18 @@
+{
+  "assertions_changed": false,
+  "assertions_identity": "3a1a38a8f09391491da388f1374a8b7c32d2010cf19d4b6f0a785ca982d8da2d",
+  "basis": "Explicitly reissued original storage, escape, allocation and entry-initialization assertions; six INTENT corrections change no allocation or configuration and grant no new initialized sections.",
+  "compiler_effect_or_numerical_proofs_reused": false,
+  "new_path": "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/capture-facts.json",
+  "new_sha256": "1bea5abea7e5c512cb8ec880c0ab8c419a20f3e0a3804dff495711dcd89465c2",
+  "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/generic-residency-30pct-20261009/correctness/original-convection-application-01/convection-partial-viscosity-facts-02.json",
+  "original_sha256": "e2b708db66b11059cc4f5c652b0ad19b6f7fe69e09245bc42f738ab60dca69c5",
+  "schema_version": 1,
+  "source_hashes_recomputed_from_actual_repaired_files": true,
+  "source_repair": {
+    "after_sha256": "e32b9a1d7bd1c39711ff0dbd5f93938217feed40b34b86f41d42dc2cc080658d",
+    "before_sha256": "6437b7e3a1e748eb39f4fcb8c865f23aafccfbfa0842838bd16c0c54b95c10ca",
+    "patch_sha256": "57102e96312c97f0748201674bc011a7bf0c8d965545e3170536b56464ca8c10",
+    "path": "ELMM/src/advection.f90"
+  }
+}

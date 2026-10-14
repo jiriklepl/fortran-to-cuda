@@ -1,0 +1,149 @@
+{
+  "affinity": [
+    4,
+    5,
+    10,
+    11
+  ],
+  "analysis_sha256": "072e3c7afc1b8e50794534425bd11b423c5b3b26c2b725df2364459f8f645481",
+  "analysis_sources": "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/analysis/analysis-sources.json",
+  "application_built": false,
+  "application_executed": false,
+  "capture_facts_sha256": "1bea5abea7e5c512cb8ec880c0ab8c419a20f3e0a3804dff495711dcd89465c2",
+  "cases": {
+    "channel": {
+      "compiler_branch_assumptions": [],
+      "configuration_changed": false,
+      "files": {
+        "boundconds.conf": "b6b64e153212affdfae650767de910113c008a77a350ef5fddd4f22bbf04e619",
+        "frames.conf": "866cc5cb4d15b35079c2eeb1027613ee9dbaf0a28e0f47423512d3ab226d05bb",
+        "grid.conf": "f44970b7a9e636d1bf78bd2b48820f1bd50ec2adec1c163825ed0d435f8cd7ef",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "les.conf": "1cee53a844bb557673849df1942cb749db067b01f2b19356c9018a53f9b3385d",
+        "main.conf": "3bbb39e3312dcfbc846e78d83bd7eb3bc071907c028e8db79569bd707af43e9b",
+        "output.conf": "b894e8a4500102f04733544b8c85a648684d63cd3eb8dba12518f41e79f65f51",
+        "time_stepping.conf": "87e5abd4c4b57cc5dffdf8a166480207cc54b3f210ba47d9d81ccdcf0ef94483"
+      },
+      "identity": "44fbe5230748585ca7e04d2a849bc4960890a28993a95b14d0f285c22a1cd928",
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/examples/channel",
+      "path": "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/cases/channel",
+      "workload_changed": false
+    },
+    "channel-simple": {
+      "compiler_branch_assumptions": [],
+      "configuration_changed": false,
+      "files": {
+        "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+        "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+        "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+        "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+        "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+        "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+        "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+        "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05"
+      },
+      "identity": "47284c289a0b824a86bf074638967f7a9e30d90c1c2631091e96a77bcba28dc4",
+      "original_path": "/home/jirka/research/fortran-abomination/containers/cases/channel-simple",
+      "path": "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/cases/channel-simple",
+      "workload_changed": false
+    }
+  },
+  "compiler_generation_executed": false,
+  "configured_source_count": 69,
+  "declarations": [
+    {
+      "destination": "U2",
+      "line": 16,
+      "procedure": "CDUdiv"
+    },
+    {
+      "destination": "V2",
+      "line": 60,
+      "procedure": "CDVdiv"
+    },
+    {
+      "destination": "W2",
+      "line": 103,
+      "procedure": "CDWdiv"
+    },
+    {
+      "destination": "U2",
+      "line": 152,
+      "procedure": "CDUadv"
+    },
+    {
+      "destination": "V2",
+      "line": 195,
+      "procedure": "CDVadv"
+    },
+    {
+      "destination": "W2",
+      "line": 238,
+      "procedure": "CDWadv"
+    }
+  ],
+  "elapsed_seconds": 27.525221839998267,
+  "implementation_sha256": {
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/gpu_calls.py": "56f83a872c4dc102946aaa9a5a10f9b7a6511fce1b57d6b3fd07c134fbf1536c",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/scope_extraction.py": "5b161df7bf9545a5bafd52203986d7f1ad9300d7286f2afae5e53ee39c0a3ac6",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/structural.py": "1333c348471659511fa255bf582d3a470f283d9fd69e843cdc103e3148823879"
+  },
+  "include_dependency_count": 18,
+  "original_request_sha256": "9c81727347c237d234010c31560192dfe302cf06219e4920e3544527fefd7834",
+  "performance_measured": false,
+  "preprocessor": {
+    "argv": [
+      "/usr/bin/gfortran-14"
+    ],
+    "defines": [
+      "DPREC"
+    ],
+    "sha256": "a71c6f88b219660bd5c05882d1db04a9f53de4da41e247b2515d3593fa382fa9",
+    "version": "GNU Fortran (Debian 14.4.0-3) 14.4.0\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n"
+  },
+  "repair_audit_sha256": "00835ab3d582ca9ca09296ad6045d570c6a38f87c126a64102997246bf776c4e",
+  "repositories": {
+    "/home/jirka/research/fortran-abomination": "a3c0acbf52326b4331931a7e8d8aff5155a5e43a",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline": "0876bf8c10660f474509d73af8d335d5798709d1"
+  },
+  "reproducer_sha256": "95930fe395154b26493b06f9da4a9fcf3fefcd7e93435be94d13ca70c21fd75c",
+  "schema_version": 1,
+  "seed_files": 232,
+  "source_archives": {
+    "ELMM": {
+      "archive_sha256": "e5deb97a87cc4da8b4b5553a2f54844671df8061c0e8a230c266ec84a8abb4db",
+      "argv": [
+        "git",
+        "-C",
+        "/home/jirka/research/fortran-abomination/elmm-pipeline/.cache/repos/elmm",
+        "archive",
+        "--format=tar",
+        "ddb426fca5b020216083f02a218292fea70c1df2"
+      ],
+      "revision": "ddb426fca5b020216083f02a218292fea70c1df2"
+    },
+    "PoisFFT": {
+      "archive_sha256": "6d71f727d0f85e780400d8d5eeff0e549d1310ef6e1952deffc52cbc2f81aa7e",
+      "argv": [
+        "git",
+        "-C",
+        "/home/jirka/research/fortran-abomination/elmm-pipeline/.cache/repos/PoisFFT",
+        "archive",
+        "--format=tar",
+        "256a2338254c08f611881b2df5e72bdfa73bc257"
+      ],
+      "revision": "256a2338254c08f611881b2df5e72bdfa73bc257"
+    }
+  },
+  "source_repair": {
+    "after_sha256": "e32b9a1d7bd1c39711ff0dbd5f93938217feed40b34b86f41d42dc2cc080658d",
+    "before_sha256": "6437b7e3a1e748eb39f4fcb8c865f23aafccfbfa0842838bd16c0c54b95c10ca",
+    "patch_sha256": "57102e96312c97f0748201674bc011a7bf0c8d965545e3170536b56464ca8c10",
+    "path": "ELMM/src/advection.f90"
+  },
+  "source_seed_identity": "34f95e8764c47a3dcb30f22b2f702798967f8d3af2f86fecca0dbc6928216719",
+  "status": "inputs-prepared",
+  "workflow": "Copy the same repaired seed to each native/SGS/automatic build; source manifests refer to this frozen original seed and must be applied with explicit checked destination mappings."
+}

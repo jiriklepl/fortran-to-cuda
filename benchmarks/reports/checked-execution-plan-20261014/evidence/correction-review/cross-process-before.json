@@ -1,0 +1,180 @@
+{
+  "after_evidence": "focused/pytest.log and its source-bound subprocess regression test",
+  "application_performance_or_measured_calibration": false,
+  "cause": "RegionExtraction PRIVATE inventories inherited hash-seed-dependent set iteration order.",
+  "correction": "Sort private resource roots before constructing the scalar and array inventories.",
+  "observations": {
+    "1": {
+      "fixtures": {
+        "serial": {
+          "contract_sha256": "486a1b7a5544836b4be126d3b3b8e72dd312c9b35138573258d2955a0c35d9d3",
+          "execution_identity": "7c575bb950dc779e07cf524a7b27f55ebf0ef0ab2b892cce211d77a7a06082ba",
+          "private_scalar_inventories": [
+            [
+              "i",
+              "v",
+              "j",
+              "k"
+            ],
+            [
+              "i",
+              "j",
+              "k"
+            ],
+            [
+              "i",
+              "j",
+              "k"
+            ]
+          ],
+          "source_hashes": {
+            "/tmp/checked-plan-cross-process-review/serial.f90": "6dce518c06a3004f4acbcd3961e9aa87492ac6792d89b49ede161863ff1a568c"
+          },
+          "worker_hashes": {
+            "exact_fixture::advance#region1": {
+              "shared_entry.cu": "651d5a655e091b934600bf49b9e5a8b509fe2568f80c58479c14e252e42922f1",
+              "shared_interface.f90": "ec1a853e16d21e290b67ba9d556187f2d79fb614f1d453be7a8a080cb7d5c106"
+            },
+            "exact_fixture::advance#region2": {
+              "shared_entry.cu": "f8a9b24612a03fa56bbc877072b4ae401c7ed0aa22d2aa0c6a28f5b0aa42d9f8",
+              "shared_interface.f90": "a67aae54d706bbe2927f19d8e76b1aa3dc98b9cfcca058e552ff71abc849ee4f"
+            },
+            "exact_fixture::advance#region3": {
+              "shared_entry.cu": "e72fc857ef9e7260cd626151ef51cf5efd9137ca3481fd3da00f9dea0b1a9828",
+              "shared_interface.f90": "2f27bef0cea81b1a3cf103899e1d28c26577501474d27e3fe554800d1f285c7c"
+            }
+          }
+        },
+        "teams": {
+          "contract_sha256": "960ddc881e98ef6041f1b3a4bdce928492f48bd3adfa4cdfffe398edfbc6bbba",
+          "execution_identity": "60d73920a525c8c099a9659b31c1e032960873294a441073cb06925b7d4ea0e3",
+          "private_scalar_inventories": [
+            [
+              "i",
+              "v",
+              "j",
+              "k"
+            ],
+            [
+              "i",
+              "j",
+              "k"
+            ],
+            [
+              "i",
+              "j",
+              "k"
+            ]
+          ],
+          "source_hashes": {
+            "/tmp/checked-plan-cross-process-review/teams.f90": "fdbab0eeb872d0957e34b9e7f999b044adaa3da91504dfc1ccb1bb05165275e5"
+          },
+          "worker_hashes": {
+            "exact_fixture::advance#region1": {
+              "shared_entry.cu": "ef918742f89d92a6ad22d3df05c506de9b44782045e9ff6289be4808484205e5",
+              "shared_interface.f90": "b177c012e1a032f78bca1a9f081c966029de3771244b5d8216d75b181239062e"
+            },
+            "exact_fixture::advance#region2": {
+              "shared_entry.cu": "f53c73fd227eb62f55bd959c5027eb5ce9a3a700efe2fbad851db8079bb9d637",
+              "shared_interface.f90": "df210eee42fb822cfb3824544c4b4baa20cb31ecdc83ffe9bc49de6b6f4cea34"
+            },
+            "exact_fixture::advance#region3": {
+              "shared_entry.cu": "488b90c9659ca3213aa4be6df318b8b452cecfd9ad7713d8bffeb219a68f7b1f",
+              "shared_interface.f90": "dc41205654f70b7ab69f24ee2d939f58e4bb877a2a2c337de39a332ff71cf13d"
+            }
+          }
+        }
+      },
+      "full_diagnostic_record_archived": false,
+      "original_diagnostic_record_path": "/tmp/checked-plan-cross-process-review/records-1.json",
+      "original_diagnostic_record_sha256": "7bb58f025a8241adaf24fbcdb8181488e3bc9d1fd85d0e1211c9dd11ad8cdbfc"
+    },
+    "91237": {
+      "fixtures": {
+        "serial": {
+          "contract_sha256": "b50cf51093cd505ae380e8c474fed6a872e1eb31c3b3d41e488c3564240b4121",
+          "execution_identity": "6a39a8eb355201eae94aa24418e2a2e223ac322b5e9c792d1e0be61ee2687463",
+          "private_scalar_inventories": [
+            [
+              "j",
+              "i",
+              "k",
+              "v"
+            ],
+            [
+              "j",
+              "i",
+              "k"
+            ],
+            [
+              "j",
+              "i",
+              "k"
+            ]
+          ],
+          "source_hashes": {
+            "/tmp/checked-plan-cross-process-review/serial.f90": "6dce518c06a3004f4acbcd3961e9aa87492ac6792d89b49ede161863ff1a568c"
+          },
+          "worker_hashes": {
+            "exact_fixture::advance#region1": {
+              "shared_entry.cu": "651d5a655e091b934600bf49b9e5a8b509fe2568f80c58479c14e252e42922f1",
+              "shared_interface.f90": "ec1a853e16d21e290b67ba9d556187f2d79fb614f1d453be7a8a080cb7d5c106"
+            },
+            "exact_fixture::advance#region2": {
+              "shared_entry.cu": "f8a9b24612a03fa56bbc877072b4ae401c7ed0aa22d2aa0c6a28f5b0aa42d9f8",
+              "shared_interface.f90": "a67aae54d706bbe2927f19d8e76b1aa3dc98b9cfcca058e552ff71abc849ee4f"
+            },
+            "exact_fixture::advance#region3": {
+              "shared_entry.cu": "e72fc857ef9e7260cd626151ef51cf5efd9137ca3481fd3da00f9dea0b1a9828",
+              "shared_interface.f90": "2f27bef0cea81b1a3cf103899e1d28c26577501474d27e3fe554800d1f285c7c"
+            }
+          }
+        },
+        "teams": {
+          "contract_sha256": "ff7d27bd509302de25e3a135ba11902e2fd0251bc5fed78f314397d54348586a",
+          "execution_identity": "482ce2fe6c71191e6b167abc20f4227a6c6ae8011c2bfa50cc164ae87920f5c6",
+          "private_scalar_inventories": [
+            [
+              "j",
+              "i",
+              "k",
+              "v"
+            ],
+            [
+              "j",
+              "i",
+              "k"
+            ],
+            [
+              "j",
+              "i",
+              "k"
+            ]
+          ],
+          "source_hashes": {
+            "/tmp/checked-plan-cross-process-review/teams.f90": "fdbab0eeb872d0957e34b9e7f999b044adaa3da91504dfc1ccb1bb05165275e5"
+          },
+          "worker_hashes": {
+            "exact_fixture::advance#region1": {
+              "shared_entry.cu": "ef918742f89d92a6ad22d3df05c506de9b44782045e9ff6289be4808484205e5",
+              "shared_interface.f90": "b177c012e1a032f78bca1a9f081c966029de3771244b5d8216d75b181239062e"
+            },
+            "exact_fixture::advance#region2": {
+              "shared_entry.cu": "f53c73fd227eb62f55bd959c5027eb5ce9a3a700efe2fbad851db8079bb9d637",
+              "shared_interface.f90": "df210eee42fb822cfb3824544c4b4baa20cb31ecdc83ffe9bc49de6b6f4cea34"
+            },
+            "exact_fixture::advance#region3": {
+              "shared_entry.cu": "488b90c9659ca3213aa4be6df318b8b452cecfd9ad7713d8bffeb219a68f7b1f",
+              "shared_interface.f90": "dc41205654f70b7ab69f24ee2d939f58e4bb877a2a2c337de39a332ff71cf13d"
+            }
+          }
+        }
+      },
+      "full_diagnostic_record_archived": false,
+      "original_diagnostic_record_path": "/tmp/checked-plan-cross-process-review/records-91237.json",
+      "original_diagnostic_record_sha256": "a332aaa2d9906a7824c70ebb89c286e44a4b08738b6e2c7dbf8038bd72c58a2d"
+    }
+  },
+  "schema_version": 1,
+  "status": "read-only diagnostic before correction; derived extract of larger temporary records"
+}

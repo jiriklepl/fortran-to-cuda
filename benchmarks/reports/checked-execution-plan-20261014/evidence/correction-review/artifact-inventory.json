@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "sha256": {
+    "README.md": "45c5e952b0b6e392ed8e5213cc0ae5c1ea858fc1b3946e95bffd16dcab54057d",
+    "baseline/pytest.log": "9e1db8724cd0c1bdbbba350ffe61715a01502caa517f7ad69839a5af4d09ee46",
+    "baseline/receipt.json": "0d66d33a5320ba8362486f9d7c872f78c214197e9ec165632bdfd301699e98cf",
+    "baseline/test_corrections.py.txt": "db7bc1777192379f64bd0775c17683094c4c86f190b42a24033dc1d4f579f0ca",
+    "cross-process-before.json": "58bb2978b5b642be260b6a1972518ebec7e36dd45dc5c0671b3e5abef3f4f19f",
+    "curate.py": "a8953d4a596da6bc2e419a96b2270eee5084f211fa31a52b7795aa692e3ac0bc",
+    "evidence.json": "72d624af9dec0d8a24cbf03358776f51ac6bb7d2b9a659e49f3a034a9c6b13b8",
+    "focused/authored-correction.patch": "1ae8d76b32e8ca9762f051baf9995bd434463f639d96204c62bfd69f7da560fd",
+    "focused/intermediate-snapshot.patch": "5fe998c8eade295b96ab091640a85106e7037570f072f12cb7993206898a337b",
+    "focused/pytest.log": "a9337f135384c656d78c86d27b49852c20a1dc4b8138ef39de90d02c4d75b8f0",
+    "focused/receipt.json": "067ce771aa7776879788dd4fe6873999c16cb231c38347c5165197e6dc1b4481",
+    "overlay/modules/execution_plan.py.txt": "3ffebee820bcfdf9e00accae7b84a645c044eca57bfdedc497b103c9d793f8db",
+    "overlay/modules/regions.py.txt": "221f6f49d8a22f3c97dd744cac32848238bba7e843ecae7dbcf244fc300272c2",
+    "overlay/modules/sitecustomize.py.txt": "49196a0d52da660e7a8055296a53bfac88814b3528c82ad34fad67d3f00992da",
+    "overlay/pytest.log": "a2b84f733f8dae36ac4c411a1cf0e8fa5bbad127f412966f0894089c31f805b9",
+    "overlay/receipt.json": "bdcb15cf0974f02195e0b904e1bcc4ed42c500c51fd5963e420f18090f9a3fcf",
+    "revision-binding.json": "10a2896e0be64a2e05d67d58aab47475f632f6caf4bd1ae4178105a61adbc31e"
+  }
+}

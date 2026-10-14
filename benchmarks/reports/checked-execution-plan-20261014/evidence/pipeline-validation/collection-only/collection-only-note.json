@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "classification": "diagnostic-runner-collection-failure",
+  "production_test_execution_completed": false,
+  "production_source_changes": false,
+  "cause": "Implicit pytest discovery traversed retained work-directory basetemp copies, including independent compiler tests.",
+  "terminal": "65 warnings, 2396 errors during collection in 48.24s",
+  "corrective_scope": "A new diagnostic directory invokes pytest -q tests explicitly; no production code or test changes.",
+  "replacement_checkpoint": "../checked-plan-portable-validation-20261014-v2",
+  "compiler_host_collection": "The independently launched host suite explicitly selects compiler/tests and cannot discover pipeline/work copies."
+}

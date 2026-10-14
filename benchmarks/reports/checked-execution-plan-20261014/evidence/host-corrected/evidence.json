@@ -1,0 +1,193 @@
+{
+  "application_performance_qualification": false,
+  "claim": "Complete compiler host selection, with all four affinity-dependent skips passed in a separate four-CPU whole-file run.",
+  "combined_coverage": {
+    "note": "Counts combine separate affinity-appropriate runs; this is not one 5153-pass invocation.",
+    "remaining_skipped_tests": 0,
+    "repeated_already_passed_tests": 14,
+    "unique_selected_host_tests_passed": 5153
+  },
+  "commit_verification": "commit-verification.json",
+  "commits": {
+    "/home/jirka/research/fortran-abomination": "ff9565f8ac941f9d9fad19e20027840e83f953b5",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline": "494df4e9221b61d3c8f28c7f86ab7dd07cd6908f"
+  },
+  "copied_artifacts": {
+    "four-cpu-supplement/command.json": {
+      "original_path": "/tmp/checked-plan-four-cpu-validation-20261014/command.json",
+      "sha256": "4dd9b45ee8a425d03830d87f852218433043166b622f11f51dba37f9aefe909e"
+    },
+    "four-cpu-supplement/final.json": {
+      "original_path": "/tmp/checked-plan-four-cpu-validation-20261014/final.json",
+      "sha256": "892c994977e4907262ac1cfe3fa2f6ad063ad2e1f89abc292e181716dd929add"
+    },
+    "four-cpu-supplement/final.log": {
+      "original_path": "/tmp/checked-plan-four-cpu-validation-20261014/final.log",
+      "sha256": "9ded744d14d7837b165a8f2b615d20d70dec1d8ef0f7fbf32f57fb6407c51f54"
+    },
+    "four-cpu-supplement/run.py": {
+      "original_path": "/tmp/checked-plan-four-cpu-validation-20261014/run.py",
+      "sha256": "1aaf5621e25b8ae6d980747bf4fd64af00df5ceb41bb917e68f5ed1931b69593"
+    },
+    "four-cpu-supplement/source-files-after.json": {
+      "original_path": "/tmp/checked-plan-four-cpu-validation-20261014/source-files-after.json",
+      "sha256": "003aaa81870b6cfaf09d255bc79a15d35a6e05dba8eb618828b6f23653e1061b"
+    },
+    "four-cpu-supplement/source-files-before.json": {
+      "original_path": "/tmp/checked-plan-four-cpu-validation-20261014/source-files-before.json",
+      "sha256": "003aaa81870b6cfaf09d255bc79a15d35a6e05dba8eb618828b6f23653e1061b"
+    },
+    "full-host/collected-tests.json": {
+      "original_path": "/tmp/checked-plan-host-corrected-20261014/collected-tests.json",
+      "sha256": "00b7698c47a56799d3bf5de1fcab0b05607f069b1d43fb52d89553ce53f7fa7c"
+    },
+    "full-host/collection.log": {
+      "original_path": "/tmp/checked-plan-host-corrected-20261014/collection.log",
+      "sha256": "7a1009aa51d1e17afeea9dcb5e1b0644c1d6344e4aa0867ea96cbe0ff1f35c87"
+    },
+    "full-host/command.json": {
+      "original_path": "/tmp/checked-plan-host-corrected-20261014/command.json",
+      "sha256": "0fe1b486af8f7b89de4666884507308023a0f53d537816b9610aff5113d272bf"
+    },
+    "full-host/final.json": {
+      "original_path": "/tmp/checked-plan-host-corrected-20261014/final.json",
+      "sha256": "e167c955e262164fd35ba9d35e4cc3ac667863789546514f81f209f0aacc0423"
+    },
+    "full-host/run.py": {
+      "original_path": "/tmp/checked-plan-host-corrected-20261014/run.py",
+      "sha256": "85d4b68bb75ea4ca7bfff130042b84a50c81cbb74ff30222d5c2c20d0a0c8620"
+    },
+    "full-host/source-files-after.json": {
+      "original_path": "/tmp/checked-plan-host-corrected-20261014/source-files-after.json",
+      "sha256": "003aaa81870b6cfaf09d255bc79a15d35a6e05dba8eb618828b6f23653e1061b"
+    },
+    "full-host/source-files-before.json": {
+      "original_path": "/tmp/checked-plan-host-corrected-20261014/source-files-before.json",
+      "sha256": "003aaa81870b6cfaf09d255bc79a15d35a6e05dba8eb618828b6f23653e1061b"
+    },
+    "full-host/worker-0.json": {
+      "original_path": "/tmp/checked-plan-host-corrected-20261014/worker-0.json",
+      "sha256": "cbb6c901f38ff62a82a8da951d92d1c4c198b9e421ef7d92fc3cce47804469c9"
+    },
+    "full-host/worker-0.log": {
+      "original_path": "/tmp/checked-plan-host-corrected-20261014/worker-0.log",
+      "sha256": "63a14e4462430b9b31b05f8570783daf83db9c235308706f351872ab77fbb8c5"
+    },
+    "full-host/worker-1.json": {
+      "original_path": "/tmp/checked-plan-host-corrected-20261014/worker-1.json",
+      "sha256": "6fa77776443a8a030929a455896158299cf521157586c5de7729a403a9a0d2e6"
+    },
+    "full-host/worker-1.log": {
+      "original_path": "/tmp/checked-plan-host-corrected-20261014/worker-1.log",
+      "sha256": "d2ad45efc0f350904fc31bebe6c3b228de94129a5bf81ff9693c1f8e88336aaf"
+    },
+    "full-host/worker-2.json": {
+      "original_path": "/tmp/checked-plan-host-corrected-20261014/worker-2.json",
+      "sha256": "0f663b6f95414456e26fff1be1b534b1a20c5e40d6b08d47ed90d9cd22f672f8"
+    },
+    "full-host/worker-2.log": {
+      "original_path": "/tmp/checked-plan-host-corrected-20261014/worker-2.log",
+      "sha256": "481c73a418fa9506788940782efd949dc1ecd7e47be332e3847826a3fd3f8481"
+    }
+  },
+  "cuda_native_suite_qualification": false,
+  "four_cpu_supplement": {
+    "cpu_affinity": "0,1,6,7",
+    "failed": 0,
+    "log": "four-cpu-supplement/final.log",
+    "nodeid_basis": "same-source full host collection filtered to the entire rerun file",
+    "nodeids": [
+      "compiler/tests/test_dependency_source.py::test_constant_free_pointwise_source_uses_full_cpu_work_span_and_independent_gpu[serial]",
+      "compiler/tests/test_dependency_source.py::test_constant_free_pointwise_source_uses_full_cpu_work_span_and_independent_gpu[fork_join]",
+      "compiler/tests/test_dependency_source.py::test_unvalidated_accesses_and_primitive_domains_remain_native[x=a(i)\\ny=b(i)\\nout(i)=out(i)+x+y-1-memory access class]",
+      "compiler/tests/test_dependency_source.py::test_unvalidated_accesses_and_primitive_domains_remain_native[x=a(i)+a(i+1)\\ny=b(i)\\nout(i)=x+y-1-memory access class]",
+      "compiler/tests/test_dependency_source.py::test_unvalidated_accesses_and_primitive_domains_remain_native[x=a(i,j)\\ny=b(i,j)\\nout(i,j)=(x*y+x)/3d0+y-2-dense traversal]",
+      "compiler/tests/test_dependency_source.py::test_unvalidated_accesses_and_primitive_domains_remain_native[x=a(i)\\ny=b(i)\\nout(i)=sqrt(x*x+y*y)-1-primitive interval proof]",
+      "compiler/tests/test_dependency_source.py::test_unvalidated_accesses_and_primitive_domains_remain_native[x=a(i)\\ny=b(i)\\nout(i)=x/y-1-primitive interval proof]",
+      "compiler/tests/test_dependency_source.py::test_unvalidated_accesses_and_primitive_domains_remain_native[x=a(i)\\ny=b(i)\\nout(i)=x+y+real(i/2,8)-1-unpriced]",
+      "compiler/tests/test_dependency_source.py::test_unvalidated_accesses_and_primitive_domains_remain_native[x=a(i)\\ny=b(i)\\nx=x*x\\nout(i)=y+y-1-unconsumed private source work]",
+      "compiler/tests/test_dependency_source.py::test_unvalidated_accesses_and_primitive_domains_remain_native[x=a(i)\\ny=b(i)\\nout(i)=y+y-1-unconsumed private source work]",
+      "compiler/tests/test_dependency_source.py::test_borrowed_root_view_costs_remain_unavailable_without_address_compute_evidence",
+      "compiler/tests/test_dependency_source.py::test_present_but_unavailable_dependency_evidence_does_not_fall_back_to_v2[malformed]",
+      "compiler/tests/test_dependency_source.py::test_present_but_unavailable_dependency_evidence_does_not_fall_back_to_v2[identity]",
+      "compiler/tests/test_dependency_source.py::test_present_but_unavailable_dependency_evidence_does_not_fall_back_to_v2[rejected_holdout]",
+      "compiler/tests/test_dependency_source.py::test_public_plain_query_preserves_complete_role_costs",
+      "compiler/tests/test_dependency_source.py::test_every_public_query_rechecks_wait_spin_and_team_budget",
+      "compiler/tests/test_dependency_source.py::test_public_query_declines_an_existing_native_team_but_preserves_effects",
+      "compiler/tests/test_dependency_source.py::test_public_query_declines_actual_thread_limit_below_calibrated_budget"
+    ],
+    "passed": 18,
+    "pytest_seconds": 30.71,
+    "receipt": "four-cpu-supplement/final.json",
+    "skipped": 0
+  },
+  "full_host": {
+    "cpu_affinity": "0,1,2,3,6,7,8,9",
+    "failed": 0,
+    "passed": 5149,
+    "receipt": "full-host/final.json",
+    "selected": 5153,
+    "selection": "not cuda and not native",
+    "skipped": 4,
+    "skipped_tests": [
+      {
+        "nodeid": "compiler/tests/test_dependency_source.py::test_public_plain_query_preserves_complete_role_costs",
+        "nodeid_basis": "raw skip source line mapped to the verified committed function",
+        "reason": "run CPU-only source query tests on exactly four CPUs",
+        "source_line": 342,
+        "worker": 0
+      },
+      {
+        "nodeid": "compiler/tests/test_dependency_source.py::test_public_query_declines_actual_thread_limit_below_calibrated_budget",
+        "nodeid_basis": "raw skip source line mapped to the verified committed function",
+        "reason": "run CPU-only source query tests on exactly four CPUs",
+        "source_line": 396,
+        "worker": 0
+      },
+      {
+        "nodeid": "compiler/tests/test_dependency_source.py::test_every_public_query_rechecks_wait_spin_and_team_budget",
+        "nodeid_basis": "raw skip source line mapped to the verified committed function",
+        "reason": "run CPU-only source query tests on exactly four CPUs",
+        "source_line": 359,
+        "worker": 1
+      },
+      {
+        "nodeid": "compiler/tests/test_dependency_source.py::test_public_query_declines_an_existing_native_team_but_preserves_effects",
+        "nodeid_basis": "raw skip source line mapped to the verified committed function",
+        "reason": "run CPU-only source query tests on exactly four CPUs",
+        "source_line": 387,
+        "worker": 2
+      }
+    ],
+    "workers": [
+      {
+        "exit_code": 0,
+        "passed": 1716,
+        "pytest_seconds": 587.94,
+        "skipped": 2,
+        "worker": 0
+      },
+      {
+        "exit_code": 0,
+        "passed": 1717,
+        "pytest_seconds": 566.74,
+        "skipped": 1,
+        "worker": 1
+      },
+      {
+        "exit_code": 0,
+        "passed": 1716,
+        "pytest_seconds": 481.27,
+        "skipped": 1,
+        "worker": 2
+      }
+    ]
+  },
+  "schema_version": 1,
+  "scope_note": "Correctness jobs shared hardware. Elapsed test time is not application performance evidence. Pytest work trees, generated binaries and caches are excluded.",
+  "source_inventory_entries": 664,
+  "source_inventory_sha256": "003aaa81870b6cfaf09d255bc79a15d35a6e05dba8eb618828b6f23653e1061b",
+  "source_inventory_unchanged": true,
+  "status": "passed",
+  "tracked_commit_mismatches": 0
+}

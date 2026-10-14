@@ -1,0 +1,148 @@
+{
+  "application_checkpoint": {
+    "all_inputs_unchanged": true,
+    "application_built": false,
+    "application_executed": false,
+    "approach_status": "Whole-Convection generation stopped; no unchanged retries or larger budgets.",
+    "automatic_placement_qualified": false,
+    "cap_seconds": 300,
+    "comparison_limit": "Earlier timeouts used forced policy and pristine declarations; this checkpoint used automatic policy and six audited declaration repairs. No planning speedup comparison is established.",
+    "compiler_commit": "c16d01a0e2028c0f610f1291277f37df413344c9",
+    "elapsed_seconds": 300.0044415750017,
+    "evidence": "evidence/application/completion.json",
+    "files": {
+      "completion.json": "d2c5050821cc3c46be9071b64d3178383f5261b65ee59dee6c56bc79dabe7d25",
+      "generation.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "launch.json": "4588e86803f55e1b92173bf5271fd2ff1c123345f83506bd3ba2310246501bef"
+    },
+    "input_count": 178,
+    "manifest_emitted": false,
+    "performance_claim": false,
+    "pipeline_commit": "494df4e9221b61d3c8f28c7f86ab7dd07cd6908f",
+    "status": "timeout",
+    "visual_note": "c16d01a \u00b7 300 s timeout\nNo application retry at ff9565f"
+  },
+  "application_input_basis": {
+    "capture_facts": "Existing storage and initialization assertions explicitly reissued against repaired source hashes; no compiler proofs reused.",
+    "comparison_requirement": "Any subsequent native, SGS-direct and automatic runs use the same repaired seed.",
+    "configuration": "Both original case configurations and 128x64x64 grids retained; no runtime branch specialization.",
+    "generation_outcome": "300-second timeout; no manifest, application build or execution.",
+    "input_bundle": "evidence/application/input-bundle.json",
+    "source": "Pinned ELMM/PoisFFT copy with six audited INTENT(OUT) to INTENT(INOUT) destination declarations; numerical statements unchanged, source identity distinct from pristine upstream."
+  },
+  "architecture_commit": "c16d01a0e2028c0f610f1291277f37df413344c9",
+  "claims": {
+    "application_speedup": false,
+    "automatic_application_qualification": false,
+    "measured_transfer_saving": false,
+    "scope": "Compiler architecture and authority boundaries"
+  },
+  "compatible_pipeline_commit": "494df4e9221b61d3c8f28c7f86ab7dd07cd6908f",
+  "date": "2026-10-14",
+  "decision": {
+    "blocker_map": "blocker-map.json",
+    "missing_cost_gate": "The absent-profile/absent-exact-window auto case could select an authenticated zero-scope native result before expensive discovery. Existing pipeline consumers support that result; the compiler early exit is not implemented in this milestone and would not satisfy automatic offload acceptance.",
+    "next_interval": "Diffusion to accumulation is a candidate for investigation only.",
+    "prerequisite": "Joint generic discovery, native-prefix/section legality and compatible automatic pricing preflight before further kernel work.",
+    "whole_convection": "Stopped after the unchanged 300-second checkpoint cap; no further full-entry retries or budget increases."
+  },
+  "deferred": [
+    "pressure ownership",
+    "cross-stage residency",
+    "mathematical reordering"
+  ],
+  "delivery_note": "User requested wrapping up; no subsequent early-cost-gate implementation or legacy collective correction was started. Both are documented follow-up work. Neither application target is qualified.",
+  "evidence_binding": "Application timeout is bound to c16d01a/494df4e. Corrected compiler validation is separately bound to the implementation commit; no application rerun or performance claim.",
+  "figures": [
+    "architecture-map",
+    "qualification-gates"
+  ],
+  "identity_contract": {
+    "calibration_reuse": "Only the existing complete-original-window admission class; reached suffixes are not newly admitted.",
+    "execution_identity": "Reusable source/configuration/capture and execution semantics within the admitted complete-original-window calibration class; no new portability promise for reached suffixes or unsupported ownership boundaries.",
+    "identity": "Diagnostic record with the issuing compilation's registered proof tokens; not an importable authority.",
+    "proof_validation": "Exact registered in-process authorities remain required; serialized fingerprints cannot grant source or numerical legality."
+  },
+  "implementation_commit": "ff9565f8ac941f9d9fad19e20027840e83f953b5",
+  "implementation_limits": [
+    "Legacy CollectiveScopeBuilder.numerical override still reads live source files at ff9565f; captured-text lowering is not complete for that separate path. Follow-up correction required."
+  ],
+  "qualification_gates": [
+    "Actual configured application generation within the unchanged cap",
+    "A useful executable resident window, not admission alone",
+    "Unchanged numerical validation, including full float64 bounds and halos",
+    "Predicted and observed complete transfer ledger",
+    "Compatible measured automatic placement costs for the admitted interval",
+    "Complete-process native, SGS-direct, and automatic-resident comparisons"
+  ],
+  "schema_version": 1,
+  "status": "validated_architecture_checkpoint_application_unqualified",
+  "targets": {
+    "candidate": "automatic_resident",
+    "channel": {
+      "comparison": "at_most_and_faster_than_sgs_direct",
+      "native_fraction": 0.744,
+      "workload": "Unchanged upstream configuration and full duration, including fourth-order advection and active filtering"
+    },
+    "channel-simple": {
+      "comparison": "strictly_less_than",
+      "complete_wall_seconds": 9.0,
+      "workload": "Unchanged configuration and natural 109-step completion"
+    },
+    "comfortably_met": "All seven measured candidate runs meet their case target, and beat SGS direct in each corresponding round.",
+    "controls": [
+      "fresh_native",
+      "fresh_sgs_direct"
+    ],
+    "excluded_warmups_per_mode": 1,
+    "host_threads": 4,
+    "measured_runs_per_mode": 7
+  },
+  "title": "One immutable source session, one checked execution plan",
+  "validation": {
+    "baseline_host": {
+      "evidence": "evidence/host-baseline/curation.json",
+      "failed": 36,
+      "passed": 5110
+    },
+    "baseline_pipeline": {
+      "evidence": "evidence/pipeline-validation",
+      "passed": 616,
+      "skipped": 22,
+      "subtests": 265
+    },
+    "cuda_native": {
+      "evidence": "evidence/cuda-native-validation/evidence.json",
+      "failed": 0,
+      "passed": 49,
+      "scope": "affected CUDA/native regressions; not complete CUDA suite",
+      "skipped": 0,
+      "stable_source_inputs": true
+    },
+    "host": {
+      "distinct_tests_passed_across_runs": 5153,
+      "evidence": "evidence/host-corrected/evidence.json",
+      "failed": 0,
+      "passed": 5149,
+      "selected": 5153,
+      "skipped": 4,
+      "stable_source_inputs": true,
+      "supplement": {
+        "covered_original_skips": 4,
+        "duplicate_passes": 14,
+        "passed": 18,
+        "skipped": 0
+      }
+    },
+    "pipeline": {
+      "evidence": "evidence/pipeline-validation/corrected/evidence.json",
+      "passed": 616,
+      "skipped": 22,
+      "stable_source_inputs": true,
+      "subtests": 265
+    },
+    "status": "complete_host_and_pipeline_plus_affected_cuda_native_passed",
+    "visual_note": "Host 5,153 distinct \u00b7 CUDA/native 49\nPipeline 616 + 265 subtests",
+    "visual_status": "Regression checks passed"
+  }
+}

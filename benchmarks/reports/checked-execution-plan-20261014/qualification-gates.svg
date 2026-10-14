@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="907.2pt" height="422.806101pt" viewBox="0 0 907.2 422.806101" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 422.806101
+L 907.2 422.806101
+L 907.2 0
+L 0 0
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 31.3056 181.969056
+L 250.9344 181.969056
+Q 258.9696 181.969056 258.9696 178.42644
+L 258.9696 83.563056
+Q 258.9696 80.02044 250.9344 80.02044
+L 31.3056 80.02044
+Q 23.2704 80.02044 23.2704 83.563056
+L 23.2704 178.42644
+Q 23.2704 181.969056 31.3056 181.969056
+z
+" clip-path="url(#p64b3218796)" style="fill: #dceafb; stroke: #a5afbb; stroke-width: 0.85; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 325.9296 181.969056
+L 581.2704 181.969056
+Q 589.3056 181.969056 589.3056 178.42644
+L 589.3056 83.563056
+Q 589.3056 80.02044 581.2704 80.02044
+L 325.9296 80.02044
+Q 317.8944 80.02044 317.8944 83.563056
+L 317.8944 178.42644
+Q 317.8944 181.969056 325.9296 181.969056
+z
+" clip-path="url(#p64b3218796)" style="fill: #f7d6cf; stroke: #a5afbb; stroke-width: 0.85; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 656.2656 181.969056
+L 875.8944 181.969056
+Q 883.9296 181.969056 883.9296 178.42644
+L 883.9296 83.563056
+Q 883.9296 80.02044 875.8944 80.02044
+L 656.2656 80.02044
+Q 648.2304 80.02044 648.2304 83.563056
+L 648.2304 178.42644
+Q 648.2304 181.969056 656.2656 181.969056
+z
+" clip-path="url(#p64b3218796)" style="fill: #fff0c4; stroke: #a5afbb; stroke-width: 0.85; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 256.717547 130.797936
+Q 287.930678 130.797936 317.802168 130.797936
+" clip-path="url(#p64b3218796)" style="fill: none; stroke: #213047; stroke-width: 1.2; stroke-linecap: round"/>
+    <path d="M 313.002168 128.397936
+L 317.802168 130.797936
+L 313.002168 133.197936
+z
+" clip-path="url(#p64b3218796)" style="fill: #213047; stroke: #213047; stroke-width: 1.2; stroke-linecap: round"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 587.053547 130.797936
+Q 618.266678 130.797936 648.138168 130.797936
+" clip-path="url(#p64b3218796)" style="fill: none; stroke-dasharray: 4.44,1.92; stroke-dashoffset: 0; stroke: #526278; stroke-width: 1.2; stroke-linecap: round"/>
+    <path d="M 643.338168 128.397936
+L 648.138168 130.797936
+L 643.338168 133.197936
+z
+" clip-path="url(#p64b3218796)" style="fill: #526278; stroke-dasharray: 4.44,1.92; stroke-dashoffset: 0; stroke: #526278; stroke-width: 1.2; stroke-linecap: round"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 31.3056 278.013312
+L 442.8864 278.013312
+Q 450.9216 278.013312 450.9216 274.470696
+L 450.9216 227.235816
+Q 450.9216 223.6932 442.8864 223.6932
+L 31.3056 223.6932
+Q 23.2704 223.6932 23.2704 227.235816
+L 23.2704 274.470696
+Q 23.2704 278.013312 31.3056 278.013312
+z
+" clip-path="url(#p64b3218796)" style="fill: #e6eaf0; stroke: #a5afbb; stroke-width: 0.85; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 468.7776 278.013312
+L 875.8944 278.013312
+Q 883.9296 278.013312 883.9296 274.470696
+L 883.9296 227.235816
+Q 883.9296 223.6932 875.8944 223.6932
+L 468.7776 223.6932
+Q 460.7424 223.6932 460.7424 227.235816
+L 460.7424 274.470696
+Q 460.7424 278.013312 468.7776 278.013312
+z
+" clip-path="url(#p64b3218796)" style="fill: #e6eaf0; stroke: #a5afbb; stroke-width: 0.85; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 23px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="20.592" y="32.548886" transform="rotate(-0 20.592 32.548886)">Application generation remains blocked</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 11.7px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526278" x="20.592" y="60.33924" transform="rotate(-0 20.592 60.33924)">Both channel cases remain primary · automatic placement and residency are the deliverable</text>
+   </g>
+   <g id="text_3">
+    <text style="font-weight: 700; font-size: 11.8px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="141.12" y="100.307185" transform="rotate(-0 141.12 100.307185)">Compiler capability slice</text>
+   </g>
+   <g id="text_4">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(69.247891 123.025746)">Immutable source session</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(75.346016 135.710121)">Checked execution plan</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(33.174766 149.460121)">Shared placement / emission inventory</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(141.12 160.174809)"/>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(69.103516 176.960121)">Regression checks passed</text>
+   </g>
+   <g id="text_5">
+    <text style="font-weight: 700; font-size: 11.8px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="453.6" y="100.307185" transform="rotate(-0 453.6 100.307185)">Integrated application checkpoint</text>
+   </g>
+   <g id="text_6">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(383.627969 129.900746)">300-second limit reached</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(372.253281 142.585121)">No generated scope manifest</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(362.834531 156.335121)">No application build or execution</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(347.877109 170.085121)">Pricing and traffic remain unmeasured</text>
+   </g>
+   <g id="text_7">
+    <text style="font-weight: 700; font-size: 11.8px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="766.08" y="100.307185" transform="rotate(-0 766.08 100.307185)">Complete-process qualification</text>
+   </g>
+   <g id="text_8">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(671.779063 129.900746)">Fresh native + SGS-direct controls</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(684.405 143.650746)">Automatic-resident candidate</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(674.313359 156.335121)">4 threads · unchanged workloads</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(661.977031 170.085121)">1 warmup + 7 rotated measured runs</text>
+   </g>
+   <g id="text_9">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #526278" transform="translate(49.493437 205.132558)">Host 5,153 distinct · CUDA/native 49</text>
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #526278" transform="translate(70.764531 217.135292)">Pipeline 616 + 265 subtests</text>
+   </g>
+   <g id="text_10">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #526278" transform="translate(392.309375 205.132558)">c16d01a · 300 s timeout</text>
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #526278" transform="translate(377.911719 217.135292)">No application retry at ff9565f</text>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #526278" x="766.08" y="204.131581" transform="rotate(-0 766.08 204.131581)">No qualifying samples in this report</text>
+   </g>
+   <g id="text_12">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="237.096" y="242.744756" transform="rotate(-0 237.096 242.744756)">channel-simple</text>
+   </g>
+   <g id="text_13">
+    <text style="font-size: 11.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(143.247875 254.753256)">Complete wall-time median &lt; 9 s</text>
+    <text style="font-size: 11.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(81.3775 268.753256)">Unchanged configuration · natural 109-step completion</text>
+   </g>
+   <g id="text_14">
+    <text style="font-weight: 700; font-size: 11.6px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="672.336" y="242.640834" transform="rotate(-0 672.336 242.640834)">channel</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 10.8px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(523.685812 255.388162)">Median ≤ 74.4% of fresh native; faster than SGS direct</text>
+    <text style="font-size: 10.8px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(519.548063 268.392881)">Full duration · actual fourth-order advection and filtering</text>
+   </g>
+   <g id="text_16">
+    <text style="font-weight: 700; font-size: 11.2px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="29.52" y="303.205248" transform="rotate(-0 29.52 303.205248)">Comfortably met: every candidate run meets its case target and beats SGS direct in the corresponding round.</text>
+   </g>
+   <g id="text_17">
+    <text style="font-size: 11.2px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="29.52" y="328.00356" transform="rotate(-0 29.52 328.00356)">Missing or incompatible automatic cost estimates select native. That fallback does not complete the automation objective.</text>
+   </g>
+   <g id="text_18">
+    <text style="font-size: 11.2px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="29.52" y="347.68476" transform="rotate(-0 29.52 347.68476)">No application performance or transfer measurements were produced at this checkpoint.</text>
+   </g>
+   <g id="text_19">
+    <text style="font-size: 10.8px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526278" x="29.52" y="368.546832" transform="rotate(-0 29.52 368.546832)">Case configurations and grids are unchanged; the diagnostic source includes six audited INTENT repairs.</text>
+   </g>
+   <g id="text_20">
+    <text style="font-size: 10.8px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526278" x="29.52" y="389.01528" transform="rotate(-0 29.52 389.01528)">Pressure ownership, cross-stage residency and mathematical reordering remain separate future work.</text>
+   </g>
+   <g id="text_21">
+    <text style="font-size: 9.1px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #526278" x="20.592" y="413.419968" transform="rotate(-0 20.592 413.419968)">Compiler ff9565f8ac94 · compatible pipeline 494df4e9221b · source-bound evidence in README / report.json</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p64b3218796">
+   <rect x="7.2" y="7.2" width="892.8" height="393.624"/>
+  </clipPath>
+ </defs>
+</svg>

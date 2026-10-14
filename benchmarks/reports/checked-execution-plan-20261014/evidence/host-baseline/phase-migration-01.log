@@ -1,0 +1,48 @@
+........................................................................ [ 45%]
+........................................................................ [ 91%]
+.......F......                                                           [100%]
+=================================== FAILURES ===================================
+_ test_mid_classification_mutation_is_hard_and_cannot_adopt_generated_artifacts[execution] _
+
+subject = (PosixPath('/tmp/pytest-of-jirka/pytest-1688/test_mid_classification_mutati0/original.f90'), <compiler.scopes.source.ScopeBuilder object at 0x74ba866f0050>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x74ba866d8ad0>
+change = 'execution'
+
+    @pytest.mark.parametrize("change", ["execution", "file", "contracts", "config", "options"])
+    def test_mid_classification_mutation_is_hard_and_cannot_adopt_generated_artifacts(subject, monkeypatch, change):
+        path, builder = subject
+        builder.analysis.contracts["unused_external"] = {"identity": "original"}
+        assignment, = walk(builder.analysis.routines[ENTRY].execution, F.Assignment_Stmt)
+        original_generate = source.generate_sources
+        generated = []
+    
+        def generate(*args, **kwargs):
+            result = original_generate(*args, **kwargs)
+            generated.append(result)
+            if change == "execution":
+                assignment.items = (*assignment.items[:2], assignment.items[0])
+            elif change == "file":
+                path.write_text(SOURCE + "! source changed during classification\n")
+            elif change == "contracts":
+                builder.analysis.contracts["unused_external"]["identity"] = "changed"
+            elif change == "config":
+                builder.config = replace(builder.config, host_threads=builder.config.host_threads + 1)
+            else:
+                builder.options = replace(builder.options, opt_level=0)
+            return result
+    
+        monkeypatch.setattr(source, "generate_sources", generate)
+        if change == "file":
+            with GenerationTransaction(builder) as transaction:
+                assert transaction.builder.numerical(ENTRY) is not None
+                with pytest.raises(CompilationError, match="source changed"):
+                    transaction.builder.finish()
+        else:
+>           with pytest.raises(CompilationError, match="changed|authority"):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE CompilationError
+
+compiler/tests/test_numerical_classification.py:158: Failed
+=========================== short test summary info ============================
+FAILED compiler/tests/test_numerical_classification.py::test_mid_classification_mutation_is_hard_and_cannot_adopt_generated_artifacts[execution]
+1 failed, 157 passed in 87.39s (0:01:27)

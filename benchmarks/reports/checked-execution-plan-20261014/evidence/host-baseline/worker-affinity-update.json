@@ -1,0 +1,72 @@
+{
+  "reason": "Use otherwise idle correctness CPUs after pipeline suite completion; application diagnostic retains exclusive CPUs 4,5,10,11. No performance claim.",
+  "time_unix": 1792012109.800804,
+  "workers": [
+    {
+      "after": [
+        0,
+        1,
+        2,
+        3,
+        6,
+        7,
+        8,
+        9
+      ],
+      "argv_sha256": "e5597fa0b302496752bce8b54bfaa4137300bf3c051b0367c03b2730ffb526a3",
+      "before": [
+        0,
+        1,
+        6,
+        7
+      ],
+      "pid": 221213,
+      "start_ticks": "3724589",
+      "worker": 1
+    },
+    {
+      "after": [
+        0,
+        1,
+        2,
+        3,
+        6,
+        7,
+        8,
+        9
+      ],
+      "argv_sha256": "6f3290cdb4bf2c18517db717c8db21a79d1a5c4fcb095846ba70ae1b26a20145",
+      "before": [
+        0,
+        1,
+        6,
+        7
+      ],
+      "pid": 221214,
+      "start_ticks": "3724589",
+      "worker": 2
+    },
+    {
+      "after": [
+        0,
+        1,
+        2,
+        3,
+        6,
+        7,
+        8,
+        9
+      ],
+      "argv_sha256": "80eaa0a91e97c7fc33f0897dd8f4d49f431bc307bbbb3956dfce7b8eef275d7c",
+      "before": [
+        0,
+        1,
+        6,
+        7
+      ],
+      "pid": 221215,
+      "start_ticks": "3724589",
+      "worker": 0
+    }
+  ]
+}

@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "status": "whole_entry_stopped_smaller_interval_investigation_only",
+  "checkpoint": {
+    "receipt": "evidence/application/completion.json",
+    "status": "timeout",
+    "cap_seconds": 300,
+    "elapsed_seconds": 300.0044415750017,
+    "exit_code": 124,
+    "manifest_emitted": false,
+    "authenticated_input_files": 178,
+    "changed_inputs": [],
+    "application_executed": false,
+    "performance_measured": false,
+    "compiler_commit": "c16d01a0e2028c0f610f1291277f37df413344c9",
+    "pipeline_commit": "494df4e9221b61d3c8f28c7f86ab7dd07cd6908f"
+  },
+  "decision": {
+    "whole_convection": "stopped; no further retry or budget increase authorized by this assessment",
+    "future_candidate": "Original explicit-diffusion branch through downstream accumulation completion",
+    "status": "investigation_only",
+    "admitted": false,
+    "executable": false,
+    "useful": null,
+    "prerequisite": "Joint generic discovery, native-prefix/section correctness and compatible automatic-pricing preflight for the same interval",
+    "preserve": [
+      "original numerical order",
+      "original branch positions",
+      "stage initialization",
+      "filtering and halos",
+      "original OpenMP completion",
+      "prefix and remaining suffix each execute once"
+    ],
+    "excluded": [
+      "application procedure-name allowlists",
+      "adapter-owned scheduling",
+      "full RK ownership",
+      "cross-stage ownership",
+      "pressure ownership",
+      "mathematical reordering"
+    ]
+  },
+  "blockers": [
+    {
+      "id": "discovery_trigger",
+      "state": "confirmed_code_gate",
+      "reason": "Ordinary contiguous Convection formals and current module facts do not trigger discovery; bounded source-order candidates do not prioritize the late suffix.",
+      "sources": [
+        "compiler/scopes/window_discovery.py:18",
+        "compiler/scopes/window_discovery.py:68",
+        "seed/ELMM/src/dynamics.f90:234"
+      ]
+    },
+    {
+      "id": "native_prefix",
+      "state": "required_unproved_current_application",
+      "reason": "Native preceding operations must establish selected input definitions, alias/lifetime stability and completion without replay or assumed effects.",
+      "sources": [
+        "compiler/frontend/native_prefix.py:502",
+        "compiler/frontend/reached_windows.py:1446",
+        "seed/ELMM/src/dynamics.f90:349"
+      ]
+    },
+    {
+      "id": "stage_and_partial_definitions",
+      "state": "required_source_obligation",
+      "reason": "OUT accumulated fields are initialized only on original stage paths; accumulation reads existing sections, and momentum intermediates remain live into next-stage initialization.",
+      "sources": [
+        "seed/ELMM/src/dynamics.f90:241",
+        "seed/ELMM/src/dynamics.f90:266",
+        "seed/ELMM/src/dynamics.f90:448"
+      ]
+    },
+    {
+      "id": "native_wall_corrections_and_completion",
+      "state": "required_unproved_current_application",
+      "reason": "Indirect wall corrections occur inside diffusion between tiled loops; exact metadata footprints, coherence and original-team barriers must be checked together.",
+      "sources": [
+        "seed/ELMM/src/momentum_diffusion.f90:169",
+        "seed/ELMM/src/wmfluxes-nobranch-U-inc.f90:5",
+        "compiler/frontend/native_metadata.py:1"
+      ]
+    },
+    {
+      "id": "runtime_variants",
+      "state": "required_source_obligation",
+      "reason": "Preserve or safely guard explicit diffusion, grid type and discretization order; variable-z metrics and fourth-order local Fl allocation remain independent unsupported-path obligations.",
+      "sources": [
+        "seed/ELMM/src/dynamics.f90:430",
+        "seed/ELMM/src/parameters.f90:162",
+        "seed/ELMM/src/momentum_diffusion.f90:827"
+      ]
+    },
+    {
+      "id": "automatic_pricing",
+      "state": "confirmed_code_gate_and_missing_evidence",
+      "reason": "Existing complete-window cost admission excludes reached suffixes, child owners, calls/branches and tiles/helpers; native interruption preparation costs and application calibration are unavailable.",
+      "sources": [
+        "compiler/offload/exact_window.py:240",
+        "compiler/offload/exact_window.py:363",
+        "compiler/scopes/execution_plan.py:218",
+        "compiler/scopes/source.py:1764"
+      ]
+    },
+    {
+      "id": "authority_and_portable_identity_review",
+      "state": "historical_checkpoint_gate_corrected_at_ff9565f",
+      "reason": "Explicit registered borrowing and independent-process/hash-seed checks were implemented in ff9565f8. Reusable identity is limited to the admitted complete-original-window calibration class; reached suffixes gain no admission. Final corrected validation is recorded separately in report.json.",
+      "sources": [
+        "compiler/scopes/execution_plan.py:98",
+        "compiler/scopes/execution_plan.py:324"
+      ],
+      "evidence": "evidence/correction-review/README.md"
+    },
+    {
+      "id": "repaired_source_controls",
+      "state": "required_comparison_contract",
+      "reason": "Use the same audited repaired source for all future controls; unchanged case configurations and grids do not make the six corrected declarations pristine upstream source.",
+      "sources": [
+        "../native-diagnostics-20261014/README.md",
+        "evidence/application/input-bundle.json"
+      ]
+    },
+    {
+      "id": "application_validation_and_value",
+      "state": "no_current_result",
+      "reason": "No generated executable, full-field comparison, observed transfer ledger, compatible automatic decision or complete-process qualification is available for this checkpoint.",
+      "sources": [
+        "evidence/application/completion.json"
+      ]
+    }
+  ],
+  "sgs_only_alternative": {
+    "selected": false,
+    "reason": "Immediate native wall fluxes, viscosity boundaries and possible further corrections require full effects/coherence; no downstream GPU viscosity consumer removes the eventual publication.",
+    "bulk_transfer_saving_over_sgs_direct": "not established; lifetime extension alone removes no named bulk-transfer edge",
+    "sources": [
+      "seed/ELMM/src/dynamics.f90:869",
+      "seed/ELMM/src/wallmodels.f90:2159",
+      "seed/ELMM/src/scalarboundaries.f90:326"
+    ]
+  },
+  "transfer_assessment": {
+    "kind": "conditional_symbolic_edge_bounds_not_measured_predictions",
+    "symbols": {
+      "M": "bytes of identical momentum sections uploaded again by separately offloaded accumulation",
+      "N": "viscosity bytes per redundant component upload",
+      "P": "native-interruption and cleanup traffic introduced by residency",
+      "V": "velocity bytes uploaded again at downstream diffusion"
+    },
+    "suffix_removed_edges_upper_bound": "M + 2*N - P, only if comparison uploads viscosity separately for all three component kernels; omit 2*N when already shared",
+    "larger_sgs_to_diffusion_named_edges_upper_bound": "V + 2*N before native interruption traffic; larger interval not admitted",
+    "momentum_final_publication_removed": false,
+    "example_bytes": {
+      "momentum_interiors": 12517376,
+      "velocity_full_allocations": 15683360,
+      "viscosity_full_allocation": 4882944,
+      "momentum_plus_two_redundant_viscosity_uploads": 22283264
+    },
+    "example_assumptions": [
+      "128x64x64 pressure grid",
+      "periodic x/y and bounded z: U/V interiors 128x64x64, W interior 128x64x63",
+      "float64",
+      "interior momentum upload and full viscosity uploads",
+      "identical sections and otherwise identical execution in comparison"
+    ],
+    "sgs_direct_control_net_saving": null,
+    "sgs_direct_control_limitation": "Native Convection has no diffusion/accumulation PCIe transfers to remove; the candidate adds GPU entry/exit traffic. Net saving may be negative.",
+    "observed_upload_bytes": null,
+    "observed_download_bytes": null,
+    "observed_transfer_counts": null,
+    "performance_gain": null
+  },
+  "source_path_basis": "seed paths are relative to benchmarks/results/checked-plan-application-20261014; compiler paths are relative to repository root; cited code belongs to the stopped checkpoint, not a future corrected implementation"
+}

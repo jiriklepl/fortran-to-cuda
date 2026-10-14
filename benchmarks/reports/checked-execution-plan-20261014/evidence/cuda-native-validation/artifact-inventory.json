@@ -1,0 +1,42 @@
+{
+  "files": {
+    "commit-verification.json": {
+      "bytes": 2630,
+      "sha256": "173718146d6397f25f7faa01c2607547d9700e77d88267a9eba090913743f6a4"
+    },
+    "curate.py": {
+      "bytes": 6359,
+      "sha256": "dc74d442dd5bf2bce6f76d16358dfa54019f549c72e43eea9f6170319f061a1f"
+    },
+    "evidence.json": {
+      "bytes": 2939,
+      "sha256": "725364a6f967a1844810051fa5640ebf872f536f16807b5774983a22674522c9"
+    },
+    "passed/command.json": {
+      "bytes": 3120,
+      "sha256": "a24e3ac68385ad0c6eef594b42d592dab5ffb5872b15fe726c7835ccbb8c591c"
+    },
+    "passed/final.json": {
+      "bytes": 3422,
+      "sha256": "6d65271cdb09f7cf6678e570f2ffb88567cd7d20654d264b8c83a63912eba1f0"
+    },
+    "passed/final.log": {
+      "bytes": 111,
+      "sha256": "f6cc6d69acf859f789ce8de59748c78b7b1ca31d8dae8862c05e90ac6d09ff11"
+    },
+    "passed/run.py": {
+      "bytes": 3971,
+      "sha256": "2798b0e78084f3cc97d178a5e9f414d708122f122f7cb2e4e7abb7c587d48f65"
+    },
+    "passed/source-files-after.json": {
+      "bytes": 75587,
+      "sha256": "003aaa81870b6cfaf09d255bc79a15d35a6e05dba8eb618828b6f23653e1061b"
+    },
+    "passed/source-files-before.json": {
+      "bytes": 75587,
+      "sha256": "003aaa81870b6cfaf09d255bc79a15d35a6e05dba8eb618828b6f23653e1061b"
+    }
+  },
+  "identity": "eb3b870cd71324d134d892b4ac240f0de87312c50cc6e5ad954d30481447d3fe",
+  "schema_version": 1
+}

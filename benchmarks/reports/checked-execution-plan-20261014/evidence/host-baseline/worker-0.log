@@ -1,0 +1,485 @@
+........................................................................ [  4%]
+........................................................................ [  8%]
+........................................................................ [ 12%]
+........................................................................ [ 16%]
+........................................................................ [ 20%]
+........................................................................ [ 25%]
+........................................................................ [ 29%]
+..................................................................F..... [ 33%]
+........................................................................ [ 37%]
+........................................................................ [ 41%]
+........................................................................ [ 46%]
+........................................................................ [ 50%]
+.F.F.................................................................... [ 54%]
+........................................................................ [ 58%]
+........................................................................ [ 62%]
+.F.F.F...........F...................................................... [ 67%]
+..............................F.......F...F............................. [ 71%]
+....................................F................................... [ 75%]
+........................................................................ [ 79%]
+.............................F.......................................... [ 83%]
+........................................................................ [ 88%]
+...............F.F..F................................................... [ 92%]
+........................................................................ [ 96%]
+............................................................             [100%]
+=================================== FAILURES ===================================
+__________ test_original_child_source_mutation_invalidates_root_plan ___________
+
+tmp_path = PosixPath('/tmp/checked-plan-full-host-final-20261014/pytest-0/test_original_child_source_mut0')
+
+    def test_original_child_source_mutation_invalidates_root_plan(tmp_path):
+        paths, builder, proof, originals = mapped_child_fixture(tmp_path)
+        paths[0].write_text(CHILD_SOURCE.replace("2.0_8*x(i)", "3.0_8*x(i)"))
+>       with pytest.raises(CompilationError, match="source|original|changed"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE CompilationError
+
+compiler/tests/test_mapped_child_reached_plans.py:238: Failed
+_ test_mid_classification_mutation_is_hard_and_cannot_adopt_generated_artifacts[execution] _
+
+subject = (PosixPath('/tmp/checked-plan-full-host-final-20261014/pytest-0/test_mid_classification_mutati0/original.f90'), <compiler.scopes.source.ScopeBuilder object at 0x74364afa0550>)
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x74364c7ed160>
+change = 'execution'
+
+    @pytest.mark.parametrize("change", ["execution", "file", "contracts", "config", "options"])
+    def test_mid_classification_mutation_is_hard_and_cannot_adopt_generated_artifacts(subject, monkeypatch, change):
+        path, builder = subject
+        builder.analysis.contracts["unused_external"] = {"identity": "original"}
+        assignment, = walk(builder.analysis.routines[ENTRY].execution, F.Assignment_Stmt)
+        original_generate = source.generate_sources
+        generated = []
+    
+        def generate(*args, **kwargs):
+            result = original_generate(*args, **kwargs)
+            generated.append(result)
+            if change == "execution":
+                assignment.items = (*assignment.items[:2], assignment.items[0])
+            elif change == "file":
+                path.write_text(SOURCE + "! source changed during classification\n")
+            elif change == "contracts":
+                builder.analysis.contracts["unused_external"]["identity"] = "changed"
+            elif change == "config":
+                builder.config = replace(builder.config, host_threads=builder.config.host_threads + 1)
+            else:
+                builder.options = replace(builder.options, opt_level=0)
+            return result
+    
+        monkeypatch.setattr(source, "generate_sources", generate)
+>       with pytest.raises(CompilationError, match="changed|authority"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE CompilationError
+
+compiler/tests/test_numerical_classification.py:150: Failed
+____ test_private_execution_cannot_be_adopted_as_original_generated_source _____
+
+subject = (PosixPath('/tmp/checked-plan-full-host-final-20261014/pytest-0/test_private_execution_cannot_0/original.f90'), <compiler.scopes.source.ScopeBuilder object at 0x74364afa2ad0>)
+
+    def test_private_execution_cannot_be_adopted_as_original_generated_source(subject):
+        _path, builder = subject
+        assignment, = walk(builder.analysis.routines[ENTRY].execution, F.Assignment_Stmt)
+>       assignment.items = (*assignment.items[:2], assignment.items[0])
+        ^^^^^^^^^^^^^^^^
+
+compiler/tests/test_numerical_classification.py:183: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = Assignment_Stmt(Part_Ref(Name('a'), Section_Subscript_List(',', (Name('i'),))), '=', Level_2_Expr(Intrinsic_Function_R...(Intrinsic_Name('COS'), Actual_Arg_Spec_List(',', (Part_Ref(Name('a'), Section_Subscript_List(',', (Name('i'),))),)))))
+name = 'items'
+value = (Part_Ref(Name('a'), Section_Subscript_List(',', (Name('i'),))), '=', Part_Ref(Name('a'), Section_Subscript_List(',', (Name('i'),))))
+
+    def _node_setattr(self, name, value):
+        if name == "parent":
+            object.__setattr__(self, name, value)
+            return
+>       raise CompilationError("original compilation-session syntax is immutable: " + name)
+E       compiler.ir.nodes.CompilationError: original compilation-session syntax is immutable: items
+
+compiler/frontend/sealed_syntax.py:88: CompilationError
+__ test_mutable_source_authority_is_not_converted_into_native_close[binding] ___
+
+tmp_path = PosixPath('/tmp/checked-plan-full-host-final-20261014/pytest-0/test_mutable_source_authority_0')
+mutation = 'binding'
+
+    @pytest.mark.parametrize("mutation", ["source", "binding", "declaring_scope", "imports"])
+    def test_mutable_source_authority_is_not_converted_into_native_close(tmp_path, mutation):
+        path, builder, proof, originals = planned_window_fixture(tmp_path)
+        if mutation == "source":
+            path.write_text(PLANNED_SOURCE + "\n! source mutation\n")
+        elif mutation == "binding":
+            scope = builder.analysis.routines["renamed_stage::face_update"].scope
+>           scope.bindings["a"] = copy(scope.bindings["a"])
+            ^^^^^^^^^^^^^^^^^^^
+
+compiler/tests/test_planned_reached_closures.py:214: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = {'a': Binding(name='a', root='argument::a', dtype='real', kind=8, rank=1, intent='inout', attributes=frozenset({'intent'}), lower_bounds=('1',))}
+args = ('a', Binding(name='a', root='argument::a', dtype='real', kind=8, rank=1, intent='inout', attributes=frozenset({'intent'}), lower_bounds=('1',)))
+kwargs = {}
+
+    def _reject(self, *args, **kwargs):
+>       raise CompilationError("owned compilation graph is immutable")
+E       compiler.ir.nodes.CompilationError: owned compilation graph is immutable
+
+compiler/frontend/immutable_graph.py:22: CompilationError
+____ test_public_discovery_adopts_planned_branch_without_full_child_summary ____
+
+tmp_path = PosixPath('/tmp/checked-plan-full-host-final-20261014/pytest-0/test_public_discovery_adopts_p0')
+
+    def test_public_discovery_adopts_planned_branch_without_full_child_summary(tmp_path):
+        _path, builder, _proof, _originals = planned_window_fixture(tmp_path)
+        _outputs, report = builder.run()
+        discovery = report["reached_window_discovery"]
+        assert discovery["selected"], discovery
+>       assert discovery["schema_version"] == 6
+E       assert 7 == 6
+
+compiler/tests/test_planned_reached_closures.py:272: AssertionError
+_ test_later_generation_cut_revalidates_exact_emission_and_recounts_live_kernels _
+
+tmp_path = PosixPath('/tmp/checked-plan-full-host-final-20261014/pytest-0/test_later_generation_cut_reva0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x74364c126200>
+
+    def test_later_generation_cut_revalidates_exact_emission_and_recounts_live_kernels(tmp_path, monkeypatch):
+        from compiler.scopes.lexical import LexicalOwner
+>       from compiler.scopes.window_discovery import _numerical_calls
+E       ImportError: cannot import name '_numerical_calls' from 'compiler.scopes.window_discovery' (/home/jirka/research/fortran-abomination/compiler/scopes/window_discovery.py)
+
+compiler/tests/test_planned_reached_closures.py:355: ImportError
+________ test_prefix_authority_and_budget_failures_remain_hard[binding] ________
+
+tmp_path = PosixPath('/tmp/checked-plan-full-host-final-20261014/pytest-0/test_prefix_authority_and_budg0')
+mutation = 'binding'
+
+    @pytest.mark.parametrize("mutation", ["source", "binding", "declaring_scope", "imports", "budget"])
+    def test_prefix_authority_and_budget_failures_remain_hard(tmp_path, mutation):
+        path, builder, proof, originals = preowner_window_fixture(tmp_path)
+        if mutation == "source":
+            path.write_text(PREOWNER_SOURCE + "\n! changed original\n")
+        elif mutation == "binding":
+>           builder.entry.scope.bindings["a"] = copy(builder.entry.scope.bindings["a"])
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+compiler/tests/test_preowner_activation.py:246: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = {'a': Binding(name='a', root='argument::a', dtype='real', kind=8, rank=1, intent='in', attributes=frozenset({'intent'}...renamed_prefix::advance::bias', dtype='integer', kind=4, rank=0, intent=None, attributes=frozenset(), lower_bounds=())}
+args = ('a', Binding(name='a', root='argument::a', dtype='real', kind=8, rank=1, intent='in', attributes=frozenset({'intent'}), lower_bounds=('- 2',)))
+kwargs = {}
+
+    def _reject(self, *args, **kwargs):
+>       raise CompilationError("owned compilation graph is immutable")
+E       compiler.ir.nodes.CompilationError: owned compilation graph is immutable
+
+compiler/frontend/immutable_graph.py:22: CompilationError
+_ test_original_source_binding_and_emission_configuration_cannot_go_stale[source] _
+
+tmp_path = PosixPath('/tmp/checked-plan-full-host-final-20261014/pytest-0/test_original_source_binding_a0')
+mutation = 'source'
+
+    @pytest.mark.parametrize("mutation", ["source", "binding", "configuration"])
+    def test_original_source_binding_and_emission_configuration_cannot_go_stale(tmp_path, mutation):
+        paths, builder, proof, originals, provider = reached_numerical_fixture(tmp_path)
+        selection = original_joined_group(builder.analysis.routines[CHILD])
+        prepared = provider.prepare(builder.analysis, CHILD, selection)
+        if mutation == "source":
+            paths[0].write_text(paths[0].read_text().replace("g(1)=value", "g(1)=2.0_8*value"))
+        elif mutation == "binding":
+            helper = builder.analysis.numerical_helpers["quartz_math::profile_cell"]
+            binding = helper.scope.bindings["value"]
+            helper.scope.bindings["value"] = replace(binding, attributes=binding.attributes | {"volatile"})
+        else:
+            builder.config = replace(builder.config, host_threads=2)
+            with pytest.raises(CompilationError):
+                ReachedWindowOwner(builder, proof, originals).run()
+            return
+>       with pytest.raises(CompilationError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE CompilationError
+
+compiler/tests/test_reached_numerical_effects.py:132: Failed
+_______ test_changed_original_source_invalidates_source_position_capture _______
+
+tmp_path = PosixPath('/tmp/checked-plan-full-host-final-20261014/pytest-0/test_changed_original_source_i1')
+
+    def test_changed_original_source_invalidates_source_position_capture(tmp_path):
+        builder, _selected, _proof, proxy = bound(tmp_path)
+        builder.entry.scope.path.write_text(builder.entry.scope.path.read_text().replace("counter=2", "counter=3"))
+>       with pytest.raises(CompilationError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE CompilationError
+
+compiler/tests/test_reached_window_binding.py:100: Failed
+___________ test_failed_search_preserves_existing_fallback_artifacts ___________
+
+tmp_path = PosixPath('/tmp/checked-plan-full-host-final-20261014/pytest-0/test_failed_search_preserves_e0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x74364f4e3a80>
+
+    def test_failed_search_preserves_existing_fallback_artifacts(tmp_path, monkeypatch):
+        source = SOURCE.replace("a(i)=2.0_8*b(i)", "call opaque_element(a(i),b(i))")
+        _path, actual = discovery_fixture(tmp_path, source)
+        # Parse the same original source and supplied facts afresh. A second path
+        # would intentionally change artifact identities and invalidate comparison.
+        control = ScopeBuilder([actual.entry.scope.path], ENTRY, facts=deepcopy(actual.facts),
+                               options=actual.options, config=actual.config)
+        actual_outputs, actual_report = actual.run()
+        monkeypatch.setattr("compiler.scopes.window_discovery.discover_reached_window", lambda builder: False)
+        control_outputs, control_report = control.run()
+        assert not actual_report["reached_window_discovery"]["selected"]
+        # Diagnostics intentionally expose the rejected search; generated code,
+        # variants, source patches and runtime provenance must otherwise match.
+        assert {name: value for name, value in actual_outputs.items() if name != "scope-manifest.json"} == {
+            name: value for name, value in control_outputs.items() if name != "scope-manifest.json"}
+        for field in ("scopes", "boundaries", "source_edits", "runtime_provenance", "implementation_variants",
+                      "resolved_calls", "inline_numerical_regions", "child_numerical_regions"):
+>           assert actual_report[field] == control_report[field], field
+E           AssertionError: scopes
+E           assert [{'owner': 'f...ne': 16, ...}] == [{'owner': 'f...ne': 16, ...}]
+E             
+E             At index 0 diff: {'owner': 'fort_owner_context_90a922942c8d', 'owner_variant': 'dc57d1e29730d543b4da1aeb3cbb596e8b4f407b65da64e28477a095116b4c03', 'path': '/tmp/checked-plan-full-host-final-20261014/pytest-0/test_failed_search_preserves_e0/stage.f90', 'first_line': 16, 'last_line': 27, 'gpu_leaves': ['renamed_stage::step#region1'], 'mode': 'sections', 'estimate_available': False, 'planning_reason': None, 'ownership': {'lifetime': 'one original invocation', 'planning_mode': 'continuation', 'retained_resources': ['argument::a', 'argument::b'], 'end_reason': 'reached bound...
+E             
+E             ...Full output truncated (2 lines hidden), use '-vv' to show
+
+compiler/tests/test_reached_window_discovery.py:185: AssertionError
+_ test_mutated_source_aborts_snapshot_instead_of_publishing_partial_diagnostics _
+
+tmp_path = PosixPath('/tmp/checked-plan-full-host-final-20261014/pytest-0/test_mutated_source_aborts_sna0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x74364f531da0>
+
+    def test_mutated_source_aborts_snapshot_instead_of_publishing_partial_diagnostics(tmp_path, monkeypatch):
+        path, builder = subject(tmp_path)
+        original = NumericalPreparationProvider.prepare
+    
+        def mutate(self, *args, **kwargs):
+            result = original(self, *args, **kwargs)
+            path.write_text(SOURCE + "! changed during diagnostics\n")
+            return result
+    
+        monkeypatch.setattr(NumericalPreparationProvider, "prepare", mutate)
+>       with pytest.raises(CompilationError, match="changed|match"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE CompilationError
+
+compiler/tests/test_scope_preflight.py:147: Failed
+_____ test_optional_cost_metadata_does_not_replace_hard_source_validation ______
+
+tmp_path = PosixPath('/tmp/checked-plan-full-host-final-20261014/pytest-0/test_optional_cost_metadata_do0')
+bundle = {'precision_bits': 64, 'cpu_threads': 4, 'numerical_contract': {'schema_version': 1, 'id': 'separate-arithmetic-v1', '...123-456789abcdef', 'gpu_name': 'Test device', 'compute_capability': '8.6', 'cpu_name': 'synthetic test CPU', ...}, ...}
+
+    def test_optional_cost_metadata_does_not_replace_hard_source_validation(tmp_path, bundle):
+        path, builder = inline_builder(tmp_path, bundle)
+        path.write_text(path.read_text().replace("out(i)=", "out(i)=1d0+"))
+>       with pytest.raises(CompilationError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE CompilationError
+
+compiler/tests/test_source_applicability_emission.py:104: Failed
+_ test_reached_original_action_guard_precedes_every_descriptor_and_native_decision _
+
+tmp_path = PosixPath('/tmp/checked-plan-full-host-final-20261014/pytest-0/test_reached_original_action_g0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x74364776acf0>
+
+    def test_reached_original_action_guard_precedes_every_descriptor_and_native_decision(tmp_path, monkeypatch):
+>       _, _, _, manifest, text = emit(tmp_path, monkeypatch)
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+compiler/tests/test_source_native_preflight.py:105: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+compiler/tests/test_source_native_preflight.py:57: in emit
+    outputs, manifest = builder.run()
+                        ^^^^^^^^^^^^^
+compiler/scopes/source.py:2724: in run
+    result = self._attempt_lexical_owner(nodes, finalize=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+compiler/scopes/source.py:2672: in _attempt_lexical_owner
+    result = attempt(candidate)
+             ^^^^^^^^^^^^^^^^^^
+compiler/scopes/source.py:2648: in attempt
+    accepted = owner.run(nodes)
+               ^^^^^^^^^^^^^^^^
+compiler/scopes/lexical.py:961: in run
+    return self._run_lexical(nodes)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+compiler/scopes/lexical.py:978: in _run_lexical
+    plan = build_execution_plan(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+compiler/scopes/execution_plan.py:381: in build_execution_plan
+    emission_identities, numerical_authorities = _seal_execution(owner)
+                                                 ^^^^^^^^^^^^^^^^^^^^^^
+compiler/scopes/execution_plan.py:121: in _seal_execution
+    portable_numerical = _portable_numerical_references(owner.builder.analysis)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+analysis = <compiler.frontend.source_effects.SourceEffects object at 0x74364afa16d0>
+
+    def _portable_numerical_references(analysis):
+        """Describe registered numerical work without exporting Python identities.
+    
+        Tokens still authenticate exact parser/binding objects in this process.
+        Calibration instead binds the source selection, checked numerical payload,
+        context and policy. Only known registered token references are substituted;
+        arbitrary diagnostic fields and emitted source text are never discarded.
+        """
+        references = {}
+    
+        def portable(value):
+            if isinstance(value, str):
+                return references.get(value, value)
+            if isinstance(value, dict):
+                return {key: portable(item) for key, item in value.items()}
+            if isinstance(value, (list, tuple)):
+                return [portable(item) for item in value]
+            return value
+    
+>       for proof in analysis._numerical_preparations.values():
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'SourceEffects' object has no attribute '_numerical_preparations'. Did you mean: '_numerical_completions'?
+
+compiler/scopes/execution_plan.py:65: AttributeError
+______ test_payload_bound_keeps_original_native_source_without_preflight _______
+
+tmp_path = PosixPath('/tmp/checked-plan-full-host-final-20261014/pytest-0/test_payload_bound_keeps_origi0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x74364b7a7460>
+
+    def test_payload_bound_keeps_original_native_source_without_preflight(tmp_path, monkeypatch):
+        source = SOURCE.replace("do i=1,n", "do i=1,int(a(1))")
+>       path, _, _, manifest, text = emit(tmp_path, monkeypatch, source)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+compiler/tests/test_source_native_preflight.py:177: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+compiler/tests/test_source_native_preflight.py:57: in emit
+    outputs, manifest = builder.run()
+                        ^^^^^^^^^^^^^
+compiler/scopes/source.py:2724: in run
+    result = self._attempt_lexical_owner(nodes, finalize=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+compiler/scopes/source.py:2672: in _attempt_lexical_owner
+    result = attempt(candidate)
+             ^^^^^^^^^^^^^^^^^^
+compiler/scopes/source.py:2648: in attempt
+    accepted = owner.run(nodes)
+               ^^^^^^^^^^^^^^^^
+compiler/scopes/lexical.py:961: in run
+    return self._run_lexical(nodes)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+compiler/scopes/lexical.py:978: in _run_lexical
+    plan = build_execution_plan(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+compiler/scopes/execution_plan.py:381: in build_execution_plan
+    emission_identities, numerical_authorities = _seal_execution(owner)
+                                                 ^^^^^^^^^^^^^^^^^^^^^^
+compiler/scopes/execution_plan.py:121: in _seal_execution
+    portable_numerical = _portable_numerical_references(owner.builder.analysis)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+analysis = <compiler.frontend.source_effects.SourceEffects object at 0x74364f6db610>
+
+    def _portable_numerical_references(analysis):
+        """Describe registered numerical work without exporting Python identities.
+    
+        Tokens still authenticate exact parser/binding objects in this process.
+        Calibration instead binds the source selection, checked numerical payload,
+        context and policy. Only known registered token references are substituted;
+        arbitrary diagnostic fields and emitted source text are never discarded.
+        """
+        references = {}
+    
+        def portable(value):
+            if isinstance(value, str):
+                return references.get(value, value)
+            if isinstance(value, dict):
+                return {key: portable(item) for key, item in value.items()}
+            if isinstance(value, (list, tuple)):
+                return [portable(item) for item in value]
+            return value
+    
+>       for proof in analysis._numerical_preparations.values():
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'SourceEffects' object has no attribute '_numerical_preparations'. Did you mean: '_numerical_completions'?
+
+compiler/scopes/execution_plan.py:65: AttributeError
+_ test_intent_out_entry_keeps_definition_registration_before_native_placement __
+
+tmp_path = PosixPath('/tmp/checked-plan-full-host-final-20261014/pytest-0/test_intent_out_entry_keeps_de0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x74364c00df60>
+
+    def test_intent_out_entry_keeps_definition_registration_before_native_placement(tmp_path, monkeypatch):
+        source = SOURCE.replace("real(8),intent(inout)::a(:)", "real(8),intent(out)::a(:)")
+        source = source.replace("a(i)=sqrt(a(i)*a(i)+1.0_8)+cos(a(i))", "a(i)=sqrt(real(i,8)*real(i,8)+1.0_8)+cos(real(i,8))")
+>       _, builder, _, manifest, text = emit(tmp_path, monkeypatch, source)
+                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+compiler/tests/test_source_native_preflight.py:320: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+compiler/tests/test_source_native_preflight.py:57: in emit
+    outputs, manifest = builder.run()
+                        ^^^^^^^^^^^^^
+compiler/scopes/source.py:2724: in run
+    result = self._attempt_lexical_owner(nodes, finalize=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+compiler/scopes/source.py:2672: in _attempt_lexical_owner
+    result = attempt(candidate)
+             ^^^^^^^^^^^^^^^^^^
+compiler/scopes/source.py:2648: in attempt
+    accepted = owner.run(nodes)
+               ^^^^^^^^^^^^^^^^
+compiler/scopes/lexical.py:961: in run
+    return self._run_lexical(nodes)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+compiler/scopes/lexical.py:978: in _run_lexical
+    plan = build_execution_plan(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+compiler/scopes/execution_plan.py:381: in build_execution_plan
+    emission_identities, numerical_authorities = _seal_execution(owner)
+                                                 ^^^^^^^^^^^^^^^^^^^^^^
+compiler/scopes/execution_plan.py:121: in _seal_execution
+    portable_numerical = _portable_numerical_references(owner.builder.analysis)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+analysis = <compiler.frontend.source_effects.SourceEffects object at 0x74364afa1590>
+
+    def _portable_numerical_references(analysis):
+        """Describe registered numerical work without exporting Python identities.
+    
+        Tokens still authenticate exact parser/binding objects in this process.
+        Calibration instead binds the source selection, checked numerical payload,
+        context and policy. Only known registered token references are substituted;
+        arbitrary diagnostic fields and emitted source text are never discarded.
+        """
+        references = {}
+    
+        def portable(value):
+            if isinstance(value, str):
+                return references.get(value, value)
+            if isinstance(value, dict):
+                return {key: portable(item) for key, item in value.items()}
+            if isinstance(value, (list, tuple)):
+                return [portable(item) for item in value]
+            return value
+    
+>       for proof in analysis._numerical_preparations.values():
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'SourceEffects' object has no attribute '_numerical_preparations'. Did you mean: '_numerical_completions'?
+
+compiler/scopes/execution_plan.py:65: AttributeError
+=========================== short test summary info ============================
+FAILED compiler/tests/test_mapped_child_reached_plans.py::test_original_child_source_mutation_invalidates_root_plan
+FAILED compiler/tests/test_numerical_classification.py::test_mid_classification_mutation_is_hard_and_cannot_adopt_generated_artifacts[execution]
+FAILED compiler/tests/test_numerical_classification.py::test_private_execution_cannot_be_adopted_as_original_generated_source
+FAILED compiler/tests/test_planned_reached_closures.py::test_mutable_source_authority_is_not_converted_into_native_close[binding]
+FAILED compiler/tests/test_planned_reached_closures.py::test_public_discovery_adopts_planned_branch_without_full_child_summary
+FAILED compiler/tests/test_planned_reached_closures.py::test_later_generation_cut_revalidates_exact_emission_and_recounts_live_kernels
+FAILED compiler/tests/test_preowner_activation.py::test_prefix_authority_and_budget_failures_remain_hard[binding]
+FAILED compiler/tests/test_reached_numerical_effects.py::test_original_source_binding_and_emission_configuration_cannot_go_stale[source]
+FAILED compiler/tests/test_reached_window_binding.py::test_changed_original_source_invalidates_source_position_capture
+FAILED compiler/tests/test_reached_window_discovery.py::test_failed_search_preserves_existing_fallback_artifacts
+FAILED compiler/tests/test_scope_preflight.py::test_mutated_source_aborts_snapshot_instead_of_publishing_partial_diagnostics
+FAILED compiler/tests/test_source_applicability_emission.py::test_optional_cost_metadata_does_not_replace_hard_source_validation
+FAILED compiler/tests/test_source_native_preflight.py::test_reached_original_action_guard_precedes_every_descriptor_and_native_decision
+FAILED compiler/tests/test_source_native_preflight.py::test_payload_bound_keeps_original_native_source_without_preflight
+FAILED compiler/tests/test_source_native_preflight.py::test_intent_out_entry_keeps_definition_registration_before_native_placement
+15 failed, 1701 passed in 549.31s (0:09:09)

@@ -1,0 +1,46 @@
+{
+  "base_commit": "c16d01a0e2028c0f610f1291277f37df413344c9",
+  "final_corrected_release_validation": false,
+  "focused_snapshot": {
+    "all_recorded_file_hashes_match_reconstruction": true,
+    "description": "base commit plus intermediate-snapshot.patch; an intermediate working revision",
+    "later_corrected_commit_differences": [
+      {
+        "corrected_commit_sha256": "e0adfed1cc59cbaf1c93992e244037ec2d43a96c50dc12cd530b8b53cec7db38",
+        "path": "compiler/frontend/immutable_graph.py",
+        "tested_sha256": "13181e5bc7108a9d77f60d5f010f62a5d41f96c61c06a12a0eb9c52c53d7a1e9"
+      },
+      {
+        "corrected_commit_sha256": "ea943c68b8c6d90d78b0452c2ca5b440ffc50a6e6dd481968785020339b5f346",
+        "path": "compiler/frontend/lowering.py",
+        "tested_sha256": "e9770fe00339700081953cb912960d901d1514b60fe8db1cc238ced699352565"
+      },
+      {
+        "corrected_commit_sha256": "17acdf640c7774d31b13cbed6bfb3b5c1a0f4325b8c55b000bca88906cfda235",
+        "path": "compiler/frontend/sealed_syntax.py",
+        "tested_sha256": "ba3ba7bc737c8c96778276e1ec46368722b001e7384b3a537f78e0155c6d6b4f"
+      },
+      {
+        "corrected_commit_sha256": "b18c848ee4812a6f7b43daae4c8b8cf063007513fb880903e2455377601f3b0b",
+        "path": "compiler/scopes/numerical.py",
+        "tested_sha256": "328538ca5d1e08d21f2c85780edcbc1d6160a98bbceae2b46b5d54e0bc61c6de"
+      },
+      {
+        "corrected_commit_sha256": "d000bf4943f5de6842a95d92475dbd7ee44d23e291edcec2a8d6a2089efd717e",
+        "path": "compiler/scopes/source.py",
+        "tested_sha256": "32e17b43165335a5c5896c2e0b0865539254f3c323294c1f24f23a348ae88b88"
+      }
+    ],
+    "patch": "focused/intermediate-snapshot.patch",
+    "patched_paths": [
+      "compiler/scopes/execution_plan.py",
+      "compiler/scopes/preflight.py",
+      "compiler/scopes/regions.py",
+      "compiler/tests/test_checked_execution_plan.py",
+      "compiler/tests/test_exact_window.py"
+    ],
+    "recorded_file_count": 171
+  },
+  "later_corrected_commit": "ff9565f8ac941f9d9fad19e20027840e83f953b5",
+  "schema_version": 1
+}

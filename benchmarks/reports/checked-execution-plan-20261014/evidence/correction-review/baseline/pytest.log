@@ -1,0 +1,112 @@
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+_____ test_unknown_frontend_dataclass_is_metadata_not_registered_authority _____
+
+tmp_path = PosixPath('/tmp/pytest-of-jirka/pytest-1683/test_unknown_frontend_dataclas0')
+
+    def test_unknown_frontend_dataclass_is_metadata_not_registered_authority(tmp_path):
+        @dataclass
+        class FutureProof:
+            semantic: list = field(default_factory=lambda: ['original'])
+    
+            def validate(self):
+                raise AssertionError('not an issued proof')
+    
+            def public(self):
+                return {'role': 'future-proof'}
+    
+        FutureProof.__module__ = 'compiler.frontend.future_proof'
+        proof = FutureProof()
+        with scanned(tmp_path, lambda owner: setattr(owner.units[0], 'future_metadata', proof)) as (owner, plan):
+>           with pytest.raises(CompilationError, match='immutable'):
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           Failed: DID NOT RAISE CompilationError
+
+/tmp/checked-plan-correction-overlay/test_corrections.py:29: Failed
+___________ test_unregistered_prepared_proof_copy_cannot_be_borrowed ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-jirka/pytest-1683/test_unregistered_prepared_pro0')
+
+    def test_unregistered_prepared_proof_copy_cannot_be_borrowed(tmp_path):
+        def install_copy(owner):
+            proof = next(iter(owner.builder.analysis._numerical_preparations.values()))
+            owner.units[0].future_authority = replace(proof)
+        with pytest.raises(CompilationError, match='exact registered'):
+            with scanned(tmp_path, install_copy):
+>               pytest.fail('unregistered proof copy was borrowed')
+E               Failed: unregistered proof copy was borrowed
+
+/tmp/checked-plan-correction-overlay/test_corrections.py:40: Failed
+____ test_complete_window_fingerprint_is_portable_across_process_hash_seeds ____
+
+tmp_path = PosixPath('/tmp/pytest-of-jirka/pytest-1683/test_complete_window_fingerpri0')
+
+    def test_complete_window_fingerprint_is_portable_across_process_hash_seeds(tmp_path):
+        for mode in ('serial', 'teams'):
+            (tmp_path / (mode + '.f90')).write_text(fixture_source(original_teams=mode == 'teams'))
+        program = '''
+    import json
+    from pathlib import Path
+    import sys
+    from compiler.offload.exact_window_calibration import emit
+    root = Path(sys.argv[1])
+    records = {}
+    for mode in ('serial', 'teams'):
+        _, report, exact = emit(root / (mode + '.f90'), {'calibration': True})
+        plan = report['scopes'][0]['checked_execution_plan']
+        records[mode] = {'execution_identity': plan['execution_identity'],
+                         'contract_sha256': exact['contract_sha256']}
+    print(json.dumps(records, sort_keys=True))
+    '''
+        records = []
+        for seed in (1, 91237):
+            result = subprocess.run([sys.executable, '-c', program, str(tmp_path)],
+                cwd='/home/jirka/research/fortran-abomination',
+                env={**os.environ, 'PYTHONHASHSEED': str(seed)},
+                check=True, capture_output=True, text=True)
+            records.append(json.loads(result.stdout))
+>       assert records[0] == records[1]
+E       AssertionError: assert {'serial': {'...55345d4decb'}} == {'serial': {'...72615b31f1e'}}
+E         
+E         Differing items:
+E         {'teams': {'contract_sha256': 'a7c1cbbd500d4cf51ada7fbaef6f1f3cf91878b1e8b13344cf0bcc9a1e796d15', 'execution_identity': 'a85ef15214545d55a8cec3affc891e8879a64ed0baca90f2ba5fd55345d4decb'}} != {'teams': {'contract_sha256': '0bbab05c09382037a0473e8a54e26e0880f16beaec4cd9444bb651128bbf7e6c', 'execution_identity': 'e1c28d804db8262bcad6fe312e2f9f78929f3b38ddb995aa6f47f72615b31f1e'}}
+E         {'serial': {'contract_sha256': '480d89c7d9734a6db618d087b5ace1de30c5c1c1f3d2991f5c40462056ec18ed', 'execution_identity': '56d76c387ddc62eaf0b3a489f2bdda02e21a17976816763df45a2cb69a...
+E         
+E         ...Full output truncated (2 lines hidden), use '-vv' to show
+
+/tmp/checked-plan-correction-overlay/test_corrections.py:67: AssertionError
+=============================== warnings summary ===============================
+compiler/tests/test_source_scopes.py:802
+  /home/jirka/research/fortran-abomination/compiler/tests/test_source_scopes.py:802: PytestUnknownMarkWarning: Unknown pytest.mark.native - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.native
+
+compiler/tests/test_source_scopes.py:978
+  /home/jirka/research/fortran-abomination/compiler/tests/test_source_scopes.py:978: PytestUnknownMarkWarning: Unknown pytest.mark.native - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.native
+
+compiler/tests/test_source_scopes.py:988
+  /home/jirka/research/fortran-abomination/compiler/tests/test_source_scopes.py:988: PytestUnknownMarkWarning: Unknown pytest.mark.native - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.native
+
+compiler/tests/test_source_scopes.py:998
+  /home/jirka/research/fortran-abomination/compiler/tests/test_source_scopes.py:998: PytestUnknownMarkWarning: Unknown pytest.mark.cuda - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.cuda
+
+compiler/tests/test_source_scopes.py:1019
+  /home/jirka/research/fortran-abomination/compiler/tests/test_source_scopes.py:1019: PytestUnknownMarkWarning: Unknown pytest.mark.cuda - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.cuda
+
+compiler/tests/test_source_scopes.py:1035
+  /home/jirka/research/fortran-abomination/compiler/tests/test_source_scopes.py:1035: PytestUnknownMarkWarning: Unknown pytest.mark.cuda - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.cuda
+
+compiler/tests/test_source_scopes.py:1046
+  /home/jirka/research/fortran-abomination/compiler/tests/test_source_scopes.py:1046: PytestUnknownMarkWarning: Unknown pytest.mark.cuda - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.cuda
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED ../../../../tmp/checked-plan-correction-overlay/test_corrections.py::test_unknown_frontend_dataclass_is_metadata_not_registered_authority
+FAILED ../../../../tmp/checked-plan-correction-overlay/test_corrections.py::test_unregistered_prepared_proof_copy_cannot_be_borrowed
+FAILED ../../../../tmp/checked-plan-correction-overlay/test_corrections.py::test_complete_window_fingerprint_is_portable_across_process_hash_seeds
+3 failed, 7 warnings in 22.69s

@@ -1,0 +1,32 @@
+{
+  "command": [
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "-m",
+    "pytest",
+    "/tmp/checked-plan-correction-overlay/test_corrections.py",
+    "-q"
+  ],
+  "cwd": "/home/jirka/research/fortran-abomination",
+  "PYTHONPATH": "/home/jirka/research/fortran-abomination",
+  "affinity": [
+    4,
+    5,
+    10,
+    11
+  ],
+  "seconds": 22.921503167999617,
+  "exit_code": 1,
+  "before": {
+    "compiler/scopes/execution_plan.py": "e386da15641e1e46742c34218b9fa606ad245bfe3adf52b47d26dedd6ccb75a6",
+    "compiler/scopes/regions.py": "5170e78a211fe1401ba7a656d3873468959fd31057b58fc0c49c64f03516e97f",
+    "compiler/offload/exact_window.py": "702d9467a4ec3b061772e0ed748efe0dae141cc9e49b10b26207a1fca92b60b8",
+    "compiler/tests/test_checked_execution_plan.py": "eb3c8498e4ee30d309fa8375b7f1a7658293dee0f7a4ce957ffc02ea6e0cb349"
+  },
+  "after": {
+    "compiler/scopes/execution_plan.py": "e386da15641e1e46742c34218b9fa606ad245bfe3adf52b47d26dedd6ccb75a6",
+    "compiler/scopes/regions.py": "5170e78a211fe1401ba7a656d3873468959fd31057b58fc0c49c64f03516e97f",
+    "compiler/offload/exact_window.py": "702d9467a4ec3b061772e0ed748efe0dae141cc9e49b10b26207a1fca92b60b8",
+    "compiler/tests/test_checked_execution_plan.py": "eb3c8498e4ee30d309fa8375b7f1a7658293dee0f7a4ce957ffc02ea6e0cb349"
+  },
+  "purpose": "expected failures against frozen uncorrected source; no application or calibration measurement"
+}

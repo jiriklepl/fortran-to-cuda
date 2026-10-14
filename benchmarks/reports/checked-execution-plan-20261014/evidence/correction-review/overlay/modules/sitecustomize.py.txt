@@ -1,0 +1,16 @@
+"""Diagnostic overlay only; leave repository sources unchanged."""
+import importlib.abc
+import importlib.util
+from pathlib import Path
+import sys
+
+class CorrectionFinder(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        replacements = {
+            'compiler.scopes.execution_plan': 'execution_plan.py',
+            'compiler.scopes.regions': 'regions.py',
+        }
+        if fullname in replacements:
+            return importlib.util.spec_from_file_location(fullname, Path(__file__).parent / replacements[fullname])
+
+sys.meta_path.insert(0, CorrectionFinder())

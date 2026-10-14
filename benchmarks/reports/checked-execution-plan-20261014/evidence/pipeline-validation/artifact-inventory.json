@@ -1,0 +1,58 @@
+{
+  "files": {
+    "collection-only/collection-only-note.json": {
+      "bytes": 721,
+      "sha256": "5f12615881cdc7e95e59bbfc7622b1410ec55c3ee4b8e835b13a0ef8cc4de698"
+    },
+    "collection-only/command.json": {
+      "bytes": 2820,
+      "sha256": "b6222c37c75d5a5450e9df96496b34c32a279e740a6e91b372f5947b67563885"
+    },
+    "collection-only/final.json": {
+      "bytes": 3124,
+      "sha256": "92042dfc0ff700b4c9467a3e65f1cdbca53bba94de79fb2e2417685411add8f0"
+    },
+    "collection-only/run.py": {
+      "bytes": 3467,
+      "sha256": "96537e752c9e6245d91ac6f4e298be272b976ea19858ce5e9e05e3b66e118038"
+    },
+    "commit-verification.json": {
+      "bytes": 2371,
+      "sha256": "36d0c04ad1ae107e26cc4e03e23131b5e2cb1ec92dec12434b840074c9140c3b"
+    },
+    "curate.py": {
+      "bytes": 6962,
+      "sha256": "0b16bcde47b18aff8344956b1a271f41dc73fffcd42d192fed710fa07be0b888"
+    },
+    "evidence.json": {
+      "bytes": 4672,
+      "sha256": "b63fd14ed77db78ef34f56c8a64de83555b9654c15a363eb185f94a928db90ca"
+    },
+    "successful/command.json": {
+      "bytes": 2836,
+      "sha256": "58cf445e5c7a0d7649d93a46c5fd81a378af3a9c1dc0f7782c5959d10ee3b512"
+    },
+    "successful/final.json": {
+      "bytes": 3138,
+      "sha256": "89db1037352879e9e8f1cba82d1740cf12b4c3e0f80235700a8764e5d0b6b51f"
+    },
+    "successful/final.log": {
+      "bytes": 807,
+      "sha256": "013acd65da458fe928d576b7930435f02fd5a35364c24052d835d0711d42059d"
+    },
+    "successful/run.py": {
+      "bytes": 3476,
+      "sha256": "99db14ff7d47518b9bf4f1927567cd81211f9af29bc4a69562c555539e973968"
+    },
+    "successful/source-files-after.json": {
+      "bytes": 75263,
+      "sha256": "a910b6898bb1e6e600592463d32e460b6002986269910ae5f95ae0db517b62e7"
+    },
+    "successful/source-files-before.json": {
+      "bytes": 75263,
+      "sha256": "a910b6898bb1e6e600592463d32e460b6002986269910ae5f95ae0db517b62e7"
+    }
+  },
+  "identity": "1f82281a9bea3f7fcb4e09cfda6c50cedfecdc2ab488d6dc35fb2227224b250d",
+  "schema_version": 1
+}

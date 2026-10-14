@@ -1,0 +1,52 @@
+{
+  "command": [
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "-m",
+    "pytest",
+    "compiler/tests/test_joined_team_source.py",
+    "compiler/tests/test_combined_numerical_team.py",
+    "compiler/tests/test_reached_window_owner.py",
+    "compiler/tests/test_reached_native_environment.py",
+    "compiler/tests/test_joined_prefix_definitions.py",
+    "compiler/tests/test_immutable_inputs.py",
+    "-q",
+    "-x"
+  ],
+  "cwd": "/home/jirka/research/fortran-abomination",
+  "PYTHONPATH": "/tmp/checked-plan-correction-overlay:/home/jirka/research/fortran-abomination",
+  "affinity": [
+    4,
+    5,
+    10,
+    11
+  ],
+  "seconds": 36.815646381997794,
+  "exit_code": 0,
+  "before": {
+    "compiler/scopes/execution_plan.py": "e386da15641e1e46742c34218b9fa606ad245bfe3adf52b47d26dedd6ccb75a6",
+    "compiler/scopes/regions.py": "5170e78a211fe1401ba7a656d3873468959fd31057b58fc0c49c64f03516e97f",
+    "compiler/tests/test_joined_team_source.py": "e618aba62e909d82944abada17f7e17537101e025016d6b43a4cef74ec3fae80",
+    "compiler/tests/test_combined_numerical_team.py": "c1c4f087153e85ca6182e3e292fb2dd35ce22fd3ece35feb20c3ab6b4e43ed2d",
+    "compiler/tests/test_reached_window_owner.py": "232535e3ebe511d2c2d494b2a76ae623c7132e1801bb4c0588e2ad26addba1c1",
+    "compiler/tests/test_reached_native_environment.py": "23298d06a1c0b4bde3388c2ee82639c8fb4c83a8edb497d6111abf0db0f9f2ff",
+    "compiler/tests/test_joined_prefix_definitions.py": "3934d4da9aee9e4afa6ed104dc76008a8cd628d7e399f3ef9a51f8830818069c",
+    "compiler/tests/test_immutable_inputs.py": "ac5dd3786b2491db14c96c75b239872e439fda737482da7f0a556b1f4b30c6f1",
+    "/tmp/checked-plan-correction-overlay/sitecustomize.py": "49196a0d52da660e7a8055296a53bfac88814b3528c82ad34fad67d3f00992da",
+    "/tmp/checked-plan-correction-overlay/execution_plan.py": "3ffebee820bcfdf9e00accae7b84a645c044eca57bfdedc497b103c9d793f8db",
+    "/tmp/checked-plan-correction-overlay/regions.py": "221f6f49d8a22f3c97dd744cac32848238bba7e843ecae7dbcf244fc300272c2"
+  },
+  "after": {
+    "compiler/scopes/execution_plan.py": "e386da15641e1e46742c34218b9fa606ad245bfe3adf52b47d26dedd6ccb75a6",
+    "compiler/scopes/regions.py": "5170e78a211fe1401ba7a656d3873468959fd31057b58fc0c49c64f03516e97f",
+    "compiler/tests/test_joined_team_source.py": "e618aba62e909d82944abada17f7e17537101e025016d6b43a4cef74ec3fae80",
+    "compiler/tests/test_combined_numerical_team.py": "c1c4f087153e85ca6182e3e292fb2dd35ce22fd3ece35feb20c3ab6b4e43ed2d",
+    "compiler/tests/test_reached_window_owner.py": "232535e3ebe511d2c2d494b2a76ae623c7132e1801bb4c0588e2ad26addba1c1",
+    "compiler/tests/test_reached_native_environment.py": "23298d06a1c0b4bde3388c2ee82639c8fb4c83a8edb497d6111abf0db0f9f2ff",
+    "compiler/tests/test_joined_prefix_definitions.py": "3934d4da9aee9e4afa6ed104dc76008a8cd628d7e399f3ef9a51f8830818069c",
+    "compiler/tests/test_immutable_inputs.py": "ac5dd3786b2491db14c96c75b239872e439fda737482da7f0a556b1f4b30c6f1",
+    "/tmp/checked-plan-correction-overlay/sitecustomize.py": "49196a0d52da660e7a8055296a53bfac88814b3528c82ad34fad67d3f00992da",
+    "/tmp/checked-plan-correction-overlay/execution_plan.py": "3ffebee820bcfdf9e00accae7b84a645c044eca57bfdedc497b103c9d793f8db",
+    "/tmp/checked-plan-correction-overlay/regions.py": "221f6f49d8a22f3c97dd744cac32848238bba7e843ecae7dbcf244fc300272c2"
+  },
+  "purpose": "diagnostic correction module overlay; no application or calibration measurement"
+}

@@ -1,0 +1,16 @@
+{
+  "files": {
+    "applied-source.patch": "24fb21fafa7c4fb41a178060fa4a7cd9141a5098ed0bf61113069a2a1db3d8db",
+    "audited-source.patch": "57102e96312c97f0748201674bc011a7bf0c8d965545e3170536b56464ca8c10",
+    "capture-facts-provenance.json": "99f181cbb15aed43fbd1d9daa88bfec082c4a216c4cfbee481d2b22d6bbaef11",
+    "capture-facts.json": "1bea5abea7e5c512cb8ec880c0ab8c419a20f3e0a3804dff495711dcd89465c2",
+    "input-bundle.json": "5a8b86c102a1cb65de0f3095dc55051c16b12e33d347ac82ce886ba1d3f52554",
+    "prepare-inputs.py": "95930fe395154b26493b06f9da4a9fcf3fefcd7e93435be94d13ca70c21fd75c",
+    "request.json": "e14b57cb21316b557c59d80a6170cd3d7f0b0e41d1ee93cbea7462e8b6568881",
+    "run-generation.py": "131403377f4597ebbd593cafed7a6f7aaeec3306e0847ca7bfeaf4806c5ab179",
+    "seed-after.json": "ac0f01161a45e964e74df19ba5bb9ff27458bac019089a80b6b571bb18c2afe5",
+    "seed-before.json": "f7f6b34571ced6089316f76a4b97ab0d5d4b81b21c1b4e5537cfc18aeaaf0e4c"
+  },
+  "origin": "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014",
+  "scope": "Prepared inputs only; terminal generation evidence recorded separately."
+}

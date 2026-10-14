@@ -1,0 +1,128 @@
+{
+  "application_generation_or_performance_qualification": false,
+  "base_commit": "c16d01a0e2028c0f610f1291277f37df413344c9",
+  "before_after_regressions": [
+    {
+      "after": "Unregistered metadata freezes normally, detaches retained aliases and contributes semantic fields to identity.",
+      "before": "Unknown frontend dataclass with validate/public retained mutable semantic children."
+    },
+    {
+      "after": "Known proof classes require exact membership in their existing issuing registries.",
+      "before": "A copied, unregistered PreparedOriginalRegion was treated as borrowed authority."
+    },
+    {
+      "after": "Same-path fixture compilation under seeds 1 and 91237 yields equal executable and contract hashes.",
+      "before": "Serial and original-team fixtures changed executable and contract hashes across Python hash seeds."
+    }
+  ],
+  "claim": "Narrow correctness evidence for cross-process fingerprint reuse and explicit registered borrowing.",
+  "copied_artifacts": {
+    "baseline/pytest.log": {
+      "original_path": "/tmp/checked-plan-correction-overlay/baseline.log",
+      "sha256": "9e1db8724cd0c1bdbbba350ffe61715a01502caa517f7ad69839a5af4d09ee46"
+    },
+    "baseline/receipt.json": {
+      "original_path": "/tmp/checked-plan-correction-overlay/baseline-receipt.json",
+      "sha256": "0d66d33a5320ba8362486f9d7c872f78c214197e9ec165632bdfd301699e98cf"
+    },
+    "baseline/test_corrections.py.txt": {
+      "original_path": "/tmp/checked-plan-correction-overlay/test_corrections.py",
+      "sha256": "db7bc1777192379f64bd0775c17683094c4c86f190b42a24033dc1d4f579f0ca"
+    },
+    "focused/authored-correction.patch": {
+      "original_path": "/tmp/checked-plan-corrected-original-validation/correction.patch",
+      "sha256": "1ae8d76b32e8ca9762f051baf9995bd434463f639d96204c62bfd69f7da560fd"
+    },
+    "focused/pytest.log": {
+      "original_path": "/tmp/checked-plan-corrected-original-validation/focused.log",
+      "sha256": "a9337f135384c656d78c86d27b49852c20a1dc4b8138ef39de90d02c4d75b8f0"
+    },
+    "focused/receipt.json": {
+      "original_path": "/tmp/checked-plan-corrected-original-validation/focused-receipt.json",
+      "sha256": "067ce771aa7776879788dd4fe6873999c16cb231c38347c5165197e6dc1b4481"
+    },
+    "overlay/modules/execution_plan.py.txt": {
+      "original_path": "/tmp/checked-plan-correction-overlay/execution_plan.py",
+      "sha256": "3ffebee820bcfdf9e00accae7b84a645c044eca57bfdedc497b103c9d793f8db"
+    },
+    "overlay/modules/regions.py.txt": {
+      "original_path": "/tmp/checked-plan-correction-overlay/regions.py",
+      "sha256": "221f6f49d8a22f3c97dd744cac32848238bba7e843ecae7dbcf244fc300272c2"
+    },
+    "overlay/modules/sitecustomize.py.txt": {
+      "original_path": "/tmp/checked-plan-correction-overlay/sitecustomize.py",
+      "sha256": "49196a0d52da660e7a8055296a53bfac88814b3528c82ad34fad67d3f00992da"
+    },
+    "overlay/pytest.log": {
+      "original_path": "/tmp/checked-plan-correction-overlay/overlay-consumers.log",
+      "sha256": "a2b84f733f8dae36ac4c411a1cf0e8fa5bbad127f412966f0894089c31f805b9"
+    },
+    "overlay/receipt.json": {
+      "original_path": "/tmp/checked-plan-correction-overlay/overlay-consumers-receipt.json",
+      "sha256": "bdcb15cf0974f02195e0b904e1bcc4ed42c500c51fd5963e420f18090f9a3fcf"
+    }
+  },
+  "final_corrected_release_validation": false,
+  "later_corrected_commit": "ff9565f8ac941f9d9fad19e20027840e83f953b5",
+  "limitations": [
+    "All tests here cover intermediate source revisions; final full host/CUDA validation is separate.",
+    "Outside the admitted complete-original-window class, graph-sharing differences may change diagnostic fingerprints despite equal emitted artifacts.",
+    "Immutability follows ordinary supported APIs and existing borrowed frozen-dataclass contracts; reflective mutation bypasses are not hardened here.",
+    "Synthetic profitable observations used by unit tests are not measured calibration or application performance."
+  ],
+  "runs": {
+    "baseline": {
+      "classification": "intermediate correction review; not final release validation",
+      "coverage_limit": "Pre/post inventory records four repository files. The external regression script is archived and hashed at curation time; its hash was not recorded before/after execution.",
+      "exit_code": 1,
+      "log": "baseline/pytest.log",
+      "pytest_seconds": 22.69,
+      "receipt": "baseline/receipt.json",
+      "recorded_file_count": 4,
+      "recorded_source_inventory_unchanged": true,
+      "repository_paths_differing_from_base": [],
+      "result": {
+        "failed": 3
+      },
+      "runner_seconds": 22.921503167999617
+    },
+    "focused": {
+      "classification": "intermediate correction review; not final release validation",
+      "coverage_limit": "Pre/post inventory records every compiler Python implementation file and the three invoked test modules. This snapshot predates the five later source changes listed in revision-binding.json.",
+      "exit_code": 0,
+      "log": "focused/pytest.log",
+      "pytest_seconds": 131.8,
+      "receipt": "focused/receipt.json",
+      "recorded_file_count": 171,
+      "recorded_source_inventory_unchanged": true,
+      "repository_paths_differing_from_base": [
+        "compiler/scopes/execution_plan.py",
+        "compiler/scopes/preflight.py",
+        "compiler/scopes/regions.py",
+        "compiler/tests/test_checked_execution_plan.py",
+        "compiler/tests/test_exact_window.py"
+      ],
+      "result": {
+        "passed": 90
+      },
+      "runner_seconds": 132.09699805799755
+    },
+    "overlay": {
+      "archived_replacement_modules_match_recorded_hashes": true,
+      "classification": "intermediate correction review; not final release validation",
+      "coverage_limit": "Pre/post inventory records two repository implementation files, six test files and three replacement modules. It is not a complete compiler source inventory. The overlay predates the absent-preparation-registry fix and later captured-lowering corrections.",
+      "exit_code": 0,
+      "log": "overlay/pytest.log",
+      "pytest_seconds": 36.48,
+      "receipt": "overlay/receipt.json",
+      "recorded_file_count": 11,
+      "recorded_source_inventory_unchanged": true,
+      "repository_paths_differing_from_base": [],
+      "result": {
+        "passed": 120
+      },
+      "runner_seconds": 36.815646381997794
+    }
+  },
+  "schema_version": 1
+}

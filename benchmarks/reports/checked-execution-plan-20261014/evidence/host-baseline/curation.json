@@ -1,0 +1,32 @@
+{
+  "affinity_note": "Worker CPU affinity was expanded during this diagnostic run. One existing live cost-identity test then rejected the changed affinity; its entire unchanged file passed18 tests under fixed affinity. Corrected final suites start and retain fixed affinity.",
+  "claim": "Complete baseline host collection, failed; not corrected-release validation.",
+  "compiler_commit": "c16d01a0e2028c0f610f1291277f37df413344c9",
+  "failed": 36,
+  "failure_disposition": {
+    "contract_migrations": 26,
+    "production_regressions": 9,
+    "runner_affinity_mismatch": 1
+  },
+  "files": {
+    "collected-tests.json": "cc93ccac5f0e7c0a0eaed9dfee356ef1ecb01142555eece9aac1f9a7eb47e9c8",
+    "collection.log": "3c94816cc41b407ffb2cd4c737df67570ccc8e49d7233dfae1ea04f194871d0d",
+    "command.json": "ca158bf792bf15f35ad62d71a6f314821783d15dd3a2a69811b3b3f3863d8281",
+    "dependency-fixed-affinity.log": "1fadf5f2813978f876ec9dcf0e8b1f16e92839b1657cd64d6e3a2bcd0ef58441",
+    "final.json": "e8b459f2cb3f540b336b1f85ec17f91c0c375ac248442361a389d97e3d8d6956",
+    "phase-migration-01.log": "42f9ebf3f36426a0ba71df336d327f567982de628e0442a6b4fc4e23af352bbf",
+    "phase-migration-02.log": "0c1bba75a2586c77f07f5a1ea51044cc315ee5e7e4fbbef4de36cabb456f4a65",
+    "run.py": "49d7ea38e78a8d33c666f09f8556999e7c56d747da3f5c76c7469e48d9747dde",
+    "source-files-after.json": "f9638ff6becf2fbf273cb570188bc587956d24b797f35c39a376381cc5cc9797",
+    "source-files-before.json": "f9638ff6becf2fbf273cb570188bc587956d24b797f35c39a376381cc5cc9797",
+    "worker-0.json": "4cdb0711b9a6936e71414ff5e9a06a1413380e32fbcbbadefa5a003d05bcb9e4",
+    "worker-0.log": "0ee9b8a67381a591e242f1e54a72799da9661e5d8c19c14b496f1dbebfdef948",
+    "worker-1.json": "252fc0f1632c32f13c5f271ae1b2b00991fc0331c9791d8d2ae069c7556be14b",
+    "worker-1.log": "d397c1f97d822feec65caf49a9cd58c0b2ad0643774873348f147837a051d003",
+    "worker-2.json": "d05480514757f896c5d48cfffe42658887c06fb9484a904d8b3ec00e2893e212",
+    "worker-2.log": "913ea774c27126c79a35780e0e00a36967c0c84da4a9cf2ad0faefdb09495994",
+    "worker-affinity-update.json": "ac4d0a6e4050598c0e520e0a4a4a398fd0eb44bad08c86563574abdc3fe4e3ec"
+  },
+  "origin": "/tmp/checked-plan-full-host-final-20261014",
+  "passed": 5110
+}

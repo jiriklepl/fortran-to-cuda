@@ -1,0 +1,65 @@
+{
+  "application_performance_qualification": false,
+  "claim": "Affected CUDA and native regression suite for the recorded corrected compiler/pipeline pair.",
+  "commit_verification": "commit-verification.json",
+  "commits": {
+    "/home/jirka/research/fortran-abomination": "ff9565f8ac941f9d9fad19e20027840e83f953b5",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline": "494df4e9221b61d3c8f28c7f86ab7dd07cd6908f"
+  },
+  "copied_artifacts": {
+    "passed/command.json": {
+      "original_path": "/tmp/checked-plan-cuda-validation-20261014/command.json",
+      "sha256": "a24e3ac68385ad0c6eef594b42d592dab5ffb5872b15fe726c7835ccbb8c591c"
+    },
+    "passed/final.json": {
+      "original_path": "/tmp/checked-plan-cuda-validation-20261014/final.json",
+      "sha256": "6d65271cdb09f7cf6678e570f2ffb88567cd7d20654d264b8c83a63912eba1f0"
+    },
+    "passed/final.log": {
+      "original_path": "/tmp/checked-plan-cuda-validation-20261014/final.log",
+      "sha256": "f6cc6d69acf859f789ce8de59748c78b7b1ca31d8dae8862c05e90ac6d09ff11"
+    },
+    "passed/run.py": {
+      "original_path": "/tmp/checked-plan-cuda-validation-20261014/run.py",
+      "sha256": "2798b0e78084f3cc97d178a5e9f414d708122f122f7cb2e4e7abb7c587d48f65"
+    },
+    "passed/source-files-after.json": {
+      "original_path": "/tmp/checked-plan-cuda-validation-20261014/source-files-after.json",
+      "sha256": "003aaa81870b6cfaf09d255bc79a15d35a6e05dba8eb618828b6f23653e1061b"
+    },
+    "passed/source-files-before.json": {
+      "original_path": "/tmp/checked-plan-cuda-validation-20261014/source-files-before.json",
+      "sha256": "003aaa81870b6cfaf09d255bc79a15d35a6e05dba8eb618828b6f23653e1061b"
+    }
+  },
+  "cpu_affinity": "4,5,10,11",
+  "exit_code": 0,
+  "full_compiler_suite_qualification": false,
+  "log": "passed/final.log",
+  "pytest_summary": "49 passed in 781.96s (0:13:01)",
+  "receipt": "passed/final.json",
+  "schema_version": 1,
+  "scope_note": "Other correctness jobs shared hardware; elapsed test time is not application performance evidence.",
+  "source_files_changed": [],
+  "source_inventory_sha256": "003aaa81870b6cfaf09d255bc79a15d35a6e05dba8eb618828b6f23653e1061b",
+  "source_inventory_unchanged": true,
+  "status": "passed",
+  "test_counts": {
+    "passed": 49
+  },
+  "test_selection": [
+    "taskset",
+    "-c",
+    "4,5,10,11",
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "compiler/tests/test_exact_window_teams_cuda.py",
+    "compiler/tests/test_lexical_source_owner_cuda.py",
+    "compiler/tests/test_native_automatic_private.py::test_generated_owner_preserves_entry_bounds_empty_storage_and_native_team",
+    "--basetemp=/tmp/checked-plan-cuda-validation-20261014/pytest"
+  ],
+  "tracked_commit_mismatches": 0,
+  "upstream_probe_note": "The two recorded pristine probe files are matched to upstream commit blobs at curation; this is not a full application build or run."
+}

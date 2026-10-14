@@ -1,0 +1,20 @@
+{
+  "all_inputs_unchanged": true,
+  "application_built": false,
+  "application_executed": false,
+  "automatic_placement_qualified": false,
+  "cap_seconds": 300,
+  "comparison_limit": "Earlier timeouts used forced policy and pristine declarations; this checkpoint used automatic policy and six audited declaration repairs. No planning speedup comparison is established.",
+  "compiler_commit": "c16d01a0e2028c0f610f1291277f37df413344c9",
+  "elapsed_seconds": 300.0044415750017,
+  "files": {
+    "completion.json": "d2c5050821cc3c46be9071b64d3178383f5261b65ee59dee6c56bc79dabe7d25",
+    "generation.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "launch.json": "4588e86803f55e1b92173bf5271fd2ff1c123345f83506bd3ba2310246501bef"
+  },
+  "input_count": 178,
+  "manifest_emitted": false,
+  "performance_claim": false,
+  "pipeline_commit": "494df4e9221b61d3c8f28c7f86ab7dd07cd6908f",
+  "status": "timeout"
+}
