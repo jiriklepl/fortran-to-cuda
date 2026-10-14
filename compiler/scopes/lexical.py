@@ -150,6 +150,7 @@ class LexicalOwner:
         self.control_guard = parent.control_guard if parent else None
         self.forwarded_handles = parent.forwarded_handles if parent else set()
         self.units, self.boundaries, self.patches = [], [], []
+        self.exact_window = None
         self.numerical_team_declines, self.numerical_team_decline_count = [], 0
         self.counted_controls = []
         self.lines = self.routine.scope.path.read_text().splitlines(keepends=True)
@@ -614,7 +615,7 @@ class LexicalOwner:
                 "type(c_ptr) :: fort_pointer", "type(fort_scope_layout) :: fort_layout",
                 "type(fort_scope_access) :: fort_access", "type(fort_scope_plan_decision) :: fort_decision",
                 f"type(fort_scope_plan_binding), target :: fort_bindings({max(1,len(arrays))})",
-                f"integer(c_int), parameter :: fort_mode = {1 if builder.config.policy == 'sections' else 2}"]
+                f"integer(c_int), parameter :: fort_mode = {1 if builder.config.policy == 'sections' or self.exact_window is not None else 2}"]
         prepare = ["fort_status = FORT_SCOPE_OK", "fort_can = .true."]
         failure = [*close(), "exit " + block]
         capture_facts = {root: builder.capture(binding) for root, binding in arrays.items()}
@@ -649,7 +650,7 @@ class LexicalOwner:
             prepare += [f"if (.not. {element_active}) exit {block}"]
         metadata_native = None
         preflight = None
-        if builder.config.policy == "auto":
+        if builder.config.policy == "auto" and self.exact_window is None:
             from compiler.scopes.compute_identity import compute_identity_guard
             # An earlier rejected candidate can roll back artifact maps while
             # retaining reusable child proofs. Restore only this admitted
@@ -703,10 +704,10 @@ class LexicalOwner:
                         *close(reason="original numerical preparation guard failed"),
                         "exit " + block, "endif"]
         from compiler.scopes.segments import Segment
-        if builder.config.policy == "auto" and unit.definition_summary.changes:
+        if builder.config.policy == "auto" and self.exact_window is None and unit.definition_summary.changes:
             unit.native_preflight = {"abi_version": 1, "available": False,
                 "reason": "ordered definition changes require reached registration and validation"}
-        if (builder.config.policy == "auto" and not combined_team and not unit.definition_summary.changes
+        if (builder.config.policy == "auto" and self.exact_window is None and not combined_team and not unit.definition_summary.changes
                 and not unit.scope.native and len(unit.scope.tree) == 1
                 and isinstance(unit.scope.tree[0], Segment)
                 and unit.scope.tree[0].query and unit.scope.tree[0].query[0]):
@@ -814,7 +815,7 @@ class LexicalOwner:
             return [renamed(builder, value, values) if value is not None else "None" for value in call.actuals]
 
         selector = None
-        if builder.config.policy == "auto":
+        if builder.config.policy == "auto" and self.exact_window is None:
             selector, _ = builder.entry_artifacts(sorted(self.owner.leaves)[0])
             imports += [f"use {selector['fortran_module']}, only: fort_choose => {selector['planning']['fortran_selector']}"]
         from compiler.scopes.joined_team import JoinedTeam
@@ -905,9 +906,11 @@ class LexicalOwner:
                          f"use iso_c_binding, only: {self.kind} => c_int64_t\n")
         declarations = [f"integer({self.kind}) :: {self.context}", f"logical :: {self.enabled}",
                         *[f"integer({self.kind}) :: fort_buffer_{number}" for _binding, number in self.resources.values()]]
+        from compiler.offload.exact_window import control as exact_window_control
+        exact_spec, exact_code = exact_window_control(self) if self.exact_window is not None else ([], [])
         initialize = [f"{self.context} = 0", *[f"fort_buffer_{number} = 0" for _binding,number in self.resources.values()],
-                      "block", "use fort_scoped_memory, only: fort_scope_serial_caller",
-                      f"{self.enabled} = fort_scope_serial_caller() /= 0", "end block"]
+                      "block", "use fort_scoped_memory, only: fort_scope_serial_caller", *exact_spec,
+                      f"{self.enabled} = fort_scope_serial_caller() /= 0", *exact_code, "end block"]
         builder.add_edit(self.routine.scope.path, first,first-1,
                          "\n".join(fortran_lines([*declarations,*initialize]))+"\n", prepend=True)
         builder.add_edit(self.routine.scope.path, last+1,last,"\n".join(fortran_lines(self.close(
@@ -935,17 +938,20 @@ class LexicalOwner:
         self.leaves = {leaf for member in self.members.values() for unit in member.units for leaf in unit.leaves}
         if not self.leaves:
             return False
-        native_reason = builder.automatic_native_preflight(self.leaves)
-        if builder.config.policy == "auto" and any(operation.host_only_reads
+        from compiler.offload.exact_window import prepare as prepare_exact_window
+        self.exact_window = prepare_exact_window(self)
+        native_reason = (None if self.exact_window is not None
+                         else builder.automatic_native_preflight(self.leaves))
+        if builder.config.policy == "auto" and self.exact_window is None and any(operation.host_only_reads
                 for member in self.members.values() for unit in member.units for operation in unit.scope.native):
             native_reason = "host-only native range preparation lacks compatible offline cost estimates"
-        if builder.config.policy == "auto" and any(operation.native_environment
+        if builder.config.policy == "auto" and self.exact_window is None and any(operation.native_environment
                 for member in self.members.values() for unit in member.units for operation in unit.scope.native):
             native_reason = "original IEEE environment coordination lacks compatible offline cost estimates"
-        if builder.config.policy == "auto" and any(call.region is not None and call.region.scalar_element_captures
+        if builder.config.policy == "auto" and self.exact_window is None and any(call.region is not None and call.region.scalar_element_captures
                 for member in self.members.values() for unit in member.units for call in unit.scope.calls):
             native_reason = "immutable element preparation lacks compatible offline cost estimates"
-        if builder.config.policy == "auto" and any(
+        if builder.config.policy == "auto" and self.exact_window is None and any(
                 getattr(operation, "indirect_sections", None) is not None
                 for member in self.members.values() for unit in member.units for operation in unit.scope.native):
             native_reason = "native indirect inspector preparation lacks compatible offline cost estimates"
@@ -1084,6 +1090,11 @@ class LexicalOwner:
             "boundaries": self.boundaries, "native_continuation": "original lexical scope; no replay and no synthetic argument association",
             "registration": "first reached use after original allocation and descriptor guards",
             "reopen_after_boundary": False})
+        if self.exact_window is not None:
+            builder.scopes[-1]["exact_window"] = {key: value for key, value in self.exact_window.items()
+                                                  if key not in {"expressions", "guards"}}
+            builder.scopes[-1]["estimate_available"] = self.exact_window["available"]
+            builder.scopes[-1]["planning_reason"] = self.exact_window["reason"]
         builder.scopes[-1]["transfer_configuration"] = builder.numerical(sorted(self.leaves)[0]).scoped["transfer_configuration"]
         builder.boundaries.extend(boundary for member in self.members.values() for boundary in member.boundaries)
         return True

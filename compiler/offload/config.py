@@ -24,6 +24,9 @@ class OffloadConfig:
     # Issued for one authenticated original region, before artifact rewriting.
     # This describes cost applicability only; it cannot authorize execution.
     source_applicability: "SourceComputeApplicability | None" = None
+    # Experimental complete lexical-window evidence. This is independent of
+    # the per-kernel roofline profile; absent evidence never authorizes AUTO.
+    exact_window: dict | None = None
 
     def __post_init__(self):
         if self.policy not in {"always", "sections", "auto", "chunked", "hybrid"}:
@@ -42,6 +45,10 @@ class OffloadConfig:
                 raise ValueError("Source compute applicability requires original-region metadata")
             if self.source_applicability.native_participation != self.native_participation:
                 raise ValueError("Source compute applicability participation differs")
+        if self.exact_window is not None:
+            if (type(self.exact_window) is not dict or self.scope_execution != "reached"
+                    or self.policy not in {"auto", "sections"} or self.collective):
+                raise ValueError("Exact window requires a serial reached auto/sections owner")
         if self.profile is not None:
             try:
                 require_numerical_build_contract(self.profile.get("numerical_contract")

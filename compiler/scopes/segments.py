@@ -926,7 +926,7 @@ class StructuredScope:
 
         def choose():
             lines = ["if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_plan_validate(fort_context)"]
-            if builder.config.policy == "auto":
+            if builder.config.policy == "auto" and selector is not None:
                 lines += [f"if (fort_status == FORT_SCOPE_OK) fort_status = {selector_name}(fort_context, fort_decision)"]
             return lines
 

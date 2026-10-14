@@ -2778,6 +2778,58 @@ an inlined helper retain shared identity and are analyzed as aliases. Callers
 must provide valid extents and sufficient storage for every accessed index;
 general bounds checking and broader Fortran semantics are outside this subset.
 
+### Experimental complete-window observations
+
+`compiler.offload.exact_window_calibration` is an independent offline consumer
+for a narrow alternative to per-kernel cost models. It compiles the untouched
+original Fortran and the compiler's resident implementation of a three-dimensional
+producer, current-host reader, native correction, diffusion and accumulation.
+Seven rotated pairs and two separate input holdouts measure complete **cold
+invocations**, including resident guards, context creation, transfers, native
+interruptions, publication and close. Full float64 fields, including halos, must
+agree. Output serialization and fixture input initialization are outside this
+window interval; these are not complete-application timing results.
+
+After selection, another seven rotated native/AUTO pairs and two input holdouts
+measure the final production selector without tracing or calibration overrides.
+These independent observations report an actual advantage or a model miss; they
+never revise the calibration or force a different decision. Performance reports
+use these production samples. Separate diagnostic traces require exactly three
+worker launches, full-field agreement, and predicted versus observed complete
+transfer bytes; transfer trace-event counts are not individual CUDA API counts.
+A changed thread setting must preserve native results with zero device launches.
+
+```bash
+python -m compiler.offload.exact_window_calibration \
+  --output /tmp/exact-window-observations --sizes 16,192 --architecture sm_86
+```
+
+The experimental `OffloadConfig.exact_window` route consumes the measured record
+at one original lexical entry. It selects residency only when every measured
+resident interval beats every native interval by at least 5%. It never scales a
+pointwise coefficient to a stencil or extrapolates to different dimensions.
+Source/plan/runtime/helper identities, compiler options, capture facts, exact
+descriptor and integer-control values, original Fortran options, CPU model and placement
+and GPU identity bind each observation. A mismatch selects the existing native
+path before work. The normal numerical, effect, definition, alias and execution
+guards still apply, including publication without replay after a GPU prefix.
+
+The **independent producer is currently the only supported build consumer**.
+It records and validates exact semantic CUDA/Fortran compile options before
+defining the contract-specific selector attestation macro. Without that macro,
+the emitted selector returns native. Other consumers must reject this manifest
+until they can enforce the complete performance build contract; enforcing only
+floating-point flags is insufficient. Calibration overrides exist only in
+explicit diagnostic artifacts, never in the resulting automatic selector.
+
+This first admission class contains a complete branchless serial owner with
+stable real array formals, integer input controls and affine counted loops.
+Payload-dependent bounds/indices, hidden state controlling work, original teams,
+helpers, numerical-domain-sensitive primitives, allocation changes and child
+owners remain unsupported. In particular, this fixture does **not** establish
+automatic offloading or performance for either channel application. The
+maintained application controls and their broader cost models remain separate.
+
 ## Development and validation
 
 ```bash
