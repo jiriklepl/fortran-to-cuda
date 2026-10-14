@@ -1,0 +1,394 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="795.6pt" height="983.021363pt" viewBox="0 0 795.6 983.021363" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 983.021363
+L 795.6 983.021363
+L 795.6 0
+L 0 0
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 275.1516 182.253202
+L 770.4324 182.253202
+Q 779.8068 182.253202 779.8068 170.943442
+L 779.8068 136.071682
+Q 779.8068 124.761922 770.4324 124.761922
+L 275.1516 124.761922
+Q 265.7772 124.761922 265.7772 136.071682
+L 265.7772 170.943442
+Q 265.7772 182.253202 275.1516 182.253202
+z
+" clip-path="url(#p63d5f44577)" style="fill: #e6eaf0; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 275.1516 247.284322
+L 770.4324 247.284322
+Q 779.8068 247.284322 779.8068 235.974562
+L 779.8068 193.562963
+Q 779.8068 182.253202 770.4324 182.253202
+L 275.1516 182.253202
+Q 265.7772 182.253202 265.7772 193.562963
+L 265.7772 235.974562
+Q 265.7772 247.284322 275.1516 247.284322
+z
+" clip-path="url(#p63d5f44577)" style="fill: #d2eee4; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 275.1516 315.142882
+L 770.4324 315.142882
+Q 779.8068 315.142882 779.8068 303.833122
+L 779.8068 258.594083
+Q 779.8068 247.284322 770.4324 247.284322
+L 275.1516 247.284322
+Q 265.7772 247.284322 265.7772 258.594083
+L 265.7772 303.833122
+Q 265.7772 315.142882 275.1516 315.142882
+z
+" clip-path="url(#p63d5f44577)" style="fill: #e6eaf0; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 275.1516 378.289042
+L 770.4324 378.289042
+Q 779.8068 378.289042 779.8068 366.979282
+L 779.8068 326.452643
+Q 779.8068 315.142883 770.4324 315.142883
+L 275.1516 315.142883
+Q 265.7772 315.142883 265.7772 326.452643
+L 265.7772 366.979282
+Q 265.7772 378.289042 275.1516 378.289042
+z
+" clip-path="url(#p63d5f44577)" style="fill: #d2eee4; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 275.1516 447.090082
+L 512.6364 447.090082
+Q 522.0108 447.090082 522.0108 435.780323
+L 522.0108 389.598803
+Q 522.0108 378.289043 512.6364 378.289043
+L 275.1516 378.289043
+Q 265.7772 378.289043 265.7772 389.598803
+L 265.7772 435.780323
+Q 265.7772 447.090082 275.1516 447.090082
+z
+" clip-path="url(#p63d5f44577)" style="fill: #fff0c4; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 532.9476 447.090082
+L 770.4324 447.090082
+Q 779.8068 447.090082 779.8068 435.780323
+L 779.8068 389.598803
+Q 779.8068 378.289043 770.4324 378.289043
+L 532.9476 378.289043
+Q 523.5732 378.289043 523.5732 389.598803
+L 523.5732 435.780323
+Q 523.5732 447.090082 532.9476 447.090082
+z
+" clip-path="url(#p63d5f44577)" style="fill: #f7d6cf; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 275.1516 517.776083
+L 512.6364 517.776083
+Q 522.0108 517.776083 522.0108 506.466323
+L 522.0108 458.399843
+Q 522.0108 447.090082 512.6364 447.090082
+L 275.1516 447.090082
+Q 265.7772 447.090082 265.7772 458.399843
+L 265.7772 506.466323
+Q 265.7772 517.776083 275.1516 517.776083
+z
+" clip-path="url(#p63d5f44577)" style="fill: #f4f5f7; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 532.9476 517.776083
+L 770.4324 517.776083
+Q 779.8068 517.776083 779.8068 506.466323
+L 779.8068 458.399843
+Q 779.8068 447.090082 770.4324 447.090082
+L 532.9476 447.090082
+Q 523.5732 447.090082 523.5732 458.399843
+L 523.5732 506.466323
+Q 523.5732 517.776083 532.9476 517.776083
+z
+" clip-path="url(#p63d5f44577)" style="fill: #f7d6cf; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 275.1516 599.771843
+L 770.4324 599.771843
+Q 779.8068 599.771843 779.8068 588.462083
+L 779.8068 529.085843
+Q 779.8068 517.776083 770.4324 517.776083
+L 275.1516 517.776083
+Q 265.7772 517.776083 265.7772 529.085843
+L 265.7772 588.462083
+Q 265.7772 599.771843 275.1516 599.771843
+z
+" clip-path="url(#p63d5f44577)" style="fill: #e6eaf0; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 275.1516 715.696883
+L 770.4324 715.696883
+Q 779.8068 715.696883 779.8068 704.387123
+L 779.8068 611.081603
+Q 779.8068 599.771843 770.4324 599.771843
+L 275.1516 599.771843
+Q 265.7772 599.771843 265.7772 611.081603
+L 265.7772 704.387123
+Q 265.7772 715.696883 275.1516 715.696883
+z
+" clip-path="url(#p63d5f44577)" style="fill: #f7d6cf; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_12">
+    <path d="M 275.1516 780.728003
+L 770.4324 780.728003
+Q 779.8068 780.728003 779.8068 769.418243
+L 779.8068 727.006643
+Q 779.8068 715.696883 770.4324 715.696883
+L 275.1516 715.696883
+Q 265.7772 715.696883 265.7772 727.006643
+L 265.7772 769.418243
+Q 265.7772 780.728003 275.1516 780.728003
+z
+" clip-path="url(#p63d5f44577)" style="fill: #d2eee4; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 275.1516 848.586563
+L 770.4324 848.586563
+Q 779.8068 848.586563 779.8068 837.276803
+L 779.8068 792.037763
+Q 779.8068 780.728003 770.4324 780.728003
+L 275.1516 780.728003
+Q 265.7772 780.728003 265.7772 792.037763
+L 265.7772 837.276803
+Q 265.7772 848.586563 275.1516 848.586563
+z
+" clip-path="url(#p63d5f44577)" style="fill: #e6eaf0; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_14">
+    <path d="M 9.5436 932.467283
+L 24.3864 932.467283
+Q 33.7608 932.467283 33.7608 921.157523
+L 33.7608 915.502643
+Q 33.7608 904.192883 24.3864 904.192883
+L 9.5436 904.192883
+Q 0.1692 904.192883 0.1692 915.502643
+L 0.1692 921.157523
+Q 0.1692 932.467283 9.5436 932.467283
+z
+" clip-path="url(#p63d5f44577)" style="fill: #d2eee4; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_15">
+    <path d="M 407.9556 932.467283
+L 422.7984 932.467283
+Q 432.1728 932.467283 432.1728 921.157523
+L 432.1728 915.502643
+Q 432.1728 904.192883 422.7984 904.192883
+L 407.9556 904.192883
+Q 398.5812 904.192883 398.5812 915.502643
+L 398.5812 921.157523
+Q 398.5812 932.467283 407.9556 932.467283
+z
+" clip-path="url(#p63d5f44577)" style="fill: #f7d6cf; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_16">
+    <path d="M 9.5436 957.914243
+L 24.3864 957.914243
+Q 33.7608 957.914243 33.7608 946.604483
+L 33.7608 940.949603
+Q 33.7608 929.639843 24.3864 929.639843
+L 9.5436 929.639843
+Q 0.1692 929.639843 0.1692 940.949603
+L 0.1692 946.604483
+Q 0.1692 957.914243 9.5436 957.914243
+z
+" clip-path="url(#p63d5f44577)" style="fill: #e6eaf0; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_17">
+    <path d="M 407.9556 957.914243
+L 422.7984 957.914243
+Q 432.1728 957.914243 432.1728 946.604483
+L 432.1728 940.949603
+Q 432.1728 929.639843 422.7984 929.639843
+L 407.9556 929.639843
+Q 398.5812 929.639843 398.5812 940.949603
+L 398.5812 946.604483
+Q 398.5812 957.914243 407.9556 957.914243
+z
+" clip-path="url(#p63d5f44577)" style="fill: #fff0c4; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 22px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="23.916562" transform="rotate(-0 7.2 23.916562)">The two primary momentum paths</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="48.421042" transform="rotate(-0 7.2 48.421042)">Source order and observed admission gaps · no resident owner admitted by this report</text>
+   </g>
+   <g id="text_3">
+    <text style="font-weight: 700; font-size: 15px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="389.988" y="85.177762" transform="rotate(-0 389.988 85.177762)">channel-simple</text>
+   </g>
+   <g id="text_4">
+    <text style="font-weight: 700; font-size: 15px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="647.784" y="85.177762" transform="rotate(-0 647.784 85.177762)">channel</text>
+   </g>
+   <g id="text_5">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="389.988" y="102.142402" transform="rotate(-0 389.988 102.142402)">advection 2 · filter off · wall model 1</text>
+   </g>
+   <g id="text_6">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="647.784" y="102.142402" transform="rotate(-0 647.784 102.142402)">advection 4 · filter on · wall model 1</text>
+   </g>
+   <g id="text_7">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="144.429964" transform="rotate(-0 7.2 144.429964)">1  Wall properties</text>
+   </g>
+   <g id="text_8">
+    <text style="font-size: 8.8px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #516075" x="7.2" y="159.722947" transform="rotate(-0 7.2 159.722947)">U/V/W, Pr, scalars → wall metadata</text>
+   </g>
+   <g id="text_9">
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(477.181266 149.182125)">ComputeViscsWM</text>
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(460.069969 163.462125)">original native operation</text>
+   </g>
+   <g id="text_10">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="201.921244" transform="rotate(-0 7.2 201.921244)">2  SGS producer</text>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 8.8px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #516075" x="7.2" y="217.214227" transform="rotate(-0 7.2 217.214227)">U/V/W → Viscosity</text>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(462.101203 210.443325)">Sigma, order-2 gradient</text>
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(409.123359 224.723325)">numerical group prepares; costs unavailable</text>
+   </g>
+   <g id="text_13">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="266.952364" transform="rotate(-0 7.2 266.952364)">3  Wall fluxes / halos</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 8.8px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #516075" x="7.2" y="282.245347" transform="rotate(-0 7.2 282.245347)">U/V/W, Viscosity, wall metadata</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(415.286391 276.888165)">ComputeUVWFluxesWM → BoundViscosity</text>
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(411.502828 291.168165)">→ immersed-boundary viscosity corrections</text>
+   </g>
+   <g id="text_16">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="334.810924" transform="rotate(-0 7.2 334.810924)">4  Stage initialization</text>
+   </g>
+   <g id="text_17">
+    <text style="font-size: 8.8px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #516075" x="7.2" y="350.103907" transform="rotate(-0 7.2 350.103907)">previous Ustar → U2, or zero fields</text>
+   </g>
+   <g id="text_18">
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(458.269828 342.248681)">Original RK_stage branch</text>
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(410.730656 356.670525)">complete groups prepare; costs unavailable</text>
+   </g>
+   <g id="text_19">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="397.957084" transform="rotate(-0 7.2 397.957084)">5  Advection</text>
+   </g>
+   <g id="text_20">
+    <text style="font-size: 8.8px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #516075" x="7.2" y="413.24938" transform="rotate(-0 7.2 413.24938)">U/V/W → Ustar/Vstar/Wstar</text>
+   </g>
+   <g id="text_21">
+    <text style="font-size: 9.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(349.093594 409.598219)">CDU → CDV → CDW</text>
+    <text style="font-size: 9.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(332.296406 421.668188)">leaf coverage still required</text>
+   </g>
+   <g id="text_22">
+    <text style="font-size: 9.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(577.266313 409.679438)">CD4divU → CD4divV → CD4divW</text>
+    <text style="font-size: 9.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(561.789469 421.668188)">U leaf: dynamic scratch / multiply gaps</text>
+   </g>
+   <g id="text_23">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="466.758124" transform="rotate(-0 7.2 466.758124)">6  Filter / halo updates</text>
+   </g>
+   <g id="text_24">
+    <text style="font-size: 8.8px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #516075" x="7.2" y="482.051108" transform="rotate(-0 7.2 482.051108)">star fields and Utype/Vtype/Wtype</text>
+   </g>
+   <g id="text_25">
+    <text style="font-size: 9.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(329.386906 478.531708)">FilterUstar branch bypassed</text>
+    <text style="font-size: 9.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(363.212 491.411708)">filtertype = 0</text>
+   </g>
+   <g id="text_26">
+    <text style="font-size: 9.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(573.421719 479.422958)">BoundUVW → Filter each star field</text>
+    <text style="font-size: 9.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(567.248375 491.411708)">→ BoundUVW; Filter3ord scratch gap</text>
+   </g>
+   <g id="text_27">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="537.444124" transform="rotate(-0 7.2 537.444124)">7  Source-ordered forces</text>
+   </g>
+   <g id="text_28">
+    <text style="font-size: 8.8px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #516075" x="7.2" y="552.737108" transform="rotate(-0 7.2 552.737108)">star fields; U/V/W; optional scalars</text>
+   </g>
+   <g id="text_29">
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(416.072906 547.308525)">Coriolis → buoyancy → resistance → linear</text>
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(412.4535 561.588525)">→ Rayleigh damping → StressBoundaryFlux</text>
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(431.376891 575.868525)">keep original predicates and effects</text>
+   </g>
+   <g id="text_30">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="619.439884" transform="rotate(-0 7.2 619.439884)">8  Explicit diffusion</text>
+   </g>
+   <g id="text_31">
+    <text style="font-size: 8.8px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #516075" x="7.2" y="634.732868" transform="rotate(-0 7.2 634.732868)">Viscosity + U/V/W → star updates</text>
+   </g>
+   <g id="text_32">
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(426.77175 632.97705)">Second-order diffusion in BOTH cases</text>
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(430.319438 647.25705)">U stencil → native U wall corrections</text>
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(430.807125 661.53705)">V stencil → native V wall corrections</text>
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(427.699313 675.81705)">W stencil → native W wall corrections</text>
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(406.389281 689.108925)">whole team: indirect component / effect gaps</text>
+   </g>
+   <g id="text_33">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="735.364924" transform="rotate(-0 7.2 735.364924)">9  Accumulation</text>
+   </g>
+   <g id="text_34">
+    <text style="font-size: 8.8px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #516075" x="7.2" y="750.657908" transform="rotate(-0 7.2 750.657908)">U2/V2/W2 += beta(stage) × dt × star</text>
+   </g>
+   <g id="text_35">
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(459.796641 743.887005)">Original arithmetic order</text>
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(410.730656 758.167005)">complete group prepares; costs unavailable</text>
+   </g>
+   <g id="text_36">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="800.395184" transform="rotate(-0 7.2 800.395184)">10  Next consumers</text>
+   </g>
+   <g id="text_37">
+    <text style="font-size: 8.8px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #516075" x="7.2" y="815.689028" transform="rotate(-0 7.2 815.689028)">publish stale host sections when needed</text>
+   </g>
+   <g id="text_38">
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(423.828891 811.31997)">ScalarRK3 → OtherTerms → boundaries</text>
+    <text style="font-size: 10.2px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(433.8225 824.611845)">pressure correction remains native</text>
+   </g>
+   <g id="text_39">
+    <text style="font-size: 9.2px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="864.608723" transform="rotate(-0 7.2 864.608723)">Diffusion formal U2/V2/W2 are mapped to the caller's Ustar/Vstar/Wstar; accumulation updates distinct U2/V2/W2.</text>
+   </g>
+   <g id="text_40">
+    <text style="font-size: 9.2px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="886.285763" transform="rotate(-0 7.2 886.285763)">Any unsupported intervening consumer may require earlier publication. The map does not claim that native effects are proved.</text>
+   </g>
+   <g id="text_41">
+    <text style="font-size: 8.7px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="36.1044" y="920.590383" transform="rotate(-0 36.1044 920.590383)">Numerical preparation available; execution/cost proof remains</text>
+   </g>
+   <g id="text_42">
+    <text style="font-size: 8.7px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="434.5164" y="920.590383" transform="rotate(-0 434.5164 920.590383)">Observed whole-source analysis limitation</text>
+   </g>
+   <g id="text_43">
+    <text style="font-size: 8.7px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="36.1044" y="946.037343" transform="rotate(-0 36.1044 946.037343)">Original native work or uninspected effects</text>
+   </g>
+   <g id="text_44">
+    <text style="font-size: 8.7px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="434.5164" y="946.037343" transform="rotate(-0 434.5164 946.037343)">Leaf coverage remains incomplete</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p63d5f44577">
+   <rect x="7.2" y="33.341362" width="781.2" height="942.48"/>
+  </clipPath>
+ </defs>
+</svg>

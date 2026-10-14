@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="795.6pt" height="413.796075pt" viewBox="0 0 795.6 413.796075" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 413.796075
+L 795.6 413.796075
+L 795.6 -0
+L 0 -0
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="line2d_1">
+    <path d="M 7.2 123.685755
+L 788.4 123.685755
+" clip-path="url(#p52be8edda7)" style="fill: none; stroke: #e5e9ee; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_2">
+    <path d="M 7.2 160.553355
+L 788.4 160.553355
+" clip-path="url(#p52be8edda7)" style="fill: none; stroke: #e5e9ee; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_3">
+    <path d="M 7.2 197.420955
+L 788.4 197.420955
+" clip-path="url(#p52be8edda7)" style="fill: none; stroke: #e5e9ee; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_4">
+    <path d="M 7.2 234.288555
+L 788.4 234.288555
+" clip-path="url(#p52be8edda7)" style="fill: none; stroke: #e5e9ee; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_5">
+    <path d="M 7.2 271.156155
+L 788.4 271.156155
+" clip-path="url(#p52be8edda7)" style="fill: none; stroke: #e5e9ee; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_6">
+    <path d="M 7.2 308.023755
+L 788.4 308.023755
+" clip-path="url(#p52be8edda7)" style="fill: none; stroke: #e5e9ee; stroke-linecap: square"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 20px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="22.396875" transform="rotate(-0 7.2 22.396875)">Bounded diagnostics expose several prerequisites at once</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 10.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="43.741275" transform="rotate(-0 7.2 43.741275)">Six completed source-only snapshots · no captures asserted · no calibration supplied · no application execution</text>
+   </g>
+   <g id="text_3">
+    <text style="font-weight: 700; font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="76.728075" transform="rotate(-0 7.2 76.728075)">Entry</text>
+   </g>
+   <g id="text_4">
+    <text style="font-weight: 700; font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="343.116" y="76.728075" transform="rotate(-0 343.116 76.728075)">Operations</text>
+   </g>
+   <g id="text_5">
+    <text style="font-weight: 700; font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="436.86" y="76.728075" transform="rotate(-0 436.86 76.728075)">Prepared groups</text>
+   </g>
+   <g id="text_6">
+    <text style="font-weight: 700; font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="569.664" y="76.728075" transform="rotate(-0 569.664 76.728075)">Capture notices</text>
+   </g>
+   <g id="text_7">
+    <text style="font-weight: 700; font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="694.656" y="76.728075" transform="rotate(-0 694.656 76.728075)">Other notices</text>
+   </g>
+   <g id="text_8">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="114.513127" transform="rotate(-0 7.2 114.513127)">Convection (both cases)</text>
+   </g>
+   <g id="text_9">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="366.552" y="114.772462" transform="rotate(-0 366.552 114.772462)">43</text>
+   </g>
+   <g id="text_10">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="483.732" y="114.772462" transform="rotate(-0 483.732 114.772462)">4 / 4</text>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="616.536" y="114.772462" transform="rotate(-0 616.536 114.772462)">133</text>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="733.716" y="114.772462" transform="rotate(-0 733.716 114.772462)">8</text>
+   </g>
+   <g id="text_13">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="151.380727" transform="rotate(-0 7.2 151.380727)">SGS sigma (both cases)</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="366.552" y="151.640062" transform="rotate(-0 366.552 151.640062)">9</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="483.732" y="151.640062" transform="rotate(-0 483.732 151.640062)">1 / 2</text>
+   </g>
+   <g id="text_16">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="616.536" y="151.640062" transform="rotate(-0 616.536 151.640062)">7</text>
+   </g>
+   <g id="text_17">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="733.716" y="151.640062" transform="rotate(-0 733.716 151.640062)">3</text>
+   </g>
+   <g id="text_18">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="188.248327" transform="rotate(-0 7.2 188.248327)">Second-order diffusion (both)</text>
+   </g>
+   <g id="text_19">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="366.552" y="188.507662" transform="rotate(-0 366.552 188.507662)">7</text>
+   </g>
+   <g id="text_20">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="483.732" y="188.507662" transform="rotate(-0 483.732 188.507662)">0 / 1</text>
+   </g>
+   <g id="text_21">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="616.536" y="188.507662" transform="rotate(-0 616.536 188.507662)">7</text>
+   </g>
+   <g id="text_22">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="733.716" y="188.507662" transform="rotate(-0 733.716 188.507662)">16</text>
+   </g>
+   <g id="text_23">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="225.115927" transform="rotate(-0 7.2 225.115927)">Filter dispatcher (channel)</text>
+   </g>
+   <g id="text_24">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="366.552" y="225.375262" transform="rotate(-0 366.552 225.375262)">13</text>
+   </g>
+   <g id="text_25">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="483.732" y="225.375262" transform="rotate(-0 483.732 225.375262)">0 / 0</text>
+   </g>
+   <g id="text_26">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="616.536" y="225.375262" transform="rotate(-0 616.536 225.375262)">18</text>
+   </g>
+   <g id="text_27">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="733.716" y="225.375262" transform="rotate(-0 733.716 225.375262)">0</text>
+   </g>
+   <g id="text_28">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="261.983527" transform="rotate(-0 7.2 261.983527)">Fourth-order advection U (channel)</text>
+   </g>
+   <g id="text_29">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="366.552" y="262.242862" transform="rotate(-0 366.552 262.242862)">6</text>
+   </g>
+   <g id="text_30">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="483.732" y="262.242862" transform="rotate(-0 483.732 262.242862)">0 / 1</text>
+   </g>
+   <g id="text_31">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="616.536" y="262.242862" transform="rotate(-0 616.536 262.242862)">13</text>
+   </g>
+   <g id="text_32">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="733.716" y="262.242862" transform="rotate(-0 733.716 262.242862)">4</text>
+   </g>
+   <g id="text_33">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="298.851127" transform="rotate(-0 7.2 298.851127)">Filter3ord (channel)</text>
+   </g>
+   <g id="text_34">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="366.552" y="299.110462" transform="rotate(-0 366.552 299.110462)">11</text>
+   </g>
+   <g id="text_35">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="483.732" y="299.110462" transform="rotate(-0 483.732 299.110462)">0 / 3</text>
+   </g>
+   <g id="text_36">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="616.536" y="299.110462" transform="rotate(-0 616.536 299.110462)">18</text>
+   </g>
+   <g id="text_37">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #213047" x="733.716" y="299.110462" transform="rotate(-0 733.716 299.110462)">6</text>
+   </g>
+   <g id="text_38">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="367.788075" transform="rotate(-0 7.2 367.788075)">Counts are diagnostic occurrences, not distinct defects. Both sides of runtime branches are inspected.</text>
+   </g>
+   <g id="text_39">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="385.251675" transform="rotate(-0 7.2 385.251675)">Whole-team rejection does not disprove existing per-worksharing-unit support. A missing capture assertion is not a compiler defect.</text>
+   </g>
+   <g id="text_40">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="402.715275" transform="rotate(-0 7.2 402.715275)">No measured transfers or performance improvements are represented here. Both application targets remain unqualified.</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p52be8edda7">
+   <rect x="7.2" y="18.516075" width="781.2" height="388.08"/>
+  </clipPath>
+ </defs>
+</svg>
