@@ -4,6 +4,22 @@ Three momentum-advection kernels (CDU, CDV and CDW), seven implementation
 variants, and a [native/local compiler comparison](docs/tool-comparison.md).
 Run all commands below from the repository root.
 
+## Scope preflight maps
+
+The compiler's `--scope-preflight` report separates source support, numerical
+preparation, automatic cost estimates and unproved ownership. Render the
+`preflight` object from its JSON response into a fresh directory:
+
+```bash
+python -m benchmarks.harness.plot_preflight preflight.json --output new-scope-figures
+```
+
+The HTML report retains guards, resources and rejection reasons; paginated
+PNG/SVG maps preserve source order within each procedure. Gray means unknown,
+not requested or not applicable, and does not establish GPU eligibility.
+The receipt binds the input and rendered files by hash. These diagnostics
+contain no measured transfers, execution proof or application speedup.
+
 ## Layout
 
 ```text

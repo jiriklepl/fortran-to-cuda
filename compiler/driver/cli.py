@@ -59,6 +59,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Report bounded native procedure effects separately from GPU eligibility; write no outputs.")
     parser.add_argument("--form-scopes", action="store_true",
                         help="Emit compiler-approved shared source scopes and a versioned build/edit manifest.")
+    parser.add_argument("--scope-preflight", action="store_true",
+                        help="With --form-scopes, inspect independent source/cost blockers and write no outputs.")
     parser.add_argument("--scope-facts", metavar="FILE",
                         help="Versioned stable capture/definition and caller participation facts for source scopes.")
     parser.add_argument("--numerical-sources", metavar="FILE",
@@ -153,6 +155,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--gpu-collective", action="store_true",
                         help="Opt-in entry is called by every thread of one existing OpenMP team.")
     args = parser.parse_args()
+    if args.scope_preflight and not args.form_scopes:
+        parser.error("--scope-preflight requires --form-scopes")
     if args.scope_execution != "bounded" and not args.form_scopes:
         parser.error("--scope-execution reached requires --form-scopes")
     if args.analyze_effects and (args.list_candidates or args.emit_scoped_runtime or args.form_scopes):
@@ -296,6 +300,15 @@ def main() -> None:
                     numerical_sources = json.loads(Path(args.numerical_sources).read_text())
                 except (OSError, ValueError) as error:
                     raise CompilationError(f"invalid numerical source package: {error}") from error
+            if args.scope_preflight:
+                from compiler.scopes.preflight import preflight_source_scopes
+                preflight = preflight_source_scopes([source_file, *args.source_file], args.kernel,
+                    facts=facts, options=options, config=_offload_config(args), contracts=contracts,
+                    numerical_sources=numerical_sources, analysis_sources=analysis_sources,
+                    summary_cache=args.summary_cache)
+                print(json.dumps({"kernel": args.kernel, "supported": True, "reason": None,
+                                  "outputs": [], "preflight": preflight.public()}, indent=2))
+                return
             outputs, manifest = form_source_scopes([source_file,*args.source_file], args.kernel,
                                                    facts=facts, options=options, config=_offload_config(args),
                                                    contracts=contracts, numerical_sources=numerical_sources,
