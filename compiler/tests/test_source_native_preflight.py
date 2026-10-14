@@ -12,7 +12,7 @@ from compiler.offload.config import OffloadConfig
 from compiler.scopes.native_preflight import source_native_preflight
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_compute_costs import profile_v2
-from compiler.tests.test_source_scopes import FACT
+from compiler.tests.test_source_scopes import FACT, assert_uncalibrated_native
 
 SOURCE = """module renamed_gate
 implicit none
@@ -55,7 +55,8 @@ def builder_for(tmp_path, monkeypatch, source=SOURCE, *, mode="reached", profile
 def emit(tmp_path, monkeypatch, source=SOURCE, **kwargs):
     path, builder = builder_for(tmp_path, monkeypatch, source, **kwargs)
     outputs, manifest = builder.run()
-    text = outputs[manifest["sources"][str(path)]["replacement"]]
+    replacement = manifest["sources"].get(str(path), {}).get("replacement")
+    text = outputs[replacement] if replacement else path.read_text()
     return path, builder, outputs, manifest, text
 
 
@@ -194,10 +195,7 @@ def test_scalar_expression_actual_is_not_evaluated_by_metadata_preflight(tmp_pat
 def test_static_all_native_has_no_source_guard_or_owner_side_effects(tmp_path, monkeypatch):
     path, _, _, manifest, text = emit(tmp_path, monkeypatch, profile=False)
     assert text == path.read_text() == SOURCE
-    owner, = manifest["scopes"]
-    assert owner["automatic_preflight"]["successful"]
-    assert owner["automatic_preflight"]["runtime_decision_inputs"] == []
-    assert not owner["automatic_preflight"]["caller_guards_evaluated"]
+    assert_uncalibrated_native(manifest)
     assert "fort_native_preflight_" not in text
     assert "fort_scope_create(" not in text
     assert manifest["implementation_variants"]["generated_count"] == 0

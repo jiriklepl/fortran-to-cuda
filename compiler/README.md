@@ -683,6 +683,17 @@ module stability or be registered before that window's fresh allocation,
 original-bound, layout and alias guards. The default remains `"invocation"`.
 Neither lifetime choice derives initialized payload from allocation presence.
 
+With `--gpu-policy auto`, absence of both a compatible calibration profile and
+an explicit complete-window evidence request selects unchanged native source
+before window discovery or numerical lowering. Source/configuration hashes,
+entry and package authentication, collective caller assertions, and final live
+input checks still apply. The result contains a reasoned boundary, zero scopes,
+no source edits, and no generated runtime or build sources. Its native-effect
+report contains local structure without materializing the transitive closure.
+A supplied profile or independent complete-window request follows its existing
+pricing and validation path; one unpriced leaf cannot suppress other estimable
+alternatives. This early native decision is not evidence of automatic offloading.
+
 An optional capture `expected_descriptor` has exactly `lower_bounds` and
 `extents`: rank-matched lists of signed 64-bit integer lower bounds and
 nonnegative signed 64-bit extents. For example,
@@ -2116,7 +2127,8 @@ sealed together; private projections and analysis caches remain explicit.
 Queries authenticate session membership, while publication rechecks live source
 and configuration inputs. Standalone mutable analyses retain fresh checks.
 Parsing and later numerical lowering consume the captured original or prepared
-text. Normalized numerical packages retain the exact text checked against their
+text, including the qualified collective lowering path. Normalized numerical
+packages retain the exact text checked against their
 package hash; temporary live-file edits cannot enter lowering and then escape a
 publication hash check by being restored. Unexpanded Fortran
 INCLUDE readers outside that snapshot block session sealing; the configured

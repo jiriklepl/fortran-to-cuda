@@ -73,11 +73,12 @@ class CollectiveScopeBuilder(ScopeBuilder):
                 if package:
                     if not set(effects).issubset(package.arrays):
                         raise CompilationError("numerical source package omits original array effects")
-                    function = lower_file(package.path, package.entry)
+                    function = lower_file(package.path, package.entry, source_text=package.text)
                 else:
                     if any(not root.startswith("argument::") for root in effects):
                         raise CompilationError("hidden numerical arrays require a normalized source package")
-                    function = lower_file(self.analysis.inputs.path(routine.scope.path), procedure)
+                    path = self.analysis.inputs.path(routine.scope.path)
+                    function = lower_file(path, procedure, source_text=self.analysis.source_text(path))
                 function, plan = prepare_function(function, options=self.options)
                 if not plan.regions:
                     raise CompilationError("numerical source has no parallel region")
@@ -104,7 +105,12 @@ class CollectiveScopeBuilder(ScopeBuilder):
 
     def run(self):
         variant_checkpoint = self.variants.checkpoint()
+        missing_cost_reason = self._missing_automatic_cost_reason()
         try:
+            if missing_cost_reason:
+                # Constructor participation proofs remain mandatory even when
+                # missing costs retain every original call unchanged.
+                raise CompilationError(missing_cost_reason)
             if self.config.scope_execution == "reached":
                 raise CompilationError("reached lexical ownership requires a serial original caller; collective execution remains native")
             if any("allocatable" in self.entry.scope.bindings[formal].attributes
@@ -155,7 +161,7 @@ class CollectiveScopeBuilder(ScopeBuilder):
             self.variants.restore(variant_checkpoint)
             self.boundaries.append({"procedure": self.entry.qualified, "reason": str(error),
                                     "execution": "unchanged native source"})
-        outputs, report = self.finish()
+        outputs, report = self.finish(materialize_native_effects=False if missing_cost_reason else None)
         report["participation"] = self.participation.public()
         report["collective_roles"] = [{"procedure": procedure, **role}
                                       for procedure, role in sorted(self.roles.items())]

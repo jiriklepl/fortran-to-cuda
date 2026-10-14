@@ -6,8 +6,7 @@ from hashlib import sha256
 from compiler.driver.options import CompilerOptions
 from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
-from compiler.tests.test_source_scopes import FACT
-
+from compiler.tests.test_source_scopes import FACT, assert_uncalibrated_native
 
 SOURCE = """module local_owner
 implicit none
@@ -175,7 +174,7 @@ end module
         'call opaque(x,n)', 'call leaf(x,n,escape)')
 
 
-def emit(directory, source=SOURCE, *, captures=None, policy='sections'):
+def emit(directory, source=SOURCE, *, captures=None, policy='sections', profile=None):
     directory.mkdir(parents=True, exist_ok=True)
     path = directory/'owner.f90'
     path.write_text(source)
@@ -184,23 +183,16 @@ def emit(directory, source=SOURCE, *, captures=None, policy='sections'):
              'captures':{'argument::'+name:FACT for name in ('a','b','out')}}
     facts['captures'].update(captures or {})
     builder = ScopeBuilder([path], 'local_owner::step', facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy=policy,scope_execution='reached'))
+                           config=OffloadConfig(policy=policy,profile=profile,scope_execution='reached'))
     outputs, report = builder.run()
     return path, outputs, report
 
 
 def test_static_native_selection_preserves_original_lexical_storage_and_calls(tmp_path):
     path, outputs, report = emit(tmp_path, INTERNAL_SOURCE, policy='auto')
-    scope, = report['scopes']
-    text = outputs[report['sources'][str(path)]['replacement']]
-    assert text == path.read_text() == INTERNAL_SOURCE
-    assert scope['owner_variant'] is None
-    assert not scope['estimate_available']
-    assert scope['automatic_preflight']['successful']
-    assert scope['automatic_preflight']['runtime_decision_inputs'] == []
-    assert not scope['automatic_preflight']['caller_guards_evaluated']
-    assert not scope['automatic_preflight']['generated_owner_invoked']
-    assert scope['automatic_preflight']['caller_source_unchanged']
+    assert_uncalibrated_native(report)
+    assert list(outputs) == ['scope-manifest.json']
+    assert path.read_text() == INTERNAL_SOURCE
     assert report['implementation_variants']['generated_count'] == 0
 
 

@@ -8,6 +8,7 @@ from compiler.frontend.reached_windows import prove_reached_window
 from compiler.ir import CompilationError
 from compiler.tests.test_module_reached_windows import MODULE_ROOTS, MODULE_SOURCE, module_fixture, original_loops
 from compiler.tests.test_reached_window_owner import ENTRY
+from compiler.tests.test_source_scopes import assert_uncalibrated_native
 
 PARTIAL_BOUNDARY_SOURCE = MODULE_SOURCE.replace(
     "enddo\ndo i=-2,n-3\na(i)",
@@ -123,6 +124,7 @@ def test_partial_geometry_does_not_replace_original_registered_authority(tmp_pat
 def test_missing_calibration_keeps_partial_window_automatic_execution_native(tmp_path):
     path, builder = partial_fixture(tmp_path, policy="auto")
     outputs, report = builder.run()
-    assert not report["reached_window_discovery"]["selected"]
+    assert_uncalibrated_native(report)
+    assert "reached_window_discovery" not in report
     replacement = report["sources"].get(str(path), {}).get("replacement")
     assert (outputs[replacement] if replacement else path.read_text()) == MODULE_SOURCE

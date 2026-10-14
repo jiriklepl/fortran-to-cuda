@@ -12,7 +12,7 @@ from compiler.offload.config import OffloadConfig
 from compiler.scopes.reached_owner import ReachedWindowOwner
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_reached_window_owner import ENTRY, SOURCE
-from compiler.tests.test_source_scopes import FACT
+from compiler.tests.test_source_scopes import FACT, assert_uncalibrated_native
 
 MODULE_ROOTS = ("renamed_stage::a", "renamed_stage::b")
 MODULE_SOURCE = SOURCE.replace(
@@ -173,7 +173,8 @@ def test_uncertain_module_storage_cannot_be_blessed_by_selected_facts(tmp_path, 
 def test_missing_auto_calibration_keeps_module_source_native(tmp_path):
     path, builder = module_fixture(tmp_path, policy="auto")
     outputs, report = builder.run()
-    assert not report["reached_window_discovery"]["selected"]
+    assert_uncalibrated_native(report)
+    assert "reached_window_discovery" not in report
     replacement = report["sources"].get(str(path), {}).get("replacement")
     assert (outputs[replacement] if replacement else path.read_text()) == MODULE_SOURCE
     assert builder.analysis.stable_module_allocatables == frozenset()

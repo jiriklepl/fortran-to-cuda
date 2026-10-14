@@ -6,7 +6,7 @@ import re
 
 import pytest
 
-from compiler.tests.test_source_scopes import FACT, PROGRAM, generate
+from compiler.tests.test_source_scopes import FACT, PROGRAM, assert_uncalibrated_native, generate
 
 TREE = PROGRAM.replace("integer,intent(in)::n\ncall producer(a,b,n)",
                        "integer,intent(inout)::n\nlogical::flag\ncall producer(a,b,n)")
@@ -26,7 +26,8 @@ def generate_tree(directory, source=TREE, *, mode="sections", profile=None):
     facts = {"schema_version": 1, "participation": "serial",
              "captures": {"argument::a": FACT, "argument::b": FACT, "argument::out": FACT}}
     original, output, manifest = generate(directory, source, mode=mode, facts=facts, profile=profile)
-    text = (output / manifest["sources"][str(original)]["replacement"]).read_text()
+    replacement = manifest["sources"].get(str(original), {}).get("replacement")
+    text = (output / replacement).read_text() if replacement else original.read_text()
     return original, output, manifest, text
 
 
@@ -70,20 +71,13 @@ def test_structured_owner_queries_only_reached_segments_and_preserves_bounds(tmp
 
 def test_missing_calibration_selects_original_before_creating_context(tmp_path):
     _, _, manifest, text = generate_tree(tmp_path, mode="auto")
-    scope, owner = owner_text(manifest, text)
-    assert not scope["estimate_available"]
-    assert scope["automatic_preflight"]["successful"]
-    assert scope["automatic_preflight"]["selection"] == "native"
-    assert scope["automatic_preflight"]["runtime_decision_inputs"] == []
-    assert "fort_scope_create(" not in owner
-    assert "fort_scope_register(" not in owner
-    assert not re.search(r"fort_scope_plan_\w+\(", owner)
-    assert "fort_scope_query_" not in owner
-    assert "call producer(" in owner.lower() and "call consumer(" in owner.lower()
+    assert_uncalibrated_native(manifest)
+    assert text == TREE
 
 
 def test_one_available_alternative_preserves_reached_automatic_planning():
     from types import SimpleNamespace
+
     from compiler.scopes.source import ScopeBuilder
 
     builder = object.__new__(ScopeBuilder)
@@ -160,7 +154,8 @@ def test_affine_condition_point_uses_reached_scalar_and_definition_checks(tmp_pa
     operation, = [item for item in scope["native_operations"]
                   if item["kind"] == "condition read" and item["resources"] == ["argument::b"]]
     assert operation["sections"]["available"]
-    assert operation["structured_summary_identity"] and operation["demand_identity"]
+    assert operation["structured_summary_identity"]
+    assert operation["demand_identity"]
     assert operation["selected_original_nodes"]
     text = (output / manifest["sources"][str(original)]["replacement"]).read_text()
     _, owner = owner_text(manifest, text)
@@ -257,12 +252,13 @@ JOINED = TREE.replace("real(8),intent(out)::b(:)", "real(8),intent(inout)::b(:)"
 def test_joined_native_team_retains_original_private_variables(tmp_path, monkeypatch):
     # Exercise the native operation independently of optional inline numerical
     # admission; a legal joined region remains inside its owner either way.
-    from compiler.ir import CompilationError
-    from compiler.driver.options import CompilerOptions
-    from compiler.offload.config import OffloadConfig
-    from compiler.scopes.source import ScopeBuilder
-    from compiler.scopes import region_dispatch
     from hashlib import sha256
+
+    from compiler.driver.options import CompilerOptions
+    from compiler.ir import CompilationError
+    from compiler.offload.config import OffloadConfig
+    from compiler.scopes import region_dispatch
+    from compiler.scopes.source import ScopeBuilder
 
     def native_region(*args, **kwargs):
         raise CompilationError("inline numerical admission unavailable")

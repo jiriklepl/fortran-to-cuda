@@ -9,7 +9,7 @@ from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.scopes.window_discovery import MAX_ATTEMPTS, discover_reached_window
 from compiler.tests.test_reached_window_owner import ENTRY, ROOTS, SOURCE
-from compiler.tests.test_source_scopes import FACT
+from compiler.tests.test_source_scopes import FACT, assert_uncalibrated_native
 
 
 def discovery_fixture(directory, source=SOURCE, *, policy="sections", captures=None, device_budget=None):
@@ -149,13 +149,10 @@ def test_bounded_rejected_search_has_no_generated_artifacts_or_registered_tokens
 def test_auto_without_calibration_stays_native_without_window_instrumentation(tmp_path):
     path, builder = discovery_fixture(tmp_path, policy="auto")
     outputs, report = builder.run()
-    assert not report["reached_window_discovery"]["selected"]
-    assert any("automatic GPU alternative" in attempt["reason"]
-               for attempt in report["reached_window_discovery"]["attempts"])
-    text = outputs[report["sources"][str(path)]["replacement"]]
-    assert text == SOURCE
-    assert "fort_window_spent_" not in text
-    assert all(scope["automatic_preflight"]["contexts_created"] == 0 for scope in report["scopes"])
+    assert_uncalibrated_native(report)
+    assert "reached_window_discovery" not in report
+    assert list(outputs) == ["scope-manifest.json"]
+    assert path.read_text() == SOURCE
 
 
 def test_whole_entry_stable_formals_keep_existing_owner_path(tmp_path):

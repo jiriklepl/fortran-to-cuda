@@ -7,6 +7,7 @@ import pytest
 from compiler.driver.options import CompilerOptions
 from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
+from compiler.tests.test_source_compute_costs import profile_v2
 from compiler.tests.test_source_scopes import FACT
 
 PROGRAM = """module windows
@@ -56,7 +57,7 @@ def build(tmp_path, source=PROGRAM, *, policy="sections"):
              "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {"argument::" + name: FACT for name in ("a", "b", "out")}}
     compiler = ScopeBuilder([path], "windows::step", facts=facts, options=CompilerOptions(),
-                            config=OffloadConfig(policy=policy))
+                            config=OffloadConfig(policy=policy, profile=profile_v2() if policy == "auto" else None))
     outputs, report = compiler.run()
     return compiler, outputs, report
 

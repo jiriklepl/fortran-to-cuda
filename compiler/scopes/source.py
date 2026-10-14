@@ -2700,7 +2700,28 @@ class ScopeBuilder:
                         registry.operations = max(registry.operations, spent.operations)
         return False
 
+    def _missing_automatic_cost_reason(self):
+        """Decline work that cannot be priced before discovering any owner.
+
+        Exact-window evidence is independent of the per-kernel profile. Even
+        an explicit empty request must reach its own validation path.
+        """
+        if (self.config.policy != "auto" or self.config.profile is not None
+                or self.config.exact_window is not None):
+            return None
+        reason = ("no calibration profile or exact-window evidence supplied; "
+                  "automatic policy retains unchanged native source")
+        return f"{self.config.profile_reason}; {reason}" if self.config.profile_reason else reason
+
     def run(self):
+        reason = self._missing_automatic_cost_reason()
+        if reason:
+            # Construction authenticated inputs, packages and entry identity.
+            # Native execution needs neither speculative owners nor a complete
+            # effect closure. Publication still rechecks every live input.
+            self.boundaries.append({"procedure": self.entry.qualified, "reason": reason,
+                                    "execution": "unchanged native source"})
+            return self.finish(materialize_native_effects=False)
         if self.entry.source_kind != "module":
             first = _span(_part(self.entry.scope.node, "Subroutine_Stmt"))[0]
             last = _span(_part(self.entry.scope.node, "End_Subroutine_Stmt"))[1]
@@ -2731,7 +2752,7 @@ class ScopeBuilder:
         self.scan(nodes)
         return self.finish()
 
-    def finish(self):
+    def finish(self, *, materialize_native_effects=None):
         """Publish source edits and build artifacts after approved scope work."""
         self._check_reached_publication()
         self._validate_reached_window_fresh()
@@ -2787,7 +2808,8 @@ class ScopeBuilder:
                 *[item.report.get("runtime_provenance", {}) for item in self.view_generated.values()]]),
             "sources":provenance, "runtime":self.runtime if self.scopes else None,
             "native_effects":self.analysis.report(self.entry.qualified,
-                materialize=self.config.scope_execution != "reached"),
+                materialize=(self.config.scope_execution != "reached"
+                             if materialize_native_effects is None else materialize_native_effects)),
             "resolved_calls": [self.resolved_calls[key] for key in sorted(self.resolved_calls)],
             "implementation_variants": self.variants.public(),
             "inline_numerical_regions": self.inline.public(),
