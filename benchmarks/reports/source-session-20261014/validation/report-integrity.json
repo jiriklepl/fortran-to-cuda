@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "checks": [
+    "sealed-prototype: authenticated source/capture/request inputs equal to baseline",
+    "final: authenticated source/capture/request inputs equal to baseline",
+    "baseline: 300-second timeout / no manifest receipt verified",
+    "sealed-prototype: 300-second timeout / no manifest receipt verified",
+    "final: 300-second timeout / no manifest receipt verified",
+    "Application audit source hashes verified",
+    "Private declaration diagnostic scope and empty machine-code diff verified",
+    "Renderer syntax valid; PNG/SVG figures rendered and visually inspected"
+  ]
+}

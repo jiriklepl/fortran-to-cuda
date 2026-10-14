@@ -1,0 +1,148 @@
+Timeout (0:00:30)!
+Thread 0x0000797643e01400 (most recent call first):
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/common/readfortran.py", line ??? in get_item
+  <invalid frame>
+Timeout (0:00:30)!
+Thread 0x0000797643e01400 (most recent call first):
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 1638 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 1644 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 12584 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 1527 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 12620 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 1212 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 5957 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 1423 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 5791 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 1212 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 5957 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 1423 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 5791 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 1212 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 5935 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 1212 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 5957 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 1212 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 5957 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+Timeout (0:00:30)!
+Thread 0x0000797643e01400 (most recent call first):
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/frontend/source_syntax.py", line 159 in _capture_node
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/frontend/source_syntax.py", line 113 in _capture_value
+  File "<string>", line 11 in __init__
+  <invalid frame>
+Timeout (0:00:30)!
+Thread 0x0000797643e01400 (most recent call first):
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/generation_transaction.py", line 77 in __call__
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/generation_transaction.py", line 88 in <genexpr>
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/generation_transaction.py", line 88 in __call__
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/generation_transaction.py", line 88 in <genexpr>
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/generation_transaction.py", line 88 in __call__
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/generation_transaction.py", line 88 in <genexpr>
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/generation_transaction.py", line 88 in __call__
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/generation_transaction.py", line 88 in <genexpr>
+  <invalid frame>
+Timeout (0:00:30)!
+Thread 0x0000797643e01400 (most recent call first):
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/frontend/source_syntax.py", line 64 in <genexpr>
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/frontend/source_syntax.py", line 64 in unchanged
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/frontend/source_syntax.py", line 75 in <genexpr>
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/frontend/source_syntax.py", line 75 in unchanged
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/frontend/source_syntax.py", line 229 in unchanged
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/frontend/source_effects.py", line 2017 in <genexpr>
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/frontend/source_effects.py", line 2017 in _require_original_global
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/frontend/numerical_preparation.py", line 342 in publish
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/frontend/numerical_preparation.py", line 352 in _environment_required
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/frontend/numerical_preparation.py", line 528 in validate
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/frontend/numerical_effects.py", line 311 in _derive
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/frontend/numerical_effects.py", line 409 in validate
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/region_dispatch.py", line 338 in resolved_numerical_region
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/region_dispatch.py", line 369 in prepare_numerical_region
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/region_dispatch.py", line 310 in prepare_combined_team
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/combined_team.py", line 299 in __init__
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/lexical.py", line 370 in admit
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/lexical.py", line 468 in scan
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/lexical.py", line 492 in scan
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/lexical.py", line 931 in _run_lexical
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/lexical.py", line 925 in run
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/source.py", line 2617 in attempt
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/source.py", line 2641 in _attempt_lexical_owner
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/source.py", line 2693 in run
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/source.py", line 2802 in form_source_scopes
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/driver/cli.py", line 312 in main
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/__main__.py", line 4 in <module>
+  File "<frozen runpy>", line 88 in _run_code
+  File "<frozen runpy>", line 234 in run_module
+  File "/tmp/application_path_profile_python", line 22 in <module>
+Timeout (0:00:30)!
+Thread 0x0000797643e01400 (most recent call first):
+  File "/usr/lib/python3.13/cProfile.py", line 59 in snapshot_stats
+  File "/usr/lib/python3.13/cProfile.py", line 56 in create_stats
+  File "/usr/lib/python3.13/cProfile.py", line 51 in dump_stats
+  File "/tmp/application_path_profile_python", line 12 in finish
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 2001 in walk
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 2032 in walk
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 2032 in walk
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 2032 in walk
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 2032 in walk
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 2032 in walk
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 2032 in walk
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 2032 in walk
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 2032 in walk
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/regions.py", line 312 in _exception_observers
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/region_dispatch.py", line 397 in _outline
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/region_dispatch.py", line 316 in prepare_combined_team
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/combined_team.py", line 299 in __init__
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/lexical.py", line 370 in admit
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/lexical.py", line 468 in scan
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/lexical.py", line 492 in scan
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/lexical.py", line 931 in _run_lexical
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/lexical.py", line 925 in run
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/source.py", line 2617 in attempt
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/source.py", line 2641 in _attempt_lexical_owner
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/source.py", line 2693 in run
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/scopes/source.py", line 2802 in form_source_scopes
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/driver/cli.py", line 312 in main
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/compiler/compiler/__main__.py", line 4 in <module>
+  File "<frozen runpy>", line 88 in _run_code
+  File "<frozen runpy>", line 234 in run_module
+  File "/tmp/application_path_profile_python", line 22 in <module>

@@ -1,0 +1,56 @@
+--- /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/ELMM/src/advection.f90
++++ /tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic/advection.f90
+@@ -13,7 +13,7 @@
+ 
+ 
+   subroutine CDUdiv(U2, U, V, W)
+-    real(knd), contiguous, intent(out) :: U2(-2:,-2:,-2:)
++    real(knd), contiguous, intent(inout) :: U2(-2:,-2:,-2:)
+     real(knd), contiguous, intent(in)  :: U(-2:,-2:,-2:), V(-2:,-2:,-2:), W(-2:,-2:,-2:)
+     real(knd) :: Ax, Ay, Az
+     integer :: i, j, k, bi, bj, bk
+@@ -57,7 +57,7 @@
+ 
+ 
+   subroutine CDVdiv(V2, U, V, W)
+-    real(knd), contiguous, intent(out) :: V2(-2:,-2:,-2:)
++    real(knd), contiguous, intent(inout) :: V2(-2:,-2:,-2:)
+     real(knd), contiguous, intent(in)  :: U(-2:,-2:,-2:), V(-2:,-2:,-2:), W(-2:,-2:,-2:)
+     real(knd) :: Ax, Ay, Az
+     integer :: i, j, k, bi, bj, bk
+@@ -100,7 +100,7 @@
+ 
+ 
+   subroutine CDWdiv(W2, U, V, W)
+-    real(knd), contiguous, intent(out) :: W2(-2:,-2:,-2:)
++    real(knd), contiguous, intent(inout) :: W2(-2:,-2:,-2:)
+     real(knd), contiguous, intent(in) :: U(-2:,-2:,-2:), V(-2:,-2:,-2:), W(-2:,-2:,-2:)
+     real(knd) :: Ax, Ay, Az
+     integer :: i, j, k, bi, bj, bk
+@@ -149,7 +149,7 @@
+ 
+ 
+   subroutine CDUadv(U2, U, V, W)
+-    real(knd), contiguous, intent(out) :: U2(-2:,-2:,-2:)
++    real(knd), contiguous, intent(inout) :: U2(-2:,-2:,-2:)
+     real(knd), contiguous, intent(in)  :: U(-2:,-2:,-2:), V(-2:,-2:,-2:), W(-2:,-2:,-2:)
+     real(knd) :: Ax, Ay, Az, Vadv, Wadv
+     integer :: i, j, k, bi, bj, bk
+@@ -192,7 +192,7 @@
+ 
+ 
+   subroutine CDVadv(V2, U, V, W)
+-    real(knd), contiguous, intent(out) :: V2(-2:,-2:,-2:)
++    real(knd), contiguous, intent(inout) :: V2(-2:,-2:,-2:)
+     real(knd), contiguous, intent(in)  :: U(-2:,-2:,-2:), V(-2:,-2:,-2:), W(-2:,-2:,-2:)
+     real(knd) :: Ax, Ay, Az, Uadv, Wadv
+     integer :: i, j, k, bi, bj, bk
+@@ -235,7 +235,7 @@
+ 
+ 
+   subroutine CDWadv(W2, U, V, W)
+-    real(knd), contiguous, intent(out) :: W2(-2:,-2:,-2:)
++    real(knd), contiguous, intent(inout) :: W2(-2:,-2:,-2:)
+     real(knd), contiguous, intent(in)  :: U(-2:,-2:,-2:), V(-2:,-2:,-2:), W(-2:,-2:,-2:)
+     real(knd) :: Ax, Ay, Az, Uadv, Vadv
+     integer :: i, j, k, bi, bj, bk

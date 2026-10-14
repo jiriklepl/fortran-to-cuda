@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "status": "unapplied diagnostic option",
+  "artifacts": [
+    {
+      "file": "report.json",
+      "sha256": "35accac6bbff9be0e628a0032d4fced1ff27234eb8b318625023690191e1b63c",
+      "original_path": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic/report.json"
+    },
+    {
+      "file": "source.patch",
+      "sha256": "57102e96312c97f0748201674bc011a7bf0c8d965545e3170536b56464ca8c10",
+      "original_path": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic/source.patch"
+    },
+    {
+      "file": "reproduce.py",
+      "sha256": "0e117751e830941c39b6e54ceee160c8fca00086b5361d6d71dbd1760c02ffc7",
+      "original_path": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic/reproduce.py"
+    },
+    {
+      "file": "machine-code.diff",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "original_path": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic/machine-code.diff"
+    },
+    {
+      "file": "command-receipts/0b6728a9ee904b9e8f9e543b1f598925.json",
+      "sha256": "31bbaada476e4e6ec4cbb58d843980b584253450b83cc717d80c43bae495a699",
+      "original_path": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic/command-receipts/0b6728a9ee904b9e8f9e543b1f598925.json"
+    }
+  ],
+  "original_checkpoint": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic",
+  "invocation": [
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic/reproduce.py"
+  ],
+  "reproducer_layout": "Run the recipe from a fresh equivalent private checkpoint beside the preserved ELMM, PoisFFT and build trees. The frozen recipe derives those paths from its original location; this report copy is preserved source evidence.",
+  "proven": [
+    "One privately recompiled advection object has byte-identical executable/allocated/nondebug-relocation sections under the recorded compiler and semantic flags.",
+    "Original source, object and module inputs remain unchanged."
+  ],
+  "not_proven": [
+    "Equivalence after rebuilding every caller against corrected module interfaces.",
+    "Application numerical validation or timing.",
+    "Unchanged upstream source semantics."
+  ]
+}

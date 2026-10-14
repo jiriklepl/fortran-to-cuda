@@ -1,0 +1,188 @@
+{
+  "baseline": {
+    "parent_commit": "5d752da1bf88c235b29c1c2cca11c79d8c50ed13",
+    "pipeline_commit": "3c799dc0d266abf6aa6eb0d4b3ce39234cd80bcd",
+    "result": {
+      "status": "timeout",
+      "time_limit_seconds": 300,
+      "outer_exit_code": 124,
+      "manifest_emitted": false,
+      "original_input_and_capture_request": "benchmarks/results/application-path-20261014/request.json",
+      "scope_claim": "No successful admission or application execution established by incomplete generation"
+    },
+    "source_path": "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014",
+    "request_sha256": "9c81727347c237d234010c31560192dfe302cf06219e4920e3544527fefd7834",
+    "profile_sha256": "fe3465418aca1eadaca8477068b08705fd82e3fb071822504bcdcabd695e5e92",
+    "profile_scope": "Incomplete 180-second instrumented source-generation invocation; overlapping cumulative times; concurrent CPU activity; not an application benchmark",
+    "profile_selected": [
+      {
+        "file": "frontend/source_effects.py",
+        "line": 2009,
+        "function": "_require_original_global",
+        "primitive_calls": 188,
+        "calls": 188,
+        "self_seconds": 0.0046831320000000004,
+        "cumulative_seconds": 49.088484559
+      },
+      {
+        "file": "frontend/source_syntax.py",
+        "line": 56,
+        "function": "unchanged",
+        "primitive_calls": 42368,
+        "calls": 42368,
+        "self_seconds": 0.37375118700000004,
+        "cumulative_seconds": 26.533699364
+      },
+      {
+        "file": "frontend/source_syntax.py",
+        "line": 214,
+        "function": "unchanged",
+        "primitive_calls": 61300,
+        "calls": 61300,
+        "self_seconds": 0.139135336,
+        "cumulative_seconds": 40.704157319000004
+      },
+      {
+        "file": "scopes/source.py",
+        "line": 86,
+        "function": "__init__",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_seconds": 0.000840889,
+        "cumulative_seconds": 100.337604909
+      },
+      {
+        "file": "scopes/source.py",
+        "line": 2668,
+        "function": "run",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_seconds": 7.0012e-05,
+        "cumulative_seconds": 79.458803805
+      },
+      {
+        "file": "frontend/source_effects.py",
+        "line": 2013,
+        "function": "<genexpr>",
+        "primitive_calls": 9430456,
+        "calls": 9430456,
+        "self_seconds": 5.2272549690000005,
+        "cumulative_seconds": 7.14862043
+      },
+      {
+        "file": "frontend/source_syntax.py",
+        "line": 74,
+        "function": "unchanged",
+        "primitive_calls": 6080,
+        "calls": 6080,
+        "self_seconds": 0.027776021,
+        "cumulative_seconds": 31.543753210000002
+      },
+      {
+        "file": "frontend/source_syntax.py",
+        "line": 25,
+        "function": "unchanged",
+        "primitive_calls": 2664960,
+        "calls": 2664960,
+        "self_seconds": 2.442856014,
+        "cumulative_seconds": 3.824795228
+      }
+    ]
+  },
+  "sealed-prototype": {
+    "parent_commit": "e335714c86e2f36730e91cbe0a416f2d1b22447d",
+    "pipeline_commit": "3c799dc0d266abf6aa6eb0d4b3ce39234cd80bcd",
+    "result": {
+      "status": "timeout",
+      "experimental": true,
+      "time_limit_seconds": 300,
+      "outer_exit_code": 124,
+      "manifest_emitted": false,
+      "scope_claim": "No final admission or application execution established by incomplete generation"
+    },
+    "source_path": "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014",
+    "request_sha256": "2e4695a40dcb5b7f879a0e0ce1a927e3538bef69ccb3cdcf3614f59009def056",
+    "profile_sha256": "23f05ee9765d08e05819fb4f2b4e8d61386208388de27f57af70372eaee91354",
+    "profile_scope": "Incomplete 180-second instrumented source-generation invocation; overlapping cumulative times; concurrent CPU activity; not an application benchmark",
+    "profile_selected": [
+      {
+        "file": "frontend/source_effects.py",
+        "line": 2009,
+        "function": "_require_original_global",
+        "primitive_calls": 130,
+        "calls": 130,
+        "self_seconds": 0.003236506,
+        "cumulative_seconds": 16.458792712
+      },
+      {
+        "file": "frontend/source_syntax.py",
+        "line": 56,
+        "function": "unchanged",
+        "primitive_calls": 662,
+        "calls": 662,
+        "self_seconds": 0.004153447,
+        "cumulative_seconds": 0.774682082
+      },
+      {
+        "file": "frontend/source_syntax.py",
+        "line": 237,
+        "function": "unchanged",
+        "primitive_calls": 16110,
+        "calls": 16110,
+        "self_seconds": 0.025291549,
+        "cumulative_seconds": 3.1496130620000002
+      },
+      {
+        "file": "scopes/source.py",
+        "line": 86,
+        "function": "__init__",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_seconds": 0.182985016,
+        "cumulative_seconds": 159.902879261
+      },
+      {
+        "file": "scopes/source.py",
+        "line": 2673,
+        "function": "run",
+        "primitive_calls": 1,
+        "calls": 1,
+        "self_seconds": 4.9501000000000006e-05,
+        "cumulative_seconds": 19.789849070000002
+      },
+      {
+        "file": "frontend/source_syntax.py",
+        "line": 74,
+        "function": "unchanged",
+        "primitive_calls": 95,
+        "calls": 95,
+        "self_seconds": 0.000443838,
+        "cumulative_seconds": 0.845956263
+      },
+      {
+        "file": "frontend/source_syntax.py",
+        "line": 25,
+        "function": "unchanged",
+        "primitive_calls": 41640,
+        "calls": 41640,
+        "self_seconds": 0.034868586,
+        "cumulative_seconds": 0.054332033
+      },
+      {
+        "file": "frontend/source_effects.py",
+        "line": 2013,
+        "function": "<genexpr>",
+        "primitive_calls": 6521060,
+        "calls": 6521060,
+        "self_seconds": 4.490093096,
+        "cumulative_seconds": 14.674301701000001
+      }
+    ],
+    "compiler_overlay": {
+      "compiler/frontend/sealed_syntax.py": "597ae3549828ec0dc3acb56212fa46f0802349265b738052a5e7e6239e6df7f7",
+      "compiler/frontend/source_syntax.py": "6e117e8595c643163f1f19675cb6cd6cebbdfff4a205f7bb8ad9522231f0c431",
+      "compiler/scopes/source.py": "e9134a54fe826d68cdb260282a6fc1da7217557397b50b25c137d6b87b8d5d9d",
+      "compiler/tests/test_sealed_syntax.py": "e8b3621cab1a4cf9205a2a23c9eca1a92b0e7851517d3922ad4919fc8ed9417b"
+    }
+  }
+}

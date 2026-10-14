@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "title": "Source-session authentication: bounded Convection diagnostics",
+  "status": "completed bounded generation diagnostic; application objective remains incomplete",
+  "application_qualification": false,
+  "automatic_placement_qualification": false,
+  "measurement_kind": "generation diagnostics; no application execution",
+  "implementation_commit": "62a1d028952561c4c1dd7d0c51d91c9d060f571f",
+  "pipeline_commit": "0876bf8c10660f474509d73af8d335d5798709d1",
+  "attempts": {
+    "baseline": {
+      "parent_commit": "5d752da1bf88c235b29c1c2cca11c79d8c50ed13",
+      "request_sha256": "9c81727347c237d234010c31560192dfe302cf06219e4920e3544527fefd7834",
+      "profile_sha256": "fe3465418aca1eadaca8477068b08705fd82e3fb071822504bcdcabd695e5e92",
+      "generation_cap_seconds": 300,
+      "manifest_emitted": false
+    },
+    "sealed-prototype": {
+      "parent_commit": "e335714c86e2f36730e91cbe0a416f2d1b22447d",
+      "request_sha256": "2e4695a40dcb5b7f879a0e0ce1a927e3538bef69ccb3cdcf3614f59009def056",
+      "profile_sha256": "23f05ee9765d08e05819fb4f2b4e8d61386208388de27f57af70372eaee91354",
+      "generation_cap_seconds": 300,
+      "manifest_emitted": false
+    },
+    "final": {
+      "parent_commit": "62a1d028952561c4c1dd7d0c51d91c9d060f571f",
+      "pipeline_commit": "0876bf8c10660f474509d73af8d335d5798709d1",
+      "request_sha256": "ef5abd8bc7c6216ca8bbbfc4f8e9ac56d9ef27a7d54b251a4a97d4f2ba990614",
+      "generation_cap_seconds": 300,
+      "outer_exit_code": 124,
+      "manifest_emitted": false,
+      "cpu_affinity": [
+        4,
+        5,
+        10,
+        11
+      ],
+      "profile_requested": false,
+      "visual_outcome": "300 s cap reached \u00b7 exit 124\nNo final manifest"
+    }
+  },
+  "binary_identity": null,
+  "calibration_identity": null,
+  "binary_and_calibration_absence_reason": "None of the three bounded generation attempts emitted a manifest or built an application binary. No automatic estimate or calibration was attached.",
+  "correction": "The historical comparison 41640-call /0.054332033s entry is _Sequence.unchanged, not isolated post-seal identity checks. _SyntaxCheckpoint.unchanged totals16110calls/3.149613062s including initial validation.",
+  "validation": "validation/record.json",
+  "unapplied_source_option": {
+    "receipt": "evidence/advection-intent-diagnostic/report.json",
+    "scope": "Private six-declaration object-code comparison only; original source unchanged; no caller/full-build/application equivalence established"
+  }
+}

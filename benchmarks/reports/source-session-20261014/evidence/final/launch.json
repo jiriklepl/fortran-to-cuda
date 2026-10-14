@@ -1,0 +1,24 @@
+{
+  "command": [
+    "timeout",
+    "--kill-after=5",
+    "300",
+    "taskset",
+    "-c",
+    "4,5,10,11",
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "/tmp/application_path_final_probe.py"
+  ],
+  "working_directory": "/home/jirka/research/fortran-abomination",
+  "shell_resource_limits": {
+    "virtual_memory_kib": 3145728
+  },
+  "observed_cpu_affinity": [
+    4,
+    5,
+    10,
+    11
+  ],
+  "profile_requested": false,
+  "probe_sha256": "b526d5f44188602ae1e263997af331480b32862a41a1548241be542dcc41b4d9"
+}

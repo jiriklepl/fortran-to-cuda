@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "experimental": true,
+  "request_equal_fields": [
+    "source",
+    "source_inputs",
+    "capture_facts",
+    "entry",
+    "options",
+    "analysis_sources"
+  ],
+  "unprofiled_generation": {
+    "baseline": {
+      "cap_seconds": 300,
+      "exit_code": 124,
+      "manifest": false
+    },
+    "sealed": {
+      "cap_seconds": 300,
+      "exit_code": 124,
+      "manifest": false
+    }
+  },
+  "profile_limits_seconds": 180,
+  "global_authentication": {
+    "baseline": [
+      {
+        "file": "frontend/source_effects.py",
+        "line": 2009,
+        "function": "_require_original_global",
+        "primitive_calls": 188,
+        "calls": 188,
+        "self_seconds": 0.0046831320000000004,
+        "cumulative_seconds": 49.088484559
+      }
+    ],
+    "sealed": [
+      {
+        "file": "frontend/source_effects.py",
+        "line": 2009,
+        "function": "_require_original_global",
+        "primitive_calls": 130,
+        "calls": 130,
+        "self_seconds": 0.003236506,
+        "cumulative_seconds": 16.458792712
+      }
+    ]
+  },
+  "syntax_checks": {
+    "baseline": [
+      {
+        "file": "frontend/source_syntax.py",
+        "line": 214,
+        "function": "unchanged",
+        "primitive_calls": 61300,
+        "calls": 61300,
+        "self_seconds": 0.139135336,
+        "cumulative_seconds": 40.704157319000004
+      },
+      {
+        "file": "frontend/source_syntax.py",
+        "line": 74,
+        "function": "unchanged",
+        "primitive_calls": 6080,
+        "calls": 6080,
+        "self_seconds": 0.027776021,
+        "cumulative_seconds": 31.543753210000002
+      },
+      {
+        "file": "frontend/source_syntax.py",
+        "line": 56,
+        "function": "unchanged",
+        "primitive_calls": 42368,
+        "calls": 42368,
+        "self_seconds": 0.37375118700000004,
+        "cumulative_seconds": 26.533699364
+      },
+      {
+        "file": "frontend/source_syntax.py",
+        "line": 25,
+        "function": "unchanged",
+        "primitive_calls": 2664960,
+        "calls": 2664960,
+        "self_seconds": 2.442856014,
+        "cumulative_seconds": 3.824795228
+      }
+    ],
+    "sealed": [
+      {
+        "file": "frontend/source_syntax.py",
+        "line": 237,
+        "function": "unchanged",
+        "primitive_calls": 16110,
+        "calls": 16110,
+        "self_seconds": 0.025291549,
+        "cumulative_seconds": 3.1496130620000002
+      },
+      {
+        "file": "frontend/source_syntax.py",
+        "line": 74,
+        "function": "unchanged",
+        "primitive_calls": 95,
+        "calls": 95,
+        "self_seconds": 0.000443838,
+        "cumulative_seconds": 0.845956263
+      },
+      {
+        "file": "frontend/source_syntax.py",
+        "line": 56,
+        "function": "unchanged",
+        "primitive_calls": 662,
+        "calls": 662,
+        "self_seconds": 0.004153447,
+        "cumulative_seconds": 0.774682082
+      },
+      {
+        "file": "frontend/source_syntax.py",
+        "line": 25,
+        "function": "unchanged",
+        "primitive_calls": 41640,
+        "calls": 41640,
+        "self_seconds": 0.034868586,
+        "cumulative_seconds": 0.054332033
+      }
+    ]
+  },
+  "next_bottleneck": {
+    "file": "frontend/source_effects.py",
+    "line": 2013,
+    "function": "_require_original_global provenance loop",
+    "iterations": 6521060,
+    "cumulative_seconds": 14.674,
+    "original_global_checks": 130
+  },
+  "caveats": [
+    "Both attempts are incomplete; no numerical, build, application, placement or performance qualification.",
+    "Profiles include instrumentation overhead and concurrent CPU activity; no end-to-end speedup claim.",
+    "Prototype also includes committed owning-placement fix e335714 relative to baseline5d752da.",
+    "Snapshot predates later Comment-cloning and serialization-alias compatibility repairs."
+  ],
+  "decision": "Stop this prerequisite sequence and reassess complete source-session ownership; do not add more lowering capabilities or raise analysis budgets."
+}

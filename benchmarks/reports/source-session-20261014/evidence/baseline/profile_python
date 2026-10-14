@@ -1,0 +1,23 @@
+#!/home/jirka/research/fortran-abomination/.venv/bin/python
+import cProfile, faulthandler, json, pathlib, runpy, signal, sys, time
+out=pathlib.Path('/home/jirka/research/fortran-abomination/benchmarks/results/application-path-20261014/profile')
+out.mkdir(exist_ok=True)
+stack=(out/'stacks.log').open('w')
+faulthandler.dump_traceback_later(30,repeat=True,file=stack)
+p=cProfile.Profile();started=time.monotonic();finished=False
+def finish(signum=None,frame=None):
+ global finished
+ if finished:return
+ finished=True
+ p.disable();p.dump_stats(str(out/'profile.pstats'))
+ (out/'termination.json').write_text(json.dumps({'signal':signum,'seconds':time.monotonic()-started})+'\n')
+ faulthandler.cancel_dump_traceback_later()
+ if signum:sys.exit(128+signum)
+signal.signal(signal.SIGTERM,finish)
+signal.alarm(180)
+signal.signal(signal.SIGALRM,finish)
+assert sys.argv[1:3]==['-m','compiler']
+sys.argv=['compiler',*sys.argv[3:]]
+try:
+ p.enable();runpy.run_module('compiler',run_name='__main__')
+finally:finish()

@@ -1,0 +1,5 @@
+{
+  "status": "failed",
+  "seconds": 183.2993647250005,
+  "error": "Compiler did not return a JSON result; refresh the explicit compiler snapshot: "
+}

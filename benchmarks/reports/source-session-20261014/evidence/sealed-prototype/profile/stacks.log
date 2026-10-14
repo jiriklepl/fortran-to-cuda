@@ -1,0 +1,114 @@
+Timeout (0:00:30)!
+Thread 0x00007daec93fb400 (most recent call first):
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/common/splitline.py", line 148 in wrapper
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 1179 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 12745 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 503 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 12718 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/common/readfortran.py", line 403 in parse_line
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 466 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 706 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 658 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 767 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 13118 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 767 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 11374 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 767 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 11322 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 409 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 362 in __new__
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/frontend/lowering.py", line 1480 in _parse_file
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/frontend/source_inputs.py", line 92 in parse
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/frontend/source_effects.py", line 361 in __init__
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/scopes/source.py", line 96 in __init__
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/scopes/source.py", line 2806 in form_source_scopes
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/driver/cli.py", line 312 in main
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/__main__.py", line 4 in <module>
+  File "<frozen runpy>", line 88 in _run_code
+  File "<frozen runpy>", line 234 in run_module
+  File "/tmp/application_path_sealed_profile_python", line 22 in <module>
+Timeout (0:00:30)!
+Thread 0x00007daec93fb400 (most recent call first):
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/common/splitline.py", line ??? in wrapper
+  <invalid frame>
+Timeout (0:00:30)!
+Thread 0x00007daec93fb400 (most recent call first):
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 767 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 7187 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 767 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 658 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 767 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 13118 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 767 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 11374 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 767 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 11322 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 506 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 409 in match
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 481 in __new__
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/Fortran2003.py", line 362 in __new__
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/frontend/lowering.py", line 1480 in _parse_file
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/frontend/source_inputs.py", line 92 in parse
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/frontend/source_effects.py", line 361 in __init__
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/scopes/source.py", line 96 in __init__
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/scopes/source.py", line 2806 in form_source_scopes
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/driver/cli.py", line 312 in main
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/__main__.py", line 4 in <module>
+  File "<frozen runpy>", line 88 in _run_code
+  File "<frozen runpy>", line 234 in run_module
+  File "/tmp/application_path_sealed_profile_python", line 22 in <module>
+Timeout (0:00:30)!
+Thread 0x00007daec93fb400 (most recent call first):
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/frontend/source_effects.py", line 942 in _binding
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/frontend/source_effects.py", line 733 in _import_kinds
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/frontend/source_effects.py", line 396 in __init__
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/scopes/source.py", line 96 in __init__
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/scopes/source.py", line 2806 in form_source_scopes
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/driver/cli.py", line 312 in main
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/__main__.py", line 4 in <module>
+  File "<frozen runpy>", line 88 in _run_code
+  File "<frozen runpy>", line 234 in run_module
+  File "/tmp/application_path_sealed_profile_python", line 22 in <module>
+Timeout (0:00:30)!
+Thread 0x00007daec93fb400 (most recent call first):
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/frontend/sealed_syntax.py", line ??? in _getattribute
+  <invalid frame>
+Timeout (0:00:30)!
+Thread 0x00007daec93fb400 (most recent call first):
+  File "/usr/lib/python3.13/cProfile.py", line 59 in snapshot_stats
+  File "/usr/lib/python3.13/cProfile.py", line 56 in create_stats
+  File "/usr/lib/python3.13/cProfile.py", line 51 in dump_stats
+  File "/tmp/application_path_sealed_profile_python", line 12 in finish
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/frontend/sealed_syntax.py", line 66 in _getattribute
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 2032 in walk
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 2032 in walk
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 2032 in walk
+  File "/home/jirka/research/fortran-abomination/.venv/lib/python3.13/site-packages/fparser/two/utils.py", line 2032 in walk
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/scopes/participation.py", line 207 in _threadprivate
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/scopes/regions.py", line 930 in extract_region
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/scopes/region_dispatch.py", line 244 in prepare_sequence
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/scopes/region_dispatch.py", line 199 in prepare_sequence
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/scopes/region_dispatch.py", line 273 in prepare
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/scopes/source.py", line 2693 in run
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/scopes/source.py", line 2807 in form_source_scopes
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/driver/cli.py", line 312 in main
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/application-path-sealed-20261014/compiler/compiler/__main__.py", line 4 in <module>
+  File "<frozen runpy>", line 88 in _run_code
+  File "<frozen runpy>", line 234 in run_module
+  File "/tmp/application_path_sealed_profile_python", line 22 in <module>

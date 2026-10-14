@@ -1,0 +1,25 @@
+{
+  "checked_at_utc": "2026-10-14T20:01:17.703914+00:00",
+  "result": "...........................................................              [100%]\n59 passed in 311.78s (0:05:11)",
+  "source_inventory_sha256": "39bcc394cfece788daa9ef405bc054b2e29a58c751fe9ae3aec2655db3d03fc7",
+  "log_sha256": "935771432ccfa694f58190a1eacb13d04279c41e0102e0e5fee166ac8056d6c1",
+  "inventory_count": 537,
+  "changed": [
+    {
+      "path": "compiler/.pytest_cache/v/cache/nodeids",
+      "expected": "1f567c61587c9a751dbc040f312fe1fc8b35405b517914f7766e6ca54eda88d7",
+      "observed": "98bf14b80906d311d97db140d54722f0b4296741b511b12866c78fa251b92766"
+    }
+  ],
+  "added": [],
+  "critical_hashes": {
+    "compiler/frontend/sealed_syntax.py": "37f42a4bc945a62335a827e5e39edc3c961fbc9aad05696deb6115b5de249bee",
+    "compiler/frontend/source_syntax.py": "863c4c248cd57bd5b72054f2f92a8916413e0177ef74b7b7b91d1a87cba563b0",
+    "compiler/scopes/combined_team.py": "51f49ed469512238596bc0c575b1cdce0cc4272b0e6f773a44f4240e12e3895b",
+    "compiler/scopes/joined_team.py": "8f35cc8b216ceb12945dbdba3171aa99d08a90cc93adef60904d1f6983b367ce",
+    "compiler/scopes/lexical.py": "79bef5de04e7d27248aa5c9349beeac7e11967c4b199081f7434eff440b23cd1",
+    "compiler/scopes/region_dispatch.py": "12546508344869b32dd238f0347fd80f25223ef9a9a48d3b24332a66c46d0469",
+    "compiler/scopes/segments.py": "c0880c5b15790fc1cb615d87b0f3ba43e50e3bf63b39e1a1c8433d4b867b556e",
+    "compiler/scopes/source.py": "e9134a54fe826d68cdb260282a6fc1da7217557397b50b25c137d6b87b8d5d9d"
+  }
+}

@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="802.509375pt" height="465.472646pt" viewBox="0 0 802.509375 465.472646" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 465.472646
+L 802.509375 465.472646
+L 802.509375 0
+L 0 0
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 10.3248 139.864094
+L 246.2472 139.864094
+Q 255.6216 139.864094 255.6216 134.608382
+L 255.6216 74.60567
+Q 255.6216 69.349958 246.2472 69.349958
+L 10.3248 69.349958
+Q 0.9504 69.349958 0.9504 74.60567
+L 0.9504 134.608382
+Q 0.9504 139.864094 10.3248 139.864094
+z
+" clip-path="url(#pe135658066)" style="fill: #f7d6cf; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 275.9328 139.864094
+L 511.8552 139.864094
+Q 521.2296 139.864094 521.2296 134.608382
+L 521.2296 74.60567
+Q 521.2296 69.349958 511.8552 69.349958
+L 275.9328 69.349958
+Q 266.5584 69.349958 266.5584 74.60567
+L 266.5584 134.608382
+Q 266.5584 139.864094 275.9328 139.864094
+z
+" clip-path="url(#pe135658066)" style="fill: #f7d6cf; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 541.5408 139.864094
+L 777.4632 139.864094
+Q 786.8376 139.864094 786.8376 134.608382
+L 786.8376 74.60567
+Q 786.8376 69.349958 777.4632 69.349958
+L 541.5408 69.349958
+Q 532.1664 69.349958 532.1664 74.60567
+L 532.1664 134.608382
+Q 532.1664 139.864094 541.5408 139.864094
+z
+" clip-path="url(#pe135658066)" style="fill: #f7d6cf; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 10.3248 301.915214
+L 375.1452 301.915214
+Q 384.5196 301.915214 384.5196 296.659502
+L 384.5196 219.13775
+Q 384.5196 213.882038 375.1452 213.882038
+L 10.3248 213.882038
+Q 0.9504 213.882038 0.9504 219.13775
+L 0.9504 296.659502
+Q 0.9504 301.915214 10.3248 301.915214
+z
+" clip-path="url(#pe135658066)" style="fill: #fff0c4; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 412.6428 301.915214
+L 777.4632 301.915214
+Q 786.8376 301.915214 786.8376 296.659502
+L 786.8376 219.13775
+Q 786.8376 213.882038 777.4632 213.882038
+L 412.6428 213.882038
+Q 403.2684 213.882038 403.2684 219.13775
+L 403.2684 296.659502
+Q 403.2684 301.915214 412.6428 301.915214
+z
+" clip-path="url(#pe135658066)" style="fill: #fff0c4; stroke: #a5afbb; stroke-width: 0.8; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 23px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="24.676406" transform="rotate(-0 7.2 24.676406)">Bounded Convection generation: no application qualification</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 10.7px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="46.575206" transform="rotate(-0 7.2 46.575206)">300-second generation cap unchanged · separate 180-second profiles of baseline / prototype · no application or GPU execution</text>
+   </g>
+   <g id="text_3">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(73.658969 93.307964)">BASELINE  5d752da</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(49.794984 107.642339)">300 s cap reached · exit 124</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(81.378734 124.107964)">No final manifest</text>
+   </g>
+   <g id="text_4">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(304.826656 92.242339)">PROTOTYPE  e335714 + overlay</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(315.402984 107.642339)">300 s cap reached · exit 124</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(346.986734 124.107964)">No final manifest</text>
+   </g>
+   <g id="text_5">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(615.919656 93.307964)">FINAL  62a1d02</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(581.010984 107.642339)">300 s cap reached · exit 124</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(612.594734 124.107964)">No final manifest</text>
+   </g>
+   <g id="text_6">
+    <text style="font-weight: 700; font-size: 16px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="173.588246" transform="rotate(-0 7.2 173.588246)">What the separate incomplete profiles show</text>
+   </g>
+   <g id="text_7">
+    <text style="font-size: 10.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="191.107286" transform="rotate(-0 7.2 191.107286)">Cumulative profiler times overlap and include instrumentation. Attempts reached different work; CPU contention was present.</text>
+   </g>
+   <g id="text_8">
+    <text style="font-size: 11.5px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(124.72957 246.08597)">Baseline authentication</text>
+    <text style="font-size: 11.5px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(80.17875 261.071907)">188 global checks · 49.09 s cumulative</text>
+    <text style="font-size: 11.5px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(55.451055 277.171907)">Repeated syntax-tree comparison is prominent.</text>
+   </g>
+   <g id="text_9">
+    <text style="font-size: 11.5px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(523.686516 244.971907)">Prototype authentication</text>
+    <text style="font-size: 11.5px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(482.49675 261.071907)">130 global checks · 16.46 s cumulative</text>
+    <text style="font-size: 11.5px; font-family: 'DejaVu Sans'; fill: #213047" transform="translate(486.666398 277.171907)">6,521,060 provenance visits · 14.67 s</text>
+   </g>
+   <g id="text_10">
+    <text style="font-weight: 700; font-size: 13px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="326.879846" transform="rotate(-0 7.2 326.879846)">These are diagnostic hotspots, not a before/after speedup benchmark.</text>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 11.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="350.968526" transform="rotate(-0 7.2 350.968526)">The profile supports removing a duplicate provenance scan after immutable-session verification.</text>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="372.867326" transform="rotate(-0 7.2 372.867326)">It does not establish cheaper complete planning, admitted resident execution, transfer savings, or either wall-time target.</text>
+   </g>
+   <g id="text_13">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="407.905406" transform="rotate(-0 7.2 407.905406)">Next decision: reassess the complete blocker map before adding capabilities; do not raise analysis budgets.</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="431.994086" transform="rotate(-0 7.2 431.994086)">Prototype predates Comment-cloning / serialization-alias repairs and includes the owning-placement change after baseline.</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #213047" x="7.2" y="452.578958" transform="rotate(-0 7.2 452.578958)">Raw pstats, stack samples, source hashes, capture facts, request options, and corrected profile attribution are frozen beside this chart.</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pe135658066">
+   <rect x="7.2" y="20.296646" width="781.2" height="437.976"/>
+  </clipPath>
+ </defs>
+</svg>

@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "implementation_commit": "62a1d028952561c4c1dd7d0c51d91c9d060f571f",
+  "compatible_pipeline_commit": "0876bf8c10660f474509d73af8d335d5798709d1",
+  "final_revision_host": [
+    {
+      "log": "sealed-syntax-final-host-tests.log",
+      "passed": 163,
+      "deselected": 11,
+      "seconds": 50.92
+    },
+    {
+      "log": "sealed-syntax-completed-host-tests.log",
+      "passed": 80,
+      "seconds": 3.14
+    }
+  ],
+  "earlier_revision_cuda": {
+    "log": "sealed-owner-placement-isolated-cuda-tests.log",
+    "passed": 59,
+    "seconds": 311.78,
+    "source_inventory": "sealed-owner-placement-isolated-cuda-source.json",
+    "verification": "sealed-owner-placement-isolated-cuda-verification.json",
+    "scope": "Earlier source revision includes serialization-state alias fix, but predates final mutable-copy/restorer and redundant-provenance-scan changes; distinct from measured four-file prototype; not final-revision CUDA validation",
+    "verification_caveat": "Only recorded changed file is pytest nodeids cache; recorded implementation inventory stable across this CUDA run."
+  },
+  "sha256": {
+    "sealed-syntax-final-host-tests.log": "de85a3177248a3ec7dc96c838d643978497041bc78cdd53ca7a64d70a4b4201e",
+    "sealed-syntax-completed-host-tests.log": "81807e692b93b02b09c329b7c3950eea2cfa9b38fc0de020a6f9d8d24be49313",
+    "sealed-owner-placement-isolated-cuda-source.json": "39bcc394cfece788daa9ef405bc054b2e29a58c751fe9ae3aec2655db3d03fc7",
+    "sealed-owner-placement-isolated-cuda-verification.json": "22be78f816e8373213a505486ad3d4e90332bc483f8b110aa72dc7e208b73ccd",
+    "sealed-owner-placement-isolated-cuda-tests.log": "935771432ccfa694f58190a1eacb13d04279c41e0102e0e5fee166ac8056d6c1"
+  }
+}

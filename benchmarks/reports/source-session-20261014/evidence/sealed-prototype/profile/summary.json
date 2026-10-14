@@ -1,0 +1,5444 @@
+{
+  "scope": "One180s cProfile-bounded incomplete source-generation invocation; profiler overhead and concurrent CPU activity included; no application execution",
+  "total_calls": 337417615,
+  "primitive_calls": 310882627,
+  "total_profiled_seconds": 178.08193524599997,
+  "compiler_functions": [
+    {
+      "file": "__main__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.4011e-05,
+      "cumulative_seconds": 179.99937341
+    },
+    {
+      "file": "driver/cli.py",
+      "line": 240,
+      "function": "main",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.00043568100000000005,
+      "cumulative_seconds": 179.809346551
+    },
+    {
+      "file": "scopes/source.py",
+      "line": 2799,
+      "function": "form_source_scopes",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.626e-05,
+      "cumulative_seconds": 179.692745051
+    },
+    {
+      "file": "scopes/source.py",
+      "line": 86,
+      "function": "__init__",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.182985016,
+      "cumulative_seconds": 159.902879261
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 321,
+      "function": "__init__",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.46083214800000005,
+      "cumulative_seconds": 138.411563371
+    },
+    {
+      "file": "frontend/source_inputs.py",
+      "line": 91,
+      "function": "parse",
+      "primitive_calls": 69,
+      "calls": 69,
+      "self_seconds": 0.139154323,
+      "cumulative_seconds": 110.465712581
+    },
+    {
+      "file": "frontend/lowering.py",
+      "line": 1472,
+      "function": "_parse_file",
+      "primitive_calls": 69,
+      "calls": 69,
+      "self_seconds": 0.003499397,
+      "cumulative_seconds": 109.19390521300001
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 87,
+      "function": "__init__",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 0.0018567660000000001,
+      "cumulative_seconds": 24.863206219000002
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 136,
+      "function": "_capture_node",
+      "primitive_calls": 2460,
+      "calls": 761178,
+      "self_seconds": 8.384459648,
+      "cumulative_seconds": 24.861348573
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 109,
+      "function": "_capture_value",
+      "primitive_calls": 190,
+      "calls": 3468540,
+      "self_seconds": 7.0908488190000005,
+      "cumulative_seconds": 24.855106300000003
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 168,
+      "function": "seal",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.9701000000000004e-05,
+      "cumulative_seconds": 21.255725627
+    },
+    {
+      "file": "scopes/source.py",
+      "line": 2673,
+      "function": "run",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.9501000000000006e-05,
+      "cumulative_seconds": 19.789849070000002
+    },
+    {
+      "file": "scopes/region_dispatch.py",
+      "line": 140,
+      "function": "prepare",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.000162124,
+      "cumulative_seconds": 19.776405341
+    },
+    {
+      "file": "scopes/region_dispatch.py",
+      "line": 181,
+      "function": "prepare_sequence",
+      "primitive_calls": 1,
+      "calls": 2,
+      "self_seconds": 0.000258301,
+      "cumulative_seconds": 19.77275363
+    },
+    {
+      "file": "scopes/region_dispatch.py",
+      "line": 389,
+      "function": "_outline",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.000116173,
+      "cumulative_seconds": 18.123869466000002
+    },
+    {
+      "file": "scopes/region_dispatch.py",
+      "line": 42,
+      "function": "native_environment_required",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.002405182,
+      "cumulative_seconds": 16.53201352
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 2034,
+      "function": "_require_original",
+      "primitive_calls": 130,
+      "calls": 130,
+      "self_seconds": 0.000852257,
+      "cumulative_seconds": 16.505269781000003
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 2009,
+      "function": "_require_original_global",
+      "primitive_calls": 130,
+      "calls": 130,
+      "self_seconds": 0.003236506,
+      "cumulative_seconds": 16.458792712
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 2013,
+      "function": "<genexpr>",
+      "primitive_calls": 6521060,
+      "calls": 6521060,
+      "self_seconds": 4.490093096,
+      "cumulative_seconds": 14.674301701000001
+    },
+    {
+      "file": "frontend/sealed_syntax.py",
+      "line": 66,
+      "function": "_getattribute",
+      "primitive_calls": 22834367,
+      "calls": 23676817,
+      "self_seconds": 9.954483748000001,
+      "cumulative_seconds": 10.32704567
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 706,
+      "function": "_import_kinds",
+      "primitive_calls": 2019,
+      "calls": 134792,
+      "self_seconds": 1.162412572,
+      "cumulative_seconds": 7.49254535
+    },
+    {
+      "file": "frontend/sealed_syntax.py",
+      "line": 109,
+      "function": "seal",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.0006419100000000001,
+      "cumulative_seconds": 6.3658148070000005
+    },
+    {
+      "file": "frontend/sealed_syntax.py",
+      "line": 123,
+      "function": "freeze_node",
+      "primitive_calls": 1230,
+      "calls": 380589,
+      "self_seconds": 2.5292660970000003,
+      "cumulative_seconds": 6.365172897000001
+    },
+    {
+      "file": "frontend/sealed_syntax.py",
+      "line": 113,
+      "function": "freeze_value",
+      "primitive_calls": 190,
+      "calls": 1746458,
+      "self_seconds": 2.5060698340000003,
+      "cumulative_seconds": 6.362884074
+    },
+    {
+      "file": "frontend/sealed_syntax.py",
+      "line": 118,
+      "function": "<genexpr>",
+      "primitive_calls": 460,
+      "calls": 149503,
+      "self_seconds": 0.053662941000000006,
+      "cumulative_seconds": 6.362281978
+    },
+    {
+      "file": "frontend/sealed_syntax.py",
+      "line": 120,
+      "function": "<genexpr>",
+      "primitive_calls": 396921,
+      "calls": 991056,
+      "self_seconds": 0.24098933800000003,
+      "cumulative_seconds": 4.727040102
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 913,
+      "function": "_binding",
+      "primitive_calls": 233441,
+      "calls": 684546,
+      "self_seconds": 1.9590277690000002,
+      "cumulative_seconds": 4.0162706550000005
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 155,
+      "function": "<genexpr>",
+      "primitive_calls": 1345788,
+      "calls": 1345788,
+      "self_seconds": 2.288928834,
+      "cumulative_seconds": 3.3170279760000003
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 237,
+      "function": "unchanged",
+      "primitive_calls": 16110,
+      "calls": 16110,
+      "self_seconds": 0.025291549,
+      "cumulative_seconds": 3.1496130620000002
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 178,
+      "function": "<genexpr>",
+      "primitive_calls": 1231,
+      "calls": 1231,
+      "self_seconds": 0.001142875,
+      "cumulative_seconds": 3.11444804
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 187,
+      "function": "_layout",
+      "primitive_calls": 95,
+      "calls": 95,
+      "self_seconds": 0.9751853770000001,
+      "cumulative_seconds": 2.1347953850000003
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 701,
+      "function": "extract_region",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 0.002536177,
+      "cumulative_seconds": 1.614663562
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 301,
+      "function": "_exception_observers",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.0861383,
+      "cumulative_seconds": 1.591733893
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 888,
+      "function": "_exported",
+      "primitive_calls": 1271070,
+      "calls": 1271070,
+      "self_seconds": 0.8897034800000001,
+      "cumulative_seconds": 1.2730636830000002
+    },
+    {
+      "file": "frontend/source_inputs.py",
+      "line": 105,
+      "function": "verify",
+      "primitive_calls": 134,
+      "calls": 134,
+      "self_seconds": 0.07072278,
+      "cumulative_seconds": 1.241506978
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 256,
+      "function": "register_associates",
+      "primitive_calls": 1135,
+      "calls": 1135,
+      "self_seconds": 0.005686674,
+      "cumulative_seconds": 1.205391802
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 263,
+      "function": "visit",
+      "primitive_calls": 1126,
+      "calls": 299277,
+      "self_seconds": 0.719973155,
+      "cumulative_seconds": 1.199342473
+    },
+    {
+      "file": "frontend/lowering.py",
+      "line": 197,
+      "function": "integer",
+      "primitive_calls": 138524,
+      "calls": 429472,
+      "self_seconds": 0.812660173,
+      "cumulative_seconds": 1.151850332
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 2343,
+      "function": "joined_completion",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 2.9002e-05,
+      "cumulative_seconds": 1.0374765030000002
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 473,
+      "function": "prove_joined_completion",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 9.1984e-05,
+      "cumulative_seconds": 1.0374471710000002
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 58,
+      "function": "_joined_completion_facts",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 0.000548938,
+      "cumulative_seconds": 1.037187804
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 2072,
+      "function": "_selected_source",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 0.0011659090000000001,
+      "cumulative_seconds": 1.027377253
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 2039,
+      "function": "structure",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 0.00084723,
+      "cumulative_seconds": 1.0188231730000001
+    },
+    {
+      "file": "frontend/source_functions.py",
+      "line": 62,
+      "function": "register_source_function_authority",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.003698616,
+      "cumulative_seconds": 0.906853609
+    },
+    {
+      "file": "frontend/source_functions.py",
+      "line": 50,
+      "function": "_resolution",
+      "primitive_calls": 1239,
+      "calls": 1239,
+      "self_seconds": 0.7755400130000001,
+      "cumulative_seconds": 0.901352562
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 74,
+      "function": "unchanged",
+      "primitive_calls": 95,
+      "calls": 95,
+      "self_seconds": 0.000443838,
+      "cumulative_seconds": 0.845956263
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 899,
+      "function": "use_sources",
+      "primitive_calls": 437426,
+      "calls": 437426,
+      "self_seconds": 0.577766462,
+      "cumulative_seconds": 0.820562757
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 75,
+      "function": "<genexpr>",
+      "primitive_calls": 757,
+      "calls": 757,
+      "self_seconds": 0.0009284600000000001,
+      "cumulative_seconds": 0.775610542
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 56,
+      "function": "unchanged",
+      "primitive_calls": 662,
+      "calls": 662,
+      "self_seconds": 0.004153447,
+      "cumulative_seconds": 0.774682082
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 104,
+      "function": "_tick",
+      "primitive_calls": 4227448,
+      "calls": 4227448,
+      "self_seconds": 0.627823663,
+      "cumulative_seconds": 0.627823663
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 712,
+      "function": "exports",
+      "primitive_calls": 37315,
+      "calls": 39785,
+      "self_seconds": 0.203750714,
+      "cumulative_seconds": 0.5749606150000001
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 38,
+      "function": "_kind",
+      "primitive_calls": 2631774,
+      "calls": 2631774,
+      "self_seconds": 0.505555726,
+      "cumulative_seconds": 0.505555726
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 2056,
+      "function": "_structure_candidate",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.001460116,
+      "cumulative_seconds": 0.40635066400000003
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 59,
+      "function": "<genexpr>",
+      "primitive_calls": 435244,
+      "calls": 435244,
+      "self_seconds": 0.23736373000000002,
+      "cumulative_seconds": 0.406219329
+    },
+    {
+      "file": "scopes/participation.py",
+      "line": 203,
+      "function": "_threadprivate",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 0.021107754000000003,
+      "cumulative_seconds": 0.402646484
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 511,
+      "function": "_routine_signature",
+      "primitive_calls": 4326,
+      "calls": 4326,
+      "self_seconds": 0.05048238,
+      "cumulative_seconds": 0.39796505400000004
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 213,
+      "function": "<genexpr>",
+      "primitive_calls": 1797,
+      "calls": 1797,
+      "self_seconds": 0.092489288,
+      "cumulative_seconds": 0.37464998800000004
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 527,
+      "function": "_summary_authority",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 0.005974458,
+      "cumulative_seconds": 0.358898812
+    },
+    {
+      "file": "frontend/summary_cache.py",
+      "line": 219,
+      "function": "lookup",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.000337139,
+      "cumulative_seconds": 0.30833091900000004
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 429,
+      "function": "_register_routine",
+      "primitive_calls": 674,
+      "calls": 789,
+      "self_seconds": 0.012210432,
+      "cumulative_seconds": 0.296679647
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 28,
+      "function": "_children",
+      "primitive_calls": 303403,
+      "calls": 303403,
+      "self_seconds": 0.143520477,
+      "cumulative_seconds": 0.292660806
+    },
+    {
+      "file": "frontend/source_objects.py",
+      "line": 62,
+      "function": "register_source_object_authority",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.011102817000000001,
+      "cumulative_seconds": 0.267999969
+    },
+    {
+      "file": "frontend/summary_cache.py",
+      "line": 66,
+      "function": "_canonical",
+      "primitive_calls": 3,
+      "calls": 3,
+      "self_seconds": 0.040828118000000004,
+      "cumulative_seconds": 0.257626697
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 747,
+      "function": "_specification",
+      "primitive_calls": 1230,
+      "calls": 1230,
+      "self_seconds": 0.09108954400000001,
+      "cumulative_seconds": 0.24715051200000002
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 266,
+      "function": "public",
+      "primitive_calls": 35230,
+      "calls": 35230,
+      "self_seconds": 0.070553631,
+      "cumulative_seconds": 0.19485918900000002
+    },
+    {
+      "file": "driver/cli.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.5092e-05,
+      "cumulative_seconds": 0.189425174
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 64,
+      "function": "<genexpr>",
+      "primitive_calls": 2932,
+      "calls": 2932,
+      "self_seconds": 0.005014293,
+      "cumulative_seconds": 0.18278312800000002
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 34,
+      "function": "_canonical",
+      "primitive_calls": 5064,
+      "calls": 5064,
+      "self_seconds": 0.006770707000000001,
+      "cumulative_seconds": 0.177088831
+    },
+    {
+      "file": "frontend/source_inputs.py",
+      "line": 123,
+      "function": "identity",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 8.372100000000001e-05,
+      "cumulative_seconds": 0.162376276
+    },
+    {
+      "file": "frontend/summary_cache.py",
+      "line": 199,
+      "function": "_identity",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.0014061750000000002,
+      "cumulative_seconds": 0.158760955
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 218,
+      "function": "<genexpr>",
+      "primitive_calls": 1135,
+      "calls": 1135,
+      "self_seconds": 0.054072794,
+      "cumulative_seconds": 0.150287004
+    },
+    {
+      "file": "frontend/source_inputs.py",
+      "line": 25,
+      "function": "__init__",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.004203841000000001,
+      "cumulative_seconds": 0.139230823
+    },
+    {
+      "file": "frontend/sealed_syntax.py",
+      "line": 89,
+      "function": "_sealed_type",
+      "primitive_calls": 434582,
+      "calls": 434582,
+      "self_seconds": 0.134837651,
+      "cumulative_seconds": 0.134837651
+    },
+    {
+      "file": "frontend/source_objects.py",
+      "line": 58,
+      "function": "_specification",
+      "primitive_calls": 1230,
+      "calls": 1230,
+      "self_seconds": 0.0035301280000000004,
+      "cumulative_seconds": 0.12219139700000001
+    },
+    {
+      "file": "frontend/source_objects.py",
+      "line": 44,
+      "function": "_kind_state",
+      "primitive_calls": 2469,
+      "calls": 2469,
+      "self_seconds": 0.05127261,
+      "cumulative_seconds": 0.118730504
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 50,
+      "function": "_attach_execution_directives",
+      "primitive_calls": 1135,
+      "calls": 1135,
+      "self_seconds": 0.010199090000000001,
+      "cumulative_seconds": 0.10951708700000001
+    },
+    {
+      "file": "frontend/sealed_syntax.py",
+      "line": 105,
+      "function": "sealed",
+      "primitive_calls": 434582,
+      "calls": 434582,
+      "self_seconds": 0.10110540000000001,
+      "cumulative_seconds": 0.10110540000000001
+    },
+    {
+      "file": "scopes/source.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.000158615,
+      "cumulative_seconds": 0.10071065600000001
+    },
+    {
+      "file": "analysis/__init__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.855e-05,
+      "cumulative_seconds": 0.09532270400000001
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 945,
+      "function": "_candidates",
+      "primitive_calls": 2547,
+      "calls": 11011,
+      "self_seconds": 0.046034312,
+      "cumulative_seconds": 0.086838253
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 351,
+      "function": "build_structure",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.0003858,
+      "cumulative_seconds": 0.085288714
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 144,
+      "function": "_build_structure",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.000178636,
+      "cumulative_seconds": 0.08490291400000001
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 446,
+      "function": "_register_function",
+      "primitive_calls": 344,
+      "calls": 346,
+      "self_seconds": 0.006509923000000001,
+      "cumulative_seconds": 0.078590641
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 211,
+      "function": "<genexpr>",
+      "primitive_calls": 379927,
+      "calls": 379927,
+      "self_seconds": 0.077207248,
+      "cumulative_seconds": 0.077207248
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 206,
+      "function": "<genexpr>",
+      "primitive_calls": 348568,
+      "calls": 348568,
+      "self_seconds": 0.0753158,
+      "cumulative_seconds": 0.0753158
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 178,
+      "function": "sequence",
+      "primitive_calls": 1,
+      "calls": 62,
+      "self_seconds": 0.0022757090000000003,
+      "cumulative_seconds": 0.072112311
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 59,
+      "function": "detach_prefixes",
+      "primitive_calls": 1126,
+      "calls": 40337,
+      "self_seconds": 0.049281434000000006,
+      "cumulative_seconds": 0.07198523200000001
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 24,
+      "function": "_kind",
+      "primitive_calls": 310816,
+      "calls": 310816,
+      "self_seconds": 0.07110179400000001,
+      "cumulative_seconds": 0.07110179400000001
+    },
+    {
+      "file": "frontend/summary_cache.py",
+      "line": 29,
+      "function": "_plain_json",
+      "primitive_calls": 5,
+      "calls": 101397,
+      "self_seconds": 0.06148120000000001,
+      "cumulative_seconds": 0.070259284
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 76,
+      "function": "<genexpr>",
+      "primitive_calls": 41735,
+      "calls": 41735,
+      "self_seconds": 0.011722380000000001,
+      "cumulative_seconds": 0.066054413
+    },
+    {
+      "file": "analysis/dependence.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.3302e-05,
+      "cumulative_seconds": 0.056672683
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 25,
+      "function": "unchanged",
+      "primitive_calls": 41640,
+      "calls": 41640,
+      "self_seconds": 0.034868586,
+      "cumulative_seconds": 0.054332033
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 46,
+      "function": "_part",
+      "primitive_calls": 8160,
+      "calls": 8160,
+      "self_seconds": 0.02094512,
+      "cumulative_seconds": 0.05394837500000001
+    },
+    {
+      "file": "scopes/participation.py",
+      "line": 38,
+      "function": "_directive",
+      "primitive_calls": 124412,
+      "calls": 124412,
+      "self_seconds": 0.024769781,
+      "cumulative_seconds": 0.051022211000000005
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 155,
+      "function": "add",
+      "primitive_calls": 253,
+      "calls": 253,
+      "self_seconds": 0.001618084,
+      "cumulative_seconds": 0.047888626000000004
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 528,
+      "function": "_upward_reads",
+      "primitive_calls": 6,
+      "calls": 137,
+      "self_seconds": 0.00191438,
+      "cumulative_seconds": 0.046507123000000004
+    },
+    {
+      "file": "frontend/summary_cache.py",
+      "line": 87,
+      "function": "_decode",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 3.1360000000000005e-05,
+      "cumulative_seconds": 0.045947413
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 212,
+      "function": "<genexpr>",
+      "primitive_calls": 379927,
+      "calls": 379927,
+      "self_seconds": 0.045886564000000005,
+      "cumulative_seconds": 0.045886564000000005
+    },
+    {
+      "file": "frontend/lowering.py",
+      "line": 162,
+      "function": "__init__",
+      "primitive_calls": 1230,
+      "calls": 1230,
+      "self_seconds": 0.020807621000000002,
+      "cumulative_seconds": 0.045868935
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 2022,
+      "function": "_require_original_routine",
+      "primitive_calls": 130,
+      "calls": 130,
+      "self_seconds": 0.001129383,
+      "cumulative_seconds": 0.045624812
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 478,
+      "function": "_register_internal",
+      "primitive_calls": 961,
+      "calls": 1135,
+      "self_seconds": 0.001296148,
+      "cumulative_seconds": 0.04510732
+    },
+    {
+      "file": "frontend/__init__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.9541e-05,
+      "cumulative_seconds": 0.045062245
+    },
+    {
+      "file": "frontend/source_functions.py",
+      "line": 46,
+      "function": "_hash",
+      "primitive_calls": 1239,
+      "calls": 1239,
+      "self_seconds": 0.002464195,
+      "cumulative_seconds": 0.044819914
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 2017,
+      "function": "<genexpr>",
+      "primitive_calls": 12480,
+      "calls": 12480,
+      "self_seconds": 0.016047591,
+      "cumulative_seconds": 0.044126198000000005
+    },
+    {
+      "file": "frontend/source_objects.py",
+      "line": 48,
+      "function": "<genexpr>",
+      "primitive_calls": 138590,
+      "calls": 138590,
+      "self_seconds": 0.041438458000000004,
+      "cumulative_seconds": 0.043193883
+    },
+    {
+      "file": "ir/__init__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.974e-05,
+      "cumulative_seconds": 0.035644077
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 51,
+      "function": "_span",
+      "primitive_calls": 283,
+      "calls": 283,
+      "self_seconds": 0.002166129,
+      "cumulative_seconds": 0.032089194
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 178,
+      "function": "_scalar_reads",
+      "primitive_calls": 443,
+      "calls": 443,
+      "self_seconds": 0.00095405,
+      "cumulative_seconds": 0.030199493
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.9502e-05,
+      "cumulative_seconds": 0.029356462000000003
+    },
+    {
+      "file": "scopes/ordinary_consumption.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.0881000000000004e-05,
+      "cumulative_seconds": 0.027585691000000002
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1071,
+      "function": "transformed",
+      "primitive_calls": 3,
+      "calls": 213,
+      "self_seconds": 0.000876558,
+      "cumulative_seconds": 0.025546143
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1073,
+      "function": "<genexpr>",
+      "primitive_calls": 12,
+      "calls": 198,
+      "self_seconds": 0.00014134800000000002,
+      "cumulative_seconds": 0.02542642
+    },
+    {
+      "file": "emission/cuda/scoped.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.000252587,
+      "cumulative_seconds": 0.025126888
+    },
+    {
+      "file": "frontend/source_objects.py",
+      "line": 33,
+      "function": "_canonical",
+      "primitive_calls": 1951,
+      "calls": 1951,
+      "self_seconds": 0.00212939,
+      "cumulative_seconds": 0.024443616
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 9.5933e-05,
+      "cumulative_seconds": 0.023180271000000002
+    },
+    {
+      "file": "emission/cuda/native_preflight.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 6.2181e-05,
+      "cumulative_seconds": 0.022681717
+    },
+    {
+      "file": "scopes/segments.py",
+      "line": 170,
+      "function": "directive",
+      "primitive_calls": 1728,
+      "calls": 1728,
+      "self_seconds": 0.0015120250000000002,
+      "cumulative_seconds": 0.022620360000000003
+    },
+    {
+      "file": "scopes/region_dispatch.py",
+      "line": 176,
+      "function": "context",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 3.2791000000000005e-05,
+      "cumulative_seconds": 0.022326598000000003
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 42,
+      "function": "_children",
+      "primitive_calls": 24052,
+      "calls": 24052,
+      "self_seconds": 0.009564645,
+      "cumulative_seconds": 0.021938433
+    },
+    {
+      "file": "frontend/source_objects.py",
+      "line": 37,
+      "function": "_resolution",
+      "primitive_calls": 1230,
+      "calls": 1230,
+      "self_seconds": 0.0034508390000000002,
+      "cumulative_seconds": 0.021415079
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 314,
+      "function": "references",
+      "primitive_calls": 1087,
+      "calls": 2907,
+      "self_seconds": 0.002690553,
+      "cumulative_seconds": 0.02129446
+    },
+    {
+      "file": "scopes/region_context.py",
+      "line": 22,
+      "function": "original_region_context",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 9.1303e-05,
+      "cumulative_seconds": 0.021193179000000003
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 138,
+      "function": "_typename",
+      "primitive_calls": 7536,
+      "calls": 7536,
+      "self_seconds": 0.005457067,
+      "cumulative_seconds": 0.021155488
+    },
+    {
+      "file": "scopes/region_context.py",
+      "line": 82,
+      "function": "prepared_span",
+      "primitive_calls": 338,
+      "calls": 338,
+      "self_seconds": 0.000270341,
+      "cumulative_seconds": 0.020743537000000003
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 47,
+      "function": "<genexpr>",
+      "primitive_calls": 15111,
+      "calls": 15111,
+      "self_seconds": 0.013545908,
+      "cumulative_seconds": 0.020670117000000002
+    },
+    {
+      "file": "frontend/reached_windows.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.00013056300000000002,
+      "cumulative_seconds": 0.020432002
+    },
+    {
+      "file": "emission/cuda/structured.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.2351e-05,
+      "cumulative_seconds": 0.020196206
+    },
+    {
+      "file": "scopes/region_context.py",
+      "line": 55,
+      "function": "summary",
+      "primitive_calls": 338,
+      "calls": 338,
+      "self_seconds": 0.007416911000000001,
+      "cumulative_seconds": 0.020133457
+    },
+    {
+      "file": "frontend/inline_source.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.2551e-05,
+      "cumulative_seconds": 0.020090929
+    },
+    {
+      "file": "offload/__init__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.1051000000000001e-05,
+      "cumulative_seconds": 0.018677418
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 68,
+      "function": "public",
+      "primitive_calls": 506,
+      "calls": 506,
+      "self_seconds": 0.0009142530000000001,
+      "cumulative_seconds": 0.018404734000000002
+    },
+    {
+      "file": "emission/__init__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.5211e-05,
+      "cumulative_seconds": 0.017854347
+    },
+    {
+      "file": "offload/analysis.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.000123733,
+      "cumulative_seconds": 0.017739035
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 43,
+      "function": "_thaw",
+      "primitive_calls": 508,
+      "calls": 22036,
+      "self_seconds": 0.013485512000000002,
+      "cumulative_seconds": 0.017511621
+    },
+    {
+      "file": "scopes/region_context.py",
+      "line": 103,
+      "function": "visit",
+      "primitive_calls": 74,
+      "calls": 225,
+      "self_seconds": 0.00024461700000000003,
+      "cumulative_seconds": 0.017247750000000003
+    },
+    {
+      "file": "emission/cuda/offload.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.7690000000000006e-05,
+      "cumulative_seconds": 0.016897256
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 739,
+      "function": "complete_original_groups",
+      "primitive_calls": 2,
+      "calls": 4,
+      "self_seconds": 0.000103523,
+      "cumulative_seconds": 0.016631083
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 73,
+      "function": "register_types",
+      "primitive_calls": 1230,
+      "calls": 1230,
+      "self_seconds": 0.007694799,
+      "cumulative_seconds": 0.016588066000000002
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 219,
+      "function": "_helper",
+      "primitive_calls": 624,
+      "calls": 624,
+      "self_seconds": 0.000659555,
+      "cumulative_seconds": 0.016282803000000002
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 546,
+      "function": "<genexpr>",
+      "primitive_calls": 243,
+      "calls": 243,
+      "self_seconds": 9.569400000000001e-05,
+      "cumulative_seconds": 0.014437922
+    },
+    {
+      "file": "frontend/descriptor_windows.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 9.301300000000001e-05,
+      "cumulative_seconds": 0.014028363
+    },
+    {
+      "file": "frontend/lowering.py",
+      "line": 183,
+      "function": "<genexpr>",
+      "primitive_calls": 7706,
+      "calls": 7706,
+      "self_seconds": 0.003255988,
+      "cumulative_seconds": 0.013866380000000001
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 35,
+      "function": "_freeze",
+      "primitive_calls": 255,
+      "calls": 11027,
+      "self_seconds": 0.009991238000000001,
+      "cumulative_seconds": 0.013483023
+    },
+    {
+      "file": "scopes/segments.py",
+      "line": 252,
+      "function": "statement_span",
+      "primitive_calls": 88,
+      "calls": 88,
+      "self_seconds": 0.0009813600000000001,
+      "cumulative_seconds": 0.013374619
+    },
+    {
+      "file": "scopes/segments.py",
+      "line": 193,
+      "function": "grouped_nodes",
+      "primitive_calls": 8,
+      "calls": 8,
+      "self_seconds": 0.000388734,
+      "cumulative_seconds": 0.013158201000000001
+    },
+    {
+      "file": "emission/driver.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.2032e-05,
+      "cumulative_seconds": 0.012708629
+    },
+    {
+      "file": "offload/numerical_calibration.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 8.113300000000001e-05,
+      "cumulative_seconds": 0.012659806000000001
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 861,
+      "function": "<genexpr>",
+      "primitive_calls": 7714,
+      "calls": 7714,
+      "self_seconds": 0.003802278,
+      "cumulative_seconds": 0.012306736
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 39,
+      "function": "<genexpr>",
+      "primitive_calls": 618,
+      "calls": 5291,
+      "self_seconds": 0.001123714,
+      "cumulative_seconds": 0.012158007
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 216,
+      "function": "<genexpr>",
+      "primitive_calls": 55317,
+      "calls": 55317,
+      "self_seconds": 0.012045814,
+      "cumulative_seconds": 0.012045814
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 136,
+      "function": "public",
+      "primitive_calls": 150,
+      "calls": 150,
+      "self_seconds": 0.0005734280000000001,
+      "cumulative_seconds": 0.01197629
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 366,
+      "function": "admit_cached_structure",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.0017293940000000002,
+      "cumulative_seconds": 0.011270915000000001
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 673,
+      "function": "authorize_stable_module_allocatables",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.0131000000000003e-05,
+      "cumulative_seconds": 0.01121741
+    },
+    {
+      "file": "frontend/source_inputs.py",
+      "line": 78,
+      "function": "<genexpr>",
+      "primitive_calls": 58887,
+      "calls": 58887,
+      "self_seconds": 0.010422537,
+      "cumulative_seconds": 0.010422537
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 28,
+      "function": "__init__",
+      "primitive_calls": 3364,
+      "calls": 3364,
+      "self_seconds": 0.007713986000000001,
+      "cumulative_seconds": 0.009941217
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 134,
+      "function": "public",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.000128334,
+      "cumulative_seconds": 0.009541521
+    },
+    {
+      "file": "frontend/source_inputs.py",
+      "line": 102,
+      "function": "<genexpr>",
+      "primitive_calls": 113374,
+      "calls": 113374,
+      "self_seconds": 0.009499169,
+      "cumulative_seconds": 0.009499169
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 194,
+      "function": "public",
+      "primitive_calls": 28,
+      "calls": 28,
+      "self_seconds": 0.00021203400000000002,
+      "cumulative_seconds": 0.009308477
+    },
+    {
+      "file": "scopes/region_dispatch.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.7450000000000003e-05,
+      "cumulative_seconds": 0.008750761000000001
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.2922000000000006e-05,
+      "cumulative_seconds": 0.008092595000000001
+    },
+    {
+      "file": "frontend/source_functions.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.5142e-05,
+      "cumulative_seconds": 0.008058893000000001
+    },
+    {
+      "file": "frontend/summary_cache.py",
+      "line": 78,
+      "function": "_object",
+      "primitive_calls": 3093,
+      "calls": 3093,
+      "self_seconds": 0.007824185,
+      "cumulative_seconds": 0.007824185
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 367,
+      "function": "resolve_source_call",
+      "primitive_calls": 28,
+      "calls": 28,
+      "self_seconds": 7.2342e-05,
+      "cumulative_seconds": 0.007755864
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 531,
+      "function": "_resolve_source_invocation",
+      "primitive_calls": 28,
+      "calls": 28,
+      "self_seconds": 0.001203237,
+      "cumulative_seconds": 0.007683522000000001
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 217,
+      "function": "<genexpr>",
+      "primitive_calls": 55317,
+      "calls": 55317,
+      "self_seconds": 0.0074554190000000005,
+      "cumulative_seconds": 0.0074554190000000005
+    },
+    {
+      "file": "frontend/source_objects.py",
+      "line": 53,
+      "function": "_members",
+      "primitive_calls": 137,
+      "calls": 137,
+      "self_seconds": 0.000413644,
+      "cumulative_seconds": 0.006924144
+    },
+    {
+      "file": "scopes/region_context.py",
+      "line": 44,
+      "function": "children",
+      "primitive_calls": 2060,
+      "calls": 2060,
+      "self_seconds": 0.001413579,
+      "cumulative_seconds": 0.006739818000000001
+    },
+    {
+      "file": "driver/cli.py",
+      "line": 29,
+      "function": "_parse_args",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.9380000000000004e-05,
+      "cumulative_seconds": 0.006556651
+    },
+    {
+      "file": "frontend/source_objects.py",
+      "line": 54,
+      "function": "<genexpr>",
+      "primitive_calls": 1038,
+      "calls": 1038,
+      "self_seconds": 0.0016904280000000001,
+      "cumulative_seconds": 0.00648618
+    },
+    {
+      "file": "scopes/lexical.py",
+      "line": 21,
+      "function": "check_structured_entry",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.6741e-05,
+      "cumulative_seconds": 0.006449873
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 189,
+      "function": "_host_associated_reads",
+      "primitive_calls": 50,
+      "calls": 54,
+      "self_seconds": 0.000136183,
+      "cumulative_seconds": 0.006375499000000001
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.207e-05,
+      "cumulative_seconds": 0.006057584
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 375,
+      "function": "body",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 9.781300000000001e-05,
+      "cumulative_seconds": 0.005862408
+    },
+    {
+      "file": "ir/plan.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.9982000000000002e-05,
+      "cumulative_seconds": 0.0056641700000000005
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 340,
+      "function": "check_loop",
+      "primitive_calls": 9,
+      "calls": 9,
+      "self_seconds": 3.2380000000000005e-05,
+      "cumulative_seconds": 0.005504237
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.8262e-05,
+      "cumulative_seconds": 0.005490546000000001
+    },
+    {
+      "file": "frontend/source_inputs.py",
+      "line": 27,
+      "function": "<genexpr>",
+      "primitive_calls": 70,
+      "calls": 70,
+      "self_seconds": 0.000134396,
+      "cumulative_seconds": 0.005354015
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 720,
+      "function": "<genexpr>",
+      "primitive_calls": 902,
+      "calls": 902,
+      "self_seconds": 0.000217418,
+      "cumulative_seconds": 0.005332555
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 345,
+      "function": "<genexpr>",
+      "primitive_calls": 567,
+      "calls": 567,
+      "self_seconds": 0.000177116,
+      "cumulative_seconds": 0.005304044
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 226,
+      "function": "_helper_actuals",
+      "primitive_calls": 156,
+      "calls": 156,
+      "self_seconds": 0.00068512,
+      "cumulative_seconds": 0.005199728000000001
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 872,
+      "function": "<genexpr>",
+      "primitive_calls": 11200,
+      "calls": 11200,
+      "self_seconds": 0.0017972270000000002,
+      "cumulative_seconds": 0.005064171
+    },
+    {
+      "file": "frontend/native_environment.py",
+      "line": 71,
+      "function": "intrinsic_export",
+      "primitive_calls": 106,
+      "calls": 106,
+      "self_seconds": 0.000137264,
+      "cumulative_seconds": 0.004737788000000001
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 863,
+      "function": "<genexpr>",
+      "primitive_calls": 6126,
+      "calls": 6126,
+      "self_seconds": 0.002775811,
+      "cumulative_seconds": 0.004640626
+    },
+    {
+      "file": "frontend/native_environment.py",
+      "line": 80,
+      "function": "_resolve_intrinsic_export",
+      "primitive_calls": 106,
+      "calls": 106,
+      "self_seconds": 0.000507084,
+      "cumulative_seconds": 0.004600524
+    },
+    {
+      "file": "emission/c/sessions.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.169e-05,
+      "cumulative_seconds": 0.004571413
+    },
+    {
+      "file": "frontend/source_objects.py",
+      "line": 59,
+      "function": "<genexpr>",
+      "primitive_calls": 2436,
+      "calls": 2436,
+      "self_seconds": 0.0031382410000000004,
+      "cumulative_seconds": 0.004520477
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.9071e-05,
+      "cumulative_seconds": 0.0044103350000000005
+    },
+    {
+      "file": "frontend/native_sections.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 6.5251e-05,
+      "cumulative_seconds": 0.004386959
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 260,
+      "function": "_helper_closure",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 2.419e-05,
+      "cumulative_seconds": 0.004312929
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 264,
+      "function": "visit",
+      "primitive_calls": 9,
+      "calls": 9,
+      "self_seconds": 0.000309081,
+      "cumulative_seconds": 0.004288739000000001
+    },
+    {
+      "file": "frontend/lowering.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.3321e-05,
+      "cumulative_seconds": 0.004227094000000001
+    },
+    {
+      "file": "scopes/lexical.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.5731e-05,
+      "cumulative_seconds": 0.004145694
+    },
+    {
+      "file": "frontend/numerical_preparation.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.249e-05,
+      "cumulative_seconds": 0.004045391000000001
+    },
+    {
+      "file": "scopes/region_dispatch.py",
+      "line": 149,
+      "function": "original_group",
+      "primitive_calls": 5,
+      "calls": 5,
+      "self_seconds": 0.000284567,
+      "cumulative_seconds": 0.00397986
+    },
+    {
+      "file": "frontend/native_group_structure.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.905e-05,
+      "cumulative_seconds": 0.003975510000000001
+    },
+    {
+      "file": "emission/common/resources.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.4510000000000002e-05,
+      "cumulative_seconds": 0.003934598
+    },
+    {
+      "file": "driver/pipeline.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.496e-05,
+      "cumulative_seconds": 0.003912227
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 27,
+      "function": "_directive",
+      "primitive_calls": 613,
+      "calls": 613,
+      "self_seconds": 0.0005770710000000001,
+      "cumulative_seconds": 0.0038444190000000004
+    },
+    {
+      "file": "scopes/segments.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.614e-05,
+      "cumulative_seconds": 0.003823256
+    },
+    {
+      "file": "frontend/native_environment.py",
+      "line": 89,
+      "function": "resolve",
+      "primitive_calls": 106,
+      "calls": 681,
+      "self_seconds": 0.001958231,
+      "cumulative_seconds": 0.0036487090000000004
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 208,
+      "function": "<genexpr>",
+      "primitive_calls": 4,
+      "calls": 4,
+      "self_seconds": 1.7670000000000002e-05,
+      "cumulative_seconds": 0.003554109
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 870,
+      "function": "<genexpr>",
+      "primitive_calls": 11200,
+      "calls": 11200,
+      "self_seconds": 0.0027137230000000004,
+      "cumulative_seconds": 0.0035336680000000002
+    },
+    {
+      "file": "frontend/source_inputs.py",
+      "line": 87,
+      "function": "path",
+      "primitive_calls": 69,
+      "calls": 69,
+      "self_seconds": 0.001239681,
+      "cumulative_seconds": 0.003317426
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 439,
+      "function": "<genexpr>",
+      "primitive_calls": 2945,
+      "calls": 2945,
+      "self_seconds": 0.001391389,
+      "cumulative_seconds": 0.00312879
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.1461e-05,
+      "cumulative_seconds": 0.0030368960000000003
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 207,
+      "function": "component_access",
+      "primitive_calls": 25,
+      "calls": 25,
+      "self_seconds": 0.000497301,
+      "cumulative_seconds": 0.003017524
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 251,
+      "function": "source_scope_for",
+      "primitive_calls": 1365,
+      "calls": 1365,
+      "self_seconds": 0.000994675,
+      "cumulative_seconds": 0.0027562150000000002
+    },
+    {
+      "file": "emission/common/resources.py",
+      "line": 32,
+      "function": "read_scoped_runtime",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.8161e-05,
+      "cumulative_seconds": 0.002745309
+    },
+    {
+      "file": "frontend/summary_cache.py",
+      "line": 93,
+      "function": "_payload",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.000532714,
+      "cumulative_seconds": 0.002576964
+    },
+    {
+      "file": "emission/common/memory.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.3870000000000001e-05,
+      "cumulative_seconds": 0.002546823
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 31,
+      "function": "_canonical",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 9.2e-06,
+      "cumulative_seconds": 0.00239657
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 736,
+      "function": "<genexpr>",
+      "primitive_calls": 34,
+      "calls": 34,
+      "self_seconds": 2.608e-05,
+      "cumulative_seconds": 0.002392209
+    },
+    {
+      "file": "memory/__init__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.540000000000001e-06,
+      "cumulative_seconds": 0.002317108
+    },
+    {
+      "file": "scopes/region_dispatch.py",
+      "line": 275,
+      "function": "_reserve",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 5.6251e-05,
+      "cumulative_seconds": 0.0022701170000000003
+    },
+    {
+      "file": "scopes/numerical.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.3772e-05,
+      "cumulative_seconds": 0.002255137
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 737,
+      "function": "<genexpr>",
+      "primitive_calls": 34,
+      "calls": 34,
+      "self_seconds": 1.8421000000000002e-05,
+      "cumulative_seconds": 0.0022478570000000002
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 22,
+      "function": "__str__",
+      "primitive_calls": 3301,
+      "calls": 3301,
+      "self_seconds": 0.002227231,
+      "cumulative_seconds": 0.002227231
+    },
+    {
+      "file": "emission/c/generator.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.0551e-05,
+      "cumulative_seconds": 0.002218505
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 862,
+      "function": "<genexpr>",
+      "primitive_calls": 4524,
+      "calls": 4524,
+      "self_seconds": 0.001497161,
+      "cumulative_seconds": 0.002212632
+    },
+    {
+      "file": "frontend/source_objects.py",
+      "line": 27,
+      "function": "_children",
+      "primitive_calls": 1230,
+      "calls": 1230,
+      "self_seconds": 0.0010193440000000002,
+      "cumulative_seconds": 0.002204008
+    },
+    {
+      "file": "scopes/participation.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.3212e-05,
+      "cumulative_seconds": 0.0021985850000000003
+    },
+    {
+      "file": "addressing/__init__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.63e-06,
+      "cumulative_seconds": 0.002183294
+    },
+    {
+      "file": "scopes/immutable_inputs.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.9122000000000003e-05,
+      "cumulative_seconds": 0.002074382
+    },
+    {
+      "file": "analysis/planning.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.9822000000000003e-05,
+      "cumulative_seconds": 0.00200816
+    },
+    {
+      "file": "scopes/region_dispatch.py",
+      "line": 277,
+      "function": "<genexpr>",
+      "primitive_calls": 615,
+      "calls": 615,
+      "self_seconds": 0.00017111400000000002,
+      "cumulative_seconds": 0.002007731
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 143,
+      "function": "_field_binding",
+      "primitive_calls": 22,
+      "calls": 22,
+      "self_seconds": 0.000392934,
+      "cumulative_seconds": 0.001993243
+    },
+    {
+      "file": "memory/planning.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.0260000000000003e-05,
+      "cumulative_seconds": 0.0019434780000000002
+    },
+    {
+      "file": "offload/preparation.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 6.0963000000000006e-05,
+      "cumulative_seconds": 0.0018941460000000002
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 814,
+      "function": "<genexpr>",
+      "primitive_calls": 569,
+      "calls": 569,
+      "self_seconds": 0.00013520400000000002,
+      "cumulative_seconds": 0.0017385730000000002
+    },
+    {
+      "file": "addressing/planner.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.3121e-05,
+      "cumulative_seconds": 0.0017199420000000001
+    },
+    {
+      "file": "analysis/semantics.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.5191e-05,
+      "cumulative_seconds": 0.0017135820000000002
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 392,
+      "function": "_iterator",
+      "primitive_calls": 108,
+      "calls": 108,
+      "self_seconds": 0.0006476390000000001,
+      "cumulative_seconds": 0.001690129
+    },
+    {
+      "file": "emission/fortran/generator.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.715e-05,
+      "cumulative_seconds": 0.001581759
+    },
+    {
+      "file": "frontend/summary_cache.py",
+      "line": 121,
+      "function": "visit",
+      "primitive_calls": 2,
+      "calls": 253,
+      "self_seconds": 0.0005494930000000001,
+      "cumulative_seconds": 0.001530378
+    },
+    {
+      "file": "frontend/native_environment.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.4752000000000003e-05,
+      "cumulative_seconds": 0.001432616
+    },
+    {
+      "file": "emission/common/sessions.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.8732000000000002e-05,
+      "cumulative_seconds": 0.001421406
+    },
+    {
+      "file": "offload/config.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.4071000000000001e-05,
+      "cumulative_seconds": 0.001405805
+    },
+    {
+      "file": "frontend/source_objects.py",
+      "line": 23,
+      "function": "_kind",
+      "primitive_calls": 5542,
+      "calls": 5542,
+      "self_seconds": 0.001382236,
+      "cumulative_seconds": 0.001382236
+    },
+    {
+      "file": "driver/options.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.5391000000000002e-05,
+      "cumulative_seconds": 0.0013659240000000001
+    },
+    {
+      "file": "scopes/access.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.5921e-05,
+      "cumulative_seconds": 0.0013240230000000001
+    },
+    {
+      "file": "analysis/proof.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.0640000000000001e-05,
+      "cumulative_seconds": 0.0013155830000000002
+    },
+    {
+      "file": "emission/c/declarations.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 6.920000000000001e-06,
+      "cumulative_seconds": 0.001287102
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 456,
+      "function": "<genexpr>",
+      "primitive_calls": 1258,
+      "calls": 1258,
+      "self_seconds": 0.000579878,
+      "cumulative_seconds": 0.0012815860000000001
+    },
+    {
+      "file": "scopes/lexical.py",
+      "line": 23,
+      "function": "<genexpr>",
+      "primitive_calls": 1420,
+      "calls": 1420,
+      "self_seconds": 0.000353251,
+      "cumulative_seconds": 0.0012640610000000001
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 300,
+      "function": "_actual",
+      "primitive_calls": 138,
+      "calls": 138,
+      "self_seconds": 0.000210527,
+      "cumulative_seconds": 0.001260262
+    },
+    {
+      "file": "frontend/native_prefix.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.1651000000000005e-05,
+      "cumulative_seconds": 0.001191889
+    },
+    {
+      "file": "frontend/native_intrinsics.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.4341000000000003e-05,
+      "cumulative_seconds": 0.00118767
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 2005,
+      "function": "source_scope_for",
+      "primitive_calls": 170,
+      "calls": 170,
+      "self_seconds": 0.00046942500000000004,
+      "cumulative_seconds": 0.001185669
+    },
+    {
+      "file": "ir/intrinsics.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 9.1452e-05,
+      "cumulative_seconds": 0.0011389380000000001
+    },
+    {
+      "file": "frontend/numerical_completion.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.3771e-05,
+      "cumulative_seconds": 0.001111858
+    },
+    {
+      "file": "frontend/sealed_syntax.py",
+      "line": 49,
+      "function": "_copy",
+      "primitive_calls": 97,
+      "calls": 97,
+      "self_seconds": 0.000395638,
+      "cumulative_seconds": 0.001085229
+    },
+    {
+      "file": "addressing/ranges.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.2252e-05,
+      "cumulative_seconds": 0.001053677
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 336,
+      "function": "_arrange",
+      "primitive_calls": 49,
+      "calls": 49,
+      "self_seconds": 0.000615023,
+      "cumulative_seconds": 0.001031307
+    },
+    {
+      "file": "scopes/window_discovery.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.1204000000000006e-05,
+      "cumulative_seconds": 0.001004806
+    },
+    {
+      "file": "scopes/variants.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.0071e-05,
+      "cumulative_seconds": 0.000933174
+    },
+    {
+      "file": "emission/fortran/declarations.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.0291e-05,
+      "cumulative_seconds": 0.000930494
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1040,
+      "function": "normalized_indices",
+      "primitive_calls": 9,
+      "calls": 9,
+      "self_seconds": 0.000157904,
+      "cumulative_seconds": 0.000928924
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.9031e-05,
+      "cumulative_seconds": 0.000874132
+    },
+    {
+      "file": "scopes/registration.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.0181000000000002e-05,
+      "cumulative_seconds": 0.000866352
+    },
+    {
+      "file": "frontend/preowner_transfers.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.4240000000000002e-05,
+      "cumulative_seconds": 0.0008630510000000001
+    },
+    {
+      "file": "frontend/source_functions.py",
+      "line": 64,
+      "function": "<genexpr>",
+      "primitive_calls": 1136,
+      "calls": 1136,
+      "self_seconds": 0.00037962,
+      "cumulative_seconds": 0.0008499530000000001
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 90,
+      "function": "<genexpr>",
+      "primitive_calls": 2394,
+      "calls": 2394,
+      "self_seconds": 0.000601153,
+      "cumulative_seconds": 0.0008412900000000001
+    },
+    {
+      "file": "frontend/source_objects.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.3630000000000002e-05,
+      "cumulative_seconds": 0.000834051
+    },
+    {
+      "file": "emission/common/abi.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.5771000000000002e-05,
+      "cumulative_seconds": 0.0008038600000000001
+    },
+    {
+      "file": "scopes/constant_parameters.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.5023000000000006e-05,
+      "cumulative_seconds": 0.00078361
+    },
+    {
+      "file": "scopes/region_context.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.6341e-05,
+      "cumulative_seconds": 0.000729199
+    },
+    {
+      "file": "offload/codegen.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.8231000000000002e-05,
+      "cumulative_seconds": 0.0007284980000000001
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 427,
+      "function": "<genexpr>",
+      "primitive_calls": 1136,
+      "calls": 1136,
+      "self_seconds": 0.000726719,
+      "cumulative_seconds": 0.000726719
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 994,
+      "function": "_actual_binding",
+      "primitive_calls": 144,
+      "calls": 144,
+      "self_seconds": 0.000129152,
+      "cumulative_seconds": 0.0007214350000000001
+    },
+    {
+      "file": "scopes/views.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.3650000000000001e-05,
+      "cumulative_seconds": 0.000713238
+    },
+    {
+      "file": "scopes/region_context.py",
+      "line": 69,
+      "function": "<genexpr>",
+      "primitive_calls": 4822,
+      "calls": 4822,
+      "self_seconds": 0.0006148200000000001,
+      "cumulative_seconds": 0.0006148200000000001
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 19,
+      "function": "_kind",
+      "primitive_calls": 2593,
+      "calls": 2593,
+      "self_seconds": 0.0006132090000000001,
+      "cumulative_seconds": 0.0006132090000000001
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 167,
+      "function": "clauses",
+      "primitive_calls": 11,
+      "calls": 11,
+      "self_seconds": 4.066e-05,
+      "cumulative_seconds": 0.000557333
+    },
+    {
+      "file": "scopes/region_context.py",
+      "line": 30,
+      "function": "tick",
+      "primitive_calls": 3100,
+      "calls": 3100,
+      "self_seconds": 0.00053825,
+      "cumulative_seconds": 0.00053825
+    },
+    {
+      "file": "frontend/sealed_syntax.py",
+      "line": 41,
+      "function": "_thaw",
+      "primitive_calls": 346,
+      "calls": 561,
+      "self_seconds": 0.00027090400000000003,
+      "cumulative_seconds": 0.00053682
+    },
+    {
+      "file": "scopes/source.py",
+      "line": 914,
+      "function": "capture",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.124e-05,
+      "cumulative_seconds": 0.000531323
+    },
+    {
+      "file": "scopes/source.py",
+      "line": 890,
+      "function": "capture_fact",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.3711e-05,
+      "cumulative_seconds": 0.000514353
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 109,
+      "function": "_schema",
+      "primitive_calls": 18,
+      "calls": 48,
+      "self_seconds": 0.000202468,
+      "cumulative_seconds": 0.000484294
+    },
+    {
+      "file": "scheduling/__init__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.9600000000000005e-06,
+      "cumulative_seconds": 0.000461122
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 844,
+      "function": "<genexpr>",
+      "primitive_calls": 334,
+      "calls": 334,
+      "self_seconds": 0.00020430400000000001,
+      "cumulative_seconds": 0.000455699
+    },
+    {
+      "file": "transforms/__init__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.33e-06,
+      "cumulative_seconds": 0.000382819
+    },
+    {
+      "file": "frontend/source_objects.py",
+      "line": 65,
+      "function": "<genexpr>",
+      "primitive_calls": 1136,
+      "calls": 1136,
+      "self_seconds": 0.000264426,
+      "cumulative_seconds": 0.000343859
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 458,
+      "function": "<genexpr>",
+      "primitive_calls": 498,
+      "calls": 498,
+      "self_seconds": 0.00022916400000000002,
+      "cumulative_seconds": 0.000302274
+    },
+    {
+      "file": "scopes/participation.py",
+      "line": 205,
+      "function": "<genexpr>",
+      "primitive_calls": 1580,
+      "calls": 1580,
+      "self_seconds": 0.000290867,
+      "cumulative_seconds": 0.000290867
+    },
+    {
+      "file": "emission/cuda/generator.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.4591000000000002e-05,
+      "cumulative_seconds": 0.000285827
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 109,
+      "function": "deferred_native_descendants",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 0.00020918500000000002,
+      "cumulative_seconds": 0.000278407
+    },
+    {
+      "file": "scopes/window_discovery.py",
+      "line": 106,
+      "function": "discover_reached_window",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.7431e-05,
+      "cumulative_seconds": 0.00023843600000000002
+    },
+    {
+      "file": "scopes/region_context.py",
+      "line": 51,
+      "function": "<genexpr>",
+      "primitive_calls": 360,
+      "calls": 360,
+      "self_seconds": 0.000124702,
+      "cumulative_seconds": 0.000233087
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 84,
+      "function": "<genexpr>",
+      "primitive_calls": 176,
+      "calls": 176,
+      "self_seconds": 7.5092e-05,
+      "cumulative_seconds": 0.00022156400000000002
+    },
+    {
+      "file": "scopes/window_discovery.py",
+      "line": 114,
+      "function": "<genexpr>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.000172855,
+      "cumulative_seconds": 0.00021604500000000002
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 79,
+      "function": "<genexpr>",
+      "primitive_calls": 274,
+      "calls": 274,
+      "self_seconds": 0.00015767300000000002,
+      "cumulative_seconds": 0.000212374
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 163,
+      "function": "public",
+      "primitive_calls": 114,
+      "calls": 114,
+      "self_seconds": 6.653300000000001e-05,
+      "cumulative_seconds": 0.00020417500000000002
+    },
+    {
+      "file": "scopes/segments.py",
+      "line": 146,
+      "function": "fortran_lines",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 0.000142103,
+      "cumulative_seconds": 0.000192675
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 550,
+      "function": "<genexpr>",
+      "primitive_calls": 162,
+      "calls": 162,
+      "self_seconds": 0.00010379600000000001,
+      "cumulative_seconds": 0.00017114700000000002
+    },
+    {
+      "file": "scopes/region_dispatch.py",
+      "line": 197,
+      "function": "<genexpr>",
+      "primitive_calls": 627,
+      "calls": 627,
+      "self_seconds": 9.9021e-05,
+      "cumulative_seconds": 0.00016504400000000001
+    },
+    {
+      "file": "frontend/sealed_syntax.py",
+      "line": 45,
+      "function": "<genexpr>",
+      "primitive_calls": 135,
+      "calls": 162,
+      "self_seconds": 4.7661e-05,
+      "cumulative_seconds": 0.000155491
+    },
+    {
+      "file": "scopes/region_dispatch.py",
+      "line": 84,
+      "function": "<genexpr>",
+      "primitive_calls": 235,
+      "calls": 235,
+      "self_seconds": 0.000149814,
+      "cumulative_seconds": 0.000149814
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 216,
+      "function": "_check_resource_identity",
+      "primitive_calls": 132,
+      "calls": 132,
+      "self_seconds": 7.384600000000001e-05,
+      "cumulative_seconds": 0.00014918600000000002
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 266,
+      "function": "<genexpr>",
+      "primitive_calls": 100,
+      "calls": 100,
+      "self_seconds": 0.000122351,
+      "cumulative_seconds": 0.000144361
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 987,
+      "function": "resource_identity_boundary",
+      "primitive_calls": 243,
+      "calls": 243,
+      "self_seconds": 9.5801e-05,
+      "cumulative_seconds": 0.000140401
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 99,
+      "function": "<genexpr>",
+      "primitive_calls": 448,
+      "calls": 448,
+      "self_seconds": 0.00013883300000000002,
+      "cumulative_seconds": 0.00013883300000000002
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 393,
+      "function": "<genexpr>",
+      "primitive_calls": 216,
+      "calls": 216,
+      "self_seconds": 0.00010917500000000001,
+      "cumulative_seconds": 0.000138777
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 23,
+      "function": "_kind",
+      "primitive_calls": 406,
+      "calls": 406,
+      "self_seconds": 0.000129195,
+      "cumulative_seconds": 0.000129195
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 20,
+      "function": "_children",
+      "primitive_calls": 28,
+      "calls": 28,
+      "self_seconds": 2.353e-05,
+      "cumulative_seconds": 0.00012073200000000001
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 82,
+      "function": "normalize",
+      "primitive_calls": 13,
+      "calls": 13,
+      "self_seconds": 6.213200000000001e-05,
+      "cumulative_seconds": 0.00011893300000000001
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 1004,
+      "function": "_actual_mapping_boundary",
+      "primitive_calls": 6,
+      "calls": 6,
+      "self_seconds": 1.1481e-05,
+      "cumulative_seconds": 0.000102113
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 55,
+      "function": "<genexpr>",
+      "primitive_calls": 1227,
+      "calls": 1227,
+      "self_seconds": 0.00010144200000000001,
+      "cumulative_seconds": 0.00010144200000000001
+    },
+    {
+      "file": "scopes/generation_transaction.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.54e-05,
+      "cumulative_seconds": 9.3442e-05
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 23,
+      "function": "_children",
+      "primitive_calls": 18,
+      "calls": 18,
+      "self_seconds": 1.0320000000000001e-05,
+      "cumulative_seconds": 9.0121e-05
+    },
+    {
+      "file": "driver/options.py",
+      "line": 20,
+      "function": "__post_init__",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.1041e-05,
+      "cumulative_seconds": 8.4362e-05
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 183,
+      "function": "resource_mapping",
+      "primitive_calls": 28,
+      "calls": 28,
+      "self_seconds": 6.414100000000001e-05,
+      "cumulative_seconds": 8.3161e-05
+    },
+    {
+      "file": "numerical_contract.py",
+      "line": 20,
+      "function": "numerical_build_contract",
+      "primitive_calls": 3,
+      "calls": 3,
+      "self_seconds": 1.844e-05,
+      "cumulative_seconds": 8.074200000000001e-05
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 79,
+      "function": "content",
+      "primitive_calls": 9,
+      "calls": 9,
+      "self_seconds": 1.214e-05,
+      "cumulative_seconds": 7.9351e-05
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 426,
+      "function": "<genexpr>",
+      "primitive_calls": 96,
+      "calls": 96,
+      "self_seconds": 7.6412e-05,
+      "cumulative_seconds": 7.6412e-05
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 364,
+      "function": "<genexpr>",
+      "primitive_calls": 205,
+      "calls": 205,
+      "self_seconds": 5.406e-05,
+      "cumulative_seconds": 7.562000000000001e-05
+    },
+    {
+      "file": "scopes/segments.py",
+      "line": 259,
+      "function": "<genexpr>",
+      "primitive_calls": 602,
+      "calls": 602,
+      "self_seconds": 7.551300000000001e-05,
+      "cumulative_seconds": 7.551300000000001e-05
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 73,
+      "function": "<genexpr>",
+      "primitive_calls": 11,
+      "calls": 11,
+      "self_seconds": 2.4181e-05,
+      "cumulative_seconds": 7.5251e-05
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 75,
+      "function": "StructuredSummary",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 6.726200000000001e-05,
+      "cumulative_seconds": 7.3742e-05
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 88,
+      "function": "<genexpr>",
+      "primitive_calls": 176,
+      "calls": 176,
+      "self_seconds": 5.6991000000000004e-05,
+      "cumulative_seconds": 7.0512e-05
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 9,
+      "function": "ScalarType",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 8.16e-06,
+      "cumulative_seconds": 7.047100000000001e-05
+    },
+    {
+      "file": "offload/profile.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.9401000000000002e-05,
+      "cumulative_seconds": 6.940200000000001e-05
+    },
+    {
+      "file": "frontend/summary_cache.py",
+      "line": 135,
+      "function": "<genexpr>",
+      "primitive_calls": 504,
+      "calls": 504,
+      "self_seconds": 6.780100000000001e-05,
+      "cumulative_seconds": 6.780100000000001e-05
+    },
+    {
+      "file": "frontend/source_inputs.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.5391e-05,
+      "cumulative_seconds": 6.5412e-05
+    },
+    {
+      "file": "scheduling/planner.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.8840000000000003e-05,
+      "cumulative_seconds": 6.477100000000001e-05
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 165,
+      "function": "checkpoint",
+      "primitive_calls": 5,
+      "calls": 5,
+      "self_seconds": 4.9301e-05,
+      "cumulative_seconds": 6.1172e-05
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 128,
+      "function": "__post_init__",
+      "primitive_calls": 117,
+      "calls": 117,
+      "self_seconds": 6.0461e-05,
+      "cumulative_seconds": 6.0461e-05
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 156,
+      "function": "<genexpr>",
+      "primitive_calls": 27,
+      "calls": 27,
+      "self_seconds": 2.9901e-05,
+      "cumulative_seconds": 6.0291e-05
+    },
+    {
+      "file": "scopes/section_operations.py",
+      "line": 18,
+      "function": "expand_full_sections",
+      "primitive_calls": 3,
+      "calls": 3,
+      "self_seconds": 2.758e-05,
+      "cumulative_seconds": 5.9942e-05
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 1026,
+      "function": "_signature",
+      "primitive_calls": 6,
+      "calls": 6,
+      "self_seconds": 2.869e-05,
+      "cumulative_seconds": 5.957e-05
+    },
+    {
+      "file": "numerical_contract.py",
+      "line": 49,
+      "function": "numerical_source_prologue",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.16e-06,
+      "cumulative_seconds": 5.7101e-05
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 16,
+      "function": "_kind",
+      "primitive_calls": 190,
+      "calls": 190,
+      "self_seconds": 5.5773e-05,
+      "cumulative_seconds": 5.5773e-05
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 144,
+      "function": "local_private",
+      "primitive_calls": 6,
+      "calls": 6,
+      "self_seconds": 5.3382000000000005e-05,
+      "cumulative_seconds": 5.4612000000000005e-05
+    },
+    {
+      "file": "frontend/summary_cache.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.0051e-05,
+      "cumulative_seconds": 5.4091e-05
+    },
+    {
+      "file": "scopes/source.py",
+      "line": 85,
+      "function": "ScopeBuilder",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.3671e-05,
+      "cumulative_seconds": 5.3671e-05
+    },
+    {
+      "file": "scopes/reached_owner.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.084e-05,
+      "cumulative_seconds": 5.2731e-05
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 313,
+      "function": "<genexpr>",
+      "primitive_calls": 217,
+      "calls": 217,
+      "self_seconds": 5.1841e-05,
+      "cumulative_seconds": 5.1841e-05
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 426,
+      "function": "_untile",
+      "primitive_calls": 3,
+      "calls": 3,
+      "self_seconds": 2.0150000000000002e-05,
+      "cumulative_seconds": 5.1221e-05
+    },
+    {
+      "file": "scopes/segments.py",
+      "line": 257,
+      "function": "<genexpr>",
+      "primitive_calls": 602,
+      "calls": 602,
+      "self_seconds": 5.0782e-05,
+      "cumulative_seconds": 5.0782e-05
+    },
+    {
+      "file": "frontend/sealed_syntax.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.0061e-05,
+      "cumulative_seconds": 4.9422e-05
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 320,
+      "function": "SourceEffects",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.8821000000000006e-05,
+      "cumulative_seconds": 4.8821000000000006e-05
+    },
+    {
+      "file": "frontend/summary_cache.py",
+      "line": 116,
+      "function": "<genexpr>",
+      "primitive_calls": 254,
+      "calls": 254,
+      "self_seconds": 4.6091e-05,
+      "cumulative_seconds": 4.6091e-05
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 263,
+      "function": "signature",
+      "primitive_calls": 270,
+      "calls": 270,
+      "self_seconds": 3.8912e-05,
+      "cumulative_seconds": 3.8912e-05
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 105,
+      "function": "native_group_for_selection",
+      "primitive_calls": 4,
+      "calls": 4,
+      "self_seconds": 1.9861000000000002e-05,
+      "cumulative_seconds": 3.7412e-05
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 257,
+      "function": "<genexpr>",
+      "primitive_calls": 256,
+      "calls": 256,
+      "self_seconds": 3.732e-05,
+      "cumulative_seconds": 3.732e-05
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 132,
+      "function": "resource",
+      "primitive_calls": 393,
+      "calls": 393,
+      "self_seconds": 3.7290000000000004e-05,
+      "cumulative_seconds": 3.7290000000000004e-05
+    },
+    {
+      "file": "scopes/region_dispatch.py",
+      "line": 19,
+      "function": "__init__",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.6420000000000002e-05,
+      "cumulative_seconds": 3.5541000000000004e-05
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 846,
+      "function": "write",
+      "primitive_calls": 9,
+      "calls": 9,
+      "self_seconds": 2.763e-05,
+      "cumulative_seconds": 3.4411e-05
+    },
+    {
+      "file": "scopes/provenance.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 8.740000000000001e-06,
+      "cumulative_seconds": 3.405e-05
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 42,
+      "function": "public",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 1.202e-05,
+      "cumulative_seconds": 3.316e-05
+    },
+    {
+      "file": "frontend/reached_windows.py",
+      "line": 1445,
+      "function": "ReachedWindowProof",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.324e-05,
+      "cumulative_seconds": 3.2811e-05
+    },
+    {
+      "file": "ir/integers.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.1901000000000005e-05,
+      "cumulative_seconds": 3.2721e-05
+    },
+    {
+      "file": "transforms/fusion.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.961e-05,
+      "cumulative_seconds": 3.2481e-05
+    },
+    {
+      "file": "frontend/numerical_completion.py",
+      "line": 21,
+      "function": "NumericalCompletionProof",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.15e-06,
+      "cumulative_seconds": 3.2421e-05
+    },
+    {
+      "file": "frontend/summary_cache.py",
+      "line": 182,
+      "function": "__init__",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 1.9211e-05,
+      "cumulative_seconds": 3.1591e-05
+    },
+    {
+      "file": "frontend/numerical_preparation.py",
+      "line": 447,
+      "function": "PreparedOriginalRegion",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.662e-05,
+      "cumulative_seconds": 3.0621000000000004e-05
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 74,
+      "function": "<genexpr>",
+      "primitive_calls": 62,
+      "calls": 62,
+      "self_seconds": 2.124e-05,
+      "cumulative_seconds": 2.8700000000000003e-05
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 1016,
+      "function": "_unknown_exports",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 1.248e-05,
+      "cumulative_seconds": 2.8311e-05
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 277,
+      "function": "Scope",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.701e-05,
+      "cumulative_seconds": 2.786e-05
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 100,
+      "function": "source_nodes",
+      "primitive_calls": 93,
+      "calls": 93,
+      "self_seconds": 2.7581000000000002e-05,
+      "cumulative_seconds": 2.7581000000000002e-05
+    },
+    {
+      "file": "frontend/source_objects.py",
+      "line": 222,
+      "function": "SourceObjectMapping",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.6400000000000003e-06,
+      "cumulative_seconds": 2.669e-05
+    },
+    {
+      "file": "emission/common/c_family.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.355e-05,
+      "cumulative_seconds": 2.5191e-05
+    },
+    {
+      "file": "frontend/summary_cache.py",
+      "line": 216,
+      "function": "_filename",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.82e-06,
+      "cumulative_seconds": 2.5110000000000002e-05
+    },
+    {
+      "file": "scopes/region_dispatch.py",
+      "line": 18,
+      "function": "InlineRegions",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.4341000000000003e-05,
+      "cumulative_seconds": 2.4341000000000003e-05
+    },
+    {
+      "file": "emission/cuda/native_preflight.py",
+      "line": 14,
+      "function": "NativePreflight",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.3571000000000002e-05,
+      "cumulative_seconds": 2.3571000000000002e-05
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 253,
+      "function": "<genexpr>",
+      "primitive_calls": 45,
+      "calls": 45,
+      "self_seconds": 2.3210000000000003e-05,
+      "cumulative_seconds": 2.3210000000000003e-05
+    },
+    {
+      "file": "offload/numerical_calibration.py",
+      "line": 365,
+      "function": "<genexpr>",
+      "primitive_calls": 8,
+      "calls": 8,
+      "self_seconds": 1.002e-05,
+      "cumulative_seconds": 2.2460000000000002e-05
+    },
+    {
+      "file": "emission/common/symbols.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 9.770000000000001e-06,
+      "cumulative_seconds": 2.095e-05
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 825,
+      "function": "<genexpr>",
+      "primitive_calls": 66,
+      "calls": 66,
+      "self_seconds": 1.533e-05,
+      "cumulative_seconds": 2.0940000000000003e-05
+    },
+    {
+      "file": "offload/analysis.py",
+      "line": 173,
+      "function": "Unit",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.251e-05,
+      "cumulative_seconds": 2.0841000000000003e-05
+    },
+    {
+      "file": "frontend/capture_coverage.py",
+      "line": 36,
+      "function": "physical_sections",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.2220000000000002e-05,
+      "cumulative_seconds": 2.057e-05
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 27,
+      "function": "_children",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 2.9400000000000002e-06,
+      "cumulative_seconds": 1.9730000000000003e-05
+    },
+    {
+      "file": "numerical_contract.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.9161000000000002e-05,
+      "cumulative_seconds": 1.9161000000000002e-05
+    },
+    {
+      "file": "driver/cli.py",
+      "line": 189,
+      "function": "_offload_config",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.51e-06,
+      "cumulative_seconds": 1.9151e-05
+    },
+    {
+      "file": "frontend/capture_coverage.py",
+      "line": 19,
+      "function": "expected_descriptor",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 6.2300000000000005e-06,
+      "cumulative_seconds": 1.8631000000000002e-05
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 769,
+      "function": "<genexpr>",
+      "primitive_calls": 34,
+      "calls": 34,
+      "self_seconds": 1.146e-05,
+      "cumulative_seconds": 1.79e-05
+    },
+    {
+      "file": "frontend/source_functions.py",
+      "line": 65,
+      "function": "<genexpr>",
+      "primitive_calls": 10,
+      "calls": 10,
+      "self_seconds": 1.6601000000000003e-05,
+      "cumulative_seconds": 1.7431e-05
+    },
+    {
+      "file": "frontend/lowering.py",
+      "line": 253,
+      "function": "_Lowerer",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.7140000000000002e-05,
+      "cumulative_seconds": 1.7140000000000002e-05
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 72,
+      "function": "<genexpr>",
+      "primitive_calls": 33,
+      "calls": 33,
+      "self_seconds": 1.116e-05,
+      "cumulative_seconds": 1.652e-05
+    },
+    {
+      "file": "frontend/native_prefix.py",
+      "line": 498,
+      "function": "NativePrefixProof",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.08e-05,
+      "cumulative_seconds": 1.6060000000000002e-05
+    },
+    {
+      "file": "scopes/segments.py",
+      "line": 25,
+      "function": "Native",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 9.501000000000001e-06,
+      "cumulative_seconds": 1.6041e-05
+    },
+    {
+      "file": "emission/fortran/sessions.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.391e-05,
+      "cumulative_seconds": 1.581e-05
+    },
+    {
+      "file": "frontend/numerical_preparation.py",
+      "line": 389,
+      "function": "NumericalPreparationProvider",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 9e-06,
+      "cumulative_seconds": 1.561e-05
+    },
+    {
+      "file": "emission/cuda/kernels.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.1691e-05,
+      "cumulative_seconds": 1.5481e-05
+    },
+    {
+      "file": "frontend/source_functions.py",
+      "line": 235,
+      "function": "NativeSourceFunctionProof",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 9.66e-06,
+      "cumulative_seconds": 1.4700000000000002e-05
+    },
+    {
+      "file": "scopes/section_operations.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.2240000000000001e-05,
+      "cumulative_seconds": 1.4680000000000002e-05
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 249,
+      "function": "Binding",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 9.031e-06,
+      "cumulative_seconds": 1.3771e-05
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 774,
+      "function": "<genexpr>",
+      "primitive_calls": 11,
+      "calls": 11,
+      "self_seconds": 8.011e-06,
+      "cumulative_seconds": 1.3731000000000001e-05
+    },
+    {
+      "file": "frontend/descriptor_windows.py",
+      "line": 607,
+      "function": "DescriptorWindowProof",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 8.740000000000001e-06,
+      "cumulative_seconds": 1.373e-05
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 168,
+      "function": "ResolvedSourceCall",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.2120000000000001e-05,
+      "cumulative_seconds": 1.358e-05
+    },
+    {
+      "file": "emission/common/loops.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.610000000000001e-06,
+      "cumulative_seconds": 1.3170000000000001e-05
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 28,
+      "function": "OriginalNumericalPrecondition",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.036e-05,
+      "cumulative_seconds": 1.2960000000000001e-05
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 88,
+      "function": "RegionExtraction",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.2810000000000001e-05,
+      "cumulative_seconds": 1.2810000000000001e-05
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 241,
+      "function": "<genexpr>",
+      "primitive_calls": 9,
+      "calls": 9,
+      "self_seconds": 7.610000000000001e-06,
+      "cumulative_seconds": 1.2580000000000002e-05
+    },
+    {
+      "file": "scopes/immutable_inputs.py",
+      "line": 104,
+      "function": "ImmutableArrayInput",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 6.470000000000001e-06,
+      "cumulative_seconds": 1.2400000000000002e-05
+    },
+    {
+      "file": "scopes/constant_parameters.py",
+      "line": 35,
+      "function": "outline_constants",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.0170000000000001e-05,
+      "cumulative_seconds": 1.2270000000000001e-05
+    },
+    {
+      "file": "frontend/reached_windows.py",
+      "line": 1419,
+      "function": "_MappedChildPlan",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.32e-06,
+      "cumulative_seconds": 1.2060000000000001e-05
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 232,
+      "function": "__init__",
+      "primitive_calls": 5,
+      "calls": 5,
+      "self_seconds": 1.1871e-05,
+      "cumulative_seconds": 1.1871e-05
+    },
+    {
+      "file": "scopes/lexical.py",
+      "line": 127,
+      "function": "LexicalOwner",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.1791000000000001e-05,
+      "cumulative_seconds": 1.1791000000000001e-05
+    },
+    {
+      "file": "scopes/participation.py",
+      "line": 85,
+      "function": "CollectiveCallSite",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 6.5800000000000005e-06,
+      "cumulative_seconds": 1.165e-05
+    },
+    {
+      "file": "frontend/capture_coverage.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 8.881e-06,
+      "cumulative_seconds": 1.1121e-05
+    },
+    {
+      "file": "scopes/ordinary_consumption.py",
+      "line": 15,
+      "function": "_OrdinaryPairConsumption",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.0471e-05,
+      "cumulative_seconds": 1.0471e-05
+    },
+    {
+      "file": "frontend/native_intrinsics.py",
+      "line": 121,
+      "function": "NativePredicateProof",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.4300000000000005e-06,
+      "cumulative_seconds": 1.043e-05
+    },
+    {
+      "file": "frontend/summary_cache.py",
+      "line": 208,
+      "function": "_remember",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 9.341000000000001e-06,
+      "cumulative_seconds": 1.0141e-05
+    },
+    {
+      "file": "frontend/native_group_structure.py",
+      "line": 220,
+      "function": "NativeGroupStructure",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 8.77e-06,
+      "cumulative_seconds": 1.006e-05
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 129,
+      "function": "<genexpr>",
+      "primitive_calls": 112,
+      "calls": 112,
+      "self_seconds": 1.004e-05,
+      "cumulative_seconds": 1.004e-05
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 44,
+      "function": "ComponentAccess",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.081e-06,
+      "cumulative_seconds": 9.801e-06
+    },
+    {
+      "file": "analysis/effects.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.091e-06,
+      "cumulative_seconds": 9.791e-06
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 436,
+      "function": "<genexpr>",
+      "primitive_calls": 18,
+      "calls": 18,
+      "self_seconds": 6.0600000000000004e-06,
+      "cumulative_seconds": 9.48e-06
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 318,
+      "function": "<genexpr>",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 5.3400000000000005e-06,
+      "cumulative_seconds": 9.280000000000001e-06
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 58,
+      "function": "EffectNode",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.510000000000001e-06,
+      "cumulative_seconds": 9.260000000000001e-06
+    },
+    {
+      "file": "frontend/reached_windows.py",
+      "line": 1540,
+      "function": "_ReachedPlanView",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 9.251e-06,
+      "cumulative_seconds": 9.251e-06
+    },
+    {
+      "file": "scopes/segments.py",
+      "line": 538,
+      "function": "StructuredScope",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 9.15e-06,
+      "cumulative_seconds": 9.15e-06
+    },
+    {
+      "file": "scopes/region_dispatch.py",
+      "line": 213,
+      "function": "<genexpr>",
+      "primitive_calls": 12,
+      "calls": 12,
+      "self_seconds": 6.730000000000001e-06,
+      "cumulative_seconds": 9.12e-06
+    },
+    {
+      "file": "scopes/region_dispatch.py",
+      "line": 172,
+      "function": "<genexpr>",
+      "primitive_calls": 40,
+      "calls": 40,
+      "self_seconds": 9.12e-06,
+      "cumulative_seconds": 9.12e-06
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 34,
+      "function": "ComponentSchema",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.1900000000000005e-06,
+      "cumulative_seconds": 8.891e-06
+    },
+    {
+      "file": "emission/cuda/scoped.py",
+      "line": 51,
+      "function": "ScopedEmission",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 8.78e-06,
+      "cumulative_seconds": 8.78e-06
+    },
+    {
+      "file": "frontend/descriptor_windows.py",
+      "line": 65,
+      "function": "_Check",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 8.730000000000001e-06,
+      "cumulative_seconds": 8.730000000000001e-06
+    },
+    {
+      "file": "emission/driver.py",
+      "line": 22,
+      "function": "GeneratedSources",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.36e-06,
+      "cumulative_seconds": 8.720000000000001e-06
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 1021,
+      "function": "<genexpr>",
+      "primitive_calls": 12,
+      "calls": 12,
+      "self_seconds": 8.68e-06,
+      "cumulative_seconds": 8.68e-06
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 116,
+      "function": "SourceActualMapping",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.970000000000001e-06,
+      "cumulative_seconds": 8.61e-06
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 218,
+      "function": "<genexpr>",
+      "primitive_calls": 26,
+      "calls": 26,
+      "self_seconds": 8.46e-06,
+      "cumulative_seconds": 8.46e-06
+    },
+    {
+      "file": "emission/common/schedules.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.0800000000000005e-06,
+      "cumulative_seconds": 8.25e-06
+    },
+    {
+      "file": "offload/analysis.py",
+      "line": 73,
+      "function": "Footprint",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 8.17e-06,
+      "cumulative_seconds": 8.17e-06
+    },
+    {
+      "file": "frontend/native_sections.py",
+      "line": 30,
+      "function": "NativeBound",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.6400000000000005e-06,
+      "cumulative_seconds": 8.020000000000001e-06
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1271,
+      "function": "<genexpr>",
+      "primitive_calls": 38,
+      "calls": 38,
+      "self_seconds": 7.99e-06,
+      "cumulative_seconds": 7.99e-06
+    },
+    {
+      "file": "offload/preparation.py",
+      "line": 35,
+      "function": "Preparation",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.72e-06,
+      "cumulative_seconds": 7.72e-06
+    },
+    {
+      "file": "frontend/native_environment.py",
+      "line": 260,
+      "function": "NativeEnvironmentProof",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.13e-06,
+      "cumulative_seconds": 7.360000000000001e-06
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 16,
+      "function": "SourceLocation",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.291e-06,
+      "cumulative_seconds": 7.291e-06
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 54,
+      "function": "Symbol",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.611e-06,
+      "cumulative_seconds": 7.221000000000001e-06
+    },
+    {
+      "file": "offload/analysis.py",
+      "line": 100,
+      "function": "PrivateArrayUsage",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.180000000000001e-06,
+      "cumulative_seconds": 7.180000000000001e-06
+    },
+    {
+      "file": "offload/analysis.py",
+      "line": 127,
+      "function": "WorkloadFeatures",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.141000000000001e-06,
+      "cumulative_seconds": 7.141000000000001e-06
+    },
+    {
+      "file": "driver/options.py",
+      "line": 8,
+      "function": "CompilerOptions",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.14e-06,
+      "cumulative_seconds": 7.14e-06
+    },
+    {
+      "file": "offload/analysis.py",
+      "line": 199,
+      "function": "Interval",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 6.88e-06,
+      "cumulative_seconds": 6.88e-06
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 314,
+      "function": "_Closure",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.77e-06,
+      "cumulative_seconds": 6.8500000000000005e-06
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 95,
+      "function": "SourceScalarElementActual",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.7200000000000004e-06,
+      "cumulative_seconds": 6.78e-06
+    },
+    {
+      "file": "frontend/native_group_structure.py",
+      "line": 202,
+      "function": "NativeGroupUnit",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.1900000000000005e-06,
+      "cumulative_seconds": 6.560000000000001e-06
+    },
+    {
+      "file": "frontend/native_completion.py",
+      "line": 32,
+      "function": "NativeCompletionProof",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.39e-06,
+      "cumulative_seconds": 6.5000000000000004e-06
+    },
+    {
+      "file": "memory/planning.py",
+      "line": 28,
+      "function": "MemoryOperation",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.5000000000000004e-06,
+      "cumulative_seconds": 6.5000000000000004e-06
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1083,
+      "function": "<genexpr>",
+      "primitive_calls": 12,
+      "calls": 12,
+      "self_seconds": 4.85e-06,
+      "cumulative_seconds": 6.380000000000001e-06
+    },
+    {
+      "file": "frontend/native_group_structure.py",
+      "line": 135,
+      "function": "NativeGroupCandidate",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.3710000000000004e-06,
+      "cumulative_seconds": 6.221e-06
+    },
+    {
+      "file": "scopes/region_context.py",
+      "line": 100,
+      "function": "<genexpr>",
+      "primitive_calls": 34,
+      "calls": 34,
+      "self_seconds": 5.92e-06,
+      "cumulative_seconds": 5.92e-06
+    },
+    {
+      "file": "frontend/source_functions.py",
+      "line": 74,
+      "function": "resolution_changes",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 4.95e-06,
+      "cumulative_seconds": 5.8e-06
+    },
+    {
+      "file": "scopes/lexical.py",
+      "line": 110,
+      "function": "Unit",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.7900000000000005e-06,
+      "cumulative_seconds": 5.7900000000000005e-06
+    },
+    {
+      "file": "offload/numerical_calibration.py",
+      "line": 364,
+      "function": "<genexpr>",
+      "primitive_calls": 9,
+      "calls": 9,
+      "self_seconds": 5.6100000000000005e-06,
+      "cumulative_seconds": 5.6100000000000005e-06
+    },
+    {
+      "file": "frontend/native_environment.py",
+      "line": 239,
+      "function": "NativeLocalStateProof",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.69e-06,
+      "cumulative_seconds": 5.53e-06
+    },
+    {
+      "file": "scopes/source.py",
+      "line": 201,
+      "function": "validate_reached_window",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.04e-06,
+      "cumulative_seconds": 5.510000000000001e-06
+    },
+    {
+      "file": "scopes/section_operations.py",
+      "line": 30,
+      "function": "<genexpr>",
+      "primitive_calls": 3,
+      "calls": 3,
+      "self_seconds": 3.8100000000000004e-06,
+      "cumulative_seconds": 5.320000000000001e-06
+    },
+    {
+      "file": "frontend/source_objects.py",
+      "line": 75,
+      "function": "_TypeBuilder",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.281e-06,
+      "cumulative_seconds": 5.281e-06
+    },
+    {
+      "file": "emission/cuda/offload.py",
+      "line": 21,
+      "function": "OffloadEmission",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.27e-06,
+      "cumulative_seconds": 5.27e-06
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 59,
+      "function": "AssociationScope",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.3300000000000003e-06,
+      "cumulative_seconds": 5.1700000000000005e-06
+    },
+    {
+      "file": "frontend/summary_cache.py",
+      "line": 172,
+      "function": "SummaryCache",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.02e-06,
+      "cumulative_seconds": 5.02e-06
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1205,
+      "function": "numerical_type",
+      "primitive_calls": 21,
+      "calls": 21,
+      "self_seconds": 4.6910000000000005e-06,
+      "cumulative_seconds": 4.6910000000000005e-06
+    },
+    {
+      "file": "scopes/immutable_inputs.py",
+      "line": 206,
+      "function": "ScalarElementCapture",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.3e-06,
+      "cumulative_seconds": 4.68e-06
+    },
+    {
+      "file": "emission/common/resources.py",
+      "line": 51,
+      "function": "<genexpr>",
+      "primitive_calls": 14,
+      "calls": 14,
+      "self_seconds": 4.6400000000000005e-06,
+      "cumulative_seconds": 4.6400000000000005e-06
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1277,
+      "function": "<lambda>",
+      "primitive_calls": 18,
+      "calls": 18,
+      "self_seconds": 4.620000000000001e-06,
+      "cumulative_seconds": 4.620000000000001e-06
+    },
+    {
+      "file": "emission/cuda/compute_memory.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.58e-06,
+      "cumulative_seconds": 4.58e-06
+    },
+    {
+      "file": "offload/config.py",
+      "line": 12,
+      "function": "OffloadConfig",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.57e-06,
+      "cumulative_seconds": 4.57e-06
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 79,
+      "function": "SourceSyntaxSnapshot",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.51e-06,
+      "cumulative_seconds": 4.51e-06
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 761,
+      "function": "<genexpr>",
+      "primitive_calls": 4,
+      "calls": 4,
+      "self_seconds": 3.1500000000000003e-06,
+      "cumulative_seconds": 4.49e-06
+    },
+    {
+      "file": "frontend/native_sections.py",
+      "line": 82,
+      "function": "NativeResourceSections",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.43e-06,
+      "cumulative_seconds": 4.43e-06
+    },
+    {
+      "file": "frontend/native_sections.py",
+      "line": 71,
+      "function": "NativeRectangle",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.05e-06,
+      "cumulative_seconds": 4.41e-06
+    },
+    {
+      "file": "scopes/numerical.py",
+      "line": 30,
+      "function": "NumericalSource",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.34e-06,
+      "cumulative_seconds": 4.34e-06
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 156,
+      "function": "SourceCallArgument",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.78e-06,
+      "cumulative_seconds": 4.14e-06
+    },
+    {
+      "file": "scopes/variants.py",
+      "line": 9,
+      "function": "Variant",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.06e-06,
+      "cumulative_seconds": 4.06e-06
+    },
+    {
+      "file": "scopes/variants.py",
+      "line": 34,
+      "function": "__init__",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.61e-06,
+      "cumulative_seconds": 4.03e-06
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 34,
+      "function": "PrivateArrayOrigin",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.86e-06,
+      "cumulative_seconds": 3.86e-06
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 34,
+      "function": "SourceSectionBound",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.6300000000000002e-06,
+      "cumulative_seconds": 3.85e-06
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 24,
+      "function": "SourceDependency",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.1400000000000003e-06,
+      "cumulative_seconds": 3.82e-06
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 2128,
+      "function": "<genexpr>",
+      "primitive_calls": 33,
+      "calls": 33,
+      "self_seconds": 3.7700000000000003e-06,
+      "cumulative_seconds": 3.7700000000000003e-06
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 67,
+      "function": "RectangularSection",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.6300000000000002e-06,
+      "cumulative_seconds": 3.71e-06
+    },
+    {
+      "file": "frontend/sealed_syntax.py",
+      "line": 22,
+      "function": "FrozenList",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.6700000000000004e-06,
+      "cumulative_seconds": 3.6700000000000004e-06
+    },
+    {
+      "file": "offload/analysis.py",
+      "line": 223,
+      "function": "ChunkPlan",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.66e-06,
+      "cumulative_seconds": 3.66e-06
+    },
+    {
+      "file": "offload/analysis.py",
+      "line": 248,
+      "function": "ScopeSlabPlan",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.66e-06,
+      "cumulative_seconds": 3.66e-06
+    },
+    {
+      "file": "frontend/capture_coverage.py",
+      "line": 26,
+      "function": "<genexpr>",
+      "primitive_calls": 3,
+      "calls": 3,
+      "self_seconds": 2.8500000000000002e-06,
+      "cumulative_seconds": 3.31e-06
+    },
+    {
+      "file": "offload/analysis.py",
+      "line": 264,
+      "function": "OffloadAnalysis",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.2800000000000004e-06,
+      "cumulative_seconds": 3.2800000000000004e-06
+    },
+    {
+      "file": "numerical_contract.py",
+      "line": 36,
+      "function": "cuda_compile_options",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.74e-06,
+      "cumulative_seconds": 3.26e-06
+    },
+    {
+      "file": "frontend/summary_cache.py",
+      "line": 194,
+      "function": "stats",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.81e-06,
+      "cumulative_seconds": 3.2000000000000003e-06
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 304,
+      "function": "Routine",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.1900000000000004e-06,
+      "cumulative_seconds": 3.1900000000000004e-06
+    },
+    {
+      "file": "driver/options.py",
+      "line": 25,
+      "function": "<genexpr>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.1900000000000004e-06,
+      "cumulative_seconds": 3.1900000000000004e-06
+    },
+    {
+      "file": "ir/intrinsics.py",
+      "line": 9,
+      "function": "IntrinsicSignature",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.0310000000000003e-06,
+      "cumulative_seconds": 3.0310000000000003e-06
+    },
+    {
+      "file": "scopes/source.py",
+      "line": 69,
+      "function": "Call",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3e-06,
+      "cumulative_seconds": 3e-06
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 48,
+      "function": "_Group",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.95e-06,
+      "cumulative_seconds": 2.95e-06
+    },
+    {
+      "file": "offload/config.py",
+      "line": 31,
+      "function": "__post_init__",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.8400000000000003e-06,
+      "cumulative_seconds": 2.8400000000000003e-06
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 68,
+      "function": "_Layout",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.8400000000000003e-06,
+      "cumulative_seconds": 2.8400000000000003e-06
+    },
+    {
+      "file": "offload/analysis.py",
+      "line": 234,
+      "function": "ScopeSlabArray",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.78e-06,
+      "cumulative_seconds": 2.78e-06
+    },
+    {
+      "file": "frontend/lowering.py",
+      "line": 152,
+      "function": "_KindScope",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.7600000000000003e-06,
+      "cumulative_seconds": 2.7600000000000003e-06
+    },
+    {
+      "file": "frontend/lowering.py",
+      "line": 103,
+      "function": "_ConstantArray",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.68e-06,
+      "cumulative_seconds": 2.68e-06
+    },
+    {
+      "file": "emission/common/abi.py",
+      "line": 10,
+      "function": "AbiArgument",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.65e-06,
+      "cumulative_seconds": 2.65e-06
+    },
+    {
+      "file": "analysis/proof.py",
+      "line": 22,
+      "function": "ParallelProof",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.64e-06,
+      "cumulative_seconds": 2.64e-06
+    },
+    {
+      "file": "scopes/variants.py",
+      "line": 31,
+      "function": "VariantRegistry",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.6e-06,
+      "cumulative_seconds": 2.6e-06
+    },
+    {
+      "file": "frontend/lowering.py",
+      "line": 136,
+      "function": "ProcedureCandidate",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.6e-06,
+      "cumulative_seconds": 2.6e-06
+    },
+    {
+      "file": "scopes/segments.py",
+      "line": 117,
+      "function": "Segment",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.57e-06,
+      "cumulative_seconds": 2.57e-06
+    },
+    {
+      "file": "frontend/reached_windows.py",
+      "line": 1530,
+      "function": "_ResolvedNumericalRegion",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.47e-06,
+      "cumulative_seconds": 2.47e-06
+    },
+    {
+      "file": "scopes/generation_transaction.py",
+      "line": 115,
+      "function": "GenerationTransaction",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.46e-06,
+      "cumulative_seconds": 2.46e-06
+    },
+    {
+      "file": "frontend/native_sections.py",
+      "line": 127,
+      "function": "NativeSections",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.42e-06,
+      "cumulative_seconds": 2.42e-06
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1278,
+      "function": "<genexpr>",
+      "primitive_calls": 4,
+      "calls": 4,
+      "self_seconds": 2.391e-06,
+      "cumulative_seconds": 2.391e-06
+    },
+    {
+      "file": "scopes/views.py",
+      "line": 87,
+      "function": "BorrowedView",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.39e-06,
+      "cumulative_seconds": 2.39e-06
+    },
+    {
+      "file": "emission/fortran/formatting.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.35e-06,
+      "cumulative_seconds": 2.35e-06
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 668,
+      "function": "stable_module_allocatables",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 2.33e-06,
+      "cumulative_seconds": 2.33e-06
+    },
+    {
+      "file": "offload/analysis.py",
+      "line": 212,
+      "function": "ChunkArray",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.3200000000000002e-06,
+      "cumulative_seconds": 2.3200000000000002e-06
+    },
+    {
+      "file": "scopes/participation.py",
+      "line": 128,
+      "function": "CollectiveParticipation",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.3100000000000003e-06,
+      "cumulative_seconds": 2.3100000000000003e-06
+    },
+    {
+      "file": "frontend/lowering.py",
+      "line": 80,
+      "function": "_PrivateArray",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.28e-06,
+      "cumulative_seconds": 2.28e-06
+    },
+    {
+      "file": "analysis/dependence.py",
+      "line": 61,
+      "function": "Affine",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.26e-06,
+      "cumulative_seconds": 2.26e-06
+    },
+    {
+      "file": "frontend/capture_coverage.py",
+      "line": 28,
+      "function": "<genexpr>",
+      "primitive_calls": 4,
+      "calls": 4,
+      "self_seconds": 2.25e-06,
+      "cumulative_seconds": 2.25e-06
+    },
+    {
+      "file": "frontend/capture_coverage.py",
+      "line": 47,
+      "function": "<genexpr>",
+      "primitive_calls": 7,
+      "calls": 7,
+      "self_seconds": 2.19e-06,
+      "cumulative_seconds": 2.19e-06
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 27,
+      "function": "CompilationError",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.1800000000000003e-06,
+      "cumulative_seconds": 2.1800000000000003e-06
+    },
+    {
+      "file": "emission/common/sessions.py",
+      "line": 16,
+      "function": "SessionNames",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.1400000000000003e-06,
+      "cumulative_seconds": 2.1400000000000003e-06
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1215,
+      "function": "<genexpr>",
+      "primitive_calls": 26,
+      "calls": 26,
+      "self_seconds": 2.13e-06,
+      "cumulative_seconds": 2.13e-06
+    },
+    {
+      "file": "scopes/ordinary_consumption.py",
+      "line": 162,
+      "function": "_ordinary_pair_state",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.12e-06,
+      "cumulative_seconds": 2.12e-06
+    },
+    {
+      "file": "offload/numerical_calibration.py",
+      "line": 33,
+      "function": "<genexpr>",
+      "primitive_calls": 4,
+      "calls": 4,
+      "self_seconds": 2.03e-06,
+      "cumulative_seconds": 2.03e-06
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 131,
+      "function": "Loop",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.97e-06,
+      "cumulative_seconds": 1.97e-06
+    },
+    {
+      "file": "scopes/generation_transaction.py",
+      "line": 31,
+      "function": "_GenerationCopy",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.8900000000000001e-06,
+      "cumulative_seconds": 1.8900000000000001e-06
+    },
+    {
+      "file": "frontend/native_sections.py",
+      "line": 59,
+      "function": "NativeAxis",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.87e-06,
+      "cumulative_seconds": 1.87e-06
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 181,
+      "function": "<genexpr>",
+      "primitive_calls": 9,
+      "calls": 9,
+      "self_seconds": 1.841e-06,
+      "cumulative_seconds": 1.841e-06
+    },
+    {
+      "file": "addressing/ranges.py",
+      "line": 32,
+      "function": "RangeProof",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.79e-06,
+      "cumulative_seconds": 1.79e-06
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 201,
+      "function": "<genexpr>",
+      "primitive_calls": 9,
+      "calls": 9,
+      "self_seconds": 1.76e-06,
+      "cumulative_seconds": 1.76e-06
+    },
+    {
+      "file": "frontend/lowering.py",
+      "line": 65,
+      "function": "_Routine",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.76e-06,
+      "cumulative_seconds": 1.76e-06
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1011,
+      "function": "<genexpr>",
+      "primitive_calls": 5,
+      "calls": 5,
+      "self_seconds": 1.7100000000000001e-06,
+      "cumulative_seconds": 1.7100000000000001e-06
+    },
+    {
+      "file": "scopes/reached_owner.py",
+      "line": 29,
+      "function": "MappedReachedControl",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.7e-06,
+      "cumulative_seconds": 1.7e-06
+    },
+    {
+      "file": "ir/plan.py",
+      "line": 63,
+      "function": "ParallelRegion",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.7e-06,
+      "cumulative_seconds": 1.7e-06
+    },
+    {
+      "file": "frontend/capture_coverage.py",
+      "line": 30,
+      "function": "<genexpr>",
+      "primitive_calls": 4,
+      "calls": 4,
+      "self_seconds": 1.6600000000000002e-06,
+      "cumulative_seconds": 1.6600000000000002e-06
+    },
+    {
+      "file": "frontend/source_inputs.py",
+      "line": 16,
+      "function": "SourceInputs",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.6600000000000002e-06,
+      "cumulative_seconds": 1.6600000000000002e-06
+    },
+    {
+      "file": "analysis/dependence.py",
+      "line": 127,
+      "function": "_Event",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.6600000000000002e-06,
+      "cumulative_seconds": 1.6600000000000002e-06
+    },
+    {
+      "file": "scopes/region_context.py",
+      "line": 11,
+      "function": "OriginalRegionContext",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.6400000000000002e-06,
+      "cumulative_seconds": 1.6400000000000002e-06
+    },
+    {
+      "file": "frontend/structured_effects.py",
+      "line": 107,
+      "function": "<genexpr>",
+      "primitive_calls": 4,
+      "calls": 4,
+      "self_seconds": 1.6400000000000002e-06,
+      "cumulative_seconds": 1.6400000000000002e-06
+    },
+    {
+      "file": "analysis/proof.py",
+      "line": 8,
+      "function": "ProofFailure",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.63e-06,
+      "cumulative_seconds": 1.63e-06
+    },
+    {
+      "file": "frontend/native_sections.py",
+      "line": 49,
+      "function": "NativeIteration",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.6200000000000002e-06,
+      "cumulative_seconds": 1.6200000000000002e-06
+    },
+    {
+      "file": "scopes/segments.py",
+      "line": 125,
+      "function": "Branch",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.6000000000000001e-06,
+      "cumulative_seconds": 1.6000000000000001e-06
+    },
+    {
+      "file": "scopes/access.py",
+      "line": 13,
+      "function": "NativeAccessCode",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.59e-06,
+      "cumulative_seconds": 1.59e-06
+    },
+    {
+      "file": "frontend/lowering.py",
+      "line": 51,
+      "function": "_Declaration",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.5800000000000001e-06,
+      "cumulative_seconds": 1.5800000000000001e-06
+    },
+    {
+      "file": "scopes/provenance.py",
+      "line": 7,
+      "function": "Provenance",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.57e-06,
+      "cumulative_seconds": 1.57e-06
+    },
+    {
+      "file": "scopes/constant_parameters.py",
+      "line": 22,
+      "function": "ConstantParameters",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.56e-06,
+      "cumulative_seconds": 1.56e-06
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1211,
+      "function": "<lambda>",
+      "primitive_calls": 18,
+      "calls": 18,
+      "self_seconds": 1.56e-06,
+      "cumulative_seconds": 1.56e-06
+    },
+    {
+      "file": "frontend/capture_coverage.py",
+      "line": 48,
+      "function": "<genexpr>",
+      "primitive_calls": 4,
+      "calls": 4,
+      "self_seconds": 1.5500000000000002e-06,
+      "cumulative_seconds": 1.5500000000000002e-06
+    },
+    {
+      "file": "ir/plan.py",
+      "line": 98,
+      "function": "ExecutionPlan",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.5300000000000002e-06,
+      "cumulative_seconds": 1.5300000000000002e-06
+    },
+    {
+      "file": "ir/plan.py",
+      "line": 11,
+      "function": "RegionReport",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.52e-06,
+      "cumulative_seconds": 1.52e-06
+    },
+    {
+      "file": "scopes/numerical.py",
+      "line": 21,
+      "function": "Parameter",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.4900000000000001e-06,
+      "cumulative_seconds": 1.4900000000000001e-06
+    },
+    {
+      "file": "frontend/native_group_structure.py",
+      "line": 35,
+      "function": "_Scan",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.4700000000000001e-06,
+      "cumulative_seconds": 1.4700000000000001e-06
+    },
+    {
+      "file": "frontend/numerical_preparation.py",
+      "line": 27,
+      "function": "_Budget",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.45e-06,
+      "cumulative_seconds": 1.45e-06
+    },
+    {
+      "file": "scopes/segments.py",
+      "line": 133,
+      "function": "Association",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.4400000000000002e-06,
+      "cumulative_seconds": 1.4400000000000002e-06
+    },
+    {
+      "file": "offload/analysis.py",
+      "line": 65,
+      "function": "Box",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.43e-06,
+      "cumulative_seconds": 1.43e-06
+    },
+    {
+      "file": "frontend/preowner_transfers.py",
+      "line": 25,
+      "function": "PreownerTransfer",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.41e-06,
+      "cumulative_seconds": 1.41e-06
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 152,
+      "function": "FunctionIR",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.41e-06,
+      "cumulative_seconds": 1.41e-06
+    },
+    {
+      "file": "scopes/reached_owner.py",
+      "line": 130,
+      "function": "ReachedWindowOwner",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.3600000000000001e-06,
+      "cumulative_seconds": 1.3600000000000001e-06
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 30,
+      "function": "_Node",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.3100000000000002e-06,
+      "cumulative_seconds": 1.3100000000000002e-06
+    },
+    {
+      "file": "frontend/descriptor_windows.py",
+      "line": 45,
+      "function": "DescriptorWindowUnsupported",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.2900000000000001e-06,
+      "cumulative_seconds": 1.2900000000000001e-06
+    },
+    {
+      "file": "analysis/proof.py",
+      "line": 16,
+      "function": "ParallelizationError",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.28e-06,
+      "cumulative_seconds": 1.28e-06
+    },
+    {
+      "file": "offload/analysis.py",
+      "line": 52,
+      "function": "AxisMapping",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.2700000000000001e-06,
+      "cumulative_seconds": 1.2700000000000001e-06
+    },
+    {
+      "file": "ir/plan.py",
+      "line": 88,
+      "function": "ConditionalRegion",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.24e-06,
+      "cumulative_seconds": 1.24e-06
+    },
+    {
+      "file": "scopes/segments.py",
+      "line": 140,
+      "function": "Delegated",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.2200000000000002e-06,
+      "cumulative_seconds": 1.2200000000000002e-06
+    },
+    {
+      "file": "ir/plan.py",
+      "line": 79,
+      "function": "SequentialRegion",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.2200000000000002e-06,
+      "cumulative_seconds": 1.2200000000000002e-06
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 103,
+      "function": "Size",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.2000000000000002e-06,
+      "cumulative_seconds": 1.2000000000000002e-06
+    },
+    {
+      "file": "frontend/lowering.py",
+      "line": 128,
+      "function": "_FixedVector",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.19e-06,
+      "cumulative_seconds": 1.19e-06
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 231,
+      "function": "_SyntaxCheckpoint",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.17e-06,
+      "cumulative_seconds": 1.17e-06
+    },
+    {
+      "file": "ir/plan.py",
+      "line": 45,
+      "function": "SubscriptDecision",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.1600000000000001e-06,
+      "cumulative_seconds": 1.1600000000000001e-06
+    },
+    {
+      "file": "frontend/call_bindings.py",
+      "line": 56,
+      "function": "SourceSectionAxis",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.12e-06,
+      "cumulative_seconds": 1.12e-06
+    },
+    {
+      "file": "memory/planning.py",
+      "line": 50,
+      "function": "MemoryPlan",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.1100000000000002e-06,
+      "cumulative_seconds": 1.1100000000000002e-06
+    },
+    {
+      "file": "frontend/reached_windows.py",
+      "line": 33,
+      "function": "_NeedsNativeClose",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.08e-06,
+      "cumulative_seconds": 1.08e-06
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 119,
+      "function": "Assignment",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.06e-06,
+      "cumulative_seconds": 1.06e-06
+    },
+    {
+      "file": "scopes/registration.py",
+      "line": 15,
+      "function": "RegistrationCode",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.02e-06,
+      "cumulative_seconds": 1.02e-06
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 109,
+      "function": "IntrinsicCall",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.01e-06,
+      "cumulative_seconds": 1.01e-06
+    },
+    {
+      "file": "scopes/source.py",
+      "line": 225,
+      "function": "_validate_reached_window_fresh",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.5e-07,
+      "cumulative_seconds": 9.600000000000001e-07
+    },
+    {
+      "file": "frontend/source_effects.py",
+      "line": 686,
+      "function": "<genexpr>",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 8.4e-07,
+      "cumulative_seconds": 9.600000000000001e-07
+    },
+    {
+      "file": "frontend/source_syntax.py",
+      "line": 20,
+      "function": "_Sequence",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 9.5e-07,
+      "cumulative_seconds": 9.5e-07
+    },
+    {
+      "file": "ir/plan.py",
+      "line": 23,
+      "function": "HostBlock",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 9.5e-07,
+      "cumulative_seconds": 9.5e-07
+    },
+    {
+      "file": "ir/plan.py",
+      "line": 30,
+      "function": "RegionSchedule",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 9.5e-07,
+      "cumulative_seconds": 9.5e-07
+    },
+    {
+      "file": "emission/fortran/declarations.py",
+      "line": 11,
+      "function": "FortranKinds",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 9.400000000000001e-07,
+      "cumulative_seconds": 9.400000000000001e-07
+    },
+    {
+      "file": "offload/numerical_calibration.py",
+      "line": 41,
+      "function": "NumericalCalibrationError",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 9.300000000000001e-07,
+      "cumulative_seconds": 9.300000000000001e-07
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 84,
+      "function": "ArrayAccess",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 8.81e-07,
+      "cumulative_seconds": 8.81e-07
+    },
+    {
+      "file": "ir/plan.py",
+      "line": 54,
+      "function": "RegionAddressing",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 8.4e-07,
+      "cumulative_seconds": 8.4e-07
+    },
+    {
+      "file": "frontend/numerical_preparation.py",
+      "line": 23,
+      "function": "NumericalPreparationUnsupported",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 8.300000000000001e-07,
+      "cumulative_seconds": 8.300000000000001e-07
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1231,
+      "function": "<genexpr>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.7e-07,
+      "cumulative_seconds": 7.7e-07
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 73,
+      "function": "Literal",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.7e-07,
+      "cumulative_seconds": 7.7e-07
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 96,
+      "function": "Binary",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.7e-07,
+      "cumulative_seconds": 7.7e-07
+    },
+    {
+      "file": "ir/plan.py",
+      "line": 37,
+      "function": "IntegerRange",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.3e-07,
+      "cumulative_seconds": 7.3e-07
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 141,
+      "function": "If",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.200000000000001e-07,
+      "cumulative_seconds": 7.200000000000001e-07
+    },
+    {
+      "file": "frontend/preowner_transfers.py",
+      "line": 21,
+      "function": "PreownerUnsupported",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 7.100000000000001e-07,
+      "cumulative_seconds": 7.100000000000001e-07
+    },
+    {
+      "file": "scopes/constant_parameters.py",
+      "line": 31,
+      "function": "_UnsupportedInitializer",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 6.800000000000001e-07,
+      "cumulative_seconds": 6.800000000000001e-07
+    },
+    {
+      "file": "offload/profile.py",
+      "line": 69,
+      "function": "ProfileError",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 6.800000000000001e-07,
+      "cumulative_seconds": 6.800000000000001e-07
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 90,
+      "function": "Unary",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 6.7e-07,
+      "cumulative_seconds": 6.7e-07
+    },
+    {
+      "file": "scopes/numerical.py",
+      "line": 92,
+      "function": "load_numerical_sources",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 6.6e-07,
+      "cumulative_seconds": 6.6e-07
+    },
+    {
+      "file": "frontend/component_bindings.py",
+      "line": 20,
+      "function": "ComponentAccessUnsupported",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 6.000000000000001e-07,
+      "cumulative_seconds": 6.000000000000001e-07
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1232,
+      "function": "<genexpr>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.800000000000001e-07,
+      "cumulative_seconds": 5.800000000000001e-07
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 79,
+      "function": "Reference",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.7e-07,
+      "cumulative_seconds": 5.7e-07
+    },
+    {
+      "file": "ir/nodes.py",
+      "line": 126,
+      "function": "Block",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 5.5e-07,
+      "cumulative_seconds": 5.5e-07
+    },
+    {
+      "file": "numerical_contract.py",
+      "line": 38,
+      "function": "<genexpr>",
+      "primitive_calls": 2,
+      "calls": 2,
+      "self_seconds": 5.2e-07,
+      "cumulative_seconds": 5.2e-07
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1233,
+      "function": "<genexpr>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.5000000000000003e-07,
+      "cumulative_seconds": 4.5000000000000003e-07
+    },
+    {
+      "file": "scopes/provenance.py",
+      "line": 8,
+      "function": "__init__",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 4.1000000000000004e-07,
+      "cumulative_seconds": 4.1000000000000004e-07
+    },
+    {
+      "file": "emission/cuda/__init__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.9e-07,
+      "cumulative_seconds": 3.9e-07
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1280,
+      "function": "<genexpr>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.7e-07,
+      "cumulative_seconds": 3.7e-07
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1229,
+      "function": "<lambda>",
+      "primitive_calls": 3,
+      "calls": 3,
+      "self_seconds": 3.3e-07,
+      "cumulative_seconds": 3.3e-07
+    },
+    {
+      "file": "scopes/__init__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.3e-07,
+      "cumulative_seconds": 3.3e-07
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 980,
+      "function": "<genexpr>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 3.1e-07,
+      "cumulative_seconds": 3.1e-07
+    },
+    {
+      "file": "emission/c/__init__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.4000000000000003e-07,
+      "cumulative_seconds": 2.4000000000000003e-07
+    },
+    {
+      "file": "emission/common/__init__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 2.3000000000000002e-07,
+      "cumulative_seconds": 2.3000000000000002e-07
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 963,
+      "function": "<genexpr>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.8000000000000002e-07,
+      "cumulative_seconds": 1.8000000000000002e-07
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1196,
+      "function": "<genexpr>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.8000000000000002e-07,
+      "cumulative_seconds": 1.8000000000000002e-07
+    },
+    {
+      "file": "emission/fortran/__init__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.7000000000000001e-07,
+      "cumulative_seconds": 1.7000000000000001e-07
+    },
+    {
+      "file": "driver/__init__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.7000000000000001e-07,
+      "cumulative_seconds": 1.7000000000000001e-07
+    },
+    {
+      "file": "scopes/immutable_inputs.py",
+      "line": 237,
+      "function": "scalar_element_captures",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.6e-07,
+      "cumulative_seconds": 1.6e-07
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1035,
+      "function": "<genexpr>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.6e-07,
+      "cumulative_seconds": 1.6e-07
+    },
+    {
+      "file": "runtime/__init__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.5000000000000002e-07,
+      "cumulative_seconds": 1.5000000000000002e-07
+    },
+    {
+      "file": "__init__.py",
+      "line": 1,
+      "function": "<module>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.4e-07,
+      "cumulative_seconds": 1.4e-07
+    },
+    {
+      "file": "scopes/regions.py",
+      "line": 1283,
+      "function": "<genexpr>",
+      "primitive_calls": 1,
+      "calls": 1,
+      "self_seconds": 1.2000000000000002e-07,
+      "cumulative_seconds": 1.2000000000000002e-07
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "status": "timeout",
+  "experimental": true,
+  "time_limit_seconds": 300,
+  "outer_exit_code": 124,
+  "manifest_emitted": false,
+  "scope_claim": "No final admission or application execution established by incomplete generation"
+}

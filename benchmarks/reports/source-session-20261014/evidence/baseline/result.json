@@ -1,0 +1,8 @@
+{
+  "status": "timeout",
+  "time_limit_seconds": 300,
+  "outer_exit_code": 124,
+  "manifest_emitted": false,
+  "original_input_and_capture_request": "benchmarks/results/application-path-20261014/request.json",
+  "scope_claim": "No successful admission or application execution established by incomplete generation"
+}

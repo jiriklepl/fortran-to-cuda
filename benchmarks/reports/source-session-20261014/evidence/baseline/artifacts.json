@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "files": {
+    "profile.log": "566c56169b86bc11b2c351fc41df4f2d68deed7b0d3e858d89faf85d106a4063",
+    "profile_probe.py": "433f51568f7132c7a4cfe6bcb16dfe1d054a4729a2c7341801dc38d4f11f2674",
+    "request.json": "9c81727347c237d234010c31560192dfe302cf06219e4920e3544527fefd7834",
+    "profile_python": "0a4dcc7915aaf869253ba019690cdc71f307deb9691300e2dce1d1afbbe58c0d",
+    "result.json": "8fb7a88fdcdbf7263c5fbf023965fe5c3696a2a5f5263c827fd4efade7667280",
+    "profile-result.json": "9eda272c8861993d013e87a5b478b2e0278d225a5bbb5fc65fa375578616a1ff",
+    "probe.py": "f9c5657ba7c5175a270ef7ac2fa40413a3b70f2b4221b3dd8d2622b0c0fa3ad6",
+    "generation.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "profile/stacks.log": "8f2b982af51fb0d50d0f0fe9800d6aaeea50fe614fb0b98984b8190c0d1845a7",
+    "profile/profile.pstats": "fe3465418aca1eadaca8477068b08705fd82e3fb071822504bcdcabd695e5e92",
+    "profile/summary.json": "d31cd7d0235805ad6bd46956b3d34f05d7bd01863f39e5142b4abccc0942f8b5",
+    "profile/termination.json": "251341bdd3057c3c563cd578819bc435308158e41ab39ec0b4366981ebae834b"
+  },
+  "compiler_commit": "5d752da1bf88c235b29c1c2cca11c79d8c50ed13",
+  "application_source": "pristine upstream cache;69 authenticated source inputs",
+  "application_executions": 0,
+  "cuda_executions": 0,
+  "stopped_after_unprofiled_timeout": true,
+  "profile_bounded_seconds": 180,
+  "interpretation": "Profile establishes repeated global source authentication dominates observed post-parse generation; incomplete generation proves no final scope admission"
+}

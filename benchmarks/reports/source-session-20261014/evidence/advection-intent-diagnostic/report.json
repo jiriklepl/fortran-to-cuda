@@ -1,0 +1,588 @@
+{
+  "schema_version": 1,
+  "kind": "private-advection-declaration-code-comparison",
+  "performance_measured": false,
+  "application_executed": false,
+  "original_sources_or_objects_modified": false,
+  "original_modules_unchanged": true,
+  "original_build_identity": "95d77a25d590c9d06ae45c9b97736b024d33bbd56ea976fe2cee8c1004bd5dc4",
+  "affinity": [
+    4,
+    5,
+    10,
+    11
+  ],
+  "declaration_changes": [
+    {
+      "procedure": "CDUdiv",
+      "destination": "U2",
+      "before": "intent(out)",
+      "after": "intent(inout)"
+    },
+    {
+      "procedure": "CDUadv",
+      "destination": "U2",
+      "before": "intent(out)",
+      "after": "intent(inout)"
+    },
+    {
+      "procedure": "CDVdiv",
+      "destination": "V2",
+      "before": "intent(out)",
+      "after": "intent(inout)"
+    },
+    {
+      "procedure": "CDVadv",
+      "destination": "V2",
+      "before": "intent(out)",
+      "after": "intent(inout)"
+    },
+    {
+      "procedure": "CDWdiv",
+      "destination": "W2",
+      "before": "intent(out)",
+      "after": "intent(inout)"
+    },
+    {
+      "procedure": "CDWadv",
+      "destination": "W2",
+      "before": "intent(out)",
+      "after": "intent(inout)"
+    }
+  ],
+  "argv_path_substitutions": [
+    {
+      "index": 2,
+      "original": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/advection.o",
+      "diagnostic": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic/advection.o"
+    },
+    {
+      "index": 13,
+      "original": "-J/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build",
+      "diagnostic": "-J/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic"
+    },
+    {
+      "index": 14,
+      "original": "advection.f90",
+      "diagnostic": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic/advection.f90"
+    }
+  ],
+  "semantic_compile_flags_changed": false,
+  "compile_receipts": [
+    {
+      "path": "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic/command-receipts/0b6728a9ee904b9e8f9e543b1f598925.json",
+      "sha256": "31bbaada476e4e6ec4cbb58d843980b584253450b83cc717d80c43bae495a699"
+    }
+  ],
+  "executable_sections_equal": true,
+  "allocated_sections_equal": true,
+  "nondebug_relocation_sections_equal": true,
+  "executable_sections": [
+    ".text"
+  ],
+  "allocated_sections": [
+    ".text",
+    ".data",
+    ".bss",
+    ".rodata",
+    ".rodata.cst8",
+    ".rodata.cst16",
+    ".eh_frame"
+  ],
+  "nondebug_relocation_sections": [
+    ".rela.text",
+    ".rela.eh_frame"
+  ],
+  "textual_comparisons": {
+    "machine-code": true,
+    "relocations": false
+  },
+  "full_objects_equal": false,
+  "original_object_sha256": "a93edc5f4f80aa2e370df2c0623fd0f66bbe7470a6177ffe5da62d91edb712b5",
+  "diagnostic_object_sha256": "bbcdbb60548a16cf025ce28c3fbe2bc999d46f2cc0444ef1afd26a21cd278003",
+  "sections": {
+    ".bss": {
+      "original": {
+        "type": 8,
+        "flags": 3,
+        "size": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "diagnostic": {
+        "type": 8,
+        "flags": 3,
+        "size": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "equal": true
+    },
+    ".comment": {
+      "original": {
+        "type": 1,
+        "flags": 48,
+        "size": 31,
+        "sha256": "a0c78b16e85ecca1556b15bab25839181d5c0c9536b9097d166ec2e52da741bc"
+      },
+      "diagnostic": {
+        "type": 1,
+        "flags": 48,
+        "size": 31,
+        "sha256": "a0c78b16e85ecca1556b15bab25839181d5c0c9536b9097d166ec2e52da741bc"
+      },
+      "equal": true
+    },
+    ".data": {
+      "original": {
+        "type": 1,
+        "flags": 3,
+        "size": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "diagnostic": {
+        "type": 1,
+        "flags": 3,
+        "size": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "equal": true
+    },
+    ".debug_abbrev": {
+      "original": {
+        "type": 1,
+        "flags": 0,
+        "size": 757,
+        "sha256": "eaa07d8107dd3441fe27a7b7773bb2e03e6d1e541469b1128a97a6b14a59fff4"
+      },
+      "diagnostic": {
+        "type": 1,
+        "flags": 0,
+        "size": 757,
+        "sha256": "eaa07d8107dd3441fe27a7b7773bb2e03e6d1e541469b1128a97a6b14a59fff4"
+      },
+      "equal": true
+    },
+    ".debug_aranges": {
+      "original": {
+        "type": 1,
+        "flags": 0,
+        "size": 48,
+        "sha256": "1cb3e7531279ffdd8358adffe4135b93e2006c22c4102dcf40f761c079bb0054"
+      },
+      "diagnostic": {
+        "type": 1,
+        "flags": 0,
+        "size": 48,
+        "sha256": "1cb3e7531279ffdd8358adffe4135b93e2006c22c4102dcf40f761c079bb0054"
+      },
+      "equal": true
+    },
+    ".debug_info": {
+      "original": {
+        "type": 1,
+        "flags": 0,
+        "size": 19624,
+        "sha256": "9a005bdb74035f1566d03b8a0a4e6cedc4032bd2311125f04d0f577b054bfc6b"
+      },
+      "diagnostic": {
+        "type": 1,
+        "flags": 0,
+        "size": 19624,
+        "sha256": "9a005bdb74035f1566d03b8a0a4e6cedc4032bd2311125f04d0f577b054bfc6b"
+      },
+      "equal": true
+    },
+    ".debug_line": {
+      "original": {
+        "type": 1,
+        "flags": 0,
+        "size": 18299,
+        "sha256": "8ae6e1b71fcf1104d107d178931b7780684993dece4b929b0297e84781186821"
+      },
+      "diagnostic": {
+        "type": 1,
+        "flags": 0,
+        "size": 18303,
+        "sha256": "a0bd9e1c10abb3eff981eabf88953607748f00a8dd23a824cbd185a0bf000549"
+      },
+      "equal": false
+    },
+    ".debug_line_str": {
+      "original": {
+        "type": 1,
+        "flags": 48,
+        "size": 215,
+        "sha256": "a33f7e6dc1a7dfe6bf198181fc6ef36a11e1614bca8927ea5f7c4a3869d2174e"
+      },
+      "diagnostic": {
+        "type": 1,
+        "flags": 48,
+        "size": 415,
+        "sha256": "87cbfc583c8865df5d5c1a915d6ea32279ea768766107d86d83925a62c25e4e9"
+      },
+      "equal": false
+    },
+    ".debug_loclists": {
+      "original": {
+        "type": 1,
+        "flags": 0,
+        "size": 37996,
+        "sha256": "07be8e52e6df47e82072e68357b212ec0fea4a138ffeb168ab68d5cbd7b9ed68"
+      },
+      "diagnostic": {
+        "type": 1,
+        "flags": 0,
+        "size": 37996,
+        "sha256": "07be8e52e6df47e82072e68357b212ec0fea4a138ffeb168ab68d5cbd7b9ed68"
+      },
+      "equal": true
+    },
+    ".debug_rnglists": {
+      "original": {
+        "type": 1,
+        "flags": 0,
+        "size": 998,
+        "sha256": "e288e2cffc5576e11304dfc1d7ddd872cf8a3016add699928e0f7b9a813d5d7c"
+      },
+      "diagnostic": {
+        "type": 1,
+        "flags": 0,
+        "size": 998,
+        "sha256": "e288e2cffc5576e11304dfc1d7ddd872cf8a3016add699928e0f7b9a813d5d7c"
+      },
+      "equal": true
+    },
+    ".debug_str": {
+      "original": {
+        "type": 1,
+        "flags": 48,
+        "size": 1899,
+        "sha256": "a96764ccb17942104569e4a8601be74e95450caa884bdd0db074c1ca4e097517"
+      },
+      "diagnostic": {
+        "type": 1,
+        "flags": 48,
+        "size": 1921,
+        "sha256": "dd55258ed3404e6dc729bcf5434d141973a54d9ccca9c40d0e4d2cd4df619769"
+      },
+      "equal": false
+    },
+    ".eh_frame": {
+      "original": {
+        "type": 1,
+        "flags": 2,
+        "size": 1560,
+        "sha256": "f4e5ea8b11ddcca9c1f4cdc3fa22b6fec81b0a31e8ee74068f08bc882edb0f45"
+      },
+      "diagnostic": {
+        "type": 1,
+        "flags": 2,
+        "size": 1560,
+        "sha256": "f4e5ea8b11ddcca9c1f4cdc3fa22b6fec81b0a31e8ee74068f08bc882edb0f45"
+      },
+      "equal": true
+    },
+    ".note.GNU-stack": {
+      "original": {
+        "type": 1,
+        "flags": 0,
+        "size": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "diagnostic": {
+        "type": 1,
+        "flags": 0,
+        "size": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "equal": true
+    },
+    ".rela.debug_aranges": {
+      "original": {
+        "type": 4,
+        "flags": 64,
+        "size": 48,
+        "sha256": "2e41e712c7c106e329f454183e8b791349ce48922d2a1b57b237ef4320c42f6c"
+      },
+      "diagnostic": {
+        "type": 4,
+        "flags": 64,
+        "size": 48,
+        "sha256": "2e41e712c7c106e329f454183e8b791349ce48922d2a1b57b237ef4320c42f6c"
+      },
+      "equal": true
+    },
+    ".rela.debug_info": {
+      "original": {
+        "type": 4,
+        "flags": 64,
+        "size": 28200,
+        "sha256": "463075140e16926dea398bee743b41d04e3e862439c4cfe6eecf6b103c79d2ed"
+      },
+      "diagnostic": {
+        "type": 4,
+        "flags": 64,
+        "size": 28200,
+        "sha256": "a6d7944b3597dcdd1de841092a54b1a97412791694166ffe2db609dd590fc330"
+      },
+      "equal": false
+    },
+    ".rela.debug_line": {
+      "original": {
+        "type": 4,
+        "flags": 64,
+        "size": 120,
+        "sha256": "90b51e5f5035c5ecf18988f90429fd8195fd0af2a49052be9a781eb3c3079c08"
+      },
+      "diagnostic": {
+        "type": 4,
+        "flags": 64,
+        "size": 144,
+        "sha256": "0048d933a8b521a923364610ced17de5c1287b9bc7aafbb0cfb54368b907cf12"
+      },
+      "equal": false
+    },
+    ".rela.eh_frame": {
+      "original": {
+        "type": 4,
+        "flags": 64,
+        "size": 504,
+        "sha256": "e03d96291921c1c9ef6398117505691995ff8c49111e60d46b91cd26445497b2"
+      },
+      "diagnostic": {
+        "type": 4,
+        "flags": 64,
+        "size": 504,
+        "sha256": "e03d96291921c1c9ef6398117505691995ff8c49111e60d46b91cd26445497b2"
+      },
+      "equal": true
+    },
+    ".rela.text": {
+      "original": {
+        "type": 4,
+        "flags": 64,
+        "size": 10800,
+        "sha256": "5b90b7c4c817aa0b8921c616e7813855efa56c0ddb69b376e20d4cf96458b4a4"
+      },
+      "diagnostic": {
+        "type": 4,
+        "flags": 64,
+        "size": 10800,
+        "sha256": "5b90b7c4c817aa0b8921c616e7813855efa56c0ddb69b376e20d4cf96458b4a4"
+      },
+      "equal": true
+    },
+    ".rodata": {
+      "original": {
+        "type": 1,
+        "flags": 2,
+        "size": 32,
+        "sha256": "e22955e4be27f8de501dfaf4c6f8de20311baccad535401a97b2887f869fbf82"
+      },
+      "diagnostic": {
+        "type": 1,
+        "flags": 2,
+        "size": 32,
+        "sha256": "e22955e4be27f8de501dfaf4c6f8de20311baccad535401a97b2887f869fbf82"
+      },
+      "equal": true
+    },
+    ".rodata.cst16": {
+      "original": {
+        "type": 1,
+        "flags": 18,
+        "size": 64,
+        "sha256": "66239293a79aa046d0db496ce1c0a8c6fbf2d8ff7a8949b6f3da183867b67387"
+      },
+      "diagnostic": {
+        "type": 1,
+        "flags": 18,
+        "size": 64,
+        "sha256": "66239293a79aa046d0db496ce1c0a8c6fbf2d8ff7a8949b6f3da183867b67387"
+      },
+      "equal": true
+    },
+    ".rodata.cst8": {
+      "original": {
+        "type": 1,
+        "flags": 18,
+        "size": 32,
+        "sha256": "8a3944331184d7aa90e37bc64173c26e068994d178512dc0d248e5b4c0577e2b"
+      },
+      "diagnostic": {
+        "type": 1,
+        "flags": 18,
+        "size": 32,
+        "sha256": "8a3944331184d7aa90e37bc64173c26e068994d178512dc0d248e5b4c0577e2b"
+      },
+      "equal": true
+    },
+    ".shstrtab": {
+      "original": {
+        "type": 3,
+        "flags": 0,
+        "size": 251,
+        "sha256": "55bd897a04cba615820482d70e25b9c310862972d5d1abb77404022428fa457d"
+      },
+      "diagnostic": {
+        "type": 3,
+        "flags": 0,
+        "size": 251,
+        "sha256": "55bd897a04cba615820482d70e25b9c310862972d5d1abb77404022428fa457d"
+      },
+      "equal": true
+    },
+    ".strtab": {
+      "original": {
+        "type": 3,
+        "flags": 0,
+        "size": 1427,
+        "sha256": "ad70a99a6f09e1bca1b518a1fae910a843ca12d159dc38ad35ac875dd184d744"
+      },
+      "diagnostic": {
+        "type": 3,
+        "flags": 0,
+        "size": 1427,
+        "sha256": "ad70a99a6f09e1bca1b518a1fae910a843ca12d159dc38ad35ac875dd184d744"
+      },
+      "equal": true
+    },
+    ".symtab": {
+      "original": {
+        "type": 2,
+        "flags": 0,
+        "size": 1656,
+        "sha256": "65bf21779df099a8e17a65e5b2fa07f71b9c63097770d3d73715246941a34601"
+      },
+      "diagnostic": {
+        "type": 2,
+        "flags": 0,
+        "size": 1656,
+        "sha256": "65bf21779df099a8e17a65e5b2fa07f71b9c63097770d3d73715246941a34601"
+      },
+      "equal": true
+    },
+    ".text": {
+      "original": {
+        "type": 1,
+        "flags": 6,
+        "size": 104172,
+        "sha256": "0ec3817a775ec4f9ee4e184fe9033f13e140ca02595358dcb57d0e4d91881ca1"
+      },
+      "diagnostic": {
+        "type": 1,
+        "flags": 6,
+        "size": 104172,
+        "sha256": "0ec3817a775ec4f9ee4e184fe9033f13e140ca02595358dcb57d0e4d91881ca1"
+      },
+      "equal": true
+    }
+  },
+  "original_modules_sha256": {
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/immersedboundarywm.mod": "9a6b58510d295d438912636f390182cc1ceffa063ed663ee4f4d9509f5fee795",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/solidbodies.mod": "3b1e0b059f217f918a401ebbe21f4a3216e0217e452f47dd990ecd5c7f85c28a",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/vtkarray.mod": "4496e5f45c946dcb19620bc883450e76a1330ddbb1d17bddf02319c348899512",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/buoyantgases.mod": "a503617ce52eb25a9f8491260c89e667291e1ab267f752df90da14cdb47250fa",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/wmpoint_types.mod": "40864178d503cc177cbde11c6f8686db87876534effdf66b475ec5ee8bb84b75",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/filters.mod": "af7d34f9d1753ce12bf441c09475b517255a53d48154495285057267f8ff3276",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/staggeredframes.mod": "c9faaed8d0b08ff62c26cd77ff07aa5bb887e67218a0eb99f09acfc87c114980",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/scalardiffusion.mod": "42fd8a61c542a321fd29fe6258be9201492ac2b6715e4e2b7bee5ff0921fb5f4",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/pthreads.mod": "eddc2d7aab499aac70ee5290f5aa56cdbc117d5b3a64df9cc5659060c64bef6d",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/freeunit.mod": "46d2465686b134ccd25963d91b2041d73f2f1bbf85345b99ebccb906ca61a1ed",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/tiling.mod": "0a813db9035247852b68e24c864ebec29702a4fbfec60d456fc4aaaee0d8f6e4",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/poisfft_sp.mod": "785e26ce8a51a480b428078e5cc7dd849886940c3ebe28c264bff0e50af5aa05",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/kinds.mod": "05c0488884217bfd219ec554f84cc311c944f3fe9682450cc2bfb338b927e47d",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/parsetrees_fields.mod": "cb5c34922f8156b1dfffacf40311b2b4808d39e7fc25b46f5b9dd1f44e474d14",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/diabaticprocesses.mod": "c71ba10e88a38e356bbfd1b0063abe2b54a8c66fc28dd4885316dd57fde0a786",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/rng_par_zig.mod": "aeed6920d866db9e1e19b183297badd3a1d4284a06257f3f3db5b7de5995319e",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/poissonresidues.mod": "f1982fdd557a42fe8a43bfd6eaf6164097f5c8a0af9cdf83049328395a5f6e7b",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/solarradiation.mod": "7693221b4965cb43440f980dc9cc4f253646083d1adfe94d45507851df6ceaef",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/waterthermodynamics.mod": "b18908d327a9cf7ca54f7a8750f0909b02b0ecf4c2c10d75426597ae8b20ab9f",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/strings.mod": "895928ec2205a6b31826675b750ad0cf4a6cee468484707d9a750cb0e153b670",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/multigrid2d.mod": "873a6fe782e92842ad5e981e7985b8d459237da42a0d857cf20215035a4a7169",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/stop_procedures.mod": "55205507f583afa1e6518ec56ed564a16fc532b6020c1207d01cc2d847a02d08",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/puffs.mod": "a8728841f6b8cec0a90ac0a48bd38a2fce3692603afe55ee453e208a7b4b7b20",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/directories.mod": "7790d15a28d8ec1cd6145ae825cd65eef1b5a4333c7fd24f45d326a605dd1a21",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/momentumadvection_variable_z.mod": "96fefa78d3ce50b99b1ee721a5a0860948a07cb9d895d271b62c81fd879496f1",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/scalaradvection.mod": "727a21b6c3f8d2c272a6af5f37d69ab90c4f5c5f3027a467c602d3df5c2e7dba",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/fft_sp.mod": "92b3af4b9e91962834fd4b085b416678d6f551837b57469ae6ee5dcaabf158b2",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/parsetrees.mod": "d507c083e2a1301e4bd40541a650455840a23283a0f61664b57f1bf1ef8af7b1",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/geometricshapes2d.mod": "19632d461792161873d8bcaacbeea7519b56bb2141ca538fc3d49e55769b2ff3",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/radiation.mod": "a3c25208a900c1e4423300ffc9ad51a0f222cab6c84ed92cc8f9878afc281b38",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/wmpointlists.mod": "b630bf17986fb2089128658ba4d8eff50d9674d032e5217696f6f2c7bf4d9009",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/volumesources.mod": "988b434b382a0d946ba97b9692a98d706bd106d0108ffce8cc9d0253d5b5a490",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/subgrid_mixedtimescale.mod": "b2a74a7bbd2226aa87aaa2f3d236cf077e9710776f7c0373e54509e36f0de436",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/cgal_polyhedra.mod": "b9c97dfe2c285470f66d1d3ed11f084f15cff40997b2994a748e8bdfa8410f0d",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/turbinlet.mod": "5101811868c85a80b82dee428518dbe012c936e22958e26518c847192b634b2f",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/immersedboundary.mod": "aa67285a1a455f64461fca187e77428b6a6e9e72fd9416402055deadde6330c8",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/areasources.mod": "c71d19b43a38a15c0e0740eb87786c4355483c336f3038af14569ce99d55d755",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/momentumadvection.mod": "477e76d5435f10f11c6355ff0632abf4be4c629d5894e5351165483b358bb970",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/elevationmodels.mod": "0fefafb0e6acc12890e001c1459e5c7eafb87634780abc26dac81ca44ecc4764",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/linesources.mod": "8fa1115df89f02f8023cb0e3c46c2fcc73986d9b7a4d669b4ef9de154ca5c2e5",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/lapack.mod": "1b811a368386697d3f59b8b6d5898c2eea134f55becc755cf1305818403147f9",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/initial.mod": "dec3c53714ca2a676b2c6c4203ec99fd9cd7bcf9e87b5fa527165879d3a7faec",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/verticalprofiles.mod": "84f2ac4929f13c3eff1c28ed05a713524406e498dcd5a62f43b174673609832c",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/numericaloperators.mod": "3f8356565298c258f0fdcd70cbe374f03aac9b42fcaf451724cf6db2ee14688c",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/lists.mod": "da1b41aa1fc11a55d804473fdcd5a648e5a23bf52a0a1b2cc0f2ccece9bfe98f",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/fftw3.mod": "48bf45c84b1018871999cee318f3ae103fdcf496e5552f89bee1446948913829",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/momentumdiffusion.mod": "6f2e576e78d06ff4e25dd355d7d7df6208c566574a194fef7fedda6ad512e75a",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/linearforcing.mod": "97fcb92ce6ad779b250bca7b043549d7e203cc6d35bd035e7eaeb4bc75b77710",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/body_class.mod": "0db963684c84238ab7dc6cc2d8c53a761c0e8bd980c0a2ebcfea68d371aa3132",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/poisfft_dp.mod": "b90877adf267f19e8fcef9363fb15e2cbe5a6b2e57da52b9745bdf26f51d3f7b",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/gen_lists.mod": "1c5d1eedf6e90e2eb023506df191b482d2a13f41c3947618a82b2916b75d3599",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/rk1.mod": "da50d9787746617536a7d58cb9cecb2d6066733a1e7be7e406e7bbde81b845c6",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/rk3.mod": "176e3af2e60dd75638215daede9f86cc923c55cff138b4329d226b590254d6e5",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/limiters.mod": "0d74ffa6d9cb9d80ae6883fe99821efc82e6c9a6a3883183130fa662829c5b2f",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/rungekutta_coefficients.mod": "4fcd2d5f58fcc1e789d7aec38c58d303e6cd37d5ecf1f0bdf4461f78a0e0696b",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/outputdata.mod": "392cb66af360596e59547e0d135ffdf8c49d3beae4470ba4bde318271afd3818",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/endianness.mod": "75588fa541931bbac764165a77c427edc305e85fce0246c8ef8ae85c3c9ada77",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/str_lists.mod": "f757540527c94ed58235a228ac16527defd5849a25a257ca8bb8eb1c052e6745",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/vtkframes.mod": "b00c488aaaa6445de17387c4df19fb58d34d488725f7811e2d0c2746f418e7db",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/dynamics.mod": "8873f4279ad4d42d6a693c73230aff372d4a889da49672cd6cf8bb8e77afab3f",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/poisfft_parameters.mod": "f2cf9935044b7cbe02cb1a39d4d5aa47cd18991ea7302f710094d8a9a102e0eb",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/large_scale_processes.mod": "caf511b85aa9c5747dfb374ab85eed081e07f609c5cc6edc545c4a91687bc272",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/interpolation.mod": "9151f72ef301c20f2081ff36afb2827680908bf5398eaf3b3a3541cc4a13519b",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/ieee_arithmetic.mod": "9e487429b160e20a35dbbb2c955bc58bb6fd488d5dda70130bed7059265f56de",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/custom_par.mod": "1174600c096dfbc4a71df8be1e389514dbc0afe71eb65595a66dd2d03d8ee70b",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/pressure.mod": "5130f49011fc28cd93e6123d20a5a18df79f9c9363cfa55ed6eea2121f34c2ce",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/pointsources.mod": "ff7962535d0216dcb12f7fa50cd5650b903ca7619d0ef9b2bafe151566c35613",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/sort.mod": "658dc493b6e415c0163a48b14acd29ccb962a8bab0e2bab9d909d478d0ec6c81",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/arrayutilities.mod": "e4e426b0c55c87dc5ad0afcbdd6aff2a29a0a8a54067232979f2012558a7d2f7",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/timesteps.mod": "5e52d8b3a3da92fb15d3d10bef94d1821072477a26242edf1a79eba18978a55c",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/poisfft.mod": "fa208a89b0ba83072d6c8fb91201fa9c4c13ef4ef17cc6fd546521837bef9270",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/surfaceframes.mod": "596edfe73fc6f1f244705d3c32119df10a802c93ccc44154ca83008f3d73da8f",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/frames_common.mod": "187d3b7cbb829f387b3915ba95deab909a8a73c5fc05a4806e7cf6ed449d8760",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/scalarboundaries.mod": "fbd00bb23b42a6bb7421b7db12768af742155c362ead73185404b5d3cd6c4bd7",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/ibpoint_types.mod": "c2d2825b87a06fe7cd53e21244339d7a633f6176012e30ed546bb94247da2ddd",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/wallmodels.mod": "96387cae68cace37ffdda550cca4020315550c60f3c7cd5b31225c8e6c6eb283",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/sponge.mod": "f8f8b8ee9051e59865792c1e029aa4151e4e0fe53475b82745fcbd1c3e91c879",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/volumesourcebody_type.mod": "84bc83bf0236b9d6e1e8a274ae155c130e8de22db6e6155c9ef3050d6032dc23",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/physicalproperties.mod": "5fc71a95ea26a4158c533b1a1929c72fe2e9013875bf3ae71431ad47d5a950c4",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/poisfft_precisions.mod": "d9d35fd9235af57775c288907efb5277d2fb54f0eacc5dbfe3dc3c405383cc59",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/outputs.mod": "b5256a8984d9c0dcb3c6d74d6d9d9977ca8023ad79d6a18d0a9c1f8c28f356f3",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/fft_dp.mod": "817360f3019517062fbf80c6f30f8c4b6077fa44afb6befe9306712672b2aa09",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/rng_int_to_real.mod": "6d3fba4cf3dd334fa27231ef3c495149105f40992d21089fd0b559666fa881e5",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/scalflibpoint_list.mod": "632f1194c1a3b7f0f9b44e7ad6abbec5200808b0314e67b13f6db4df550adc62",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/scalars.mod": "a51b6f57f4ed30cb208a99f33b74e8c1c694f76c3908b52a06ab2af508c4aa37",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/geometricshapes.mod": "1204ba275f275c8b52f853c5280d0dfdc4fb8c07908ec5f15cd1009ee133ea38",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/plantbody_type.mod": "ef4f34c44ba71896073a018582409b02414cbd5822e84579a92caa47d1bb75c4",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/velibpoint_list.mod": "3a3b2879018e0030a6b265ed4d83fec12d3681e38b751c0fe443c1236ae76089",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/r3_type.mod": "7bb3dd7e06f01652f3b2b212977fd45e50d3ed5cf8b2752816f6b8d00bc657e5",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/poissonsolvers.mod": "e82e87c07cc6c49adb0d09909177ca967a37ae57a906d7f0e5a2f5a7e4b1b2c1",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/parameters.mod": "6b60a9ffb6234ae0defd26f53f5893eb8f0f775ae3467a93afd6283fc58df584",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/subgrid.mod": "0ceaddba8ebe7d4aa328f1019c446e7efa705cfb3d437edb516c6a1f8305b951",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/boundaries.mod": "4217ea61044a4705262ea76cb85a73bd886d8bf6c01ffb8d73218d9431a1f29a",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/output_helpers.mod": "2d6e062c435bb00a35342a2c9fd88162250a0fd8ce6d828ea64555767ceaeb20",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/wmpointuvwlists.mod": "5462d3d3a751f0a7112de9a1766a0e28a0ae825c155bd9025a56289c513eefb9",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/multigrid.mod": "7be15bcefe02dcb15f1eec8940d1c6a5993012bfbae7f2ae8bbdd74f9618da72"
+  },
+  "files_sha256": {
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic/reproduce.py": "0e117751e830941c39b6e54ceee160c8fca00086b5361d6d71dbd1760c02ffc7",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/ELMM/src/advection.f90": "6437b7e3a1e748eb39f4fcb8c865f23aafccfbfa0842838bd16c0c54b95c10ca",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic/advection.f90": "e32b9a1d7bd1c39711ff0dbd5f93938217feed40b34b86f41d42dc2cc080658d",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic/source.patch": "57102e96312c97f0748201674bc011a7bf0c8d965545e3170536b56464ca8c10",
+    "/usr/bin/objdump": "efd15bb2361eb94c16ffcd38f75a1c227a70b5b54919032b925aa2441eb669e8",
+    "/usr/bin/gfortran-14": "a71c6f88b219660bd5c05882d1db04a9f53de4da41e247b2515d3593fa382fa9",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/build/momentumadvection.mod": "477e76d5435f10f11c6355ff0632abf4be4c629d5894e5351165483b358bb970",
+    "/tmp/fortran-residency-e2e-20261014/build-receipt-checkpoint-gfortran14/advection-intent-diagnostic/momentumadvection.mod": "556de6077372a138972b7652cd9500b3fa7613740608797a6db00531eaf85a98"
+  }
+}

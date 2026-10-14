@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "files": {
+    "compiler.tar": "4deab561310c5964e977aa55a2ff460dce74821185692b4decc8055ba22842de",
+    "profile.log": "672bf07d76795b17fe0f22dd2ec1d9de59c9e08e7964635f15e22378bbbb676e",
+    "profile_probe.py": "23f934e0a31528e18d56dfd0933f76e087ab69fd96956d69b8a3fffc04a0cb70",
+    "pipeline.tar": "333acd14c9fb3e6ba48e21dd8b8d247f7546460fcda6b11da3f007f59c2765de",
+    "request.json": "2e4695a40dcb5b7f879a0e0ce1a927e3538bef69ccb3cdcf3614f59009def056",
+    "profile_python": "9c7d2a54efc4fa2b905dc0024a008ce9bc7024beff55e95c7e938e7658c14769",
+    "result.json": "b173a86aa840ac9b4b9b7037f7951c5f452744bb5d81da4be8e81f6cb9e9f8b6",
+    "profile-result.json": "68b4364919c1c17c4274e1668ae21e3ec164f8a52cdd428dc1afea56ae4ead5d",
+    "comparison.json": "29d74af62f27d430f519089435ee7a1846b84306bfcc061dce2200363485ea91",
+    "probe.py": "cbbfcc1d69eb6d5c0a2b0cd678333f30d2b0e20152f61b82b8ce8ca8887f4634",
+    "generation.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "profile/stacks.log": "6cb8778dad4f5f97f77e61e0d92ec9cb585ab3e876235f3afc5f7ce87fe583fb",
+    "profile/profile.pstats": "23f05ee9765d08e05819fb4f2b4e8d61386208388de27f57af70372eaee91354",
+    "profile/summary.json": "4df96ae97ee84b003e63448cc4b8cff1d605eb1b2c034cae2776771377db99ac",
+    "profile/termination.json": "8511a66b60af235ac6d3c69c67ec487e1a2006404c4f70b31ad6c89e4c42a025"
+  },
+  "experimental": true,
+  "application_executions": 0,
+  "cuda_executions": 0,
+  "generated_final_manifests": 0,
+  "source_inventory": "request.json compiler_snapshot_sha256 and compiler_overlay",
+  "compiler_base_commit": "e335714c86e2f36730e91cbe0a416f2d1b22447d",
+  "pipeline_commit": "3c799dc0d266abf6aa6eb0d4b3ce39234cd80bcd"
+}
