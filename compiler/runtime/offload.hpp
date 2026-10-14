@@ -61,12 +61,8 @@ inline bool context_valid(int threads, bool collective) {
     return collective ? in_parallel() && team_size() == threads : !in_parallel();
 }
 
-inline bool compatible(const Profile &p, int threads, int precision) {
-    if (!p.valid || p.threads != threads || p.precision != precision) return false;
-    fort_runtime::HostFloatingEnvironment floating_environment;
-    if (!floating_environment.valid()) return false;
-#ifdef __CUDACC__
-    static const std::string cpu_name = []() {
+inline const std::string &cpu_identity() {
+    static const std::string name = []() {
         std::ifstream input("/proc/cpuinfo");
         std::string line;
         while (std::getline(input, line)) {
@@ -79,6 +75,15 @@ inline bool compatible(const Profile &p, int threads, int precision) {
         }
         return std::string{};
     }();
+    return name;
+}
+
+inline bool compatible(const Profile &p, int threads, int precision) {
+    if (!p.valid || p.threads != threads || p.precision != precision) return false;
+    fort_runtime::HostFloatingEnvironment floating_environment;
+    if (!floating_environment.valid()) return false;
+#ifdef __CUDACC__
+    const auto &cpu_name = cpu_identity();
     const std::string host = std::to_string(__GNUC__) + "." + std::to_string(__GNUC_MINOR__) + "." + std::to_string(__GNUC_PATCHLEVEL__);
     const std::string cuda = std::to_string(__CUDACC_VER_MAJOR__) + "." + std::to_string(__CUDACC_VER_MINOR__) + "." + std::to_string(__CUDACC_VER_BUILD__);
     static const auto versions = []() {
