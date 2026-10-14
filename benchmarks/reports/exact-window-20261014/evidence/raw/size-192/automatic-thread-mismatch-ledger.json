@@ -1,0 +1,19 @@
+{
+  "predicted": {
+    "upload_bytes": 0,
+    "download_bytes": 0,
+    "launch_count": 0
+  },
+  "observed": {
+    "upload_trace_events": 0,
+    "download_trace_events": 0,
+    "launch_count": 0,
+    "upload_bytes": 0,
+    "download_bytes": 0
+  },
+  "fields_sha256": "226bf84d091f812509b9a48c6b7f4b78a725a5112a2e5dd8ca4befb2d19a5c5d",
+  "trace_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "coverage": "all entry, native correction, publication and cleanup transfers",
+  "counts": "upload/download trace events count CopyPlan/Box records, not individual CUDA API copies",
+  "prediction": "a producer input; one corrected b cell reupload; interior out input; b,d,out publication"
+}

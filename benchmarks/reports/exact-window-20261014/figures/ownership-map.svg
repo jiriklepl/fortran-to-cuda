@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="739.8pt" height="594.325031pt" viewBox="0 0 739.8 594.325031" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.10.9+dfsg1, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 594.325031
+L 739.8 594.325031
+L 739.8 0
+L 0 0
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 21.708 135.843431
+L 710.838 135.843431
+Q 716.6412 135.843431 716.6412 131.408231
+L 716.6412 78.185831
+Q 716.6412 73.750631 710.838 73.750631
+L 21.708 73.750631
+Q 15.9048 73.750631 15.9048 78.185831
+L 15.9048 131.408231
+Q 15.9048 135.843431 21.708 135.843431
+z
+" clip-path="url(#p6e6cf926fe)" style="fill: #eef6fa; stroke: #1677a8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 21.708 210.133031
+L 710.838 210.133031
+Q 716.6412 210.133031 716.6412 205.697831
+L 716.6412 152.475431
+Q 716.6412 148.040231 710.838 148.040231
+L 21.708 148.040231
+Q 15.9048 148.040231 15.9048 152.475431
+L 15.9048 205.697831
+Q 15.9048 210.133031 21.708 210.133031
+z
+" clip-path="url(#p6e6cf926fe)" style="fill: #f1f3f6; stroke: #64748b; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 21.708 284.422631
+L 710.838 284.422631
+Q 716.6412 284.422631 716.6412 279.987431
+L 716.6412 226.765031
+Q 716.6412 222.329831 710.838 222.329831
+L 21.708 222.329831
+Q 15.9048 222.329831 15.9048 226.765031
+L 15.9048 279.987431
+Q 15.9048 284.422631 21.708 284.422631
+z
+" clip-path="url(#p6e6cf926fe)" style="fill: #f1f3f6; stroke: #64748b; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 21.708 358.712231
+L 710.838 358.712231
+Q 716.6412 358.712231 716.6412 354.277031
+L 716.6412 301.054631
+Q 716.6412 296.619431 710.838 296.619431
+L 21.708 296.619431
+Q 15.9048 296.619431 15.9048 301.054631
+L 15.9048 354.277031
+Q 15.9048 358.712231 21.708 358.712231
+z
+" clip-path="url(#p6e6cf926fe)" style="fill: #eef6fa; stroke: #1677a8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 21.708 433.001831
+L 710.838 433.001831
+Q 716.6412 433.001831 716.6412 428.566631
+L 716.6412 375.344231
+Q 716.6412 370.909031 710.838 370.909031
+L 21.708 370.909031
+Q 15.9048 370.909031 15.9048 375.344231
+L 15.9048 428.566631
+Q 15.9048 433.001831 21.708 433.001831
+z
+" clip-path="url(#p6e6cf926fe)" style="fill: #eef6fa; stroke: #1677a8; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 21.708 507.291431
+L 710.838 507.291431
+Q 716.6412 507.291431 716.6412 502.856231
+L 716.6412 449.633831
+Q 716.6412 445.198631 710.838 445.198631
+L 21.708 445.198631
+Q 15.9048 445.198631 15.9048 449.633831
+L 15.9048 502.856231
+Q 15.9048 507.291431 21.708 507.291431
+z
+" clip-path="url(#p6e6cf926fe)" style="fill: #edf5f0; stroke: #21805a; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 19px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #203047" x="7.2" y="21.637031" transform="rotate(-0 7.2 21.637031)">One original call: ownership and transfer edges</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #203047" transform="translate(7.2 45.867469)">Resident execution map · original numerical order · no ELMM scheduling claim</text>
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; fill: #203047" transform="translate(7.2 58.584969)">Production AUTO choices: n=16: native; n=192: resident</text>
+   </g>
+   <g id="text_3">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #1677a8" x="39.843" y="97.589831" transform="rotate(-0 39.843 97.589831)">1  GPU producer</text>
+   </g>
+   <g id="text_4">
+    <text style="font-size: 10.3px; font-family: 'DejaVu Sans'; fill: #203047" transform="translate(224.82 102.198475)">Upload a interior: 8 n³ bytes</text>
+    <text style="font-size: 10.3px; font-family: 'DejaVu Sans'; fill: #203047" transform="translate(224.82 115.2975)">a → b; b remains device-current</text>
+   </g>
+   <g id="patch_8">
+    <path d="M 362.646 137.285738
+Q 362.646 139.724086 362.646 140.932598
+" style="fill: none; stroke: #64748b; stroke-width: 1.1; stroke-linecap: round"/>
+    <path d="M 364.646 136.932598
+L 362.646 140.932598
+L 360.646 136.932598
+" style="fill: none; stroke: #64748b; stroke-width: 1.1; stroke-linecap: round"/>
+   </g>
+   <g id="text_5">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #64748b" x="39.843" y="171.879431" transform="rotate(-0 39.843 171.879431)">2  Native reader</text>
+   </g>
+   <g id="text_6">
+    <text style="font-size: 10.3px; font-family: 'DejaVu Sans'; fill: #203047" transform="translate(224.82 176.488075)">audit = sum(a(:,1,1)); overlaps the uploaded a section</text>
+    <text style="font-size: 10.3px; font-family: 'DejaVu Sans'; fill: #203047" transform="translate(224.82 189.5871)">Current host mirror: zero download; device a remains valid</text>
+   </g>
+   <g id="patch_9">
+    <path d="M 362.646 211.575338
+Q 362.646 214.013686 362.646 215.222198
+" style="fill: none; stroke: #64748b; stroke-width: 1.1; stroke-linecap: round"/>
+    <path d="M 364.646 211.222198
+L 362.646 215.222198
+L 360.646 211.222198
+" style="fill: none; stroke: #64748b; stroke-width: 1.1; stroke-linecap: round"/>
+   </g>
+   <g id="text_7">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #64748b" x="39.843" y="246.169031" transform="rotate(-0 39.843 246.169031)">3  Native correction</text>
+   </g>
+   <g id="text_8">
+    <text style="font-size: 10.3px; font-family: 'DejaVu Sans'; fill: #203047" transform="translate(224.82 250.777675)">Read b(2,2,2): download 8 bytes; then update that cell</text>
+    <text style="font-size: 10.3px; font-family: 'DejaVu Sans'; fill: #203047" transform="translate(224.82 263.8767)">Only the written cell loses device validity</text>
+   </g>
+   <g id="patch_10">
+    <path d="M 362.646 285.864938
+Q 362.646 288.303286 362.646 289.511798
+" style="fill: none; stroke: #64748b; stroke-width: 1.1; stroke-linecap: round"/>
+    <path d="M 364.646 285.511798
+L 362.646 289.511798
+L 360.646 285.511798
+" style="fill: none; stroke: #64748b; stroke-width: 1.1; stroke-linecap: round"/>
+   </g>
+   <g id="text_9">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #1677a8" x="39.843" y="320.458631" transform="rotate(-0 39.843 320.458631)">4  GPU diffusion</text>
+   </g>
+   <g id="text_10">
+    <text style="font-size: 10.3px; font-family: 'DejaVu Sans'; fill: #203047" transform="translate(224.82 325.067275)">Reupload corrected b cell: 8 bytes; read retained a and b</text>
+    <text style="font-size: 10.3px; font-family: 'DejaVu Sans'; fill: #203047" transform="translate(224.82 338.1663)">Write d interior of (n−2)³ cells; a is reused after the native reader</text>
+   </g>
+   <g id="patch_11">
+    <path d="M 362.646 360.154538
+Q 362.646 362.592886 362.646 363.801398
+" style="fill: none; stroke: #64748b; stroke-width: 1.1; stroke-linecap: round"/>
+    <path d="M 364.646 359.801398
+L 362.646 363.801398
+L 360.646 359.801398
+" style="fill: none; stroke: #64748b; stroke-width: 1.1; stroke-linecap: round"/>
+   </g>
+   <g id="text_11">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #1677a8" x="39.843" y="394.748231" transform="rotate(-0 39.843 394.748231)">5  GPU accumulation</text>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 10.3px; font-family: 'DejaVu Sans'; fill: #203047" transform="translate(224.82 399.356875)">Upload out interior: 8 (n−2)³ bytes</text>
+    <text style="font-size: 10.3px; font-family: 'DejaVu Sans'; fill: #203047" transform="translate(224.82 412.4559)">out += 0.125 d; retain results until publication</text>
+   </g>
+   <g id="patch_12">
+    <path d="M 362.646 434.444138
+Q 362.646 436.882486 362.646 438.090998
+" style="fill: none; stroke: #64748b; stroke-width: 1.1; stroke-linecap: round"/>
+    <path d="M 364.646 434.090998
+L 362.646 438.090998
+L 360.646 434.090998
+" style="fill: none; stroke: #64748b; stroke-width: 1.1; stroke-linecap: round"/>
+   </g>
+   <g id="text_13">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #21805a" x="39.843" y="469.037831" transform="rotate(-0 39.843 469.037831)">6  Owner close</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 10.3px; font-family: 'DejaVu Sans'; fill: #203047" transform="translate(224.82 473.646475)">Publish remaining b plus d/out interiors</text>
+    <text style="font-size: 10.3px; font-family: 'DejaVu Sans'; fill: #203047" transform="translate(224.82 486.7455)">Download 8 [n³−1+2 (n−2)³] bytes; preserve original halos</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 10.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #203047" x="21.708" y="528.913031" transform="rotate(-0 21.708 528.913031)">Predicted complete traffic: upload 8 [n³+(n−2)³+1]; download 8 [n³+2 (n−2)³] bytes.</text>
+   </g>
+   <g id="text_16">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #203047" x="21.708" y="551.089031" transform="rotate(-0 21.708 551.089031)">Measured separate traces: n=16: 54,728 B up / 76,672 B down; n=192: 111,495,112 B up / 166,367,104 B down</text>
+   </g>
+   <g id="text_17">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #203047" x="21.708" y="576.037031" transform="rotate(-0 21.708 576.037031)">Trace-event counts are not CUDA copy-call counts. Full float64 array bytes, including halos, agree.</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p6e6cf926fe">
+   <rect x="7.2" y="32.725031" width="725.4" height="554.4"/>
+  </clipPath>
+ </defs>
+</svg>

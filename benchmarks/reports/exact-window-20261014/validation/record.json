@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "provenance": "coordinator-supplied validation history; captured logs copied without modification",
+  "compatible_commits": {
+    "compiler": "2aa4990dcd71a2d9e793ada05f7d6b75a9309f19",
+    "pipeline": "3c799dc0d266abf6aa6eb0d4b3ce39234cd80bcd"
+  },
+  "logs": {
+    "residency-pipeline-final-full-tests.log": {
+      "source_path": "/tmp/residency-pipeline-final-full-tests.log",
+      "sha256": "d1be4fe613913bcca2cd1255e5b44d4f2e3ed2034354b26da0f81624e2cd6bb3"
+    },
+    "residency-compiler-host-tests.log": {
+      "source_path": "/tmp/residency-compiler-host-tests.log",
+      "sha256": "cfaf7b7af7ee4da290cde2ddc00a88b1fb47e87377d546022d2f554122e288ba"
+    },
+    "residency-affected-cuda-tests.log": {
+      "source_path": "/tmp/residency-affected-cuda-tests.log",
+      "sha256": "3fe91165def82e6ce020a34cd8577f5f6063bbcae830a90ab121287c2269967a"
+    },
+    "residency-exact-window-v3.log": {
+      "source_path": "/tmp/residency-exact-window-v3.log",
+      "sha256": "eecbf4052ba1a320decf375653d4748fcad05cb9b4c8ce0cd1e3215281f29f93"
+    }
+  },
+  "broad_host_initial": {
+    "passed": 5012,
+    "failed": 11,
+    "skipped": 4,
+    "deselected": 1467,
+    "log": "residency-compiler-host-tests.log"
+  },
+  "baseline_repairs": {
+    "commits": [
+      "fc04620",
+      "76951bf"
+    ],
+    "classification": "coordinator confirmed stale baseline test expectations",
+    "affected_file_reruns_passed": [
+      41,
+      29
+    ],
+    "provenance": "coordinator/agent report; individual rerun logs not supplied"
+  },
+  "clean_full_host_suite_rerun_after_repairs": false,
+  "real_cuda": {
+    "passed": 95,
+    "log": "residency-affected-cuda-tests.log"
+  },
+  "exact_window_focused": {
+    "passed": 31,
+    "provenance": "coordinator/agent report; individual test log not supplied"
+  },
+  "pipeline": {
+    "passed": 549,
+    "subtests_passed": 265,
+    "skipped": 22,
+    "log": "residency-pipeline-final-full-tests.log"
+  },
+  "gpu_measurement": {
+    "log": "residency-exact-window-v3.log",
+    "raw_evidence": "../evidence/raw/report.json"
+  },
+  "application_qualification": false
+}

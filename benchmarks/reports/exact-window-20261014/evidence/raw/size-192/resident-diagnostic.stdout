@@ -1,0 +1,5 @@
+WINDOW_SECONDS   3.1909720600000002E-01
+FORTRAN_VERSION GCC version 15.3.0
+FORTRAN_OPTIONS -I /tmp/exact-window-calibration-20261014-v3/calibration -mtune=generic -march=x86-64 -O3 -std=f2018 -fopenmp -ffp-contract=off -J /tmp/exact-window-calibration-20261014-v3/calibration -fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h
+CPU_TEAM 4 0 0
+NATIVE_KEY 194 0 194 0 194 0 194 0 194 0 194 0 194 0 194 0 194 0 194 0 194 0 194 0 192

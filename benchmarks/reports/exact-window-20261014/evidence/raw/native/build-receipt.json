@@ -1,0 +1,35 @@
+{
+  "commands": [
+    [
+      "/usr/bin/gfortran-15",
+      "-O3",
+      "-std=f2018",
+      "-fopenmp",
+      "-ffp-contract=off",
+      "-J/tmp/exact-window-calibration-20261014-v3/native",
+      "-I",
+      "/tmp/exact-window-calibration-20261014-v3/native",
+      "-c",
+      "/tmp/exact-window-calibration-20261014-v3/original.f90",
+      "/tmp/exact-window-calibration-20261014-v3/native/driver.f90"
+    ],
+    [
+      "/usr/bin/gfortran-15",
+      "-O3",
+      "-std=f2018",
+      "-fopenmp",
+      "-ffp-contract=off",
+      "/tmp/exact-window-calibration-20261014-v3/native/original.o",
+      "/tmp/exact-window-calibration-20261014-v3/native/driver.o",
+      "-o",
+      "/tmp/exact-window-calibration-20261014-v3/native/native"
+    ]
+  ],
+  "binary": "/tmp/exact-window-calibration-20261014-v3/native/native",
+  "binary_sha256": "65cab53ea1b301eb4fa3ed3e7caab0d3ab1ce837f672be84c230135ffd44b203",
+  "objects": {
+    "/tmp/exact-window-calibration-20261014-v3/native/original.o": "6468a0d064442813176095a1b227149d5d92a8c066d6d115ebdf131c06c755b0",
+    "/tmp/exact-window-calibration-20261014-v3/native/driver.o": "be1d76ed36ac7a328cb9f3b398ef11f8fc3ea6367b5bd26d06f1413510f11043"
+  },
+  "original_source_sha256": "6dce518c06a3004f4acbcd3961e9aa87492ac6792d89b49ede161863ff1a568c"
+}

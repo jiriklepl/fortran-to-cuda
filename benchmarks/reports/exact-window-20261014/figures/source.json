@@ -1,0 +1,27 @@
+{
+  "snapshot_sha256": "f0111e35007626f7f46958343e0fc9299416f8e1da1513b0af35f0723da7da5d",
+  "renderer_sha256": "a362a8f3b13fc14197a27660b592af50300b0dbf5e9da926eaff6ba41cb525dd",
+  "compatible_commits": {
+    "compiler": "2aa4990dcd71a2d9e793ada05f7d6b75a9309f19",
+    "pipeline": "3c799dc0d266abf6aa6eb0d4b3ce39234cd80bcd"
+  },
+  "plotting_versions": {
+    "python": "3.13.15 (main, Aug 11 2026, 08:30:27) [GCC 16.2.0]",
+    "matplotlib": "3.10.9+dfsg1",
+    "numpy": "2.4.6"
+  },
+  "files_sha256": {
+    "calibration-costs.png": "a178bdb601204eee11659c8534ee9091ce0def0a20f73a6235de77b3247ee422",
+    "calibration-costs.svg": "cd2ea609e7bedd7ad76a6805b29fed226d16cecf2add7c2ed37542fd41bcc251",
+    "ownership-map.png": "1051ba9e8ab3e75d96465bf9114ec3346997b6df8f90fcf2874526aa61a4cc74",
+    "ownership-map.svg": "0e1f2fbcd54b6df40b0620bcfcf2ea1d26e69b83619c8e5dd0c6f9281bb158fe",
+    "production-wall-absolute.png": "ffbf79ffe5743ab0c430ed34d4f79d7dcdc5d800cbfe9314cc461ddf59628a10",
+    "production-wall-absolute.svg": "88a9dae999cf66e8b469b21c98ea49b001fcaec11e8103fd48c67df85c47c429",
+    "production-wall-relative.png": "fcdbfe1a595950b41d80fc913afe64fd27dfd6da5dce46580871fcec1ca4c903",
+    "production-wall-relative.svg": "7886ac75fa2282cbebe0d97007e45faa64016157d6186cb5f86966c09d2cffa3",
+    "transfer-totals.png": "092a4fe1818f4b7cf08a557a699921433fdc9be98043adca3b653c1d3b171160",
+    "transfer-totals.svg": "63786738c3c15d9bf5d79e55fc7ff5d47d7aad3a4a526013241c666d987bd17f"
+  },
+  "rendering_only": true,
+  "application_qualification": false
+}
