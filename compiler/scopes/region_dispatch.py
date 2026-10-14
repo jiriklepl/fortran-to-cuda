@@ -575,8 +575,8 @@ class InlineRegions:
             # (they have no ``string``). Keep their source and directive
             # metadata intact while restoring neighbouring private facades.
             if _kind(value) == "Comment":
-                result = object.__new__(type(value))
-                result.__dict__ = dict(value.__dict__)
+                from compiler.frontend.sealed_syntax import mutable_copy
+                result = mutable_copy(value)
             else:
                 result = copy.copy(value)
             for attribute in ("content", "items"):

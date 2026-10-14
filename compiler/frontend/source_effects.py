@@ -2010,7 +2010,10 @@ class SourceEffects:
         """Check shared original files, provenance and module syntax freshly."""
         self.inputs.verify()
         syntax = _syntax if _syntax is not None else self._source_syntax.checkpoint()
-        if any(getattr(node, "item", None) is not item or item.span != span
+        # Sealing authenticated these same item identities and source spans,
+        # then made them immutable. Only mutable standalone analyses need a
+        # fresh full provenance walk; file and namespace checks remain fresh.
+        if not self._source_syntax.immutable and any(getattr(node, "item", None) is not item or item.span != span
                or getattr(item, "fort_original_span", None) != original_span
                for node, item, span, original_span in self._source_provenance.values()):
             raise CompilationError("structured effects require unchanged original source span authority")
