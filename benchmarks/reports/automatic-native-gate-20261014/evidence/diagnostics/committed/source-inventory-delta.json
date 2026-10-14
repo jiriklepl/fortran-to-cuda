@@ -1,0 +1,4 @@
+{
+  "compiler/.ruff_cache/0.16.10/6823323864881815829": "fcaccf310cd39d064748a4b329dee9b1b728286dc2aa8d0dbedc3f1d6fe23399",
+  "compiler/tests/test_lexical_owner_diagnostics.py": "fa8471fa4cb3a9bf132e5af64535b4304d605c40d5b54a065a632e880160210c"
+}

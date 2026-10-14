@@ -1,0 +1,38 @@
+{
+  "files": {
+    "commit-verification.json": {
+      "bytes": 468,
+      "sha256": "aaa812da42e417e3ee70055e77f7ee7033caa107909f471efdef581e76d105f0"
+    },
+    "completion.json": {
+      "bytes": 107472,
+      "sha256": "419af22f7c8ce23e01a4f9fd6ffb99004f438d713a73b30e5cfc9238dfd22e6a"
+    },
+    "curate.py": {
+      "bytes": 7090,
+      "sha256": "1af659c43cea0c84820b087b663759888f801cd4790ad255ba947cbf5a3b9362"
+    },
+    "evidence.json": {
+      "bytes": 4159,
+      "sha256": "411f301b7d06b16524491260906397db960ec30d0fbf0a87cf84e8816f040fd8"
+    },
+    "generation.log": {
+      "bytes": 799,
+      "sha256": "a9a767ce78652096e087ce0c05421e4d11e840811d904fa4d415af102483e836"
+    },
+    "manifest-view.json": {
+      "bytes": 1939,
+      "sha256": "d378a089259bb08c2032e671e6fef9df9b968b33d8545a6dc6818038328a2539"
+    },
+    "run.py": {
+      "bytes": 9434,
+      "sha256": "c28414cdf6be08b87106d6a2eae334dae9d2cd46ec9f3ef9250486ad9131bb31"
+    },
+    "worker-result.json": {
+      "bytes": 845,
+      "sha256": "792b8bab9e3e958f1893a794f83c497c6bbbc3d1c88ef7f25619bedac1f8c0a2"
+    }
+  },
+  "identity": "d6bc59f45eb082be3f3d469097dad8c2a26081d7fed5a4393a4b671d69588549",
+  "schema_version": 1
+}

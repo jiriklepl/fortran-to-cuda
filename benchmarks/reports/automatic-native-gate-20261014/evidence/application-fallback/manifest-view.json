@@ -1,0 +1,49 @@
+{
+  "analysis_sources_canonical_json_sha256": "334ca6941376de38222144b9b369c2516b117b8a8e5c12994dca07efbd03275f",
+  "canonical_hash_encoding": "UTF-8 json.dumps(sort_keys=True,separators=(comma,colon))",
+  "full_manifest": {
+    "bytes": 2628429,
+    "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/automatic-native-gate-20261014/generated/scope-manifest.json",
+    "sha256": "46887742546096fa5aa822f6fff0f2bb0d46be1f39badd46b5f377eab64478be"
+  },
+  "is_projection": true,
+  "omitted": "Large local structured-source diagnostics and repeated source maps; full raw manifest remains hash-bound.",
+  "selected_public_fields": {
+    "artifacts_sha256": {},
+    "automatic_estimate_available": false,
+    "automatic_scope_available": false,
+    "boundaries": [
+      {
+        "execution": "unchanged native source",
+        "procedure": "dynamics::convection",
+        "reason": "no calibration profile supplied; automatic policy retains native execution; no calibration profile or exact-window evidence supplied; automatic policy retains unchanged native source"
+      }
+    ],
+    "build_sources": [],
+    "capture_facts_sha256": "927161790703a8f2a53146ffcb8b88727b0b196b3547a29a93379947c567a04c",
+    "entry": "dynamics::convection",
+    "native_effects": {
+      "closure_complete_available": false,
+      "closure_materialization": "not_requested",
+      "complete": false,
+      "entry": "dynamics::convection",
+      "materialized_rejections": [],
+      "procedures": [],
+      "schema_version": 2,
+      "summarized_operations": 0
+    },
+    "numerical_decisions": [],
+    "numerical_sources": [],
+    "runtime": null,
+    "schema_version": 1,
+    "scope_count": 0,
+    "scope_execution": "reached",
+    "scopes": [],
+    "source_edits": [],
+    "sources": {}
+  },
+  "source_inputs": {
+    "canonical_json_sha256": "116e600fa18866da948e250c0e751014e6b64f3dd9d36b4eacc65daa2f8fe8ba",
+    "count": 69
+  }
+}

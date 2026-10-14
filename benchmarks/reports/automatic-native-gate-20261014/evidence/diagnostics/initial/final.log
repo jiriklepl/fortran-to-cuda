@@ -1,0 +1,27 @@
+.....F...................                                                [100%]
+=================================== FAILURES ===================================
+_ test_accepted_source_owner_and_successful_native_are_distinct[auto-successful_native-False] _
+
+tmp_path = PosixPath('/tmp/automatic-native-gate-diagnostics-20261014/pytest/test_accepted_source_owner_and1')
+policy = 'auto', outcome = 'successful_native', admitted = False
+
+    @pytest.mark.parametrize(("policy", "outcome", "admitted"), [
+        ("sections", "accepted", True), ("auto", "successful_native", False)])
+    def test_accepted_source_owner_and_successful_native_are_distinct(tmp_path, policy, outcome, admitted):
+        from compiler.tests.test_source_compute_costs import profile_v2
+    
+        # Keep exercising the owner diagnostic path. An absent profile now selects
+        # native before attempting an owner and is covered by the cost-gate tests.
+        _path, builder = subject(tmp_path, policy=policy, profile=profile_v2() if policy == "auto" else None)
+        _outputs, report = builder.run()
+        attempt = report["lexical_owner_attempt"]
+>       assert attempt["outcome"] == outcome
+E       AssertionError: assert 'accepted' == 'successful_native'
+E         
+E         - successful_native
+E         + accepted
+
+compiler/tests/test_lexical_owner_diagnostics.py:214: AssertionError
+=========================== short test summary info ============================
+FAILED compiler/tests/test_lexical_owner_diagnostics.py::test_accepted_source_owner_and_successful_native_are_distinct[auto-successful_native-False]
+1 failed, 24 passed in 1.81s

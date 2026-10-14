@@ -1,0 +1,49 @@
+{
+  "/home/jirka/research/fortran-abomination": {
+    "commit": "0eeae487bc68a0a88090a8304e3dceaac1df45a5",
+    "tracked_hash_mismatches": [],
+    "tracked_inventory_files_verified": 539,
+    "untracked_inventory_entries": [
+      "compiler/.ruff_cache/.gitignore",
+      "compiler/.ruff_cache/0.16.10/10835236273510154449",
+      "compiler/.ruff_cache/0.16.10/12005544905745125630",
+      "compiler/.ruff_cache/0.16.10/12655146983846465830",
+      "compiler/.ruff_cache/0.16.10/13592697907577326472",
+      "compiler/.ruff_cache/0.16.10/14093905629324870211",
+      "compiler/.ruff_cache/0.16.10/14241627443516654830",
+      "compiler/.ruff_cache/0.16.10/1662357470466435845",
+      "compiler/.ruff_cache/0.16.10/1685566379534886502",
+      "compiler/.ruff_cache/0.16.10/1719598255008516388",
+      "compiler/.ruff_cache/0.16.10/1828034428908073738",
+      "compiler/.ruff_cache/0.16.10/3888921197306081579",
+      "compiler/.ruff_cache/0.16.10/4735976155247325889",
+      "compiler/.ruff_cache/0.16.10/5767192024048944382",
+      "compiler/.ruff_cache/0.16.10/6823323864881815829",
+      "compiler/.ruff_cache/0.16.10/9357451063596280195",
+      "compiler/.ruff_cache/0.16.4/10835236273510154449",
+      "compiler/.ruff_cache/0.16.4/11649910286073064178",
+      "compiler/.ruff_cache/0.16.4/13317214089928464278",
+      "compiler/.ruff_cache/0.16.4/14621674838134575597",
+      "compiler/.ruff_cache/0.16.4/14636817438846089738",
+      "compiler/.ruff_cache/0.16.4/14764809249717444512",
+      "compiler/.ruff_cache/0.16.4/15571432872174743688",
+      "compiler/.ruff_cache/0.16.4/16589432636432937672",
+      "compiler/.ruff_cache/0.16.4/1828034428908073738",
+      "compiler/.ruff_cache/0.16.4/5891197586615233782",
+      "compiler/.ruff_cache/0.16.4/6823323864881815829",
+      "compiler/.ruff_cache/0.16.4/9485625537456649597",
+      "compiler/.ruff_cache/0.16.8/10835236273510154449",
+      "compiler/.ruff_cache/0.16.8/1685566379534886502",
+      "compiler/.ruff_cache/0.16.8/6823323864881815829",
+      "compiler/.ruff_cache/CACHEDIR.TAG",
+      "compiler/CODE_MAP.md",
+      "compiler/MEMORY_MODEL_PLAN.md"
+    ]
+  },
+  "/home/jirka/research/fortran-abomination/elmm-pipeline": {
+    "commit": "8ebaa348bbaa8525435a727560d217a4a15a1bc2",
+    "tracked_hash_mismatches": [],
+    "tracked_inventory_files_verified": 90,
+    "untracked_inventory_entries": []
+  }
+}

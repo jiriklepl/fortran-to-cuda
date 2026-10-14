@@ -1,0 +1,21 @@
+{
+  "/home/jirka/research/fortran-abomination": {
+    "final_commit": "0eeae487bc68a0a88090a8304e3dceaac1df45a5",
+    "final_commit_differences": [],
+    "recorded_working_tree_base": "406de31c38970d76ffccd4d47ab866ee6c6ada9d",
+    "tracked_inventory_files_verified": 203,
+    "untracked_inventory_entries": [
+      "compiler/CODE_MAP.md",
+      "compiler/MEMORY_MODEL_PLAN.md"
+    ],
+    "working_patch_equals_base_to_final_diff": true
+  },
+  "/home/jirka/research/fortran-abomination/elmm-pipeline": {
+    "final_commit": "8ebaa348bbaa8525435a727560d217a4a15a1bc2",
+    "final_commit_differences": [],
+    "recorded_working_tree_base": "494df4e9221b61d3c8f28c7f86ab7dd07cd6908f",
+    "tracked_inventory_files_verified": 49,
+    "untracked_inventory_entries": [],
+    "working_patch_equals_base_to_final_diff": true
+  }
+}

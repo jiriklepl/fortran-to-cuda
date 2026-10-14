@@ -1,0 +1,84 @@
+{
+  "application_built": false,
+  "application_executed": false,
+  "authenticated_input_files": 178,
+  "automatic_offloading_qualified": false,
+  "build_units": 0,
+  "cap_seconds": 300,
+  "changed_inputs": [],
+  "claim": "Authenticated unchanged-native fallback selected before expensive numerical discovery.",
+  "commit_verification": "commit-verification.json",
+  "commits": {
+    "compiler": "0eeae487bc68a0a88090a8304e3dceaac1df45a5",
+    "pipeline": "8ebaa348bbaa8525435a727560d217a4a15a1bc2"
+  },
+  "comparison_limit": "Elapsed time belongs to a native-selection diagnostic. It is not application speedup or faster completion of whole-Convection GPU admission.",
+  "copied_artifacts": {
+    "completion.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/automatic-native-gate-20261014/completion.json",
+      "sha256": "419af22f7c8ce23e01a4f9fd6ffb99004f438d713a73b30e5cfc9238dfd22e6a"
+    },
+    "generation.log": {
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/automatic-native-gate-20261014/generation.log",
+      "sha256": "a9a767ce78652096e087ce0c05421e4d11e840811d904fa4d415af102483e836"
+    },
+    "run.py": {
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/automatic-native-gate-20261014/run.py",
+      "sha256": "c28414cdf6be08b87106d6a2eae334dae9d2cd46ec9f3ef9250486ad9131bb31"
+    },
+    "worker-result.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/automatic-native-gate-20261014/worker-result.json",
+      "sha256": "792b8bab9e3e958f1893a794f83c497c6bbbc3d1c88ef7f25619bedac1f8c0a2"
+    }
+  },
+  "cost_estimates_available": false,
+  "cpu_affinity": "4,5,10,11",
+  "elapsed_seconds": 50.60639362499933,
+  "hash_bound_external_artifacts": {
+    "compiler.tar": {
+      "bytes": 7895040,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/automatic-native-gate-20261014/compiler.tar",
+      "sha256": "d71a67defbd46138ae5b8143d889d7c1dee95417d5ed40af4594e309a23ca5a9"
+    },
+    "generated/scope-compiler.log": {
+      "bytes": 2904406,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/automatic-native-gate-20261014/generated/scope-compiler.log",
+      "sha256": "404cb897d2822a63bb585e49a4fb3f2233637e92a408920f3c130fda96642905"
+    },
+    "generated/scope-manifest.json": {
+      "bytes": 2628429,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/automatic-native-gate-20261014/generated/scope-manifest.json",
+      "sha256": "46887742546096fa5aa822f6fff0f2bb0d46be1f39badd46b5f377eab64478be"
+    },
+    "generated/scope-transformation.json": {
+      "bytes": 6096319,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/automatic-native-gate-20261014/generated/scope-transformation.json",
+      "sha256": "264e274f4478104e88879548e9a1ab77a18b75ae6141f61dc16270bb27429e25"
+    },
+    "launch.json": {
+      "bytes": 107160,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/automatic-native-gate-20261014/launch.json",
+      "sha256": "e8b7cfbe25d3b870e6dc1be64290da40e82c51ad9ebcf0bf2ed2151469989c7e"
+    },
+    "pipeline.tar": {
+      "bytes": 512000,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/automatic-native-gate-20261014/pipeline.tar",
+      "sha256": "da8eb30457da03264cf8f7d10c16146f310b5864df991f145e51776046e3c9a2"
+    }
+  },
+  "input_inventory_equal_to_prior_checkpoint": true,
+  "manifest_view": "manifest-view.json",
+  "missing_cost_reasons": [
+    "no calibration profile supplied; automatic policy retains native execution; no calibration profile or exact-window evidence supplied; automatic policy retains unchanged native source"
+  ],
+  "native_build_contract_empty": true,
+  "numerical_window_admitted": false,
+  "performance_measured": false,
+  "runtime": null,
+  "schema_version": 1,
+  "scope_count": 0,
+  "source_edits": 0,
+  "source_input_files": 69,
+  "status": "authenticated_unchanged_native_fallback",
+  "virtual_memory_bytes": 3221225472
+}

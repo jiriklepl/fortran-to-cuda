@@ -1,0 +1,4 @@
+.........s..........                                                     [100%]
+=========================== short test summary info ============================
+SKIPPED [1] compiler/tests/test_source_scopes.py:820: matching explicit offline scoped calibration profile required
+19 passed, 1 skipped, 56 deselected in 141.85s (0:02:21)

@@ -1,0 +1,14 @@
+{
+  "compiler": {
+    "archive_sha256": "d71a67defbd46138ae5b8143d889d7c1dee95417d5ed40af4594e309a23ca5a9",
+    "commit": "0eeae487bc68a0a88090a8304e3dceaac1df45a5",
+    "mismatches": [],
+    "tracked_archive_files_verified": 539
+  },
+  "pipeline": {
+    "archive_sha256": "da8eb30457da03264cf8f7d10c16146f310b5864df991f145e51776046e3c9a2",
+    "commit": "8ebaa348bbaa8525435a727560d217a4a15a1bc2",
+    "mismatches": [],
+    "tracked_archive_files_verified": 43
+  }
+}

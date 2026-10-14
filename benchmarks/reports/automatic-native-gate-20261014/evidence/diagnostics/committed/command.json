@@ -1,0 +1,34 @@
+{
+  "argv": [
+    "taskset",
+    "-c",
+    "4,5,10,11",
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "compiler/tests/test_lexical_owner_diagnostics.py",
+    "compiler/tests/test_automatic_cost_gate.py",
+    "--basetemp=/tmp/automatic-native-gate-diagnostics-committed-20261014/pytest"
+  ],
+  "claim": "lexical diagnostics fixture correction and early cost-gate regression supplement; no performance claim",
+  "commits": {
+    "/home/jirka/research/fortran-abomination": "af7584edcec5037b1f3bbc0ab3cc128d3611fd4c",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline": "8ebaa348bbaa8525435a727560d217a4a15a1bc2"
+  },
+  "cwd": "/home/jirka/research/fortran-abomination",
+  "environment": {
+    "ELMM_TEST_COMPILER_ROOT": "/home/jirka/research/fortran-abomination",
+    "FORT_TEST_ELMM_SOURCE": "/home/jirka/research/fortran-abomination/elmm-pipeline/.cache/repos/elmm/src",
+    "LD_LIBRARY_PATH": "/usr/local/cuda/lib64:/opt/nvidia/hpc_sdk/Linux_x86_64/2025/compilers/lib",
+    "OMP_NUM_THREADS": null,
+    "OMP_PLACES": null,
+    "OMP_PROC_BIND": null,
+    "PATH": "/home/jirka/.local/bin:/home/jirka/.codex/tmp/arg0/codex-arg00Z57tS:/home/jirka/.vscode-server/bin/16507d91be0dc1ce4f94c04d4d0430210b8685d9/bin/remote-cli:/home/jirka/.local/bin:/usr/local/cuda/bin:/opt/nvidia/hpc_sdk/Linux_x86_64/2025/compilers/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/usr/lib/linux-tools/6.18.54.1-microsoft-standard-WSL2/bin:/mnt/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.8/bin:/mnt/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.8/libnvvp:/mnt/c/Windows/system32:/mnt/c/Windows:/mnt/c/Windows/System32/Wbem:/mnt/c/Windows/System32/WindowsPowerShell/v1.0/:/mnt/c/Windows/System32/OpenSSH/:/mnt/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/c/WINDOWS/system32:/mnt/c/WINDOWS:/mnt/c/WINDOWS/System32/Wbem:/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/c/WINDOWS/System32/OpenSSH/:/mnt/c/Program Files/dotnet/:/mnt/c/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR:/mnt/c/Program Files/PowerShell/7-preview/preview:/mnt/c/Program Files/Git/cmd:/mnt/c/Program Files/NVIDIA Corporation/Nsight Compute 2026.3.1/:/mnt/c/Program Files/WSL/:/mnt/c/Users/Jirka/AppData/Local/Programs/Python/Launcher/:/mnt/c/Users/Jirka/AppData/Local/Microsoft/WindowsApps:/mnt/c/Users/Jirka/AppData/Local/Programs/Microsoft VS Code Insiders/bin:/mnt/c/Users/Jirka/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Users/Jirka/AppData/Local/PowerToys/DSCModules/:/home/jirka/.vscode-server/extensions/openai.chatgpt-26.1007.21434-linux-x64/bin/linux-x86_64",
+    "PYTHONPATH": null
+  },
+  "python_sha256": "aa7caff7dcabb09abdb8610f820186e71064351711eeb4882328705c33878f8f",
+  "runner_sha256": "5ab48137c6fc252e94f767f3d2fc4a0a57b3ef3a5e1c0e4b27783351cb5e4704",
+  "schema_version": 1,
+  "source_files_before_sha256": "6b5298cfaba51992f99877f9b640c6bade3409752e34497fde49413bca9a0030"
+}

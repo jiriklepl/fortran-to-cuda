@@ -1,0 +1,33 @@
+{
+  "command_receipt": "command.json",
+  "final_fields": {
+    "elapsed_seconds": 550.5739687970054,
+    "source_files_after_sha256": "ff8e8b2e81bc461fc82c63298f33741e1de53bd579d7d5a59a18b28c2c6e80c9",
+    "source_files_changed": [],
+    "stable_source_inputs": true,
+    "workers": [
+      {
+        "elapsed_seconds": 544.7963267409941,
+        "exit_code": 0,
+        "log_sha256": "a482e691f640fe91ebf5c2348c6c506404e7d8d0991372ea5a6aec5591791a69",
+        "test_count": 1724,
+        "worker": 0
+      },
+      {
+        "elapsed_seconds": 506.5725937660027,
+        "exit_code": 0,
+        "log_sha256": "4a92c0471d53ec51c5fa0f5539290a0d260e2598b084806ae1649c04092e39d8",
+        "test_count": 1724,
+        "worker": 1
+      },
+      {
+        "elapsed_seconds": 548.6943959589989,
+        "exit_code": 1,
+        "log_sha256": "cb1c3e5c4c05ae122e7f699e429e5d511dfbb74f30c738d0501458f7a3eb3c70",
+        "test_count": 1723,
+        "worker": 2
+      }
+    ]
+  },
+  "schema_version": 1
+}

@@ -1,0 +1,69 @@
+{
+  "files": {
+    "committed-test-correction.patch": {
+      "bytes": 2101,
+      "sha256": "cd23b1805711745cbf61f29409d6c8c14b0949cc4c59985b6803151641e02ac6"
+    },
+    "committed/command.json": {
+      "bytes": 3023,
+      "sha256": "f237864d523b8215bab64689354694c8314440c621bd09e2994a031769287579"
+    },
+    "committed/final.json": {
+      "bytes": 3327,
+      "sha256": "8722e7eaf37b4c32fc37768a1082b33860b7302c006a42741948e84b25c7f1bc"
+    },
+    "committed/final.log": {
+      "bytes": 99,
+      "sha256": "0da317b098dde583ef076537d9b7a02516ff37d960b63968554e67a8ab00d335"
+    },
+    "committed/source-inventory-delta.json": {
+      "bytes": 247,
+      "sha256": "d6d8be7716fe557d44cad3e355b05d58b68dab93d68dceabb4883210280a9ddf"
+    },
+    "corrected-working-tree/command.json": {
+      "bytes": 3023,
+      "sha256": "312e80e901cfb47077fc6a5109c682adda843c84730c9718db97700370bb7017"
+    },
+    "corrected-working-tree/final.json": {
+      "bytes": 3327,
+      "sha256": "7176abdae3670ac130405a7382daa74d36c105d10bc3567d6d8e1aab84c4ade9"
+    },
+    "corrected-working-tree/final.log": {
+      "bytes": 99,
+      "sha256": "2145d8b40ba7b5cc60583be9cae654741b34af17aee7f43a1591455182c2024d"
+    },
+    "corrected-working-tree/source-inventory-delta.json": {
+      "bytes": 125,
+      "sha256": "0d2e0111a23f0ba6ce9df00afcf6191931475ee101feb6dd1c404110bb3b3cec"
+    },
+    "curate.py": {
+      "bytes": 6413,
+      "sha256": "925795a36b606d757241ad94a301e7538fd131c1c5774ce85f66222eaa574862"
+    },
+    "evidence.json": {
+      "bytes": 7035,
+      "sha256": "e2a2e0d374fbeaebc75ba79ade0ab4e865f9e51643093f2855d30763dbcff770"
+    },
+    "initial/command.json": {
+      "bytes": 3013,
+      "sha256": "499eba1d4630931f827b6376a4e238fc9772600357060af08e28b92d86b30e87"
+    },
+    "initial/final.json": {
+      "bytes": 3317,
+      "sha256": "0415597d3be9305ec9824923dc528fbd981159da08c4f9401d8cca75e9102f48"
+    },
+    "initial/final.log": {
+      "bytes": 1633,
+      "sha256": "7e7fe7bc395c7614344681993685403bb3d2288a22b09a31b953b8a136cdfdf6"
+    },
+    "initial/source-inventory-delta.json": {
+      "bytes": 125,
+      "sha256": "30b32697159977b352e6283cca9d7347e24c0f9b4eb5e4a7f5f70670350d63a7"
+    },
+    "run.py": {
+      "bytes": 3863,
+      "sha256": "5ab48137c6fc252e94f767f3d2fc4a0a57b3ef3a5e1c0e4b27783351cb5e4704"
+    }
+  },
+  "schema_version": 1
+}

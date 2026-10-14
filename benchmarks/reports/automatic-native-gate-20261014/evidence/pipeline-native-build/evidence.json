@@ -1,0 +1,90 @@
+{
+  "actual_native_builds": 1,
+  "application_build_or_run": false,
+  "application_performance_qualification": false,
+  "automatic_offloading_qualified": false,
+  "channel_field_or_halo_validation": false,
+  "claim": "Five focused pipeline integrations, including one real native fixture build and full-field execution.",
+  "classification": "Intermediate working-tree test run; exact recorded production and selected test files match the later final commits.",
+  "copied_artifacts": {
+    "command.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/command.json",
+      "sha256": "41def5873cbb8fe3188862a060152dcdabef5c5755c15b556f8dd5bfc074d79f"
+    },
+    "compiler-working.patch": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/compiler-working.patch",
+      "sha256": "b47a2fbf9c7605177479bd2200ab7dc7f7b0033365e04b73d0ed43e123d85935"
+    },
+    "final.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/final.json",
+      "sha256": "91d3cc3503eaf0ec497976dc571d544b1f785bb0b6bda265b608a6a90d3a4d8e"
+    },
+    "final.log": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/final.log",
+      "sha256": "17e771d7be10c59e0d5d7f89cd92273baa6c3f1de984ed8cb0463ae606420fe9"
+    },
+    "fixture/build/build-command.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/build-command.json",
+      "sha256": "7237d89b4b91c714e91a94dd15e7cdf1f004cfa7b9bf8eb956e3327b7fb07b2e"
+    },
+    "fixture/build/build-receipts.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/build-receipts.json",
+      "sha256": "e7cc0eb6b0841a168b297fa9298469da8639407c36837342ddb95fc4c2b8e631"
+    },
+    "fixture/build/build.log": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/build.log",
+      "sha256": "7f40514b81859307c35b83a9284356c73628cb7f227ca536afffa1c8bfb0bfd2"
+    },
+    "fixture/integration-build.log": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/integration-build.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fixture/integration-runtime.log": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/integration-runtime.log",
+      "sha256": "9e7511eec94278ce9553c430321287629f096ec993b5a69f66bf63e0b5444a1f"
+    },
+    "fixture/integration.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/integration.json",
+      "sha256": "b2bbcd99f6e1c603c51d0bd800250200f71cd62eae7b75546afbdd90ce5bdd7c"
+    },
+    "pipeline-working.patch": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pipeline-working.patch",
+      "sha256": "b13e2e789d425316554fb8d7192c7e01244b5e24842e546d387e42daeedba6bb"
+    },
+    "run.py": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/run.py",
+      "sha256": "cc7870943b17b11d7e79ab2739be387353e113f72a83c47c85629817bc5cf730"
+    },
+    "source-files-before.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/source-files-before.json",
+      "sha256": "917c606ba4c6abaa07b0a833cfde97da8402388e80585bb4c3a1fce90605110e"
+    },
+    "working-tree-binding.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/working-tree-binding.json",
+      "sha256": "09217d55f533c4f859f3dbbed5f5d48d68eec0675807c668af743565133c1c83"
+    }
+  },
+  "coverage_limit": "Inventory includes compiler files except compiler tests/caches, pipeline implementation, selected root metadata, and the two invoked pipeline test modules. It is not a complete compiler-test inventory.",
+  "final_matching_commits": {
+    "/home/jirka/research/fortran-abomination": "0eeae487bc68a0a88090a8304e3dceaac1df45a5",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline": "8ebaa348bbaa8525435a727560d217a4a15a1bc2"
+  },
+  "final_source_verification": "final-source-verification.json",
+  "fixture_artifact_provenance": "Retained pytest artifacts are hashed at curation. Build receipts bind actual compile/link inputs and outputs; the fixture artifacts themselves were not inventoried before/after execution.",
+  "fixture_validation": "FULL_FIELDS_OK: unchanged input and exact producer/native-correction/consumer results for two 1D shapes, with negative host lower bounds.",
+  "generated_or_patched_build_sources": 0,
+  "gpu_build_contract_present": false,
+  "native_object_count": 2,
+  "pytest_seconds": 4.47,
+  "recorded_base_commits": {
+    "/home/jirka/research/fortran-abomination": "406de31c38970d76ffccd4d47ab866ee6c6ada9d",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline": "494df4e9221b61d3c8f28c7f86ab7dd07cd6908f"
+  },
+  "schema_version": 1,
+  "scope_count": 0,
+  "source_inventory_note": "One identical before/after inventory is included; both hashes remain in final.json.",
+  "source_inventory_sha256": "917c606ba4c6abaa07b0a833cfde97da8402388e80585bb4c3a1fce90605110e",
+  "stable_source_inputs": true,
+  "test_or_documentation_differences_in_recorded_inventory": [],
+  "tests_passed": 5
+}

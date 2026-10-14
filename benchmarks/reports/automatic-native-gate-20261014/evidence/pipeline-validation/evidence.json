@@ -1,0 +1,47 @@
+{
+  "after_inventory_original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/automatic-native-gate-final-validation-20261014/source-files-after.json",
+  "application_performance_qualification": false,
+  "claim": "Complete pipeline integration suite for the recorded native-gate compiler/pipeline pair.",
+  "commit_verification": "commit-verification.json",
+  "commits": {
+    "/home/jirka/research/fortran-abomination": "0eeae487bc68a0a88090a8304e3dceaac1df45a5",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline": "8ebaa348bbaa8525435a727560d217a4a15a1bc2"
+  },
+  "copied_artifacts": {
+    "passed/command.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/automatic-native-gate-final-validation-20261014/command.json",
+      "sha256": "e1ef8d3bd1c3644c9261eb7ee919eb958f1a11897bb5a79c8959749b2e00a352"
+    },
+    "passed/final.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/automatic-native-gate-final-validation-20261014/final.json",
+      "sha256": "f9d052b306ac0f58707a7285148210d8360be061c342ba07d04d1810f7ad815f"
+    },
+    "passed/final.log": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/automatic-native-gate-final-validation-20261014/final.log",
+      "sha256": "68aa2d59c23d32f84ff62905a56d6dff5c48ecc3cd4db2d2c13445f6bbcb1370"
+    },
+    "passed/run.py": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/automatic-native-gate-final-validation-20261014/run.py",
+      "sha256": "3f9d973098d2f2114f4552a245b621860de10ff4ab22362d3a65dcb9944e6483"
+    },
+    "passed/source-files-before.json": {
+      "original_path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/automatic-native-gate-final-validation-20261014/source-files-before.json",
+      "sha256": "bfbf39ffe3aea74ea0c06130460f88c132e92f279030874242b7430ed90135bb"
+    }
+  },
+  "cpu_affinity": "0,1,6,7",
+  "exit_code": 0,
+  "full_compiler_suite_qualification": false,
+  "log": "passed/final.log",
+  "pytest_summary": "618 passed, 22 skipped, 265 subtests passed in 88.72s (0:01:28)",
+  "receipt": "passed/final.json",
+  "schema_version": 1,
+  "scope_note": "Concurrent correctness jobs shared hardware; elapsed test time is not application performance evidence.",
+  "source_files_changed": [],
+  "source_inventory_note": "One identical before/after inventory is included; both hashes are recorded in final.json.",
+  "source_inventory_sha256": "bfbf39ffe3aea74ea0c06130460f88c132e92f279030874242b7430ed90135bb",
+  "source_inventory_unchanged": true,
+  "status": "passed",
+  "test_selection": "pytest -q tests",
+  "tracked_commit_mismatches": 0
+}

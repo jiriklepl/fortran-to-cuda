@@ -1,0 +1,12 @@
+{
+  "command_receipt": "command.json",
+  "final_fields": {
+    "elapsed_seconds": 142.11496014799923,
+    "exit_code": 0,
+    "log_sha256": "40d4ef6197fcdb58fbc16ec68644a1323aa11bc485b3e549367c2cedfdf41be7",
+    "source_files_after_sha256": "ff8e8b2e81bc461fc82c63298f33741e1de53bd579d7d5a59a18b28c2c6e80c9",
+    "source_files_changed": [],
+    "stable_source_inputs": true
+  },
+  "schema_version": 1
+}

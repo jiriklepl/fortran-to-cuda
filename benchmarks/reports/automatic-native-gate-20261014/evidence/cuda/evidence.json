@@ -1,0 +1,59 @@
+{
+  "application_execution_or_performance_evidence": false,
+  "claim": "Affected CUDA/native regressions only",
+  "commits": {
+    "/home/jirka/research/fortran-abomination": "0eeae487bc68a0a88090a8304e3dceaac1df45a5",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline": "8ebaa348bbaa8525435a727560d217a4a15a1bc2"
+  },
+  "original_artifacts": {
+    "command.json": {
+      "original_path": "/tmp/automatic-native-gate-cuda-20261014/command.json",
+      "sha256": "64b6346650c35df56e47aa33d4b0bb2b710fccbf179091389b77b83570571988"
+    },
+    "final.json": {
+      "original_path": "/tmp/automatic-native-gate-cuda-20261014/final.json",
+      "reconstruction": "Merge command.json with outcome.json.final_fields; json.dumps(sort_keys=True, indent=2) plus newline reproduces original bytes.",
+      "sha256": "d8eddef2b8a4715dc9eade94693d714f4861b0358b880df5f84439fac417be20"
+    },
+    "final.log": {
+      "original_path": "/tmp/automatic-native-gate-cuda-20261014/final.log",
+      "sha256": "40d4ef6197fcdb58fbc16ec68644a1323aa11bc485b3e549367c2cedfdf41be7"
+    },
+    "run.py": {
+      "original_path": "/tmp/automatic-native-gate-cuda-20261014/run.py",
+      "sha256": "4212d37e8928d86626407255b7f74cc6724a5053faaa3039a20cd2c8b6524acd"
+    },
+    "source-files-after.json": {
+      "original_path": "/tmp/automatic-native-gate-cuda-20261014/source-files-after.json",
+      "sha256": "ff8e8b2e81bc461fc82c63298f33741e1de53bd579d7d5a59a18b28c2c6e80c9",
+      "stored_identically_as": "source-files.json"
+    },
+    "source-files-before.json": {
+      "original_path": "/tmp/automatic-native-gate-cuda-20261014/source-files-before.json",
+      "sha256": "ff8e8b2e81bc461fc82c63298f33741e1de53bd579d7d5a59a18b28c2c6e80c9",
+      "stored_identically_as": "source-files.json"
+    }
+  },
+  "results": [
+    {
+      "cpu_affinity": "4,5,10,11",
+      "deselected": 56,
+      "exit_code": 0,
+      "passed": 19,
+      "skipped": 1,
+      "summary": "19 passed, 1 skipped, 56 deselected in 141.85s (0:02:21)"
+    }
+  ],
+  "schema_version": 1,
+  "scope_note": "Correctness jobs shared hardware. Test duration is not application performance. Pytest work trees, generated binaries and cache contents are excluded.",
+  "source_inventory_unchanged": true,
+  "status": "passed",
+  "totals": {
+    "deselected": 56,
+    "error": 0,
+    "errors": 0,
+    "failed": 0,
+    "passed": 19,
+    "skipped": 1
+  }
+}

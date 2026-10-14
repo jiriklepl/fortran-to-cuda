@@ -1,0 +1,36 @@
+{
+  "argv": [
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/.cache/envs/build/bin/python",
+    "-m",
+    "SCons",
+    "-f",
+    "SConstruct.pipeline",
+    "-j",
+    "1",
+    "fast=yes",
+    "aggressive=no",
+    "lto=no",
+    "openmp=yes",
+    "prec=dp",
+    "dir=/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build"
+  ],
+  "cwd": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/application/src",
+  "native_library_dir": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/lib",
+  "preprocessing_defines": [
+    "DPREC"
+  ],
+  "extra_sources": [],
+  "patched_sources": [],
+  "command_receipts": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/host-command-receipts-tob4kltd",
+  "host_runtime": {
+    "gnu_openmp": "/usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0",
+    "ordered_prefix": [
+      "/usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0"
+    ]
+  },
+  "build_receipts": {
+    "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/build-receipts.json",
+    "status": "complete",
+    "identity": "8847178376e79d9093bc116d59b026cea55f81ac2f14e96cd24dfe3ace1306ba"
+  }
+}

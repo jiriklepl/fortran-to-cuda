@@ -1,0 +1,87 @@
+{
+  "application": {
+    "application_built": false,
+    "application_executed": false,
+    "build_units": 0,
+    "cap_seconds": 300,
+    "changed_inputs": [],
+    "classification": "frozen-input compiler/pipeline native-fallback diagnostic",
+    "elapsed_seconds": 50.60639362499933,
+    "evidence": "evidence/application-fallback/evidence.json",
+    "exit_code": 0,
+    "input_files": 178,
+    "input_inventory_equal_to_prior_checkpoint": true,
+    "manifest_emitted": true,
+    "memory_bytes": 3221225472,
+    "scope_count": 0,
+    "source_edits": 0,
+    "status": "completed_native_fallback"
+  },
+  "behavior": {
+    "authentication": "source/configuration, packages, entry, collective participation and final publication checks retained",
+    "collective_lowering": "ordinary and normalized source text captured before lowering",
+    "gate": "auto and profile is None and exact_window is None",
+    "native_result": "zero scopes, source edits, runtime and build units"
+  },
+  "claims": {
+    "application_speedup": false,
+    "automatic_application_gpu_residency": false,
+    "performance_targets_met": false
+  },
+  "compiler_commit": "0eeae487bc68a0a88090a8304e3dceaac1df45a5",
+  "figure_footer": "Compiler 0eeae487 \u00b7 pipeline 8ebaa348 \u00b7 native manifest completed; application GPU qualification remains open",
+  "pipeline_commit": "8ebaa348bbaa8525435a727560d217a4a15a1bc2",
+  "previous_report": "../checked-execution-plan-20261014/README.md",
+  "remaining": [
+    "Useful generic resident interval discovery and compatible automatic pricing",
+    "Native effects/definitions and diffusion wall correction proofs for both primary cases",
+    "Full-field, transfer-ledger and complete-process performance qualification"
+  ],
+  "schema_version": 1,
+  "status": "completed_native_fallback_checkpoint_gpu_qualification_open",
+  "test_correction_commit": "af7584edcec5037b1f3bbc0ab3cc128d3611fd4c",
+  "title": "Automatic native selection before speculative window work",
+  "validation": {
+    "cuda_native": {
+      "deselected": 56,
+      "evidence": "evidence/cuda/evidence.json",
+      "passed": 19,
+      "scope": "affected native fallback and source scope CUDA/native tests",
+      "skip_reason": "matching explicit offline scoped calibration profile required",
+      "skipped": 1,
+      "source_inventory_unchanged": true
+    },
+    "host_baseline": {
+      "evidence": "evidence/host/evidence.json",
+      "failed": 1,
+      "failure": "Owner diagnostics fixture omitted profile evidence and reached the new early native decision instead of owner planning.",
+      "passed": 5170,
+      "skipped": 0,
+      "source_inventory_unchanged": true,
+      "status": "failed"
+    },
+    "host_correction": {
+      "compiler_commit": "af7584edcec5037b1f3bbc0ab3cc128d3611fd4c",
+      "correction": "Supply a valid transfer profile without numerical compute calibration; preserve original owner diagnostic assertions.",
+      "evidence": "evidence/diagnostics/evidence.json",
+      "failed": 0,
+      "passed": 25,
+      "production_unchanged_from": "0eeae487bc68a0a88090a8304e3dceaac1df45a5",
+      "scope": "Complete owner diagnostics and automatic cost gate test files; full host suite not rerun after the test-only correction.",
+      "source_inventory_unchanged": true
+    },
+    "native_build_fixture": {
+      "claim": "real native fixture build and full-field checks, not ELMM application validation",
+      "evidence": "evidence/pipeline-native-build/evidence.json",
+      "passed": 5,
+      "revision_binding": "intermediate working-tree run; all 252 recorded tracked inputs match final compiler/pipeline commits"
+    },
+    "pipeline": {
+      "evidence": "evidence/pipeline-validation/evidence.json",
+      "passed": 618,
+      "skipped": 22,
+      "source_inventory_unchanged": true,
+      "subtests_passed": 265
+    }
+  }
+}

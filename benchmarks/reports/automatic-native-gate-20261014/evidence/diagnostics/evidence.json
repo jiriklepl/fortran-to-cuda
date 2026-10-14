@@ -1,0 +1,141 @@
+{
+  "application_performance_evidence": false,
+  "baseline_compiler_commit": "0eeae487bc68a0a88090a8304e3dceaac1df45a5",
+  "claim": "Separate diagnostic fixture correction supplement; full host baseline remains failed.",
+  "committed_changed_paths": [
+    "compiler/tests/test_lexical_owner_diagnostics.py"
+  ],
+  "corrected_compiler_commit": "af7584edcec5037b1f3bbc0ab3cc128d3611fd4c",
+  "final_patch": "committed-test-correction.patch",
+  "final_test_sha256": "fa8471fa4cb3a9bf132e5af64535b4304d605c40d5b54a065a632e880160210c",
+  "full_suite_rerun_on_corrected_commit": false,
+  "pipeline_commit": "8ebaa348bbaa8525435a727560d217a4a15a1bc2",
+  "production_changed": false,
+  "runs": [
+    {
+      "counts": {
+        "failed": 1,
+        "passed": 24
+      },
+      "exit_code": 1,
+      "incidental_untracked_cache_delta": [],
+      "intermediate_note": "Initial WIP source content is not archived; its exact hash and failing raw outcome are preserved.",
+      "intermediate_source_contents_preserved": false,
+      "inventory_base": "../host/source-files.json",
+      "inventory_base_sha256": "ff8e8b2e81bc461fc82c63298f33741e1de53bd579d7d5a59a18b28c2c6e80c9",
+      "inventory_delta": "initial/source-inventory-delta.json",
+      "inventory_reconstruction": "Merge base with delta, then json.dumps(sort_keys=True, indent=2) plus newline.",
+      "label": "initial",
+      "origin": "/tmp/automatic-native-gate-diagnostics-20261014",
+      "pipeline_commit": "8ebaa348bbaa8525435a727560d217a4a15a1bc2",
+      "pytest_summary": "1 failed, 24 passed in 1.81s",
+      "raw_artifacts": {
+        "command.json": {
+          "original_path": "/tmp/automatic-native-gate-diagnostics-20261014/command.json",
+          "sha256": "499eba1d4630931f827b6376a4e238fc9772600357060af08e28b92d86b30e87"
+        },
+        "final.json": {
+          "original_path": "/tmp/automatic-native-gate-diagnostics-20261014/final.json",
+          "sha256": "0415597d3be9305ec9824923dc528fbd981159da08c4f9401d8cca75e9102f48"
+        },
+        "final.log": {
+          "original_path": "/tmp/automatic-native-gate-diagnostics-20261014/final.log",
+          "sha256": "7e7fe7bc395c7614344681993685403bb3d2288a22b09a31b953b8a136cdfdf6"
+        }
+      },
+      "recorded_head": "0eeae487bc68a0a88090a8304e3dceaac1df45a5",
+      "runner": "run.py",
+      "runner_sha256": "5ab48137c6fc252e94f767f3d2fc4a0a57b3ef3a5e1c0e4b27783351cb5e4704",
+      "source_inventory_sha256": "6a57182c739393fecef67f23a49ad8c4772be1fa1c8c0fc455b476cf60ed00b9",
+      "source_inventory_unchanged": true,
+      "tested_file_sha256": "ed56facc6a300a1fe5b1ac8a4a1f942bb5b287a2853e7c2e78609cca36e30565",
+      "tracked_inventory_matches_final_correction_commit": false,
+      "tracked_mismatch_with_recorded_head": [
+        "compiler/tests/test_lexical_owner_diagnostics.py"
+      ]
+    },
+    {
+      "counts": {
+        "passed": 25
+      },
+      "exit_code": 0,
+      "incidental_untracked_cache_delta": [],
+      "intermediate_note": null,
+      "intermediate_source_contents_preserved": true,
+      "inventory_base": "../host/source-files.json",
+      "inventory_base_sha256": "ff8e8b2e81bc461fc82c63298f33741e1de53bd579d7d5a59a18b28c2c6e80c9",
+      "inventory_delta": "corrected-working-tree/source-inventory-delta.json",
+      "inventory_reconstruction": "Merge base with delta, then json.dumps(sort_keys=True, indent=2) plus newline.",
+      "label": "corrected-working-tree",
+      "origin": "/tmp/automatic-native-gate-diagnostics-corrected-20261014",
+      "pipeline_commit": "8ebaa348bbaa8525435a727560d217a4a15a1bc2",
+      "pytest_summary": "25 passed in 1.30s",
+      "raw_artifacts": {
+        "command.json": {
+          "original_path": "/tmp/automatic-native-gate-diagnostics-corrected-20261014/command.json",
+          "sha256": "312e80e901cfb47077fc6a5109c682adda843c84730c9718db97700370bb7017"
+        },
+        "final.json": {
+          "original_path": "/tmp/automatic-native-gate-diagnostics-corrected-20261014/final.json",
+          "sha256": "7176abdae3670ac130405a7382daa74d36c105d10bc3567d6d8e1aab84c4ade9"
+        },
+        "final.log": {
+          "original_path": "/tmp/automatic-native-gate-diagnostics-corrected-20261014/final.log",
+          "sha256": "2145d8b40ba7b5cc60583be9cae654741b34af17aee7f43a1591455182c2024d"
+        }
+      },
+      "recorded_head": "0eeae487bc68a0a88090a8304e3dceaac1df45a5",
+      "runner": "run.py",
+      "runner_sha256": "5ab48137c6fc252e94f767f3d2fc4a0a57b3ef3a5e1c0e4b27783351cb5e4704",
+      "source_inventory_sha256": "4797c176b4911343e423b97e5a59f5b4ef46afda71de0a118a532b7ebc73d4e2",
+      "source_inventory_unchanged": true,
+      "tested_file_sha256": "fa8471fa4cb3a9bf132e5af64535b4304d605c40d5b54a065a632e880160210c",
+      "tracked_inventory_matches_final_correction_commit": true,
+      "tracked_mismatch_with_recorded_head": [
+        "compiler/tests/test_lexical_owner_diagnostics.py"
+      ]
+    },
+    {
+      "counts": {
+        "passed": 25
+      },
+      "exit_code": 0,
+      "incidental_untracked_cache_delta": [
+        "compiler/.ruff_cache/0.16.10/6823323864881815829"
+      ],
+      "intermediate_note": null,
+      "intermediate_source_contents_preserved": true,
+      "inventory_base": "../host/source-files.json",
+      "inventory_base_sha256": "ff8e8b2e81bc461fc82c63298f33741e1de53bd579d7d5a59a18b28c2c6e80c9",
+      "inventory_delta": "committed/source-inventory-delta.json",
+      "inventory_reconstruction": "Merge base with delta, then json.dumps(sort_keys=True, indent=2) plus newline.",
+      "label": "committed",
+      "origin": "/tmp/automatic-native-gate-diagnostics-committed-20261014",
+      "pipeline_commit": "8ebaa348bbaa8525435a727560d217a4a15a1bc2",
+      "pytest_summary": "25 passed in 1.23s",
+      "raw_artifacts": {
+        "command.json": {
+          "original_path": "/tmp/automatic-native-gate-diagnostics-committed-20261014/command.json",
+          "sha256": "f237864d523b8215bab64689354694c8314440c621bd09e2994a031769287579"
+        },
+        "final.json": {
+          "original_path": "/tmp/automatic-native-gate-diagnostics-committed-20261014/final.json",
+          "sha256": "8722e7eaf37b4c32fc37768a1082b33860b7302c006a42741948e84b25c7f1bc"
+        },
+        "final.log": {
+          "original_path": "/tmp/automatic-native-gate-diagnostics-committed-20261014/final.log",
+          "sha256": "0da317b098dde583ef076537d9b7a02516ff37d960b63968554e67a8ab00d335"
+        }
+      },
+      "recorded_head": "af7584edcec5037b1f3bbc0ab3cc128d3611fd4c",
+      "runner": "run.py",
+      "runner_sha256": "5ab48137c6fc252e94f767f3d2fc4a0a57b3ef3a5e1c0e4b27783351cb5e4704",
+      "source_inventory_sha256": "6b5298cfaba51992f99877f9b640c6bade3409752e34497fde49413bca9a0030",
+      "source_inventory_unchanged": true,
+      "tested_file_sha256": "fa8471fa4cb3a9bf132e5af64535b4304d605c40d5b54a065a632e880160210c",
+      "tracked_inventory_matches_final_correction_commit": true,
+      "tracked_mismatch_with_recorded_head": []
+    }
+  ],
+  "schema_version": 1
+}

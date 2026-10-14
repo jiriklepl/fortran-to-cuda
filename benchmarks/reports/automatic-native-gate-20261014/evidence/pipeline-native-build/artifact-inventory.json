@@ -1,0 +1,74 @@
+{
+  "files": {
+    "command.json": {
+      "bytes": 3257,
+      "sha256": "41def5873cbb8fe3188862a060152dcdabef5c5755c15b556f8dd5bfc074d79f"
+    },
+    "compiler-working.patch": {
+      "bytes": 5661,
+      "sha256": "b47a2fbf9c7605177479bd2200ab7dc7f7b0033365e04b73d0ed43e123d85935"
+    },
+    "curate.py": {
+      "bytes": 8203,
+      "sha256": "e75baba0c9e0f2d8ce866ba92422903407d0a74cdbcc5d79fcee1032bdd190f7"
+    },
+    "evidence.json": {
+      "bytes": 6193,
+      "sha256": "9bcced1c3bf93113dd926c279fe0268140e33ab66ec19eff95cfed5edf551e9c"
+    },
+    "final-source-verification.json": {
+      "bytes": 823,
+      "sha256": "d8ee02800580925e7336dd0a90d8664f61557547fed8991cb872cacc89ac9d78"
+    },
+    "final.json": {
+      "bytes": 3560,
+      "sha256": "91d3cc3503eaf0ec497976dc571d544b1f785bb0b6bda265b608a6a90d3a4d8e"
+    },
+    "final.log": {
+      "bytes": 98,
+      "sha256": "17e771d7be10c59e0d5d7f89cd92273baa6c3f1de984ed8cb0463ae606420fe9"
+    },
+    "fixture/build/build-command.json": {
+      "bytes": 1577,
+      "sha256": "7237d89b4b91c714e91a94dd15e7cdf1f004cfa7b9bf8eb956e3327b7fb07b2e"
+    },
+    "fixture/build/build-receipts.json": {
+      "bytes": 21801,
+      "sha256": "e7cc0eb6b0841a168b297fa9298469da8639407c36837342ddb95fc4c2b8e631"
+    },
+    "fixture/build/build.log": {
+      "bytes": 2068,
+      "sha256": "7f40514b81859307c35b83a9284356c73628cb7f227ca536afffa1c8bfb0bfd2"
+    },
+    "fixture/integration-build.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "fixture/integration-runtime.log": {
+      "bytes": 16,
+      "sha256": "9e7511eec94278ce9553c430321287629f096ec993b5a69f66bf63e0b5444a1f"
+    },
+    "fixture/integration.json": {
+      "bytes": 201055,
+      "sha256": "b2bbcd99f6e1c603c51d0bd800250200f71cd62eae7b75546afbdd90ce5bdd7c"
+    },
+    "pipeline-working.patch": {
+      "bytes": 8037,
+      "sha256": "b13e2e789d425316554fb8d7192c7e01244b5e24842e546d387e42daeedba6bb"
+    },
+    "run.py": {
+      "bytes": 4115,
+      "sha256": "cc7870943b17b11d7e79ab2739be387353e113f72a83c47c85629817bc5cf730"
+    },
+    "source-files-before.json": {
+      "bytes": 27150,
+      "sha256": "917c606ba4c6abaa07b0a833cfde97da8402388e80585bb4c3a1fce90605110e"
+    },
+    "working-tree-binding.json": {
+      "bytes": 778,
+      "sha256": "09217d55f533c4f859f3dbbed5f5d48d68eec0675807c668af743565133c1c83"
+    }
+  },
+  "identity": "31e35a742363b508d55cc03fd039304be4686b4469737cb89dc5cace174519ea",
+  "schema_version": 1
+}

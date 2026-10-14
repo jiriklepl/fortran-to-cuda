@@ -1,0 +1,23 @@
+{
+  "changes": {
+    "compiler": {
+      "base_commit": "406de31c38970d76ffccd4d47ab866ee6c6ada9d",
+      "patch": "compiler-working.patch",
+      "patch_sha256": "b47a2fbf9c7605177479bd2200ab7dc7f7b0033365e04b73d0ed43e123d85935",
+      "paths": [
+        "compiler/scopes/source.py",
+        "compiler/scopes/collective.py"
+      ]
+    },
+    "pipeline": {
+      "base_commit": "494df4e9221b61d3c8f28c7f86ab7dd07cd6908f",
+      "patch": "pipeline-working.patch",
+      "patch_sha256": "b13e2e789d425316554fb8d7192c7e01244b5e24842e546d387e42daeedba6bb",
+      "paths": [
+        "tests/test_local_scopes.py",
+        "tests/test_scoped_adaptation.py"
+      ]
+    }
+  },
+  "claim": "Tests used inventoried working-tree changes; recorded HEAD alone is not the tested revision."
+}

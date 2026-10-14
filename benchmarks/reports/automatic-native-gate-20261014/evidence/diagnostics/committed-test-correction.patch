@@ -1,0 +1,35 @@
+diff --git a/compiler/tests/test_lexical_owner_diagnostics.py b/compiler/tests/test_lexical_owner_diagnostics.py
+index a1d2c69..2b390b9 100644
+--- a/compiler/tests/test_lexical_owner_diagnostics.py
++++ b/compiler/tests/test_lexical_owner_diagnostics.py
+@@ -50,7 +50,7 @@ def isolated_summary_cache(monkeypatch):
+     monkeypatch.setattr(source_effects, "_DEFAULT_SUMMARY_CACHE", SummaryCache())
+ 
+ 
+-def subject(tmp_path, text=SOURCE, *, policy="sections"):
++def subject(tmp_path, text=SOURCE, *, policy="sections", profile=None):
+     path = tmp_path / "original.f90"
+     path.write_text(text)
+     digest = sha256(path.read_bytes()).hexdigest()
+@@ -58,7 +58,7 @@ def subject(tmp_path, text=SOURCE, *, policy="sections"):
+              "captures": {"argument::a": {"storage": "stable", "initialized": "whole",
+                                           "escapes": False, "allocation_changes": False}}}
+     builder = ScopeBuilder([path], "diagnostic_owner::step", facts=facts, options=CompilerOptions(),
+-                           config=OffloadConfig(policy=policy, scope_execution="reached"))
++                           config=OffloadConfig(policy=policy, profile=profile, scope_execution="reached"))
+     return path, builder
+ 
+ 
+@@ -204,7 +204,11 @@ def test_failed_team_alternatives_restore_artifacts_without_refunding_preparatio
+ @pytest.mark.parametrize(("policy", "outcome", "admitted"), [
+     ("sections", "accepted", True), ("auto", "successful_native", False)])
+ def test_accepted_source_owner_and_successful_native_are_distinct(tmp_path, policy, outcome, admitted):
+-    _path, builder = subject(tmp_path, policy=policy)
++    from compiler.tests.test_offload_profile import scoped_profile
++
++    # Keep exercising the owner diagnostic path with a transfer profile that
++    # lacks numerical compute calibration. An absent profile exits earlier.
++    _path, builder = subject(tmp_path, policy=policy, profile=scoped_profile() if policy == "auto" else None)
+     _outputs, report = builder.run()
+     attempt = report["lexical_owner_attempt"]
+     assert attempt["outcome"] == outcome

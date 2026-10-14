@@ -1,0 +1,33 @@
+{
+  "files": {
+    "command.json": {
+      "bytes": 3007,
+      "sha256": "64b6346650c35df56e47aa33d4b0bb2b710fccbf179091389b77b83570571988"
+    },
+    "commit-verification.json": {
+      "bytes": 2697,
+      "sha256": "40274a5e4e553ea6b8479e3be0e1f11e8786d5b346d2c77173c52d704a1eaa5c"
+    },
+    "evidence.json": {
+      "bytes": 2403,
+      "sha256": "765b4b059889027db1402fcf894d5cf6a2727eec8dc87d91cb6ca654de9577b1"
+    },
+    "final.log": {
+      "bytes": 334,
+      "sha256": "40d4ef6197fcdb58fbc16ec68644a1323aa11bc485b3e549367c2cedfdf41be7"
+    },
+    "outcome.json": {
+      "bytes": 403,
+      "sha256": "d0e808b6e45c3110407b0e6bee56044c6061b0fd39c732a4218af3f069acbbc5"
+    },
+    "run.py": {
+      "bytes": 3856,
+      "sha256": "4212d37e8928d86626407255b7f74cc6724a5053faaa3039a20cd2c8b6524acd"
+    },
+    "source-files.json": {
+      "bytes": 75703,
+      "sha256": "ff8e8b2e81bc461fc82c63298f33741e1de53bd579d7d5a59a18b28c2c6e80c9"
+    }
+  },
+  "schema_version": 1
+}

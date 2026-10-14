@@ -1,0 +1,102 @@
+{
+  "application_execution_or_performance_evidence": false,
+  "claim": "Complete selected compiler host suite",
+  "commits": {
+    "/home/jirka/research/fortran-abomination": "0eeae487bc68a0a88090a8304e3dceaac1df45a5",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline": "8ebaa348bbaa8525435a727560d217a4a15a1bc2"
+  },
+  "original_artifacts": {
+    "collected-tests.json": {
+      "original_path": "/tmp/automatic-native-gate-host-20261014/collected-tests.json",
+      "reconstruction": "Round-robin interleave command.json.worker_argv[*][8:]; same ordered node IDs are retained in collection.log.",
+      "sha256": "86a72f498ab4f6e28a120f813b97040444ab7b9621b5d57847989194cd863988"
+    },
+    "collection.log": {
+      "original_path": "/tmp/automatic-native-gate-host-20261014/collection.log",
+      "sha256": "3fa6d123a18ad8dcc53dcc637fa17d572576158e9ca76f6799f6e36804d966cb"
+    },
+    "command.json": {
+      "original_path": "/tmp/automatic-native-gate-host-20261014/command.json",
+      "sha256": "5bb83afd42da6d526a50dfd302bdc1ba825526fc409ef7f78e633ca515f0fe6f"
+    },
+    "final.json": {
+      "original_path": "/tmp/automatic-native-gate-host-20261014/final.json",
+      "reconstruction": "Merge command.json with outcome.json.final_fields; json.dumps(sort_keys=True, indent=2) plus newline reproduces original bytes.",
+      "sha256": "8ae406c95ddae30dbac6b5d10e2f74d45f375df9194344473ac7e6b432d97ac3"
+    },
+    "run.py": {
+      "original_path": "/tmp/automatic-native-gate-host-20261014/run.py",
+      "sha256": "9026c96d94c3ab9f344d22d0173613a0435344b9dc826d2fb068b71f23db9317"
+    },
+    "source-files-after.json": {
+      "original_path": "/tmp/automatic-native-gate-host-20261014/source-files-after.json",
+      "sha256": "ff8e8b2e81bc461fc82c63298f33741e1de53bd579d7d5a59a18b28c2c6e80c9",
+      "stored_identically_as": "source-files.json"
+    },
+    "source-files-before.json": {
+      "original_path": "/tmp/automatic-native-gate-host-20261014/source-files-before.json",
+      "sha256": "ff8e8b2e81bc461fc82c63298f33741e1de53bd579d7d5a59a18b28c2c6e80c9",
+      "stored_identically_as": "source-files.json"
+    },
+    "worker-0.json": {
+      "original_path": "/tmp/automatic-native-gate-host-20261014/worker-0.json",
+      "sha256": "62275c233f094c3b4ce34d860e14b4caf0f06b1dff7f4f8f40c710f985856138"
+    },
+    "worker-0.log": {
+      "original_path": "/tmp/automatic-native-gate-host-20261014/worker-0.log",
+      "sha256": "a482e691f640fe91ebf5c2348c6c506404e7d8d0991372ea5a6aec5591791a69"
+    },
+    "worker-1.json": {
+      "original_path": "/tmp/automatic-native-gate-host-20261014/worker-1.json",
+      "sha256": "1f7e8cad227a49e946975b484dac3e6852e48b62f7ea593ba247a32a99e4f6c2"
+    },
+    "worker-1.log": {
+      "original_path": "/tmp/automatic-native-gate-host-20261014/worker-1.log",
+      "sha256": "4a92c0471d53ec51c5fa0f5539290a0d260e2598b084806ae1649c04092e39d8"
+    },
+    "worker-2.json": {
+      "original_path": "/tmp/automatic-native-gate-host-20261014/worker-2.json",
+      "sha256": "24a71a442f8dddc08a17d3547e6d20d8d79ba09a5dc84e6b646bfb088f077074"
+    },
+    "worker-2.log": {
+      "original_path": "/tmp/automatic-native-gate-host-20261014/worker-2.log",
+      "sha256": "cb1c3e5c4c05ae122e7f699e429e5d511dfbb74f30c738d0501458f7a3eb3c70"
+    }
+  },
+  "results": [
+    {
+      "cpu_affinity": "0,1,6,7",
+      "exit_code": 0,
+      "passed": 1724,
+      "summary": "1724 passed in 543.75s (0:09:03)",
+      "worker": 0
+    },
+    {
+      "cpu_affinity": "2,3,8,9",
+      "exit_code": 0,
+      "passed": 1724,
+      "summary": "1724 passed in 505.66s (0:08:25)",
+      "worker": 1
+    },
+    {
+      "cpu_affinity": "0,1,2,3",
+      "exit_code": 1,
+      "failed": 1,
+      "passed": 1722,
+      "summary": "1 failed, 1722 passed in 547.71s (0:09:07)",
+      "worker": 2
+    }
+  ],
+  "schema_version": 1,
+  "scope_note": "Correctness jobs shared hardware. Test duration is not application performance. Pytest work trees, generated binaries and cache contents are excluded.",
+  "source_inventory_unchanged": true,
+  "status": "failed",
+  "totals": {
+    "deselected": 0,
+    "error": 0,
+    "errors": 0,
+    "failed": 1,
+    "passed": 5170,
+    "skipped": 0
+  }
+}

@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "kind": "application-build-receipts",
+  "status": "complete",
+  "placement_authority": false,
+  "binary": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/ELMM",
+  "units": [
+    {
+      "object": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/application.o",
+      "source": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/application/src/application.f90",
+      "execution": {
+        "schema_version": 1,
+        "kind": "executed-build-command",
+        "status": "completed",
+        "argv": [
+          "/usr/bin/gfortran-15",
+          "-o",
+          "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/application.o",
+          "-c",
+          "-O3",
+          "-fopenmp",
+          "-fcheck=all",
+          "-std=f2018",
+          "-ffree-line-length-none",
+          "-I/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build",
+          "-J/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build",
+          "application.f90"
+        ],
+        "cwd": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/application/src",
+        "shell": false,
+        "environment": {
+          "PATH": "/home/jirka/.local/bin:/home/jirka/.codex/tmp/arg0/codex-arg00Z57tS:/home/jirka/.vscode-server/bin/16507d91be0dc1ce4f94c04d4d0430210b8685d9/bin/remote-cli:/home/jirka/.local/bin:/usr/local/cuda/bin:/opt/nvidia/hpc_sdk/Linux_x86_64/2025/compilers/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/usr/lib/linux-tools/6.18.54.1-microsoft-standard-WSL2/bin:/mnt/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.8/bin:/mnt/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.8/libnvvp:/mnt/c/Windows/system32:/mnt/c/Windows:/mnt/c/Windows/System32/Wbem:/mnt/c/Windows/System32/WindowsPowerShell/v1.0/:/mnt/c/Windows/System32/OpenSSH/:/mnt/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/c/WINDOWS/system32:/mnt/c/WINDOWS:/mnt/c/WINDOWS/System32/Wbem:/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/c/WINDOWS/System32/OpenSSH/:/mnt/c/Program Files/dotnet/:/mnt/c/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR:/mnt/c/Program Files/PowerShell/7-preview/preview:/mnt/c/Program Files/Git/cmd:/mnt/c/Program Files/NVIDIA Corporation/Nsight Compute 2026.3.1/:/mnt/c/Program Files/WSL/:/mnt/c/Users/Jirka/AppData/Local/Programs/Python/Launcher/:/mnt/c/Users/Jirka/AppData/Local/Microsoft/WindowsApps:/mnt/c/Users/Jirka/AppData/Local/Programs/Microsoft VS Code Insiders/bin:/mnt/c/Users/Jirka/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Users/Jirka/AppData/Local/PowerToys/DSCModules/:/home/jirka/.vscode-server/extensions/openai.chatgpt-26.1007.21434-linux-x64/bin/linux-x86_64",
+          "CPATH": null,
+          "C_INCLUDE_PATH": null,
+          "CPLUS_INCLUDE_PATH": null,
+          "LIBRARY_PATH": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/lib",
+          "LD_LIBRARY_PATH": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/lib:/usr/local/cuda/lib64:/opt/nvidia/hpc_sdk/Linux_x86_64/2025/compilers/lib",
+          "GCC_EXEC_PREFIX": null,
+          "COMPILER_PATH": null,
+          "SOURCE_DATE_EPOCH": null,
+          "LANG": "en_US.UTF-8",
+          "LC_ALL": "C.UTF-8",
+          "NVCC_PREPEND_FLAGS": null,
+          "NVCC_APPEND_FLAGS": null,
+          "FC": "/usr/bin/gfortran-15",
+          "CC": null,
+          "CXX": "/usr/bin/g++-14",
+          "FFLAGS": null,
+          "FCFLAGS": null,
+          "F90FLAGS": null,
+          "CFLAGS": null,
+          "CXXFLAGS": null,
+          "LDFLAGS": null
+        },
+        "environment_sha256": "db2c7305af882eddc2b2812edf2801a097f7d7eb5872f33260edab99281ac8bb",
+        "compiler": {
+          "path": "/usr/bin/x86_64-linux-gnu-gfortran-15",
+          "sha256": "d50c19657ba852999f54428d6cad77719279ab034a04a79370e78a3477f68db8",
+          "version": "GNU Fortran (Debian 15.3.0-4) 15.3.0\nCopyright (C) 2025 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+          "version_returncode": 0
+        },
+        "inputs": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/application/src/application.f90",
+            "sha256": "9b15e4b78ebc9bb5944f458fa7693064cf9151d3ccd62f14316afc8b1d528b8b"
+          }
+        ],
+        "outputs": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/application.o",
+            "sha256": "202490ae3fbffe8b8e0edd13be026afdea0600270ff1859376ece0d1678cca58"
+          }
+        ],
+        "started_ns": 1792014072127586362,
+        "returncode": 0,
+        "finished_ns": 1792014072195101413
+      }
+    },
+    {
+      "object": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/main.o",
+      "source": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/application/src/main.f90",
+      "execution": {
+        "schema_version": 1,
+        "kind": "executed-build-command",
+        "status": "completed",
+        "argv": [
+          "/usr/bin/gfortran-15",
+          "-o",
+          "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/main.o",
+          "-c",
+          "-O3",
+          "-fopenmp",
+          "-fcheck=all",
+          "-std=f2018",
+          "-ffree-line-length-none",
+          "-I/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build",
+          "-J/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build",
+          "main.f90"
+        ],
+        "cwd": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/application/src",
+        "shell": false,
+        "environment": {
+          "PATH": "/home/jirka/.local/bin:/home/jirka/.codex/tmp/arg0/codex-arg00Z57tS:/home/jirka/.vscode-server/bin/16507d91be0dc1ce4f94c04d4d0430210b8685d9/bin/remote-cli:/home/jirka/.local/bin:/usr/local/cuda/bin:/opt/nvidia/hpc_sdk/Linux_x86_64/2025/compilers/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/usr/lib/linux-tools/6.18.54.1-microsoft-standard-WSL2/bin:/mnt/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.8/bin:/mnt/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.8/libnvvp:/mnt/c/Windows/system32:/mnt/c/Windows:/mnt/c/Windows/System32/Wbem:/mnt/c/Windows/System32/WindowsPowerShell/v1.0/:/mnt/c/Windows/System32/OpenSSH/:/mnt/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/c/WINDOWS/system32:/mnt/c/WINDOWS:/mnt/c/WINDOWS/System32/Wbem:/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/c/WINDOWS/System32/OpenSSH/:/mnt/c/Program Files/dotnet/:/mnt/c/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR:/mnt/c/Program Files/PowerShell/7-preview/preview:/mnt/c/Program Files/Git/cmd:/mnt/c/Program Files/NVIDIA Corporation/Nsight Compute 2026.3.1/:/mnt/c/Program Files/WSL/:/mnt/c/Users/Jirka/AppData/Local/Programs/Python/Launcher/:/mnt/c/Users/Jirka/AppData/Local/Microsoft/WindowsApps:/mnt/c/Users/Jirka/AppData/Local/Programs/Microsoft VS Code Insiders/bin:/mnt/c/Users/Jirka/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Users/Jirka/AppData/Local/PowerToys/DSCModules/:/home/jirka/.vscode-server/extensions/openai.chatgpt-26.1007.21434-linux-x64/bin/linux-x86_64",
+          "CPATH": null,
+          "C_INCLUDE_PATH": null,
+          "CPLUS_INCLUDE_PATH": null,
+          "LIBRARY_PATH": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/lib",
+          "LD_LIBRARY_PATH": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/lib:/usr/local/cuda/lib64:/opt/nvidia/hpc_sdk/Linux_x86_64/2025/compilers/lib",
+          "GCC_EXEC_PREFIX": null,
+          "COMPILER_PATH": null,
+          "SOURCE_DATE_EPOCH": null,
+          "LANG": "en_US.UTF-8",
+          "LC_ALL": "C.UTF-8",
+          "NVCC_PREPEND_FLAGS": null,
+          "NVCC_APPEND_FLAGS": null,
+          "FC": "/usr/bin/gfortran-15",
+          "CC": null,
+          "CXX": "/usr/bin/g++-14",
+          "FFLAGS": null,
+          "FCFLAGS": null,
+          "F90FLAGS": null,
+          "CFLAGS": null,
+          "CXXFLAGS": null,
+          "LDFLAGS": null
+        },
+        "environment_sha256": "db2c7305af882eddc2b2812edf2801a097f7d7eb5872f33260edab99281ac8bb",
+        "compiler": {
+          "path": "/usr/bin/x86_64-linux-gnu-gfortran-15",
+          "sha256": "d50c19657ba852999f54428d6cad77719279ab034a04a79370e78a3477f68db8",
+          "version": "GNU Fortran (Debian 15.3.0-4) 15.3.0\nCopyright (C) 2025 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+          "version_returncode": 0
+        },
+        "inputs": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/application/src/main.f90",
+            "sha256": "d50b3819e54d824ccf7a9862321ef0e8a14e029013ad808421af9b63e0511baa"
+          }
+        ],
+        "outputs": [
+          {
+            "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/main.o",
+            "sha256": "ad1f9b8b6d956fc1cae5eeff8a20287692a49a23765b2ff86af859a7cdb0e648"
+          }
+        ],
+        "started_ns": 1792014072199573645,
+        "returncode": 0,
+        "finished_ns": 1792014072282750597
+      }
+    }
+  ],
+  "link": {
+    "schema_version": 1,
+    "kind": "executed-build-command",
+    "status": "completed",
+    "argv": [
+      "/usr/bin/gfortran-15",
+      "-o",
+      "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/ELMM",
+      "-fopenmp",
+      "-Wl,--disable-new-dtags",
+      "-Wl,-rpath=/usr/lib/x86_64-linux-gnu",
+      "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/application.o",
+      "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/main.o",
+      "-L/usr/lib/gcc/x86_64-linux-gnu/15",
+      "-L/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/lib",
+      "/usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0"
+    ],
+    "cwd": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/application/src",
+    "shell": false,
+    "environment": {
+      "PATH": "/home/jirka/.local/bin:/home/jirka/.codex/tmp/arg0/codex-arg00Z57tS:/home/jirka/.vscode-server/bin/16507d91be0dc1ce4f94c04d4d0430210b8685d9/bin/remote-cli:/home/jirka/.local/bin:/usr/local/cuda/bin:/opt/nvidia/hpc_sdk/Linux_x86_64/2025/compilers/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/usr/lib/wsl/lib:/usr/lib/linux-tools/6.18.54.1-microsoft-standard-WSL2/bin:/mnt/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.8/bin:/mnt/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.8/libnvvp:/mnt/c/Windows/system32:/mnt/c/Windows:/mnt/c/Windows/System32/Wbem:/mnt/c/Windows/System32/WindowsPowerShell/v1.0/:/mnt/c/Windows/System32/OpenSSH/:/mnt/c/Program Files (x86)/NVIDIA Corporation/PhysX/Common:/mnt/c/WINDOWS/system32:/mnt/c/WINDOWS:/mnt/c/WINDOWS/System32/Wbem:/mnt/c/WINDOWS/System32/WindowsPowerShell/v1.0/:/mnt/c/WINDOWS/System32/OpenSSH/:/mnt/c/Program Files/dotnet/:/mnt/c/Program Files/NVIDIA Corporation/NVIDIA app/NvDLISR:/mnt/c/Program Files/PowerShell/7-preview/preview:/mnt/c/Program Files/Git/cmd:/mnt/c/Program Files/NVIDIA Corporation/Nsight Compute 2026.3.1/:/mnt/c/Program Files/WSL/:/mnt/c/Users/Jirka/AppData/Local/Programs/Python/Launcher/:/mnt/c/Users/Jirka/AppData/Local/Microsoft/WindowsApps:/mnt/c/Users/Jirka/AppData/Local/Programs/Microsoft VS Code Insiders/bin:/mnt/c/Users/Jirka/AppData/Local/Programs/Microsoft VS Code/bin:/mnt/c/Users/Jirka/AppData/Local/PowerToys/DSCModules/:/home/jirka/.vscode-server/extensions/openai.chatgpt-26.1007.21434-linux-x64/bin/linux-x86_64",
+      "CPATH": null,
+      "C_INCLUDE_PATH": null,
+      "CPLUS_INCLUDE_PATH": null,
+      "LIBRARY_PATH": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/lib",
+      "LD_LIBRARY_PATH": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/lib:/usr/local/cuda/lib64:/opt/nvidia/hpc_sdk/Linux_x86_64/2025/compilers/lib",
+      "GCC_EXEC_PREFIX": null,
+      "COMPILER_PATH": null,
+      "SOURCE_DATE_EPOCH": null,
+      "LANG": "en_US.UTF-8",
+      "LC_ALL": "C.UTF-8",
+      "NVCC_PREPEND_FLAGS": null,
+      "NVCC_APPEND_FLAGS": null,
+      "FC": "/usr/bin/gfortran-15",
+      "CC": null,
+      "CXX": "/usr/bin/g++-14",
+      "FFLAGS": null,
+      "FCFLAGS": null,
+      "F90FLAGS": null,
+      "CFLAGS": null,
+      "CXXFLAGS": null,
+      "LDFLAGS": null
+    },
+    "environment_sha256": "db2c7305af882eddc2b2812edf2801a097f7d7eb5872f33260edab99281ac8bb",
+    "compiler": {
+      "path": "/usr/bin/x86_64-linux-gnu-gfortran-15",
+      "sha256": "d50c19657ba852999f54428d6cad77719279ab034a04a79370e78a3477f68db8",
+      "version": "GNU Fortran (Debian 15.3.0-4) 15.3.0\nCopyright (C) 2025 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+      "version_returncode": 0
+    },
+    "inputs": [
+      {
+        "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/application.o",
+        "sha256": "202490ae3fbffe8b8e0edd13be026afdea0600270ff1859376ece0d1678cca58"
+      },
+      {
+        "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/main.o",
+        "sha256": "ad1f9b8b6d956fc1cae5eeff8a20287692a49a23765b2ff86af859a7cdb0e648"
+      },
+      {
+        "path": "/usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0",
+        "sha256": "b6dd2e4d985bd978b84f0460dc1e6d521814e7b7ee6c35e18f6aad68f820fd95"
+      }
+    ],
+    "outputs": [
+      {
+        "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/ELMM",
+        "sha256": "066fb8e4ef5468af19091d32933692d992e90ae178ccddb5a43da71ae6fa64f0"
+      }
+    ],
+    "started_ns": 1792014072286539602,
+    "returncode": 0,
+    "finished_ns": 1792014072392234526
+  },
+  "source_inputs": {
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/PoisFFT/src/poisfft.f90": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/application/src/SConstruct": "358f9155059f029d33cc8211a7b6e9df09bd850e2414e441e68fcf6e1aa916ed",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/application/src/application.f90": "9b15e4b78ebc9bb5944f458fa7693064cf9151d3ccd62f14316afc8b1d528b8b",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/application/src/main.f90": "d50b3819e54d824ccf7a9862321ef0e8a14e029013ad808421af9b63e0511baa",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/application/src/SConstruct.pipeline": "ac58543b1259005379a419d66f82f167d9e2126754b26c2a97fdc276947e9267",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/build_receipts.py": "a46dc118862fcb66e8f4202e1580e47121bcb192cab657168919429636a1a3d2"
+  },
+  "files_sha256": {
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/PoisFFT/src/poisfft.f90": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/application/src/SConstruct": "358f9155059f029d33cc8211a7b6e9df09bd850e2414e441e68fcf6e1aa916ed",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/application/src/application.f90": "9b15e4b78ebc9bb5944f458fa7693064cf9151d3ccd62f14316afc8b1d528b8b",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/application/src/main.f90": "d50b3819e54d824ccf7a9862321ef0e8a14e029013ad808421af9b63e0511baa",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/application/src/SConstruct.pipeline": "ac58543b1259005379a419d66f82f167d9e2126754b26c2a97fdc276947e9267",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/build_receipts.py": "a46dc118862fcb66e8f4202e1580e47121bcb192cab657168919429636a1a3d2",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/host-command-receipts-tob4kltd/45391f01fb1b4ec3a07945ee3c160f9d.json": "842ed859c63f39cc2b23acc8eeb58682284acc1a44804a9b45b00b6646fd46e6",
+    "/usr/bin/x86_64-linux-gnu-gfortran-15": "d50c19657ba852999f54428d6cad77719279ab034a04a79370e78a3477f68db8",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/application.o": "202490ae3fbffe8b8e0edd13be026afdea0600270ff1859376ece0d1678cca58",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/host-command-receipts-tob4kltd/8b8ca5ca39944239b57c7e93797f244f.json": "1ae7ecbce55ca0e7ba3985da8f38c5ab9f56e5548f594074f979d2378d2b23a8",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/main.o": "ad1f9b8b6d956fc1cae5eeff8a20287692a49a23765b2ff86af859a7cdb0e648",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/host-command-receipts-tob4kltd/3c076e85794b41309a44ef731f5fa6c8.json": "f4afa42e8e27559896f7181af578a4747ff0c845a41513ed535260daba23fb85",
+    "/usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0": "b6dd2e4d985bd978b84f0460dc1e6d521814e7b7ee6c35e18f6aad68f820fd95",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/missing-cost-native-build-validation-20261014/pytest/test_real_normal_scopes_build_0/build/ELMM": "066fb8e4ef5468af19091d32933692d992e90ae178ccddb5a43da71ae6fa64f0"
+  },
+  "limitations": [
+    "No placement authority",
+    "Implicit system headers and libraries are not inventoried"
+  ],
+  "identity": "8847178376e79d9093bc116d59b026cea55f81ac2f14e96cd24dfe3ace1306ba"
+}
