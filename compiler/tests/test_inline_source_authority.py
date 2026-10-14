@@ -13,7 +13,6 @@ from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT
 
-
 SOURCE = """module renamed_owner
 contains
 subroutine advance(a,n,flag)
@@ -55,7 +54,8 @@ def test_worker_and_branch_keep_distinct_original_node_authority(tmp_path):
     assert cloned is not branch
     assert builder.inline.original_selection(cloned) == (branch,)
     selection = builder.inline.original_selection(facade)
-    assert len(selection) == 1 and _kind(selection[0]) == "Block_Nonlabel_Do_Construct"
+    assert len(selection) == 1
+    assert _kind(selection[0]) == "Block_Nonlabel_Do_Construct"
     assert any(selection[0] is node for node in branch.content)
     assert "unknown_native" in str(builder.inline.original_selection(cloned)[0])
 
@@ -99,6 +99,21 @@ def test_joined_directive_projection_recovers_original_loop_once(tmp_path):
     assert len({id(node) for node in selection}) == len(selection)
     assert any(_kind(node) == "Block_Nonlabel_Do_Construct" for node in selection)
     assert all(any(node is candidate for candidate in original) for node in selection)
+
+
+def test_native_restore_copies_sealed_original_directives_once(tmp_path):
+    from compiler.frontend.sealed_syntax import sealed
+
+    source = SOURCE.replace("if(flag)then\n", "i=0\n!$omp parallel do private(i)\n").replace(
+        "else\ncall unknown_native(a)\nendif", "!$omp end parallel do")
+    builder, original, _, _, _ = prepared(tmp_path, source)
+    restored = builder.inline.restore(original)
+    text = "\n".join(map(str, restored)).lower()
+    assert text.count("!$omp parallel do") == 1
+    assert text.count("!$omp end parallel do") == 1
+    assert text.count("do i = 1, n") == 1
+    assert all(sealed(node) for node in original)
+    assert builder.analysis._require_original(builder.entry.qualified) is builder.entry
 
 
 def test_single_line_if_projection_retains_original_action(tmp_path):

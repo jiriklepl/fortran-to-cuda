@@ -1,7 +1,7 @@
-"""Fresh original-syntax checks without recursively formatting Fortran trees.
+"""Original-syntax authority without recursively formatting Fortran trees.
 
-The snapshot is evidence, not a successful-validation cache. Each checkpoint
-reads the current objects again; its memo belongs to one immediate demand only.
+Mutable parser inputs are checked afresh at each demand. Active compilation
+sessions seal their originals and then authenticate node identity directly.
 Namespace, binding, configuration and source-file checks remain with callers.
 """
 
@@ -14,6 +14,7 @@ from operator import and_, attrgetter, eq, is_
 from fparser.common.readfortran import FortranReaderBase
 from fparser.two.utils import Base, BlockBase
 
+from compiler.frontend.sealed_syntax import FrozenList
 from compiler.ir import CompilationError
 
 
@@ -56,7 +57,7 @@ class _Group:
     def unchanged(self):
         if not all(map(is_, map(type, self.objects), self.kinds)):
             return False
-        keys = map(dict.keys, map(vars, self.objects))
+        keys = (vars(value).keys() for value in self.objects)
         if self.item:
             keys = map(and_, keys, repeat(_ITEM_FIELD_NAMES))
         if not all(map(eq, keys, repeat(self.keys))):
@@ -85,12 +86,14 @@ class SourceSyntaxSnapshot:
     """
 
     def __init__(self, roots, *, limit=4_194_304):
+        self._roots = tuple(roots)
+        self._sealed = False
         self._nodes = {}
         self._layouts = {}
         self._active = set()
         self._remaining = limit
         try:
-            for root in roots:
+            for root in self._roots:
                 if root is not None:
                     self._capture_node(root)
         except RecursionError as error:
@@ -113,7 +116,7 @@ class SourceSyntaxSnapshot:
             return
         if kind in (str, int, bool, bytes, type(None)):
             return
-        if kind in (tuple, list):
+        if kind in (tuple, list, FrozenList):
             if id(value) in active:
                 raise CompilationError("original source syntax contains a cycle")
             active.add(id(value))
@@ -160,6 +163,30 @@ class SourceSyntaxSnapshot:
 
     def checkpoint(self):
         return _SyntaxCheckpoint(self)
+
+    @property
+    def immutable(self):
+        """All authenticated original syntax and source spans reject writes."""
+        return self._sealed
+
+    def seal(self):
+        """Return immutable syntax authority for an active compiler session.
+
+        Namespace and configured-file authentication remain separate. Original
+        parser attributes and child lists reject writes; copying a node creates
+        a mutable projection which cannot pass this snapshot's identity check.
+        """
+        if self._sealed:
+            return self
+        checkpoint = self.checkpoint()
+        if not all(checkpoint.unchanged(root) for root in self._roots):
+            raise CompilationError("cannot seal changed original source syntax")
+        from compiler.frontend.sealed_syntax import seal
+
+        seal(self._roots)
+        result = SourceSyntaxSnapshot(self._roots)
+        result._sealed = True
+        return result
 
     def _layout(self, node):
         """Group immutable baseline records; never cache a validation result."""
@@ -212,7 +239,7 @@ class _SyntaxCheckpoint:
         self._changed = set()
 
     def unchanged(self, node):
-        """Check original identity and every descendant once in this demand."""
+        """Check original identity and, when mutable, its current descendants."""
         if node is None:
             # An original empty procedure has no Execution_Part. Callers
             # separately check that this is still its registered execution.
@@ -225,6 +252,8 @@ class _SyntaxCheckpoint:
         state = self._snapshot._nodes.get(key)
         if state is None or state.original is not node or type(node) is not state.kind:
             return False
+        if self._snapshot._sealed:
+            return True
         layout = self._snapshot._layout(node)
         unchanged = layout.unchanged()
         if unchanged:

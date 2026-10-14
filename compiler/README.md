@@ -1545,13 +1545,18 @@ memory, each capped at 8 MiB; disk-directory cleanup belongs to its caller.
 runtime placement or allocation addresses are cached by this mechanism.
 
 Original syntax is authenticated against a bounded structural snapshot rather
-than repeatedly formatting every configured module. Each public demand checks
-current node and statement identities, ordered syntax values, labels and source
-spans. A local checkpoint shares comparisons only within that immediate demand;
-it never retains a successful validation across calls. Files, bindings,
-namespaces, contracts and budgets are still checked separately. Changed private
-execution projections receive distinct authority and cannot grant original
-source proofs. Unknown or cyclic parser state fails closed.
+than repeatedly formatting every configured module. An active `ScopeBuilder`
+then seals the original syntax and source spans for its compilation session.
+Original parser attributes, child lists, statement labels and source spans reject
+writes; pre-existing dictionary/list aliases and serialization state cannot
+modify the originals. Repeated demands authenticate original node identities
+without rescanning immutable syntax or its source-location inventory. Copies
+create mutable private projections and cannot acquire original-source authority.
+Files, bindings, namespaces, contracts and budgets are still checked separately.
+Standalone mutable `SourceEffects` analyses retain fresh structural checks, with
+comparisons shared only within one immediate demand. Unknown or cyclic parser
+state fails closed. This seals syntax/provenance; it does not yet make the whole
+namespace and binding graph immutable.
 
 A synchronous recursive summary shares syntax comparisons and one frozen
 canonical authority only while its original parser roots remain intact. Its

@@ -122,6 +122,11 @@ class ScopeBuilder:
                         continue
                     stable_module_allocatables.add(binding.root)
         self.analysis.authorize_stable_module_allocatables(stable_module_allocatables)
+        # The active compilation session owns read-only original parser syntax.
+        # Generated projections are separate mutable copies. Repeated proof
+        # queries need only original-node identity here; configured sources,
+        # namespaces, captures and options retain their independent checks.
+        self.analysis._source_syntax = self.analysis._source_syntax.seal()
         self.packages = load_numerical_sources(numerical_sources, self.analysis)
         self.device_budget = facts.get("device_budget_bytes", 256*1024*1024)
         if type(self.device_budget) is not int or not 0 <= self.device_budget < 2**63:

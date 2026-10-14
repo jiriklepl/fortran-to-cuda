@@ -521,8 +521,8 @@ def renamed(builder, node, parameters, *, lexical_scope=None, native_metadata=Fa
                     builder.capture(binding)
                     return F.Logical_Literal_Constant(".TRUE.")
         if _kind(value) == "Comment":
-            result = object.__new__(type(value))
-            result.__dict__ = dict(value.__dict__)
+            from compiler.frontend.sealed_syntax import mutable_copy
+            result = mutable_copy(value)
             result.items = [rename_comment(value) if directive(value) is not None else str(value)]
             return result
         result = copy.copy(value)
