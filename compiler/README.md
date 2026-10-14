@@ -2871,13 +2871,22 @@ python -m compiler.offload.exact_window_calibration \
 ```
 
 Add `--original-teams` to retain three original four-thread joined loops in the
-native control. Complete-window protocol 3 binds the checked plan's portable
+native control. Complete-window protocol 4 binds the checked plan's portable
 execution fingerprint and independent source completion
 proofs for every original team and measures their startup, worksharing and joins
 inside the same complete invocation. It does not borrow serial or per-loop
 coefficients. Runtime thread limits, active-level limits and OpenMP placement
 environment are part of the identity; incompatible limits select native before
-CUDA work. Protocol 1 and 2 observations do not authorize this plan-bound class.
+CUDA work. The independent native measurement and resident selector both query
+`omp_get_schedule`: the effective kind (including the monotonic modifier bit)
+and chunk size must match, even when `OMP_SCHEDULE` is unchanged. Kinds use an
+unsigned 32-bit representation; zero is a valid static chunk size. The independent
+native sample uses a C-bound getter because GNU's legacy Fortran getter omits
+the monotonic modifier. A production
+schedule mismatch selects native before CUDA identity queries or ownership.
+Protocols 1–3 observations do not authorize this execution identity. The current
+complete-owner admission excludes calls that could change the schedule inside
+the measured interval; this check does not admit larger intervals.
 Original PRIVATE arrays contribute their entry-time sizes and lower bounds to
 the exact cost key, once per array even when several teams reuse it. This also
 covers unused PRIVATE storage that may incur allocation costs. Descriptor

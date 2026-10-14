@@ -31,6 +31,7 @@ def observations(contract, *, resident=0.1, native=1.0):
         "affinity": [0, 1, 2, 3],
         "threads": 4,
         "dynamic": 0,
+        "effective_schedule": {"kind": 1, "chunk": 0},
         "proc_bind": 0,
         "thread_limit": 2147483647,
         "max_active_levels": 1,
@@ -43,6 +44,7 @@ def observations(contract, *, resident=0.1, native=1.0):
         "fortran_options": normalize_fortran_options(identity["fortran_options"]),
         "team": [4, 0, 0, 2147483647, 1],
         "affinity": identity["affinity"],
+        "effective_schedule": identity["effective_schedule"],
         "environment": identity["environment"],
     }
     rows = []
@@ -163,6 +165,8 @@ print(json.dumps(records, sort_keys=True))
         "control",
         "placement",
         "native_cpu",
+        "native_schedule",
+        "old_protocol",
         "native_key",
         "fields",
     ],
@@ -190,6 +194,13 @@ def test_invalid_or_stale_observations_cannot_enable_a_window(prepared, change):
         evidence["identity"]["dynamic"] = 1
     elif change == "native_cpu":
         evidence["observations"][0]["observed_cpu_identity"] = {}
+    elif change == "native_schedule":
+        evidence["observations"][0]["observed_cpu_identity"] = {
+            **evidence["observations"][0]["observed_cpu_identity"],
+            "effective_schedule": {"kind": 2, "chunk": 1},
+        }
+    elif change == "old_protocol":
+        evidence["protocol"] = "complete-original-window-cold-v3"
     elif change == "native_key":
         evidence["observations"][0]["observed_key"] = [1]
     elif change == "fields":
@@ -383,6 +394,107 @@ def test_malformed_execution_identity_fails_closed(prepared, field, value):
     assert not decision["available"]
 
 
+@pytest.mark.parametrize("schedule", [
+    None, {}, {"kind": 1}, {"chunk": 0}, {"kind": 1, "chunk": 0, "extra": 0},
+    {"kind": True, "chunk": 0}, {"kind": 1, "chunk": False},
+    {"kind": -2147483647, "chunk": 0}, {"kind": 2**32 + 1, "chunk": 0},
+    {"kind": 0, "chunk": 0}, {"kind": 5, "chunk": 0},
+    {"kind": 1, "chunk": -1}, {"kind": 1, "chunk": 2**31},
+    {"kind": 1.0, "chunk": 0}, {"kind": 1, "chunk": 0.0},
+])
+@pytest.mark.parametrize("location", ["identity", "observed_cpu_identity", "observed_identity"])
+def test_malformed_effective_schedule_fails_closed(prepared, schedule, location):
+    contract = prepared[-1]["contract"]
+    evidence = copy.deepcopy(observations(contract))
+    if location == "identity":
+        evidence["identity"]["effective_schedule"] = schedule
+    else:
+        key = "identity" if location == "observed_identity" else location
+        evidence["observations"][0][key] = {**evidence["observations"][0][key], "effective_schedule": schedule}
+    decision = evidence_decision(evidence, contract)
+    assert not decision["available"]
+    assert decision["selection"] == "native"
+
+
+@pytest.mark.parametrize("schedule", [
+    {"kind": 1, "chunk": 0}, {"kind": 0x80000001, "chunk": 0},
+    {"kind": 2, "chunk": 1}, {"kind": 0x80000003, "chunk": 2**31 - 1}, {"kind": 4, "chunk": 0},
+])
+def test_effective_schedule_preserves_modifier_and_zero_chunk(prepared, schedule):
+    contract = prepared[-1]["contract"]
+    evidence = observations(contract)
+    evidence["identity"]["effective_schedule"] = schedule
+    for row in evidence["observations"]:
+        row["observed_cpu_identity"]["effective_schedule"] = schedule
+    assert evidence_decision(evidence, contract)["selection"] == "resident"
+
+
+def test_production_schedule_guard_precedes_cuda_queries(prepared):
+    source, _outputs, _report, record = prepared
+    outputs, _, _ = emit(source, {"evidence": observations(record["contract"])})
+    selector = next(text for name, text in outputs.items() if name.startswith("exact/") and name.endswith(".cu"))
+    assert selector.index("omp_get_schedule(") < selector.index("if(effective_kind!=1U||schedule_chunk!=0)")
+    assert selector.index("if(effective_kind!=1U||schedule_chunk!=0)") < selector.index("cudaGetDevice(")
+
+
+@pytest.mark.native
+def test_independent_driver_preserves_actual_monotonic_modifier(tmp_path, monkeypatch):
+    import os
+    import shutil
+
+    from compiler.offload import exact_window_calibration as producer
+
+    fortran = shutil.which("gfortran-15") or shutil.which("gfortran")
+    if not fortran:
+        pytest.skip("Fortran toolchain required")
+    source = tmp_path / "original.f90"
+    source.write_text(fixture_source(original_teams=True).replace("schedule(static)", "schedule(runtime)"))
+    monkeypatch.setattr(producer, "DRIVER", producer.DRIVER.replace(
+        "call fort_get_schedule(", "call omp_set_schedule(ibset(omp_sched_static,31),0)\ncall fort_get_schedule(", 1
+    ))
+    environment = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "OMP_SCHEDULE": "static"}
+    native, _ = producer.build_native(tmp_path / "native", source, environment, fortran=fortran)
+    result = producer._run([str(native), "16", "9"], cwd=tmp_path, environment=environment)
+    assert producer.observed_schedule(result.stdout) == {"kind": 0x80000001, "chunk": 0}
+
+
+@pytest.mark.parametrize("phase", ["collect", "production"])
+@pytest.mark.parametrize("changed_mode", ["native", "resident"])
+def test_independent_measurement_rejects_changed_effective_schedule(prepared, tmp_path, monkeypatch, phase, changed_mode):
+    import json
+    from hashlib import sha256
+    from types import SimpleNamespace
+
+    from compiler.offload import exact_window_calibration as producer
+
+    evidence = observations(prepared[-1]["contract"])
+    payload = b"same complete fields and same environment"
+    for row in evidence["observations"]:
+        row["fields_sha256"] = sha256(payload).hexdigest()
+    monkeypatch.setattr(producer, "cpu_identity", lambda: "fixture CPU")
+    monkeypatch.setattr(producer.os, "sched_getaffinity", lambda _pid: {0, 1, 2, 3})
+
+    def measured(command, *, cwd, environment):
+        mode = "native" if command[0] == "native" else "resident"
+        (cwd / "fields.bin").write_bytes(payload)
+        schedule = "2 1" if mode == changed_mode else "1 0"
+        metadata = {"identity": evidence["identity"], "key": evidence["key"]}
+        return SimpleNamespace(
+            stdout="WINDOW_SECONDS 0.1\nFORTRAN_VERSION fixture\n"
+            "FORTRAN_OPTIONS -O3 -fopenmp -ffp-contract=off\nCPU_TEAM 4 0 0 2147483647 1\n"
+            f"CPU_SCHEDULE {schedule}\nNATIVE_KEY " + " ".join(map(str, evidence["key"])) + "\n",
+            stderr="FORT_EXACT_OBSERVATION " + json.dumps(metadata) + "\n" if phase == "collect" and mode == "resident" else "",
+        )
+
+    monkeypatch.setattr(producer, "_run", measured)
+    if phase == "collect":
+        with pytest.raises(RuntimeError, match="identity"):
+            producer.collect("resident", "native", tmp_path, {}, 96, evidence["contract"])
+    else:
+        with pytest.raises(RuntimeError, match="identity"):
+            producer.validate_production("resident", "native", tmp_path, {}, 96, evidence, {"selection": "resident"})
+
+
 @pytest.mark.parametrize(("automatic_seconds", "model_miss"), [(0.1, False), (2.0, True)])
 def test_actual_production_validation_reports_model_miss_without_revising_decision(
     prepared, tmp_path, monkeypatch, automatic_seconds, model_miss
@@ -406,7 +518,7 @@ def test_actual_production_validation_reports_model_miss_without_revising_decisi
         seconds = automatic_seconds if command[0] == "automatic" else 1.0
         return SimpleNamespace(
             stdout=f"WINDOW_SECONDS {seconds}\nFORTRAN_VERSION fixture\n"
-            "FORTRAN_OPTIONS -O3 -fopenmp -ffp-contract=off\nCPU_TEAM 4 0 0 2147483647 1\n"
+            "FORTRAN_OPTIONS -O3 -fopenmp -ffp-contract=off\nCPU_TEAM 4 0 0 2147483647 1\nCPU_SCHEDULE 1 0\n"
             "NATIVE_KEY " + " ".join(map(str, evidence["key"])) + "\n",
             stderr="",
         )
