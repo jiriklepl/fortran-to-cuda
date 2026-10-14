@@ -209,6 +209,7 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--scope-execution {bounded,reached}` | `bounded` | Opt-in reached ownership in original lexical procedures; requires `--form-scopes` |
 | `--analyze-effects` | off | Bounded native source effects without requiring GPU lowering; writes no artifacts |
 | `--form-scopes` | off | Emit bounded serial source scopes, original-module helpers, and public source/build manifests |
+| `--scope-preflight` | off | With `--form-scopes`, report independent source/cost blockers without emitting scopes or artifacts |
 | `--scope-facts FILE` | none | Source-hash-bound capture, initialization, and caller facts; requires `--form-scopes` |
 | `--source-file FILE` | none | Additional effect-analysis source; repeat for separate modules |
 | `--effect-contracts FILE` | none | Versioned explicit contracts for opaque native calls; requires effect analysis |
@@ -2072,6 +2073,33 @@ original native path. Module captures consume separate descriptor-window proofs
 at every reached consumer, without globally blessing their allocations.
 Discovery neither invents capture facts nor proves whole-stage residency.
 Original descriptor and partial-definition proofs remain separate gates.
+
+For a bounded diagnostic pass before source generation, add `--scope-preflight`
+to a serial `--form-scopes` command. Its schema-version-1 `preflight` report
+inspects original procedures independently, preserving source order, both sides
+of branches, and complete joined OpenMP groups. An unsupported early operation
+does not hide later numerical, native-effect, capture, or source-cost diagnostics.
+The pass follows resolved calls breadth-first, inspects each local body once,
+and never expands a whole-entry effects closure for reporting. Calls retain
+their original argument maps; callee formal lifetimes remain explicitly
+unproved until an owner checks the mapped source interval.
+
+`compiler.scopes.preflight.preflight_source_scopes(...)` exposes the same pass as
+an immutable snapshot with detached `public()` JSON. Per-operation statuses
+distinguish `available`, `unavailable`, `not_requested`, and `not_applicable`;
+an unavailable proof is not a claim that the original program is invalid.
+Transfer bytes remain unknown until a checked owner and runtime descriptors
+establish section coherence. Numerical prices do not imply that a complete
+resident-window estimate or execution plan exists. The report shares the
+existing operation, procedure, and depth limits, marks incomplete traversal as
+`truncated`, authenticates source/configuration/capture identities before
+publication, and grants no execution or storage authority. It evaluates no
+branch predicates and emits no source edits, workers, or output directory.
+An optional API `observer` receives detached `analysis_started`,
+`procedure_started`, `operation_started`, and `operation_complete` events so
+long inspections can retain progress. Events remain explicitly provisional;
+only a returned snapshot has passed final source and policy reauthentication.
+
 One-shot module owners close before excluded allocation
 swaps and do not retain state across backedges or invocations.
 Numerical extraction checks liveness against the complete original lexical
