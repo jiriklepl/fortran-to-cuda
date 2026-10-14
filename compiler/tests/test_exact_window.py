@@ -32,6 +32,8 @@ def observations(contract, *, resident=0.1, native=1.0):
         "threads": 4,
         "dynamic": 0,
         "proc_bind": 0,
+        "thread_limit": 2147483647,
+        "max_active_levels": 1,
         "environment": {name: None for name in ENVIRONMENT},
     }
     key = [98 if item["property"] == "size" else 0 if item["property"] == "lbound" else 96 for item in contract["key"]]
@@ -39,7 +41,7 @@ def observations(contract, *, resident=0.1, native=1.0):
         "cpu_name": identity["cpu_name"],
         "fortran_version": identity["fortran_version"],
         "fortran_options": normalize_fortran_options(identity["fortran_options"]),
-        "team": [4, 0, 0],
+        "team": [4, 0, 0, 2147483647, 1],
         "affinity": identity["affinity"],
         "environment": identity["environment"],
     }
@@ -168,6 +170,100 @@ def test_measured_auto_uses_one_guard_and_preserves_native_without_estimates(pre
     assert not any(name.startswith("exact/") for name in outputs)
 
 
+@pytest.mark.parametrize("combined", [True, False])
+def test_complete_original_teams_have_independent_source_bound_calibration(tmp_path, combined):
+    source = tmp_path / "original.f90"
+    text = fixture_source(original_teams=True)
+    if not combined:
+        text = text.replace(
+            "!$omp parallel do private(i,j,k,v) schedule(static)",
+            "!$omp parallel private(i,j,k,v)\n!$omp do schedule(static)",
+        )
+        text = text.replace(
+            "!$omp parallel do private(i,j,k) schedule(static)",
+            "!$omp parallel private(i,j,k)\n!$omp do schedule(static)",
+        )
+        text = text.replace("!$omp end parallel do", "!$omp end do\n!$omp end parallel")
+    source.write_text(text)
+    _outputs, _report, calibrated = emit(source, {"calibration": True})
+    participation = calibrated["contract"]["original_participation"]
+    assert participation["kind"] == "original_joined_teams"
+    assert len(participation["teams"]) == 3
+    assert all(team["proof_identity"] and team["selected_original_nodes"] for team in participation["teams"])
+    evidence = observations(calibrated["contract"])
+    outputs, _report, automatic = emit(source, {"evidence": evidence})
+    assert automatic["selection"] == "resident"
+    generated = next(value for name, value in outputs.items() if name.startswith("sources/"))
+    assert "fort_mode = 1" in generated
+    assert "fort_choose(" not in generated
+    assert source.read_text() == text
+    # Serial evidence cannot authorize a team, even for identical descriptors.
+    evidence = copy.deepcopy(evidence)
+    evidence["contract"]["original_participation"] = {"kind": "serial", "teams": []}
+    assert evidence_decision(evidence, calibrated["contract"])["selection"] == "native"
+
+
+@pytest.mark.parametrize(("field", "value"), [("thread_limit", 2), ("max_active_levels", 0)])
+def test_insufficient_original_team_runtime_limits_do_not_authorize_placement(prepared, field, value):
+    contract = prepared[-1]["contract"]
+    evidence = observations(contract)
+    evidence["identity"][field] = value
+    decision = evidence_decision(evidence, contract)
+    assert not decision["available"]
+    assert decision["selection"] == "native"
+
+
+def test_pre_team_protocol_observations_are_stale(prepared):
+    contract = prepared[-1]["contract"]
+    evidence = observations(contract)
+    evidence["protocol"] = "complete-original-window-cold-v1"
+    assert not evidence_decision(evidence, contract)["available"]
+
+
+def test_native_automatic_private_descriptors_key_whole_window_cost_once(tmp_path):
+    source = tmp_path / "original.f90"
+    text = fixture_source(original_teams=True).replace(
+        "implicit none\ncontains", "implicit none\ninteger::extent=3\ncontains"
+    ).replace("real(8)::v", "real(8)::v\nreal(8)::scratch(-2:extent),unused(-1:extent)")
+    interruption = """!$omp parallel do private(i,scratch,unused) schedule(static)
+do i=1,n
+scratch=a(i,1,1)
+b(i,1,1)=b(i,1,1)+sum(scratch)
+enddo
+!$omp end parallel do
+"""
+    text = text.replace("audit=sum(a(:,1,1))", interruption * 2 + "audit=sum(a(:,1,1))")
+    source.write_text(text)
+    outputs, report, calibrated = emit(source, {"calibration": True})
+    contract = calibrated["contract"]
+    private_key = [item for item in contract["key"] if item["resource"].startswith("exact_fixture::advance::")]
+    assert private_key == [
+        {"resource": "exact_fixture::advance::" + name, "property": inquiry, "axis": 1}
+        for name in ("scratch", "unused")
+        for inquiry in ("size", "lbound")
+    ]
+    generated = next(value for name, value in outputs.items() if name.startswith("sources/"))
+    for name in ("scratch", "unused"):
+        for inquiry in ("size", "lbound"):
+            assert f"{inquiry}({name},1,kind=c_int64_t)" in generated
+    assert "int(extent,c_int64_t)" not in generated
+    assert all(not item["resource"].endswith(("::scratch", "::unused"))
+               for item in report["scopes"][0]["resource_bindings"]["resources"])
+
+    evidence = observations(contract)
+    evidence["key"][-4:] = [6, -2, 5, -1]
+    outputs, _report, automatic = emit(source, {"evidence": evidence})
+    assert automatic["selection"] == "resident"
+    selector = next(value for name, value in outputs.items() if name.endswith(".cu") and name.startswith("exact/"))
+    for index, value in enumerate((6, -2, 5, -1), len(contract["key"]) - 4):
+        assert f"key[{index}]!={value}LL" in selector
+    # A changed automatic extent cannot borrow observations for the old key.
+    incompatible = copy.deepcopy(evidence)
+    incompatible["observations"][0]["observed_key"] = [*incompatible["key"][:-4], 7, -2, 6, -1]
+    assert not evidence_decision(incompatible, contract)["available"]
+    assert source.read_text() == text
+
+
 @pytest.mark.parametrize(
     "replacement",
     [
@@ -257,7 +353,7 @@ def test_actual_production_validation_reports_model_miss_without_revising_decisi
         seconds = automatic_seconds if command[0] == "automatic" else 1.0
         return SimpleNamespace(
             stdout=f"WINDOW_SECONDS {seconds}\nFORTRAN_VERSION fixture\n"
-            "FORTRAN_OPTIONS -O3 -fopenmp -ffp-contract=off\nCPU_TEAM 4 0 0\n"
+            "FORTRAN_OPTIONS -O3 -fopenmp -ffp-contract=off\nCPU_TEAM 4 0 0 2147483647 1\n"
             "NATIVE_KEY " + " ".join(map(str, evidence["key"])) + "\n",
             stderr="",
         )
