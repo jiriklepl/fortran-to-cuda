@@ -397,6 +397,7 @@ class CheckedExecutionPlan:
     _procedures: tuple
     _contexts: tuple
     _numerical_authorities: tuple
+    _selection_prefixes: tuple
     _record: str
     _issuer: object
 
@@ -433,6 +434,10 @@ class CheckedExecutionPlan:
             analysis.verify_publication()
         for proof in self._numerical_authorities:
             proof.validate(proof._provider._analysis, proof.procedure, proof._selection)
+        for member, proof in self._selection_prefixes:
+            if member.emission.selection_prefix is not proof:
+                raise CompilationError("execution plan lost its exact original selection prefix authority")
+            proof.validate(member.builder.analysis, member.routine.qualified, proof._selection, proof.demanded)
         return self
 
     def operations(self, member, ordinal):
@@ -546,7 +551,8 @@ def build_execution_plan(owner):
         "gpu_leaves": sorted(leaves),
         "policy": {
             "order": "original source order within each procedure; original call sites and guards retained",
-            "lifetime": "one-shot reached interval" if hasattr(owner, "window_proof") else "original invocation",
+            "lifetime": ("closed original numerical selection" if hasattr(owner, "closed_selection") else
+                         "one-shot reached interval" if hasattr(owner, "window_proof") else "original invocation"),
             "guards": "original reached evaluation points; no hoisting across native effects",
             "fallback": "publish and continue the unexecuted suffix once; execution failure never authorizes replay",
             "authority": "existing source, numerical, definition, native-effect and completion proofs",
@@ -578,7 +584,10 @@ def build_execution_plan(owner):
     contexts = tuple((member.builder, member.builder.analysis, member.routine, _configuration(member.builder),
                       _digest(member.builder.facts)) for member in members)
     result = CheckedExecutionPlan(identity, execution_identity, invocations, leaves, owner, tuple(procedures), contexts,
-                                  numerical_authorities, _json(record), _ISSUER)
+                                  numerical_authorities,
+                                  tuple((member, member.emission.selection_prefix) for member in members
+                                        if member.emission.selection_prefix is not None),
+                                  _json(record), _ISSUER)
     # The only publication of authority occurs after the entire graph is sealed.
     object.__setattr__(owner, "execution_plan", result)
     # A native proof made against a prospective reached inventory must cover

@@ -132,6 +132,7 @@ class ScopeBuilder:
             raise CompilationError("scope device budget must be a nonnegative signed-64-bit byte count")
         self.outputs, self.edits, self.clones, self.generated = {}, {}, {}, {}
         self.queries = {}
+        self._lexical_target_edits = {}
         self.numerical_ir = {}
         self.view_generated = {}
         self.view_clones = {}
@@ -597,7 +598,7 @@ class ScopeBuilder:
                     participation = _native_participation(analysis, procedure, summary["native_completion"])
                     sources = generate_sources(function, plan,
                         offload_config=replace(self.config, native_participation=participation,
-                                               scope_measurement=None), memory_model="scoped")
+                                               scope_measurement=None, exact_window=None), memory_model="scoped")
                     if sources.scoped:
                         result = sources
                     else:
@@ -959,7 +960,8 @@ class ScopeBuilder:
                 function, plan = self.numerical_ir[procedure]
                 participation = sources.scoped["compute_estimates"]["native_participation"]
                 self.view_generated[procedure] = generate_scoped(
-                    function, plan, replace(self.config, native_participation=participation, scope_measurement=None),
+                    function, plan, replace(self.config, native_participation=participation,
+                                            scope_measurement=None, exact_window=None),
                     "common_functions.cuh", runtime_id=self.runtime["runtime_id"],
                     root_views=True, root_view_abi=2)
             companion = self.view_generated[procedure]
@@ -2493,12 +2495,15 @@ class ScopeBuilder:
                 dict(self.view_clones), dict(self.view_queries),
                 {procedure: (registry, set(registry.used), dict(registry.original_numerical_regions))
                  for procedure, registry in self.region_owners.items()},
-                dict(self.runtime_provenance.records), dict(self.coordinators), dict(self.coordinator_reasons))
+                dict(self.runtime_provenance.records), dict(self.coordinators), dict(self.coordinator_reasons),
+                {key: (declaration, set(selected), replacement)
+                 for key, (declaration, selected, replacement) in self._lexical_target_edits.items()})
 
     def restore_scope_checkpoint(self, checkpoint):
         (self.outputs, self.edits, self.clones, self.queries,
          self.generated, self.numerical_reasons, self.numerical_ir, self.batch_chains, variants, self.view_generated,
-         self.view_clones, self.view_queries, registries, provenance, coordinators, coordinator_reasons) = checkpoint
+         self.view_clones, self.view_queries, registries, provenance, coordinators, coordinator_reasons,
+         self._lexical_target_edits) = checkpoint
         self.runtime_provenance.records.clear()
         self.runtime_provenance.records.update(provenance)
         self.variants.restore(variants)
@@ -2748,7 +2753,13 @@ class ScopeBuilder:
             from compiler.scopes.window_discovery import discover_reached_window
             if self.config.scope_measurement is None and discover_reached_window(self):
                 return self.finish()
-        nodes = self.inline.prepare(_children(self.entry.execution)) if not self.config.collective else _children(self.entry.execution)
+        from compiler.scopes.closed_selection import discover_closed_selections, has_residual_candidates
+        closed = discover_closed_selections(self)
+        if closed and ((self.config.exact_window or {}).get("coverage") == "original_selection"
+                       or not has_residual_candidates(self, closed)):
+            return self.finish()
+        nodes = (self.inline.prepare(_children(self.entry.execution), closed_selections=closed)
+                 if not self.config.collective else _children(self.entry.execution))
         self.generated.update(self.inline.generated)
         self.numerical_ir.update(self.inline.ir)
         self.numerical_reasons.update({procedure: None for procedure in self.inline.regions})

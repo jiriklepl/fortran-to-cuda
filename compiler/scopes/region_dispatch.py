@@ -137,11 +137,14 @@ class InlineRegions:
                     self._register_projection(node, self.original_selection(source))
         return groups
 
-    def prepare(self, nodes):
+    def prepare(self, nodes, *, closed_selections=()):
         """Outline bounded numerical work, including reached structured branches."""
         from compiler.scopes.segments import grouped_nodes, statement_span
         original = tuple(nodes)
         authoritative = {id(node): node for node in walk(self.builder.entry.execution)}
+        retained = {tuple(map(id, selection)): selection for selection in closed_selections}
+        for selection in closed_selections:
+            self.builder.analysis._selected_source(self.builder.entry.qualified, selection)
 
         def register_projection(node, sources):
             self._register_projection(node, sources)
@@ -188,6 +191,11 @@ class InlineRegions:
                 group = tuple(grouped) if isinstance(grouped, tuple) else (grouped,)
                 sources = original_group(group, sequence)
                 node = group[0]
+                if tuple(map(id, sources)) in retained:
+                    from compiler.scopes.closed_selection import ClosedSelectionBoundary
+
+                    result.append(ClosedSelectionBoundary(sources))
+                    continue
                 if len(group) == 1 and _kind(node) in {"If_Construct", "Associate_Construct"}:
                     # Lifetimes/exits remain original boundaries. In particular
                     # do not borrow a region through a possibly reallocating
@@ -458,9 +466,10 @@ class InlineRegions:
         # source's compiled form or participation protocol.
         function, plan = (self.artifact_ir(value, source_name, extraction.source_identity)
                           for value in (function, plan))
-        # Observation wraps the original owning CALL, never a derived worker.
+        # Observations and placement belong to the checked original owner,
+        # never a separately generated numerical worker.
         config = replace(self.builder.config, collective=collective, native_participation=native_participation,
-                         source_applicability=applicability, scope_measurement=None)
+                         source_applicability=applicability, scope_measurement=None, exact_window=None)
         generated = generate_sources(function, plan, offload_config=config, memory_model="scoped")
         if generated.scoped is None:
             raise CompilationError("inline numerical candidate has no shared numerical entry")

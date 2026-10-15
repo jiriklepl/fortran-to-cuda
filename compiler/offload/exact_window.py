@@ -125,10 +125,10 @@ def valid_effective_schedule(schedule):
     )
 
 
-def evidence_decision(evidence, contract):
+def evidence_decision(evidence, contract, *, protocol=PROTOCOL):
     """Reconstruct acceptance from raw paired observations; no trusted flag."""
     try:
-        if not isinstance(evidence, dict) or evidence.get("protocol") != PROTOCOL:
+        if not isinstance(evidence, dict) or evidence.get("protocol") != protocol:
             raise ValueError("complete-window calibration missing")
         if evidence.get("contract") != contract:
             raise ValueError("complete-window source/plan/implementation identity differs")
@@ -310,6 +310,10 @@ def prepare(owner):
     request = deepcopy(builder.config.exact_window)
     if request is None:
         return None
+    if request.get("coverage") == "original_selection":
+        from compiler.offload.selection_cost import prepare as prepare_selection
+
+        return prepare_selection(owner)
     request_snapshot = _request_snapshot(request)
     plan = owner.execution_plan
     if plan is None:
@@ -558,6 +562,12 @@ def prepare(owner):
         "guards": guards,
         "capture": capture,
     })
+    return _issue_placement(owner, record, request_snapshot)
+
+
+def _issue_placement(owner, record, request_snapshot):
+    """Attach an admitted measured alternative through the shared exact issuer."""
+    builder, plan = owner.builder, owner.execution_plan
     placement = ExactWindowPlacement(record, plan, request_snapshot, _PLACEMENT_ISSUER)
     registry = getattr(builder, "_exact_window_placements", None)
     if registry is None:
@@ -577,6 +587,10 @@ def control(owner):
     if placement is None:
         raise CompilationError("exact-window control requires an issued placement")
     record = placement.record
+    if record["contract"].get("protocol") == "checked-selection-process-v1":
+        from compiler.offload.selection_cost import control as selection_control
+
+        return selection_control(owner)
     enabled = owner.enabled
     if not record["capture"] and record["selection"] != "resident":
         return [], [enabled + " = .false."]
@@ -610,7 +624,7 @@ def control(owner):
     return [*imports, *interface], lines
 
 
-def selector_source(name, record):
+def selector_source(name, record, *, observer=None):
     """The calibration selector records actual identities inside timed calls.
 
     Calibration override exists only in a separately compiled diagnostic
@@ -620,6 +634,9 @@ def selector_source(name, record):
     key = record.get("key", [])
     count = len(record["expressions"])
     capture = record["capture"]
+    alternatives = record.get("accepted_keys")
+    if alternatives:
+        expected, key = alternatives[0]["identity"], alternatives[0]["key"]
     expected_json = json.dumps(expected, sort_keys=True, separators=(",", ":"))
     # Identity values are assembled in exactly Python's sorted-key order.
     source = r"""
@@ -712,6 +729,23 @@ extern "C" int @NAME@(const int64_t *key,const char *version,const char *options
             '"FORT_EXACT_DECISION selection=%s reason=%s\\n",compatible?"resident":"native",'
             'compatible?"measured_complete_window":"execution_identity_mismatch");\nreturn compatible;'
         )
+    if alternatives:
+        comparisons = []
+        for alternative in alternatives:
+            same_key = "&&".join(f"key[{index}]=={value}LL" for index, value in enumerate(alternative["key"]))
+            comparisons.append("(" + same_key + "&&identity.str()==" + json.dumps(
+                json.dumps(alternative["identity"], sort_keys=True, separators=(",", ":"))) + ")")
+        keycheck = "if(!(" + "||".join(
+            "(" + "&&".join(f"key[{index}]=={value}LL" for index, value in enumerate(item["key"])) + ")"
+            for item in alternatives) + "))return 0;"
+        choice = "return " + "||".join(comparisons) + ";"
+    if observer is not None:
+        # The complete-selection observer owns timing/outcome separately. It
+        # records the actual identity after all shared checks; capture is an
+        # independently compiled variant, not an environment force switch.
+        choice = observer + "(key,identity.str());\n" + ("return 1;" if capture else choice)
+        source = source.replace("extern \"C\" int @NAME@", "static void " + observer
+                                + "(const int64_t*,const std::string&);\nextern \"C\" int @NAME@")
     for token, value in {
         "NAME": name,
         "ATTESTATION": "FORT_EXACT_WINDOW_BUILD_" + record["contract_sha256"],

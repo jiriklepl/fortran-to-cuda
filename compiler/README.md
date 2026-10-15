@@ -211,6 +211,7 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--form-scopes` | off | Emit bounded serial source scopes, original-module helpers, and public source/build manifests |
 | `--scope-preflight` | off | With `--form-scopes`, report independent source/cost blockers without emitting scopes or artifacts |
 | `--scope-facts FILE` | none | Source-hash-bound capture, initialization, and caller facts; requires `--form-scopes` |
+| `--scope-cost FILE` | none | Source-bound scope cost request JSON; serial `--form-scopes` with `auto` or `sections`, separate from diagnostic measurement |
 | `--source-file FILE` | none | Additional effect-analysis source; repeat for separate modules |
 | `--effect-contracts FILE` | none | Versioned explicit contracts for opaque native calls; requires effect analysis |
 | `--summary-cache DIRECTORY` | memory only | Optional source-summary disk cache for effect/scope analysis |
@@ -2939,6 +2940,58 @@ general bounds checking and broader Fortran semantics are outside this subset.
 
 ### Experimental complete-window observations
 
+`--scope-cost FILE` transports a JSON object into `OffloadConfig.exact_window`.
+The existing complete-owner request requires `--scope-execution reached`.
+A request with `"coverage": "original_selection"` uses bounded execution and
+the checked plan for a complete original numerical OpenMP group. The original
+scalar preparation and enclosing branch remain in place. The compiler closes
+the group's local context before any whole-group native fallback and never
+replays executed work. This discovery path uses the same numerical, definition,
+completion and resource proofs as reached owners; it does not supply effects
+for unsupported native operations or extend ownership across them.
+
+Cost requests are independent of per-kernel hardware profiles. Supplying a
+request does not establish that its evidence is available, compatible or
+profitable. The automatic policy retains native execution when those checks
+fail. Diagnostic `--scope-measurement` and `--scope-cost` are mutually exclusive.
+
+The original-selection request uses `"coverage": "original_selection"`,
+`"calibration": "native"` or `"resident"` for separate observation artifacts,
+an executed application `build_contract`, and explicit `workloads`. Production
+omits `calibration` and supplies `evidence`. All three variants use the same
+automatic numerical options. The `checked-selection-process-v1` protocol
+compares complete application processes, including startup, every invocation,
+output and teardown. It checks seven rotated pairs and two holdouts, full-field
+agreement, actual completed GPU launches, reached descriptor/control keys and
+build identities. Warm group timing alone cannot establish an application gain.
+
+Workload documents bind arguments, relevant environment, input-file hashes and
+completion facts. The selector checks actual arguments, environment and bounded
+regular input files at each reached group; these checks also run during
+calibration. No cached timestamp or launcher approval replaces the file contents.
+This is empirical applicability to observed complete workloads, not a proof of
+future invocation counts. Initially production pricing supports one admitted
+selection per bundle. Discovery may retain additional declined groups unchanged;
+multiple admitted selections support diagnostic capture but select native until
+complete bundle pricing is available.
+
+The current process-evidence reader still inherits the fixture's bitwise field
+hash comparison. Application validation that permits numerical differences
+within fixed tolerances needs a separately verified comparison receipt before
+it can authorize this pricing path. Capture generation and build attestation
+alone therefore do not establish application AUTO qualification.
+
+`python -m compiler.offload.application_build preflight|attest` verifies the
+consumer's build through a versioned JSON request. Preflight binds original
+source destinations, final compiler artifacts and selector-specific macros.
+Attestation checks executed compiler/link receipts and the final binary before
+delivery. Native observations preserve the original group and need no numerical
+GPU workers; static native production needs no selector macro. The recorded
+local contract preserves ordered options and explicit inputs and libraries. It
+does not claim an inventory of implicit system headers or libraries. Consumers
+must preserve authenticated original source paths across calibration and
+production and apply edits to separate build destinations.
+
 `--scope-measurement native|resident` with `--form-scopes`,
 `--gpu-policy sections` and `--scope-execution reached` emits diagnostic timing
 for an already admitted complete
@@ -3028,7 +3081,9 @@ before adding ownership instrumentation. Valid evidence that selects native
 still reports its estimate as available. The fixture build consumer retains its
 existing runtime linkage even for this static native selection.
 
-The **independent producer is currently the only supported build consumer**.
+For the complete-owner protocol above, the **independent producer is currently
+the only supported build consumer**. The original-selection application build
+protocol described earlier is separate.
 It records and validates exact semantic CUDA/Fortran compile options before
 defining the contract-specific selector attestation macro. Without that macro,
 the emitted selector returns native. Other consumers must reject this manifest
