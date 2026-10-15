@@ -1,0 +1,9 @@
+{
+  "algorithm": "sha256",
+  "files": {
+    "README.md": "cb2d32b53b3337678f454f3ff2e48412136effd149c3ed329a844dbb1d20fdbe",
+    "gate-map.svg": "de5824b1c818ce6891c40edaa75bcd9c50ed6c28168032e5f392764742f55b8e",
+    "render.py": "5b9027cc17d6714ebca1c9feea2eb5115ad8f7d1447eaa34c470ad9ef622e004",
+    "report.json": "a75d12a3afeb226c4f7e8096a2e6455aa454fa691287c5b72945fa2043d04e8b"
+  }
+}

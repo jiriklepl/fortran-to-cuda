@@ -1,0 +1,281 @@
+{
+  "application_inputs": {
+    "count": 178,
+    "provenance": "Identities and probe findings quoted from prior immutable report; no fresh proof run. Later native_demand.py declaration guards are not retroactively part of the probe.",
+    "source_repair": "Same authenticated six INTENT declaration corrections as existing controls",
+    "source_session_identity": "94189986b02c0cf6b1ceab73ed3d601c359629ff470cb14a48237d5e3f09be31"
+  },
+  "application_source_references": [
+    {
+      "finding": "Original SubgridStresses then Convection then ScalarRK3; proposed interval ends before ScalarRK3.",
+      "line": 122,
+      "path": "benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/tsteps.f90",
+      "sha256": "d78e1c714c2b301dbe8e3cad55d764f546872fcfc1e2b4da0c4838fd68ed83d4"
+    },
+    {
+      "finding": "StressBoundaryFlux reads current_profiles uw/uwsgs/vw/vwsgs payloads; later lines 897 and 904 contain viscosity and guarded TDiff calls.",
+      "line": 204,
+      "path": "benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/dynamics.f90",
+      "sha256": "16c525bf352d92e7ba62b55c3ec17028ffb86ea7db8a79037f0a637f07019618"
+    },
+    {
+      "finding": "Eighteen original calls to fluxes; guided team at line 2200 and pointer association at line 2205 remain source obligations.",
+      "line": 2159,
+      "path": "benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/wallmodels.f90",
+      "sha256": "5e31e5296cc0ae4ab72f0a86477fd41798f72b3cd8ae156f09cf8ecd97d404f4"
+    }
+  ],
+  "case_configuration_identities": {
+    "channel": {
+      "identity": "44fbe5230748585ca7e04d2a849bc4960890a28993a95b14d0f285c22a1cd928",
+      "path": "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/cases/channel"
+    },
+    "channel-simple": {
+      "identity": "47284c289a0b824a86bf074638967f7a9e30d90c1c2631091e96a77bcba28dc4",
+      "path": "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/cases/channel-simple"
+    }
+  },
+  "claims": {
+    "automatic_application_window": false,
+    "new_application_execution": false,
+    "performance_improvement": false,
+    "qualification": false
+  },
+  "code_references": [
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Demanded effects require independent static storage separation; no pricing authority.",
+      "line": 140,
+      "path": "compiler/frontend/native_demand.py",
+      "sha256": "1297c8b7ec25667c914b187d12c2d3521ba8a2842be0f6abe8445256ce83db51"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Original call traversal, storage obligations and bounded scan; not a parameterized reusable effect graph.",
+      "line": 518,
+      "path": "compiler/frontend/resource_reachability.py",
+      "sha256": "19b4a24a1ea6028e1c0880c374e02b6ae5a81ceeceecf10088227047939595a0"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Root prospective numerical inventory; final child coverage must still hold.",
+      "line": 347,
+      "path": "compiler/scopes/resource_demand.py",
+      "sha256": "c9ec7387cd711a7f3e65a80fd4c1d6083b0aa7b71489804bb842abff307ad34b"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Demanded native coherence requires whole initialized resources; no section or overwrite authority.",
+      "line": 542,
+      "path": "compiler/scopes/segments.py",
+      "sha256": "38e28a66b4f58c551d89f0098ccdc8d93c2af27d081a2364211ee514fb6fdf40"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "New native-call fallback excludes guarded statements and borrowed owners.",
+      "line": 429,
+      "path": "compiler/scopes/lexical.py",
+      "sha256": "52ad7cfbebc56e898e992da08f4dff12ba38887b65e352eb57c2172c58fc40a7"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Existing discovery is tied to reached allocation/lifetime candidates, not an arbitrary shared stage interval.",
+      "line": 1,
+      "path": "compiler/scopes/window_discovery.py",
+      "sha256": "107e24a9918c55bbc8487f3ee31c4cfcf6674c371547c7e8d88224956992eefa"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Reached-window lifetime and definition authority remains required.",
+      "line": 1,
+      "path": "compiler/frontend/reached_windows.py",
+      "sha256": "5d619c0ec259eb341aff4d479c16ee6a797a11b66a3af8fda8ea92dc108c872a"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Registration checks known registered address ranges; canonical identity does not prove missing payload separation.",
+      "line": 2217,
+      "path": "compiler/runtime/scoped_runtime.cu",
+      "sha256": "326941ca46e6af60d70aee03c48a64d4bbf9bdbb2ea395138feb0416ba6e3dcb"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Native observation cost requirement and issued placement gate.",
+      "line": 316,
+      "path": "compiler/scopes/execution_plan.py",
+      "sha256": "54eaa585c455e595961a384fe31b7647bb41e0af15e9e1f2e07ea75d76d8f0dc"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Only validated placement evidence can supersede missing estimates.",
+      "line": 476,
+      "path": "compiler/scopes/execution_plan.py",
+      "sha256": "54eaa585c455e595961a384fe31b7647bb41e0af15e9e1f2e07ea75d76d8f0dc"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Whole direct-call timing is observation-only: no runtime workload key or placement authority.",
+      "line": 80,
+      "path": "compiler/offload/scope_measurement.py",
+      "sha256": "26081436ba0d42aee06e2f5bc1882df38ce95a5443ae6a2f36096dab6257f662"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Complete-window calibration admission excludes calls, branches, tiles/helpers, module resources and child owners.",
+      "line": 303,
+      "path": "compiler/offload/exact_window.py",
+      "sha256": "36a338e3b5b34652f452027d5a6d55fa93576d8cb6e40cd76196f49cdca00d74"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Raw paired evidence and whole-interval costs; no duplicate transfer or cleanup charges.",
+      "line": 128,
+      "path": "compiler/offload/exact_window.py",
+      "sha256": "36a338e3b5b34652f452027d5a6d55fa93576d8cb6e40cd76196f49cdca00d74"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Issued preexecution selector, runtime identity and effective schedule checks.",
+      "line": 572,
+      "path": "compiler/offload/exact_window.py",
+      "sha256": "36a338e3b5b34652f452027d5a6d55fa93576d8cb6e40cd76196f49cdca00d74"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Current source applicability is a single direct loop.",
+      "line": 32,
+      "path": "compiler/offload/source_applicability.py",
+      "sha256": "e6228d3c139d13d8900e28450cd7820fb6107cd63f31f6e865da51e183f57991"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Current source cost class excludes multidimensional stencils, accumulation and existing-team forms.",
+      "line": 62,
+      "path": "compiler/offload/dependency_source.py",
+      "sha256": "90dbbe4444a827fb8da8c7a986b2979c734dc8989d69d9ca1938dc35b250a236"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Semantic configuration retains policy/options/profile; sections observations are not automatically AUTO evidence.",
+      "line": 114,
+      "path": "compiler/frontend/numerical_preparation.py",
+      "sha256": "2a1a357000d4b20b95c502ff53a55ab944d632a9dd451757b7809722c06225ab"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Scope measurements currently require sections/reached and cannot combine with exact-window calibration.",
+      "line": 54,
+      "path": "compiler/offload/config.py",
+      "sha256": "e7e839762c1c0fd7232b5cff3b78c5e22dae3da501b0600bb4d6de9681f0a59b"
+    },
+    {
+      "commit": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+      "finding": "Existing ordered planner accounts for transfers, lifetimes, teams, synchronization and compute totals.",
+      "line": 172,
+      "path": "compiler/runtime/scoped_runtime.h",
+      "sha256": "0e38edc2f19126c96ac4f8e91a0fa7639e5124cc7cce291dda298be2820211b1"
+    },
+    {
+      "commit": "b9418a9f1c3c242c4b77e948b29fa391b94aee60",
+      "finding": "Application consumer rejects exact-window cost evidence without complete build attestation.",
+      "line": 66,
+      "path": "elmm-pipeline/elmm_pipeline/local_adapter.py",
+      "sha256": "ddbb5c50544c686f1ee1a267c8dd4c4fc60919cedd56a886f7fce2a6628b3c45"
+    },
+    {
+      "commit": "b9418a9f1c3c242c4b77e948b29fa391b94aee60",
+      "finding": "Executed build receipts are reusable facts, not placement authority.",
+      "line": 81,
+      "path": "elmm-pipeline/elmm_pipeline/build_receipts.py",
+      "sha256": "a46dc118862fcb66e8f4202e1580e47121bcb192cab657168919429636a1a3d2"
+    }
+  ],
+  "commits": {
+    "parent": "eb557dde27a6bd7978e3d6739b521e84972f29e2",
+    "pipeline": "b9418a9f1c3c242c4b77e948b29fa391b94aee60"
+  },
+  "date": "2026-10-15",
+  "decision": "current_incremental_approach_stopped; future_scope_clarification_requested",
+  "gates": [
+    {
+      "detail": "Discovery, complete future resources, stage definitions and team composition",
+      "name": "One useful interval",
+      "status": "unmet"
+    },
+    {
+      "detail": "Alias payloads, precise sections, original guards, completion and bounded graph",
+      "name": "Native effects and lifetime",
+      "status": "unmet"
+    },
+    {
+      "detail": "Same alternative identity, runtime workload key, build receipt and actual outcome",
+      "name": "Measured automatic placement",
+      "status": "unmet"
+    },
+    {
+      "detail": "Both cases: full fields, complete transfer ledger and complete-process comparison",
+      "name": "Application checkpoint",
+      "status": "not_run"
+    }
+  ],
+  "kind": "joint-read-only-channel-preflight",
+  "method": "Current source inspection and previously archived evidence only; no fresh proof, generation, build, test, GPU or application run.",
+  "native_requirements": [
+    "Prove separation of actual allocation payloads, not only opaque parent reservations or already registered managed ranges. Transport referenced payload descriptors at the original safe point.",
+    "BoundViscosity/ComputeTDiff use partially initialized viscosity in current capture facts; whole-resource hooks cannot invent valid halos. Need source-bound section effects and inherited definitions.",
+    "Preserve original single-line conditions and support borrowed owners with final complete interval coverage; current root-only fallback does neither.",
+    "Factor repeated call bodies into one parameterized effect graph with exact actual/formal instantiation. The 18 fluxes sites and 66 own execution statements explain repeated expansion pressure, not the exact historical rejection location.",
+    "Memoization alone does not resolve pointer association, guided OpenMP completion, optional arguments, branches or error-stop paths. Listed source branches are not asserted to execute in either case."
+  ],
+  "possible_future_design": {
+    "acceptance": "All four gates together on both primary cases; no ELMM procedure-name compiler allowlists.",
+    "candidate": "Original SubgridStresses through Convection, ending before ScalarRK3; reuse existing SGS, uniform second-order diffusion and accumulation, preserving other original work including advection/filtering/forces. This is a hypothesis, not an admitted window.",
+    "description": "One parameterized native-effect graph and one admitted interval carrying measured workload/build/outcome evidence; reuse the checked plan as the authority, not a new scheduler.",
+    "implementation_started": false
+  },
+  "previous_evidence": [
+    {
+      "path": "benchmarks/reports/native-demand-checkpoint-20261015/report.json",
+      "sha256": "29eaf34a9244d2ece24e00abed97c9206b9a59cfc2eb7d766b06580897d9b9af"
+    },
+    {
+      "path": "benchmarks/reports/native-demand-checkpoint-20261015/evidence/application-probe/input-inventory.json",
+      "sha256": "d650d1815ff96c37b1d73368953ecb4ea43c23bad37506aacf0a52ce98f0c98b"
+    },
+    {
+      "path": "benchmarks/reports/native-demand-checkpoint-20261015/evidence/application-probe/completion.json",
+      "sha256": "ce4bac41e25f394fdb1dfa758b3b50167fff5bd21627e0c4b5e0b4a47e7f6c55"
+    },
+    {
+      "path": "benchmarks/reports/native-demand-checkpoint-20261015/evidence/application-probe/result.json.gz",
+      "sha256": "3ce2483ddb28f6c3fb471e19c87a524c48d6cc2fb0cb66cb4627777e5c2a744e"
+    }
+  ],
+  "pricing_requirements": [
+    "Use the same admitted native/resident alternatives and source/config/worker identities; current sections-only observations cannot be relabeled as AUTO evidence.",
+    "Derive safely evaluated workload keys for descriptors, loop/tile/private sizes, branch/control values, native metadata work and team/schedule state; exact transfer boxes alone do not identify native work.",
+    "Record actual resident or guarded-native outcome and independent native identities. Native-only timings plus a missing-cost bypass are insufficient.",
+    "Bind every relevant original and generated object to executed build receipts and a compiler-issued application attestation contract. Pipeline remains a consumer.",
+    "Measure the complete invocation including guards, inspectors, transfers, original teams, interruptions and cleanup. Do not add modeled costs again; mismatches select unchanged native before execution."
+  ],
+  "primary_targets": [
+    {
+      "case": "channel-simple",
+      "new_qualification": false,
+      "status": "unmet",
+      "target": "complete-process median below 9 seconds"
+    },
+    {
+      "case": "channel",
+      "new_qualification": false,
+      "status": "unmet",
+      "target": "at most 74.4% of fresh native and faster than SGS direct"
+    }
+  ],
+  "schema_version": 1,
+  "status": "bounded_experiment_not_successful",
+  "stop_rule": {
+    "result": "Generic executable fixtures exist; useful application interval still absent. Stop alias-only patches and full-Convection retries.",
+    "successive_capability_clusters_without_application_window": 2
+  }
+}
