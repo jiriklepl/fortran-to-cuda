@@ -220,6 +220,7 @@ def emit(owner, measurement):
 def emit_native(owner, nodes, checkpoint, measurement):
     """Discard resident artifacts; leave original callee declarations and body."""
     builder = owner.builder
+    interval_applicability = owner.execution_plan.interval_applicability().public()
     builder.restore_scope_checkpoint(checkpoint)
     plan = owner.execution_plan.validate()
     from compiler.scopes.segments import statement_span
@@ -231,6 +232,7 @@ def emit_native(owner, nodes, checkpoint, measurement):
         "estimate_available": False,
         "source_authority": {"version": 1, "structured_summary_identity": owner.graph.identity},
         "checked_execution_plan": plan.public(), "boundaries": [],
+        "interval_applicability": interval_applicability,
         "execution": "unchanged original native callee; authenticated caller timing only",
     })
     emit(owner, measurement)

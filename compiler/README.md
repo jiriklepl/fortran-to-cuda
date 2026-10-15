@@ -2130,6 +2130,16 @@ the final plan before emission; a prefix-only inventory is insufficient.
 These inventories establish neither native effects nor storage separation or
 cost coverage. They do not change placement or public build manifests.
 
+`plan.interval_applicability()` projects the same checked operations and demand
+into an optional scope-level `interval_applicability` schema-version-1 record.
+It lists descriptor/control key candidates, original controls and native graphs,
+and independent missing measurement, workload-stability, build and execution-outcome
+evidence. Candidates grant no permission to evaluate source expressions. This
+diagnostic retains the exact configuration identity and existing exact-window
+decision; it neither attaches calibration nor supplies an automatic selector.
+The pipeline validates its linkage before edits and preserves it through
+composition. Missing interval estimates continue to select native execution.
+
 The compilation session shares one authenticated immutable original source
 graph across private lowering and generation transactions. Original syntax,
 declarations, namespaces, source text and configured-source identities are
@@ -2180,6 +2190,14 @@ only a returned snapshot has passed final source and policy reauthentication.
 inspects native calls against explicit tuples of original `Binding` objects.
 The bounded `prove_resource_reachability` provider visits original selections
 and resolved callees without first materializing complete effect summaries.
+Its parameterized native-effect graph scans each selected root or complete
+callee body once, then instantiates the original call associations separately.
+Repeated helper calls retain distinct actual resources, controls and barriers.
+The existing 256-operation limit now bounds unique source statements and call
+instances separately; bounded source visits, substitution work, depth and
+procedure count remain enforced. This changes accounting, not the limit values.
+Reusing a template does not discharge pointer, completion, alias or section
+requirements, and the public graph cannot authorize execution.
 It records may-accesses, source-call associations, unsupported operations and
 storage-separation obligations. Selected allocatable object fields can be
 identified without granting their numerical layout or capture authority.

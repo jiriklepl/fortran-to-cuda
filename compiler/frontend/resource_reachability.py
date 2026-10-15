@@ -28,7 +28,7 @@ from compiler.frontend.source_objects import _members, _TypeBuilder
 from compiler.ir import CompilationError
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
-VERSION = 2
+VERSION = 3
 
 
 class ResourceReachabilityBudgetExceeded(CompilationError):
@@ -150,6 +150,141 @@ class SourceCallEdge:
 
 
 @dataclass(frozen=True)
+class NativeTemplateCall:
+    edge: SourceCallEdge
+    associations: tuple = field(repr=False, compare=False)
+
+    def public(self):
+        return {"kind": "call", **self.edge.public(),
+                "parameter_associations": [_association_public(formal, path) for formal, path in self.associations]}
+
+
+def _association_public(formal, path):
+    return {"formal_resource": formal.root,
+            "formal_scope": getattr(formal.declaring_scope, "qualified", formal.declaring_scope.module),
+            "actual_storage": path.public() if path is not None else None,
+            "expression_actual": path is None}
+
+
+@dataclass(frozen=True)
+class NativeEffectNode:
+    """Original control/statement topology with local, parameterized effects."""
+    kind: str
+    original: object = field(repr=False, compare=False)
+    items: tuple = ()
+    declaration: object = field(default=None, repr=False, compare=False)
+
+    def public(self):
+        return {"kind": self.kind, "source": str(self.original),
+                "declaration": self.declaration.public() if self.declaration is not None else None,
+                "items": [{"kind": "access", **item.public()} if isinstance(item, ResourceAccess)
+                          else {"kind": "barrier", **item.public()} if isinstance(item, ReachabilityBarrier)
+                          else item.public() for item in self.items]}
+
+
+@dataclass(frozen=True)
+class NativeEffectTemplate:
+    procedure: str
+    identity: str
+    nodes: tuple[NativeEffectNode, ...]
+    calls: tuple[NativeTemplateCall, ...]
+    completion: tuple = field(repr=False, compare=False)
+    source_work: tuple
+    _analysis: object = field(repr=False, compare=False)
+    _routine: object = field(repr=False, compare=False)
+    _selection: object = field(repr=False, compare=False)
+    _scopes: tuple = field(repr=False, compare=False)
+    _schemas: tuple = field(repr=False, compare=False)
+    _limits: tuple = field(repr=False, compare=False)
+    _issuer: object = field(repr=False, compare=False)
+
+    def validate(self, analysis):
+        if (self._issuer is not _ISSUER or analysis is not self._analysis
+                or getattr(analysis, "_native_effect_templates", {}).get(_template_key(analysis, self.procedure,
+                                                                                   self._selection)) is not self
+                or self._limits != _limits(analysis)
+                or _original(analysis, self.procedure) is not self._routine):
+            raise CompilationError("native effect template lacks exact original source authority")
+        for scope in self._scopes:
+            _validate_scope(analysis, scope)
+        for schema in self._schemas:
+            _authenticate_schema(analysis, schema)
+        for call in self.calls:
+            call.edge.resolved.validate(analysis, call.edge.resolved._scope, call.edge.original)
+        for name, selected, proof in self.completion:
+            proof.validate(analysis, name, selected)
+        return self
+
+    def public(self):
+        return {"identity": self.identity, "procedure": self.procedure,
+                "scope": "complete callee" if self._selection is None else "exact original root selection",
+                "nodes": [node.public() for node in self.nodes], "source_work": dict(self.source_work),
+                "completion_identities": [proof.identity for _name, _selected, proof in self.completion]}
+
+
+@dataclass(frozen=True)
+class NativeCallInstance:
+    ordinal: int
+    template: NativeEffectTemplate
+    parent: int | None
+    call: NativeTemplateCall | None
+    associations: tuple = field(repr=False, compare=False)
+
+    def public(self):
+        return {"ordinal": self.ordinal, "template_identity": self.template.identity, "parent": self.parent,
+                "call": self.call.edge.public() if self.call is not None else None,
+                "storage_substitutions": [_association_public(formal, path) for formal, path in self.associations]}
+
+
+@dataclass(frozen=True)
+class NativeEffectGraph:
+    identity: str
+    procedure: str
+    templates: tuple[NativeEffectTemplate, ...]
+    instances: tuple[NativeCallInstance, ...]
+    source_work: tuple
+    instantiation_work: tuple
+    _analysis: object = field(repr=False, compare=False)
+    _selection: tuple = field(repr=False, compare=False)
+    _source_identity: str = field(repr=False, compare=False)
+    _limits: tuple = field(repr=False, compare=False)
+    _issuer: object = field(repr=False, compare=False)
+
+    def validate(self, analysis, procedure, original_selection):
+        if (self._issuer is not _ISSUER or analysis is not self._analysis or procedure != self.procedure
+                or not isinstance(original_selection, tuple) or len(original_selection) != len(self._selection)
+                or any(left is not right for left, right in zip(original_selection, self._selection, strict=True))
+                or self._limits != _limits(analysis)
+                or getattr(analysis, "_native_effect_graphs", {}).get(self.identity) is not self):
+            raise CompilationError("native effect graph lacks exact issued source authority")
+        analysis._selected_source(procedure, original_selection)
+        for template in self.templates:
+            template.validate(analysis)
+        return self
+
+    def public(self):
+        return {"schema_version": 1, "identity": self.identity, "procedure": self.procedure,
+                "source_identity": json.loads(self._source_identity),
+                "templates": [template.public() for template in self.templates],
+                "instances": [instance.public() for instance in self.instances],
+                "source_work": dict(self.source_work), "instantiation_work": dict(self.instantiation_work),
+                "counting": "unique template source statements and call instances have separate existing operation bounds",
+                "limits": {"depth": self._limits[0], "procedures": self._limits[1],
+                           "source_statements": self._limits[2], "call_instances": self._limits[2],
+                           "source_nodes": self._limits[3], "substitution_and_obligation_steps": self._limits[3]},
+                "workload_key_authority": False, "execution_authority": False,
+                "alias_authority": False, "cost_authority": False}
+
+
+def _limits(analysis):
+    return analysis.depth_limit, analysis.procedure_limit, analysis.operation_limit, NATIVE_GROUP_SCAN_LIMIT
+
+
+def _template_key(analysis, name, selection):
+    return id(analysis), name, None if selection is None else tuple(map(id, selection))
+
+
+@dataclass(frozen=True)
 class ResourceReachabilityProof:
     procedure: str
     identity: str
@@ -157,6 +292,7 @@ class ResourceReachabilityProof:
     obligations: tuple[StorageDisjointnessObligation, ...]
     barriers: tuple[ReachabilityBarrier, ...]
     calls: tuple[SourceCallEdge, ...]
+    native_graph: NativeEffectGraph
     demanded: tuple[Binding, ...] = field(repr=False, compare=False)
     _analysis: object = field(repr=False, compare=False)
     _selection: tuple = field(repr=False, compare=False)
@@ -179,6 +315,7 @@ class ResourceReachabilityProof:
                 "storage_disjointness_obligations": [item.public() for item in self.obligations],
                 "barriers": [item.public() for item in self.barriers], "calls": [item.public() for item in self.calls],
                 "selection_covered": not self.barriers, "scan_work": dict(self._work),
+                "native_graph": self.native_graph.public(),
                 "whole_procedure_effects_complete": False, "execution_authorized": False,
                 "capture_authorized": False, "definition_authorized": False, "alias_authorized": False,
                 "scope": "exact original selection and statically resolved source callees; all original branches",
@@ -195,6 +332,7 @@ class ResourceReachabilityProof:
         if self._limits != (analysis.depth_limit, analysis.procedure_limit, analysis.operation_limit, NATIVE_GROUP_SCAN_LIMIT):
             raise CompilationError("resource reachability proof budgets changed")
         analysis.verify_source()
+        self.native_graph.validate(analysis, procedure, original_selection)
         for name, routine in self._routines:
             if _original(analysis, name) is not routine:
                 raise CompilationError("resource reachability original procedure changed")
@@ -237,6 +375,20 @@ class _Scan:
         self.visits = self.operations = 0
         self.active = []
         self.specifications = set()
+        self.nodes, self.frames = [], []
+        self.template_calls = []
+
+    def record(self, item):
+        (self.frames[-1] if self.frames else self.nodes).append(item)
+
+    def frame(self, kind, original, operation, *, declaration=None):
+        self.frames.append([])
+        try:
+            operation()
+            items = tuple(self.frames[-1])
+        finally:
+            self.frames.pop()
+        self.record(NativeEffectNode(kind, original, items, declaration))
 
     def tick(self, statement=False):
         self.visits += 1
@@ -248,6 +400,7 @@ class _Scan:
         item = ReachabilityBarrier(kind, routine.qualified, str(node), reason)
         if item not in self.barriers:
             self.barriers.append(item)
+            self.record(item)
 
     def scope(self, scope):
         pending = scope
@@ -265,6 +418,8 @@ class _Scan:
         binding = self.analysis._binding(scope, base)
         if binding is None:
             raise CompilationError("unresolved original storage: " + str(base))
+        if binding.declaring_scope is None:
+            raise CompilationError("original storage declaration scope is unavailable: " + binding.name)
         self.scope(binding.declaring_scope)
         path = mapping.get(id(binding), StoragePath(binding))
         if path is None:
@@ -313,7 +468,9 @@ class _Scan:
             self.barrier("association", routine, node, "pointer, optional or asynchronous storage needs separate authority")
         local = (binding.declaring_scope is routine.scope and binding.name not in routine.arguments
                  and "save" not in binding.attributes and id(binding) not in mapping)
-        self.accesses.append(ResourceAccess(path, action, routine.qualified, str(node), not local, node))
+        item = ResourceAccess(path, action, routine.qualified, str(node), not local, node)
+        self.accesses.append(item)
+        self.record(item)
         if _typename(path.dtype) and action in {"read", "write"}:
             self.barrier("implicit_call", routine, node, "whole derived-object operation may invoke defined assignment or finalization")
         terminal_attributes = path.components[-1].attributes if path.components else path.binding.attributes
@@ -380,8 +537,9 @@ class _Scan:
         if resolved.procedure.startswith("$external::"):
             self.barrier("external_call", routine, node, "external linkage/interposition needs independent original call authority")
             return
-        self.calls.append(SourceCallEdge(routine.qualified, resolved.procedure, node, resolved))
-        child_mapping = dict(mapping)
+        edge = SourceCallEdge(routine.qualified, resolved.procedure, node, resolved)
+        self.calls.append(edge)
+        associations = []
         for item in resolved.associations:
             self.scope(item.formal_binding.declaring_scope)
             if item.actual is None:
@@ -395,15 +553,17 @@ class _Scan:
                 except CompilationError as error:
                     self.barrier("association", routine, item.actual, str(error))
                     continue
-                child_mapping[id(item.formal_binding)] = path
+                associations.append((item.formal_binding, path))
                 self.access(routine, item.actual, mapping, "association")
                 if item.formal_binding.intent == "out":
                     self.access(routine, item.actual, mapping, "undefine")
                     self.access(routine, item.actual, mapping, "write")
             else:
-                child_mapping[id(item.formal_binding)] = None
+                associations.append((item.formal_binding, None))
                 self.expression(routine, item.actual, mapping)
-        self.routine(resolved.procedure, child_mapping)
+        call = NativeTemplateCall(edge, tuple(associations))
+        self.template_calls.append(call)
+        self.record(call)
 
     def sequence(self, routine, nodes, mapping, *, called, depth=0):
         if depth > self.analysis.depth_limit:
@@ -412,19 +572,25 @@ class _Scan:
         for item in grouped_original_sequence(nodes, peeled):
             if isinstance(item, NativeGroupCandidate):
                 originals = item.original_nodes
-                try:
-                    proof = self.analysis.joined_completion(routine.qualified, originals)
-                    self.completion.append((routine.qualified, proof.selected_node_ids, proof))
-                except CompilationError as error:
-                    self.barrier("completion", routine, originals, str(error))
-                for node in originals:
-                    if _kind(node) != "Comment":
-                        self.statement(routine, node, mapping, called=called, depth=depth + 1,
-                                       ignore_directives=True)
+                def group(originals=originals):
+                    try:
+                        proof = self.analysis.joined_completion(routine.qualified, originals)
+                        self.completion.append((routine.qualified, proof.selected_node_ids, proof))
+                    except CompilationError as error:
+                        self.barrier("completion", routine, originals, str(error))
+                    for node in originals:
+                        if _kind(node) != "Comment":
+                            self.statement(routine, node, mapping, called=called, depth=depth + 1,
+                                           ignore_directives=True)
+                self.frame("joined_group", originals, group)
             else:
                 self.statement(routine, item, mapping, called=called, depth=depth)
 
     def statement(self, routine, node, mapping, *, called, depth=0, ignore_directives=False):
+        self.frame(_kind(node), node, lambda: self._statement(routine, node, mapping, called=called,
+                   depth=depth, ignore_directives=ignore_directives))
+
+    def _statement(self, routine, node, mapping, *, called, depth=0, ignore_directives=False):
         self.tick(statement=_kind(node).endswith("_Stmt"))
         kind = _kind(node)
         if kind == "Comment":
@@ -501,8 +667,9 @@ class _Scan:
                 if binding.dtype == "character":
                     self.barrier("specification", routine, routine.scope.node,
                                  "CHARACTER length and entry specification effects need separate authority")
-                for shape in binding.shape_nodes:
-                    self.expression(routine, shape, mapping)
+                self.frame("declaration", tuple(binding.shape_nodes),
+                           lambda binding=binding: [self.expression(routine, shape, mapping)
+                                                    for shape in binding.shape_nodes], declaration=binding)
                 if _typename(binding.dtype) and binding.name not in routine.arguments:
                     self.barrier("implicit_call", routine, routine.scope.node,
                                  "local derived-object lifetime needs initialization/finalization authority")
@@ -515,11 +682,173 @@ class _Scan:
         self.active.pop()
 
 
+def _template(analysis, procedure, selection):
+    registry = getattr(analysis, "_native_effect_templates", None)
+    if registry is None:
+        registry = analysis._native_effect_templates = {}
+    key = _template_key(analysis, procedure, selection)
+    if key in registry:
+        return registry[key].validate(analysis)
+    if len(registry) >= analysis.procedure_limit:
+        raise ResourceReachabilityBudgetExceeded("native effect template registry budget exhausted")
+    scan = _Scan(analysis, ())
+    scan.routine(procedure, {}, selection)
+    routine = scan.routines[procedure]
+    root = NativeEffectNode("procedure" if selection is None else "selection",
+                            routine.execution if selection is None else selection, tuple(scan.nodes))
+    work = (("syntax_nodes", scan.visits), ("statements", scan.operations))
+    identity = _digest({"version": VERSION, "source_identity": analysis.inputs.identity(),
+                        "procedure": procedure, "selection": None if selection is None else list(map(id, selection)),
+                        "source_work": dict(work), "nodes": root.public()})
+    value = NativeEffectTemplate(procedure, identity, (root,), tuple(scan.template_calls), tuple(scan.completion), work,
+        analysis, routine, selection, tuple(scan.scopes.values()), tuple(scan.schemas.values()), _limits(analysis), _ISSUER)
+    registry[key] = value
+    try:
+        return value.validate(analysis)
+    except BaseException:
+        if registry.get(key) is value:
+            del registry[key]
+        raise
+
+
+class _Instantiate:
+    """Instantiate typed effects and call edges; never traverse callee syntax."""
+    def __init__(self, analysis):
+        self.analysis = analysis
+        self.templates, self.instances, self.active = {}, [], []
+        self.accesses, self.barriers, self.calls, self.completion = [], [], [], []
+        self.routines, self.scopes, self.schemas = {}, {}, {}
+        self.source_visits = self.source_operations = self.steps = 0
+
+    def tick(self):
+        self.steps += 1
+        if self.steps > NATIVE_GROUP_SCAN_LIMIT:
+            raise ResourceReachabilityBudgetExceeded("resource reachability instantiation budget exhausted")
+
+    def template(self, procedure, selection=None):
+        value = _template(self.analysis, procedure, selection)
+        if value.identity not in self.templates:
+            self.templates[value.identity] = value
+            self.routines[procedure] = value._routine
+            if len(self.routines) > self.analysis.procedure_limit:
+                raise ResourceReachabilityBudgetExceeded("resource reachability procedure budget exhausted")
+            counts = dict(value.source_work)
+            self.source_visits += counts["syntax_nodes"]
+            self.source_operations += counts["statements"]
+            if (self.source_visits > NATIVE_GROUP_SCAN_LIMIT
+                    or self.source_operations > self.analysis.operation_limit):
+                raise ResourceReachabilityBudgetExceeded("resource reachability unique source scan budget exhausted")
+            self.scopes.update((id(scope), scope) for scope in value._scopes)
+            self.schemas.update((id(schema), schema) for schema in value._schemas)
+            self.completion.extend(value.completion)
+        return value
+
+    def substitute(self, path, mapping):
+        self.tick()
+        if path is None:
+            return None
+        replacement = mapping.get(id(path.binding))
+        if replacement is None:
+            return path
+        _formal, storage = replacement
+        if storage is None:
+            return None
+        return StoragePath(storage.binding, (*storage.components, *path.components))
+
+    def barrier(self, value):
+        if value not in self.barriers:
+            self.barriers.append(value)
+
+    def access(self, item, mapping):
+        storage = self.substitute(item.storage, mapping)
+        if storage is None:
+            # Expression values were evaluated by the original outer CALL.
+            # Readonly forwarding needs no invented backing resource. An
+            # eventual write or entry kill still makes the graph ineligible.
+            if item.kind not in {"read", "descriptor", "association"}:
+                self.barrier(ReachabilityBarrier("association", item.procedure, item.source,
+                             "writable expression actual has no original storage"))
+            return
+        if "parameter" in storage.attributes:
+            return
+        if storage.attributes & {"pointer", "volatile", "asynchronous", "optional"}:
+            self.barrier(ReachabilityBarrier("association", item.procedure, item.source,
+                         "pointer, optional or asynchronous storage needs separate authority"))
+        self.accesses.append(ResourceAccess(storage, item.kind, item.procedure, item.source,
+                                            item.external, item.original))
+
+    def items(self, items, instance, mapping):
+        for item in items:
+            self.tick()
+            if isinstance(item, NativeEffectNode):
+                self.items(item.items, instance, mapping)
+            elif isinstance(item, ResourceAccess):
+                self.access(item, mapping)
+            elif isinstance(item, ReachabilityBarrier):
+                self.barrier(item)
+            elif isinstance(item, NativeTemplateCall):
+                self.calls.append(item.edge)
+                child_mapping = dict(mapping)
+                for formal, path in item.associations:
+                    child_mapping[id(formal)] = formal, self.substitute(path, mapping)
+                self.instance(item.edge.callee, child_mapping, parent=instance.ordinal, call=item)
+            else:
+                raise CompilationError("native effect template contains an unknown node")
+
+    def instance(self, procedure, mapping, *, parent=None, call=None, selection=None):
+        if procedure in self.active:
+            raise ResourceReachabilityBudgetExceeded("resource reachability recursive call graph is unavailable")
+        if len(self.active) >= self.analysis.depth_limit:
+            raise ResourceReachabilityBudgetExceeded("resource reachability call depth budget exhausted")
+        # The root selection is not a source CALL occurrence. Each subsequent
+        # instance retains one exact original edge, even with shared templates.
+        if call is not None and len(self.instances) - 1 >= self.analysis.operation_limit:
+            raise ResourceReachabilityBudgetExceeded("resource reachability call instantiation budget exhausted")
+        template = self.template(procedure, selection)
+        instance = NativeCallInstance(len(self.instances), template, parent, call, tuple(mapping.values()))
+        self.instances.append(instance)
+        self.active.append(procedure)
+        try:
+            self.items(template.nodes, instance, mapping)
+        finally:
+            self.active.pop()
+
+    def graph(self, procedure, selection):
+        source_work = (("syntax_nodes", self.source_visits), ("statements", self.source_operations),
+                       ("procedures", len(self.routines)), ("templates", len(self.templates)))
+        instance_work = (("call_instances", len(self.instances) - 1), ("substitution_steps", self.steps))
+        identity = _digest({"version": VERSION, "source_identity": self.analysis.inputs.identity(),
+            "procedure": procedure, "selection": list(map(id, selection)), "limits": _limits(self.analysis),
+            "templates": list(self.templates), "instances": [item.public() for item in self.instances]})
+        registry = getattr(self.analysis, "_native_effect_graphs", None)
+        if registry is None:
+            registry = self.analysis._native_effect_graphs = {}
+        if identity in registry:
+            return registry[identity].validate(self.analysis, procedure, selection)
+        if len(registry) >= self.analysis.procedure_limit:
+            raise ResourceReachabilityBudgetExceeded("native effect graph registry budget exhausted")
+        source_identity = json.dumps(self.analysis.inputs.identity(), sort_keys=True, separators=(",", ":"))
+        value = NativeEffectGraph(identity, procedure, tuple(self.templates.values()), tuple(self.instances),
+                                  source_work, instance_work, self.analysis, selection, source_identity,
+                                  _limits(self.analysis), _ISSUER)
+        registry[identity] = value
+        try:
+            return value.validate(self.analysis, procedure, selection)
+        except BaseException:
+            if registry.get(identity) is value:
+                del registry[identity]
+            raise
+
+
 def prove_resource_reachability(analysis, procedure, original_selection, demanded):
     """Issue conservative storage reachability for an exact original selection.
 
     Demands are exact original Binding objects (including scalar dependencies),
     never names copied from an effect report. All aliases remain obligations.
+    Unique source statements and instantiated CALL occurrences each retain the
+    existing operation bound; source-node and substitution/obligation work each
+    retain the existing scan bound. Cached templates are authenticated and
+    charged on every query. This replaces repeated callee syntax expansion.
     """
     if not isinstance(original_selection, tuple) or not original_selection:
         raise CompilationError("resource reachability requires an exact nonempty original tuple")
@@ -530,8 +859,9 @@ def prove_resource_reachability(analysis, procedure, original_selection, demande
     for binding in demanded:
         _authenticate_binding(analysis, binding)
     analysis._selected_source(procedure, original_selection)
-    scan = _Scan(analysis, demanded)
-    scan.routine(procedure, {}, original_selection)
+    scan = _Instantiate(analysis)
+    scan.instance(procedure, {}, selection=original_selection)
+    graph = scan.graph(procedure, original_selection)
     obligations = {}
     for access in scan.accesses:
         if not access.external or access.kind not in {"read", "write", "association", "undefine"}:
@@ -546,7 +876,8 @@ def prove_resource_reachability(analysis, procedure, original_selection, demande
     required = tuple(StorageDisjointnessObligation(storage, next(binding for binding in demanded if id(binding) == key[-1]),
                                                    tuple(sorted(actions)))
                      for key, (storage, actions) in obligations.items())
-    work = (("syntax_nodes", scan.visits), ("statements", scan.operations), ("procedures", len(scan.routines)))
+    work = (*graph.source_work, *graph.instantiation_work,
+            ("substitution_and_obligation_steps", scan.steps))
     identity = _digest({"version": VERSION, "procedure": procedure,
         "sources": analysis.inputs.identity(), "selection": list(map(id, original_selection)),
         "demanded": list(map(id, demanded)), "accesses": [item.public() for item in scan.accesses],
@@ -559,7 +890,7 @@ def prove_resource_reachability(analysis, procedure, original_selection, demande
     if len(registry) >= analysis.procedure_limit:
         raise ResourceReachabilityBudgetExceeded("resource reachability proof registry budget exhausted")
     proof = ResourceReachabilityProof(procedure, identity, tuple(scan.accesses), required, tuple(scan.barriers),
-        tuple(scan.calls), demanded, analysis, original_selection, tuple(scan.routines.items()), tuple(scan.scopes.values()),
+        tuple(scan.calls), graph, demanded, analysis, original_selection, tuple(scan.routines.items()), tuple(scan.scopes.values()),
         tuple(scan.schemas.values()), tuple(scan.completion),
         (analysis.depth_limit, analysis.procedure_limit, analysis.operation_limit, NATIVE_GROUP_SCAN_LIMIT), work, _ISSUER)
     registry[identity] = proof

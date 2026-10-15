@@ -209,7 +209,7 @@ def test_mutation_during_scan_cannot_publish_registered_proof(tmp_path, monkeypa
     monkeypatch.setattr(resource_reachability._Scan, "routine", mutate_after_scan)
     with pytest.raises(CompilationError):
         prove_resource_reachability(analysis, "work::owner", selected, demanded)
-    assert not analysis._resource_reachability_proofs
+    assert not getattr(analysis, "_resource_reachability_proofs", {})
 
 
 def test_sealed_session_retains_exact_original_binding_and_component_authority(tmp_path):
