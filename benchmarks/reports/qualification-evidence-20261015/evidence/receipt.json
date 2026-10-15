@@ -1,0 +1,36 @@
+{
+  "application_executed": false,
+  "argv": [
+    "taskset",
+    "-c",
+    "0,1,6,7",
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_campaign_targets.py",
+    "tests/test_campaigns.py"
+  ],
+  "cwd": "/home/jirka/research/fortran-abomination/elmm-pipeline",
+  "exit_code": 0,
+  "failed": 0,
+  "log": "/home/jirka/research/fortran-abomination/elmm-pipeline/work/qualification-target-gates-20261015/final.log",
+  "log_sha256": "dd3ace9a6671da102545b9d16157750b64ca25621e802aa40efeb870e25cf338",
+  "passed": 92,
+  "performance_measured": false,
+  "pipeline_base_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+  "schema_version": 1,
+  "seconds": 8.5,
+  "source_sha256_at_receipt": {
+    "README.md": "7dc0f9ffab8bf64b2d079beb2fca1d3ef2a8f80ec8c95c23c8ad38a79d5b4c8e",
+    "elmm_pipeline/campaigns/report.py": "9ed31de07c296b8bf643511b9b22d6d0533b7c542566634d5ee095d9fbabb44b",
+    "elmm_pipeline/campaigns/targets.py": "c2075af4468b07c7559090c4f0a25040ae9107b7c39453f8c8ff8467b12e4775",
+    "tests/test_campaign_targets.py": "082ae885af93b097b19f13498a9bf8104225d84e06cd370af01a0e6e3293d2a9"
+  },
+  "synthetic_evidence_only": true,
+  "validation": {
+    "git_diff_check": "passed",
+    "ruff": "passed"
+  },
+  "working_tree_patch_sha256": "26ed1d3108531043cbd6da0c916f3e384aea7f28882c91a38e1d374402afd2d8"
+}

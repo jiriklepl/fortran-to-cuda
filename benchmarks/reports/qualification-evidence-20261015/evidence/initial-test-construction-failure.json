@@ -1,0 +1,19 @@
+{
+  "command": [
+    "../.venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_campaign_targets.py",
+    "tests/test_campaigns.py"
+  ],
+  "cwd": "/home/jirka/research/fortran-abomination/elmm-pipeline",
+  "exit_code": 1,
+  "failed": 1,
+  "failure": "test_summary_must_match_observed_rounds[ratio_to_native-native]",
+  "passed": 91,
+  "production_failure": false,
+  "reason": "The synthetic tamper set native ratio_to_native to its existing value 1; no evidence was actually changed. Corrected test to increment each scalar field.",
+  "seconds": 8.74,
+  "source_revision": "intermediate working tree; full terminal captured in agent tool output, no source inventory recorded"
+}

@@ -1,0 +1,644 @@
+{
+  "schema_version": 1,
+  "kind": "synthetic qualification regression probe; no application timings",
+  "source_sha256": "cea1640f9eb99684284b540bf09de0da3739bb1973e3b770d8a38c6854b0a027",
+  "scenarios": [
+    {
+      "scenario": "complete",
+      "runs": [
+        {
+          "mode": "native",
+          "round": 0,
+          "warmup": true,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 0,
+          "warmup": true,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 0,
+          "warmup": true,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 1,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 1,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 1,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 2,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 2,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 2,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 3,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 3,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 3,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 4,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 4,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 4,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 5,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 5,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 5,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 6,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 6,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 6,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 7,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 7,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 7,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        }
+      ],
+      "result": {
+        "schema_version": 2,
+        "baseline_mode": "native",
+        "baseline_seconds": 12,
+        "candidate_mode": "auto-resident",
+        "candidate_ratio": 0.7333333333333334,
+        "performance_target": {
+          "schema_version": 1,
+          "metric": "ratio_to_native",
+          "limit": 0.744,
+          "comparison": "le",
+          "control_mode": "sgs-direct"
+        },
+        "target_seconds": 8.928,
+        "target_label": "\u2264 74.4% of native",
+        "target_met": true,
+        "faster_than_control": true,
+        "accepted": true,
+        "comfortable": {
+          "required_measured_rounds": 7,
+          "paired_rounds_complete": true,
+          "all_samples_meet_target": true,
+          "beats_control_each_round": true,
+          "met": true
+        }
+      }
+    },
+    {
+      "scenario": "missing_native_round",
+      "runs": [
+        {
+          "mode": "native",
+          "round": 0,
+          "warmup": true,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 0,
+          "warmup": true,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 0,
+          "warmup": true,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 1,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 1,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 1,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 2,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 2,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 2,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 3,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 3,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 3,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 4,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 4,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 4,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 5,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 5,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 5,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 6,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 6,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 6,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 7,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 7,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        }
+      ],
+      "result": {
+        "schema_version": 2,
+        "baseline_mode": "native",
+        "baseline_seconds": 12.0,
+        "candidate_mode": "auto-resident",
+        "candidate_ratio": 0.7333333333333334,
+        "performance_target": {
+          "schema_version": 1,
+          "metric": "ratio_to_native",
+          "limit": 0.744,
+          "comparison": "le",
+          "control_mode": "sgs-direct"
+        },
+        "target_seconds": 8.928,
+        "target_label": "\u2264 74.4% of native",
+        "target_met": true,
+        "faster_than_control": true,
+        "accepted": true,
+        "comfortable": {
+          "required_measured_rounds": 7,
+          "paired_rounds_complete": true,
+          "all_samples_meet_target": true,
+          "beats_control_each_round": true,
+          "met": true
+        }
+      }
+    },
+    {
+      "scenario": "missing_warmups",
+      "runs": [
+        {
+          "mode": "native",
+          "round": 1,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 1,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 1,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 2,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 2,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 2,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 3,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 3,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 3,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 4,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 4,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 4,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 5,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 5,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 5,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 6,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 6,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 6,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "native",
+          "round": 7,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 12,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "sgs-direct",
+          "round": 7,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 9.6,
+          "peak_host_rss_bytes": 1024
+        },
+        {
+          "mode": "auto-resident",
+          "round": 7,
+          "warmup": false,
+          "traced": false,
+          "wall_seconds": 8.8,
+          "peak_host_rss_bytes": 1024
+        }
+      ],
+      "result": {
+        "schema_version": 2,
+        "baseline_mode": "native",
+        "baseline_seconds": 12,
+        "candidate_mode": "auto-resident",
+        "candidate_ratio": 0.7333333333333334,
+        "performance_target": {
+          "schema_version": 1,
+          "metric": "ratio_to_native",
+          "limit": 0.744,
+          "comparison": "le",
+          "control_mode": "sgs-direct"
+        },
+        "target_seconds": 8.928,
+        "target_label": "\u2264 74.4% of native",
+        "target_met": true,
+        "faster_than_control": true,
+        "accepted": true,
+        "comfortable": {
+          "required_measured_rounds": 7,
+          "paired_rounds_complete": true,
+          "all_samples_meet_target": true,
+          "beats_control_each_round": true,
+          "met": true
+        }
+      }
+    }
+  ]
+}

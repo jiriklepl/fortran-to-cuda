@@ -1,0 +1,17 @@
+{
+  "application_executed": false,
+  "automatic_application_residency": false,
+  "compiler_commit": "09b10a502f1ed3f0307d83fc7e5412e776d9b27a",
+  "failed": 0,
+  "passed": 92,
+  "performance_targets_qualified": false,
+  "pipeline_commit": "9babb9ab6f69ae502dc60d9414a0afe975decb51",
+  "schema_version": 1,
+  "scope": "Qualification evidence integrity; synthetic samples only",
+  "tested_sources": {
+    "README.md": "7dc0f9ffab8bf64b2d079beb2fca1d3ef2a8f80ec8c95c23c8ad38a79d5b4c8e",
+    "elmm_pipeline/campaigns/report.py": "9ed31de07c296b8bf643511b9b22d6d0533b7c542566634d5ee095d9fbabb44b",
+    "elmm_pipeline/campaigns/targets.py": "c2075af4468b07c7559090c4f0a25040ae9107b7c39453f8c8ff8467b12e4775",
+    "tests/test_campaign_targets.py": "082ae885af93b097b19f13498a9bf8104225d84e06cd370af01a0e6e3293d2a9"
+  }
+}
