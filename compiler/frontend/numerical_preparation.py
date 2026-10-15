@@ -132,7 +132,8 @@ def _configuration(options, config, environment_root, immutable_inputs, budget):
     # at the owning interval. They are not an input to numerical lowering or
     # effects. Including them here would change every prepared proof when a
     # calibration is later consumed for that exact same checked program.
-    structural = _digest((options, replace(config, profile=None, exact_window=None),
+    # Diagnostic caller timing likewise observes the same admitted program.
+    structural = _digest((options, replace(config, profile=None, exact_window=None, scope_measurement=None),
                           environment_root, tuple(immutable)), budget)
     # Budget consumers may run compiler callbacks. Rehash after their final
     # invocation without external callbacks, including previously encoded rows.

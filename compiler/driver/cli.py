@@ -150,6 +150,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Scoped transfer mode, independent of GPU placement (default: direct).")
     parser.add_argument("--scope-execution", choices=("bounded", "reached"), default="bounded",
                         help="Opt-in reached source execution; bounded retains existing source scopes.")
+    parser.add_argument("--scope-measurement", choices=("native", "resident"),
+                        help="Diagnostic complete-owner timing; requires reached sections scopes and supplies no AUTO costs.")
     parser.add_argument("--calibration-profile", metavar="FILE", help="Explicit offline hardware calibration JSON.")
     parser.add_argument("--host-threads", type=int, default=4, help="Total host-thread budget, including GPU coordination.")
     parser.add_argument("--gpu-collective", action="store_true",
@@ -159,6 +161,9 @@ def _parse_args() -> argparse.Namespace:
         parser.error("--scope-preflight requires --form-scopes")
     if args.scope_execution != "bounded" and not args.form_scopes:
         parser.error("--scope-execution reached requires --form-scopes")
+    if args.scope_measurement is not None and (not args.form_scopes or args.scope_execution != "reached"
+                                             or args.gpu_policy != "sections" or args.gpu_collective):
+        parser.error("--scope-measurement requires --form-scopes, --scope-execution reached and --gpu-policy sections")
     if args.analyze_effects and (args.list_candidates or args.emit_scoped_runtime or args.form_scopes):
         parser.error("--analyze-effects cannot be combined with candidate listing or runtime export")
     if (args.source_file or args.effect_contracts) and not (args.analyze_effects or args.form_scopes):
@@ -200,7 +205,8 @@ def _offload_config(args):
         reason = "no calibration profile supplied; automatic policy retains native execution"
     try:
         return OffloadConfig(args.gpu_policy, profile, args.host_threads, args.gpu_collective, reason,
-                             getattr(args, "scope_transfers", "direct"), getattr(args, "scope_execution", "bounded"))
+                             getattr(args, "scope_transfers", "direct"), getattr(args, "scope_execution", "bounded"),
+                             scope_measurement=getattr(args, "scope_measurement", None))
     except ValueError as error:
         raise CompilationError(str(error)) from error
 

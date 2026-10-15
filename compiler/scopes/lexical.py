@@ -976,6 +976,11 @@ class LexicalOwner:
             return False
         from compiler.scopes.execution_plan import build_execution_plan
         plan = build_execution_plan(self)
+        from compiler.offload.scope_measurement import emit_native
+        from compiler.offload.scope_measurement import prepare as prepare_measurement
+        measurement = prepare_measurement(self)
+        if measurement is not None and builder.config.scope_measurement == "native":
+            return emit_native(self, nodes, checkpoint, measurement)
         from compiler.offload.exact_window import prepare as prepare_exact_window
         prepare_exact_window(self)
         native_reason = plan.automatic_native_reason(complete_window=self.exact_window is not None)
@@ -1126,4 +1131,6 @@ class LexicalOwner:
             builder.scopes[-1]["planning_reason"] = self.exact_window["reason"]
         builder.scopes[-1]["transfer_configuration"] = builder.numerical(sorted(self.leaves)[0]).scoped["transfer_configuration"]
         builder.boundaries.extend(boundary for member in self.members.values() for boundary in member.boundaries)
+        from compiler.offload.scope_measurement import emit as emit_measurement
+        emit_measurement(self, measurement)
         return True
