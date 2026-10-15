@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from compiler.frontend.indirect_sections import IndirectSections, INSPECTION_STEP_LIMIT
+from dataclasses import replace
+
+from compiler.frontend.indirect_sections import INSPECTION_STEP_LIMIT, IndirectSections
 from compiler.frontend.native_sections import RECTANGLE_LIMIT
 from compiler.ir import CompilationError
-from compiler.ir.integers import INTEGER_MIN, INTEGER_MAX
+from compiler.ir.integers import INTEGER_MAX, INTEGER_MIN
 from compiler.scopes.access import NativeAccessCode, _statement_lines, build_native_access
 
 
@@ -116,13 +118,36 @@ def _build(sections, resource, handle, prefix, names, parameters, context, statu
             return checked(f"int({selector}, c_int64_t)")
         raise CompilationError("indirect inspector expression has no checked lowering")
 
-    # Each direction gets its own exact union. Overwrites deliberately stay
-    # empty: arbitrary scatter assignments are may-writes, never a definition
-    # proof. Separate opposite faces remain separate unless the union is itself
-    # one rectangle (equal extents on every axis but one touching interval).
+    references_by_action = {
+        action: tuple(item for item in sections.references
+                      if item.resource == resource.resource and item.action == action)
+        for action in ("read", "write")
+    }
+    reads, writes = references_by_action["read"], references_by_action["write"]
+    # Compare ordered structural references, ignoring only their direction and
+    # diagnostic source spelling. Insertion order affects the bounded exact
+    # union, so equality of unordered sets would not justify this reuse.
+    shared_footprint = bool(reads) and tuple(replace(item, action="read") for item in writes) == reads
+
+    # Overwrites deliberately stay empty: arbitrary scatter assignments are
+    # may-writes, never a definition proof. Each distinct direction gets its own
+    # exact union; identical directions share the retained TARGET storage.
+    # Separate opposite faces remain separate unless the union is itself one
+    # rectangle (equal extents on every axis but one touching interval).
     for action in ("read", "write"):
-        references = tuple(item for item in sections.references if item.resource == resource.resource and item.action == action)
+        references = references_by_action[action]
         if not references:
+            continue
+        if action == "write" and shared_footprint:
+            # The stable-metadata proof covers this reached preparation. Every
+            # write coordinate/loop guard was checked by the identical reads.
+            # Still charge all logical write iterations, including entered
+            # outer loops with empty children, before exposing write access.
+            # The read scan kept scan_steps <= LIMIT, so subtraction is safe.
+            require(f"{scan_steps} > {INSPECTION_STEP_LIMIT}_c_int64_t - {scan_steps}")
+            prepare += [f"{scan_steps} = {scan_steps} + {scan_steps}",
+                        f"{access}%write_count = {access}%read_count",
+                        f"{access}%writes = {access}%reads"]
             continue
         suffix = "_r" if action == "read" else "_w"
         low, high, boxes, total = (prefix + suffix + tail for tail in ("_lows", "_highs", "_sections", "_total"))
