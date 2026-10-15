@@ -420,6 +420,8 @@ def _publish(owner):
     name, record = _names(owner)
     owner.builder.outputs["exact/" + name + ".cu"] = _observer_source(name, record)
     owner.builder.outputs["exact/common_functions.cuh"] = read_common_header()
+    for header in ("scoped_runtime.h", "scoped_team_observer.hpp"):
+        owner.builder.outputs["exact/" + header] = owner.builder.runtime_outputs[header]
 
 
 def control(owner):

@@ -266,8 +266,10 @@ def test_generated_selection_observers_and_original_team_wrappers_compile(tmp_pa
     for scope in report["scopes"]:
         identity = scope["exact_window"]["contract_sha256"]
         relative = "exact/fort_selection_" + identity[:12] + ".cu"
-        command = [nvcc, "-std=c++17", "-O0", "-arch=sm_86", "-ccbin", host, "-Xcompiler=-fopenmp",
-                   "-I" + str(generated), "-DFORT_EXACT_WINDOW_BUILD_" + identity + "=1", "-c",
+        macros = [] if variant == "native" else ["-DFORT_EXACT_WINDOW_BUILD_" + identity + "=1"]
+        # Each issued translation unit carries its own non-toolchain headers;
+        # application recipes do not add an artifact-root include directory.
+        command = [nvcc, "-std=c++17", "-O0", "-arch=sm_86", "-ccbin", host, "-Xcompiler=-fopenmp", *macros, "-c",
                    str(generated / relative), "-o", str(generated / (identity[:12] + ".o"))]
         result = subprocess.run(command, capture_output=True, text=True, check=False)
         assert result.returncode == 0, result.stdout + result.stderr
