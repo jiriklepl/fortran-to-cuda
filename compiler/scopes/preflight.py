@@ -102,7 +102,7 @@ def _cost(prepared, analysis, config):
                    scope_transfer_estimate="not_requested", placement_authorized=False)
 
 
-def preflight_scope(builder, *, follow_calls=True, observer=None):
+def preflight_scope(builder, *, follow_calls=True, observer=None, resource_demands=None):
     """Inspect independent original units without emission or owner selection.
 
     The supplied builder validates source-bound capture documents and options.
@@ -113,9 +113,18 @@ def preflight_scope(builder, *, follow_calls=True, observer=None):
     ``observer`` receives detached procedure/operation progress events. These
     events are provisional until the returned snapshot reauthenticates inputs;
     an interrupted pass cannot advertise them as a complete preflight.
+    ``resource_demands`` optionally maps original procedures to exact original
+    Binding objects. These explicit, procedure-local demands inspect native
+    call reachability before complete effects are materialized. They are not a
+    discovered interval inventory, an alias proof, or placement authority.
     """
     analysis = builder.analysis
     analysis.verify_source()
+    demands = {} if resource_demands is None else {
+        procedure: tuple(bindings) for procedure, bindings in resource_demands.items()}
+    if set(demands) - analysis.routines.keys():
+        raise CompilationError("resource preflight demand names an unavailable original procedure")
+    resource_proofs = []
     facts_identity = _digest(builder.facts)
     provider = NumericalPreparationProvider(analysis, options=builder.options, config=builder.config,
                                            environment_root=builder.entry.qualified)
@@ -212,6 +221,28 @@ def preflight_scope(builder, *, follow_calls=True, observer=None):
                                          "inventory_only": True, "capture_facts": capture})
 
             calls = [node for node in syntax if _kind(node) == "Call_Stmt"]
+            if kind == "call" and procedure in demands:
+                from compiler.frontend.resource_reachability import (
+                    ResourceReachabilityBudgetExceeded,
+                    prove_resource_reachability,
+                )
+
+                # Keep the original CALL, including argument evaluation and
+                # its source guards. This demand neither resolves numerical
+                # eligibility nor asks summarize() to expand the callee first.
+                try:
+                    proof = prove_resource_reachability(analysis, procedure, selection, demands[procedure])
+                except ResourceReachabilityBudgetExceeded as error:
+                    truncated = True
+                    row["resource_reachability"] = _status("not_checked", [str(error)])
+                    blocker(row, "resource_reachability", error, "not_checked")
+                else:
+                    resource_proofs.append((proof, procedure, selection, demands[procedure]))
+                    reasons = [barrier.reason for barrier in proof.barriers]
+                    row["resource_reachability"] = _status(
+                        "incomplete" if reasons else "available", reasons, proof=proof.public())
+                    for reason in reasons:
+                        blocker(row, "resource_reachability", reason)
             for call in calls:
                 try:
                     from compiler.frontend.call_bindings import resolve_source_call
@@ -277,6 +308,8 @@ def preflight_scope(builder, *, follow_calls=True, observer=None):
     # mutated input aborts the entire snapshot; it is never just one blocker.
     provider.validate_configuration(options=builder.options, config=builder.config,
                                     environment_root=builder.entry.qualified)
+    for proof, procedure, selection, demanded in resource_proofs:
+        proof.validate(analysis, procedure, selection, demanded)
     analysis.verify_publication()
     if facts_identity != _digest(builder.facts):
         raise CompilationError("scope preflight capture facts changed during inspection")
@@ -295,6 +328,15 @@ def preflight_scope(builder, *, follow_calls=True, observer=None):
               "scope_automatic_estimate": _status("not_requested", [
                   "independent numerical prices do not establish a resident-window estimate",
                   "host-only native ranges, IEEE coordination, immutable elements and indirect inspectors require owner cost checks"])}
+    if demands:
+        report["resource_demands"] = {
+            "role": "explicit original procedure-local resource demand",
+            "complete_interval_inventory": False,
+            "execution_authorized": False,
+            "placement_authorized": False,
+            "procedures": {procedure: [binding.public() for binding in bindings]
+                           for procedure, bindings in demands.items()},
+        }
     report["snapshot_identity"] = _digest(report)
     return ScopePreflight(json.dumps(report, sort_keys=True, allow_nan=False))
 

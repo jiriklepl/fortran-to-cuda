@@ -444,6 +444,22 @@ class CheckedExecutionPlan:
             raise CompilationError("checked execution plan requires an issued exact-window placement")
         return placement.validate(self)
 
+    def resource_demand(self):
+        """Share the sealed whole-interval inventory with native consumers.
+
+        This inventory includes later numerical uses and their dependencies.
+        It supplies no effects, alias, completion, or placement authority.
+        """
+        self._require_owner()
+        from compiler.scopes.resource_demand import IntervalResourceDemand, resource_demand_from_plan
+
+        for demand in getattr(self._owner.builder, "_resource_demands", {}).values():
+            if type(demand) is not IntervalResourceDemand:
+                raise CompilationError("execution plan requires an issued interval resource demand")
+            if demand._plan is self:
+                return demand.validate()
+        return resource_demand_from_plan(self)
+
     def automatic_native_reason(self):
         placement = self.exact_window_placement()
         if self._owner.builder.config.policy != "auto":
@@ -542,4 +558,16 @@ def build_execution_plan(owner):
                                   numerical_authorities, _json(record), _ISSUER)
     # The only publication of authority occurs after the entire graph is sealed.
     object.__setattr__(owner, "execution_plan", result)
+    # A native proof made against a prospective reached inventory must cover
+    # every final member, including resources first used by later workers.
+    # Validate before any source emission, then retain one inventory for the
+    # complete checked interval. A prefix inventory cannot grant admission.
+    from compiler.scopes.resource_demand import IntervalResourceDemand
+
+    for demand in tuple(getattr(owner.builder, "_resource_demands", {}).values()):
+        if type(demand) is not IntervalResourceDemand:
+            raise CompilationError("execution plan requires an issued interval resource demand")
+        if demand._proof is not None:
+            demand.validate_plan(result)
+    result.resource_demand()
     return result

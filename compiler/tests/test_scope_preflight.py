@@ -75,6 +75,60 @@ def test_independent_failures_do_not_hide_later_numerical_or_cost_diagnostics(tm
         snapshot._json = "{}"
 
 
+def test_explicit_resource_demands_preserve_independent_cost_and_execution_gates(tmp_path):
+    _path, builder = subject(tmp_path)
+    demanded = (builder.entry.scope.bindings["a"],)
+    snapshot = preflight_scope(builder, follow_calls=False,
+                               resource_demands={builder.entry.qualified: demanded})
+    report = snapshot.public()
+    calls = [row for row in report["operations"] if row["kind"] == "call"]
+    assert len(calls) == 2
+    assert all("resource_reachability" in row for row in calls)
+    assert all(row["native"]["status"] == "not_requested" for row in calls)
+    assert all(row["cost"]["status"] == "unavailable"
+               for row in report["operations"] if row["kind"] == "loop")
+    demand = report["resource_demands"]
+    assert demand["complete_interval_inventory"] is False
+    assert demand["execution_authorized"] is False
+    assert demand["placement_authorized"] is False
+    assert demand["procedures"][builder.entry.qualified][0]["resource"] == "argument::a"
+    assert report["execution_authorized"] is False
+    assert not builder.outputs
+    assert not builder.edits
+    calls[0]["resource_reachability"].clear()
+    assert snapshot.public()["operations"][0]["resource_reachability"]
+
+
+def test_resource_preflight_rejects_foreign_binding_even_with_matching_source(tmp_path):
+    _path, foreign = subject(tmp_path)
+    _path, builder = subject(tmp_path)
+    with pytest.raises(CompilationError):
+        preflight_scope(builder, follow_calls=False,
+                        resource_demands={builder.entry.qualified: (foreign.entry.scope.bindings["a"],)})
+
+
+def test_resource_budget_decline_does_not_hide_later_operations(tmp_path, monkeypatch):
+    from compiler.frontend import resource_reachability
+
+    _path, builder = subject(tmp_path)
+    original = resource_reachability.prove_resource_reachability
+
+    def bounded(analysis, procedure, selection, demanded):
+        if "opaque" in str(selection[0]).lower():
+            raise resource_reachability.ResourceReachabilityBudgetExceeded("resource demand budget exhausted")
+        return original(analysis, procedure, selection, demanded)
+
+    monkeypatch.setattr(resource_reachability, "prove_resource_reachability", bounded)
+    report = preflight_scope(builder, follow_calls=False, resource_demands={
+        builder.entry.qualified: (builder.entry.scope.bindings["a"],)}).public()
+    first, loop, later, final = report["operations"]
+    assert first["resource_reachability"]["status"] == "not_checked"
+    assert later["resource_reachability"]["proof"]["barriers"]
+    assert loop["numerical"]["status"] == final["numerical"]["status"] == "available"
+    assert report["truncated"]
+    assert report["execution_authorized"] is False
+
+
 def test_branch_order_and_guards_preserved_without_evaluation(tmp_path):
     source = SOURCE.replace("call opaque(a)", "if(n>0)then").replace(
         "call missing(a)", "else").replace("end subroutine", "endif\nend subroutine")
