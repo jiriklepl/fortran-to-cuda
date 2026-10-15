@@ -152,6 +152,8 @@ def _parse_args() -> argparse.Namespace:
                         help="Opt-in reached source execution; bounded retains existing source scopes.")
     parser.add_argument("--scope-measurement", choices=("native", "resident"),
                         help="Diagnostic complete-owner timing; requires reached sections scopes and supplies no AUTO costs.")
+    parser.add_argument("--scope-cost", metavar="FILE",
+                        help="Source-bound cost request JSON for automatic source scopes, including original selections.")
     parser.add_argument("--calibration-profile", metavar="FILE", help="Explicit offline hardware calibration JSON.")
     parser.add_argument("--host-threads", type=int, default=4, help="Total host-thread budget, including GPU coordination.")
     parser.add_argument("--gpu-collective", action="store_true",
@@ -164,6 +166,9 @@ def _parse_args() -> argparse.Namespace:
     if args.scope_measurement is not None and (not args.form_scopes or args.scope_execution != "reached"
                                              or args.gpu_policy != "sections" or args.gpu_collective):
         parser.error("--scope-measurement requires --form-scopes, --scope-execution reached and --gpu-policy sections")
+    if args.scope_cost is not None and (not args.form_scopes or args.gpu_policy not in {"auto", "sections"}
+                                        or args.gpu_collective or args.scope_measurement is not None):
+        parser.error("--scope-cost requires serial --form-scopes with auto/sections and no --scope-measurement")
     if args.analyze_effects and (args.list_candidates or args.emit_scoped_runtime or args.form_scopes):
         parser.error("--analyze-effects cannot be combined with candidate listing or runtime export")
     if (args.source_file or args.effect_contracts) and not (args.analyze_effects or args.form_scopes):
@@ -193,6 +198,14 @@ def _parse_args() -> argparse.Namespace:
 
 def _offload_config(args):
     profile, reason = None, None
+    cost_request = None
+    if getattr(args, "scope_cost", None):
+        try:
+            cost_request = json.loads(Path(args.scope_cost).read_text())
+        except (OSError, UnicodeError, ValueError) as error:
+            raise CompilationError("Cannot read --scope-cost request: " + str(error)) from error
+        if type(cost_request) is not dict:
+            raise CompilationError("--scope-cost request must be an object")
     if args.calibration_profile:
         from compiler.offload.profile import compiler_identity, load_profile
         try:
@@ -206,6 +219,7 @@ def _offload_config(args):
     try:
         return OffloadConfig(args.gpu_policy, profile, args.host_threads, args.gpu_collective, reason,
                              getattr(args, "scope_transfers", "direct"), getattr(args, "scope_execution", "bounded"),
+                             exact_window=cost_request,
                              scope_measurement=getattr(args, "scope_measurement", None))
     except ValueError as error:
         raise CompilationError(str(error)) from error

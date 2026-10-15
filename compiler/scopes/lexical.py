@@ -133,6 +133,7 @@ class OwnerEmission:
     def __init__(self):
         self.exact_window = None
         self.units = {}
+        self.selection_prefix = None
 
 
 class LexicalOwner:
@@ -331,6 +332,12 @@ class LexicalOwner:
         first, last = statement_span(nodes[0])[0], statement_span(nodes[-1])[1]
         return "".join(self.lines[first-1:last])
 
+    def before_close(self):
+        if hasattr(self.owner, "closed_selection") and self.owner.exact_window is not None:
+            from compiler.offload.selection_cost import before_close
+            return before_close(self.owner, self.context)
+        return []
+
     def close(self, *, disable=True, reason=None, span=None):
         from compiler.scopes.provenance import position, source_id
         boundary = source_id(self.builder, "boundary", span=span,
@@ -339,6 +346,7 @@ class LexicalOwner:
                  "use fort_scoped_memory, only: fort_scope_close, FORT_SCOPE_OK, fort_scope_trace_set_v1",
                  "integer(c_int) :: fort_close_status", f"if ({self.context} /= 0) then",
                  *position(self.builder, context=self.context, owner=self.trace_owner, boundary=boundary),
+                 *self.before_close(),
                  f"fort_close_status = fort_scope_close({self.context})",
                  "if (fort_close_status /= FORT_SCOPE_OK) error stop 'lexical owner publication failed'",
                  f"{self.context} = 0", "endif"]
@@ -993,17 +1001,28 @@ class LexicalOwner:
     def _run_lexical(self, nodes):
         builder = self.builder
         checkpoint = builder.scope_checkpoint()
+        if not self._prepare_lexical(nodes):
+            return False
+        return self._emit_lexical(nodes, checkpoint)
+
+    def _prepare_lexical(self, nodes):
+        """Admit once; bundle discovery may retain this inventory before emission."""
         self.active.append(self.routine.qualified)
-        self.scan(nodes)
-        self.active.pop()
+        try:
+            self.scan(nodes)
+        finally:
+            self.active.pop()
         self.validate_plan(nodes)
         managed = {member.canonical(binding).root for member in self.members.values()
                    for unit in member.units for binding in unit.arrays.values()}
         if managed & self.scalar_element_resources.keys():
             raise CompilationError("scalar element backing storage conflicts with final managed resource inventory")
         self.leaves = {leaf for member in self.members.values() for unit in member.units for leaf in unit.leaves}
-        if not self.leaves:
-            return False
+        return bool(self.leaves)
+
+    def _emit_lexical(self, nodes, checkpoint, *, native_cleanup=True):
+        """Consume the retained admitted inventory, without another source scan."""
+        builder = self.builder
         from compiler.scopes.execution_plan import build_execution_plan
         plan = build_execution_plan(self)
         from compiler.offload.scope_measurement import emit_native
@@ -1015,6 +1034,9 @@ class LexicalOwner:
         prepare_exact_window(self)
         placement = plan.exact_window_placement()
         interval_applicability = plan.interval_applicability().public()
+        if (hasattr(self, "closed_selection") and placement is not None
+                and placement.public().get("capture_variant") == "native"):
+            return self.emit_native_capture(nodes, checkpoint, interval_applicability, cleanup=native_cleanup)
         native_reason = plan.automatic_native_reason()
         if native_reason:
             # Missing estimates or a measured native advantage settle placement
@@ -1053,7 +1075,9 @@ class LexicalOwner:
         plan.validate()
         # One shared implementation identity, independent of the count of
         # reached source segments. Original native control/storage stays here.
-        variant = builder.variants.register(self.routine.qualified, interface="lexical_owner_v1", role="coordinator",
+        variant = builder.variants.register(self.routine.qualified,
+            interface=("closed_original_selection_v1:" + str(self.selection_context["first_line"])
+                       if hasattr(self, "closed_selection") else "lexical_owner_v1"), role="coordinator",
             name=self.context, summary_identity=self.graph.identity,
             requirements=("one original invocation", "reached descriptor guards", "native continuation without prefix replay"),
             shared_artifacts=("sources/" + _name("source_", str(self.routine.scope.path)) + ".f90",))
@@ -1072,6 +1096,13 @@ class LexicalOwner:
                     target_declarations[key] = declaration, set()
                 target_declarations[key][1].add(getattr(binding, "component_object", binding).name)
         for (path, (first,last)), (declaration, selected) in target_declarations.items():
+            key = path, first, last
+            previous = builder._lexical_target_edits.get(key)
+            if previous is not None:
+                if previous[0] is not declaration:
+                    raise CompilationError("TARGET edit lost its exact original declaration")
+                selected |= previous[1]
+                builder.edits[path].remove((first, last, previous[2]))
             dtype, attributes, entities = declaration.items
             flags = list(map(str, _children(attributes)))
             if any(flag.lower() == "target" for flag in flags):
@@ -1092,7 +1123,9 @@ class LexicalOwner:
                 qualifiers = [*flags, "TARGET"] if target else flags
                 prefix = str(dtype) + (", " + ", ".join(qualifiers) if qualifiers else "")
                 lines += fortran_lines([prefix + " :: " + ", ".join(names)])
-            builder.add_edit(path, first,last, "\n".join(lines) + "\n")
+            replacement = "\n".join(lines) + "\n"
+            builder.add_edit(path, first,last, replacement)
+            builder._lexical_target_edits[key] = declaration, set(selected), replacement
         for member in plan.members:
             edits = [edit for index,unit in enumerate(plan.units(member)) for edit in member.emit_unit(unit,index)]
             for first,last,text in [*plan.patches(member), *edits]:

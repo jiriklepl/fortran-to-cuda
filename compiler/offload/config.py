@@ -24,8 +24,9 @@ class OffloadConfig:
     # Issued for one authenticated original region, before artifact rewriting.
     # This describes cost applicability only; it cannot authorize execution.
     source_applicability: "SourceComputeApplicability | None" = None
-    # Experimental complete lexical-window evidence. This is independent of
-    # the per-kernel roofline profile; absent evidence never authorizes AUTO.
+    # Source-bound complete-window or original-selection evidence. This is
+    # independent of the per-kernel roofline profile; absent evidence never
+    # authorizes AUTO.
     exact_window: dict | None = None
     # Explicit offline observation of an already-admitted complete owner.
     # This is not calibration evidence and never authorizes AUTO placement.
@@ -48,9 +49,15 @@ class OffloadConfig:
                 raise ValueError("Source compute applicability requires original-region metadata")
             if self.source_applicability.native_participation != self.native_participation:
                 raise ValueError("Source compute applicability participation differs")
-        if self.exact_window is not None and (type(self.exact_window) is not dict or self.scope_execution != "reached"
-                                             or self.policy not in {"auto", "sections"} or self.collective):
-            raise ValueError("Exact window requires a serial reached auto/sections owner")
+        if self.exact_window is not None:
+            if type(self.exact_window) is not dict:
+                raise ValueError("Exact window cost request must be an object")
+            coverage = self.exact_window.get("coverage")
+            if coverage is not None and coverage != "original_selection":
+                raise ValueError("Unknown exact window cost coverage")
+            execution = "bounded" if coverage == "original_selection" else "reached"
+            if self.scope_execution != execution or self.policy not in {"auto", "sections"} or self.collective:
+                raise ValueError(f"Exact window requires a serial {execution} auto/sections owner")
         if self.scope_measurement is not None and (
                 type(self.scope_measurement) is not str or self.scope_measurement not in {"native", "resident"}
                 or self.policy != "sections" or self.scope_execution != "reached"

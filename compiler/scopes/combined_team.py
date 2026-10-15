@@ -379,7 +379,8 @@ class CombinedNumericalTeam(StructuredScope):
                  f"{owner.enabled} = fort_team_enabled",
                  *[f"fort_buffer_{owner.resources[root][1]} = {handle}" for root, handle in handles.items()], "endif"]
         lines, generated = self._emit_team(handles, values, imports, [*specification, *extra],
-            preparation=preparation, block=block, failure=failure, price_units=price_units)
+            preparation=preparation, block=block, failure=failure, price_units=price_units,
+            owner=owner, unit=unit)
         _narrow_runtime_imports(imports, [*specification, *extra], [*before, *generated, *after])
         _check_generated_names(self.original_nodes, [*specification, *extra], imports, generated, block)
         replacement = "\n".join(fortran_lines(lines)) + "\n"
@@ -437,6 +438,7 @@ class CombinedNumericalTeam(StructuredScope):
         return extra, [*before, *lines], [*before, *generated]
 
     def _emit_team(self, handles, values, imports, specification, *, preparation, block, failure, price_units,
+                   owner=None, unit=None,
                    native_begin=(), native_end=()):
         """One original participant protocol for owning and borrowed workers."""
         builder = self.builder
@@ -461,6 +463,10 @@ class CombinedNumericalTeam(StructuredScope):
                  *builder.inline.emit_call(call, handles, values, imports, query=True),
                  "endif",
                  "if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_plan_validate(fort_context)"]
+        if owner is not None and hasattr(owner, "closed_selection") and owner.exact_window is not None:
+            from compiler.offload.selection_cost import choice
+            lines += ["if (fort_status == FORT_SCOPE_OK) then", *choice(owner, unit, handles, values), "endif",
+                      "if (.not. fort_native_ready) exit " + block]
         if price_units:
             public, _ = builder.entry_artifacts(call.procedure)
             imports.append(f"use {public['fortran_module']}, only: fort_team_choose => {public['planning']['fortran_selector']}")
