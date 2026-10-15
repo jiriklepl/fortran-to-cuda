@@ -2689,6 +2689,8 @@ class ScopeBuilder:
             self.boundaries.extend(deepcopy(candidate.boundaries[boundary_count:]))
             self.boundaries.append({"reason": "lexical owner unavailable: " + str(error),
                                     "fallback": "existing bounded source scopes"})
+            if self.config.scope_measurement is not None:
+                raise CompilationError("scope measurement requires an admitted complete lexical owner: " + str(error)) from error
         finally:
             if candidate is not None and not adopted:
                 # Per-owner generation work remains charged after a declined
@@ -2723,6 +2725,8 @@ class ScopeBuilder:
                                     "execution": "unchanged native source"})
             return self.finish(materialize_native_effects=False)
         if self.entry.source_kind != "module":
+            if self.config.scope_measurement is not None:
+                raise CompilationError("scope measurement requires an admitted module procedure owner")
             first = _span(_part(self.entry.scope.node, "Subroutine_Stmt"))[0]
             last = _span(_part(self.entry.scope.node, "End_Subroutine_Stmt"))[1]
             self.boundaries.append({"first_line": first, "last_line": last,
@@ -2733,13 +2737,15 @@ class ScopeBuilder:
             try:
                 check_structured_entry(self.entry)
             except CompilationError as error:
+                if self.config.scope_measurement is not None:
+                    raise CompilationError("scope measurement requires a structured lexical owner: " + str(error)) from error
                 # Do not fall through to outlined scopes: a source label can
                 # enter an outlined statement or bypass its coherence setup.
                 self.boundaries.append({"procedure": self.entry.qualified, "reason": str(error),
                                         "execution": "unchanged native source"})
                 return self.finish()
             from compiler.scopes.window_discovery import discover_reached_window
-            if discover_reached_window(self):
+            if self.config.scope_measurement is None and discover_reached_window(self):
                 return self.finish()
         nodes = self.inline.prepare(_children(self.entry.execution)) if not self.config.collective else _children(self.entry.execution)
         self.generated.update(self.inline.generated)
@@ -2749,6 +2755,8 @@ class ScopeBuilder:
             result = self._attempt_lexical_owner(nodes, finalize=True)
             if result:
                 return result
+            if self.config.scope_measurement is not None:
+                raise CompilationError("scope measurement requires an admitted complete lexical owner with numerical work")
         self.scan(nodes)
         return self.finish()
 
@@ -2785,7 +2793,7 @@ class ScopeBuilder:
             destination = "sources/" + _name("source_",str(path)) + ".f90"
             self.outputs[destination] = "".join(lines)
             provenance[str(path)] = {"sha256":self.analysis.sources[str(path)], "replacement":destination}
-        if self.scopes:
+        if self.scopes and self.config.scope_measurement != "native":
             self.outputs.update(self.runtime_outputs)
             self.outputs["scoped-runtime.json"] = json.dumps(self.runtime,indent=2)+"\n"
         report = {
@@ -2796,6 +2804,7 @@ class ScopeBuilder:
                 "supported_consumers": ["original_lexical", "original_module_companion"],
                 "unsupported_consumers": ["synthetic_owner", "qualified_collective_owner"]},
             "scope_execution": self.config.scope_execution,
+            **({"scope_measurement": self.config.scope_measurement} if self.config.scope_measurement is not None else {}),
             **({"reached_plan_schema_version": 1} if self.config.scope_execution == "reached" else {}),
             **({"reached_window_discovery": self.reached_window_discovery}
                if hasattr(self, "reached_window_discovery") else {}),
@@ -2803,10 +2812,10 @@ class ScopeBuilder:
                if hasattr(self, "lexical_owner_attempt") else {}),
             "automatic_scope_available":bool(self.scopes), "scope_count":len(self.scopes),
             "scopes":self.scopes, "boundaries":self.boundaries, "source_edits":patches,
-            "runtime_provenance": self.runtime_provenance.public(available=bool(self.scopes), additional=[
+            "runtime_provenance": self.runtime_provenance.public(available=bool(self.scopes) and self.config.scope_measurement != "native", additional=[
                 *[item.scoped.get("runtime_provenance", {}) for item in self.generated.values() if item],
                 *[item.report.get("runtime_provenance", {}) for item in self.view_generated.values()]]),
-            "sources":provenance, "runtime":self.runtime if self.scopes else None,
+            "sources":provenance, "runtime":self.runtime if self.scopes and self.config.scope_measurement != "native" else None,
             "native_effects":self.analysis.report(self.entry.qualified,
                 materialize=(self.config.scope_execution != "reached"
                              if materialize_native_effects is None else materialize_native_effects)),

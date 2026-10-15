@@ -2846,6 +2846,28 @@ general bounds checking and broader Fortran semantics are outside this subset.
 
 ### Experimental complete-window observations
 
+`--scope-measurement native|resident` with `--form-scopes`,
+`--gpu-policy sections` and `--scope-execution reached` emits diagnostic timing
+for an already admitted complete
+lexical owner. Separate variants retain either the original native callee
+(including its unchanged declarations) or the existing resident implementation.
+Compiler-owned clock blocks surround authenticated standalone direct calls in
+registered ordinary subroutine callers. They include argument evaluation,
+automatic storage, original OpenMP joins, publication, cleanup and return;
+logging occurs afterward. PURE/ELEMENTAL, concurrent and directive-enclosed
+caller positions, ambiguous calls, labels and alternate returns are rejected.
+Completed original teams before the call remain supported. Main programs,
+function callers and indirect calls are outside this observation subset.
+
+The manifest binds both variants to the same admitted plan and call sites.
+`automatic_scope_available` retains its existing admission meaning; measurement
+records explicitly set placement and estimate authority to false. There is no
+runtime workload key: these observations are neither calibration evidence nor
+application performance qualification, and they cannot authorize AUTO
+placement. Resident guards may select native work; inspect separate runtime
+traces before attributing an observation to GPU execution. This measurement
+interface does not change the exact-window selector's admission restrictions.
+
 `compiler.offload.exact_window_calibration` is an independent offline consumer
 for a narrow alternative to per-kernel cost models. It compiles the untouched
 original Fortran and the compiler's resident implementation of a three-dimensional

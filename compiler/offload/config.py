@@ -27,6 +27,9 @@ class OffloadConfig:
     # Experimental complete lexical-window evidence. This is independent of
     # the per-kernel roofline profile; absent evidence never authorizes AUTO.
     exact_window: dict | None = None
+    # Explicit offline observation of an already-admitted complete owner.
+    # This is not calibration evidence and never authorizes AUTO placement.
+    scope_measurement: str | None = None
 
     def __post_init__(self):
         if self.policy not in {"always", "sections", "auto", "chunked", "hybrid"}:
@@ -45,10 +48,14 @@ class OffloadConfig:
                 raise ValueError("Source compute applicability requires original-region metadata")
             if self.source_applicability.native_participation != self.native_participation:
                 raise ValueError("Source compute applicability participation differs")
-        if self.exact_window is not None:
-            if (type(self.exact_window) is not dict or self.scope_execution != "reached"
-                    or self.policy not in {"auto", "sections"} or self.collective):
-                raise ValueError("Exact window requires a serial reached auto/sections owner")
+        if self.exact_window is not None and (type(self.exact_window) is not dict or self.scope_execution != "reached"
+                                             or self.policy not in {"auto", "sections"} or self.collective):
+            raise ValueError("Exact window requires a serial reached auto/sections owner")
+        if self.scope_measurement is not None and (
+                type(self.scope_measurement) is not str or self.scope_measurement not in {"native", "resident"}
+                or self.policy != "sections" or self.scope_execution != "reached"
+                or self.collective or self.exact_window is not None):
+            raise ValueError("Scope measurement requires a native/resident serial reached sections owner")
         if self.profile is not None:
             try:
                 require_numerical_build_contract(self.profile.get("numerical_contract")

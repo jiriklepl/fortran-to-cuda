@@ -38,7 +38,7 @@ def _configuration(builder):
 
     # Observations select an already defined alternative. They cannot change
     # its identity, otherwise a calibration could never select that same plan.
-    config = replace(builder.config, exact_window=None)
+    config = replace(builder.config, exact_window=None, scope_measurement=None)
     return configuration(builder.options, config, builder._numerical_environment_root,
                          getattr(builder, "immutable_inputs", {}), _Budget())
 
