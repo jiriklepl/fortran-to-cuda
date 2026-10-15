@@ -1,0 +1,1297 @@
+[
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/host-initial.log",
+    "archive": "evidence/host-initial.log",
+    "source_bytes": 14699,
+    "source_sha256": "76164a8e20ef9262b1e78be330d1a7f6901a8360abfce6f6f12ee9a8274fdcb3",
+    "archive_sha256": "76164a8e20ef9262b1e78be330d1a7f6901a8360abfce6f6f12ee9a8274fdcb3"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/host-final.log",
+    "archive": "evidence/host-final.log",
+    "source_bytes": 272,
+    "source_sha256": "612239bf5fbdaeea3d80d7a7a1cc5d257f4ade68193727a3790fcff2b0f73d5d",
+    "archive_sha256": "612239bf5fbdaeea3d80d7a7a1cc5d257f4ade68193727a3790fcff2b0f73d5d"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/pipeline.log",
+    "archive": "evidence/pipeline.log",
+    "source_bytes": 191,
+    "source_sha256": "d81a83476eb8203426d0888d5a8b62c4f3c04b067bbaff7574d43240e68f9e55",
+    "archive_sha256": "d81a83476eb8203426d0888d5a8b62c4f3c04b067bbaff7574d43240e68f9e55"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/cuda.log",
+    "archive": "evidence/cuda.log",
+    "source_bytes": 110,
+    "source_sha256": "e79360aa6abb79c8a898df3a108edf698cb1dd31f36267453d5256b230c4ac2f",
+    "archive_sha256": "e79360aa6abb79c8a898df3a108edf698cb1dd31f36267453d5256b230c4ac2f"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture-driver.log",
+    "archive": "evidence/fixture-driver.log",
+    "source_bytes": 438,
+    "source_sha256": "b30a82e87a77a59e980826a10b55cafd54452bc361c8932c45e9983b37e82cdc",
+    "archive_sha256": "b30a82e87a77a59e980826a10b55cafd54452bc361c8932c45e9983b37e82cdc"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture-run.json",
+    "archive": "evidence/fixture-run.json",
+    "source_bytes": 1047,
+    "source_sha256": "d8e4efd1f2d1daaae8a387025f5f595b960062af4de0ce626a69679ae4f611c6",
+    "archive_sha256": "d8e4efd1f2d1daaae8a387025f5f595b960062af4de0ce626a69679ae4f611c6"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/run_fixture.py",
+    "archive": "evidence/run_fixture.py",
+    "source_bytes": 2354,
+    "source_sha256": "a3956f04c9601ed313857998426c8c394b1bed99dc4a73644abb4b2daada6e23",
+    "archive_sha256": "a3956f04c9601ed313857998426c8c394b1bed99dc4a73644abb4b2daada6e23"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/freeze_report.py",
+    "archive": "evidence/freeze_report.py",
+    "source_bytes": 3582,
+    "source_sha256": "d5d1fe31869c348bdf0164b3587331836aa54c677b0ec55a46fb4b2cb3d189a1",
+    "archive_sha256": "d5d1fe31869c348bdf0164b3587331836aa54c677b0ec55a46fb4b2cb3d189a1"
+  },
+  {
+    "source": "/tmp/exact-window-placement-authority-final-20261015.log",
+    "archive": "evidence/tests/exact-window-placement-authority-final-20261015.log",
+    "source_bytes": 110,
+    "source_sha256": "56af9b12aed5944d9032163d0ef935e2387a707369419d72346ac22dadbbf918",
+    "archive_sha256": "56af9b12aed5944d9032163d0ef935e2387a707369419d72346ac22dadbbf918"
+  },
+  {
+    "source": "/tmp/exact-window-placement-lint-final-20261015.log",
+    "archive": "evidence/tests/exact-window-placement-lint-final-20261015.log",
+    "source_bytes": 113,
+    "source_sha256": "6496a4ae2080299002badec8c4f9438227eedcac86e2cf7cd99c099d77048941",
+    "archive_sha256": "6496a4ae2080299002badec8c4f9438227eedcac86e2cf7cd99c099d77048941"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/calibration/build-receipt.json",
+    "archive": "evidence/fixture/calibration/build-receipt.json",
+    "source_bytes": 14885,
+    "source_sha256": "8d147dff39427b0edeadda11648e2fa67e1674f818fe0f2a7b0aaab29272f217",
+    "archive_sha256": "8d147dff39427b0edeadda11648e2fa67e1674f818fe0f2a7b0aaab29272f217"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/calibration/scope-manifest.json",
+    "archive": "evidence/fixture/calibration/scope-manifest.json.gz",
+    "source_bytes": 480165,
+    "source_sha256": "5916a25564463ed5748338bc91cc9f669cbe560c78dcd73649e70fe73177561f",
+    "archive_sha256": "d4acb573f8b8cf7c2b7f3f8b3bacae35e6408c84869936522905b6e07e78338a"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/native/build-receipt.json",
+    "archive": "evidence/fixture/native/build-receipt.json",
+    "source_bytes": 1952,
+    "source_sha256": "63136fda575015cc4de991dfb2f593d4f5d6916754a4904e7110b65e7900e21b",
+    "archive_sha256": "63136fda575015cc4de991dfb2f593d4f5d6916754a4904e7110b65e7900e21b"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/original.f90",
+    "archive": "evidence/fixture/original.f90",
+    "source_bytes": 5876,
+    "source_sha256": "fdbab0eeb872d0957e34b9e7f999b044adaa3da91504dfc1ccb1bb05165275e5",
+    "archive_sha256": "fdbab0eeb872d0957e34b9e7f999b044adaa3da91504dfc1ccb1bb05165275e5"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/report.json",
+    "archive": "evidence/fixture/report.json",
+    "source_bytes": 130656,
+    "source_sha256": "e970bf4fce8fa51c0d91239bd3768565a5c3f19eb30e51132258ee6b216ce5f0",
+    "archive_sha256": "e970bf4fce8fa51c0d91239bd3768565a5c3f19eb30e51132258ee6b216ce5f0"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/00-native.stderr",
+    "archive": "evidence/fixture/size-16/00-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/00-native.stdout",
+    "archive": "evidence/fixture/size-16/00-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "1375c647b7a3177444a0d0e0d827f08d53127d80588964a3d77a7ed59dad160b",
+    "archive_sha256": "1375c647b7a3177444a0d0e0d827f08d53127d80588964a3d77a7ed59dad160b"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/00-resident.stderr",
+    "archive": "evidence/fixture/size-16/00-resident.stderr",
+    "source_bytes": 1283,
+    "source_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13",
+    "archive_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/00-resident.stdout",
+    "archive": "evidence/fixture/size-16/00-resident.stdout",
+    "source_bytes": 611,
+    "source_sha256": "205be9f01beb8a0a84a14d3540150b249beaf4df8ff9d0ac882cf0c80d1c34cf",
+    "archive_sha256": "205be9f01beb8a0a84a14d3540150b249beaf4df8ff9d0ac882cf0c80d1c34cf"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/01-native.stderr",
+    "archive": "evidence/fixture/size-16/01-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/01-native.stdout",
+    "archive": "evidence/fixture/size-16/01-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "a17f364f4c86222ed3ea3916bd05523f5937a881ff3d69d5075090c285cdcd6b",
+    "archive_sha256": "a17f364f4c86222ed3ea3916bd05523f5937a881ff3d69d5075090c285cdcd6b"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/01-resident.stderr",
+    "archive": "evidence/fixture/size-16/01-resident.stderr",
+    "source_bytes": 1283,
+    "source_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13",
+    "archive_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/01-resident.stdout",
+    "archive": "evidence/fixture/size-16/01-resident.stdout",
+    "source_bytes": 611,
+    "source_sha256": "0397226b2b12ec6488e9cc7845617bc3b8c1f1d0edd96cbe281096dfe3a341d9",
+    "archive_sha256": "0397226b2b12ec6488e9cc7845617bc3b8c1f1d0edd96cbe281096dfe3a341d9"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/02-native.stderr",
+    "archive": "evidence/fixture/size-16/02-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/02-native.stdout",
+    "archive": "evidence/fixture/size-16/02-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "e1b2e089b1444a0e15a7f0f15decdb94c04bf2149dbef91d768c6d65b1cbb8a9",
+    "archive_sha256": "e1b2e089b1444a0e15a7f0f15decdb94c04bf2149dbef91d768c6d65b1cbb8a9"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/02-resident.stderr",
+    "archive": "evidence/fixture/size-16/02-resident.stderr",
+    "source_bytes": 1283,
+    "source_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13",
+    "archive_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/02-resident.stdout",
+    "archive": "evidence/fixture/size-16/02-resident.stdout",
+    "source_bytes": 611,
+    "source_sha256": "6e8a8b744f977d347d4f335dcd8c67f0d39f780d716075c74499838e82378bbb",
+    "archive_sha256": "6e8a8b744f977d347d4f335dcd8c67f0d39f780d716075c74499838e82378bbb"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/03-native.stderr",
+    "archive": "evidence/fixture/size-16/03-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/03-native.stdout",
+    "archive": "evidence/fixture/size-16/03-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "a9fa2d61c9e49c963ae6c158edb02a204746a8555b004ef5971598b4ee537144",
+    "archive_sha256": "a9fa2d61c9e49c963ae6c158edb02a204746a8555b004ef5971598b4ee537144"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/03-resident.stderr",
+    "archive": "evidence/fixture/size-16/03-resident.stderr",
+    "source_bytes": 1283,
+    "source_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13",
+    "archive_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/03-resident.stdout",
+    "archive": "evidence/fixture/size-16/03-resident.stdout",
+    "source_bytes": 611,
+    "source_sha256": "75ada06bd20eeb6edcc3b167cb2ca5e88689b86b8c48366fbb72c4313a5d17b1",
+    "archive_sha256": "75ada06bd20eeb6edcc3b167cb2ca5e88689b86b8c48366fbb72c4313a5d17b1"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/04-native.stderr",
+    "archive": "evidence/fixture/size-16/04-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/04-native.stdout",
+    "archive": "evidence/fixture/size-16/04-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "70ae2dfc27f06f645359d4fd33436fba53eb365d1bb997ecd37e415217b1672b",
+    "archive_sha256": "70ae2dfc27f06f645359d4fd33436fba53eb365d1bb997ecd37e415217b1672b"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/04-resident.stderr",
+    "archive": "evidence/fixture/size-16/04-resident.stderr",
+    "source_bytes": 1283,
+    "source_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13",
+    "archive_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/04-resident.stdout",
+    "archive": "evidence/fixture/size-16/04-resident.stdout",
+    "source_bytes": 611,
+    "source_sha256": "e62f5bd5de036d6610721fcbb6d14c62b4194ac9555e798368d81ade99bac30d",
+    "archive_sha256": "e62f5bd5de036d6610721fcbb6d14c62b4194ac9555e798368d81ade99bac30d"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/05-native.stderr",
+    "archive": "evidence/fixture/size-16/05-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/05-native.stdout",
+    "archive": "evidence/fixture/size-16/05-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "d5dd800f5b392a26899937857bccb433f095e82dc61f1b786839d98ac046db23",
+    "archive_sha256": "d5dd800f5b392a26899937857bccb433f095e82dc61f1b786839d98ac046db23"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/05-resident.stderr",
+    "archive": "evidence/fixture/size-16/05-resident.stderr",
+    "source_bytes": 1283,
+    "source_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13",
+    "archive_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/05-resident.stdout",
+    "archive": "evidence/fixture/size-16/05-resident.stdout",
+    "source_bytes": 611,
+    "source_sha256": "c9c69f3f1e2d89989c0e967c1c692d26343cd3132ca2467a73e115024a098a93",
+    "archive_sha256": "c9c69f3f1e2d89989c0e967c1c692d26343cd3132ca2467a73e115024a098a93"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/06-native.stderr",
+    "archive": "evidence/fixture/size-16/06-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/06-native.stdout",
+    "archive": "evidence/fixture/size-16/06-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "df8199cbd4724e2a15448ef1a8082342b10a7c65bd3d0c1b2f2c67b3d7e3a57b",
+    "archive_sha256": "df8199cbd4724e2a15448ef1a8082342b10a7c65bd3d0c1b2f2c67b3d7e3a57b"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/06-resident.stderr",
+    "archive": "evidence/fixture/size-16/06-resident.stderr",
+    "source_bytes": 1283,
+    "source_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13",
+    "archive_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/06-resident.stdout",
+    "archive": "evidence/fixture/size-16/06-resident.stdout",
+    "source_bytes": 611,
+    "source_sha256": "1c2abfb0504c2c4a38c9877761fc6cce3503ff0a19c7fb62d3e43cf2dccfde0b",
+    "archive_sha256": "1c2abfb0504c2c4a38c9877761fc6cce3503ff0a19c7fb62d3e43cf2dccfde0b"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/07-native.stderr",
+    "archive": "evidence/fixture/size-16/07-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/07-native.stdout",
+    "archive": "evidence/fixture/size-16/07-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "6c3e7e0f1f980e594926b9f55f95324b52dd0c017240e1d13b218583267a4139",
+    "archive_sha256": "6c3e7e0f1f980e594926b9f55f95324b52dd0c017240e1d13b218583267a4139"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/07-resident.stderr",
+    "archive": "evidence/fixture/size-16/07-resident.stderr",
+    "source_bytes": 1283,
+    "source_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13",
+    "archive_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/07-resident.stdout",
+    "archive": "evidence/fixture/size-16/07-resident.stdout",
+    "source_bytes": 611,
+    "source_sha256": "66cf0ccf45f619410779c03d4246cdba18f0931498832cad7b2f05be21463bd7",
+    "archive_sha256": "66cf0ccf45f619410779c03d4246cdba18f0931498832cad7b2f05be21463bd7"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/08-native.stderr",
+    "archive": "evidence/fixture/size-16/08-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/08-native.stdout",
+    "archive": "evidence/fixture/size-16/08-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "9e5776e8ef6b08bd24d2d8195824db3e00f59637a2e77d545d75624c7e3f1adb",
+    "archive_sha256": "9e5776e8ef6b08bd24d2d8195824db3e00f59637a2e77d545d75624c7e3f1adb"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/08-resident.stderr",
+    "archive": "evidence/fixture/size-16/08-resident.stderr",
+    "source_bytes": 1283,
+    "source_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13",
+    "archive_sha256": "69a144e005e60d6f00ca7e7cdb5dd01e7f768a39ad89618a2ae86b6462e15c13"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/08-resident.stdout",
+    "archive": "evidence/fixture/size-16/08-resident.stdout",
+    "source_bytes": 611,
+    "source_sha256": "2dfac7183f2bee064ad590f284c0410d735c55efb8e09a1431bfcf42fc887310",
+    "archive_sha256": "2dfac7183f2bee064ad590f284c0410d735c55efb8e09a1431bfcf42fc887310"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/automatic/build-receipt.json",
+    "archive": "evidence/fixture/size-16/automatic/build-receipt.json",
+    "source_bytes": 6160,
+    "source_sha256": "b99d4035a1a1e50ed82a96b3607676fa7ab23469f32400c4d3e85d6f87400b9a",
+    "archive_sha256": "b99d4035a1a1e50ed82a96b3607676fa7ab23469f32400c4d3e85d6f87400b9a"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/automatic/scope-manifest.json",
+    "archive": "evidence/fixture/size-16/automatic/scope-manifest.json.gz",
+    "source_bytes": 347819,
+    "source_sha256": "6d0d5756c72e4d92da09368d31bac942ab10fc0d8b8fe2b8659d4ff29e0411ba",
+    "archive_sha256": "6d1247821dfa3d7a2f7c77059a502b1efecf73ffdda1308771bea23918974e54"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/automatic-ledger.json",
+    "archive": "evidence/fixture/size-16/automatic-ledger.json",
+    "source_bytes": 713,
+    "source_sha256": "bf3bc1587a0c851c5f2419b69e1b9c9b173d0c8220574bb4e011edc5d43aa983",
+    "archive_sha256": "bf3bc1587a0c851c5f2419b69e1b9c9b173d0c8220574bb4e011edc5d43aa983"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/automatic-thread-mismatch-ledger.json",
+    "archive": "evidence/fixture/size-16/automatic-thread-mismatch-ledger.json",
+    "source_bytes": 713,
+    "source_sha256": "bf3bc1587a0c851c5f2419b69e1b9c9b173d0c8220574bb4e011edc5d43aa983",
+    "archive_sha256": "bf3bc1587a0c851c5f2419b69e1b9c9b173d0c8220574bb4e011edc5d43aa983"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/automatic-thread-mismatch.stderr",
+    "archive": "evidence/fixture/size-16/automatic-thread-mismatch.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/automatic-thread-mismatch.stdout",
+    "archive": "evidence/fixture/size-16/automatic-thread-mismatch.stdout",
+    "source_bytes": 623,
+    "source_sha256": "d15a6fc577f255bf44c2a0a337df251581fbc5549c287396f4928241da4bb00e",
+    "archive_sha256": "d15a6fc577f255bf44c2a0a337df251581fbc5549c287396f4928241da4bb00e"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/automatic.stderr",
+    "archive": "evidence/fixture/size-16/automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/automatic.stdout",
+    "archive": "evidence/fixture/size-16/automatic.stdout",
+    "source_bytes": 623,
+    "source_sha256": "e04a55e090c0f63d6f6cb8c123a69f99b150a4b22b88c35f1c4700286c6cdce7",
+    "archive_sha256": "e04a55e090c0f63d6f6cb8c123a69f99b150a4b22b88c35f1c4700286c6cdce7"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/evidence.json",
+    "archive": "evidence/fixture/size-16/evidence.json",
+    "source_bytes": 94680,
+    "source_sha256": "8513a2653b17e9ae08fa8d09a8ae628d2af3849971e9f42ffe99adcdc7b05384",
+    "archive_sha256": "8513a2653b17e9ae08fa8d09a8ae628d2af3849971e9f42ffe99adcdc7b05384"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-00-automatic.stderr",
+    "archive": "evidence/fixture/size-16/production-00-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-00-automatic.stdout",
+    "archive": "evidence/fixture/size-16/production-00-automatic.stdout",
+    "source_bytes": 623,
+    "source_sha256": "4c273f1b51862258e4a8d052ab16e89b86b006fd0d4e64fb071357d954d967ce",
+    "archive_sha256": "4c273f1b51862258e4a8d052ab16e89b86b006fd0d4e64fb071357d954d967ce"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-00-native.stderr",
+    "archive": "evidence/fixture/size-16/production-00-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-00-native.stdout",
+    "archive": "evidence/fixture/size-16/production-00-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "8dc5a36a8438e9c4fb16dec4df5ae2cb73f2fc7058efe8b3c670c1746492d873",
+    "archive_sha256": "8dc5a36a8438e9c4fb16dec4df5ae2cb73f2fc7058efe8b3c670c1746492d873"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-01-automatic.stderr",
+    "archive": "evidence/fixture/size-16/production-01-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-01-automatic.stdout",
+    "archive": "evidence/fixture/size-16/production-01-automatic.stdout",
+    "source_bytes": 623,
+    "source_sha256": "404ce7c187dcc7322f77b2cad85e3b849413ef6fb344e334aa82988670072d4e",
+    "archive_sha256": "404ce7c187dcc7322f77b2cad85e3b849413ef6fb344e334aa82988670072d4e"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-01-native.stderr",
+    "archive": "evidence/fixture/size-16/production-01-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-01-native.stdout",
+    "archive": "evidence/fixture/size-16/production-01-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "d983b46e7a006f3e9f9e0d8cf5e5a873f25aaa548b8358fe07d3d8153f4e97d0",
+    "archive_sha256": "d983b46e7a006f3e9f9e0d8cf5e5a873f25aaa548b8358fe07d3d8153f4e97d0"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-02-automatic.stderr",
+    "archive": "evidence/fixture/size-16/production-02-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-02-automatic.stdout",
+    "archive": "evidence/fixture/size-16/production-02-automatic.stdout",
+    "source_bytes": 623,
+    "source_sha256": "9aa9a57d170b83f9f976efaa789054e6117dfc73aaa080fc82a4eede7a9a418e",
+    "archive_sha256": "9aa9a57d170b83f9f976efaa789054e6117dfc73aaa080fc82a4eede7a9a418e"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-02-native.stderr",
+    "archive": "evidence/fixture/size-16/production-02-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-02-native.stdout",
+    "archive": "evidence/fixture/size-16/production-02-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "c5bab1b35fdda2a28c1592f97858c9eb64bb2b1f0bece33731c08e423f429933",
+    "archive_sha256": "c5bab1b35fdda2a28c1592f97858c9eb64bb2b1f0bece33731c08e423f429933"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-03-automatic.stderr",
+    "archive": "evidence/fixture/size-16/production-03-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-03-automatic.stdout",
+    "archive": "evidence/fixture/size-16/production-03-automatic.stdout",
+    "source_bytes": 623,
+    "source_sha256": "e23a2395f86336cf32b399a0cc323ddab2fcf73806cdb2747b0f8e9fe79e2381",
+    "archive_sha256": "e23a2395f86336cf32b399a0cc323ddab2fcf73806cdb2747b0f8e9fe79e2381"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-03-native.stderr",
+    "archive": "evidence/fixture/size-16/production-03-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-03-native.stdout",
+    "archive": "evidence/fixture/size-16/production-03-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "6fb803808e4658ba6d0b917a9f499a6360a394b285f250df7ecbe9d702099597",
+    "archive_sha256": "6fb803808e4658ba6d0b917a9f499a6360a394b285f250df7ecbe9d702099597"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-04-automatic.stderr",
+    "archive": "evidence/fixture/size-16/production-04-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-04-automatic.stdout",
+    "archive": "evidence/fixture/size-16/production-04-automatic.stdout",
+    "source_bytes": 623,
+    "source_sha256": "a41a896c664e802298b81d4d48c56f3383156c1d3ca008ec1d75843d7dce3af3",
+    "archive_sha256": "a41a896c664e802298b81d4d48c56f3383156c1d3ca008ec1d75843d7dce3af3"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-04-native.stderr",
+    "archive": "evidence/fixture/size-16/production-04-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-04-native.stdout",
+    "archive": "evidence/fixture/size-16/production-04-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "2d09e6f465e2625fc4948e4cc1fb1628c396c6470f905a3848b769a7586dced1",
+    "archive_sha256": "2d09e6f465e2625fc4948e4cc1fb1628c396c6470f905a3848b769a7586dced1"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-05-automatic.stderr",
+    "archive": "evidence/fixture/size-16/production-05-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-05-automatic.stdout",
+    "archive": "evidence/fixture/size-16/production-05-automatic.stdout",
+    "source_bytes": 623,
+    "source_sha256": "5e409a55614b269a91d12af597c2025f463c000ec69b31b47ba5cd71cf1be1d0",
+    "archive_sha256": "5e409a55614b269a91d12af597c2025f463c000ec69b31b47ba5cd71cf1be1d0"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-05-native.stderr",
+    "archive": "evidence/fixture/size-16/production-05-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-05-native.stdout",
+    "archive": "evidence/fixture/size-16/production-05-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "bdecbf66ab7db9041f9ca1d728f0656179357d49e7762e657b794972be814714",
+    "archive_sha256": "bdecbf66ab7db9041f9ca1d728f0656179357d49e7762e657b794972be814714"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-06-automatic.stderr",
+    "archive": "evidence/fixture/size-16/production-06-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-06-automatic.stdout",
+    "archive": "evidence/fixture/size-16/production-06-automatic.stdout",
+    "source_bytes": 623,
+    "source_sha256": "c321b851b48642abf949fa393d996521ce7ced1f53982338ba04d9e508de098a",
+    "archive_sha256": "c321b851b48642abf949fa393d996521ce7ced1f53982338ba04d9e508de098a"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-06-native.stderr",
+    "archive": "evidence/fixture/size-16/production-06-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-06-native.stdout",
+    "archive": "evidence/fixture/size-16/production-06-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "7c5a9a730264d94d7d50067a3a7042a95f1b392babb70701e300e33bbb2f613b",
+    "archive_sha256": "7c5a9a730264d94d7d50067a3a7042a95f1b392babb70701e300e33bbb2f613b"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-07-automatic.stderr",
+    "archive": "evidence/fixture/size-16/production-07-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-07-automatic.stdout",
+    "archive": "evidence/fixture/size-16/production-07-automatic.stdout",
+    "source_bytes": 623,
+    "source_sha256": "7e4cace664410c74be3f58c729250830b86ebb1982b5a865e1fa61d5d863a354",
+    "archive_sha256": "7e4cace664410c74be3f58c729250830b86ebb1982b5a865e1fa61d5d863a354"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-07-native.stderr",
+    "archive": "evidence/fixture/size-16/production-07-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-07-native.stdout",
+    "archive": "evidence/fixture/size-16/production-07-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "fd69f00724014c243d91db566b9e91822fa6d770aea034bfd10607c94ed979a2",
+    "archive_sha256": "fd69f00724014c243d91db566b9e91822fa6d770aea034bfd10607c94ed979a2"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-08-automatic.stderr",
+    "archive": "evidence/fixture/size-16/production-08-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-08-automatic.stdout",
+    "archive": "evidence/fixture/size-16/production-08-automatic.stdout",
+    "source_bytes": 623,
+    "source_sha256": "165a63a6f242fe797a638b5b2219d53cfd479a544758002d23b4b3e6855c2f2b",
+    "archive_sha256": "165a63a6f242fe797a638b5b2219d53cfd479a544758002d23b4b3e6855c2f2b"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-08-native.stderr",
+    "archive": "evidence/fixture/size-16/production-08-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-08-native.stdout",
+    "archive": "evidence/fixture/size-16/production-08-native.stdout",
+    "source_bytes": 601,
+    "source_sha256": "69e83d84a6071be93caf3ac7f38514116d1d3b0eecac27b4bc291e4aceffba9d",
+    "archive_sha256": "69e83d84a6071be93caf3ac7f38514116d1d3b0eecac27b4bc291e4aceffba9d"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/production-observations.json",
+    "archive": "evidence/fixture/size-16/production-observations.json",
+    "source_bytes": 30573,
+    "source_sha256": "8fc9ed5dd8f1577fb8c0db96782c1c3ff53185e6e5683be772c11fd4bec46e60",
+    "archive_sha256": "8fc9ed5dd8f1577fb8c0db96782c1c3ff53185e6e5683be772c11fd4bec46e60"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/resident-diagnostic-ledger.json",
+    "archive": "evidence/fixture/size-16/resident-diagnostic-ledger.json",
+    "source_bytes": 729,
+    "source_sha256": "914540fd315cc5267ba7efb33c1c91b1fffe583e8fd7b18f16da84f80bb864a6",
+    "archive_sha256": "914540fd315cc5267ba7efb33c1c91b1fffe583e8fd7b18f16da84f80bb864a6"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/resident-diagnostic.stderr",
+    "archive": "evidence/fixture/size-16/resident-diagnostic.stderr",
+    "source_bytes": 34922,
+    "source_sha256": "8fe72f417357670c97e745f0696d0e352002012c061fe29eda3bbb3fb3e22d6b",
+    "archive_sha256": "8fe72f417357670c97e745f0696d0e352002012c061fe29eda3bbb3fb3e22d6b"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-16/resident-diagnostic.stdout",
+    "archive": "evidence/fixture/size-16/resident-diagnostic.stdout",
+    "source_bytes": 611,
+    "source_sha256": "a1cb9532797ce2fc64ce2366b48cd111f811175c64b24430a647d522df4eea71",
+    "archive_sha256": "a1cb9532797ce2fc64ce2366b48cd111f811175c64b24430a647d522df4eea71"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/00-native.stderr",
+    "archive": "evidence/fixture/size-192/00-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/00-native.stdout",
+    "archive": "evidence/fixture/size-192/00-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "7dcc6417eb4fa7660e3868733b843bb31ba76afbc471ff30ec533a91506e2b69",
+    "archive_sha256": "7dcc6417eb4fa7660e3868733b843bb31ba76afbc471ff30ec533a91506e2b69"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/00-resident.stderr",
+    "archive": "evidence/fixture/size-192/00-resident.stderr",
+    "source_bytes": 1296,
+    "source_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0",
+    "archive_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/00-resident.stdout",
+    "archive": "evidence/fixture/size-192/00-resident.stdout",
+    "source_bytes": 624,
+    "source_sha256": "a5970e82bddf299cee2eee83eba02a0f0329664b0c73de042ae759c80ba3229b",
+    "archive_sha256": "a5970e82bddf299cee2eee83eba02a0f0329664b0c73de042ae759c80ba3229b"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/01-native.stderr",
+    "archive": "evidence/fixture/size-192/01-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/01-native.stdout",
+    "archive": "evidence/fixture/size-192/01-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "d9ef8da1b5e28377aeafc28a82e071619bb8fee332bc976949c26cbd6dac1a58",
+    "archive_sha256": "d9ef8da1b5e28377aeafc28a82e071619bb8fee332bc976949c26cbd6dac1a58"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/01-resident.stderr",
+    "archive": "evidence/fixture/size-192/01-resident.stderr",
+    "source_bytes": 1296,
+    "source_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0",
+    "archive_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/01-resident.stdout",
+    "archive": "evidence/fixture/size-192/01-resident.stdout",
+    "source_bytes": 624,
+    "source_sha256": "a7cec543c4480c9182d6057ba5cfeaef778515a09225f67995c9f5010629b11e",
+    "archive_sha256": "a7cec543c4480c9182d6057ba5cfeaef778515a09225f67995c9f5010629b11e"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/02-native.stderr",
+    "archive": "evidence/fixture/size-192/02-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/02-native.stdout",
+    "archive": "evidence/fixture/size-192/02-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "b5a962aa381905c55c01a908d21c03400c7b320526c95e781e408716132582d8",
+    "archive_sha256": "b5a962aa381905c55c01a908d21c03400c7b320526c95e781e408716132582d8"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/02-resident.stderr",
+    "archive": "evidence/fixture/size-192/02-resident.stderr",
+    "source_bytes": 1296,
+    "source_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0",
+    "archive_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/02-resident.stdout",
+    "archive": "evidence/fixture/size-192/02-resident.stdout",
+    "source_bytes": 624,
+    "source_sha256": "417d3d81c8979edb44967fe9513defc1c82bb769e214793e3e192ab700b70fa9",
+    "archive_sha256": "417d3d81c8979edb44967fe9513defc1c82bb769e214793e3e192ab700b70fa9"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/03-native.stderr",
+    "archive": "evidence/fixture/size-192/03-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/03-native.stdout",
+    "archive": "evidence/fixture/size-192/03-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "1ee28c9e97ea912a9a2ceb8a09ddede3bc00c54923b2bc75d2fdefae7b42607e",
+    "archive_sha256": "1ee28c9e97ea912a9a2ceb8a09ddede3bc00c54923b2bc75d2fdefae7b42607e"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/03-resident.stderr",
+    "archive": "evidence/fixture/size-192/03-resident.stderr",
+    "source_bytes": 1296,
+    "source_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0",
+    "archive_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/03-resident.stdout",
+    "archive": "evidence/fixture/size-192/03-resident.stdout",
+    "source_bytes": 624,
+    "source_sha256": "2ab1b3fa4a5c322bdfa99144d8d7c3e68f0d2dc4a9b8bf7736b2a48a11fe762e",
+    "archive_sha256": "2ab1b3fa4a5c322bdfa99144d8d7c3e68f0d2dc4a9b8bf7736b2a48a11fe762e"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/04-native.stderr",
+    "archive": "evidence/fixture/size-192/04-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/04-native.stdout",
+    "archive": "evidence/fixture/size-192/04-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "33e3f4e80aeba278c9f94582bdc85bb8d6ea50392fac69157837f1c8c881e4ee",
+    "archive_sha256": "33e3f4e80aeba278c9f94582bdc85bb8d6ea50392fac69157837f1c8c881e4ee"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/04-resident.stderr",
+    "archive": "evidence/fixture/size-192/04-resident.stderr",
+    "source_bytes": 1296,
+    "source_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0",
+    "archive_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/04-resident.stdout",
+    "archive": "evidence/fixture/size-192/04-resident.stdout",
+    "source_bytes": 624,
+    "source_sha256": "adb97fa826a1cfd666b5bdcaadbfaf17745a149684757e834d295efa1678247e",
+    "archive_sha256": "adb97fa826a1cfd666b5bdcaadbfaf17745a149684757e834d295efa1678247e"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/05-native.stderr",
+    "archive": "evidence/fixture/size-192/05-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/05-native.stdout",
+    "archive": "evidence/fixture/size-192/05-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "4f8d27f3b2ca7838aca3aeee96e541b6d2f27857f04e24900ba8e8f1b3a5c4ea",
+    "archive_sha256": "4f8d27f3b2ca7838aca3aeee96e541b6d2f27857f04e24900ba8e8f1b3a5c4ea"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/05-resident.stderr",
+    "archive": "evidence/fixture/size-192/05-resident.stderr",
+    "source_bytes": 1296,
+    "source_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0",
+    "archive_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/05-resident.stdout",
+    "archive": "evidence/fixture/size-192/05-resident.stdout",
+    "source_bytes": 624,
+    "source_sha256": "135af23ca8d66fde95610dc669203de638c8297f8435bb281abf2b3608e358f2",
+    "archive_sha256": "135af23ca8d66fde95610dc669203de638c8297f8435bb281abf2b3608e358f2"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/06-native.stderr",
+    "archive": "evidence/fixture/size-192/06-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/06-native.stdout",
+    "archive": "evidence/fixture/size-192/06-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "9bd531d71e33b0ead8451cf5f50dc72451153c083c785f20e21d7d96eefbfb9b",
+    "archive_sha256": "9bd531d71e33b0ead8451cf5f50dc72451153c083c785f20e21d7d96eefbfb9b"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/06-resident.stderr",
+    "archive": "evidence/fixture/size-192/06-resident.stderr",
+    "source_bytes": 1296,
+    "source_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0",
+    "archive_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/06-resident.stdout",
+    "archive": "evidence/fixture/size-192/06-resident.stdout",
+    "source_bytes": 624,
+    "source_sha256": "e5fbf120f28a1afa91a88b7c1d9594742985d648f59b1fd09a769ab441c10774",
+    "archive_sha256": "e5fbf120f28a1afa91a88b7c1d9594742985d648f59b1fd09a769ab441c10774"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/07-native.stderr",
+    "archive": "evidence/fixture/size-192/07-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/07-native.stdout",
+    "archive": "evidence/fixture/size-192/07-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "071b1ee3d60c90bd373ac8a497a1026dc2c38f9eee88c398d920062634cf9f8a",
+    "archive_sha256": "071b1ee3d60c90bd373ac8a497a1026dc2c38f9eee88c398d920062634cf9f8a"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/07-resident.stderr",
+    "archive": "evidence/fixture/size-192/07-resident.stderr",
+    "source_bytes": 1296,
+    "source_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0",
+    "archive_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/07-resident.stdout",
+    "archive": "evidence/fixture/size-192/07-resident.stdout",
+    "source_bytes": 624,
+    "source_sha256": "4ed3bbe1f3babfc127516797df2046b96964e5b8357c014426a9731eb512898d",
+    "archive_sha256": "4ed3bbe1f3babfc127516797df2046b96964e5b8357c014426a9731eb512898d"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/08-native.stderr",
+    "archive": "evidence/fixture/size-192/08-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/08-native.stdout",
+    "archive": "evidence/fixture/size-192/08-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "681f9a38c55a1b23ef30a3dde38ec09a39db6f06082ea022f1e4bd50c7419753",
+    "archive_sha256": "681f9a38c55a1b23ef30a3dde38ec09a39db6f06082ea022f1e4bd50c7419753"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/08-resident.stderr",
+    "archive": "evidence/fixture/size-192/08-resident.stderr",
+    "source_bytes": 1296,
+    "source_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0",
+    "archive_sha256": "9ec37ee4d938ef13721fe9744f77295b30975e2e3486ccd0aff1487a558aecf0"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/08-resident.stdout",
+    "archive": "evidence/fixture/size-192/08-resident.stdout",
+    "source_bytes": 624,
+    "source_sha256": "db9d1caa53da7a46726f2bcf1a8c7060ba1b7c0ea9c13c175734d22a4870825a",
+    "archive_sha256": "db9d1caa53da7a46726f2bcf1a8c7060ba1b7c0ea9c13c175734d22a4870825a"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/automatic/build-receipt.json",
+    "archive": "evidence/fixture/size-192/automatic/build-receipt.json",
+    "source_bytes": 6191,
+    "source_sha256": "5c5c01b2bd647c389b62561b311f80089ee90c034bae4a55534f1e7ed9a87ca9",
+    "archive_sha256": "5c5c01b2bd647c389b62561b311f80089ee90c034bae4a55534f1e7ed9a87ca9"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/automatic/scope-manifest.json",
+    "archive": "evidence/fixture/size-192/automatic/scope-manifest.json.gz",
+    "source_bytes": 347832,
+    "source_sha256": "1a1a36a0cef21df48e3b4e8bba46fc111d49326738201dd9fcdc6a8b289d74b2",
+    "archive_sha256": "b57a51866e536d7da0ce841b5dd332bfed728e5c9ae9df17ed1a07baf4b8820e"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/automatic-ledger.json",
+    "archive": "evidence/fixture/size-192/automatic-ledger.json",
+    "source_bytes": 713,
+    "source_sha256": "84be32597007db74ba38f83b2827fa4eaf53e9f0925956802c3388f0a475e731",
+    "archive_sha256": "84be32597007db74ba38f83b2827fa4eaf53e9f0925956802c3388f0a475e731"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/automatic-thread-mismatch-ledger.json",
+    "archive": "evidence/fixture/size-192/automatic-thread-mismatch-ledger.json",
+    "source_bytes": 713,
+    "source_sha256": "84be32597007db74ba38f83b2827fa4eaf53e9f0925956802c3388f0a475e731",
+    "archive_sha256": "84be32597007db74ba38f83b2827fa4eaf53e9f0925956802c3388f0a475e731"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/automatic-thread-mismatch.stderr",
+    "archive": "evidence/fixture/size-192/automatic-thread-mismatch.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/automatic-thread-mismatch.stdout",
+    "archive": "evidence/fixture/size-192/automatic-thread-mismatch.stdout",
+    "source_bytes": 638,
+    "source_sha256": "ef7a894eb42f2901f86389c2a680cdc37a3648bcd5ba097e4a00f7486ba59ef9",
+    "archive_sha256": "ef7a894eb42f2901f86389c2a680cdc37a3648bcd5ba097e4a00f7486ba59ef9"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/automatic.stderr",
+    "archive": "evidence/fixture/size-192/automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/automatic.stdout",
+    "archive": "evidence/fixture/size-192/automatic.stdout",
+    "source_bytes": 638,
+    "source_sha256": "fa59e336d29d9b13ed4648b07df1ba74f0ebf0f3ed8e4437f58e62c46be79412",
+    "archive_sha256": "fa59e336d29d9b13ed4648b07df1ba74f0ebf0f3ed8e4437f58e62c46be79412"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/evidence.json",
+    "archive": "evidence/fixture/size-192/evidence.json",
+    "source_bytes": 95162,
+    "source_sha256": "9b50204f55f94cb21ab420cdb159ef0ad45f4d0af4e26effeb7450dd3799012d",
+    "archive_sha256": "9b50204f55f94cb21ab420cdb159ef0ad45f4d0af4e26effeb7450dd3799012d"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-00-automatic.stderr",
+    "archive": "evidence/fixture/size-192/production-00-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-00-automatic.stdout",
+    "archive": "evidence/fixture/size-192/production-00-automatic.stdout",
+    "source_bytes": 638,
+    "source_sha256": "917dd6b9ce79dbeb81d3782543d626c38fc68ee9694afc9b1591c1f50cd86026",
+    "archive_sha256": "917dd6b9ce79dbeb81d3782543d626c38fc68ee9694afc9b1591c1f50cd86026"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-00-native.stderr",
+    "archive": "evidence/fixture/size-192/production-00-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-00-native.stdout",
+    "archive": "evidence/fixture/size-192/production-00-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "b02aac6c88b5bc1a7c97c632862680ca2a014ac8938731b22e889055ab9a81b8",
+    "archive_sha256": "b02aac6c88b5bc1a7c97c632862680ca2a014ac8938731b22e889055ab9a81b8"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-01-automatic.stderr",
+    "archive": "evidence/fixture/size-192/production-01-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-01-automatic.stdout",
+    "archive": "evidence/fixture/size-192/production-01-automatic.stdout",
+    "source_bytes": 638,
+    "source_sha256": "6ff55da3b030b0e12eb0a961d1fefb3199ba4b1f5534f61b8e3341bb01c3917b",
+    "archive_sha256": "6ff55da3b030b0e12eb0a961d1fefb3199ba4b1f5534f61b8e3341bb01c3917b"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-01-native.stderr",
+    "archive": "evidence/fixture/size-192/production-01-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-01-native.stdout",
+    "archive": "evidence/fixture/size-192/production-01-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "30f8703b494be51d8bfc364dbae0e32530bdf14e2ed054211fb93a4892f143f9",
+    "archive_sha256": "30f8703b494be51d8bfc364dbae0e32530bdf14e2ed054211fb93a4892f143f9"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-02-automatic.stderr",
+    "archive": "evidence/fixture/size-192/production-02-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-02-automatic.stdout",
+    "archive": "evidence/fixture/size-192/production-02-automatic.stdout",
+    "source_bytes": 638,
+    "source_sha256": "e408d85b68e832be3deb5b2e8ff7d002d63ca0aa744de79d899fafc72270d448",
+    "archive_sha256": "e408d85b68e832be3deb5b2e8ff7d002d63ca0aa744de79d899fafc72270d448"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-02-native.stderr",
+    "archive": "evidence/fixture/size-192/production-02-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-02-native.stdout",
+    "archive": "evidence/fixture/size-192/production-02-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "abb96511ff7a7c34f46e384f52a8a3365a56ccaef7d43b84a626faa556555ae9",
+    "archive_sha256": "abb96511ff7a7c34f46e384f52a8a3365a56ccaef7d43b84a626faa556555ae9"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-03-automatic.stderr",
+    "archive": "evidence/fixture/size-192/production-03-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-03-automatic.stdout",
+    "archive": "evidence/fixture/size-192/production-03-automatic.stdout",
+    "source_bytes": 638,
+    "source_sha256": "071d4258bbe8be7b5b1e5f410b03b8dde44bf7dd53c76c3967aa6cab0280658a",
+    "archive_sha256": "071d4258bbe8be7b5b1e5f410b03b8dde44bf7dd53c76c3967aa6cab0280658a"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-03-native.stderr",
+    "archive": "evidence/fixture/size-192/production-03-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-03-native.stdout",
+    "archive": "evidence/fixture/size-192/production-03-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "4c52a76f5befe3393a541cb581ca1dacfdd41275c52b6d64dde0601053ccc373",
+    "archive_sha256": "4c52a76f5befe3393a541cb581ca1dacfdd41275c52b6d64dde0601053ccc373"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-04-automatic.stderr",
+    "archive": "evidence/fixture/size-192/production-04-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-04-automatic.stdout",
+    "archive": "evidence/fixture/size-192/production-04-automatic.stdout",
+    "source_bytes": 638,
+    "source_sha256": "9e407edf5d3f16a403db2347c14eff6abf4b270a9507749519644e704bcab365",
+    "archive_sha256": "9e407edf5d3f16a403db2347c14eff6abf4b270a9507749519644e704bcab365"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-04-native.stderr",
+    "archive": "evidence/fixture/size-192/production-04-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-04-native.stdout",
+    "archive": "evidence/fixture/size-192/production-04-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "f9a05b393a8f8cfb2e91188897bd0cd750c0b7e632638203b7e7cfc254511083",
+    "archive_sha256": "f9a05b393a8f8cfb2e91188897bd0cd750c0b7e632638203b7e7cfc254511083"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-05-automatic.stderr",
+    "archive": "evidence/fixture/size-192/production-05-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-05-automatic.stdout",
+    "archive": "evidence/fixture/size-192/production-05-automatic.stdout",
+    "source_bytes": 638,
+    "source_sha256": "53b3f6eff505e37a30a3cdbbc55789b5666538c5ce5e7b668aea736933c760e2",
+    "archive_sha256": "53b3f6eff505e37a30a3cdbbc55789b5666538c5ce5e7b668aea736933c760e2"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-05-native.stderr",
+    "archive": "evidence/fixture/size-192/production-05-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-05-native.stdout",
+    "archive": "evidence/fixture/size-192/production-05-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "4ac45e6fa5174d4d8225a7aa0110e6220fbfd214aad3c4e6786a60adcf181f6c",
+    "archive_sha256": "4ac45e6fa5174d4d8225a7aa0110e6220fbfd214aad3c4e6786a60adcf181f6c"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-06-automatic.stderr",
+    "archive": "evidence/fixture/size-192/production-06-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-06-automatic.stdout",
+    "archive": "evidence/fixture/size-192/production-06-automatic.stdout",
+    "source_bytes": 638,
+    "source_sha256": "eb38f4f8fc61b04a67c37b33c8ec0b3a461d1b6747908d20295176d04e86a7d8",
+    "archive_sha256": "eb38f4f8fc61b04a67c37b33c8ec0b3a461d1b6747908d20295176d04e86a7d8"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-06-native.stderr",
+    "archive": "evidence/fixture/size-192/production-06-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-06-native.stdout",
+    "archive": "evidence/fixture/size-192/production-06-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "f103bb95e3b09b9bcfba90c61a1491a1e2284271d963d09406fbc1e0a118ba48",
+    "archive_sha256": "f103bb95e3b09b9bcfba90c61a1491a1e2284271d963d09406fbc1e0a118ba48"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-07-automatic.stderr",
+    "archive": "evidence/fixture/size-192/production-07-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-07-automatic.stdout",
+    "archive": "evidence/fixture/size-192/production-07-automatic.stdout",
+    "source_bytes": 638,
+    "source_sha256": "f7b3554a87c83176c98dc105fe69cdb3e55ae0f1c1313b4a2f58db8c4a2ce170",
+    "archive_sha256": "f7b3554a87c83176c98dc105fe69cdb3e55ae0f1c1313b4a2f58db8c4a2ce170"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-07-native.stderr",
+    "archive": "evidence/fixture/size-192/production-07-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-07-native.stdout",
+    "archive": "evidence/fixture/size-192/production-07-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "62bc7b7366c930f4bd7126b45bab4f8adb4a61cb1bbf8b70244ae53b4d5722ff",
+    "archive_sha256": "62bc7b7366c930f4bd7126b45bab4f8adb4a61cb1bbf8b70244ae53b4d5722ff"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-08-automatic.stderr",
+    "archive": "evidence/fixture/size-192/production-08-automatic.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-08-automatic.stdout",
+    "archive": "evidence/fixture/size-192/production-08-automatic.stdout",
+    "source_bytes": 638,
+    "source_sha256": "70b945929032b31d6c2e4441cd1b4eb1c4ef6e1776e89124cec95c25f10c7c9c",
+    "archive_sha256": "70b945929032b31d6c2e4441cd1b4eb1c4ef6e1776e89124cec95c25f10c7c9c"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-08-native.stderr",
+    "archive": "evidence/fixture/size-192/production-08-native.stderr",
+    "source_bytes": 0,
+    "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-08-native.stdout",
+    "archive": "evidence/fixture/size-192/production-08-native.stdout",
+    "source_bytes": 614,
+    "source_sha256": "9bad8be99875e2e9345cc73266dc744586f77c040f858563344ba521693db5b0",
+    "archive_sha256": "9bad8be99875e2e9345cc73266dc744586f77c040f858563344ba521693db5b0"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/production-observations.json",
+    "archive": "evidence/fixture/size-192/production-observations.json",
+    "source_bytes": 30815,
+    "source_sha256": "8b387faf5ac9adb148e044f389de8fd05f8a0ecb52aa709bba4f8e12e8d9999d",
+    "archive_sha256": "8b387faf5ac9adb148e044f389de8fd05f8a0ecb52aa709bba4f8e12e8d9999d"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/resident-diagnostic-ledger.json",
+    "archive": "evidence/fixture/size-192/resident-diagnostic-ledger.json",
+    "source_bytes": 745,
+    "source_sha256": "1524b4a8961c64c57cdd1b847bed1cea92549f69e9b1c02575402ebd7b6d9298",
+    "archive_sha256": "1524b4a8961c64c57cdd1b847bed1cea92549f69e9b1c02575402ebd7b6d9298"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/resident-diagnostic.stderr",
+    "archive": "evidence/fixture/size-192/resident-diagnostic.stderr",
+    "source_bytes": 34967,
+    "source_sha256": "5b87ebf20eb85116ec8db5b8c4b2174fa67fbdba3c19380367ba01318d4eaca1",
+    "archive_sha256": "5b87ebf20eb85116ec8db5b8c4b2174fa67fbdba3c19380367ba01318d4eaca1"
+  },
+  {
+    "source": "benchmarks/results/placement-authority-checkpoint-20261015/fixture/size-192/resident-diagnostic.stdout",
+    "archive": "evidence/fixture/size-192/resident-diagnostic.stdout",
+    "source_bytes": 624,
+    "source_sha256": "70900154e39752e70319b4e77c9144709631b8aa7f6003aa531a1442b1676fc6",
+    "archive_sha256": "70900154e39752e70319b4e77c9144709631b8aa7f6003aa531a1442b1676fc6"
+  }
+]

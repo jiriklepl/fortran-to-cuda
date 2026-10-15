@@ -1,0 +1,1289 @@
+{
+  "protocol": "complete-original-window-cold-production-validation-v1",
+  "observations": [
+    {
+      "round": 0,
+      "mode": "native",
+      "role": "fit",
+      "seconds": 0.000362859,
+      "fields_sha256": "3024b16f0759e9882c34da9de9e2989337c29a2521a09724b19905391a338d78",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    },
+    {
+      "round": 0,
+      "mode": "automatic",
+      "role": "fit",
+      "seconds": 0.000419231,
+      "fields_sha256": "3024b16f0759e9882c34da9de9e2989337c29a2521a09724b19905391a338d78",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    },
+    {
+      "round": 1,
+      "mode": "automatic",
+      "role": "fit",
+      "seconds": 0.00043146,
+      "fields_sha256": "d3afe52393b57de9a501d3b29495c96874e4a119e4ec4029efca122eee7715d1",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    },
+    {
+      "round": 1,
+      "mode": "native",
+      "role": "fit",
+      "seconds": 0.000355949,
+      "fields_sha256": "d3afe52393b57de9a501d3b29495c96874e4a119e4ec4029efca122eee7715d1",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    },
+    {
+      "round": 2,
+      "mode": "native",
+      "role": "fit",
+      "seconds": 0.000439921,
+      "fields_sha256": "d2b253bc0edba6548a1a9dbc7c8f3599343de5a62b7cbd60f687c3e08677c5e3",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    },
+    {
+      "round": 2,
+      "mode": "automatic",
+      "role": "fit",
+      "seconds": 0.00040001,
+      "fields_sha256": "d2b253bc0edba6548a1a9dbc7c8f3599343de5a62b7cbd60f687c3e08677c5e3",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    },
+    {
+      "round": 3,
+      "mode": "automatic",
+      "role": "fit",
+      "seconds": 0.00039364,
+      "fields_sha256": "dc5c38cf0b9d4969f299ea193dcdb0a1a8cad44e01dd9054d4aa6a7a2f862480",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    },
+    {
+      "round": 3,
+      "mode": "native",
+      "role": "fit",
+      "seconds": 0.000351309,
+      "fields_sha256": "dc5c38cf0b9d4969f299ea193dcdb0a1a8cad44e01dd9054d4aa6a7a2f862480",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    },
+    {
+      "round": 4,
+      "mode": "native",
+      "role": "fit",
+      "seconds": 0.000352499,
+      "fields_sha256": "98388cf1e07e1dc6e763e57ecbb3d4d009efb73c0cb80e40dbc74a0809c5f56d",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    },
+    {
+      "round": 4,
+      "mode": "automatic",
+      "role": "fit",
+      "seconds": 0.000356889,
+      "fields_sha256": "98388cf1e07e1dc6e763e57ecbb3d4d009efb73c0cb80e40dbc74a0809c5f56d",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    },
+    {
+      "round": 5,
+      "mode": "automatic",
+      "role": "fit",
+      "seconds": 0.000375649,
+      "fields_sha256": "0b9981dc50e724d86b8fb65bb65915df9312fcb0d72db5c90bf38d441335691d",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    },
+    {
+      "round": 5,
+      "mode": "native",
+      "role": "fit",
+      "seconds": 0.00037589,
+      "fields_sha256": "0b9981dc50e724d86b8fb65bb65915df9312fcb0d72db5c90bf38d441335691d",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    },
+    {
+      "round": 6,
+      "mode": "native",
+      "role": "fit",
+      "seconds": 0.0003979,
+      "fields_sha256": "16795f3d89637dbfb5fe4d612dffc8afb94791f2b9453f56cf7419bf1b5c898e",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    },
+    {
+      "round": 6,
+      "mode": "automatic",
+      "role": "fit",
+      "seconds": 0.000379589,
+      "fields_sha256": "16795f3d89637dbfb5fe4d612dffc8afb94791f2b9453f56cf7419bf1b5c898e",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    },
+    {
+      "round": 7,
+      "mode": "automatic",
+      "role": "holdout",
+      "seconds": 0.000383299,
+      "fields_sha256": "e7eca9bd681dd897c6e424aebd8bf2ae78072232d0171137979281edb0f60999",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    },
+    {
+      "round": 7,
+      "mode": "native",
+      "role": "holdout",
+      "seconds": 0.000362839,
+      "fields_sha256": "e7eca9bd681dd897c6e424aebd8bf2ae78072232d0171137979281edb0f60999",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    },
+    {
+      "round": 8,
+      "mode": "native",
+      "role": "holdout",
+      "seconds": 0.000378859,
+      "fields_sha256": "64be96d40a89de085bc4a23daa8f375d922c8505f5d4061ae41cb59d20aecf70",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    },
+    {
+      "round": 8,
+      "mode": "automatic",
+      "role": "holdout",
+      "seconds": 0.00040726,
+      "fields_sha256": "64be96d40a89de085bc4a23daa8f375d922c8505f5d4061ae41cb59d20aecf70",
+      "observed_cpu_identity": {
+        "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+        "fortran_version": "GCC version 15.3.0",
+        "fortran_options": "-mtune=generic\u001f-march=x86-64\u001f-O3\u001f-std=f2018\u001f-fopenmp\u001f-ffp-contract=off\u001f-fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h",
+        "team": [
+          4,
+          0,
+          0,
+          2147483647,
+          1
+        ],
+        "effective_schedule": {
+          "kind": 2147483649,
+          "chunk": 0
+        },
+        "affinity": [
+          4,
+          5,
+          10,
+          11
+        ],
+        "environment": {
+          "OMP_NUM_THREADS": "4",
+          "OMP_DYNAMIC": "FALSE",
+          "OMP_PROC_BIND": "FALSE",
+          "OMP_WAIT_POLICY": null,
+          "GOMP_SPINCOUNT": null,
+          "OMP_SCHEDULE": "static",
+          "OMP_THREAD_LIMIT": null,
+          "OMP_MAX_ACTIVE_LEVELS": null,
+          "OMP_NESTED": null,
+          "OMP_PLACES": null,
+          "GOMP_CPU_AFFINITY": null,
+          "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515"
+        }
+      },
+      "observed_key": [
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        18,
+        0,
+        16
+      ],
+      "agreement": true
+    }
+  ],
+  "native_seconds": 0.000362859,
+  "automatic_seconds": 0.00039364,
+  "automatic_profitable": false,
+  "predicted_selection": "native",
+  "model_miss": false,
+  "authority": "independent validation only; never used to revise calibration or placement"
+}

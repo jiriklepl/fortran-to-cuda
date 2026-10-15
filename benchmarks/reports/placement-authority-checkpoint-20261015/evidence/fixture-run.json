@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "repositories": {
+    "compiler": "13a9188b7d8040d90616134e537173a656b6ff4b",
+    "pipeline": "b9418a9f1c3c242c4b77e948b29fa391b94aee60"
+  },
+  "command": [
+    "taskset",
+    "-c",
+    "4,5,10,11",
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "-m",
+    "compiler.offload.exact_window_calibration",
+    "--output",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/placement-authority-checkpoint-20261015/fixture",
+    "--sizes",
+    "16,192",
+    "--architecture",
+    "sm_86",
+    "--original-teams"
+  ],
+  "environment_overrides": {
+    "CUDA_HOME": "/usr/local/cuda",
+    "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+    "OMP_NUM_THREADS": "4",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_PROC_BIND": "FALSE",
+    "OMP_SCHEDULE": "static"
+  },
+  "timeout_seconds": 295,
+  "termination_grace_seconds": 5,
+  "timed_out": false,
+  "exit_code": 0,
+  "wall_seconds": 115.4246147889935,
+  "scope": "generic original-team cold invocation; not channel qualification"
+}

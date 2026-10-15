@@ -1,0 +1,249 @@
+..FFF..............FFF...F.............................................. [ 46%]
+..................F..................................................... [ 93%]
+..........                                                               [100%]
+=================================== FAILURES ===================================
+_ test_independent_capture_and_production_share_portable_execution_identity[serial] _
+
+tmp_path = PosixPath('/tmp/pytest-of-jirka/pytest-1717/test_independent_capture_and_p0')
+original_teams = False
+
+    @pytest.mark.parametrize("original_teams", [False, True], ids=["serial", "original-teams"])
+    def test_independent_capture_and_production_share_portable_execution_identity(tmp_path, original_teams):
+        source = tmp_path / "original.f90"
+        source.write_text(fixture_source(original_teams=original_teams))
+        _outputs, capture_report, capture = emit(source, {"calibration": True})
+        _outputs, repeat_report, repeated = emit(source, {"calibration": True})
+        execution = capture_report["scopes"][0]["checked_execution_plan"]["execution_identity"]
+        assert repeat_report["scopes"][0]["checked_execution_plan"]["execution_identity"] == execution
+        assert repeated["contract"] == capture["contract"]
+        # Synthetic profitable rows test the contract handoff, never performance.
+        _outputs, production_report, production = emit(source, {"evidence": observations(capture["contract"])})
+        assert production_report["scopes"][0]["checked_execution_plan"]["execution_identity"] == execution
+        assert production["contract"]["checked_execution_identity"] == execution
+>       assert production["selection"] == "resident"
+E       AssertionError: assert 'native' == 'resident'
+E         
+E         - resident
+E         + native
+
+compiler/tests/test_exact_window.py:119: AssertionError
+_ test_independent_capture_and_production_share_portable_execution_identity[original-teams] _
+
+tmp_path = PosixPath('/tmp/pytest-of-jirka/pytest-1717/test_independent_capture_and_p1')
+original_teams = True
+
+    @pytest.mark.parametrize("original_teams", [False, True], ids=["serial", "original-teams"])
+    def test_independent_capture_and_production_share_portable_execution_identity(tmp_path, original_teams):
+        source = tmp_path / "original.f90"
+        source.write_text(fixture_source(original_teams=original_teams))
+        _outputs, capture_report, capture = emit(source, {"calibration": True})
+        _outputs, repeat_report, repeated = emit(source, {"calibration": True})
+        execution = capture_report["scopes"][0]["checked_execution_plan"]["execution_identity"]
+        assert repeat_report["scopes"][0]["checked_execution_plan"]["execution_identity"] == execution
+        assert repeated["contract"] == capture["contract"]
+        # Synthetic profitable rows test the contract handoff, never performance.
+        _outputs, production_report, production = emit(source, {"evidence": observations(capture["contract"])})
+        assert production_report["scopes"][0]["checked_execution_plan"]["execution_identity"] == execution
+        assert production["contract"]["checked_execution_identity"] == execution
+>       assert production["selection"] == "resident"
+E       AssertionError: assert 'native' == 'resident'
+E         
+E         - resident
+E         + native
+
+compiler/tests/test_exact_window.py:119: AssertionError
+____ test_complete_window_fingerprint_is_portable_across_process_hash_seeds ____
+
+tmp_path = PosixPath('/tmp/pytest-of-jirka/pytest-1717/test_complete_window_fingerpri0')
+
+    def test_complete_window_fingerprint_is_portable_across_process_hash_seeds(tmp_path):
+        import json
+        import os
+        import subprocess
+        import sys
+        from pathlib import Path
+    
+        for mode in ("serial", "teams"):
+            (tmp_path / (mode + ".f90")).write_text(fixture_source(original_teams=mode == "teams"))
+        program = """
+    import json
+    from pathlib import Path
+    import sys
+    from compiler.offload.exact_window_calibration import emit
+    root = Path(sys.argv[1])
+    records = {}
+    for mode in ('serial', 'teams'):
+        _, report, exact = emit(root / (mode + '.f90'), {'calibration': True})
+        plan = report['scopes'][0]['checked_execution_plan']
+        records[mode] = {'execution_identity': plan['execution_identity'],
+                         'contract_sha256': exact['contract_sha256']}
+    print(json.dumps(records, sort_keys=True))
+    """
+        records = []
+        for seed in (1, 91237):
+            result = subprocess.run([sys.executable, "-c", program, str(tmp_path)],
+                cwd=Path(__file__).resolve().parents[2],
+                env={**os.environ, "PYTHONHASHSEED": str(seed)},
+                check=True, capture_output=True, text=True)
+            records.append(json.loads(result.stdout))
+>       assert records[0] == records[1]
+E       AssertionError: assert {'serial': {'...a6b545e9b06'}} == {'serial': {'...a6b545e9b06'}}
+E         
+E         Differing items:
+E         {'teams': {'contract_sha256': '527768c4633b0e8704a3f525dc6e91f1f563766ae7ddeeccc2f3a8354932c120', 'execution_identity': 'df2b1d569b46230430ff5d27dea92eec7094fa41717414d994d07a6b545e9b06'}} != {'teams': {'contract_sha256': '0fa8fcd89f4433fc31ee70eb5142970c14ec7145191dfe426ba0d9efe2d00d13', 'execution_identity': 'df2b1d569b46230430ff5d27dea92eec7094fa41717414d994d07a6b545e9b06'}}
+E         {'serial': {'contract_sha256': '58e58033e671cf1f84de28832ebba075fdd45fcc72b129a498e8824b4b532d5a', 'execution_identity': '835cc08072affeaa48cd3ad4f56f848b8d964bcb076d1de6c75a06a7aa...
+E         
+E         ...Full output truncated (2 lines hidden), use '-vv' to show
+
+compiler/tests/test_exact_window.py:152: AssertionError
+___ test_measured_auto_uses_one_guard_and_preserves_native_without_estimates ___
+
+prepared = (PosixPath('/tmp/pytest-of-jirka/pytest-1717/exact-window0/original.f90'), {'entries/entry_abc1b9a8c2e7/shared_entry.c...210651ea57371b96bda192bf74f2e59fa57af0da07251e5ec259542f334bb54', 'available': False, 'selection': 'calibration', ...})
+
+    def test_measured_auto_uses_one_guard_and_preserves_native_without_estimates(prepared):
+        source, _outputs, _report, record = prepared
+        evidence = observations(record["contract"])
+        outputs, report, auto = emit(source, {"evidence": evidence})
+>       assert auto["contract"] == record["contract"]
+E       AssertionError: assert {'schema_vers...1a568c'}, ...} == {'schema_vers...1a568c'}, ...}
+E         
+E         Omitting 21 identical items, use -vv to show
+E         Differing items:
+E         {'implementation': {'__init__.py': '438e2297b8104a89f13062c1a21d2eddf450abb003bdbb41b110667d458d3efc', '__main__.py': ...7ab41f627d9eda4cd1', 'addressing/planner.py': '32aac073db4a3d27304f78622e4050ec6953f8b6a9de825daddff528cfcc1892', ...}} != {'implementation': {'__init__.py': '438e2297b8104a89f13062c1a21d2eddf450abb003bdbb41b110667d458d3efc', '__main__.py': ...7ab41f627d9eda4cd1', 'addressing/planner.py': '32aac073db4a3d27304f78622e4050ec6953f8b6a9de825daddff528cfcc1892', ...}}
+E         Use -v to get more diff
+
+compiler/tests/test_exact_window.py:217: AssertionError
+_ test_complete_original_teams_have_independent_source_bound_calibration[True] _
+
+tmp_path = PosixPath('/tmp/pytest-of-jirka/pytest-1717/test_complete_original_teams_h0')
+combined = True
+
+    @pytest.mark.parametrize("combined", [True, False])
+    def test_complete_original_teams_have_independent_source_bound_calibration(tmp_path, combined):
+        source = tmp_path / "original.f90"
+        text = fixture_source(original_teams=True)
+        if not combined:
+            text = text.replace(
+                "!$omp parallel do private(i,j,k,v) schedule(static)",
+                "!$omp parallel private(i,j,k,v)\n!$omp do schedule(static)",
+            )
+            text = text.replace(
+                "!$omp parallel do private(i,j,k) schedule(static)",
+                "!$omp parallel private(i,j,k)\n!$omp do schedule(static)",
+            )
+            text = text.replace("!$omp end parallel do", "!$omp end do\n!$omp end parallel")
+        source.write_text(text)
+        _outputs, _report, calibrated = emit(source, {"calibration": True})
+        participation = calibrated["contract"]["original_participation"]
+        assert participation["kind"] == "original_joined_teams"
+        assert len(participation["teams"]) == 3
+        assert all(team["proof_identity"] and team["selected_original_nodes"] for team in participation["teams"])
+        evidence = observations(calibrated["contract"])
+        outputs, _report, automatic = emit(source, {"evidence": evidence})
+>       assert automatic["selection"] == "resident"
+E       AssertionError: assert 'native' == 'resident'
+E         
+E         - resident
+E         + native
+
+compiler/tests/test_exact_window.py:268: AssertionError
+_ test_complete_original_teams_have_independent_source_bound_calibration[False] _
+
+tmp_path = PosixPath('/tmp/pytest-of-jirka/pytest-1717/test_complete_original_teams_h1')
+combined = False
+
+    @pytest.mark.parametrize("combined", [True, False])
+    def test_complete_original_teams_have_independent_source_bound_calibration(tmp_path, combined):
+        source = tmp_path / "original.f90"
+        text = fixture_source(original_teams=True)
+        if not combined:
+            text = text.replace(
+                "!$omp parallel do private(i,j,k,v) schedule(static)",
+                "!$omp parallel private(i,j,k,v)\n!$omp do schedule(static)",
+            )
+            text = text.replace(
+                "!$omp parallel do private(i,j,k) schedule(static)",
+                "!$omp parallel private(i,j,k)\n!$omp do schedule(static)",
+            )
+            text = text.replace("!$omp end parallel do", "!$omp end do\n!$omp end parallel")
+        source.write_text(text)
+        _outputs, _report, calibrated = emit(source, {"calibration": True})
+        participation = calibrated["contract"]["original_participation"]
+        assert participation["kind"] == "original_joined_teams"
+        assert len(participation["teams"]) == 3
+        assert all(team["proof_identity"] and team["selected_original_nodes"] for team in participation["teams"])
+        evidence = observations(calibrated["contract"])
+        outputs, _report, automatic = emit(source, {"evidence": evidence})
+>       assert automatic["selection"] == "resident"
+E       AssertionError: assert 'native' == 'resident'
+E         
+E         - resident
+E         + native
+
+compiler/tests/test_exact_window.py:268: AssertionError
+_____ test_native_automatic_private_descriptors_key_whole_window_cost_once _____
+
+tmp_path = PosixPath('/tmp/pytest-of-jirka/pytest-1717/test_native_automatic_private_0')
+
+    def test_native_automatic_private_descriptors_key_whole_window_cost_once(tmp_path):
+        source = tmp_path / "original.f90"
+        text = fixture_source(original_teams=True).replace(
+            "implicit none\ncontains", "implicit none\ninteger::extent=3\ncontains"
+        ).replace("real(8)::v", "real(8)::v\nreal(8)::scratch(-2:extent),unused(-1:extent)")
+        interruption = """!$omp parallel do private(i,scratch,unused) schedule(static)
+    do i=1,n
+    scratch=a(i,1,1)
+    b(i,1,1)=b(i,1,1)+sum(scratch)
+    enddo
+    !$omp end parallel do
+    """
+        text = text.replace("audit=sum(a(:,1,1))", interruption * 2 + "audit=sum(a(:,1,1))")
+        source.write_text(text)
+        outputs, report, calibrated = emit(source, {"calibration": True})
+        contract = calibrated["contract"]
+        private_key = [item for item in contract["key"] if item["resource"].startswith("exact_fixture::advance::")]
+        assert private_key == [
+            {"resource": "exact_fixture::advance::" + name, "property": inquiry, "axis": 1}
+            for name in ("scratch", "unused")
+            for inquiry in ("size", "lbound")
+        ]
+        generated = next(value for name, value in outputs.items() if name.startswith("sources/"))
+        for name in ("scratch", "unused"):
+            for inquiry in ("size", "lbound"):
+                assert f"{inquiry}({name},1,kind=c_int64_t)" in generated
+        assert "int(extent,c_int64_t)" not in generated
+        assert all(not item["resource"].endswith(("::scratch", "::unused"))
+                   for item in report["scopes"][0]["resource_bindings"]["resources"])
+    
+        evidence = observations(contract)
+        evidence["key"][-4:] = [6, -2, 5, -1]
+        outputs, _report, automatic = emit(source, {"evidence": evidence})
+>       assert automatic["selection"] == "resident"
+E       AssertionError: assert 'native' == 'resident'
+E         
+E         - resident
+E         + native
+
+compiler/tests/test_exact_window.py:332: AssertionError
+_____________ test_production_schedule_guard_precedes_cuda_queries _____________
+
+prepared = (PosixPath('/tmp/pytest-of-jirka/pytest-1717/exact-window0/original.f90'), {'entries/entry_abc1b9a8c2e7/shared_entry.c...210651ea57371b96bda192bf74f2e59fa57af0da07251e5ec259542f334bb54', 'available': False, 'selection': 'calibration', ...})
+
+    def test_production_schedule_guard_precedes_cuda_queries(prepared):
+        source, _outputs, _report, record = prepared
+        outputs, _, _ = emit(source, {"evidence": observations(record["contract"])})
+>       selector = next(text for name, text in outputs.items() if name.startswith("exact/") and name.endswith(".cu"))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       StopIteration
+
+compiler/tests/test_exact_window.py:447: StopIteration
+=========================== short test summary info ============================
+FAILED compiler/tests/test_exact_window.py::test_independent_capture_and_production_share_portable_execution_identity[serial]
+FAILED compiler/tests/test_exact_window.py::test_independent_capture_and_production_share_portable_execution_identity[original-teams]
+FAILED compiler/tests/test_exact_window.py::test_complete_window_fingerprint_is_portable_across_process_hash_seeds
+FAILED compiler/tests/test_exact_window.py::test_measured_auto_uses_one_guard_and_preserves_native_without_estimates
+FAILED compiler/tests/test_exact_window.py::test_complete_original_teams_have_independent_source_bound_calibration[True]
+FAILED compiler/tests/test_exact_window.py::test_complete_original_teams_have_independent_source_bound_calibration[False]
+FAILED compiler/tests/test_exact_window.py::test_native_automatic_private_descriptors_key_whole_window_cost_once
+FAILED compiler/tests/test_exact_window.py::test_production_schedule_guard_precedes_cuda_queries
+8 failed, 146 passed in 150.65s (0:02:30)

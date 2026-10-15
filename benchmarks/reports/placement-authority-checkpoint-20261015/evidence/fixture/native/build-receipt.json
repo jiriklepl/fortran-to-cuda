@@ -1,0 +1,35 @@
+{
+  "commands": [
+    [
+      "/usr/bin/gfortran-15",
+      "-O3",
+      "-std=f2018",
+      "-fopenmp",
+      "-ffp-contract=off",
+      "-J/home/jirka/research/fortran-abomination/benchmarks/results/placement-authority-checkpoint-20261015/fixture/native",
+      "-I",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/placement-authority-checkpoint-20261015/fixture/native",
+      "-c",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/placement-authority-checkpoint-20261015/fixture/original.f90",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/placement-authority-checkpoint-20261015/fixture/native/driver.f90"
+    ],
+    [
+      "/usr/bin/gfortran-15",
+      "-O3",
+      "-std=f2018",
+      "-fopenmp",
+      "-ffp-contract=off",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/placement-authority-checkpoint-20261015/fixture/native/original.o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/placement-authority-checkpoint-20261015/fixture/native/driver.o",
+      "-o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/placement-authority-checkpoint-20261015/fixture/native/native"
+    ]
+  ],
+  "binary": "/home/jirka/research/fortran-abomination/benchmarks/results/placement-authority-checkpoint-20261015/fixture/native/native",
+  "binary_sha256": "0000503159176ad9f10b0aa58cded0509ba85a66f4addc3c13b9f2b76908930e",
+  "objects": {
+    "/home/jirka/research/fortran-abomination/benchmarks/results/placement-authority-checkpoint-20261015/fixture/native/original.o": "2b353c093bc388bd98d61fc01b118dc3d5150ed2624260df194804b5d4239bc4",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/placement-authority-checkpoint-20261015/fixture/native/driver.o": "8e729fc36e963e959c36f4732dcfd3e385d6e06b6bf52a644b300aea106cb465"
+  },
+  "original_source_sha256": "fdbab0eeb872d0957e34b9e7f999b044adaa3da91504dfc1ccb1bb05165275e5"
+}

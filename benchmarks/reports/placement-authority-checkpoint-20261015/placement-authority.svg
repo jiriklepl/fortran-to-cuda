@@ -1,0 +1,273 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="792pt" height="453.6pt" viewBox="0 0 792 453.6" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>placement-checkpoint-v1</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 453.6 
+L 792 453.6 
+L 792 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 32.3424 153.9936 
+L 245.4336 153.9936 
+Q 251.0784 153.9936 251.0784 148.4064 
+L 251.0784 94.6296 
+Q 251.0784 89.0424 245.4336 89.0424 
+L 32.3424 89.0424 
+Q 26.6976 89.0424 26.6976 94.6296 
+L 26.6976 148.4064 
+Q 26.6976 153.9936 32.3424 153.9936 
+z
+" clip-path="url(#pd6a540e5fd)" style="fill: #fff1df; stroke: #d5ac74; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 32.3424 328.5936 
+L 245.4336 328.5936 
+Q 251.0784 328.5936 251.0784 323.0064 
+L 251.0784 195.8976 
+Q 251.0784 190.3104 245.4336 190.3104 
+L 32.3424 190.3104 
+Q 26.6976 190.3104 26.6976 195.8976 
+L 26.6976 323.0064 
+Q 26.6976 328.5936 32.3424 328.5936 
+z
+" clip-path="url(#pd6a540e5fd)" style="fill: #fff1df; stroke: #d5ac74; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 321.6384 153.9936 
+L 502.9776 153.9936 
+Q 508.6224 153.9936 508.6224 148.4064 
+L 508.6224 94.6296 
+Q 508.6224 89.0424 502.9776 89.0424 
+L 321.6384 89.0424 
+Q 315.9936 89.0424 315.9936 94.6296 
+L 315.9936 148.4064 
+Q 315.9936 153.9936 321.6384 153.9936 
+z
+" clip-path="url(#pd6a540e5fd)" style="fill: #edf2f8; stroke: #8ba0b6; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 554.4864 153.9936 
+L 735.8256 153.9936 
+Q 741.4704 153.9936 741.4704 148.4064 
+L 741.4704 94.6296 
+Q 741.4704 89.0424 735.8256 89.0424 
+L 554.4864 89.0424 
+Q 548.8416 89.0424 548.8416 94.6296 
+L 548.8416 148.4064 
+Q 548.8416 153.9936 554.4864 153.9936 
+z
+" clip-path="url(#pd6a540e5fd)" style="fill: #edf2f8; stroke: #8ba0b6; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 360.4464 258.7536 
+L 693.4896 258.7536 
+Q 699.1344 258.7536 699.1344 253.1664 
+L 699.1344 195.8976 
+Q 699.1344 190.3104 693.4896 190.3104 
+L 360.4464 190.3104 
+Q 354.8016 190.3104 354.8016 195.8976 
+L 354.8016 253.1664 
+Q 354.8016 258.7536 360.4464 258.7536 
+z
+" clip-path="url(#pd6a540e5fd)" style="fill: #e3f2eb; stroke: #74a48f; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 307.5264 356.5296 
+L 397.1376 356.5296 
+Q 402.7824 356.5296 402.7824 350.9424 
+L 402.7824 307.6416 
+Q 402.7824 302.0544 397.1376 302.0544 
+L 307.5264 302.0544 
+Q 301.8816 302.0544 301.8816 307.6416 
+L 301.8816 350.9424 
+Q 301.8816 356.5296 307.5264 356.5296 
+z
+" clip-path="url(#pd6a540e5fd)" style="fill: #edf2f8; stroke: #8ba0b6; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 427.4784 356.5296 
+L 517.0896 356.5296 
+Q 522.7344 356.5296 522.7344 350.9424 
+L 522.7344 307.6416 
+Q 522.7344 302.0544 517.0896 302.0544 
+L 427.4784 302.0544 
+Q 421.8336 302.0544 421.8336 307.6416 
+L 421.8336 350.9424 
+Q 421.8336 356.5296 427.4784 356.5296 
+z
+" clip-path="url(#pd6a540e5fd)" style="fill: #edf2f8; stroke: #8ba0b6; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 547.4304 356.5296 
+L 637.0416 356.5296 
+Q 642.6864 356.5296 642.6864 350.9424 
+L 642.6864 307.6416 
+Q 642.6864 302.0544 637.0416 302.0544 
+L 547.4304 302.0544 
+Q 541.7856 302.0544 541.7856 307.6416 
+L 541.7856 350.9424 
+Q 541.7856 356.5296 547.4304 356.5296 
+z
+" clip-path="url(#pd6a540e5fd)" style="fill: #edf2f8; stroke: #8ba0b6; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 667.3824 356.5296 
+L 756.9936 356.5296 
+Q 762.6384 356.5296 762.6384 350.9424 
+L 762.6384 307.6416 
+Q 762.6384 302.0544 756.9936 302.0544 
+L 667.3824 302.0544 
+Q 661.7376 302.0544 661.7376 307.6416 
+L 661.7376 350.9424 
+Q 661.7376 356.5296 667.3824 356.5296 
+z
+" clip-path="url(#pd6a540e5fd)" style="fill: #edf2f8; stroke: #8ba0b6; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 32.3424 434.7504 
+L 756.9936 434.7504 
+Q 762.6384 434.7504 762.6384 429.1632 
+L 762.6384 389.3544 
+Q 762.6384 383.7672 756.9936 383.7672 
+L 32.3424 383.7672 
+Q 26.6976 383.7672 26.6976 389.3544 
+L 26.6976 429.1632 
+Q 26.6976 434.7504 32.3424 434.7504 
+z
+" clip-path="url(#pd6a540e5fd)" style="fill: #fff1df; stroke: #d5ac74; stroke-width: 1.3; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 18px; font-family: 'DejaVu Sans'; text-anchor: start" x="25.992" y="25.488" transform="rotate(-0 25.992 25.488)">One placement authority for all consumers</text>
+   </g>
+   <g id="text_2">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #536576" x="29.52" y="60.408" transform="rotate(-0 29.52 60.408)">BEFORE</text>
+   </g>
+   <g id="text_3">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #2679ad" x="318.816" y="60.408" transform="rotate(-0 318.816 60.408)">AFTER</text>
+   </g>
+   <g id="text_4">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle" x="138.888" y="124.553313" transform="rotate(-0 138.888 124.553313)">Prepared record present</text>
+   </g>
+   <g id="text_5">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'" transform="translate(73.224016 245.987313)">Separate boolean gates</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'" transform="translate(76.489641 262.487313)">Cost gate · leaf pricing</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'" transform="translate(82.592062 278.987313)">Control · diagnostics</text>
+   </g>
+   <g id="patch_12">
+    <path d="M 138.888 153.197499 
+Q 138.888 172.149677 138.888 189.424804 
+" style="fill: none; stroke: #52677b; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 140.888 185.424804 
+L 138.888 189.424804 
+L 136.888 185.424804 
+" style="fill: none; stroke: #52677b; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="text_6">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle" x="412.308" y="124.553313" transform="rotate(-0 412.308 124.553313)">Checked execution plan</text>
+   </g>
+   <g id="text_7">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle" x="645.156" y="124.553313" transform="rotate(-0 645.156 124.553313)">Exact evidence request</text>
+   </g>
+   <g id="patch_13">
+    <path d="M 415.963477 151.84356 
+Q 470.518907 170.405628 523.486669 188.427504 
+" style="fill: none; stroke: #52677b; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 520.344074 185.245665 
+L 523.486669 188.427504 
+L 519.055641 189.032476 
+" style="fill: none; stroke: #52677b; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="patch_14">
+    <path d="M 641.491156 151.827149 
+Q 585.178462 170.406507 530.458376 188.460413 
+" style="fill: none; stroke: #52677b; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 534.883606 189.106432 
+L 530.458376 188.460413 
+L 533.630329 185.307841 
+" style="fill: none; stroke: #52677b; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="text_8">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'" transform="translate(435.519328 219.317312)">One exact registered attachment</text>
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'" transform="translate(441.939719 235.817312)">Bound to this plan and request</text>
+   </g>
+   <g id="patch_15">
+    <path d="M 525.032703 256.458043 
+Q 438.768032 278.657992 354.127493 300.439975 
+" style="fill: none; stroke: #52677b; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 358.499727 301.37996 
+L 354.127493 300.439975 
+L 357.502822 297.506179 
+" style="fill: none; stroke: #52677b; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="text_9">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: middle" x="352.332" y="331.695984" transform="rotate(-0 352.332 331.695984)">Cost gate</text>
+   </g>
+   <g id="patch_16">
+    <path d="M 525.407273 257.215151 
+Q 498.742524 278.659187 473.384644 299.052227 
+" style="fill: none; stroke: #52677b; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 477.755095 298.103987 
+L 473.384644 299.052227 
+L 475.248323 294.986922 
+" style="fill: none; stroke: #52677b; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="text_10">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: middle" x="472.284" y="331.775437" transform="rotate(-0 472.284 331.775437)">Leaf pricing</text>
+   </g>
+   <g id="patch_17">
+    <path d="M 528.592034 257.120945 
+Q 558.718105 278.656645 587.47987 299.217068 
+" style="fill: none; stroke: #52677b; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 585.388895 295.263863 
+L 587.47987 299.217068 
+L 583.062721 298.517924 
+" style="fill: none; stroke: #52677b; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: middle" x="592.236" y="332.647312" transform="rotate(-0 592.236 332.647312)">Control</text>
+   </g>
+   <g id="patch_18">
+    <path d="M 528.907926 256.440033 
+Q 618.695178 278.657797 706.854479 300.472726 
+" style="fill: none; stroke: #52677b; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 703.451998 297.570464 
+L 706.854479 300.472726 
+L 702.491181 301.453353 
+" style="fill: none; stroke: #52677b; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: middle" x="712.188" y="331.775437" transform="rotate(-0 712.188 331.775437)">Diagnostics</text>
+   </g>
+   <g id="text_13">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="394.668" y="412.018175" transform="rotate(-0 394.668 412.018175)">Application selected-interval pricing remains unsupported. No channel target or application speedup claim.</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pd6a540e5fd">
+   <rect x="11.88" y="4.536" width="776.16" height="439.992"/>
+  </clipPath>
+ </defs>
+</svg>

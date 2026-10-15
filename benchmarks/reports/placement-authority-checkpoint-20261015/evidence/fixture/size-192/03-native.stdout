@@ -1,0 +1,6 @@
+WINDOW_SECONDS   2.3046244699999999E-01
+FORTRAN_VERSION GCC version 15.3.0
+FORTRAN_OPTIONS -I /home/jirka/research/fortran-abomination/benchmarks/results/placement-authority-checkpoint-20261015/fixture/native -mtune=generic -march=x86-64 -O3 -std=f2018 -fopenmp -ffp-contract=off -J /home/jirka/research/fortran-abomination/benchmarks/results/placement-authority-checkpoint-20261015/fixture/native -fpre-include=/usr/include/finclude/x86_64-linux-gnu/math-vector-fortran.h
+CPU_TEAM 4 0 0 2147483647 1
+CPU_SCHEDULE 2147483649 0
+NATIVE_KEY 194 0 194 0 194 0 194 0 194 0 194 0 194 0 194 0 194 0 194 0 194 0 194 0 192
