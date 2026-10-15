@@ -1,0 +1,391 @@
+{
+  "analysis_script_sha256": "f3d8fc836f71ee15710eaa6fb12d51ae7ef8095246bb0fecdba200f98e296fff",
+  "automatic_placement": false,
+  "binary_sha256": "055edd942a5c798970172e025621aaddfb0c679f7ddaca35ed84ebce8a7d47ef",
+  "calibration": null,
+  "compiler_build_commit": "dd8ea33d55328d7ea7919ae328440f6a047a2cdf",
+  "cpu_profile": {
+    "api_calls": 20611,
+    "api_groups": {
+      "cuKernelGetName": {
+        "count": 981,
+        "nanoseconds": 1489772
+      },
+      "cuLibraryGetKernel": {
+        "count": 3,
+        "nanoseconds": 2160
+      },
+      "cuLibraryLoadData": {
+        "count": 3,
+        "nanoseconds": 314187
+      },
+      "cuModuleGetLoadingMode": {
+        "count": 1,
+        "nanoseconds": 6010
+      },
+      "cudaFreeAsync_v11020": {
+        "count": 2289,
+        "nanoseconds": 5406355
+      },
+      "cudaLaunchKernel_v7000": {
+        "count": 981,
+        "nanoseconds": 48011014
+      },
+      "cudaMallocFromPoolAsync_v11020": {
+        "count": 2289,
+        "nanoseconds": 42765114
+      },
+      "cudaMemPoolCreate_v11020": {
+        "count": 1,
+        "nanoseconds": 730128
+      },
+      "cudaMemPoolGetAttribute_v11020": {
+        "count": 654,
+        "nanoseconds": 794019
+      },
+      "cudaMemPoolSetAttribute_v11020": {
+        "count": 1,
+        "nanoseconds": 682810
+      },
+      "cudaMemPoolTrimTo_v11020": {
+        "count": 327,
+        "nanoseconds": 239638
+      },
+      "cudaMemcpy2DAsync_v3020": {
+        "count": 6540,
+        "nanoseconds": 448512148
+      },
+      "cudaMemcpy3DAsync_v3020": {
+        "count": 3597,
+        "nanoseconds": 2393707483
+      },
+      "cudaMemcpyAsync_v3020": {
+        "count": 654,
+        "nanoseconds": 16311771
+      },
+      "cudaStreamCreateWithFlags_v5000": {
+        "count": 1,
+        "nanoseconds": 217434343
+      },
+      "cudaStreamSynchronize_v3020": {
+        "count": 2289,
+        "nanoseconds": 278770447
+      }
+    },
+    "api_nanoseconds": 3455177399,
+    "api_outside_owner_nanoseconds": 0,
+    "api_threads": [
+      288248593525019
+    ],
+    "call_site": "730b18dfce4a302a4d951a7f64f12f28ae6b5ef2a3fc750a5684fb8c2b580c0a",
+    "capture_hashes": {
+      "profile.nsys-rep": "f0f4474362b7d3dedfbc08f833ce555dc2f2f83aae66ce7c7a8c34618e9d999e",
+      "profile.sqlite": "f409c27e18910e3bd1a1612d9fe2ca560303c05420c419579ea4ff1f7b88165f"
+    },
+    "complete_process_seconds": 28.748998106006184,
+    "device_copies": [
+      {
+        "bytes": 9987009024,
+        "count": 7848,
+        "kind": "CUDA_MEMCPY_KIND_HTOD",
+        "nanoseconds": 1180741061
+      },
+      {
+        "bytes": 4093181952,
+        "count": 2943,
+        "kind": "CUDA_MEMCPY_KIND_DTOH",
+        "nanoseconds": 708517664
+      }
+    ],
+    "device_kernels": [
+      {
+        "count": 981,
+        "nanoseconds": 199411641,
+        "symbol": "kernel_region_0_device"
+      }
+    ],
+    "observation_identity": "2d42adccf107b9d1a02917201d957071cb07d54733da34dbd15f1026890f5193",
+    "observed_calls": 327,
+    "other_owner_nanoseconds": 6626869638,
+    "owner_nanoseconds": 10082047037,
+    "process_time_is_qualification": false
+  },
+  "cpu_samples": {
+    "agreeing_base_constraints": 82,
+    "classification": {
+      "Generated native-correction preparation/control": 11085,
+      "Original source / structural / unclassified": 446,
+      "Other generated control": 4
+    },
+    "classification_method": "addr2line source text; fort_t1/3/5_* identifies correction preparation/control; no conversion to seconds",
+    "diffusion_leaf_samples": 11535,
+    "hottest_lines": [
+      {
+        "line": 19344,
+        "samples": 149,
+        "source": "momentum_diffusion.f90",
+        "text": "if (fort_t5_0_lo(fort_t5_0_count) /= fort_t5_0_r_lows(fort_t5_0_count,fort_t5_0_item) .or. &"
+      },
+      {
+        "line": 19123,
+        "samples": 127,
+        "source": "momentum_diffusion.f90",
+        "text": "if (fort_t5_0_lo(fort_t5_0_count) /= fort_t5_0_r_lows(fort_t5_0_count,fort_t5_0_item) .or. &"
+      },
+      {
+        "line": 7411,
+        "samples": 121,
+        "source": "momentum_diffusion.f90",
+        "text": "if (all(fort_t1_1_lo >= fort_t1_1_r_lows(:,fort_t1_1_item)) .and. all(fort_t1_1_hi <= &"
+      },
+      {
+        "line": 17332,
+        "samples": 107,
+        "source": "momentum_diffusion.f90",
+        "text": "if (all(fort_t3_2_lo >= fort_t3_2_r_lows(:,fort_t3_2_item)) .and. all(fort_t3_2_hi <= &"
+      },
+      {
+        "line": 6026,
+        "samples": 103,
+        "source": "momentum_diffusion.f90",
+        "text": "if (all(fort_t1_0_lo >= fort_t1_0_r_lows(:,fort_t1_0_item)) .and. all(fort_t1_0_hi <= &"
+      },
+      {
+        "line": 22052,
+        "samples": 102,
+        "source": "momentum_diffusion.f90",
+        "text": "if (all(fort_t5_1_lo >= fort_t5_1_w_lows(:,fort_t5_1_item)) .and. all(fort_t5_1_hi <= &"
+      },
+      {
+        "line": 20719,
+        "samples": 99,
+        "source": "momentum_diffusion.f90",
+        "text": "if (all(fort_t5_1_lo >= fort_t5_1_r_lows(:,fort_t5_1_item)) .and. all(fort_t5_1_hi <= &"
+      },
+      {
+        "line": 8744,
+        "samples": 99,
+        "source": "momentum_diffusion.f90",
+        "text": "if (all(fort_t1_1_lo >= fort_t1_1_w_lows(:,fort_t1_1_item)) .and. all(fort_t1_1_hi <= &"
+      },
+      {
+        "line": 15398,
+        "samples": 96,
+        "source": "momentum_diffusion.f90",
+        "text": "if (all(fort_t3_1_lo >= fort_t3_1_w_lows(:,fort_t3_1_item)) .and. all(fort_t3_1_hi <= &"
+      },
+      {
+        "line": 12680,
+        "samples": 95,
+        "source": "momentum_diffusion.f90",
+        "text": "if (all(fort_t3_0_lo >= fort_t3_0_r_lows(:,fort_t3_0_item)) .and. all(fort_t3_0_hi <= &"
+      },
+      {
+        "line": 10678,
+        "samples": 92,
+        "source": "momentum_diffusion.f90",
+        "text": "if (all(fort_t1_2_lo >= fort_t1_2_r_lows(:,fort_t1_2_item)) .and. all(fort_t1_2_hi <= &"
+      },
+      {
+        "line": 19236,
+        "samples": 91,
+        "source": "momentum_diffusion.f90",
+        "text": "if (fort_t5_0_lo(fort_t5_0_count) /= fort_t5_0_r_lows(fort_t5_0_count,fort_t5_0_item) .or. &"
+      },
+      {
+        "line": 8523,
+        "samples": 84,
+        "source": "momentum_diffusion.f90",
+        "text": "if (all(fort_t1_1_lo >= fort_t1_1_w_lows(:,fort_t1_1_item)) .and. all(fort_t1_1_hi <= &"
+      },
+      {
+        "line": 12572,
+        "samples": 83,
+        "source": "momentum_diffusion.f90",
+        "text": "if (all(fort_t3_0_lo >= fort_t3_0_r_lows(:,fort_t3_0_item)) .and. all(fort_t3_0_hi <= &"
+      },
+      {
+        "line": 19010,
+        "samples": 82,
+        "source": "momentum_diffusion.f90",
+        "text": "if (fort_t5_0_lo(fort_t5_0_count) /= fort_t5_0_r_lows(fort_t5_0_count,fort_t5_0_item) .or. &"
+      },
+      {
+        "line": 19334,
+        "samples": 78,
+        "source": "momentum_diffusion.f90",
+        "text": "if (all(fort_t5_0_lo >= fort_t5_0_r_lows(:,fort_t5_0_item)) .and. all(fort_t5_0_hi <= &"
+      },
+      {
+        "line": 15177,
+        "samples": 77,
+        "source": "momentum_diffusion.f90",
+        "text": "if (all(fort_t3_1_lo >= fort_t3_1_w_lows(:,fort_t3_1_item)) .and. all(fort_t3_1_hi <= &"
+      },
+      {
+        "line": 14065,
+        "samples": 76,
+        "source": "momentum_diffusion.f90",
+        "text": "if (all(fort_t3_1_lo >= fort_t3_1_r_lows(:,fort_t3_1_item)) .and. all(fort_t3_1_hi <= &"
+      },
+      {
+        "line": 20498,
+        "samples": 75,
+        "source": "momentum_diffusion.f90",
+        "text": "if (all(fort_t5_1_lo >= fort_t5_1_r_lows(:,fort_t5_1_item)) .and. all(fort_t5_1_hi <= &"
+      },
+      {
+        "line": 12459,
+        "samples": 73,
+        "source": "momentum_diffusion.f90",
+        "text": "if (all(fort_t3_0_lo >= fort_t3_0_r_lows(:,fort_t3_0_item)) .and. all(fort_t3_0_hi <= &"
+      }
+    ],
+    "inferred_pie_base": "0x5eab2de4c000",
+    "total_leaf_samples": 164484,
+    "worker_text_bytes": 863128
+  },
+  "cuda_profile": {
+    "api_calls": 20611,
+    "api_groups": {
+      "cuKernelGetName": {
+        "count": 981,
+        "nanoseconds": 1798760
+      },
+      "cuLibraryGetKernel": {
+        "count": 3,
+        "nanoseconds": 2631
+      },
+      "cuLibraryLoadData": {
+        "count": 3,
+        "nanoseconds": 317308
+      },
+      "cuModuleGetLoadingMode": {
+        "count": 1,
+        "nanoseconds": 4880
+      },
+      "cudaFreeAsync_v11020": {
+        "count": 2289,
+        "nanoseconds": 4798635
+      },
+      "cudaLaunchKernel_v7000": {
+        "count": 981,
+        "nanoseconds": 50722274
+      },
+      "cudaMallocFromPoolAsync_v11020": {
+        "count": 2289,
+        "nanoseconds": 59821555
+      },
+      "cudaMemPoolCreate_v11020": {
+        "count": 1,
+        "nanoseconds": 790809
+      },
+      "cudaMemPoolGetAttribute_v11020": {
+        "count": 654,
+        "nanoseconds": 673864
+      },
+      "cudaMemPoolSetAttribute_v11020": {
+        "count": 1,
+        "nanoseconds": 627083
+      },
+      "cudaMemPoolTrimTo_v11020": {
+        "count": 327,
+        "nanoseconds": 232428
+      },
+      "cudaMemcpy2DAsync_v3020": {
+        "count": 6540,
+        "nanoseconds": 478021871
+      },
+      "cudaMemcpy3DAsync_v3020": {
+        "count": 3597,
+        "nanoseconds": 2377596213
+      },
+      "cudaMemcpyAsync_v3020": {
+        "count": 654,
+        "nanoseconds": 21126921
+      },
+      "cudaStreamCreateWithFlags_v5000": {
+        "count": 1,
+        "nanoseconds": 241406649
+      },
+      "cudaStreamSynchronize_v3020": {
+        "count": 2289,
+        "nanoseconds": 279096123
+      }
+    },
+    "api_nanoseconds": 3517038004,
+    "api_outside_owner_nanoseconds": 0,
+    "api_threads": [
+      288234517439956
+    ],
+    "call_site": "730b18dfce4a302a4d951a7f64f12f28ae6b5ef2a3fc750a5684fb8c2b580c0a",
+    "capture_hashes": {
+      "profile.nsys-rep": "4ada22e7c6bc7fcdea4d074d5e397742bdc0429e44fe7b2fba94543dd574c502",
+      "profile.sqlite": "ef46c0b5e7146cd1ec034a7711471157b1c7c0d6648fb8798554839630c493da"
+    },
+    "complete_process_seconds": 23.65296422499523,
+    "device_copies": [
+      {
+        "bytes": 9987009024,
+        "count": 7848,
+        "kind": "CUDA_MEMCPY_KIND_HTOD",
+        "nanoseconds": 1239542680
+      },
+      {
+        "bytes": 4093181952,
+        "count": 2943,
+        "kind": "CUDA_MEMCPY_KIND_DTOH",
+        "nanoseconds": 724375602
+      }
+    ],
+    "device_kernels": [
+      {
+        "count": 981,
+        "nanoseconds": 198658290,
+        "symbol": "kernel_region_0_device"
+      }
+    ],
+    "observation_identity": "2d42adccf107b9d1a02917201d957071cb07d54733da34dbd15f1026890f5193",
+    "observed_calls": 327,
+    "other_owner_nanoseconds": 6145647660,
+    "owner_nanoseconds": 9662685664,
+    "process_time_is_qualification": false
+  },
+  "evidence_sha256": {
+    "evidence/binary-symbols.txt.gz": "053dd3e9695fbb801a9c6ab205f9b9125344c3f7c60afde0d13ae7a3f564e90f",
+    "evidence/compiler/indirect_access.py": "2669163d6242446110a1e9cf430b5a0ba4178d12f071c43b4b9b80e7b68b1c62",
+    "evidence/compiler/indirect_sections.py": "a5207b8ea55afbbcdb02bf274b4bd8467690022e8ae1a156f80be788d096e521",
+    "evidence/compiler/joined_team.py": "786367191b1cc9d1825d095853a2dd97ab090cdee4001c11e273003a6811ec27",
+    "evidence/cpu-leaf-counts.json.gz": "8f49ff9c8de5b1aaa66041cee0db758dfb5186f232e293985eed2694bbd0b8bd",
+    "evidence/cpu/api-intervals.csv.gz": "148d784ea97efd84059d21cc1503c20f144b49e7001cb10433b15984eaeb8bdd",
+    "evidence/cpu/command.json": "a11fe2f227db051f105ada837b2bcdcb2fc1b3dba22345b8c86dc701e1e5be6a",
+    "evidence/cpu/completion.json": "9d5c73a0965e9d0832fc726462d21f3424756c2feb8acf062b7ac52c15bf4016",
+    "evidence/cpu/profile.py": "2394ce76e47fa991c1d44116da23097af78edbd34bb10ab8ad6101749d0de2ce",
+    "evidence/cpu/stderr.log": "c177e9af090ceda41f1c6362f9149d7c1756790cc0155ff0a0126a68b7ea2638",
+    "evidence/cpu/stdout.log": "4df4af1c9795b32f5805202cd43d0b65b8dc2cbf8bc80d184b151479446bf3e7",
+    "evidence/cuda/api-intervals.csv.gz": "0b25e9b5e913baea42df6bd45b7ee878f5c9727f93806a3da8bf4126bf7a2408",
+    "evidence/cuda/command.json": "10c470a50faba4f512bf940ee984d620cbba7ec118e072cd0744f1f257591cc3",
+    "evidence/cuda/completion.json": "37ec3ef9e2e9ad982891789495662b55fb299451458b784b242a5bd6eeccca22",
+    "evidence/cuda/profile.py": "fbbf8fcb5d68d178ac1c128e656f94d6115619fd708d4eb8c471ea2680d1c441",
+    "evidence/cuda/stderr.log": "da6fd1dcf13cdb283f005fd33932970f96b01b459c2c9abc33a9a7bba13c49e6",
+    "evidence/cuda/stdout.log": "7b6bdb549ae12ac7ae356f4a829c6c53547cf336cd586156113df42780488d8d",
+    "evidence/diffusion-sample-locations.json.gz": "768b95f8ff4851bb9fa7941b518b7d732a4787e0249ce9a7b3b579b97425fdd8",
+    "evidence/sources/momentum_diffusion.f90.gz": "d83b4edc7296c92859853ead96d08cb26477205642665fe29bd6ac0e328a4124",
+    "evidence/sources/wmfluxes-nobranch-U-inc.f90.gz": "71e71dd534e47ef0f20b17d287ad6b853d07258c3c3c8f7427b96b5560b1ad5e",
+    "evidence/sources/wmfluxes-nobranch-V-inc.f90.gz": "8fdd244313302913950b7fbd749d3e93854f64e1a9912773da2434fab171cd59",
+    "evidence/sources/wmfluxes-nobranch-W-inc.f90.gz": "748382f1238a7f1b60f86793a42798abe61762acffd7293498b3fb462f4b7938"
+  },
+  "kind": "diagnostic cost breakdown",
+  "limitations": [
+    "Separate profiling processes; times are not qualification samples.",
+    "Device durations overlap CPU API durations.",
+    "CPU sampling identifies hot source lines, not their wall-clock duration.",
+    "No channel GPU qualification or automatic resident selector is demonstrated."
+  ],
+  "performance_improvement_demonstrated": false,
+  "performance_qualification": false,
+  "pipeline_commit": "b9418a9f1c3c242c4b77e948b29fa391b94aee60",
+  "previous_report_sha256": "d6b2e4f00b28c15384ab3afdbdfbc64c696855774769c0273062a64c1333575b",
+  "profiling_repository_commit": "91ed5907c7eed59689fb47f915a182bfe6fca810",
+  "schema_version": 1
+}
