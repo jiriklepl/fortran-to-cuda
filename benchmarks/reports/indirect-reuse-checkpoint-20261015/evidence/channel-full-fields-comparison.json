@@ -1,0 +1,938 @@
+{
+  "comparisons": {
+    "fields-Moisture.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          1,
+          1,
+          1
+        ],
+        "shape": [
+          0,
+          0,
+          0
+        ],
+        "upper_bounds": [
+          0,
+          0,
+          0
+        ]
+      },
+      "max_absolute_error": 0.0,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 0
+    },
+    "fields-Pr.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -1,
+          -1,
+          -1
+        ],
+        "shape": [
+          132,
+          68,
+          68
+        ],
+        "upper_bounds": [
+          130,
+          66,
+          66
+        ]
+      },
+      "max_absolute_error": 9.178961828028992e-09,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 610368
+    },
+    "fields-Pr_avg.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          1,
+          1,
+          1
+        ],
+        "shape": [
+          128,
+          64,
+          64
+        ],
+        "upper_bounds": [
+          128,
+          64,
+          64
+        ]
+      },
+      "max_absolute_error": 6.176767185684003e-08,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 524288
+    },
+    "fields-Scalar.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "shape": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "upper_bounds": [
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "max_absolute_error": 0.0,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 0
+    },
+    "fields-Scalar_avg.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "shape": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "upper_bounds": [
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "max_absolute_error": 0.0,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 0
+    },
+    "fields-TDiff.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          1,
+          1,
+          1
+        ],
+        "shape": [
+          0,
+          0,
+          0
+        ],
+        "upper_bounds": [
+          0,
+          0,
+          0
+        ]
+      },
+      "max_absolute_error": 0.0,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 0
+    },
+    "fields-Temperature.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          1,
+          1,
+          1
+        ],
+        "shape": [
+          0,
+          0,
+          0
+        ],
+        "upper_bounds": [
+          0,
+          0,
+          0
+        ]
+      },
+      "max_absolute_error": 0.0,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 0
+    },
+    "fields-U.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      },
+      "max_absolute_error": 1.9810128426556162e-07,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 656600
+    },
+    "fields-U2.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      },
+      "max_absolute_error": 1.955780841722543e-07,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 656600
+    },
+    "fields-U_avg.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      },
+      "max_absolute_error": 2.2057200621539153e-08,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 656600
+    },
+    "fields-Ustar.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      },
+      "max_absolute_error": 6.750353235274176e-07,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 656600
+    },
+    "fields-V.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      },
+      "max_absolute_error": 5.773754329502223e-08,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 656600
+    },
+    "fields-V2.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      },
+      "max_absolute_error": 5.81634595521463e-08,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 656600
+    },
+    "fields-V_avg.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      },
+      "max_absolute_error": 2.4483254416896028e-08,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 656600
+    },
+    "fields-Viscosity.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -1,
+          -1,
+          -1
+        ],
+        "shape": [
+          132,
+          68,
+          68
+        ],
+        "upper_bounds": [
+          130,
+          66,
+          66
+        ]
+      },
+      "max_absolute_error": 4.0093170939259e-09,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 610368
+    },
+    "fields-Vstar.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      },
+      "max_absolute_error": 3.190091294041908e-07,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 656600
+    },
+    "fields-W.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          69
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          66
+        ]
+      },
+      "max_absolute_error": 5.6160060466631245e-08,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 647220
+    },
+    "fields-W2.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          69
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          66
+        ]
+      },
+      "max_absolute_error": 5.5096204862326026e-08,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 647220
+    },
+    "fields-W_avg.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          69
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          66
+        ]
+      },
+      "max_absolute_error": 4.748652100011741e-09,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 647220
+    },
+    "fields-Wstar.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          69
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          66
+        ]
+      },
+      "max_absolute_error": 3.3305400440331034e-07,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 647220
+    }
+  },
+  "driver": {
+    "atol": 1e-06,
+    "dtype": "float64",
+    "field_count": 20,
+    "metadata_format": "storage-shape-bounds-v1",
+    "rtol": 1e-05
+  },
+  "helpers_sha256": {
+    "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/pipeline/elmm_pipeline/campaigns/halos.py": "8a882afa59e9fd8c45d447b5605a6adc208d4ba8296ec5b99481407ab488e4d0",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/pipeline/elmm_pipeline/validation.py": "e9ff836586ec8ff66513701e134ebba9ca7f339a469e50acbfbbc774d553b15f",
+    "/home/jirka/research/fortran-abomination/containers/sgs_experiment.py": "258ff616a9214a8a586bbd46f922aca934e3fef26d80ca101fcfe8c04fb6e57b"
+  },
+  "performance_measured": false,
+  "qualification": false,
+  "runs": [
+    {
+      "completion": {
+        "completed_steps": 2458,
+        "natural_end": true,
+        "poisson_seconds": 24.33,
+        "time_steps_seconds": 382.24
+      },
+      "directory": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native",
+      "files_sha256": {
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Moisture.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Moisture.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Pr.bin": "069f8361e7dffe9799966c3af764011986638aa85825df7f348800754e1f927e",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Pr.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Pr_avg.bin": "775f8a3508721bfde1d1bf9f2fdeba2c5af527f67386cef7c6f63b1cc09c3d0b",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Pr_avg.shape": "3196fd7ddeb27f50d5ccb0303f770f61c9bdf1e94505ed7d6c6d0a1758246be8",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Scalar.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Scalar.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Scalar_avg.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Scalar_avg.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-TDiff.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-TDiff.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Temperature.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Temperature.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-U.bin": "f1f2c30c4c3f682ae7964b4f2261dbfcc89d37cf60dac449ad997221246c63f9",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-U.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-U2.bin": "71628db79a2cbbc1aa75eece8698d93b0eeb6f0aa0eb4dd3ab2de37e338dd172",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-U2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-U_avg.bin": "b2b6e7925d2f1b92ed6a5f07eac9ec06ebc008f3c376719905edb97dd6b2cf22",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-U_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Ustar.bin": "8ff50b81a7933f39d163c94058212d253413ecf220ac5a95c4f12523b0947fa0",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Ustar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-V.bin": "79b680ddcb70b9730fd993cc7d533bf7fdb424fdf2520c758dde2e69d392980c",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-V.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-V2.bin": "587b99da0954edfcfc8fc021480751e6a811c4650d462227b68364db369c84dd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-V2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-V_avg.bin": "34d7fda773e473474cb90e56cb980dc6dd855859a7728e61dc6f51e8acc91585",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-V_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Viscosity.bin": "0308fdf9b395dda41196ad301195bed00a49b3ab42811a9f2c273dc528a4136b",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Viscosity.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Vstar.bin": "c9e46b56cb10048b08a626eb57602122f18317d2644e9bf8dc11167e4a57074d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Vstar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-W.bin": "30b87872aea296f0e829fd91076b12c7edccd1f93c9f01e2acfdbb6061db8927",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-W.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-W2.bin": "5e9759c68ab7ef626a82e571df2ff2ee89a11b0671cb5cc8750082b0f3f3a43b",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-W2.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-W_avg.bin": "630699acf63a2e2ba1abc0a8b2c536fee4487445beb0ae5241bc55af7391494b",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-W_avg.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Wstar.bin": "c42254a5d4d5ef45942a3b74f4ddc197017c441bd18ce3f8596ec25fa9a078c1",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/fields-Wstar.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/stdout.log": "7db2c0563f40fe9ad9500319c3e52d9fc145188b2a61e25c009c1ce4aa390998"
+      },
+      "mode": "native"
+    },
+    {
+      "completion": {
+        "completed_steps": 2458,
+        "natural_end": true,
+        "poisson_seconds": 20.95,
+        "time_steps_seconds": 463.36
+      },
+      "directory": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse",
+      "files_sha256": {
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Moisture.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Moisture.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Pr.bin": "f5608af1f7bae55f31f43f21ed8fc1a60e97a329b4763410fbfdf9fb4e69078d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Pr.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Pr_avg.bin": "566bc95d5f101a1b59eeac648ce3469ee25d21a9674f12df1f3e1cdb3921138d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Pr_avg.shape": "3196fd7ddeb27f50d5ccb0303f770f61c9bdf1e94505ed7d6c6d0a1758246be8",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Scalar.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Scalar.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Scalar_avg.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Scalar_avg.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-TDiff.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-TDiff.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Temperature.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Temperature.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-U.bin": "cc2547d041c034f2e8ff4fdf88c9c368cb91898e590427d83910c92e7a601c6c",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-U.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-U2.bin": "63e030b4ea7633d78c5edcd16ed3d641aef1e72ca180fbd9115326e9e6a6d2be",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-U2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-U_avg.bin": "4c63a919288b00484b724f58466190f9181277d65fdec88a780e83189d8272b8",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-U_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Ustar.bin": "8ef7d150f5882c09eee337cab2f3d729931b289f89873e174779cf1c8df2b6fe",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Ustar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-V.bin": "882cab79908ac7210d3889a492221513a8040a41bb6c558aefea5332c0d5799f",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-V.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-V2.bin": "77d419706565ab673dbd9d985067cafb4c1d7cc2772ba43bb5520a4a58f30e5f",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-V2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-V_avg.bin": "85f41734424e345b94ca192bbfe9941f99128f81b9fdb5d7454da1eeed6744ba",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-V_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Viscosity.bin": "13e80297de14487707952b578112638c5048a7e78a562b95375c213b9bce9758",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Viscosity.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Vstar.bin": "0a355e392082ee9d7299b8e38643cbd888beb7a2610755ed62598e331ce4b270",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Vstar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-W.bin": "b747d34c27c099c3a14b1a938a134b200cd8904f8cb6532eb03b82948fe37065",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-W.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-W2.bin": "6986de19da2ebd1137a312b08aeb44c2ffe688c4e5f3c386dd242004bbb3b10b",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-W2.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-W_avg.bin": "73896c3193214c404567cbaf8e9f6ba638638b212e041e2b7e360726ff2561d9",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-W_avg.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Wstar.bin": "444aa68a5ef8f8e1f30b9f29d536afba44c388cbff198fc1acf6ae38b844eba3",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/fields-Wstar.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/stdout.log": "40683a95f6f19dfcdbe07535b1b1daa7e8555d8cc90099829198770d2fcfbb25"
+      },
+      "mode": "candidate"
+    }
+  ],
+  "schema_version": 1,
+  "status": "passed",
+  "vtk": {
+    "candidate": {
+      "atol": 1e-06,
+      "files": {
+        "avg.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 6.170012056827545e-08,
+              "values": 524288
+            },
+            "ptype": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 1.1920928955078125e-07,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        },
+        "out.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 9.313225746154785e-09,
+              "values": 524288
+            },
+            "ptype": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 1.7881393432617188e-07,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        }
+      },
+      "files_sha256": {
+        "avg.vtk": "e67a677813b68357a5ff28317d9e804270e9266c39d751025c53a11020398c37",
+        "out.vtk": "0a7c4e9a05f8809f59f8043c0df4f2daadb2c7c08cd875ef9a2c5c1fa0d3d23a"
+      },
+      "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim.",
+      "passed": true,
+      "rtol": 1e-05,
+      "schema_version": 2
+    },
+    "native": {
+      "atol": 1e-06,
+      "files": {
+        "avg.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 524288
+            },
+            "ptype": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        },
+        "out.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 524288
+            },
+            "ptype": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        }
+      },
+      "files_sha256": {
+        "avg.vtk": "9ebf6f32c03405151d66f1f79cf45629a1f3e93011cd8e67a08cb57646003cdd",
+        "out.vtk": "80195592c3b8202f45671b9feb32efa741d476f82d747211ad3509f2cde602ee"
+      },
+      "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim.",
+      "passed": true,
+      "rtol": 1e-05,
+      "schema_version": 2
+    }
+  },
+  "vtk_reference": {
+    "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/output/avg.vtk": "9ebf6f32c03405151d66f1f79cf45629a1f3e93011cd8e67a08cb57646003cdd",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/output/out.vtk": "80195592c3b8202f45671b9feb32efa741d476f82d747211ad3509f2cde602ee"
+  }
+}

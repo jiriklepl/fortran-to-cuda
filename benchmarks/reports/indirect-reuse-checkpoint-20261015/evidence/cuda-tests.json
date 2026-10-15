@@ -1,0 +1,21 @@
+{
+  "argv": [
+    ".venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "compiler/tests/test_joined_team_cuda.py",
+    "-k",
+    "native_indirect_opposite_faces or overbudget_indirect_inspector",
+    "--basetemp=/tmp/fort-indirect-reuse-cuda-20261015"
+  ],
+  "exit_code": 0,
+  "log_sha256": "f2f52940f8ed107b31595842e3b1342e2c81daf88af5a5e55d797e52d5a3c1c3",
+  "result": "2 passed, 5 deselected in 99.42s",
+  "source_sha256": {
+    "compiler/scopes/indirect_access.py": "8625d2f184f27b08858ae9e00851867fa21016d06eaf2cc5e057c3e1152913e3",
+    "compiler/tests/test_indirect_access_reuse.py": "63c2a23d1c8cb92117790d872776c66dcc5afa1dfadbcd6cd1ca8e4497014cfa",
+    "compiler/tests/test_indirect_native_sections.py": "717e71daa57ae2c8dc23586fa8b74ee955570f0c86bf6e0c4f79da848d6c896a",
+    "compiler/tests/test_joined_team_cuda.py": "214094a9270e406c174a5b98dbde893625b5baf373bf9ad11425d534170bfcc0"
+  }
+}

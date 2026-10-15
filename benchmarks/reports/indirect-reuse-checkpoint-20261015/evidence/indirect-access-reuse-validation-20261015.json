@@ -1,0 +1,13 @@
+{
+  "command": "taskset -c 4,5,10,11 .venv/bin/python -m pytest -q compiler/tests/test_indirect_access_reuse.py compiler/tests/test_indirect_native_sections.py compiler/tests/test_joined_team_source.py --disable-warnings --maxfail=1",
+  "result": "57 passed in 16.01s",
+  "log": "/tmp/indirect-access-reuse-host-20261015.log",
+  "log_sha256": "7fa3639503a162bb0a20919f9d8100f5263ffe5974b098aae2a27c25e45507c7",
+  "owned_source_hashes": {
+    "compiler/scopes/indirect_access.py": "8625d2f184f27b08858ae9e00851867fa21016d06eaf2cc5e057c3e1152913e3",
+    "compiler/tests/test_indirect_access_reuse.py": "63c2a23d1c8cb92117790d872776c66dcc5afa1dfadbcd6cd1ca8e4497014cfa",
+    "compiler/tests/test_indirect_native_sections.py": "717e71daa57ae2c8dc23586fa8b74ee955570f0c86bf6e0c4f79da848d6c896a"
+  },
+  "scope": "Focused host validation, including compiled Fortran inspectors/native correction and joined-team source generation; no GPU execution or application performance claim.",
+  "emitter_size_receipt": "/tmp/indirect-access-reuse-size-20261015.json"
+}

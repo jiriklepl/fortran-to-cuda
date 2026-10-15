@@ -1,0 +1,249 @@
+{
+  "affinity": [
+    4,
+    5,
+    10,
+    11
+  ],
+  "argv": [
+    "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/full-fields/ELMM-fields",
+    "output_dir='output/'"
+  ],
+  "automatic_placement_claim": false,
+  "binary_sha256": "3de3b3fd052ad6dbb99e08b437fba4dbc722599cc797663c6131c7b111208bcd",
+  "binary_unchanged": true,
+  "case": "channel",
+  "compiler_commit": "10ae18baf5097e6414a9b0698ee382c92dc757b9",
+  "completed": true,
+  "completion": {
+    "completed_steps": 2458,
+    "natural_end": true,
+    "poisson_seconds": 20.95,
+    "time_steps_seconds": 463.36
+  },
+  "configuration_overrides": {},
+  "configuration_sha256": {
+    "boundconds.conf": "b6b64e153212affdfae650767de910113c008a77a350ef5fddd4f22bbf04e619",
+    "frames.conf": "866cc5cb4d15b35079c2eeb1027613ee9dbaf0a28e0f47423512d3ab226d05bb",
+    "grid.conf": "f44970b7a9e636d1bf78bd2b48820f1bd50ec2adec1c163825ed0d435f8cd7ef",
+    "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+    "les.conf": "1cee53a844bb557673849df1942cb749db067b01f2b19356c9018a53f9b3385d",
+    "main.conf": "3bbb39e3312dcfbc846e78d83bd7eb3bc071907c028e8db79569bd707af43e9b",
+    "output.conf": "b894e8a4500102f04733544b8c85a648684d63cd3eb8dba12518f41e79f65f51",
+    "time_stepping.conf": "87e5abd4c4b57cc5dffdf8a166480207cc54b3f210ba47d9d81ccdcf0ef94483"
+  },
+  "configuration_unchanged": true,
+  "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse",
+  "diagnostic_complete_process_seconds": 463.91642645299726,
+  "environment": {
+    "CUDA_HOME": "/usr/local/cuda",
+    "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+    "MKL_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "4",
+    "OMP_PROC_BIND": "false",
+    "OMP_SCHEDULE": "static",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "exit_code": 0,
+  "kind": "full-process diagnostic",
+  "mode": "resident-reuse-fields",
+  "output_hashes": {
+    "output/U.vtk": "3ec766365f6b8005fe7b442bc55eb65686a0db3c0539333142b8e7245c3f2563",
+    "output/Uavg.vtk": "9345a1e7f4b8c574c0666a9dd2ade4925ed8d46c49c72cebe4a565a2abc7abf0",
+    "output/V.vtk": "ce69356c49c4c77ee5560a3a6bb9dbd7425bc3e85a2f6db38162c191ba887d50",
+    "output/Vavg.vtk": "f68e03700768ea101c9624f7b9064be4bcbfd580e5372e65994da6c81c964226",
+    "output/W.vtk": "67d1c2968112a4deaf3cd94e6cd5e4efcc18584af73bb8a1acf6b8a09709063b",
+    "output/Wavg.vtk": "324de43e4d9afb291db277bd4b4e036494932415929990ba62684698e8022630",
+    "output/avg.vtk": "e67a677813b68357a5ff28317d9e804270e9266c39d751025c53a11020398c37",
+    "output/frame-y-0.vtk": "38252478618850612b7ec56bfebb3134803c18c769e2f0487c453a4858bde4bf",
+    "output/frame-y-1.vtk": "dc74521eee7dd7351e38ada5ef41ac204e4539b74405b0878b51a775b3ce0ba1",
+    "output/frame-y-10.vtk": "fd74ef9eeb17cd01559c316bf40db696ce65ebb9923fbbb1d44a5790a300dd3a",
+    "output/frame-y-11.vtk": "3dd15e3040f990ebd84ef8b94846ef8a54db0acd6d16a7005a382b4f4bff6d8f",
+    "output/frame-y-12.vtk": "ffce57630dd3daa196094a12a8497108396633e5e6f1ad867f47e184eab26353",
+    "output/frame-y-13.vtk": "57bccb33506308cd8d8fca6c584ce3eaa942173548793eb6aff29c0bc42fe326",
+    "output/frame-y-14.vtk": "2a2a0b590b940fd82089f6cdc6226f13b55023ddfa7b095c1896e384d652d2f3",
+    "output/frame-y-15.vtk": "db17b8c1d1db2f9619ba28ccf3a4a9071895f773dc904a78d7b676744ac6fd9f",
+    "output/frame-y-16.vtk": "3e256ec74970feff1b3b3bbd910176bc06663a4ac01958798c3594c358f56e8f",
+    "output/frame-y-17.vtk": "883896f4f7eac411feb38fc80dc387ea8354d9d2d0b3e7840dc1531169080d11",
+    "output/frame-y-18.vtk": "d2ae9ddb1141f897c0f583cfe88430dd0b3b6144f90655d58715c8ac8638b0d7",
+    "output/frame-y-19.vtk": "8210ffdffaf550e1ed8c52cf414b8b342d46c370f78ba597bd12ebac168737ee",
+    "output/frame-y-2.vtk": "4ccb9e42f490e2a42b5455da6278b5fde4c793345bdc9338149adcd6ccb8dc9f",
+    "output/frame-y-20.vtk": "5a5acdaa48f53a4ddebf61d05d0a1ad0c14fb11381f3fa74027a7036f3784244",
+    "output/frame-y-21.vtk": "d2202a32d1f4132fb55ee1394e5bcc34d60c2b9477a524ceffccc721491528d0",
+    "output/frame-y-22.vtk": "8449e8d89a875203a9bf167e771a9091ac1f7cab9a126e66fa37192d1e0cd8dd",
+    "output/frame-y-23.vtk": "defecd5abbcd38f305e0b567ed5c4229761d09be9ecf7b87760e7d340556beb0",
+    "output/frame-y-24.vtk": "ababe3ed5397c1787cdce786defa21d0d025427187fe438ee445e3df25303587",
+    "output/frame-y-25.vtk": "afd0131242dd4ab8576ab5615f1b90dc31fae4166106d6a75f1b29ddb512f041",
+    "output/frame-y-26.vtk": "df84da70fa01bb7323a43b17c8ee04887b3b741fd9a04d34cdd2c429199760a2",
+    "output/frame-y-27.vtk": "14ec10985c017867275f58d82c7c38da1a79eab274b7c2fe308829acab756490",
+    "output/frame-y-28.vtk": "e1cc02ae1462c1937020b018c694b42d5af2b48c438122c8b0c8beac2f7710c2",
+    "output/frame-y-29.vtk": "1c84fe69ef1d6b92e9adb99efd9177b7a8b8f68edfa70984276d545428922218",
+    "output/frame-y-3.vtk": "a8913fdc03e0d0de9f40c4984217bf2bd3fbd33f36b1a2ed6fe67fc9e16d219e",
+    "output/frame-y-30.vtk": "5425f1329c5454aacb69d17600874e440a9727b235939d174078aaaff7086d08",
+    "output/frame-y-31.vtk": "c378fea83b29d923dad3f7be1ba350d5db5bfc6642b11d8e94ed57af76b008bb",
+    "output/frame-y-32.vtk": "1c6a667cad1a724619029c7642fe84df8f3d50b2bd32dc8476ebc6fbaaa5f940",
+    "output/frame-y-33.vtk": "bb54ec3cd8f1c802464a652cb7f5c5fbdce1c948ebc44d841c947cc88306e762",
+    "output/frame-y-34.vtk": "37b6e4e1fab8e8988a531ea5e243e1b5db0ed8729e3c93d4b746c809a6aa1a01",
+    "output/frame-y-35.vtk": "6653906262df490b83cf1f416e1e806ace57c2ad2a75f2d6bf3d8c78b2919da1",
+    "output/frame-y-36.vtk": "89ab8697654c807ba3c12b14645cdbd18ba481248ec9657a063f28033c8c456e",
+    "output/frame-y-37.vtk": "1483b0b4286fd407c4b35e9c7ad0fb7be04103c708e63c55c6ce7a976809d272",
+    "output/frame-y-38.vtk": "f09c4ea2655f1185d27e672b57b475a40d39e4d714a570d79e0a00f30efb50a2",
+    "output/frame-y-39.vtk": "c546237e4426011d36ff53b294f2ce254c397be315307389248bb514d050c3bb",
+    "output/frame-y-4.vtk": "2bf68fcddcd48ac4c0d640a44892db12a24e76981b70b9d15b9926ce6bef08d3",
+    "output/frame-y-40.vtk": "af304294a5105005f8ed159960276b34340e8618c6da495a71e295c2c7e2ce71",
+    "output/frame-y-41.vtk": "8853a8a2ab5b20826f78bb9e0806a8a8feb17ba6d30b91a8f8fdeb69e5f4a346",
+    "output/frame-y-42.vtk": "9a4c4cb5d5d717bb3af193bcafa23bceb486b104931ab7132cd6134354ad367a",
+    "output/frame-y-43.vtk": "738065b952a00c256610fdaf6987d3ac5bdd1177d2138614d6d919e6d7b364dc",
+    "output/frame-y-44.vtk": "252842d8d4c9949ec49842799fa314151aa1a27f6e5897d8eb7beba9c5e8bbf3",
+    "output/frame-y-45.vtk": "81d240a0eade46a5a1295126e3ad4cec980f1dbd5fa8cc357194a5f5e2ea0b94",
+    "output/frame-y-46.vtk": "bca4e95c6ab668e967b2fcb3c1ff153340c6478a1de8643b96c9bf60353f4449",
+    "output/frame-y-47.vtk": "8b2ccf1190895761b9efa71cce7a356511685eac4e2c9c5befe40033b2cf1e67",
+    "output/frame-y-48.vtk": "c3d149852a14e0eaacbf6cc7b53aea6fa50efcd53414adba81c8a78c9dca2b67",
+    "output/frame-y-49.vtk": "4294682acb871e06c365e59168ecdd3c7f690cc4cf4ddda041630e930ecb7e73",
+    "output/frame-y-5.vtk": "105cf4f3167e10fcb10e250f1280d54a882661520d7010121d617a120b80717e",
+    "output/frame-y-50.vtk": "970b0077cf16b6fd4210549d7c4a4ca960a20d8fdcb2eb87fb7f431f33162d37",
+    "output/frame-y-6.vtk": "3c43c3d2e7866a64357d4ffbea430d19dd900c8537692817b8bac7592dbfe0b0",
+    "output/frame-y-7.vtk": "b3efcdd878e7acf242deadb2868abc9f597c54b76ba83a2a9ce9ee2ccf11e88f",
+    "output/frame-y-8.vtk": "3ba5a763ca24f8d05653c621d1744fdc867e9455298e326b6420ccb9af0bf91e",
+    "output/frame-y-9.vtk": "5addfd5bb6366dbd8515f4b03462617d91da918e4517c4f3aea37d57b02fd77d",
+    "output/frame-z-0.vtk": "5990be552dd34304f0ad9b6b292d7fea95093f6cd4c1d23620289503ea8ecf9f",
+    "output/frame-z-1.vtk": "4d92bc559e0aaf7d2cc4fcb8b32f52f8209229fc8255bbe66698532e827a36f4",
+    "output/frame-z-10.vtk": "49625bbfc33b92c3332095a60dff6cbb5d78d7fc4608abc45df326ec4d074e20",
+    "output/frame-z-11.vtk": "1f7be2bfd546c139d10961bf1b203b00eefad2a2b0aefbf445ca14c3112099d2",
+    "output/frame-z-12.vtk": "0c216e25b7620a1e789687e33fef7ec72167a10e276160fc15cf3ac0bc0079a3",
+    "output/frame-z-13.vtk": "f0424538f6107ab4e7c2992470214e25de9b54b70b5234d03b0238d13049d9ec",
+    "output/frame-z-14.vtk": "acf13e05473274d053492c2a48107c2bd4d20d43e071e85f1626ab4664acee76",
+    "output/frame-z-15.vtk": "9ce32844ee07549f11c81113eef6e599aa2a39a8a31c4db2adce1e023482cb5a",
+    "output/frame-z-16.vtk": "e2c064ec594c6cdfed1256bfb02ff8dbb9439e9104ed56c5804f0516b4143fc0",
+    "output/frame-z-17.vtk": "d2821c0a7552250c8257957b57ab271941c4c22983bbbecb849b90bc68eb3f35",
+    "output/frame-z-18.vtk": "be6c09c048b4c5c62859e5d56e4a55973a9d2ebcc42dfc42311294e9e120da5a",
+    "output/frame-z-19.vtk": "97a6ef3495fb52263625ff57fc561fc2508f6bb34ef9c74fc107ef038159fd00",
+    "output/frame-z-2.vtk": "de39b6637c3d8e28b32e29d5437d0da2a8cdddccadd7789f811823b776dab4f3",
+    "output/frame-z-20.vtk": "a2cd831715e76eebf69f53a04716ebfba5cbfea51961f6fd33c92d3dd5c4e2d9",
+    "output/frame-z-21.vtk": "61f3909878d8555298b95013eab6a44e49eb09ec5818fdfb86183a728bdecf8f",
+    "output/frame-z-22.vtk": "4cf88bfcf898a5671f7b7dbf33b7ca0bc8dfab17b8eee19109cbb137d57de84f",
+    "output/frame-z-23.vtk": "38af9a12ad4337bc03f84c7dd93ea7d099840e690e149de8d4cc459d617d0432",
+    "output/frame-z-24.vtk": "dc22c2873af6ac42009f344a747be118f4eb919861a90772b9729d403e22eb72",
+    "output/frame-z-25.vtk": "86d7dbc49b6f04efa35885c2069bbcba93f9a200fbe588ddd99856260b01b332",
+    "output/frame-z-26.vtk": "f4e4c73a8c134c9c8f6f2ce63b2cddd0138e3f9b97cefefa9c7be8ed1d01742b",
+    "output/frame-z-27.vtk": "4fc14d9b44b86746b1076fc0aa25f35c57f4c1165a30f0189a7ea8b74bea851f",
+    "output/frame-z-28.vtk": "aa1723c8e39f3e944ba17b88a8e126ea6d4c5d491d3b05ec7d3451c2427cf24d",
+    "output/frame-z-29.vtk": "30b21be6742759ae73b3fefb15785d6905882fcca38630f2a50e1909dc87aa60",
+    "output/frame-z-3.vtk": "c8edec671fee043e9164e57c7f8d370c7c55dbfceba4326728e29e2e32658fb9",
+    "output/frame-z-30.vtk": "8ee90eabf420b385ebc068b2590524679ed5e82fe6be9bd9361401a7e2960ba5",
+    "output/frame-z-31.vtk": "8f86ddfc3ab68e6358f24cca4f2b1c04f9dd53e124cd848e72cd5e82c1f2f187",
+    "output/frame-z-32.vtk": "a912bd1f73a861a8a0b0c05f231fcee86ecac2ee121b97e1f44d92ac82859fc0",
+    "output/frame-z-33.vtk": "ae809d15382b13adbc6f1930412673a47b67e4da86f641d20246d693f568a0a1",
+    "output/frame-z-34.vtk": "a7882bf0ca235ac6242c33e5ac29cd1b35ba7fe418cd2f9fabc62da2dc1fb612",
+    "output/frame-z-35.vtk": "aa9f39b211d8b61453a59ddc4a88d528900e380202e85d38a7fd5c38f958a378",
+    "output/frame-z-36.vtk": "507918aceeffb7d493672d9169bb74d8afc57c01c91fa5bdc0074028bdb7dedc",
+    "output/frame-z-37.vtk": "36cfec7955e8d3cfd10d848dca8f1ac84fb9943b11b3f2476e2a3af8f811fd1b",
+    "output/frame-z-38.vtk": "e55bd74781e438646088aaaa71ac650752b9c7907c4b5a851d3de55355d19420",
+    "output/frame-z-39.vtk": "12176545092d23abcb591a0d80ea4be8f1554ea808095c833e5acda6d8fc321d",
+    "output/frame-z-4.vtk": "338954ca681969a8bdd9de78e895d56d44942baf2c2a5a60fbaa0601b904c645",
+    "output/frame-z-40.vtk": "9ba929b7c097d92677e91cff2bdf7e2ff6bf803df8bd681b8896077f2d2038a8",
+    "output/frame-z-41.vtk": "bc405ad1ebf488fbcce3cb503182569be6d8e9a2fbc01c871d84af673850192a",
+    "output/frame-z-42.vtk": "2f1ff20e1ede939161374a662866b0623fe20df470b6b15f8345fe95a31425ba",
+    "output/frame-z-43.vtk": "e4c59953a21974f8fb9cabe295f3d67c12d587eb1cfdf6f1d77393928af1c917",
+    "output/frame-z-44.vtk": "361379885957e23eb80afcf4519bd2e0581a5f34ee85b1a805026a27ab24b33e",
+    "output/frame-z-45.vtk": "8cf18697a698e33bd80e4c44ac472be3b99b6b2796fe2361f3ec2bc70fefb73e",
+    "output/frame-z-46.vtk": "964ba8c795f5ffbdc0983dbea9b6fc4dd4f5525117eb40777c2d877587951b1b",
+    "output/frame-z-47.vtk": "d7b4138edf92f003eb2c8a3e27807f244789b4d1bc62266429d441f214985de5",
+    "output/frame-z-48.vtk": "080dca36026c8517a2bbf5362076191c959a0a159e23b27d7dc774c2d90436c2",
+    "output/frame-z-49.vtk": "81c93be524859d9323d02f269e3e2d9ac0df32b27f39688529222dc436599805",
+    "output/frame-z-5.vtk": "014a4fd7fe595cf3dea747a6c8401f1b0007394cd49227ec6d1417c8f771985a",
+    "output/frame-z-50.vtk": "a7cd9ac24b957240d2aca3c2c8c49d89438b2fa6766f166c5ee7b0a74edb721f",
+    "output/frame-z-6.vtk": "d64ca31d7cda240bc5b74bc1755364e8ea6c0ab49899be593b35be113e60d899",
+    "output/frame-z-7.vtk": "7a801cc84e622ca166372a61f5c350d5c11472d4adeb97560e99b3dcc9b4d195",
+    "output/frame-z-8.vtk": "2db0921f9e620d8c3f573b2069ac2f276b2a73e4359297ccc96f82bc0800dede",
+    "output/frame-z-9.vtk": "5f8376ddb04d90d4cb95a2de2f641caede6f7a33873315445a02565b72536cfa",
+    "output/out.vtk": "0a7c4e9a05f8809f59f8043c0df4f2daadb2c7c08cd875ef9a2c5c1fa0d3d23a"
+  },
+  "pid": 414224,
+  "pipeline_commit": "b9418a9f1c3c242c4b77e948b29fa391b94aee60",
+  "qualification": false,
+  "schema_version": 1,
+  "threads": 4,
+  "timed_out": false,
+  "timeout_seconds": 1200,
+  "traced": false,
+  "vtk": {
+    "avg.vtk": {
+      "atol": 1e-06,
+      "fields": {
+        "X_COORDINATES": {
+          "failed_values": 0,
+          "max_absolute_error": 0.0,
+          "values": 128
+        },
+        "Y_COORDINATES": {
+          "failed_values": 0,
+          "max_absolute_error": 0.0,
+          "values": 64
+        },
+        "Z_COORDINATES": {
+          "failed_values": 0,
+          "max_absolute_error": 0.0,
+          "values": 64
+        },
+        "p": {
+          "failed_values": 0,
+          "max_absolute_error": 6.170012056827545e-08,
+          "values": 524288
+        },
+        "ptype": {
+          "failed_values": 0,
+          "max_absolute_error": 0.0,
+          "values": 524288
+        },
+        "u": {
+          "failed_values": 0,
+          "max_absolute_error": 1.1920928955078125e-07,
+          "values": 1572864
+        }
+      },
+      "note": "ELMM final VTK values are float32, including double-precision builds.",
+      "passed": true,
+      "rtol": 1e-05
+    },
+    "out.vtk": {
+      "atol": 1e-06,
+      "fields": {
+        "X_COORDINATES": {
+          "failed_values": 0,
+          "max_absolute_error": 0.0,
+          "values": 128
+        },
+        "Y_COORDINATES": {
+          "failed_values": 0,
+          "max_absolute_error": 0.0,
+          "values": 64
+        },
+        "Z_COORDINATES": {
+          "failed_values": 0,
+          "max_absolute_error": 0.0,
+          "values": 64
+        },
+        "p": {
+          "failed_values": 0,
+          "max_absolute_error": 9.313225746154785e-09,
+          "values": 524288
+        },
+        "ptype": {
+          "failed_values": 0,
+          "max_absolute_error": 0.0,
+          "values": 524288
+        },
+        "u": {
+          "failed_values": 0,
+          "max_absolute_error": 1.7881393432617188e-07,
+          "values": 1572864
+        }
+      },
+      "note": "ELMM final VTK values are float32, including double-precision builds.",
+      "passed": true,
+      "rtol": 1e-05
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "binary": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/full-fields/ELMM-fields",
+  "binary_sha256": "3de3b3fd052ad6dbb99e08b437fba4dbc722599cc797663c6131c7b111208bcd",
+  "performance_measured": false,
+  "plan_sha256": "d6decb547e896727ec23c2551b4252b7cf02bbf9a6e4905f57283dacbe294aea",
+  "status": "passed"
+}

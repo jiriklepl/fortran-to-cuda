@@ -1,0 +1,77 @@
+{
+  "description": "Emitter-only comparison of three unique already-admitted wall batches reconstructed from frozen manifest; unchanged allocation descriptors and names, not a new application generation or timing.",
+  "manifest_sha256": "ccb9d3761d7848e9d898fd7462006c3556a00caa91e6a4d0dfe2711ad8ba0c6e",
+  "before_module_sha256": "2669163d6242446110a1e9cf430b5a0ba4178d12f071c43b4b9b80e7b68b1c62",
+  "after_module_sha256": "8625d2f184f27b08858ae9e00851867fa21016d06eaf2cc5e057c3e1152913e3",
+  "batches": [
+    {
+      "resources": [
+        "argument::u",
+        "argument::u2",
+        "parameters::viscosity"
+      ],
+      "before": {
+        "lines": 6640,
+        "bytes": 275673,
+        "physical_reference_loops": 54,
+        "sha256": "b69faf3588bae64389586665f050ad554f45ec268cecabf86bb954f4baab1dba"
+      },
+      "after": {
+        "lines": 5245,
+        "bytes": 217554,
+        "physical_reference_loops": 42,
+        "sha256": "c0de01fca665f125d6f1240e932ad69ed63287e5fc8a892671e6724e39add771"
+      }
+    },
+    {
+      "resources": [
+        "argument::v",
+        "argument::v2",
+        "parameters::viscosity"
+      ],
+      "before": {
+        "lines": 6640,
+        "bytes": 275675,
+        "physical_reference_loops": 54,
+        "sha256": "61a23335ebd4e2adb937ac2e13dd3585dd06d6ddf3c12086f4c8f788e8a21861"
+      },
+      "after": {
+        "lines": 5245,
+        "bytes": 217556,
+        "physical_reference_loops": 42,
+        "sha256": "523980db99c181ceba8ba53d94267b6ecfc2036a2d29a34ff8770cfeec131197"
+      }
+    },
+    {
+      "resources": [
+        "argument::w",
+        "argument::w2",
+        "parameters::viscosity"
+      ],
+      "before": {
+        "lines": 6640,
+        "bytes": 275675,
+        "physical_reference_loops": 54,
+        "sha256": "a555876bb907ce2ed37a4c0909e439254b6652d88b196f57a1f9275efe81259b"
+      },
+      "after": {
+        "lines": 5245,
+        "bytes": 217556,
+        "physical_reference_loops": 42,
+        "sha256": "171696c302219431e4ded282d5a252c06cdef9edf6cc0f79bf0c0adef3b629d7"
+      }
+    }
+  ],
+  "totals": {
+    "before": {
+      "lines": 19920,
+      "bytes": 827023,
+      "physical_reference_loops": 162
+    },
+    "after": {
+      "lines": 15735,
+      "bytes": 652666,
+      "physical_reference_loops": 126
+    }
+  }
+}

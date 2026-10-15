@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "taskset",
+    "-c",
+    "4,5,10,11",
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/run.py",
+    "--worker"
+  ],
+  "cap_seconds": 300,
+  "cwd": "/home/jirka/research/fortran-abomination",
+  "environment_overrides": {
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "4",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "runner_sha256": "9953039f1475fa57d1424e2cac3d147185e394dd8b6537924908b460d315dbbb"
+}

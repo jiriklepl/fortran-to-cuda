@@ -1,0 +1,842 @@
+{
+  "automatic_estimate_available": false,
+  "automatic_residency_complete": false,
+  "binary": {
+    "path": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/ELMM",
+    "sha256": "144786c16211257591289bf608eb5193339a2fa8fe5a7bdea76b4350824291b1"
+  },
+  "build_seconds": 88.12265857699094,
+  "commits": {
+    "compiler": "10ae18baf5097e6414a9b0698ee382c92dc757b9",
+    "pipeline": "b9418a9f1c3c242c4b77e948b29fa391b94aee60"
+  },
+  "comparison_protocol": {
+    "affinity": [
+      4,
+      5,
+      10,
+      11
+    ],
+    "case": "channel-simple",
+    "excluded_warmup_per_mode": 1,
+    "measured_rotated_rounds": 3,
+    "natural_completed_steps": 109,
+    "resident_modes_sgs_placement": "native",
+    "target_seconds": 9,
+    "threads": 4,
+    "timing": "complete process; untraced; includes observer logging in both resident modes"
+  },
+  "evidence": {
+    "evidence/before/build-generation.json": {
+      "archived_sha256": "57fcc0b4ae1032130b0d046dba91681fe6b5ffee7b7588100dff5bebed0fccfc",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/candidate/build-generation.json",
+      "source_sha256": "57fcc0b4ae1032130b0d046dba91681fe6b5ffee7b7588100dff5bebed0fccfc"
+    },
+    "evidence/before/scope-manifest.json.gz": {
+      "archived_sha256": "13edb1f0425184feaf6203492031a6b6e512fb21bee0ed205daaa1e4245d8394",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/artifacts/scope-manifest.json",
+      "source_sha256": "ccb9d3761d7848e9d898fd7462006c3556a00caa91e6a4d0dfe2711ad8ba0c6e"
+    },
+    "evidence/before/transfer-ledger.json.gz": {
+      "archived_sha256": "7cd52ed4258ba0b9a70d60e350de9282060e6005dd6a074d8d5cf5b4063c4b3f",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/transfer-ledger.json",
+      "source_sha256": "6e3d02d04642edc5b27c9271a77b84432dc92787974c39a6ac334eed6666def4"
+    },
+    "evidence/channel-full-fields-comparison.json": {
+      "archived_sha256": "6f48444ae48e6e00567f409390d8ff394f6694371a88bff41efbb5d86d995bca",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/channel-full-fields-comparison.json",
+      "source_sha256": "6f48444ae48e6e00567f409390d8ff394f6694371a88bff41efbb5d86d995bca"
+    },
+    "evidence/channel-simple-full-fields-comparison.json": {
+      "archived_sha256": "c604d62d82d3b45c0a8ca27cd249f3ce792145050b0c6bff07b68d94421a83c5",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/channel-simple-full-fields-comparison.json",
+      "source_sha256": "c604d62d82d3b45c0a8ca27cd249f3ce792145050b0c6bff07b68d94421a83c5"
+    },
+    "evidence/checkpoint-completion.json": {
+      "archived_sha256": "be6dfcdcbd9888a1210cbe46acf9df2a4904458126ea594d2766c3edea61e8c0",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/checkpoint-completion.json",
+      "source_sha256": "be6dfcdcbd9888a1210cbe46acf9df2a4904458126ea594d2766c3edea61e8c0"
+    },
+    "evidence/checkpoint.py": {
+      "archived_sha256": "babfe3abf9e100550a12d340175265fc5773b651e61cd3c3613d143f1d100c15",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/checkpoint.py",
+      "source_sha256": "babfe3abf9e100550a12d340175265fc5773b651e61cd3c3613d143f1d100c15"
+    },
+    "evidence/cuda-tests.json": {
+      "archived_sha256": "eb19482a432a2bf7ddb1ff083157ecab0364f51594ccf24ef11c5a395d20aa68",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/cuda-tests.json",
+      "source_sha256": "eb19482a432a2bf7ddb1ff083157ecab0364f51594ccf24ef11c5a395d20aa68"
+    },
+    "evidence/cuda-tests.log.gz": {
+      "archived_sha256": "da739ad92293304702cd42ceffd17ea60a4df160b18b0510c1190b14230e6309",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/cuda-tests.log",
+      "source_sha256": "f2f52940f8ed107b31595842e3b1342e2c81daf88af5a5e55d797e52d5a3c1c3"
+    },
+    "evidence/freeze_report.py": {
+      "archived_sha256": "f0e7e64883aeef5792659846ea0e85e814b1a5c77e54f8e71d55ae79b2f32b33",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/freeze_report.py",
+      "source_sha256": "f0e7e64883aeef5792659846ea0e85e814b1a5c77e54f8e71d55ae79b2f32b33"
+    },
+    "evidence/full-fields/build.json": {
+      "archived_sha256": "e111fc8f1a4823346d7f977b454fc7a9c298222b7ba769d78d2fb9101f650995",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/full-fields/build.json",
+      "source_sha256": "e111fc8f1a4823346d7f977b454fc7a9c298222b7ba769d78d2fb9101f650995"
+    },
+    "evidence/full-fields/build.log.gz": {
+      "archived_sha256": "24c9ed3011475b5de0b352967c268759e5d01bd5f736e56e97ebbe2f27dad38f",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/full-fields/build.log",
+      "source_sha256": "16d27be7b92172d73a9ad6176d7d66e3e3b0c47b7768134bd7dd6ea50a3a4f35"
+    },
+    "evidence/full-fields/dump-main.f90": {
+      "archived_sha256": "40170565640fff2ba4416638dc8aa365255ead71558b64c1b9caf52735b4255c",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/full-fields/dump-main.f90",
+      "source_sha256": "40170565640fff2ba4416638dc8aa365255ead71558b64c1b9caf52735b4255c"
+    },
+    "evidence/full-fields/plan.json": {
+      "archived_sha256": "d6decb547e896727ec23c2551b4252b7cf02bbf9a6e4905f57283dacbe294aea",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/full-fields/plan.json",
+      "source_sha256": "d6decb547e896727ec23c2551b4252b7cf02bbf9a6e4905f57283dacbe294aea"
+    },
+    "evidence/full_field_diagnostic.py": {
+      "archived_sha256": "c6d5e40a49ccb837152b2a46c89eec1e4bdeedcabdb22e2ca8b8d99f8441572f",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/full_field_diagnostic.py",
+      "source_sha256": "c6d5e40a49ccb837152b2a46c89eec1e4bdeedcabdb22e2ca8b8d99f8441572f"
+    },
+    "evidence/indirect-access-reuse-host-20261015.log.gz": {
+      "archived_sha256": "b7768807663195f02865fd7eedc96b4af0f158b1a0a7387ff25e4d861b0d43a2",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/indirect-access-reuse-host-20261015.log",
+      "source_sha256": "7fa3639503a162bb0a20919f9d8100f5263ffe5974b098aae2a27c25e45507c7"
+    },
+    "evidence/indirect-access-reuse-size-20261015.json": {
+      "archived_sha256": "ab99ca1b232561eb6c341471597cdd5cb2e258ccc13e528e109b15557cde26e7",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/indirect-access-reuse-size-20261015.json",
+      "source_sha256": "ab99ca1b232561eb6c341471597cdd5cb2e258ccc13e528e109b15557cde26e7"
+    },
+    "evidence/indirect-access-reuse-validation-20261015.json": {
+      "archived_sha256": "bef24ce232cdacece0afc0080faf0e9df19d170009c73fe13567b4e1a476bab2",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/indirect-access-reuse-validation-20261015.json",
+      "source_sha256": "bef24ce232cdacece0afc0080faf0e9df19d170009c73fe13567b4e1a476bab2"
+    },
+    "evidence/native-field-references/channel-simple/command.json": {
+      "archived_sha256": "922c957db92d2cfec461cc46bf5c03243c830404a105f345c9e2c3be94db8a0b",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/command.json",
+      "source_sha256": "922c957db92d2cfec461cc46bf5c03243c830404a105f345c9e2c3be94db8a0b"
+    },
+    "evidence/native-field-references/channel-simple/run.json": {
+      "archived_sha256": "948047d58edf3f991d506c150b710514fb696d3989d35a95044de85b09e7c703",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/run.json",
+      "source_sha256": "948047d58edf3f991d506c150b710514fb696d3989d35a95044de85b09e7c703"
+    },
+    "evidence/native-field-references/channel/command.json": {
+      "archived_sha256": "58510baf66ac1458eec16107ca0c95e016e70e36f64d9e142075d1782f2686e3",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/command.json",
+      "source_sha256": "58510baf66ac1458eec16107ca0c95e016e70e36f64d9e142075d1782f2686e3"
+    },
+    "evidence/native-field-references/channel/run.json": {
+      "archived_sha256": "7c882da68d65afec7e1e2186238f8da60b2a13fc57f7c7da150b3259e88c505f",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native/run.json",
+      "source_sha256": "7c882da68d65afec7e1e2186238f8da60b2a13fc57f7c7da150b3259e88c505f"
+    },
+    "evidence/observations.json": {
+      "archived_sha256": "379845094d0e544e87b1035b828cbe83c2be785d0515811a6a2c251eb304acfd",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/observations.json",
+      "source_sha256": "379845094d0e544e87b1035b828cbe83c2be785d0515811a6a2c251eb304acfd"
+    },
+    "evidence/resident/artifacts/scope-manifest.json.gz": {
+      "archived_sha256": "f5a3edacc8dadfd9d500cf9f898e168a1f8bec75210e1d8946c20ae8619011ab",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/artifacts/scope-manifest.json",
+      "source_sha256": "27cbfb40cee029848ce8adc4150dcac3ac41354484c106bf7bcd45c6f7798cd4"
+    },
+    "evidence/resident/artifacts/scope-transformation.json.gz": {
+      "archived_sha256": "1945769e530c23190331046b043932e5de6c12fdbee65e1dd16902a77013e843",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/artifacts/scope-transformation.json",
+      "source_sha256": "9484dfcf09b182a64be015b92df0d950c15309fdbacac1684f992faef2ea092d"
+    },
+    "evidence/resident/build_candidate.py": {
+      "archived_sha256": "ff653836c4585117cf3a7b00496574156efd7aff76bcb189bae297e7254154d7",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/build_candidate.py",
+      "source_sha256": "ff653836c4585117cf3a7b00496574156efd7aff76bcb189bae297e7254154d7"
+    },
+    "evidence/resident/candidate/build-generation.json": {
+      "archived_sha256": "fdd44f4cd38d9a4b3e0bd07621379fbf9f104eba0fe37c2caca9c90776ad5526",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build-generation.json",
+      "source_sha256": "fdd44f4cd38d9a4b3e0bd07621379fbf9f104eba0fe37c2caca9c90776ad5526"
+    },
+    "evidence/resident/candidate/build/build-command.json": {
+      "archived_sha256": "af88cc0ab4e14961d4fb32bffe092cd953dee524d7bfee141e94cbdfbdbac55c",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/build-command.json",
+      "source_sha256": "af88cc0ab4e14961d4fb32bffe092cd953dee524d7bfee141e94cbdfbdbac55c"
+    },
+    "evidence/resident/candidate/build/build-receipts.json.gz": {
+      "archived_sha256": "b676d7a4441d2945b0380469ec55496da59cd590918205e6bd19a25e4371a4d7",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/build-receipts.json",
+      "source_sha256": "6eb789fc818b4a78352bebe4cd0471b3b6108f4f43ab7b66ab16bacc52f3f076"
+    },
+    "evidence/resident/candidate/composition.json.gz": {
+      "archived_sha256": "fe3e3e587c911b57d54adcc022c187ba1960aefa094a5188cd807bd0f4a32ee6",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/composition.json",
+      "source_sha256": "67a2e30a04aeb3a9d15b881f19015173f4ce718ad67ab5e0c8d23a16462e9761"
+    },
+    "evidence/resident/candidate/native-command-comparison.json": {
+      "archived_sha256": "85d15e72477b20a320fde26ea9cfa7dfb79bb5ddb08139d819f036279812b7bd",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/native-command-comparison.json",
+      "source_sha256": "85d15e72477b20a320fde26ea9cfa7dfb79bb5ddb08139d819f036279812b7bd"
+    },
+    "evidence/resident/capture-facts.json": {
+      "archived_sha256": "7a4cb1ba19597c44999d1a073db2165a96842bee10256f6186298bfdb1c2df0a",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/capture-facts.json",
+      "source_sha256": "7a4cb1ba19597c44999d1a073db2165a96842bee10256f6186298bfdb1c2df0a"
+    },
+    "evidence/resident/command.json": {
+      "archived_sha256": "1c7f6ed6af5bb64aa7a715e1c0044f31b6019b758616c42913e800cc347b35d6",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/command.json",
+      "source_sha256": "1c7f6ed6af5bb64aa7a715e1c0044f31b6019b758616c42913e800cc347b35d6"
+    },
+    "evidence/resident/completion.json": {
+      "archived_sha256": "f864e215e8a8240b93be3657eebbc67fb31dfebff61c5927c4e0e961f975cdb4",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/completion.json",
+      "source_sha256": "f864e215e8a8240b93be3657eebbc67fb31dfebff61c5927c4e0e961f975cdb4"
+    },
+    "evidence/resident/generation.log.gz": {
+      "archived_sha256": "8a2d6c305e0384bbdb33b7cb357bc24d329b0161384a719878e1e11a0679d0a6",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/generation.log",
+      "source_sha256": "18635cd9d7630403bea8e8575f70136dcbed4f5357e16e8285c326774a33e48b"
+    },
+    "evidence/resident/request.json": {
+      "archived_sha256": "23db2b965747555122d8482f81eef963a37d652e564cbfe6b766064840e9582f",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/request.json",
+      "source_sha256": "23db2b965747555122d8482f81eef963a37d652e564cbfe6b766064840e9582f"
+    },
+    "evidence/resident/run.py": {
+      "archived_sha256": "9953039f1475fa57d1424e2cac3d147185e394dd8b6537924908b460d315dbbb",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/run.py",
+      "source_sha256": "9953039f1475fa57d1424e2cac3d147185e394dd8b6537924908b460d315dbbb"
+    },
+    "evidence/resident/worker-result.json": {
+      "archived_sha256": "cc3cfbcadc27486c7b74d08517153243beff6c50899bd8853af8d199f3e3aac9",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/worker-result.json",
+      "source_sha256": "cc3cfbcadc27486c7b74d08517153243beff6c50899bd8853af8d199f3e3aac9"
+    },
+    "evidence/run_case.py": {
+      "archived_sha256": "8bf8508c4bec72f13f7f61b37a011794c6d43826a99fb70deae86158372c2850",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/run_case.py",
+      "source_sha256": "8bf8508c4bec72f13f7f61b37a011794c6d43826a99fb70deae86158372c2850"
+    },
+    "evidence/runs/fields/channel-simple/resident-reuse/command.json": {
+      "archived_sha256": "de320d8be2e5b84364e12e760eea6cf4dba11eee13d0c9e7828d7a4cc18bbf67",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel-simple/resident-reuse/command.json",
+      "source_sha256": "de320d8be2e5b84364e12e760eea6cf4dba11eee13d0c9e7828d7a4cc18bbf67"
+    },
+    "evidence/runs/fields/channel-simple/resident-reuse/run.json": {
+      "archived_sha256": "4990b833967cb08ea800cdc31e92c376ecaf0a4f41acf4b7e3eff68a09f97b81",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel-simple/resident-reuse/run.json",
+      "source_sha256": "4990b833967cb08ea800cdc31e92c376ecaf0a4f41acf4b7e3eff68a09f97b81"
+    },
+    "evidence/runs/fields/channel-simple/resident-reuse/stderr.log.gz": {
+      "archived_sha256": "ef300cdfa4670729d0f1b933cfa4ddb43156a7260ad14f8c71f2713009f4ef55",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel-simple/resident-reuse/stderr.log",
+      "source_sha256": "fbe39f144479ce8d99c9bc8949482abe9d1d383a7116284df2043459bca15787"
+    },
+    "evidence/runs/fields/channel-simple/resident-reuse/stdout.log.gz": {
+      "archived_sha256": "c1041608d966ec45aa563ce2fe9a784d9874ffc441d3ad92cd5babe90ba261bd",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel-simple/resident-reuse/stdout.log",
+      "source_sha256": "e610a048700830adb16522ff3c4d0ff8d491c4d55c993acc4e75772faa77833b"
+    },
+    "evidence/runs/fields/channel/resident-reuse/command.json": {
+      "archived_sha256": "f99104d11ee12debda83d865e32a1b364dfeb98f62a373efd4bf5e9a11f514db",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/command.json",
+      "source_sha256": "f99104d11ee12debda83d865e32a1b364dfeb98f62a373efd4bf5e9a11f514db"
+    },
+    "evidence/runs/fields/channel/resident-reuse/run.json": {
+      "archived_sha256": "f280f750bbd21b26243ca8236012e8680cf02a2b478e0610405ac50843a9a38a",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/run.json",
+      "source_sha256": "f280f750bbd21b26243ca8236012e8680cf02a2b478e0610405ac50843a9a38a"
+    },
+    "evidence/runs/fields/channel/resident-reuse/stderr.log.gz": {
+      "archived_sha256": "1fb27b6e90fa2904fae8cadfcb1a69012769fe94a989a9d651bb7fa882aacca3",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/stderr.log",
+      "source_sha256": "a3e9fa4f7761663b31b0f1933591e2084d8a08a76875629d9d536170f756dd62"
+    },
+    "evidence/runs/fields/channel/resident-reuse/stdout.log.gz": {
+      "archived_sha256": "38b5e552e7cf367b62db6fddf6fcc240b50b34da43c47af037a982763c371f61",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/fields/channel/resident-reuse/stdout.log",
+      "source_sha256": "40683a95f6f19dfcdbe07535b1b1daa7e8555d8cc90099829198770d2fcfbb25"
+    },
+    "evidence/runs/untraced/channel-simple/round-0/native/command.json": {
+      "archived_sha256": "d227bdc0fa5dd18da7d38e4181aa5044019d6cdf9cc7a30d88eebe4a543fa17b",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-0/native/command.json",
+      "source_sha256": "d227bdc0fa5dd18da7d38e4181aa5044019d6cdf9cc7a30d88eebe4a543fa17b"
+    },
+    "evidence/runs/untraced/channel-simple/round-0/native/run.json": {
+      "archived_sha256": "348e7d405f6c8a6ff7f168e6393babc84123f5fc9dd041fceee38806429129bd",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-0/native/run.json",
+      "source_sha256": "348e7d405f6c8a6ff7f168e6393babc84123f5fc9dd041fceee38806429129bd"
+    },
+    "evidence/runs/untraced/channel-simple/round-0/native/stderr.log.gz": {
+      "archived_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-0/native/stderr.log",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "evidence/runs/untraced/channel-simple/round-0/native/stdout.log.gz": {
+      "archived_sha256": "5f4fba80e4c74eac9639ad9508340ed12b6d6f69a1e4a9d24bc303dd810658cc",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-0/native/stdout.log",
+      "source_sha256": "aedffdd305a42d296ee23e472623e5c7a6a4395188857511fd99b0d1698529b1"
+    },
+    "evidence/runs/untraced/channel-simple/round-0/resident-before/command.json": {
+      "archived_sha256": "2b78caead9566e0a047b8034439adf8f1236190f3d740d0e34fab49dbf16d2aa",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-0/resident-before/command.json",
+      "source_sha256": "2b78caead9566e0a047b8034439adf8f1236190f3d740d0e34fab49dbf16d2aa"
+    },
+    "evidence/runs/untraced/channel-simple/round-0/resident-before/run.json": {
+      "archived_sha256": "ef55e976416a095524a2f868bb85d0043063a37909347625e13fb4d716469679",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-0/resident-before/run.json",
+      "source_sha256": "ef55e976416a095524a2f868bb85d0043063a37909347625e13fb4d716469679"
+    },
+    "evidence/runs/untraced/channel-simple/round-0/resident-before/stderr.log.gz": {
+      "archived_sha256": "05a0ca00560e1557bad84cd4794f9ee1a697faa40bfd782b4fea24f840af4749",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-0/resident-before/stderr.log",
+      "source_sha256": "cb25c7d6cecfaf435ed06a979f8891438e24e417eb0c478617f221c503cfcc44"
+    },
+    "evidence/runs/untraced/channel-simple/round-0/resident-before/stdout.log.gz": {
+      "archived_sha256": "e15c988f9c8819de0040b82a5cf93c3d2abddf687546532e445c42bbace7e9df",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-0/resident-before/stdout.log",
+      "source_sha256": "c361858c756856432dabdc1bf7266c1d82c000ba6807a99cc231a0fbdf4bc12f"
+    },
+    "evidence/runs/untraced/channel-simple/round-0/resident-reuse/command.json": {
+      "archived_sha256": "fe05d7512eec357e51bade92265071017c34418190d059c97f16348ce1e3f11a",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-0/resident-reuse/command.json",
+      "source_sha256": "fe05d7512eec357e51bade92265071017c34418190d059c97f16348ce1e3f11a"
+    },
+    "evidence/runs/untraced/channel-simple/round-0/resident-reuse/run.json": {
+      "archived_sha256": "b225e25aa6b060e1c967f24429756d1d8175fc8d6694686843d6b86f81216319",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-0/resident-reuse/run.json",
+      "source_sha256": "b225e25aa6b060e1c967f24429756d1d8175fc8d6694686843d6b86f81216319"
+    },
+    "evidence/runs/untraced/channel-simple/round-0/resident-reuse/stderr.log.gz": {
+      "archived_sha256": "1595a9b1a487116fe5362602d2900096b31c12a172f625c760c89f544aa4fde3",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-0/resident-reuse/stderr.log",
+      "source_sha256": "256a878ed555d03ee6007fdfbcbba4eecbb937bbef9ed3b8570139acc04e3be2"
+    },
+    "evidence/runs/untraced/channel-simple/round-0/resident-reuse/stdout.log.gz": {
+      "archived_sha256": "1018696d5ccf3a4531d1a1b0d8faa907582d6a161eba8aec6405484ea410e1f0",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-0/resident-reuse/stdout.log",
+      "source_sha256": "e499abc239d0dd07655ab37eb5f8631e05eaa2b1fd13f38a3cd8b0a352d06caf"
+    },
+    "evidence/runs/untraced/channel-simple/round-0/sgs-direct/command.json": {
+      "archived_sha256": "3ec9cf75782fff999913db46238446937b00bfbc8ba00a69d36080009e9bad00",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-0/sgs-direct/command.json",
+      "source_sha256": "3ec9cf75782fff999913db46238446937b00bfbc8ba00a69d36080009e9bad00"
+    },
+    "evidence/runs/untraced/channel-simple/round-0/sgs-direct/run.json": {
+      "archived_sha256": "cad9208c7131c323704956619ad8f076714a752ffdd52c3789c8fc303d639600",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-0/sgs-direct/run.json",
+      "source_sha256": "cad9208c7131c323704956619ad8f076714a752ffdd52c3789c8fc303d639600"
+    },
+    "evidence/runs/untraced/channel-simple/round-0/sgs-direct/stderr.log.gz": {
+      "archived_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-0/sgs-direct/stderr.log",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "evidence/runs/untraced/channel-simple/round-0/sgs-direct/stdout.log.gz": {
+      "archived_sha256": "c5a3f1b58af01bc9f299780461630081ef8d86e70a5049ab7e381f68e0eaf638",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-0/sgs-direct/stdout.log",
+      "source_sha256": "2cde359cf1a0f5402b3370e2758197f5b9855b0e3efe76b62e9582b15bbe67aa"
+    },
+    "evidence/runs/untraced/channel-simple/round-1/native/command.json": {
+      "archived_sha256": "08477b48722ef9ea130e1d075071c88192dd989578eec8bfe97644e0a1e4658e",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-1/native/command.json",
+      "source_sha256": "08477b48722ef9ea130e1d075071c88192dd989578eec8bfe97644e0a1e4658e"
+    },
+    "evidence/runs/untraced/channel-simple/round-1/native/run.json": {
+      "archived_sha256": "b3f434d604dc1ed65d91e19f524475d45d5d6c5a5875c61d2a1faf7bab965140",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-1/native/run.json",
+      "source_sha256": "b3f434d604dc1ed65d91e19f524475d45d5d6c5a5875c61d2a1faf7bab965140"
+    },
+    "evidence/runs/untraced/channel-simple/round-1/native/stderr.log.gz": {
+      "archived_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-1/native/stderr.log",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "evidence/runs/untraced/channel-simple/round-1/native/stdout.log.gz": {
+      "archived_sha256": "2e5acdf273a86b4c3db7bb22a901075c152a1cba02f79a58a8ea2c66bbb72c28",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-1/native/stdout.log",
+      "source_sha256": "63fab1ec73c5f2a5f1623498463a3415b5cfa66e670e4a777580517e2351fb1a"
+    },
+    "evidence/runs/untraced/channel-simple/round-1/resident-before/command.json": {
+      "archived_sha256": "f860c2da5945ba6a6bc35212b9b71c7e44ee8f26767b34ca7d6c78609599af39",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-1/resident-before/command.json",
+      "source_sha256": "f860c2da5945ba6a6bc35212b9b71c7e44ee8f26767b34ca7d6c78609599af39"
+    },
+    "evidence/runs/untraced/channel-simple/round-1/resident-before/run.json": {
+      "archived_sha256": "0147b894d537f9f100d27bbb8b63bef2f5a87c25131be49f4fb8842b45bb9e11",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-1/resident-before/run.json",
+      "source_sha256": "0147b894d537f9f100d27bbb8b63bef2f5a87c25131be49f4fb8842b45bb9e11"
+    },
+    "evidence/runs/untraced/channel-simple/round-1/resident-before/stderr.log.gz": {
+      "archived_sha256": "9ac0a0524b9f0f88aed432bf721f484c2a839cf434cfd80139a5de7308a34f42",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-1/resident-before/stderr.log",
+      "source_sha256": "c3ebbdf506e5db6ba8dee7a0ca5cf8d3368f059a4ebfc46c748a3dcb4d0756e4"
+    },
+    "evidence/runs/untraced/channel-simple/round-1/resident-before/stdout.log.gz": {
+      "archived_sha256": "c436477a4fdf8f7d3422c83376f2ebd972ab54919af10dee50adcc9f289dba22",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-1/resident-before/stdout.log",
+      "source_sha256": "e08ee80dfe49d774c02591023fa4840bea9662dd5a2a1f574119823a5f4cb776"
+    },
+    "evidence/runs/untraced/channel-simple/round-1/resident-reuse/command.json": {
+      "archived_sha256": "736178ab973cd374671781c797dcd1d3d6de5fd992c4b689350bbe7a144cc718",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-1/resident-reuse/command.json",
+      "source_sha256": "736178ab973cd374671781c797dcd1d3d6de5fd992c4b689350bbe7a144cc718"
+    },
+    "evidence/runs/untraced/channel-simple/round-1/resident-reuse/run.json": {
+      "archived_sha256": "184d6abb220f77bc327f8c16b3669c8e2d48ea77c36d79ca961ecd707ec81156",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-1/resident-reuse/run.json",
+      "source_sha256": "184d6abb220f77bc327f8c16b3669c8e2d48ea77c36d79ca961ecd707ec81156"
+    },
+    "evidence/runs/untraced/channel-simple/round-1/resident-reuse/stderr.log.gz": {
+      "archived_sha256": "0af6331de71c28a77d7546612a4bf36f3aabe1605925c9e1365a97ea2cdb23a9",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-1/resident-reuse/stderr.log",
+      "source_sha256": "cea3fe328d3643c120b1f5dedc26640af32a639034a5bb69b2fc2bf860b241b7"
+    },
+    "evidence/runs/untraced/channel-simple/round-1/resident-reuse/stdout.log.gz": {
+      "archived_sha256": "edc0752124bd0087d44ba45dc5097cacc1c5f26be85b8cd91e0b773cc94a2916",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-1/resident-reuse/stdout.log",
+      "source_sha256": "52e558be38870a16b0850dd0106eb1269e96297589289f6949558bdeae1eda0c"
+    },
+    "evidence/runs/untraced/channel-simple/round-1/sgs-direct/command.json": {
+      "archived_sha256": "ee71eff022b397a986ccf80af9acf557e05d1b3fec3ee6c106ce9611aa29d101",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-1/sgs-direct/command.json",
+      "source_sha256": "ee71eff022b397a986ccf80af9acf557e05d1b3fec3ee6c106ce9611aa29d101"
+    },
+    "evidence/runs/untraced/channel-simple/round-1/sgs-direct/run.json": {
+      "archived_sha256": "6664cb39d9791dc74c0e3d1100be49f6c3bcad479e46fc71b9df4b1e7a6ac1bc",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-1/sgs-direct/run.json",
+      "source_sha256": "6664cb39d9791dc74c0e3d1100be49f6c3bcad479e46fc71b9df4b1e7a6ac1bc"
+    },
+    "evidence/runs/untraced/channel-simple/round-1/sgs-direct/stderr.log.gz": {
+      "archived_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-1/sgs-direct/stderr.log",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "evidence/runs/untraced/channel-simple/round-1/sgs-direct/stdout.log.gz": {
+      "archived_sha256": "33258115ba8ac07dad11435a9de734f6604ba08fde3c205df6b121387b01700e",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-1/sgs-direct/stdout.log",
+      "source_sha256": "5fccbaff4df0e8d536e075ee393ec4156124aadeedb37ec30abd4248a361899f"
+    },
+    "evidence/runs/untraced/channel-simple/round-2/native/command.json": {
+      "archived_sha256": "0fd6c8f0783717941679508d3c99444322f1c6ae66829db4c4bc8fc0795338a2",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-2/native/command.json",
+      "source_sha256": "0fd6c8f0783717941679508d3c99444322f1c6ae66829db4c4bc8fc0795338a2"
+    },
+    "evidence/runs/untraced/channel-simple/round-2/native/run.json": {
+      "archived_sha256": "cee76efaa2e17d06ce58180f9123bd4176bd0cdf5f492e2493a85c309462aad8",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-2/native/run.json",
+      "source_sha256": "cee76efaa2e17d06ce58180f9123bd4176bd0cdf5f492e2493a85c309462aad8"
+    },
+    "evidence/runs/untraced/channel-simple/round-2/native/stderr.log.gz": {
+      "archived_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-2/native/stderr.log",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "evidence/runs/untraced/channel-simple/round-2/native/stdout.log.gz": {
+      "archived_sha256": "f77be86d7b4fee0b50048db5702ebb94468ee8b87fd02e904ac96e74c0c45743",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-2/native/stdout.log",
+      "source_sha256": "6acdc4c757dc9fdeb529cdef6e51966d7c901941cccd7f2f71f00e4b3567b2a4"
+    },
+    "evidence/runs/untraced/channel-simple/round-2/resident-before/command.json": {
+      "archived_sha256": "010542cb61e62d091c8fef2dbf19714f9f01a4f4c086778792aeab36382b084d",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-2/resident-before/command.json",
+      "source_sha256": "010542cb61e62d091c8fef2dbf19714f9f01a4f4c086778792aeab36382b084d"
+    },
+    "evidence/runs/untraced/channel-simple/round-2/resident-before/run.json": {
+      "archived_sha256": "b359b425dab74724c215debac096fdce132cccaed012af032f5aaa9e4a3209f6",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-2/resident-before/run.json",
+      "source_sha256": "b359b425dab74724c215debac096fdce132cccaed012af032f5aaa9e4a3209f6"
+    },
+    "evidence/runs/untraced/channel-simple/round-2/resident-before/stderr.log.gz": {
+      "archived_sha256": "bdb89fd908eff02bc4d84b7ecb58de565007cbe03993155d37cf3cd36bac9001",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-2/resident-before/stderr.log",
+      "source_sha256": "0b814d7dff0e0e174c4939311d74a74029d879022e2248f002295c249d3db099"
+    },
+    "evidence/runs/untraced/channel-simple/round-2/resident-before/stdout.log.gz": {
+      "archived_sha256": "9f8a47d403af1eee5e69d2b22a776098e746c4d7ad302788baacc25b3aecff32",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-2/resident-before/stdout.log",
+      "source_sha256": "bdbe3a4abcf60131ef8be1436005fd30314b0eadc10c12ca800f14ddbb0270cd"
+    },
+    "evidence/runs/untraced/channel-simple/round-2/resident-reuse/command.json": {
+      "archived_sha256": "e9ed03e7aa4978a6255bf7a130525e5e3968330a7e6cbcd31308f8f535ebb182",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-2/resident-reuse/command.json",
+      "source_sha256": "e9ed03e7aa4978a6255bf7a130525e5e3968330a7e6cbcd31308f8f535ebb182"
+    },
+    "evidence/runs/untraced/channel-simple/round-2/resident-reuse/run.json": {
+      "archived_sha256": "ba9fb125879948999b81bad02aaf2193716cb9ba75caad3353aa16c93990c236",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-2/resident-reuse/run.json",
+      "source_sha256": "ba9fb125879948999b81bad02aaf2193716cb9ba75caad3353aa16c93990c236"
+    },
+    "evidence/runs/untraced/channel-simple/round-2/resident-reuse/stderr.log.gz": {
+      "archived_sha256": "a0a8f40c8a600cf44db841d1b89e66fbd3638413e77ca03eeef02ac969edbc44",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-2/resident-reuse/stderr.log",
+      "source_sha256": "a5beac4e2b8390b503b84a6bfc2c60a1c883129915dd1e25ce7d06eb9076a9e6"
+    },
+    "evidence/runs/untraced/channel-simple/round-2/resident-reuse/stdout.log.gz": {
+      "archived_sha256": "60919d14246b85a92a06e64aff2949ab7052f114f0fbd23a31c7457e68f6f30d",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-2/resident-reuse/stdout.log",
+      "source_sha256": "1732f9e8051824e44d8b07491d99bb07577f45ad6e8e09879a821c33512c93ee"
+    },
+    "evidence/runs/untraced/channel-simple/round-2/sgs-direct/command.json": {
+      "archived_sha256": "f45f6949e18020790aeb6292ca7c4e212384d87b8d02c6912e6d397ccdcd69d6",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-2/sgs-direct/command.json",
+      "source_sha256": "f45f6949e18020790aeb6292ca7c4e212384d87b8d02c6912e6d397ccdcd69d6"
+    },
+    "evidence/runs/untraced/channel-simple/round-2/sgs-direct/run.json": {
+      "archived_sha256": "6303ce0b41025f690e9332c9672b79a68d16f125c97ae2ba7f08a8f8756d946f",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-2/sgs-direct/run.json",
+      "source_sha256": "6303ce0b41025f690e9332c9672b79a68d16f125c97ae2ba7f08a8f8756d946f"
+    },
+    "evidence/runs/untraced/channel-simple/round-2/sgs-direct/stderr.log.gz": {
+      "archived_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-2/sgs-direct/stderr.log",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "evidence/runs/untraced/channel-simple/round-2/sgs-direct/stdout.log.gz": {
+      "archived_sha256": "37f12359e815537b9f92f2019effcd40a1850aeb29c0a74f2966895b4bbc2159",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-2/sgs-direct/stdout.log",
+      "source_sha256": "9b69579b95f9200b1416d3d6802b97fd35ca15469ac9d08e3cd80748248912a6"
+    },
+    "evidence/runs/untraced/channel-simple/round-3/native/command.json": {
+      "archived_sha256": "792cb026f794c61455004d911da16ed4cfb392cdaaeb547749a25bb648f1ecd0",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-3/native/command.json",
+      "source_sha256": "792cb026f794c61455004d911da16ed4cfb392cdaaeb547749a25bb648f1ecd0"
+    },
+    "evidence/runs/untraced/channel-simple/round-3/native/run.json": {
+      "archived_sha256": "17572755c8c438866267a18926fb1e5a995b1509830a5f61345b4a5bdb1ab5c8",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-3/native/run.json",
+      "source_sha256": "17572755c8c438866267a18926fb1e5a995b1509830a5f61345b4a5bdb1ab5c8"
+    },
+    "evidence/runs/untraced/channel-simple/round-3/native/stderr.log.gz": {
+      "archived_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-3/native/stderr.log",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "evidence/runs/untraced/channel-simple/round-3/native/stdout.log.gz": {
+      "archived_sha256": "ccd9491728e78e9ed6e64605c116b8c38b22ebfa662758c2608505b33854f3e5",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-3/native/stdout.log",
+      "source_sha256": "73a9553b4e513b1e1a6a4833506f949c92ac2e88f9e1f0be7be35f6792fe99b1"
+    },
+    "evidence/runs/untraced/channel-simple/round-3/resident-before/command.json": {
+      "archived_sha256": "200b9654dc05fff4da96af9a8a26ebfa551c42b53d9bd6f5a4033b3671d252a8",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-3/resident-before/command.json",
+      "source_sha256": "200b9654dc05fff4da96af9a8a26ebfa551c42b53d9bd6f5a4033b3671d252a8"
+    },
+    "evidence/runs/untraced/channel-simple/round-3/resident-before/run.json": {
+      "archived_sha256": "842d8be49a7a5d7cebb8748fd3e39f62fd0c2e317bc6186454d066aac9e9cbef",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-3/resident-before/run.json",
+      "source_sha256": "842d8be49a7a5d7cebb8748fd3e39f62fd0c2e317bc6186454d066aac9e9cbef"
+    },
+    "evidence/runs/untraced/channel-simple/round-3/resident-before/stderr.log.gz": {
+      "archived_sha256": "6c217c32c784583f80f544c1a98080618ffdc125191f5c10e18f56ddbf50a2dd",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-3/resident-before/stderr.log",
+      "source_sha256": "407f63722b1d18fb072eb52ad023f1adadac22aea1871ead09c15f4457d20ae1"
+    },
+    "evidence/runs/untraced/channel-simple/round-3/resident-before/stdout.log.gz": {
+      "archived_sha256": "d0e228208b46f9b451339f879209629dbc92b4b32f05fa34aac57e5a92ca4dfa",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-3/resident-before/stdout.log",
+      "source_sha256": "a633f1e17fa3d86806884a034e9b919296cc8731dfa4f56fb2f3c29e383cc156"
+    },
+    "evidence/runs/untraced/channel-simple/round-3/resident-reuse/command.json": {
+      "archived_sha256": "5cfabdbaea6c2835f0c4035576eed5aa504dddaeb3e23ad6a8840ee1bf1d49a3",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-3/resident-reuse/command.json",
+      "source_sha256": "5cfabdbaea6c2835f0c4035576eed5aa504dddaeb3e23ad6a8840ee1bf1d49a3"
+    },
+    "evidence/runs/untraced/channel-simple/round-3/resident-reuse/run.json": {
+      "archived_sha256": "79b1f37f15d607f1349183490c62d16ebd371bd2fd87fdb1054ee872159c4d79",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-3/resident-reuse/run.json",
+      "source_sha256": "79b1f37f15d607f1349183490c62d16ebd371bd2fd87fdb1054ee872159c4d79"
+    },
+    "evidence/runs/untraced/channel-simple/round-3/resident-reuse/stderr.log.gz": {
+      "archived_sha256": "0c9bb3e6ced19222ad3061969a52614cb1c5dc8f285e7e3a0055d3a944595425",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-3/resident-reuse/stderr.log",
+      "source_sha256": "647a09cac7d39f70b6990bb120841f916869679916ca8cc7983296cbe29649a6"
+    },
+    "evidence/runs/untraced/channel-simple/round-3/resident-reuse/stdout.log.gz": {
+      "archived_sha256": "42b3866941b777c4073d11b6412a6ef9eb6a8e85a2401e5fd595deadc0d294ec",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-3/resident-reuse/stdout.log",
+      "source_sha256": "c381e5876fc6a4ed8360491dae923bec671deb2207f94af57082386618042fb4"
+    },
+    "evidence/runs/untraced/channel-simple/round-3/sgs-direct/command.json": {
+      "archived_sha256": "51c83125a47a9345a16d54b1e1ae399ede92a10e6be530d63a38a6a70efe7ddc",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-3/sgs-direct/command.json",
+      "source_sha256": "51c83125a47a9345a16d54b1e1ae399ede92a10e6be530d63a38a6a70efe7ddc"
+    },
+    "evidence/runs/untraced/channel-simple/round-3/sgs-direct/run.json": {
+      "archived_sha256": "2129e1e7e6ed084dbaf5ea30ee3445b04e102a3561f78af9db180b214cb5cc7f",
+      "compressed": false,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-3/sgs-direct/run.json",
+      "source_sha256": "2129e1e7e6ed084dbaf5ea30ee3445b04e102a3561f78af9db180b214cb5cc7f"
+    },
+    "evidence/runs/untraced/channel-simple/round-3/sgs-direct/stderr.log.gz": {
+      "archived_sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-3/sgs-direct/stderr.log",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "evidence/runs/untraced/channel-simple/round-3/sgs-direct/stdout.log.gz": {
+      "archived_sha256": "d9d5c7557e47bab2361519bd0db706527bfcdcffcd1ff75b1de387e4c3015379",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/runs/untraced/channel-simple/round-3/sgs-direct/stdout.log",
+      "source_sha256": "68e117926f6459dd08380e8d9f2653c061a5db49c228580f3b52b985c7839035"
+    },
+    "evidence/transfer-ledger.json.gz": {
+      "archived_sha256": "dcfdf4f37f7a7cb7eed0d43c8debccb1f8ea0808078c2ea80c31c80dadabf8b2",
+      "compressed": true,
+      "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/transfer-ledger.json",
+      "source_sha256": "74b58704c6e35ae0e760b489af2ed42b1910301404bc8da1b2ed7c318698b80a"
+    }
+  },
+  "fields": {
+    "channel": {
+      "atol": 1e-06,
+      "bounds_and_halos": true,
+      "completion": {
+        "completed_steps": 2458,
+        "natural_end": true,
+        "poisson_seconds": 20.95,
+        "time_steps_seconds": 463.36
+      },
+      "field_records": 20,
+      "max_absolute_error": 6.750353235274176e-07,
+      "performance_qualification": false,
+      "rtol": 1e-05,
+      "status": "passed",
+      "traced": false
+    },
+    "channel-simple": {
+      "atol": 1e-06,
+      "bounds_and_halos": true,
+      "completion": {
+        "completed_steps": 109,
+        "natural_end": true,
+        "poisson_seconds": 0.94,
+        "time_steps_seconds": 21.55
+      },
+      "field_records": 20,
+      "max_absolute_error": 4.532520611610913e-07,
+      "performance_qualification": false,
+      "rtol": 1e-05,
+      "status": "passed",
+      "traced": true
+    }
+  },
+  "generation_seconds": 73.96812889000284,
+  "kind": "operation-local inspector reuse checkpoint",
+  "original_compilation_flags_match_native": true,
+  "performance": {
+    "native": {
+      "binary_sha256": "c02226278a595193e31cbc05983b187e4b64c6fbf8ff4649168375bccb03b96c",
+      "max": 12.266098727006465,
+      "median": 12.263789870994515,
+      "min": 12.212949845008552,
+      "native_relative_median": 1.0,
+      "owner_seconds": [
+        null,
+        null,
+        null
+      ],
+      "samples": [
+        12.266098727006465,
+        12.263789870994515,
+        12.212949845008552
+      ]
+    },
+    "resident-before": {
+      "binary_sha256": "055edd942a5c798970172e025621aaddfb0c679f7ddaca35ed84ebce8a7d47ef",
+      "max": 19.585262220003642,
+      "median": 19.542620854001143,
+      "min": 19.332519878997118,
+      "native_relative_median": 1.5935221542096074,
+      "owner_seconds": [
+        8.428652791,
+        8.607714515,
+        8.369764757
+      ],
+      "samples": [
+        19.585262220003642,
+        19.542620854001143,
+        19.332519878997118
+      ]
+    },
+    "resident-reuse": {
+      "binary_sha256": "144786c16211257591289bf608eb5193339a2fa8fe5a7bdea76b4350824291b1",
+      "max": 18.742893764996552,
+      "median": 18.53302269599226,
+      "min": 18.237172013003146,
+      "native_relative_median": 1.511198649923488,
+      "owner_seconds": [
+        7.227574471,
+        7.411625048,
+        7.525436569
+      ],
+      "samples": [
+        18.237172013003146,
+        18.53302269599226,
+        18.742893764996552
+      ]
+    },
+    "sgs-direct": {
+      "binary_sha256": "90ead07ea6a395c98e8aadaf2564c48b1bde570530da1e737fc015fe567e2f64",
+      "max": 9.954429616002017,
+      "median": 9.804860618009116,
+      "min": 9.757612689994858,
+      "native_relative_median": 0.7994967886068325,
+      "owner_seconds": [
+        null,
+        null,
+        null
+      ],
+      "samples": [
+        9.954429616002017,
+        9.757612689994858,
+        9.804860618009116
+      ]
+    }
+  },
+  "performance_targets_met": false,
+  "prior_resident_compiler_commit": "dd8ea33d55328d7ea7919ae328440f6a047a2cdf",
+  "qualification": false,
+  "reuse_median_reduction_fraction": 0.051661349086766895,
+  "schema_version": 1,
+  "tests": {
+    "cuda": 2,
+    "full_required_suites_run": false,
+    "host": 57
+  },
+  "transfers": {
+    "after_observed": {
+      "download_bytes": 4093181952,
+      "download_events": 2943,
+      "launch_events": 981,
+      "upload_bytes": 9987009024,
+      "upload_events": 7848,
+      "wait_events": 2289
+    },
+    "before_observed": {
+      "download_bytes": 4093181952,
+      "download_events": 2943,
+      "launch_events": 981,
+      "upload_bytes": 9987009024,
+      "upload_events": 7848,
+      "wait_events": 2289
+    },
+    "equal": true,
+    "expected": "unchanged exact sections; no compatible automatic transfer-cost estimate",
+    "issues": [],
+    "successful_contexts": 327
+  }
+}

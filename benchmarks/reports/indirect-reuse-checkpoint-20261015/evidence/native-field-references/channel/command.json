@@ -1,0 +1,48 @@
+{
+  "affinity": [
+    4,
+    5,
+    10,
+    11
+  ],
+  "argv": [
+    "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/full-fields/native/ELMM-fields",
+    "output_dir='output/'"
+  ],
+  "automatic_placement_claim": false,
+  "binary_sha256": "e05de7b77436501e59187c9e3b402a1c7c310e43695e133f9eda0882d21ef392",
+  "case": "channel",
+  "compiler_commit": "744a06a912da56f116831868c554b5e82f9ae4c1",
+  "completed": false,
+  "configuration_overrides": {},
+  "configuration_sha256": {
+    "boundconds.conf": "b6b64e153212affdfae650767de910113c008a77a350ef5fddd4f22bbf04e619",
+    "frames.conf": "866cc5cb4d15b35079c2eeb1027613ee9dbaf0a28e0f47423512d3ab226d05bb",
+    "grid.conf": "f44970b7a9e636d1bf78bd2b48820f1bd50ec2adec1c163825ed0d435f8cd7ef",
+    "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+    "les.conf": "1cee53a844bb557673849df1942cb749db067b01f2b19356c9018a53f9b3385d",
+    "main.conf": "3bbb39e3312dcfbc846e78d83bd7eb3bc071907c028e8db79569bd707af43e9b",
+    "output.conf": "b894e8a4500102f04733544b8c85a648684d63cd3eb8dba12518f41e79f65f51",
+    "time_stepping.conf": "87e5abd4c4b57cc5dffdf8a166480207cc54b3f210ba47d9d81ccdcf0ef94483"
+  },
+  "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel/native",
+  "environment": {
+    "CUDA_HOME": "/usr/local/cuda",
+    "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+    "MKL_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "4",
+    "OMP_PROC_BIND": "false",
+    "OMP_SCHEDULE": "static",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "kind": "full-process diagnostic",
+  "mode": "native-fields",
+  "pid": 5,
+  "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+  "qualification": false,
+  "schema_version": 1,
+  "threads": 4,
+  "timeout_seconds": 3600,
+  "traced": false
+}

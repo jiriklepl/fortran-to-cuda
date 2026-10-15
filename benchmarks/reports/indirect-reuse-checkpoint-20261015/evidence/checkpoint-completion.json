@@ -1,0 +1,11 @@
+{
+  "automatic_residency": false,
+  "cases": [
+    "channel-simple",
+    "channel"
+  ],
+  "completed": true,
+  "excluded_warmup_rounds": 1,
+  "performance_rounds": 3,
+  "qualification": false
+}

@@ -1,0 +1,318 @@
+{
+  "argv": [
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/.cache/envs/build/bin/python",
+    "-m",
+    "SCons",
+    "-f",
+    "SConstruct.pipeline",
+    "-j",
+    "4",
+    "fast=yes",
+    "aggressive=no",
+    "lto=no",
+    "openmp=yes",
+    "prec=dp",
+    "dir=/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build"
+  ],
+  "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/application/ELMM/src",
+  "native_library_dir": "/home/jirka/research/fortran-abomination/elmm-pipeline/.cache/native/lib",
+  "preprocessing_defines": [
+    "DPREC"
+  ],
+  "extra_sources": [
+    "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/artifacts/entries/entry_fdac987e235f/shared_interface.f90",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/artifacts/entries/entry_12c702ebf3ed/shared_interface.f90",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/artifacts/entries/entry_128bb3aaefcf/shared_interface.f90",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/artifacts/regions/fort_regions_9a8ed482d586.f90",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/artifacts/fort_scoped_team_observer.f90",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/artifacts/fort_scoped_memory.f90"
+  ],
+  "patched_sources": [
+    "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/application/ELMM/src/tiling.f90",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/application/ELMM/src/momentum_diffusion.f90",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/application/ELMM/src/parameters.f90",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/application/ELMM/src/dynamics.f90"
+  ],
+  "command_receipts": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/host-command-receipts-8vnek3pe",
+  "gpu": {
+    "toolchain": {
+      "architecture": "86",
+      "device": {
+        "available": false,
+        "devices": [],
+        "argv": [
+          "/usr/lib/wsl/lib/nvidia-smi",
+          "--query-gpu=name,driver_version,compute_cap",
+          "--format=csv,noheader,nounits"
+        ],
+        "error": "Failed to initialize NVML: GPU access blocked by the operating system\nFailed to properly shut down NVML: GPU access blocked by the operating system"
+      },
+      "versions": {
+        "nvcc": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2026 NVIDIA Corporation\nBuilt on Tue_Sep_01_08:45:21_PDT_2026\nCuda compilation tools, release 13.4, V13.4.92\nBuild cuda_13.4.r13.4/compiler.38855100_0",
+        "cuda_host_cxx": "x86_64-linux-gnu-g++-14 (Debian 14.4.0-3) 14.4.0\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+      },
+      "nvcc": "/usr/local/cuda-13.4/bin/nvcc",
+      "cuda_host_cxx": "/usr/bin/x86_64-linux-gnu-g++-14",
+      "cuda_library_dir": "/usr/local/cuda-13.4/targets/x86_64-linux/lib",
+      "cuda_runtime_discovery": {
+        "method": "explicit",
+        "directory": "/usr/local/cuda-13.4/targets/x86_64-linux/lib"
+      }
+    },
+    "sources": [
+      {
+        "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/artifacts/entries/entry_fdac987e235f/shared_entry.cu",
+        "language": "cuda",
+        "tool": "local",
+        "numerical_contract_status": "validated",
+        "numerical_contract": {
+          "schema_version": 1,
+          "id": "separate-arithmetic-v1",
+          "required_cuda_options": [
+            "--fmad=false",
+            "--ftz=false",
+            "--prec-div=true",
+            "--prec-sqrt=true"
+          ],
+          "required_host_options": [
+            "-ffp-contract=off"
+          ],
+          "identity": "552311d688f9bf1e9744a3143d4ca17c30e162bc35c0035dad77b6d769f6ce19"
+        },
+        "resolved_numerical_options": {
+          "cuda": [
+            "--fmad=false",
+            "--ftz=false",
+            "--prec-div=true",
+            "--prec-sqrt=true"
+          ],
+          "host": [
+            "-ffp-contract=off"
+          ]
+        },
+        "sha256": "40da47176fd5ffc53909338d075b94e626619b17241d95e67c5258bb81239d00",
+        "build_log": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/gpu/000_shared_entry.log",
+        "build_status": "compiled"
+      },
+      {
+        "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/artifacts/entries/entry_12c702ebf3ed/shared_entry.cu",
+        "language": "cuda",
+        "tool": "local",
+        "numerical_contract_status": "validated",
+        "numerical_contract": {
+          "schema_version": 1,
+          "id": "separate-arithmetic-v1",
+          "required_cuda_options": [
+            "--fmad=false",
+            "--ftz=false",
+            "--prec-div=true",
+            "--prec-sqrt=true"
+          ],
+          "required_host_options": [
+            "-ffp-contract=off"
+          ],
+          "identity": "552311d688f9bf1e9744a3143d4ca17c30e162bc35c0035dad77b6d769f6ce19"
+        },
+        "resolved_numerical_options": {
+          "cuda": [
+            "--fmad=false",
+            "--ftz=false",
+            "--prec-div=true",
+            "--prec-sqrt=true"
+          ],
+          "host": [
+            "-ffp-contract=off"
+          ]
+        },
+        "sha256": "d00fa50590fe7aaec5a3d26bbd1ef027397804493708ec3820c37ea20d5c0ef0",
+        "build_log": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/gpu/001_shared_entry.log",
+        "build_status": "compiled"
+      },
+      {
+        "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/artifacts/entries/entry_128bb3aaefcf/shared_entry.cu",
+        "language": "cuda",
+        "tool": "local",
+        "numerical_contract_status": "validated",
+        "numerical_contract": {
+          "schema_version": 1,
+          "id": "separate-arithmetic-v1",
+          "required_cuda_options": [
+            "--fmad=false",
+            "--ftz=false",
+            "--prec-div=true",
+            "--prec-sqrt=true"
+          ],
+          "required_host_options": [
+            "-ffp-contract=off"
+          ],
+          "identity": "552311d688f9bf1e9744a3143d4ca17c30e162bc35c0035dad77b6d769f6ce19"
+        },
+        "resolved_numerical_options": {
+          "cuda": [
+            "--fmad=false",
+            "--ftz=false",
+            "--prec-div=true",
+            "--prec-sqrt=true"
+          ],
+          "host": [
+            "-ffp-contract=off"
+          ]
+        },
+        "sha256": "9c9ab640443493ecf3106e8bacbc19218aa0060a6374b7d2e6b22966d92cb01c",
+        "build_log": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/gpu/002_shared_entry.log",
+        "build_status": "compiled"
+      },
+      {
+        "source": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/artifacts/scoped_runtime.cu",
+        "language": "cuda",
+        "tool": "local",
+        "numerical_contract_status": "validated",
+        "numerical_contract": {
+          "schema_version": 1,
+          "id": "separate-arithmetic-v1",
+          "required_cuda_options": [
+            "--fmad=false",
+            "--ftz=false",
+            "--prec-div=true",
+            "--prec-sqrt=true"
+          ],
+          "required_host_options": [
+            "-ffp-contract=off"
+          ],
+          "identity": "552311d688f9bf1e9744a3143d4ca17c30e162bc35c0035dad77b6d769f6ce19"
+        },
+        "resolved_numerical_options": {
+          "cuda": [
+            "--fmad=false",
+            "--ftz=false",
+            "--prec-div=true",
+            "--prec-sqrt=true"
+          ],
+          "host": [
+            "-ffp-contract=off"
+          ]
+        },
+        "sha256": "2d0873b9c07cd67f81d657a4b38e8f5bf952c022990efd08ee0d47420b38a9cc",
+        "build_log": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/gpu/003_scoped_runtime.log",
+        "build_status": "compiled"
+      }
+    ],
+    "commands": [
+      [
+        "/usr/local/cuda-13.4/bin/nvcc",
+        "-O3",
+        "-std=c++17",
+        "-arch=sm_86",
+        "-ccbin",
+        "/usr/bin/x86_64-linux-gnu-g++-14",
+        "-Xcompiler=-fPIC,-fopenmp",
+        "-DDPREC",
+        "--fmad=false",
+        "--ftz=false",
+        "--prec-div=true",
+        "--prec-sqrt=true",
+        "-Xcompiler=-ffp-contract=off",
+        "-c",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/artifacts/entries/entry_fdac987e235f/shared_entry.cu",
+        "-o",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/gpu/000_shared_entry.o"
+      ],
+      [
+        "/usr/local/cuda-13.4/bin/nvcc",
+        "-O3",
+        "-std=c++17",
+        "-arch=sm_86",
+        "-ccbin",
+        "/usr/bin/x86_64-linux-gnu-g++-14",
+        "-Xcompiler=-fPIC,-fopenmp",
+        "-DDPREC",
+        "--fmad=false",
+        "--ftz=false",
+        "--prec-div=true",
+        "--prec-sqrt=true",
+        "-Xcompiler=-ffp-contract=off",
+        "-c",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/artifacts/entries/entry_12c702ebf3ed/shared_entry.cu",
+        "-o",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/gpu/001_shared_entry.o"
+      ],
+      [
+        "/usr/local/cuda-13.4/bin/nvcc",
+        "-O3",
+        "-std=c++17",
+        "-arch=sm_86",
+        "-ccbin",
+        "/usr/bin/x86_64-linux-gnu-g++-14",
+        "-Xcompiler=-fPIC,-fopenmp",
+        "-DDPREC",
+        "--fmad=false",
+        "--ftz=false",
+        "--prec-div=true",
+        "--prec-sqrt=true",
+        "-Xcompiler=-ffp-contract=off",
+        "-c",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/artifacts/entries/entry_128bb3aaefcf/shared_entry.cu",
+        "-o",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/gpu/002_shared_entry.o"
+      ],
+      [
+        "/usr/local/cuda-13.4/bin/nvcc",
+        "-O3",
+        "-std=c++17",
+        "-arch=sm_86",
+        "-ccbin",
+        "/usr/bin/x86_64-linux-gnu-g++-14",
+        "-Xcompiler=-fPIC,-fopenmp",
+        "-DDPREC",
+        "--fmad=false",
+        "--ftz=false",
+        "--prec-div=true",
+        "--prec-sqrt=true",
+        "-Xcompiler=-ffp-contract=off",
+        "-c",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/artifacts/scoped_runtime.cu",
+        "-o",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/gpu/003_scoped_runtime.o"
+      ]
+    ],
+    "objects": [
+      "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/gpu/000_shared_entry.o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/gpu/001_shared_entry.o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/gpu/002_shared_entry.o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/gpu/003_scoped_runtime.o"
+    ],
+    "jobs": 4,
+    "command_receipts": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/gpu/command-receipts-nuq1ip6f",
+    "compiler_environment": {
+      "NVCC_PREPEND_FLAGS": null,
+      "NVCC_APPEND_FLAGS": null
+    },
+    "library_dirs": [
+      "/usr/lib/gcc/x86_64-linux-gnu/14",
+      "/usr/local/cuda-13.4/targets/x86_64-linux/lib"
+    ],
+    "libraries": [
+      "cudart",
+      "stdc++"
+    ],
+    "rpaths": [
+      "/usr/lib/gcc/x86_64-linux-gnu/14",
+      "/usr/local/cuda-13.4/targets/x86_64-linux/lib"
+    ],
+    "link_flags": [],
+    "cuda_stdcxx_library": "/usr/lib/gcc/x86_64-linux-gnu/14/libstdc++.so",
+    "cuda_stdcxx_link_dir": "/usr/lib/gcc/x86_64-linux-gnu/14"
+  },
+  "host_runtime": {
+    "gnu_openmp": "/usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0",
+    "ordered_prefix": [
+      "/usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0",
+      "/usr/lib/gcc/x86_64-linux-gnu/14/libstdc++.so"
+    ]
+  },
+  "build_receipts": {
+    "path": "/home/jirka/research/fortran-abomination/benchmarks/results/indirect-reuse-checkpoint-20261015/resident/candidate/build/build-receipts.json",
+    "status": "complete",
+    "identity": "b1207c4c8f109e32a33b6b72146cef9abcbdb7acc6300f239621de9bafb62345"
+  }
+}
