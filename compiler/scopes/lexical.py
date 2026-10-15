@@ -423,8 +423,32 @@ class LexicalOwner:
                         self.refresh()
                         before = self.owner.builder.scope_checkpoint()
             if scope is None:
-                scope = StructuredScope(self.builder, nodes, condition_only=condition_only,
-                                        native_metadata=True, lexical_native=True, native_host_reads=True)
+                try:
+                    scope = StructuredScope(self.builder, nodes, condition_only=condition_only,
+                                            native_metadata=True, lexical_native=True, native_host_reads=True)
+                except CompilationError as complete_error:
+                    if (condition_only or self is not self.owner or source_guard is not None
+                            or len(nodes) != 1 or _kind(nodes[0]) != "Call_Stmt"
+                            or hasattr(nodes[0], "fort_inline_region")):
+                        raise
+                    # One unchanged CALL can have sufficient demanded effects
+                    # without a complete numerical/capture closure. Keep the
+                    # ordinary resolver strict for every other consumer.
+                    self.owner.builder.restore_scope_checkpoint(before)
+                    self.refresh()
+                    from compiler.scopes.resource_demand import resource_demand_from_inline_owner
+
+                    previous = set(getattr(self.builder, "_resource_demands", {}))
+                    try:
+                        demand = resource_demand_from_inline_owner(self)
+                        scope = StructuredScope(self.builder, nodes, lexical_native=True,
+                                                native_call_demand=demand)
+                    except CompilationError as demand_error:
+                        registry = getattr(self.builder, "_resource_demands", {})
+                        for identity in set(registry) - previous:
+                            del registry[identity]
+                        raise CompilationError(str(complete_error) + "; demanded native continuation: "
+                                               + str(demand_error)) from demand_error
             from compiler.scopes.views import view_call
             if any(view_call(call) for call in scope.calls):
                 raise CompilationError("lexical rectangular calls require reached view preflight")
@@ -465,7 +489,8 @@ class LexicalOwner:
             from compiler.scopes.definitions import summarize
             definitions = summarize(scope)
             leaves = {leaf for call in scope.calls for leaf in self.builder.closure(call.procedure)[0]}
-            if not arrays and not leaves and not metadata and not any(operation.native_environment for operation in scope.native):
+            if (not arrays and not leaves and not metadata
+                    and not any(operation.native_environment or operation.demand_effects for operation in scope.native)):
                 self._retain_numerical_team_declines(nodes, joined_rejections, scope)
                 return  # Original scalar operations need no runtime context.
             self.builder.scope_budget(scope.calls)

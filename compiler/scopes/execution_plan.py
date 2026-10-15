@@ -111,6 +111,7 @@ def _registered_authorities(owner, owned_types):
     from compiler.frontend.native_call_coordinates import NativeCallCoordinatesProof
     from compiler.frontend.native_completion import NativeCompletionProof
     from compiler.frontend.native_definitions import NativeDefinitionProof
+    from compiler.frontend.native_demand import SourceBoundNativeDemandEffects
     from compiler.frontend.native_environment import NativeEnvironmentProof, NativeLocalStateProof
     from compiler.frontend.native_intrinsics import NativePredicateProof
     from compiler.frontend.native_prefix import NativePrefixProof
@@ -125,6 +126,7 @@ def _registered_authorities(owner, owned_types):
     from compiler.frontend.structured_effects import StructuredSummary
     from compiler.frontend.worksharing_completion import WorksharingCompletionProof, WorksharingNativeCompletionProof
     from compiler.scopes.lexical import OwnerEmission
+    from compiler.scopes.resource_demand import IntervalResourceDemand
     from compiler.scopes.source import ScopeBuilder
 
     registries = {
@@ -132,6 +134,7 @@ def _registered_authorities(owner, owned_types):
         NativeCallCoordinatesProof: "_native_definition_proofs",
         NativeCompletionProof: "_joined_completions",
         NativeDefinitionProof: "_native_definition_proofs",
+        SourceBoundNativeDemandEffects: "_native_demand_effects",
         NativeEnvironmentProof: "_native_environments",
         NativeLocalStateProof: "_native_environment_states",
         NativePredicateProof: "_native_predicates",
@@ -148,7 +151,7 @@ def _registered_authorities(owner, owned_types):
         WorksharingNativeCompletionProof: "_worksharing_native_completions",
     }
     session = owner.builder.analysis._source_session
-    pending, seen, analyses = [owner], set(), {}
+    pending, seen, analyses, builders = [owner], set(), {}, {}
     while pending:
         value = pending.pop()
         if id(value) in seen:
@@ -160,9 +163,11 @@ def _registered_authorities(owner, owned_types):
             if origin is not None:
                 pending.append(origin)
         elif isinstance(value, ScopeBuilder):
+            builders[id(value)] = value
             pending.append(value.analysis)
         elif (isinstance(value, (Base, OwnerEmission, StructuredSummary))
-              or type(value) in registries or session is not None and session.contains(value)):
+              or type(value) in registries or type(value) is IntervalResourceDemand
+              or session is not None and session.contains(value)):
             continue
         elif isinstance(value, (dict, MappingProxyType)):
             pending.extend(value.values())
@@ -173,6 +178,11 @@ def _registered_authorities(owner, owned_types):
             pending.extend(vars(value).values() if hasattr(value, "__dict__") else
                            (getattr(value, part.name) for part in fields(value)))
     authorities = {id(member.graph): member.graph for member in owner.members.values()}
+    for builder in builders.values():
+        for value in getattr(builder, "_resource_demands", {}).values():
+            if (type(value) is IntervalResourceDemand
+                    and builder._resource_demands.get(value.identity) is value):
+                authorities[id(value)] = value
     for analysis in analyses.values():
         for kind, registry in registries.items():
             for value in getattr(analysis, registry, {}).values():
@@ -182,7 +192,7 @@ def _registered_authorities(owner, owned_types):
         for graph in analysis._structures.values():
             if type(graph) is StructuredSummary:
                 authorities[id(graph)] = graph
-    return authorities, (*registries, StructuredSummary)
+    return authorities, (*registries, StructuredSummary, IntervalResourceDemand)
 
 
 def _seal_execution(owner):
@@ -315,6 +325,8 @@ def _cost_requirements(members):
                     kinds.add("native_environment")
                 if getattr(operation, "indirect_sections", None) is not None:
                     kinds.add("indirect_inspector")
+                if getattr(operation, "demand_effects", None) is not None:
+                    kinds.add("source_native_observations")
             if any(call.region is not None and call.region.scalar_element_captures for call in unit.scope.calls):
                 kinds.add("immutable_elements")
             reasons = {
@@ -322,6 +334,7 @@ def _cost_requirements(members):
                 "native_environment": "original IEEE environment coordination lacks compatible offline cost estimates",
                 "immutable_elements": "immutable element preparation lacks compatible offline cost estimates",
                 "indirect_inspector": "native indirect inspector preparation lacks compatible offline cost estimates",
+                "source_native_observations": "native interval costs require compatible source-bound observations",
             }
             for kind in reasons:
                 if kind in kinds:
@@ -567,7 +580,7 @@ def build_execution_plan(owner):
     for demand in tuple(getattr(owner.builder, "_resource_demands", {}).values()):
         if type(demand) is not IntervalResourceDemand:
             raise CompilationError("execution plan requires an issued interval resource demand")
-        if demand._proof is not None:
+        if demand._plan is None:
             demand.validate_plan(result)
     result.resource_demand()
     return result

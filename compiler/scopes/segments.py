@@ -41,6 +41,8 @@ class Native:
     native_environment: tuple = ()
     proof_analysis: object = field(default=None, repr=False, compare=False)
     immutable_inputs: dict = field(default_factory=dict)
+    demand_effects: object = field(default=None, repr=False, compare=False)
+    resource_demand: object = field(default=None, repr=False, compare=False)
 
     @property
     def coherence_effects(self):
@@ -537,9 +539,47 @@ def renamed(builder, node, parameters, *, lexical_scope=None, native_metadata=Fa
     return str(clone_ast(node))
 
 
+def native_demand_fragment(builder, nodes, demand):
+    """Surround one unchanged original call using demanded coherence only."""
+    from compiler.frontend.native_demand import prove_native_demand
+    from compiler.frontend.native_sections import NativeSections
+    from compiler.scopes.resource_demand import IntervalResourceDemand
+
+    if type(demand) is not IntervalResourceDemand:
+        raise CompilationError("native demand requires an issued whole-interval resource inventory")
+    demand.validate()
+    originals = tuple(builder.inline.original_selection(nodes))
+    if len(originals) != 1 or _kind(originals[0]) != "Call_Stmt":
+        raise CompilationError("demand-relative native hooks require one unchanged original CALL")
+    proof = prove_native_demand(builder.analysis, builder.entry.qualified, originals, demand.bindings)
+    effects, bindings = {}, {}
+    managed = {id(binding) for binding in demand.managed_bindings}
+    for binding, actions in proof.effects:
+        if not binding.rank:
+            continue  # Original scalar evaluation is never outlined or hoisted.
+        if id(binding) not in managed:
+            raise CompilationError("native array effect is outside the prospective managed inventory")
+        # Whole conservative accesses cannot invent missing halo definitions.
+        if builder.capture(binding)["initialized"] != "whole":
+            raise CompilationError("demand-relative native whole access requires whole initialized storage: "
+                                   + binding.root)
+        effects[binding.root] = set(actions)
+        bindings[binding.root] = binding
+    record = proof.public()
+    summary = {"complete": False, "whole_procedure_effects_complete": False,
+               "native_completion": record["native_completion"], "demand_identity": proof.identity,
+               "operations": [{"kind": action, "resource": root, "rank": bindings[root].rank}
+                              for root, actions in effects.items() for action in sorted(actions)]}
+    span = statement_span(nodes[0])
+    return Native(tuple(nodes), effects, set(), bindings, summary, "original demand-relative native call",
+                  sections=NativeSections(False, "conservative whole demanded resources; no overwrite authority"),
+                  span=span, preserve_original=True, proof_analysis=builder.analysis,
+                  demand_effects=proof, resource_demand=demand)
+
+
 class StructuredScope:
     def __init__(self, builder, nodes, *, condition_only=False, native_metadata=False, lexical_native=False,
-                 native_host_reads=False):
+                 native_host_reads=False, native_call_demand=None):
         self.builder, self.nodes = builder, tuple(nodes)
         self.native_metadata = native_metadata
         self.native_host_reads = native_host_reads
@@ -547,7 +587,14 @@ class StructuredScope:
         self.guarded = {}
         self.close_guards = {}
         self.operation_count = 0
-        if condition_only:
+        if native_call_demand is not None:
+            if condition_only or not lexical_native:
+                raise CompilationError("demand-relative native call requires original lexical emission")
+            operation = native_demand_fragment(builder, nodes, native_call_demand)
+            self.native.append(operation)
+            self.operation_count = len(operation.summary["operations"])
+            self.tree = [operation]
+        elif condition_only:
             if len(nodes) != 1 or _kind(nodes[0]) not in {"If_Then_Stmt", "If_Stmt"}:
                 raise CompilationError("reached condition publication requires one original IF header")
             condition = condition_fragment(builder, nodes[0], native_host_reads=native_host_reads)
@@ -866,6 +913,8 @@ class StructuredScope:
                                    "host_only_native_reads": operation.host_only_proof or None,
                                    "native_environment": [proof.public() for proof in operation.native_environment],
                                    "native_local_state": [proof.public() for proof in operation.native_states.values()],
+                                   "demand_relative_effects": (operation.demand_effects.public()
+                                                               if operation.demand_effects is not None else None),
                                    "immutable_inputs": [proof.public() for proof in operation.immutable_inputs.values()],
                                    "private_resources": sorted(operation.private_bindings),
                                    "completion": operation.summary["native_completion"],
@@ -933,6 +982,10 @@ class StructuredScope:
             return lines
 
         def native_hooks(operation):
+            if operation.demand_effects is not None:
+                operation.resource_demand.validate()
+                operation.demand_effects.validate(builder.analysis, builder.entry.qualified,
+                    tuple(builder.inline.original_selection(operation.nodes)), operation.resource_demand.bindings)
             identity = source_id(builder, "native_operation", span=operation.span or (self.first, self.last),
                                  operation_kind=operation.kind)
             implementation = source_id(builder, "implementation", span=operation.span or (self.first, self.last),
