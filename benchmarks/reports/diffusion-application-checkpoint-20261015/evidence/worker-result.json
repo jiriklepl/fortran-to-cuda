@@ -1,0 +1,32 @@
+{
+  "application_built": false,
+  "application_executed": false,
+  "automatic_estimate_available": false,
+  "diagnostic_boundaries": [
+    {
+      "first_line": 188,
+      "kind": "candidate_rejection",
+      "last_line": 286,
+      "phase": "inline_numerical_extraction",
+      "reason": "inline numerical boundary: structured source operation lacks an original edit span"
+    }
+  ],
+  "elapsed_seconds": 73.32446537899523,
+  "gpu_leaves": [
+    [
+      "momentumdiffusion::momentumdiffusion_nobranch_2ord#region1",
+      "momentumdiffusion::momentumdiffusion_nobranch_2ord#region2",
+      "momentumdiffusion::momentumdiffusion_nobranch_2ord#region3"
+    ]
+  ],
+  "joined_teams": 1,
+  "manifest_sha256": "cd0f856718bbaf6b6ffaf3c1f6ac182326db13519009c3dca8fec3fbb4f2a5eb",
+  "numerical_units": [
+    3
+  ],
+  "owner_boundaries": [
+    []
+  ],
+  "performance_measured": false,
+  "scope_count": 1
+}

@@ -1,0 +1,7 @@
+{
+  "binary": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/full-fields/sgs-direct/ELMM-fields",
+  "binary_sha256": "39c1df10e5a1055c75d3af055b23cc27559887e2b05f6dd9f9d88b226c507f3d",
+  "performance_measured": false,
+  "plan_sha256": "bb3a3a5c399f8f25eabda0a6dcc8a300bc72bd4680bca085ad4574a629a1390b",
+  "status": "passed"
+}

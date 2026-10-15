@@ -1,0 +1,285 @@
+{
+  "application_built": false,
+  "application_executed": false,
+  "artifact_count": 39,
+  "artifact_hashes_match": true,
+  "automatic_estimate_available": false,
+  "build_units": 13,
+  "edited_original_files": [
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/momentum_diffusion.f90",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/parameters.f90",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/tiling.f90"
+  ],
+  "full_field_validation": false,
+  "guards": {
+    "limits": "Existing 32-rectangle and 1048576-inspection-step limits retained; guard/inspector fallback may close ownership at runtime and requires observed traces.",
+    "source_capture_facts": "benchmarks/results/diffusion-complete-checkpoint-20261015/capture-facts.json",
+    "team_and_failure_contract": "Original team; master runtime coordination; collective numerical workers. Publish and continue the unexecuted suffix before execution; never replay a completed prefix.",
+    "viscosity_expected_extents_present": true,
+    "viscosity_partial_definition_registration_present": true
+  },
+  "historical_comparison": {
+    "diagnostic_boundary": "Both generations retain numerical-extraction edit-span declines for included wall loops. Those loops remain admitted native; the owner has no close boundary.",
+    "facts_change": "Current validated partial viscosity sections replace historical whole initialization; diffusion output formals use explicit original-call mapping from Ustar/Vstar/Wstar facts rather than caller accumulator facts. No new facts asserted.",
+    "manifest": "benchmarks/results/generic-residency-30pct-20261009/m1/joined-team-application-source-05/artifacts/scope-manifest.json",
+    "manifest_sha256": "06c3d075c2c0d326be3024681f864e0861ecf7fcbf1b591f8587ddd5c680cc0c",
+    "new_gpu_units": 3,
+    "new_owner_boundaries": [],
+    "old_gpu_units": 3,
+    "old_mode": "sections",
+    "old_owner_boundaries": [],
+    "same_arithmetic_source": true,
+    "timing_limit": "Historical153s and current73.47s generation elapsed times are diagnostic observations, not a controlled speedup comparison."
+  },
+  "manifest_sha256": "cd0f856718bbaf6b6ffaf3c1f6ac182326db13519009c3dca8fec3fbb4f2a5eb",
+  "mode": "sections",
+  "native_inspectors": [
+    {
+      "available": true,
+      "inspection_step_limit_per_resource": 1048576,
+      "metadata_reservations": [
+        "wallmodels::uxmwmpoints",
+        "wallmodels::uxpwmpoints",
+        "wallmodels::uymwmpoints",
+        "wallmodels::uypwmpoints",
+        "wallmodels::uzmwmpoints",
+        "wallmodels::uzpwmpoints"
+      ],
+      "reason": null,
+      "rectangle_limit": 32,
+      "resources": [
+        "argument::u",
+        "argument::u2",
+        "parameters::viscosity"
+      ],
+      "source_line": 217,
+      "worksharing_units": 12
+    },
+    {
+      "available": true,
+      "inspection_step_limit_per_resource": 1048576,
+      "metadata_reservations": [
+        "wallmodels::vxmwmpoints",
+        "wallmodels::vxpwmpoints",
+        "wallmodels::vymwmpoints",
+        "wallmodels::vypwmpoints",
+        "wallmodels::vzmwmpoints",
+        "wallmodels::vzpwmpoints"
+      ],
+      "reason": null,
+      "rectangle_limit": 32,
+      "resources": [
+        "argument::v",
+        "argument::v2",
+        "parameters::viscosity"
+      ],
+      "source_line": 250,
+      "worksharing_units": 12
+    },
+    {
+      "available": true,
+      "inspection_step_limit_per_resource": 1048576,
+      "metadata_reservations": [
+        "wallmodels::wxmwmpoints",
+        "wallmodels::wxpwmpoints",
+        "wallmodels::wymwmpoints",
+        "wallmodels::wypwmpoints",
+        "wallmodels::wzmwmpoints",
+        "wallmodels::wzpwmpoints"
+      ],
+      "reason": null,
+      "rectangle_limit": 32,
+      "resources": [
+        "argument::w",
+        "argument::w2",
+        "parameters::viscosity"
+      ],
+      "source_line": 283,
+      "worksharing_units": 12
+    }
+  ],
+  "numerical_regions": [
+    {
+      "entry": "fort_inline_92dc8cc2451d::region",
+      "execution_participation": "qualified_original_team",
+      "numerical_environment": {
+        "required": false
+      },
+      "resources": [
+        "argument::u",
+        "argument::u2",
+        "parameters::viscosity"
+      ],
+      "runtime_guards": [
+        "int(tnz,kind=c_int64_t) > 0_c_int64_t",
+        "int(Unz,kind=c_int64_t) + int(tnz,kind=c_int64_t) <= 2147483647_c_int64_t",
+        "int(tny,kind=c_int64_t) > 0_c_int64_t",
+        "int(Uny,kind=c_int64_t) + int(tny,kind=c_int64_t) <= 2147483647_c_int64_t",
+        "int(tnx,kind=c_int64_t) > 0_c_int64_t",
+        "int(Unx,kind=c_int64_t) + int(tnx,kind=c_int64_t) <= 2147483647_c_int64_t"
+      ],
+      "tile_domains": [
+        {
+          "coverage": "positive disjoint clipped tiles cover the original rectangular domain",
+          "iterator": "k",
+          "lower": "1",
+          "tile_iterator": "bk",
+          "tile_size": "tnz",
+          "upper": "Unz"
+        },
+        {
+          "coverage": "positive disjoint clipped tiles cover the original rectangular domain",
+          "iterator": "j",
+          "lower": "1",
+          "tile_iterator": "bj",
+          "tile_size": "tny",
+          "upper": "Uny"
+        },
+        {
+          "coverage": "positive disjoint clipped tiles cover the original rectangular domain",
+          "iterator": "i",
+          "lower": "1",
+          "tile_iterator": "bi",
+          "tile_size": "tnx",
+          "upper": "Unx"
+        }
+      ],
+      "written_resources": [
+        "argument::u2"
+      ]
+    },
+    {
+      "entry": "fort_inline_0133a7218177::region",
+      "execution_participation": "qualified_original_team",
+      "numerical_environment": {
+        "required": false
+      },
+      "resources": [
+        "argument::v",
+        "argument::v2",
+        "parameters::viscosity"
+      ],
+      "runtime_guards": [
+        "int(tnz,kind=c_int64_t) > 0_c_int64_t",
+        "int(Vnz,kind=c_int64_t) + int(tnz,kind=c_int64_t) <= 2147483647_c_int64_t",
+        "int(tny,kind=c_int64_t) > 0_c_int64_t",
+        "int(Vny,kind=c_int64_t) + int(tny,kind=c_int64_t) <= 2147483647_c_int64_t",
+        "int(tnx,kind=c_int64_t) > 0_c_int64_t",
+        "int(Vnx,kind=c_int64_t) + int(tnx,kind=c_int64_t) <= 2147483647_c_int64_t"
+      ],
+      "tile_domains": [
+        {
+          "coverage": "positive disjoint clipped tiles cover the original rectangular domain",
+          "iterator": "k",
+          "lower": "1",
+          "tile_iterator": "bk",
+          "tile_size": "tnz",
+          "upper": "Vnz"
+        },
+        {
+          "coverage": "positive disjoint clipped tiles cover the original rectangular domain",
+          "iterator": "j",
+          "lower": "1",
+          "tile_iterator": "bj",
+          "tile_size": "tny",
+          "upper": "Vny"
+        },
+        {
+          "coverage": "positive disjoint clipped tiles cover the original rectangular domain",
+          "iterator": "i",
+          "lower": "1",
+          "tile_iterator": "bi",
+          "tile_size": "tnx",
+          "upper": "Vnx"
+        }
+      ],
+      "written_resources": [
+        "argument::v2"
+      ]
+    },
+    {
+      "entry": "fort_inline_c9a3e887e5f9::region",
+      "execution_participation": "qualified_original_team",
+      "numerical_environment": {
+        "required": false
+      },
+      "resources": [
+        "argument::w",
+        "argument::w2",
+        "parameters::viscosity"
+      ],
+      "runtime_guards": [
+        "int(tnz,kind=c_int64_t) > 0_c_int64_t",
+        "int(Wnz,kind=c_int64_t) + int(tnz,kind=c_int64_t) <= 2147483647_c_int64_t",
+        "int(tny,kind=c_int64_t) > 0_c_int64_t",
+        "int(Wny,kind=c_int64_t) + int(tny,kind=c_int64_t) <= 2147483647_c_int64_t",
+        "int(tnx,kind=c_int64_t) > 0_c_int64_t",
+        "int(Wnx,kind=c_int64_t) + int(tnx,kind=c_int64_t) <= 2147483647_c_int64_t"
+      ],
+      "tile_domains": [
+        {
+          "coverage": "positive disjoint clipped tiles cover the original rectangular domain",
+          "iterator": "k",
+          "lower": "1",
+          "tile_iterator": "bk",
+          "tile_size": "tnz",
+          "upper": "Wnz"
+        },
+        {
+          "coverage": "positive disjoint clipped tiles cover the original rectangular domain",
+          "iterator": "j",
+          "lower": "1",
+          "tile_iterator": "bj",
+          "tile_size": "tny",
+          "upper": "Wny"
+        },
+        {
+          "coverage": "positive disjoint clipped tiles cover the original rectangular domain",
+          "iterator": "i",
+          "lower": "1",
+          "tile_iterator": "bi",
+          "tile_size": "tnx",
+          "upper": "Wnx"
+        }
+      ],
+      "written_resources": [
+        "argument::w2"
+      ]
+    }
+  ],
+  "observed_transfer_accounting": false,
+  "original_native_includes_preserved_once": {
+    "\"wmfluxes-nobranch-U-inc.f90\"": 1,
+    "\"wmfluxes-nobranch-V-inc.f90\"": 1,
+    "\"wmfluxes-nobranch-W-inc.f90\"": 1
+  },
+  "owner_boundaries": [],
+  "placement_estimate_reason": "native Fortran compute calibration is missing",
+  "replacement_source_bytes": 1086194,
+  "runtime_id": "14813f3a0d0bf1e5693e1d093faa29caf1866793f7f09e1441cba8066c63b5f6",
+  "schema_version": 1,
+  "scope_count": 1,
+  "status": "Ready for pipeline composition/application build review; generation alone does not establish executable binary or numerical correctness.",
+  "traffic": {
+    "bulk_gpu_inputs": [
+      "argument::u",
+      "argument::v",
+      "argument::w",
+      "argument::u2",
+      "argument::v2",
+      "argument::w2",
+      "parameters::viscosity"
+    ],
+    "bulk_gpu_outputs": [
+      "argument::u2",
+      "argument::v2",
+      "argument::w2"
+    ],
+    "exit": "Publish remaining device-current output sections without overwriting native-current corrections. Actual ledger must include entry, wall interruption, exit and cleanup.",
+    "host_reader_behavior": "Velocity and viscosity are read-only through this interval; existing current host mirrors can serve native corrections. Dirty output sections must be published before native read-modify-write.",
+    "performance_claim": false,
+    "post_correction_gpu_reads": "No later numerical unit reads a corrected component output; no output reupload is logically required inside this complete invocation. Actual planner/runtime behavior remains to be measured.",
+    "resource_identity": "One invocation-wide canonical registration per resource; viscosity registration reused by all three numerical units.",
+    "status": "Static obligations only; no observed bytes or counts."
+  }
+}

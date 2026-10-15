@@ -1,0 +1,18 @@
+{
+  "argv": [
+    "taskset",
+    "-c",
+    "4,5,10,11",
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/run.py",
+    "--worker"
+  ],
+  "cap_seconds": 300,
+  "cwd": "/home/jirka/research/fortran-abomination",
+  "environment_overrides": {
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "4",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "runner_sha256": "6735220fa2563af87f6b10bdda96d5f92ae2b9616af5597def9b2306980cbbfa"
+}

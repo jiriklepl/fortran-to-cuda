@@ -1,0 +1,918 @@
+{
+  "comparisons": {
+    "fields-Moisture.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          1,
+          1,
+          1
+        ],
+        "shape": [
+          0,
+          0,
+          0
+        ],
+        "upper_bounds": [
+          0,
+          0,
+          0
+        ]
+      },
+      "max_absolute_error": 0.0,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 0
+    },
+    "fields-Pr.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -1,
+          -1,
+          -1
+        ],
+        "shape": [
+          132,
+          68,
+          68
+        ],
+        "upper_bounds": [
+          130,
+          66,
+          66
+        ]
+      },
+      "max_absolute_error": 2.134289481259266e-09,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 610368
+    },
+    "fields-Pr_avg.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          1,
+          1,
+          1
+        ],
+        "shape": [
+          128,
+          64,
+          64
+        ],
+        "upper_bounds": [
+          128,
+          64,
+          64
+        ]
+      },
+      "max_absolute_error": 1.5871387537558235e-11,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 524288
+    },
+    "fields-Scalar.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "shape": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "upper_bounds": [
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "max_absolute_error": 0.0,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 0
+    },
+    "fields-Scalar_avg.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          1,
+          1,
+          1,
+          1
+        ],
+        "shape": [
+          0,
+          0,
+          0,
+          0
+        ],
+        "upper_bounds": [
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "max_absolute_error": 0.0,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 0
+    },
+    "fields-TDiff.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          1,
+          1,
+          1
+        ],
+        "shape": [
+          0,
+          0,
+          0
+        ],
+        "upper_bounds": [
+          0,
+          0,
+          0
+        ]
+      },
+      "max_absolute_error": 0.0,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 0
+    },
+    "fields-Temperature.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          1,
+          1,
+          1
+        ],
+        "shape": [
+          0,
+          0,
+          0
+        ],
+        "upper_bounds": [
+          0,
+          0,
+          0
+        ]
+      },
+      "max_absolute_error": 0.0,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 0
+    },
+    "fields-U.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      },
+      "max_absolute_error": 1.976216967847222e-10,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 656600
+    },
+    "fields-U2.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      },
+      "max_absolute_error": 1.9592527600309495e-10,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 656600
+    },
+    "fields-U_avg.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      },
+      "max_absolute_error": 5.1869730732789776e-11,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 656600
+    },
+    "fields-Ustar.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      },
+      "max_absolute_error": 3.6316051937879124e-07,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 656600
+    },
+    "fields-V.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      },
+      "max_absolute_error": 1.2113776648448038e-10,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 656600
+    },
+    "fields-V2.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      },
+      "max_absolute_error": 1.2359202550271675e-10,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 656600
+    },
+    "fields-V_avg.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      },
+      "max_absolute_error": 3.1135760636402665e-11,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 656600
+    },
+    "fields-Viscosity.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -1,
+          -1,
+          -1
+        ],
+        "shape": [
+          132,
+          68,
+          68
+        ],
+        "upper_bounds": [
+          130,
+          66,
+          66
+        ]
+      },
+      "max_absolute_error": 2.8865336987985465e-10,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 610368
+    },
+    "fields-Vstar.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          70
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          67
+        ]
+      },
+      "max_absolute_error": 9.693290046672298e-08,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 656600
+    },
+    "fields-W.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          69
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          66
+        ]
+      },
+      "max_absolute_error": 7.192385576004767e-11,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 647220
+    },
+    "fields-W2.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          69
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          66
+        ]
+      },
+      "max_absolute_error": 7.218842190681585e-11,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 647220
+    },
+    "fields-W_avg.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          69
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          66
+        ]
+      },
+      "max_absolute_error": 1.7060131085600005e-11,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 647220
+    },
+    "fields-Wstar.bin": {
+      "absolute_error_nonfinite_values": 0,
+      "atol": 1e-06,
+      "candidate_nonfinite_values": 0,
+      "failed_flat_indices": [],
+      "failed_locations_truncated": false,
+      "failed_values": 0,
+      "layout": {
+        "bits": 64,
+        "lower_bounds": [
+          -2,
+          -2,
+          -2
+        ],
+        "shape": [
+          134,
+          70,
+          69
+        ],
+        "upper_bounds": [
+          131,
+          67,
+          66
+        ]
+      },
+      "max_absolute_error": 2.269133663585464e-08,
+      "passed": true,
+      "reference_nonfinite_values": 0,
+      "rtol": 1e-05,
+      "values": 647220
+    }
+  },
+  "driver": {
+    "atol": 1e-06,
+    "dtype": "float64",
+    "field_count": 20,
+    "metadata_format": "storage-shape-bounds-v1",
+    "rtol": 1e-05
+  },
+  "helpers_sha256": {
+    "/home/jirka/research/fortran-abomination/containers/sgs_experiment.py": "258ff616a9214a8a586bbd46f922aca934e3fef26d80ca101fcfe8c04fb6e57b",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/campaigns/halos.py": "8a882afa59e9fd8c45d447b5605a6adc208d4ba8296ec5b99481407ab488e4d0",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/validation.py": "e9ff836586ec8ff66513701e134ebba9ca7f339a469e50acbfbbc774d553b15f"
+  },
+  "performance_measured": false,
+  "qualification": false,
+  "runs": [
+    {
+      "completion": {
+        "completed_steps": 109,
+        "natural_end": true,
+        "poisson_seconds": 1.12,
+        "time_steps_seconds": 13.41
+      },
+      "directory": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native",
+      "files_sha256": {
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Moisture.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Moisture.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Pr.bin": "148c8b2281435f7e0c63cf71fb6fa8e52ea862f110ebea4af3dd3db0c5184385",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Pr.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Pr_avg.bin": "a55ec34205b853fabe3a2470193d2624ce8fa7ffac3f4a71fd96670288848db8",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Pr_avg.shape": "3196fd7ddeb27f50d5ccb0303f770f61c9bdf1e94505ed7d6c6d0a1758246be8",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Scalar.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Scalar.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Scalar_avg.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Scalar_avg.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-TDiff.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-TDiff.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Temperature.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Temperature.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-U.bin": "c56898f378727acbc2c75fc45e5a126951446cd6b3514ff98c678c760450806a",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-U.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-U2.bin": "1633fff1612771d88f9cf709b69c344e2546c3a42af549c2db531095664e62f3",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-U2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-U_avg.bin": "055b4393a6a7408629a82bc57fa8804066ec71403c8799a319dcfce595bca841",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-U_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Ustar.bin": "a14dbece85b566ba4aef6fbe92c81094f14790b196b0436ef4eb93c2ee384ec1",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Ustar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-V.bin": "9aa0ebf355b64a3a8cc01c5f48de966b268a8db3f3f9625661f04057d1936ed1",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-V.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-V2.bin": "70a1b3ad669cbe6ac9dc364e68fda31a1cab3fca0c0b8721098afb7f2afce882",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-V2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-V_avg.bin": "3a77f59d4398d53e21a05acfb782282f0a749c51a8de1416c231282df30413d3",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-V_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Viscosity.bin": "88ec79aee2617ea5efaeb8c77b11b99414203252bb4b2f9e39bcb3e13dd95cda",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Viscosity.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Vstar.bin": "0cc0b096c4c6c4ca30fcfdd65360637cf4079b12bb504f56f66f7375c996922b",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Vstar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-W.bin": "42641a6443fbe38ba2741fd972489d944c0f7d5a322c950b07dffa6f75ce2b53",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-W.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-W2.bin": "802796e34d5b332439f8cfce880a2021920e312bc93849a6d2e4dcdde0b6ef06",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-W2.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-W_avg.bin": "a6b2dd69091a2fd1094edac965fc23ab801fd5ef0a86d7d9b4bf657277908ac4",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-W_avg.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Wstar.bin": "7547cbf813482573ec1bc6528024ded66707925f1168490b4c838f0d168e40c0",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/fields-Wstar.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/stdout.log": "d24cbc188112d5c11161d2e8dd988722ac4c0ef25db66dacb428a08a04c48891"
+      },
+      "mode": "native"
+    },
+    {
+      "completion": {
+        "completed_steps": 109,
+        "natural_end": true,
+        "poisson_seconds": 1.0,
+        "time_steps_seconds": 10.74
+      },
+      "directory": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct",
+      "files_sha256": {
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Moisture.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Moisture.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Pr.bin": "d90ba05a249edd3d008ced8b267affbae94e1b232cc465f8d10edbbaab6d0972",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Pr.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Pr_avg.bin": "07d270012194fd9a7f0cae6364da58fc0a9f82b7ebb247df51ad6c2227d270b4",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Pr_avg.shape": "3196fd7ddeb27f50d5ccb0303f770f61c9bdf1e94505ed7d6c6d0a1758246be8",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Scalar.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Scalar.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Scalar_avg.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Scalar_avg.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-TDiff.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-TDiff.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Temperature.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Temperature.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-U.bin": "f8a33a1634022442c0f0848159593d56dd275068be7d9e371d596a604b84aa5f",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-U.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-U2.bin": "1e3ede8df2a0c4d85bd860c640d563fe9837cd4cd4ebf57bc617acd2172da9ec",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-U2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-U_avg.bin": "508789816b6dda75e148a768e211049f79e578fa16587acd55e42eaf8ea1f5e4",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-U_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Ustar.bin": "8fb2ec1141edda7a090f3adc3ba87bf1fa012536c4cf70d29892f7000b38eb67",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Ustar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-V.bin": "1e3e61b22c412b6343eb0f9e4d8e078a0f7b85101229ba60c6fdf578e74b0100",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-V.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-V2.bin": "1a032d0030e224700b209576bf3ac7cda22c471d105a610628109bb83541a152",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-V2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-V_avg.bin": "29b2aba22c24e16a2759f1714b35a63599825921498c78ed0ab9e505bcb90d99",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-V_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Viscosity.bin": "da3d84f0d8015e0b4b47ca734b44db5be61315305d266472d188f8e195d62a22",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Viscosity.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Vstar.bin": "b06d743835ce4c77830d0f515f68db6d1b95dd9353092f19087afb45dd15fed2",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Vstar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-W.bin": "8db97c02dce5c9cd25f2e86d57d7d671f128cdcb89d73640b11b5931196728f7",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-W.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-W2.bin": "d3918699a0487578ec5dc32b5777de4fc45727d949e407698eb638bbc57103b6",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-W2.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-W_avg.bin": "63a24a4214259d7ab6c43b10accb7baf2c8982ca1c11a0ef67b434b0135f5547",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-W_avg.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Wstar.bin": "f380d81740d9e4c8279d747f335a74f35463ce8d49685b692f0657d3815194c2",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/fields-Wstar.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/sgs-direct/stdout.log": "eea38760dd15be765628dbc074974cf16ca1cfd2de6eaf8308f65e2528cb18c8"
+      },
+      "mode": "candidate"
+    }
+  ],
+  "schema_version": 1,
+  "status": "passed",
+  "vtk": {
+    "candidate": {
+      "atol": 1e-06,
+      "files": {
+        "avg.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 1.4901161193847656e-08,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 3.725290298461914e-09,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        },
+        "out.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 1.4901161193847656e-08,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 7.450580596923828e-09,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        }
+      },
+      "files_sha256": {
+        "avg.vtk": "cb017785801871d1a6c3978e6aa22e15e68ba2c02efa655b53c43cafac37f8f0",
+        "out.vtk": "88185f8176f438275a70fb17b20038dc9a88c43f2c13b611c8c5449d10484464"
+      },
+      "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim.",
+      "passed": true,
+      "rtol": 1e-05,
+      "schema_version": 2
+    },
+    "native": {
+      "atol": 1e-06,
+      "files": {
+        "avg.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        },
+        "out.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        }
+      },
+      "files_sha256": {
+        "avg.vtk": "476f661774af22b16d17b6b601baa82b26dbb55da60b8b199b13884382001782",
+        "out.vtk": "cbb621fa04152cd8acf7e973f0d54e790c0a0298721b4d0625adcc17a471c16d"
+      },
+      "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim.",
+      "passed": true,
+      "rtol": 1e-05,
+      "schema_version": 2
+    }
+  },
+  "vtk_reference": {
+    "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/output/avg.vtk": "476f661774af22b16d17b6b601baa82b26dbb55da60b8b199b13884382001782",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/fields/channel-simple/native/output/out.vtk": "cbb621fa04152cd8acf7e973f0d54e790c0a0298721b4d0625adcc17a471c16d"
+  }
+}

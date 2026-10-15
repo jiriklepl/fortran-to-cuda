@@ -1,0 +1,136 @@
+{
+  "affinity": [
+    4,
+    5,
+    10,
+    11
+  ],
+  "argv": [
+    "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/sgs-control/build/ELMM",
+    "output_dir='output/'"
+  ],
+  "automatic_placement_claim": false,
+  "binary_sha256": "90ead07ea6a395c98e8aadaf2564c48b1bde570530da1e737fc015fe567e2f64",
+  "binary_unchanged": true,
+  "case": "channel-simple",
+  "compiler_commit": "744a06a912da56f116831868c554b5e82f9ae4c1",
+  "completed": true,
+  "completion": {
+    "completed_steps": 109,
+    "natural_end": true,
+    "poisson_seconds": 0.97,
+    "time_steps_seconds": 9.52
+  },
+  "configuration_overrides": {},
+  "configuration_sha256": {
+    "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+    "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+    "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+    "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+    "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+    "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+    "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+    "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+    "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+    "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05"
+  },
+  "configuration_unchanged": true,
+  "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-3/sgs-direct",
+  "diagnostic_complete_process_seconds": 10.220559334004065,
+  "environment": {
+    "CUDA_HOME": "/usr/local/cuda",
+    "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+    "MKL_NUM_THREADS": "1",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "4",
+    "OMP_PROC_BIND": "false",
+    "OMP_SCHEDULE": "static",
+    "OPENBLAS_NUM_THREADS": "1"
+  },
+  "exit_code": 0,
+  "kind": "full-process diagnostic",
+  "mode": "sgs-direct",
+  "output_hashes": {
+    "output/U.vtk": "8ddc8e1d154fb0eb03fcbb927a85a53f912bf9e44b646b2f38ae0632261a75fd",
+    "output/V.vtk": "922fef4bbc509f9506261dd9258654dbbc24d97d66cf33a86a281b1dfea93969",
+    "output/W.vtk": "007ef9f81b76279db08b863c1c3c935383775eccabe5f041f3033d7831d84b7e",
+    "output/avg.vtk": "13d72475d10fb029b3466451386040bd7f3fa76074e310297d94244ba5eeec40",
+    "output/out.vtk": "a3c6087d5633eccdd5818b50fcb256bd9d3e1a578545207496ceef731d1dba5b"
+  },
+  "pid": 383334,
+  "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+  "qualification": false,
+  "schema_version": 1,
+  "threads": 4,
+  "timed_out": false,
+  "timeout_seconds": 3600,
+  "traced": false,
+  "vtk": {
+    "avg.vtk": {
+      "atol": 1e-06,
+      "fields": {
+        "X_COORDINATES": {
+          "failed_values": 0,
+          "max_absolute_error": 0.0,
+          "values": 128
+        },
+        "Y_COORDINATES": {
+          "failed_values": 0,
+          "max_absolute_error": 0.0,
+          "values": 64
+        },
+        "Z_COORDINATES": {
+          "failed_values": 0,
+          "max_absolute_error": 0.0,
+          "values": 64
+        },
+        "p": {
+          "failed_values": 0,
+          "max_absolute_error": 9.313225746154785e-10,
+          "values": 524288
+        },
+        "u": {
+          "failed_values": 0,
+          "max_absolute_error": 9.313225746154785e-10,
+          "values": 1572864
+        }
+      },
+      "note": "ELMM final VTK values are float32, including double-precision builds.",
+      "passed": true,
+      "rtol": 1e-05
+    },
+    "out.vtk": {
+      "atol": 1e-06,
+      "fields": {
+        "X_COORDINATES": {
+          "failed_values": 0,
+          "max_absolute_error": 0.0,
+          "values": 128
+        },
+        "Y_COORDINATES": {
+          "failed_values": 0,
+          "max_absolute_error": 0.0,
+          "values": 64
+        },
+        "Z_COORDINATES": {
+          "failed_values": 0,
+          "max_absolute_error": 0.0,
+          "values": 64
+        },
+        "p": {
+          "failed_values": 0,
+          "max_absolute_error": 1.4901161193847656e-08,
+          "values": 524288
+        },
+        "u": {
+          "failed_values": 0,
+          "max_absolute_error": 1.1920928955078125e-07,
+          "values": 1572864
+        }
+      },
+      "note": "ELMM final VTK values are float32, including double-precision builds.",
+      "passed": true,
+      "rtol": 1e-05
+    }
+  }
+}

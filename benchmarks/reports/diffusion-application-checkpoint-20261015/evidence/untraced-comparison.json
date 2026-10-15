@@ -1,0 +1,1676 @@
+{
+  "schema_version": 1,
+  "qualification": false,
+  "reason": "Three diagnostic rounds of forced placement; not seven automatic qualification rounds",
+  "runs": [
+    {
+      "affinity": [
+        4,
+        5,
+        10,
+        11
+      ],
+      "argv": [
+        "/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "automatic_placement_claim": false,
+      "binary_sha256": "c02226278a595193e31cbc05983b187e4b64c6fbf8ff4649168375bccb03b96c",
+      "binary_unchanged": true,
+      "case": "channel-simple",
+      "compiler_commit": "744a06a912da56f116831868c554b5e82f9ae4c1",
+      "completed": true,
+      "completion": {
+        "completed_steps": 109,
+        "natural_end": true,
+        "poisson_seconds": 0.97,
+        "time_steps_seconds": 12.06
+      },
+      "configuration_overrides": {},
+      "configuration_sha256": {
+        "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+        "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+        "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+        "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+        "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+        "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+        "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+        "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05"
+      },
+      "configuration_unchanged": true,
+      "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-0/native",
+      "diagnostic_complete_process_seconds": 12.470415848991252,
+      "environment": {
+        "CUDA_HOME": "/usr/local/cuda",
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "MKL_NUM_THREADS": "1",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PROC_BIND": "false",
+        "OMP_SCHEDULE": "static",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "exit_code": 0,
+      "kind": "full-process diagnostic",
+      "mode": "native",
+      "output_hashes": {
+        "output/U.vtk": "f5c3b158cc8f078bdbfb3835216ea6d68a0845b1927e124a4ce5f8c9ce025c9d",
+        "output/V.vtk": "07b0f5ece804147e4f3dd53d8979f459e1bc5ff939e637518da48f50bd70d5bb",
+        "output/W.vtk": "252a202d7fdae3218a10107f7c6c74919bea2128395d529097d1aebb8dd31831",
+        "output/avg.vtk": "6a06a64e2075efac0b3d0f34a638e6ce46cab67f9196cb0047b38c3ebca53bde",
+        "output/out.vtk": "87fe033475630abf61e6dcf9a48654e47e9d6fc6814b248f25e74cb893f4bbe8"
+      },
+      "pid": 382611,
+      "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+      "qualification": false,
+      "schema_version": 1,
+      "threads": 4,
+      "timed_out": false,
+      "timeout_seconds": 3600,
+      "traced": false,
+      "vtk": {
+        "avg.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 2.9103830456733704e-11,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 3.725290298461914e-09,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        },
+        "out.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 1.4901161193847656e-08,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 1.1920928955078125e-07,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        }
+      },
+      "round": 0,
+      "excluded_warmup": true,
+      "receipt": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-0/native/run.json"
+    },
+    {
+      "affinity": [
+        4,
+        5,
+        10,
+        11
+      ],
+      "argv": [
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/sgs-control/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "automatic_placement_claim": false,
+      "binary_sha256": "90ead07ea6a395c98e8aadaf2564c48b1bde570530da1e737fc015fe567e2f64",
+      "binary_unchanged": true,
+      "case": "channel-simple",
+      "compiler_commit": "744a06a912da56f116831868c554b5e82f9ae4c1",
+      "completed": true,
+      "completion": {
+        "completed_steps": 109,
+        "natural_end": true,
+        "poisson_seconds": 0.97,
+        "time_steps_seconds": 9.38
+      },
+      "configuration_overrides": {},
+      "configuration_sha256": {
+        "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+        "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+        "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+        "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+        "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+        "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+        "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+        "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05"
+      },
+      "configuration_unchanged": true,
+      "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-0/sgs-direct",
+      "diagnostic_complete_process_seconds": 10.105895981992944,
+      "environment": {
+        "CUDA_HOME": "/usr/local/cuda",
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "MKL_NUM_THREADS": "1",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PROC_BIND": "false",
+        "OMP_SCHEDULE": "static",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "exit_code": 0,
+      "kind": "full-process diagnostic",
+      "mode": "sgs-direct",
+      "output_hashes": {
+        "output/U.vtk": "d59bf4ee5b058c29bf3f5076c9cde770b073456cba4f49639d3a7111ba9b9bc8",
+        "output/V.vtk": "05dcee68268bdfbc796f2169aeeb0c955c165aee2271c2be44ff0ac9bf7a3e8c",
+        "output/W.vtk": "ab4b0efd102088fa377a82a5fee97ed6996a73994a6c5ff961c5bc8374fdae1c",
+        "output/avg.vtk": "906bcf2d40bdb8fec15babc2e801fec9ba66b462448902c7f10fa792658aa246",
+        "output/out.vtk": "f84a3a12997e31d31fe3352d18cc18d7c9ae41fdc93d45a93ff9105096b09133"
+      },
+      "pid": 382656,
+      "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+      "qualification": false,
+      "schema_version": 1,
+      "threads": 4,
+      "timed_out": false,
+      "timeout_seconds": 3600,
+      "traced": false,
+      "vtk": {
+        "avg.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 9.313225746154785e-10,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 9.313225746154785e-10,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        },
+        "out.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 1.4901161193847656e-08,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 1.1920928955078125e-07,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        }
+      },
+      "round": 0,
+      "excluded_warmup": true,
+      "receipt": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-0/sgs-direct/run.json"
+    },
+    {
+      "affinity": [
+        4,
+        5,
+        10,
+        11
+      ],
+      "argv": [
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/combined/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "automatic_placement_claim": false,
+      "binary_sha256": "fc866b9abe2ea0d7b610571511bda4869db59c18bac8fa3accf5c2a8e61b57b6",
+      "binary_unchanged": true,
+      "case": "channel-simple",
+      "compiler_commit": "744a06a912da56f116831868c554b5e82f9ae4c1",
+      "completed": true,
+      "completion": {
+        "completed_steps": 109,
+        "natural_end": true,
+        "poisson_seconds": 0.99,
+        "time_steps_seconds": 17.19
+      },
+      "configuration_overrides": {},
+      "configuration_sha256": {
+        "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+        "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+        "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+        "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+        "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+        "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+        "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+        "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05"
+      },
+      "configuration_unchanged": true,
+      "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-0/sgs-plus-diffusion",
+      "diagnostic_complete_process_seconds": 17.844742374989437,
+      "environment": {
+        "CUDA_HOME": "/usr/local/cuda",
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "MKL_NUM_THREADS": "1",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PROC_BIND": "false",
+        "OMP_SCHEDULE": "static",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "exit_code": 0,
+      "kind": "full-process diagnostic",
+      "mode": "sgs-plus-diffusion",
+      "output_hashes": {
+        "output/U.vtk": "357118c67a81aabb2d9e7cd7733dfac123bfc0552b2a36a626759f0dacfca878",
+        "output/V.vtk": "31bf2662798fb83fa4ab47cbeb9bdd17c89162cd2b1c83f4340a9546c643502a",
+        "output/W.vtk": "e85bae86a8c42e69c482263eb3017112c3a4b3f711aad7705f6a04a291018f8d",
+        "output/avg.vtk": "1174a6290ece275dd6225a677230a6ed9d4983b845a4b7255899f3dcfcd99062",
+        "output/out.vtk": "e0758b836f0b44a75434464ea8e464b8b9c1e6b7f7bb1044514d06b3356cb755"
+      },
+      "pid": 382739,
+      "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+      "qualification": false,
+      "schema_version": 1,
+      "threads": 4,
+      "timed_out": false,
+      "timeout_seconds": 3600,
+      "traced": false,
+      "vtk": {
+        "avg.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 1.4901161193847656e-08,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 3.725290298461914e-09,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        },
+        "out.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 1.4901161193847656e-08,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 1.1920928955078125e-07,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        }
+      },
+      "round": 0,
+      "excluded_warmup": true,
+      "receipt": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-0/sgs-plus-diffusion/run.json"
+    },
+    {
+      "affinity": [
+        4,
+        5,
+        10,
+        11
+      ],
+      "argv": [
+        "/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "automatic_placement_claim": false,
+      "binary_sha256": "c02226278a595193e31cbc05983b187e4b64c6fbf8ff4649168375bccb03b96c",
+      "binary_unchanged": true,
+      "case": "channel-simple",
+      "compiler_commit": "744a06a912da56f116831868c554b5e82f9ae4c1",
+      "completed": true,
+      "completion": {
+        "completed_steps": 109,
+        "natural_end": true,
+        "poisson_seconds": 0.99,
+        "time_steps_seconds": 12.57
+      },
+      "configuration_overrides": {},
+      "configuration_sha256": {
+        "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+        "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+        "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+        "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+        "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+        "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+        "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+        "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05"
+      },
+      "configuration_unchanged": true,
+      "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-1/native",
+      "diagnostic_complete_process_seconds": 12.921832047009957,
+      "environment": {
+        "CUDA_HOME": "/usr/local/cuda",
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "MKL_NUM_THREADS": "1",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PROC_BIND": "false",
+        "OMP_SCHEDULE": "static",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "exit_code": 0,
+      "kind": "full-process diagnostic",
+      "mode": "native",
+      "output_hashes": {
+        "output/U.vtk": "e48ba0181febf7346aa2c08190d97af9f82b1be98e8b93971f476b458651fae1",
+        "output/V.vtk": "69317648d77ddf0f9fcc48495b1d6869310921a0c43122e7e308d43a7a95af12",
+        "output/W.vtk": "5fb7e4d69a74e48a7a37cf5cf8b9d41b59272cad0750a489a0e462d358a22d28",
+        "output/avg.vtk": "1fb7320a86f94d9692b183751e534f5e411cf6e14193412a013274b73637f371",
+        "output/out.vtk": "630b921e45d5dfe88010249c50aaf87b9d018d127d961550d451ffa078e79961"
+      },
+      "pid": 382809,
+      "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+      "qualification": false,
+      "schema_version": 1,
+      "threads": 4,
+      "timed_out": false,
+      "timeout_seconds": 3600,
+      "traced": false,
+      "vtk": {
+        "avg.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 1.4901161193847656e-08,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 3.725290298461914e-09,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        },
+        "out.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 1.4901161193847656e-08,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 5.960464477539063e-08,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        }
+      },
+      "round": 1,
+      "excluded_warmup": false,
+      "receipt": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-1/native/run.json"
+    },
+    {
+      "affinity": [
+        4,
+        5,
+        10,
+        11
+      ],
+      "argv": [
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/sgs-control/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "automatic_placement_claim": false,
+      "binary_sha256": "90ead07ea6a395c98e8aadaf2564c48b1bde570530da1e737fc015fe567e2f64",
+      "binary_unchanged": true,
+      "case": "channel-simple",
+      "compiler_commit": "744a06a912da56f116831868c554b5e82f9ae4c1",
+      "completed": true,
+      "completion": {
+        "completed_steps": 109,
+        "natural_end": true,
+        "poisson_seconds": 0.97,
+        "time_steps_seconds": 9.51
+      },
+      "configuration_overrides": {},
+      "configuration_sha256": {
+        "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+        "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+        "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+        "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+        "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+        "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+        "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+        "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05"
+      },
+      "configuration_unchanged": true,
+      "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-1/sgs-direct",
+      "diagnostic_complete_process_seconds": 10.21086737200676,
+      "environment": {
+        "CUDA_HOME": "/usr/local/cuda",
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "MKL_NUM_THREADS": "1",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PROC_BIND": "false",
+        "OMP_SCHEDULE": "static",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "exit_code": 0,
+      "kind": "full-process diagnostic",
+      "mode": "sgs-direct",
+      "output_hashes": {
+        "output/U.vtk": "e9c80ec137e39da6986644b9828e3baf0708e6e814a58b684c9c6fbf46b05368",
+        "output/V.vtk": "eede11128a3383bae7d493c4bae02a0d1644f2f219caaff25bb299de7b1d87c0",
+        "output/W.vtk": "64d4e13f5dc2cea8865c3414eb950ba7a75516d17117458f6832b46c4c465311",
+        "output/avg.vtk": "e0c705e2495931d368a82f3ab02c9b57652f110b9f8a2975ae2d53091d47a862",
+        "output/out.vtk": "5047fab9d3f6b8d0605c0d45b776af4a1c1f18a6f763fe076858039d0516299f"
+      },
+      "pid": 382882,
+      "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+      "qualification": false,
+      "schema_version": 1,
+      "threads": 4,
+      "timed_out": false,
+      "timeout_seconds": 3600,
+      "traced": false,
+      "vtk": {
+        "avg.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 9.313225746154785e-10,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 1.1920928955078125e-07,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        },
+        "out.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 1.4901161193847656e-08,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 1.1920928955078125e-07,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        }
+      },
+      "round": 1,
+      "excluded_warmup": false,
+      "receipt": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-1/sgs-direct/run.json"
+    },
+    {
+      "affinity": [
+        4,
+        5,
+        10,
+        11
+      ],
+      "argv": [
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/combined/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "automatic_placement_claim": false,
+      "binary_sha256": "fc866b9abe2ea0d7b610571511bda4869db59c18bac8fa3accf5c2a8e61b57b6",
+      "binary_unchanged": true,
+      "case": "channel-simple",
+      "compiler_commit": "744a06a912da56f116831868c554b5e82f9ae4c1",
+      "completed": true,
+      "completion": {
+        "completed_steps": 109,
+        "natural_end": true,
+        "poisson_seconds": 0.94,
+        "time_steps_seconds": 16.56
+      },
+      "configuration_overrides": {},
+      "configuration_sha256": {
+        "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+        "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+        "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+        "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+        "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+        "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+        "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+        "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05"
+      },
+      "configuration_unchanged": true,
+      "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-1/sgs-plus-diffusion",
+      "diagnostic_complete_process_seconds": 17.29338313298649,
+      "environment": {
+        "CUDA_HOME": "/usr/local/cuda",
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "MKL_NUM_THREADS": "1",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PROC_BIND": "false",
+        "OMP_SCHEDULE": "static",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "exit_code": 0,
+      "kind": "full-process diagnostic",
+      "mode": "sgs-plus-diffusion",
+      "output_hashes": {
+        "output/U.vtk": "e0d00ba69564934fb81de44bbcb0164817dc63c598304bdeadd1b2299e6a44ad",
+        "output/V.vtk": "133f9276c13fa1a1c08d39b98a1807640b7b21805e61555727d23cfd15a72438",
+        "output/W.vtk": "1cee4f834e3bc29572f5f551baafbc989c14df811cced71148ac7ca0f9ecb02d",
+        "output/avg.vtk": "a46d7f8d1acaa6823cfcbd7472870e433b9d8c90e6f26ba176ad8cc1a9381e31",
+        "output/out.vtk": "92601d9fecc0c7da8ad00bc60a142defee87528f4422a8b0f0d6b2aae11ffef5"
+      },
+      "pid": 382928,
+      "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+      "qualification": false,
+      "schema_version": 1,
+      "threads": 4,
+      "timed_out": false,
+      "timeout_seconds": 3600,
+      "traced": false,
+      "vtk": {
+        "avg.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 9.313225746154785e-10,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 3.725290298461914e-09,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        },
+        "out.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 7.450580596923828e-09,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 1.1920928955078125e-07,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        }
+      },
+      "round": 1,
+      "excluded_warmup": false,
+      "receipt": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-1/sgs-plus-diffusion/run.json"
+    },
+    {
+      "affinity": [
+        4,
+        5,
+        10,
+        11
+      ],
+      "argv": [
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/sgs-control/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "automatic_placement_claim": false,
+      "binary_sha256": "90ead07ea6a395c98e8aadaf2564c48b1bde570530da1e737fc015fe567e2f64",
+      "binary_unchanged": true,
+      "case": "channel-simple",
+      "compiler_commit": "744a06a912da56f116831868c554b5e82f9ae4c1",
+      "completed": true,
+      "completion": {
+        "completed_steps": 109,
+        "natural_end": true,
+        "poisson_seconds": 0.98,
+        "time_steps_seconds": 9.72
+      },
+      "configuration_overrides": {},
+      "configuration_sha256": {
+        "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+        "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+        "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+        "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+        "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+        "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+        "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+        "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05"
+      },
+      "configuration_unchanged": true,
+      "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-2/sgs-direct",
+      "diagnostic_complete_process_seconds": 10.464510600009817,
+      "environment": {
+        "CUDA_HOME": "/usr/local/cuda",
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "MKL_NUM_THREADS": "1",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PROC_BIND": "false",
+        "OMP_SCHEDULE": "static",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "exit_code": 0,
+      "kind": "full-process diagnostic",
+      "mode": "sgs-direct",
+      "output_hashes": {
+        "output/U.vtk": "d59bf4ee5b058c29bf3f5076c9cde770b073456cba4f49639d3a7111ba9b9bc8",
+        "output/V.vtk": "2593e835ce0a0e4e24505bc970b941267921eb40484c85e92ad9b0817eab746f",
+        "output/W.vtk": "18c037745995fdf9caa1f458fabb44447b97640ba238e474881706cc3e591855",
+        "output/avg.vtk": "a0c8e45be9b9d4e16e255b2a85103992a0f033f8ae32c61a9078992c9d38869a",
+        "output/out.vtk": "498dec1f507add4d3c7c4534e26759a1c05b5b6f6b236c5341562bd62d4fcae2"
+      },
+      "pid": 382997,
+      "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+      "qualification": false,
+      "schema_version": 1,
+      "threads": 4,
+      "timed_out": false,
+      "timeout_seconds": 3600,
+      "traced": false,
+      "vtk": {
+        "avg.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 4.656612873077393e-10,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 3.725290298461914e-09,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        },
+        "out.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 1.4901161193847656e-08,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 7.450580596923828e-09,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        }
+      },
+      "round": 2,
+      "excluded_warmup": false,
+      "receipt": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-2/sgs-direct/run.json"
+    },
+    {
+      "affinity": [
+        4,
+        5,
+        10,
+        11
+      ],
+      "argv": [
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/combined/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "automatic_placement_claim": false,
+      "binary_sha256": "fc866b9abe2ea0d7b610571511bda4869db59c18bac8fa3accf5c2a8e61b57b6",
+      "binary_unchanged": true,
+      "case": "channel-simple",
+      "compiler_commit": "744a06a912da56f116831868c554b5e82f9ae4c1",
+      "completed": true,
+      "completion": {
+        "completed_steps": 109,
+        "natural_end": true,
+        "poisson_seconds": 0.96,
+        "time_steps_seconds": 16.53
+      },
+      "configuration_overrides": {},
+      "configuration_sha256": {
+        "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+        "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+        "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+        "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+        "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+        "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+        "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+        "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05"
+      },
+      "configuration_unchanged": true,
+      "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-2/sgs-plus-diffusion",
+      "diagnostic_complete_process_seconds": 17.24609514999611,
+      "environment": {
+        "CUDA_HOME": "/usr/local/cuda",
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "MKL_NUM_THREADS": "1",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PROC_BIND": "false",
+        "OMP_SCHEDULE": "static",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "exit_code": 0,
+      "kind": "full-process diagnostic",
+      "mode": "sgs-plus-diffusion",
+      "output_hashes": {
+        "output/U.vtk": "fdd81bf86045cbdca6469d83c3b00a658ef9cd17bfb56ac626c1a5a124d8250f",
+        "output/V.vtk": "02c7bd12d64eab25767695010f5e5154b2a012154b601852331097083510b86d",
+        "output/W.vtk": "db18c92f297fb731a89b5a274afa5f7f044a4605324a43506e9e6902035aad35",
+        "output/avg.vtk": "f128e65feace9a55b45c2e9ab24cdd06636f9a58d5b0dd37276934b98b83c76b",
+        "output/out.vtk": "e3bc977a4b1e8e4afb38c1973dd3cb28b412bcec8fcca58cbe9361df30504c37"
+      },
+      "pid": 383045,
+      "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+      "qualification": false,
+      "schema_version": 1,
+      "threads": 4,
+      "timed_out": false,
+      "timeout_seconds": 3600,
+      "traced": false,
+      "vtk": {
+        "avg.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 1.4901161193847656e-08,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 1.1920928955078125e-07,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        },
+        "out.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 1.4901161193847656e-08,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 1.1920928955078125e-07,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        }
+      },
+      "round": 2,
+      "excluded_warmup": false,
+      "receipt": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-2/sgs-plus-diffusion/run.json"
+    },
+    {
+      "affinity": [
+        4,
+        5,
+        10,
+        11
+      ],
+      "argv": [
+        "/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "automatic_placement_claim": false,
+      "binary_sha256": "c02226278a595193e31cbc05983b187e4b64c6fbf8ff4649168375bccb03b96c",
+      "binary_unchanged": true,
+      "case": "channel-simple",
+      "compiler_commit": "744a06a912da56f116831868c554b5e82f9ae4c1",
+      "completed": true,
+      "completion": {
+        "completed_steps": 109,
+        "natural_end": true,
+        "poisson_seconds": 0.97,
+        "time_steps_seconds": 12.08
+      },
+      "configuration_overrides": {},
+      "configuration_sha256": {
+        "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+        "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+        "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+        "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+        "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+        "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+        "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+        "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05"
+      },
+      "configuration_unchanged": true,
+      "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-2/native",
+      "diagnostic_complete_process_seconds": 12.466750730993226,
+      "environment": {
+        "CUDA_HOME": "/usr/local/cuda",
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "MKL_NUM_THREADS": "1",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PROC_BIND": "false",
+        "OMP_SCHEDULE": "static",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "exit_code": 0,
+      "kind": "full-process diagnostic",
+      "mode": "native",
+      "output_hashes": {
+        "output/U.vtk": "f29d98ca5b2f3bec48c03d039279efdae181e2d809432be54310e0a3fa224f23",
+        "output/V.vtk": "74d03af6d927e4c244239a59c43d9f2f035b3022063499a3818b53d5d317c33f",
+        "output/W.vtk": "d38800693949d9579bd6bb294335f08a64dc2dc5b7ef5d61a5d054d6e6a93a5d",
+        "output/avg.vtk": "addd81f5411c29f6f292844d236a71967f03b7e49f127348312e49f2f3391c04",
+        "output/out.vtk": "f7e256cb5166dc2f926c43327207486a245611f6649bace41482fc5b44fa610f"
+      },
+      "pid": 383122,
+      "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+      "qualification": false,
+      "schema_version": 1,
+      "threads": 4,
+      "timed_out": false,
+      "timeout_seconds": 3600,
+      "traced": false,
+      "vtk": {
+        "avg.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 9.313225746154785e-10,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 1.1920928955078125e-07,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        },
+        "out.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 7.450580596923828e-09,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 2.9802322387695312e-08,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        }
+      },
+      "round": 2,
+      "excluded_warmup": false,
+      "receipt": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-2/native/run.json"
+    },
+    {
+      "affinity": [
+        4,
+        5,
+        10,
+        11
+      ],
+      "argv": [
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/combined/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "automatic_placement_claim": false,
+      "binary_sha256": "fc866b9abe2ea0d7b610571511bda4869db59c18bac8fa3accf5c2a8e61b57b6",
+      "binary_unchanged": true,
+      "case": "channel-simple",
+      "compiler_commit": "744a06a912da56f116831868c554b5e82f9ae4c1",
+      "completed": true,
+      "completion": {
+        "completed_steps": 109,
+        "natural_end": true,
+        "poisson_seconds": 0.95,
+        "time_steps_seconds": 16.37
+      },
+      "configuration_overrides": {},
+      "configuration_sha256": {
+        "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+        "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+        "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+        "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+        "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+        "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+        "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+        "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05"
+      },
+      "configuration_unchanged": true,
+      "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-3/sgs-plus-diffusion",
+      "diagnostic_complete_process_seconds": 17.099905259005027,
+      "environment": {
+        "CUDA_HOME": "/usr/local/cuda",
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "MKL_NUM_THREADS": "1",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PROC_BIND": "false",
+        "OMP_SCHEDULE": "static",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "exit_code": 0,
+      "kind": "full-process diagnostic",
+      "mode": "sgs-plus-diffusion",
+      "output_hashes": {
+        "output/U.vtk": "cf7edf8c7853da16ac90a9da06577ed0d8c78e072df7df340bca4d36345937cb",
+        "output/V.vtk": "2e8311e0116c644c2011ba502f10b867f57eff3a521b53568cdec43a66956a51",
+        "output/W.vtk": "00f80eec12045fdbe477ee286f7d2c10aecaa34049c0e864348d7970ab0d1b88",
+        "output/avg.vtk": "177a86ed4db188546fcdd7332b8f280cdb193553dd649b894e3a5b4df5a06ef6",
+        "output/out.vtk": "58db424c7c7827d050e0c7d149c5c17c09d81555f4df389af67027a3f1e7175e"
+      },
+      "pid": 383173,
+      "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+      "qualification": false,
+      "schema_version": 1,
+      "threads": 4,
+      "timed_out": false,
+      "timeout_seconds": 3600,
+      "traced": false,
+      "vtk": {
+        "avg.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 1.4901161193847656e-08,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 3.725290298461914e-09,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        },
+        "out.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 1.4901161193847656e-08,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 7.450580596923828e-09,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        }
+      },
+      "round": 3,
+      "excluded_warmup": false,
+      "receipt": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-3/sgs-plus-diffusion/run.json"
+    },
+    {
+      "affinity": [
+        4,
+        5,
+        10,
+        11
+      ],
+      "argv": [
+        "/tmp/fortran-residency-e2e-20261014/repaired-native-checkpoint-gfortran14/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "automatic_placement_claim": false,
+      "binary_sha256": "c02226278a595193e31cbc05983b187e4b64c6fbf8ff4649168375bccb03b96c",
+      "binary_unchanged": true,
+      "case": "channel-simple",
+      "compiler_commit": "744a06a912da56f116831868c554b5e82f9ae4c1",
+      "completed": true,
+      "completion": {
+        "completed_steps": 109,
+        "natural_end": true,
+        "poisson_seconds": 0.96,
+        "time_steps_seconds": 12.15
+      },
+      "configuration_overrides": {},
+      "configuration_sha256": {
+        "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+        "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+        "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+        "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+        "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+        "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+        "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+        "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05"
+      },
+      "configuration_unchanged": true,
+      "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-3/native",
+      "diagnostic_complete_process_seconds": 12.569340639005532,
+      "environment": {
+        "CUDA_HOME": "/usr/local/cuda",
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "MKL_NUM_THREADS": "1",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PROC_BIND": "false",
+        "OMP_SCHEDULE": "static",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "exit_code": 0,
+      "kind": "full-process diagnostic",
+      "mode": "native",
+      "output_hashes": {
+        "output/U.vtk": "bc48fa42c0b88c546cf1dec3b8f9b2e48abdabdb111471921be06e0a4acd0eae",
+        "output/V.vtk": "20853e95bd29731098c93f97a7d89f776703e052d59ac298e2d5e3d4c9c2e732",
+        "output/W.vtk": "6c1fe9bd34cd67de49817cf7376f92b58ea857bb5938e5b139a4f64e51a5b29e",
+        "output/avg.vtk": "ae0e667367dd8d23dc4afd8b046e912ec9f35d7cd1b10970b96855c607c260f0",
+        "output/out.vtk": "9dbdd54383f3060a4de49fcd6b9af30d1b4b69e5c995dedb3ddd31287c1eca00"
+      },
+      "pid": 383281,
+      "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+      "qualification": false,
+      "schema_version": 1,
+      "threads": 4,
+      "timed_out": false,
+      "timeout_seconds": 3600,
+      "traced": false,
+      "vtk": {
+        "avg.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 2.3283064365386963e-10,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 3.725290298461914e-09,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        },
+        "out.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 1.4901161193847656e-08,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 1.1920928955078125e-07,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        }
+      },
+      "round": 3,
+      "excluded_warmup": false,
+      "receipt": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-3/native/run.json"
+    },
+    {
+      "affinity": [
+        4,
+        5,
+        10,
+        11
+      ],
+      "argv": [
+        "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/sgs-control/build/ELMM",
+        "output_dir='output/'"
+      ],
+      "automatic_placement_claim": false,
+      "binary_sha256": "90ead07ea6a395c98e8aadaf2564c48b1bde570530da1e737fc015fe567e2f64",
+      "binary_unchanged": true,
+      "case": "channel-simple",
+      "compiler_commit": "744a06a912da56f116831868c554b5e82f9ae4c1",
+      "completed": true,
+      "completion": {
+        "completed_steps": 109,
+        "natural_end": true,
+        "poisson_seconds": 0.97,
+        "time_steps_seconds": 9.52
+      },
+      "configuration_overrides": {},
+      "configuration_sha256": {
+        "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+        "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+        "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+        "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+        "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+        "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+        "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+        "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05"
+      },
+      "configuration_unchanged": true,
+      "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-3/sgs-direct",
+      "diagnostic_complete_process_seconds": 10.220559334004065,
+      "environment": {
+        "CUDA_HOME": "/usr/local/cuda",
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "MKL_NUM_THREADS": "1",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PROC_BIND": "false",
+        "OMP_SCHEDULE": "static",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "exit_code": 0,
+      "kind": "full-process diagnostic",
+      "mode": "sgs-direct",
+      "output_hashes": {
+        "output/U.vtk": "8ddc8e1d154fb0eb03fcbb927a85a53f912bf9e44b646b2f38ae0632261a75fd",
+        "output/V.vtk": "922fef4bbc509f9506261dd9258654dbbc24d97d66cf33a86a281b1dfea93969",
+        "output/W.vtk": "007ef9f81b76279db08b863c1c3c935383775eccabe5f041f3033d7831d84b7e",
+        "output/avg.vtk": "13d72475d10fb029b3466451386040bd7f3fa76074e310297d94244ba5eeec40",
+        "output/out.vtk": "a3c6087d5633eccdd5818b50fcb256bd9d3e1a578545207496ceef731d1dba5b"
+      },
+      "pid": 383334,
+      "pipeline_commit": "bbe44c1151ac90e0122df91022cceff9d4a48428",
+      "qualification": false,
+      "schema_version": 1,
+      "threads": 4,
+      "timed_out": false,
+      "timeout_seconds": 3600,
+      "traced": false,
+      "vtk": {
+        "avg.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 9.313225746154785e-10,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 9.313225746154785e-10,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        },
+        "out.vtk": {
+          "atol": 1e-06,
+          "fields": {
+            "X_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 128
+            },
+            "Y_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "Z_COORDINATES": {
+              "failed_values": 0,
+              "max_absolute_error": 0.0,
+              "values": 64
+            },
+            "p": {
+              "failed_values": 0,
+              "max_absolute_error": 1.4901161193847656e-08,
+              "values": 524288
+            },
+            "u": {
+              "failed_values": 0,
+              "max_absolute_error": 1.1920928955078125e-07,
+              "values": 1572864
+            }
+          },
+          "note": "ELMM final VTK values are float32, including double-precision builds.",
+          "passed": true,
+          "rtol": 1e-05
+        }
+      },
+      "round": 3,
+      "excluded_warmup": false,
+      "receipt": "/home/jirka/research/fortran-abomination/benchmarks/results/diffusion-complete-checkpoint-20261015/runs/untraced/channel-simple/round-3/sgs-direct/run.json"
+    }
+  ],
+  "complete": true
+}

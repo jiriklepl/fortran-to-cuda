@@ -1,0 +1,623 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="1296pt" height="950.4pt" viewBox="0 0 1296 950.4" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 950.4
+L 1296 950.4
+L 1296 0
+L 0 0
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 42.84 786.6
+L 356.76 786.6
+Q 365.4 786.6 365.4 777.96
+L 365.4 240.84
+Q 365.4 232.2 356.76 232.2
+L 42.84 232.2
+Q 34.2 232.2 34.2 240.84
+L 34.2 777.96
+Q 34.2 786.6 42.84 786.6
+z
+" clip-path="url(#p8323e42695)" style="fill: #fafbfd; stroke: #c7d2df; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 395.64 786.6
+L 1253.16 786.6
+Q 1261.8 786.6 1261.8 777.96
+L 1261.8 240.84
+Q 1261.8 232.2 1253.16 232.2
+L 395.64 232.2
+Q 387 232.2 387 240.84
+L 387 777.96
+Q 387 786.6 395.64 786.6
+z
+" clip-path="url(#p8323e42695)" style="fill: #f7fbfa; stroke: #c7d2df; stroke-linejoin: miter"/>
+   </g>
+   <g id="line2d_1">
+    <path d="M 590.4 372.96
+L 446.4 396
+L 446.4 669.6
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #1677a8; stroke-width: 1.2; stroke-linecap: square"/>
+   </g>
+   <g id="line2d_2">
+    <path d="M 1040.4 372.96
+L 1245.6 396
+L 1245.6 669.6
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #087e80; stroke-width: 1.2; stroke-linecap: square"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 40.68 178.2
+L 1255.32 178.2
+Q 1261.8 178.2 1261.8 171.72
+L 1261.8 109.08
+Q 1261.8 102.6 1255.32 102.6
+L 40.68 102.6
+Q 34.2 102.6 34.2 109.08
+L 34.2 171.72
+Q 34.2 178.2 40.68 178.2
+z
+" clip-path="url(#p8323e42695)" style="fill: #eef2f7; stroke: #bcc8d6; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 418.68 374.76
+L 769.32 374.76
+Q 775.8 374.76 775.8 368.28
+L 775.8 321.48
+Q 775.8 315 769.32 315
+L 418.68 315
+Q 412.2 315 412.2 321.48
+L 412.2 368.28
+Q 412.2 374.76 418.68 374.76
+z
+" clip-path="url(#p8323e42695)" style="fill: #e1f0fa; stroke: #1677a8; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 854.28 374.76
+L 1226.52 374.76
+Q 1233 374.76 1233 368.28
+L 1233 321.48
+Q 1233 315 1226.52 315
+L 854.28 315
+Q 847.8 315 847.8 321.48
+L 847.8 368.28
+Q 847.8 374.76 854.28 374.76
+z
+" clip-path="url(#p8323e42695)" style="fill: #e8f4ee; stroke: #087e80; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 65.88 491.4
+L 333.72 491.4
+Q 340.2 491.4 340.2 484.92
+L 340.2 422.28
+Q 340.2 415.8 333.72 415.8
+L 65.88 415.8
+Q 59.4 415.8 59.4 422.28
+L 59.4 484.92
+Q 59.4 491.4 65.88 491.4
+z
+" clip-path="url(#p8323e42695)" style="fill: #eef2f7; stroke: #bcc8d6; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 483.48 491.4
+L 736.92 491.4
+Q 743.4 491.4 743.4 484.92
+L 743.4 422.28
+Q 743.4 415.8 736.92 415.8
+L 483.48 415.8
+Q 477 415.8 477 422.28
+L 477 484.92
+Q 477 491.4 483.48 491.4
+z
+" clip-path="url(#p8323e42695)" style="fill: #e1f0fa; stroke: #1677a8; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 915.48 491.4
+L 1226.52 491.4
+Q 1233 491.4 1233 484.92
+L 1233 422.28
+Q 1233 415.8 1226.52 415.8
+L 915.48 415.8
+Q 909 415.8 909 422.28
+L 909 484.92
+Q 909 491.4 915.48 491.4
+z
+" clip-path="url(#p8323e42695)" style="fill: #eef2f7; stroke: #bcc8d6; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 65.88 599.4
+L 333.72 599.4
+Q 340.2 599.4 340.2 592.92
+L 340.2 530.28
+Q 340.2 523.8 333.72 523.8
+L 65.88 523.8
+Q 59.4 523.8 59.4 530.28
+L 59.4 592.92
+Q 59.4 599.4 65.88 599.4
+z
+" clip-path="url(#p8323e42695)" style="fill: #eef2f7; stroke: #bcc8d6; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 483.48 599.4
+L 736.92 599.4
+Q 743.4 599.4 743.4 592.92
+L 743.4 530.28
+Q 743.4 523.8 736.92 523.8
+L 483.48 523.8
+Q 477 523.8 477 530.28
+L 477 592.92
+Q 477 599.4 483.48 599.4
+z
+" clip-path="url(#p8323e42695)" style="fill: #e1f0fa; stroke: #1677a8; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_12">
+    <path d="M 915.48 599.4
+L 1226.52 599.4
+Q 1233 599.4 1233 592.92
+L 1233 530.28
+Q 1233 523.8 1226.52 523.8
+L 915.48 523.8
+Q 909 523.8 909 530.28
+L 909 592.92
+Q 909 599.4 915.48 599.4
+z
+" clip-path="url(#p8323e42695)" style="fill: #eef2f7; stroke: #bcc8d6; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 65.88 707.4
+L 333.72 707.4
+Q 340.2 707.4 340.2 700.92
+L 340.2 638.28
+Q 340.2 631.8 333.72 631.8
+L 65.88 631.8
+Q 59.4 631.8 59.4 638.28
+L 59.4 700.92
+Q 59.4 707.4 65.88 707.4
+z
+" clip-path="url(#p8323e42695)" style="fill: #eef2f7; stroke: #bcc8d6; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_14">
+    <path d="M 483.48 707.4
+L 736.92 707.4
+Q 743.4 707.4 743.4 700.92
+L 743.4 638.28
+Q 743.4 631.8 736.92 631.8
+L 483.48 631.8
+Q 477 631.8 477 638.28
+L 477 700.92
+Q 477 707.4 483.48 707.4
+z
+" clip-path="url(#p8323e42695)" style="fill: #e1f0fa; stroke: #1677a8; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_15">
+    <path d="M 915.48 707.4
+L 1226.52 707.4
+Q 1233 707.4 1233 700.92
+L 1233 638.28
+Q 1233 631.8 1226.52 631.8
+L 915.48 631.8
+Q 909 631.8 909 638.28
+L 909 700.92
+Q 909 707.4 915.48 707.4
+z
+" clip-path="url(#p8323e42695)" style="fill: #eef2f7; stroke: #bcc8d6; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_16">
+    <path d="M 422.28 772.2
+L 1222.92 772.2
+Q 1229.4 772.2 1229.4 765.72
+L 1229.4 734.76
+Q 1229.4 728.28 1222.92 728.28
+L 422.28 728.28
+Q 415.8 728.28 415.8 734.76
+L 415.8 765.72
+Q 415.8 772.2 422.28 772.2
+z
+" clip-path="url(#p8323e42695)" style="fill: #fff0dc; stroke: #bc641b; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_17">
+    <path d="M 40.68 878.76
+L 1255.32 878.76
+Q 1261.8 878.76 1261.8 872.28
+L 1261.8 821.88
+Q 1261.8 815.4 1255.32 815.4
+L 40.68 815.4
+Q 34.2 815.4 34.2 821.88
+L 34.2 872.28
+Q 34.2 878.76 40.68 878.76
+z
+" clip-path="url(#p8323e42695)" style="fill: #eef2f7; stroke: #bcc8d6; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 23px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #20364d" x="32.4" y="36" transform="rotate(-0 32.4 36)">Generated diffusion window: GPU kernels with native wall corrections</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 12.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #596c81" x="32.4" y="68.4" transform="rotate(-0 32.4 68.4)">Diagnostic sections policy • channel-simple validated; channel candidate untested • automatic pricing unavailable</text>
+   </g>
+   <g id="text_3">
+    <text style="font-weight: 700; font-size: 13px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="648" y="131.537461" transform="rotate(-0 648 131.537461)">Both paths: SGS direct → native wall / viscosity work → stage initialization → advection, filtering and forces</text>
+   </g>
+   <g id="text_4">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="648" y="159.55125" transform="rotate(-0 648 159.55125)">Original numerical order and wall model retained; channel's active filtering stays in the native prefix.</text>
+   </g>
+   <g id="text_5">
+    <text style="font-size: 11.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #596c81" x="43.2" y="204.48" transform="rotate(-0 43.2 204.48)">Separate ownership: SGS publishes before this native prefix. The new window starts inside the selected diffusion call.</text>
+   </g>
+   <g id="text_6">
+    <text style="font-weight: 700; font-size: 14px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #20364d" x="57.6" y="262.8" transform="rotate(-0 57.6 262.8)">SGS-DIRECT CONTROL</text>
+   </g>
+   <g id="text_7">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #596c81" x="57.6" y="291.6" transform="rotate(-0 57.6 291.6)">Diffusion remains native</text>
+   </g>
+   <g id="text_8">
+    <text style="font-weight: 700; font-size: 14px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #087e80" x="410.4" y="262.8" transform="rotate(-0 410.4 262.8)">SGS DIRECT + GENERATED DIFFUSION</text>
+   </g>
+   <g id="text_9">
+    <text style="font-size: 11.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #596c81" x="410.4" y="291.6" transform="rotate(-0 410.4 291.6)">One diffusion owner; one original OpenMP team; no owner boundary</text>
+   </g>
+   <g id="patch_18">
+    <path d="M 198 182.999268
+Q 198 204.699047 198 224.721776
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 200.6 219.521776
+L 198 224.721776
+L 195.4 219.521776
+z
+" clip-path="url(#p8323e42695)" style="fill: #20364d; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="patch_19">
+    <path d="M 828 182.999268
+Q 828 204.699047 828 224.721776
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 830.6 219.521776
+L 828 224.721776
+L 825.4 219.521776
+z
+" clip-path="url(#p8323e42695)" style="fill: #20364d; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="text_10">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="594" y="338.450456" transform="rotate(-0 594 338.450456)">Device: U / V / W + viscosity</text>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="594" y="360.270512" transform="rotate(-0 594 360.270512)">Shared read-only fields across all three kernels</text>
+   </g>
+   <g id="text_12">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="1040.4" y="338.450456" transform="rotate(-0 1040.4 338.450456)">Host: U / V / W + viscosity</text>
+   </g>
+   <g id="text_13">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="1040.4" y="361.336137" transform="rotate(-0 1040.4 361.336137)">Current mirrors retained for native readers</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 10.3px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #1677a8" x="594" y="398.88" transform="rotate(-0 594 398.88)">Entry: upload missing input sections, including stars</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 10.3px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #087e80" x="1040.4" y="398.88" transform="rotate(-0 1040.4 398.88)">Read-only host mirrors need no download</text>
+   </g>
+   <g id="text_16">
+    <text style="font-weight: 700; font-size: 12.2px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="199.8" y="444.529617" transform="rotate(-0 199.8 444.529617)">CPU U diffusion</text>
+   </g>
+   <g id="text_17">
+    <text style="font-size: 11.2px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="199.8" y="473.6155" transform="rotate(-0 199.8 473.6155)">then 12 native wall corrections</text>
+   </g>
+   <g id="text_18">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="610.2" y="444.477656" transform="rotate(-0 610.2 444.477656)">1  GPU U diffusion</text>
+   </g>
+   <g id="text_19">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="610.2" y="472.475312" transform="rotate(-0 610.2 472.475312)">Read U, viscosity and U*; update U*</text>
+   </g>
+   <g id="text_20">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="1071" y="444.477656" transform="rotate(-0 1071 444.477656)">2  CPU wall corrections</text>
+   </g>
+   <g id="text_21">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="1071" y="472.475312" transform="rotate(-0 1071 472.475312)">12 original worksharing loops update U*</text>
+   </g>
+   <g id="patch_20">
+    <path d="M 746.039377 437.76
+Q 825.33745 437.76 902.958472 437.76
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 897.758472 435.16
+L 902.958472 437.76
+L 897.758472 440.36
+z
+" clip-path="url(#p8323e42695)" style="fill: #20364d; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="patch_21">
+    <path d="M 746.039377 473.04
+Q 825.33745 473.04 902.958472 473.04
+" clip-path="url(#p8323e42695)" style="fill: none; stroke-dasharray: 6,4.5; stroke-dashoffset: 0; stroke: #bc641b; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 897.758472 470.44
+L 902.958472 473.04
+L 897.758472 475.64
+z
+" clip-path="url(#p8323e42695)" style="fill: #bc641b; stroke-dasharray: 6,4.5; stroke-dashoffset: 0; stroke: #bc641b; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="text_22">
+    <text style="font-size: 9.4px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #bc641b" x="826.56" y="463.242164" transform="rotate(-0 826.56 463.242164)">Publish dirty U* sections</text>
+   </g>
+   <g id="patch_22">
+    <path d="M 200.16 492.601465
+Q 200.16 507.10076 200.16 519.923005
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 202.76 514.723005
+L 200.16 519.923005
+L 197.56 514.723005
+z
+" clip-path="url(#p8323e42695)" style="fill: #20364d; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="patch_23">
+    <path d="M 1062.6065 489.837579
+Q 839.295487 507.560676 617.321909 525.177626
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #20364d; stroke-width: 1.2; stroke-linecap: round"/>
+    <path d="M 622.711311 527.358072
+L 617.321909 525.177626
+L 622.299907 522.174371
+z
+" clip-path="url(#p8323e42695)" style="fill: #20364d; stroke: #20364d; stroke-width: 1.2; stroke-linecap: round"/>
+   </g>
+   <g id="text_23">
+    <text style="font-weight: 700; font-size: 12.2px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="199.8" y="552.529617" transform="rotate(-0 199.8 552.529617)">CPU V diffusion</text>
+   </g>
+   <g id="text_24">
+    <text style="font-size: 11.2px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="199.8" y="581.6155" transform="rotate(-0 199.8 581.6155)">then 12 native wall corrections</text>
+   </g>
+   <g id="text_25">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="610.2" y="552.477656" transform="rotate(-0 610.2 552.477656)">3  GPU V diffusion</text>
+   </g>
+   <g id="text_26">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="610.2" y="580.475312" transform="rotate(-0 610.2 580.475312)">Read V, viscosity and V*; update V*</text>
+   </g>
+   <g id="text_27">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="1071" y="552.477656" transform="rotate(-0 1071 552.477656)">4  CPU wall corrections</text>
+   </g>
+   <g id="text_28">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="1071" y="580.475312" transform="rotate(-0 1071 580.475312)">12 original worksharing loops update V*</text>
+   </g>
+   <g id="patch_24">
+    <path d="M 746.039377 545.76
+Q 825.33745 545.76 902.958472 545.76
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 897.758472 543.16
+L 902.958472 545.76
+L 897.758472 548.36
+z
+" clip-path="url(#p8323e42695)" style="fill: #20364d; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="patch_25">
+    <path d="M 746.039377 581.04
+Q 825.33745 581.04 902.958472 581.04
+" clip-path="url(#p8323e42695)" style="fill: none; stroke-dasharray: 6,4.5; stroke-dashoffset: 0; stroke: #bc641b; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 897.758472 578.44
+L 902.958472 581.04
+L 897.758472 583.64
+z
+" clip-path="url(#p8323e42695)" style="fill: #bc641b; stroke-dasharray: 6,4.5; stroke-dashoffset: 0; stroke: #bc641b; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="text_29">
+    <text style="font-size: 9.4px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #bc641b" x="826.56" y="571.242164" transform="rotate(-0 826.56 571.242164)">Publish dirty V* sections</text>
+   </g>
+   <g id="patch_26">
+    <path d="M 200.16 600.601465
+Q 200.16 615.10076 200.16 627.923005
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 202.76 622.723005
+L 200.16 627.923005
+L 197.56 622.723005
+z
+" clip-path="url(#p8323e42695)" style="fill: #20364d; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="patch_27">
+    <path d="M 1062.6065 597.837579
+Q 839.295487 615.560676 617.321909 633.177626
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #20364d; stroke-width: 1.2; stroke-linecap: round"/>
+    <path d="M 622.711311 635.358072
+L 617.321909 633.177626
+L 622.299907 630.174371
+z
+" clip-path="url(#p8323e42695)" style="fill: #20364d; stroke: #20364d; stroke-width: 1.2; stroke-linecap: round"/>
+   </g>
+   <g id="text_30">
+    <text style="font-weight: 700; font-size: 12.2px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="199.8" y="660.529617" transform="rotate(-0 199.8 660.529617)">CPU W diffusion</text>
+   </g>
+   <g id="text_31">
+    <text style="font-size: 11.2px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="199.8" y="689.6155" transform="rotate(-0 199.8 689.6155)">then 12 native wall corrections</text>
+   </g>
+   <g id="text_32">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="610.2" y="660.477656" transform="rotate(-0 610.2 660.477656)">5  GPU W diffusion</text>
+   </g>
+   <g id="text_33">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="610.2" y="688.475312" transform="rotate(-0 610.2 688.475312)">Read W, viscosity and W*; update W*</text>
+   </g>
+   <g id="text_34">
+    <text style="font-weight: 700; font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="1071" y="660.477656" transform="rotate(-0 1071 660.477656)">6  CPU wall corrections</text>
+   </g>
+   <g id="text_35">
+    <text style="font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="1071" y="688.475312" transform="rotate(-0 1071 688.475312)">12 original worksharing loops update W*</text>
+   </g>
+   <g id="patch_28">
+    <path d="M 746.039377 653.76
+Q 825.33745 653.76 902.958472 653.76
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 897.758472 651.16
+L 902.958472 653.76
+L 897.758472 656.36
+z
+" clip-path="url(#p8323e42695)" style="fill: #20364d; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="patch_29">
+    <path d="M 746.039377 689.04
+Q 825.33745 689.04 902.958472 689.04
+" clip-path="url(#p8323e42695)" style="fill: none; stroke-dasharray: 6,4.5; stroke-dashoffset: 0; stroke: #bc641b; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 897.758472 686.44
+L 902.958472 689.04
+L 897.758472 691.64
+z
+" clip-path="url(#p8323e42695)" style="fill: #bc641b; stroke-dasharray: 6,4.5; stroke-dashoffset: 0; stroke: #bc641b; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="text_36">
+    <text style="font-size: 9.4px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #bc641b" x="826.56" y="679.242164" transform="rotate(-0 826.56 679.242164)">Publish dirty W* sections</text>
+   </g>
+   <g id="patch_30">
+    <path d="M 449.396982 453.6
+Q 461.379914 453.6 472.021204 453.6
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #1677a8; stroke-width: 1.2; stroke-linecap: round"/>
+    <path d="M 466.821204 451
+L 472.021204 453.6
+L 466.821204 456.2
+z
+" clip-path="url(#p8323e42695)" style="fill: #1677a8; stroke: #1677a8; stroke-width: 1.2; stroke-linecap: round"/>
+   </g>
+   <g id="patch_31">
+    <path d="M 1242.601172 453.6
+Q 1238.900523 453.6 1236.541515 453.6
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #087e80; stroke-width: 1.2; stroke-linecap: round"/>
+    <path d="M 1241.741515 456.2
+L 1236.541515 453.6
+L 1241.741515 451
+z
+" clip-path="url(#p8323e42695)" style="fill: #087e80; stroke: #087e80; stroke-width: 1.2; stroke-linecap: round"/>
+   </g>
+   <g id="patch_32">
+    <path d="M 449.396982 561.6
+Q 461.379914 561.6 472.021204 561.6
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #1677a8; stroke-width: 1.2; stroke-linecap: round"/>
+    <path d="M 466.821204 559
+L 472.021204 561.6
+L 466.821204 564.2
+z
+" clip-path="url(#p8323e42695)" style="fill: #1677a8; stroke: #1677a8; stroke-width: 1.2; stroke-linecap: round"/>
+   </g>
+   <g id="patch_33">
+    <path d="M 1242.601172 561.6
+Q 1238.900523 561.6 1236.541515 561.6
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #087e80; stroke-width: 1.2; stroke-linecap: round"/>
+    <path d="M 1241.741515 564.2
+L 1236.541515 561.6
+L 1241.741515 559
+z
+" clip-path="url(#p8323e42695)" style="fill: #087e80; stroke: #087e80; stroke-width: 1.2; stroke-linecap: round"/>
+   </g>
+   <g id="patch_34">
+    <path d="M 449.396982 669.6
+Q 461.379914 669.6 472.021204 669.6
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #1677a8; stroke-width: 1.2; stroke-linecap: round"/>
+    <path d="M 466.821204 667
+L 472.021204 669.6
+L 466.821204 672.2
+z
+" clip-path="url(#p8323e42695)" style="fill: #1677a8; stroke: #1677a8; stroke-width: 1.2; stroke-linecap: round"/>
+   </g>
+   <g id="patch_35">
+    <path d="M 1242.601172 669.6
+Q 1238.900523 669.6 1236.541515 669.6
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #087e80; stroke-width: 1.2; stroke-linecap: round"/>
+    <path d="M 1241.741515 672.2
+L 1236.541515 669.6
+L 1241.741515 667
+z
+" clip-path="url(#p8323e42695)" style="fill: #087e80; stroke: #087e80; stroke-width: 1.2; stroke-linecap: round"/>
+   </g>
+   <g id="text_37">
+    <text style="font-size: 10.6px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #596c81" x="61.2" y="744.48" transform="rotate(-0 61.2 744.48)">Original completion and barriers retained</text>
+   </g>
+   <g id="text_38">
+    <text style="font-size: 10.6px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #596c81" x="61.2" y="768.96" transform="rotate(-0 61.2 768.96)">No diffusion PCIe traffic in this control</text>
+   </g>
+   <g id="text_39">
+    <text style="font-weight: 700; font-size: 11.4px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="822.6" y="753.201773" transform="rotate(-0 822.6 753.201773)">Close: publish remaining dirty stars; preserve sections already corrected on the host</text>
+   </g>
+   <g id="patch_36">
+    <path d="M 1069.2 708.601904
+Q 1069.2 716.980401 1069.2 723.681846
+" clip-path="url(#p8323e42695)" style="fill: none; stroke-dasharray: 6,4.5; stroke-dashoffset: 0; stroke: #bc641b; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 1071.8 718.481846
+L 1069.2 723.681846
+L 1066.6 718.481846
+z
+" clip-path="url(#p8323e42695)" style="fill: #bc641b; stroke-dasharray: 6,4.5; stroke-dashoffset: 0; stroke: #bc641b; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="text_40">
+    <text style="font-weight: 700; font-size: 13px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="648" y="840.298261" transform="rotate(-0 648 840.298261)">Native accumulation and the remaining RK step stay outside the window</text>
+   </g>
+   <g id="text_41">
+    <text style="font-size: 12px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #20364d" x="648" y="863.53845" transform="rotate(-0 648 863.53845)">Stars remain live after return. This checkpoint does not retain ownership through accumulation or across stages.</text>
+   </g>
+   <g id="patch_37">
+    <path d="M 198 789.241729
+Q 198 800.501959 198 810.085138
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 200.6 804.885138
+L 198 810.085138
+L 195.4 804.885138
+z
+" clip-path="url(#p8323e42695)" style="fill: #20364d; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="patch_38">
+    <path d="M 820.8 789.241729
+Q 820.8 800.501959 820.8 810.085138
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 823.4 804.885138
+L 820.8 810.085138
+L 818.2 804.885138
+z
+" clip-path="url(#p8323e42695)" style="fill: #20364d; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="patch_39">
+    <path d="M 46.197949 905.76
+Q 64.299178 905.76 80.723355 905.76
+" clip-path="url(#p8323e42695)" style="fill: none; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 75.523355 903.16
+L 80.723355 905.76
+L 75.523355 908.36
+z
+" clip-path="url(#p8323e42695)" style="fill: #20364d; stroke: #20364d; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="text_42">
+    <text style="font-size: 10.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #596c81" x="93.6" y="908.487949" transform="rotate(-0 93.6 908.487949)">Original operation order</text>
+   </g>
+   <g id="patch_40">
+    <path d="M 362.997949 905.76
+Q 381.099178 905.76 397.523355 905.76
+" clip-path="url(#p8323e42695)" style="fill: none; stroke-dasharray: 6,4.5; stroke-dashoffset: 0; stroke: #bc641b; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 392.323355 903.16
+L 397.523355 905.76
+L 392.323355 908.36
+z
+" clip-path="url(#p8323e42695)" style="fill: #bc641b; stroke-dasharray: 6,4.5; stroke-dashoffset: 0; stroke: #bc641b; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="text_43">
+    <text style="font-size: 10.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #596c81" x="410.4" y="908.487949" transform="rotate(-0 410.4 908.487949)">Publication obligations; observed totals in transfer plot</text>
+   </g>
+   <g id="text_44">
+    <text style="font-size: 10.5px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #596c81" x="1101.6" y="908.487539" transform="rotate(-0 1101.6 908.487539)">U* = Ustar</text>
+   </g>
+   <g id="text_45">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #596c81" x="36" y="938.88" transform="rotate(-0 36 938.88)">Frozen manifests • compiler 744a06a912da / pipeline bbe44c1151ac • no application speedup or target qualification claimed</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p8323e42695">
+   <rect x="0" y="0" width="1296" height="950.4"/>
+  </clipPath>
+ </defs>
+</svg>
