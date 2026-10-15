@@ -1,0 +1,675 @@
+{
+  "archived_inputs": {
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/checkpoint.log": {
+      "archive_sha256": "de8dc4f1c5e410ce3a6eedf67bbbcd225d1d57c2642b193b6dc18b5c1e0e2bb4",
+      "path": "evidence/checkpoint.log",
+      "source_sha256": "de8dc4f1c5e410ce3a6eedf67bbbcd225d1d57c2642b193b6dc18b5c1e0e2bb4"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/checkpoint.py": {
+      "archive_sha256": "6c5fec8a057697b8d22a77c4bb16f8dd0db7b9778712610011849dd9f82b4002",
+      "path": "evidence/checkpoint.py",
+      "source_sha256": "6c5fec8a057697b8d22a77c4bb16f8dd0db7b9778712610011849dd9f82b4002"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/freeze_report.py": {
+      "archive_sha256": "4a3cafc7d25c06fa0539bceebe450a14a37e5c1da9537fc8125f4d53dbf12dd0",
+      "path": "evidence/freeze_report.py",
+      "source_sha256": "4a3cafc7d25c06fa0539bceebe450a14a37e5c1da9537fc8125f4d53dbf12dd0"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/full-fields-comparison.json": {
+      "archive_sha256": "11ed05eff9922a9df1d608c635f7ecd5b56ef3edb9b17e2208bd758dbe938742",
+      "path": "evidence/full-fields-comparison.json",
+      "source_sha256": "11ed05eff9922a9df1d608c635f7ecd5b56ef3edb9b17e2208bd758dbe938742"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/full-fields/native/build.json": {
+      "archive_sha256": "b2759bf98f4b356fe59ee6b29e551b3f2f32dafc4d7db95693ac9c6b2e422c0c",
+      "path": "evidence/full-fields/native/build.json",
+      "source_sha256": "b2759bf98f4b356fe59ee6b29e551b3f2f32dafc4d7db95693ac9c6b2e422c0c"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/full-fields/native/dump-main.f90": {
+      "archive_sha256": "40170565640fff2ba4416638dc8aa365255ead71558b64c1b9caf52735b4255c",
+      "path": "evidence/full-fields/native/dump-main.f90",
+      "source_sha256": "40170565640fff2ba4416638dc8aa365255ead71558b64c1b9caf52735b4255c"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/full-fields/native/plan.json": {
+      "archive_sha256": "551df7c728892eaf42e4010e557f1e948f01d60c218e7d24711da3aa247c3cc0",
+      "path": "evidence/full-fields/native/plan.json",
+      "source_sha256": "551df7c728892eaf42e4010e557f1e948f01d60c218e7d24711da3aa247c3cc0"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/full-fields/resident/build.json": {
+      "archive_sha256": "051834eba9c0440238daab13ba5c5558e3f4595f392f93873ea5e15e80d64491",
+      "path": "evidence/full-fields/resident/build.json",
+      "source_sha256": "051834eba9c0440238daab13ba5c5558e3f4595f392f93873ea5e15e80d64491"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/full-fields/resident/dump-main.f90": {
+      "archive_sha256": "40170565640fff2ba4416638dc8aa365255ead71558b64c1b9caf52735b4255c",
+      "path": "evidence/full-fields/resident/dump-main.f90",
+      "source_sha256": "40170565640fff2ba4416638dc8aa365255ead71558b64c1b9caf52735b4255c"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/full-fields/resident/plan.json": {
+      "archive_sha256": "09ee55cef7ec6c9859fc9954f1b16167bb66086a14627aa9b031a814ca0b8730",
+      "path": "evidence/full-fields/resident/plan.json",
+      "source_sha256": "09ee55cef7ec6c9859fc9954f1b16167bb66086a14627aa9b031a814ca0b8730"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/full_field_diagnostic.py": {
+      "archive_sha256": "c6d5e40a49ccb837152b2a46c89eec1e4bdeedcabdb22e2ca8b8d99f8441572f",
+      "path": "evidence/full_field_diagnostic.py",
+      "source_sha256": "c6d5e40a49ccb837152b2a46c89eec1e4bdeedcabdb22e2ca8b8d99f8441572f"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/native/artifacts/scope-manifest.json": {
+      "archive_sha256": "0ee36f81aae260a517d02ce95fec289ef8188adf46d03fa11c69a054342acc51",
+      "path": "evidence/final/native/artifacts/scope-manifest.json.gz",
+      "source_sha256": "37967862218c26381dec8fe0c2b4dc5cbf3ca50c793bf3056fadf4896e52730f"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/native/build_candidate.py": {
+      "archive_sha256": "544bf3393355bf090195396e77218bce6444e0dc6ae700c256ba1a8093b29782",
+      "path": "evidence/final/native/build_candidate.py",
+      "source_sha256": "544bf3393355bf090195396e77218bce6444e0dc6ae700c256ba1a8093b29782"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/native/candidate/build-generation.json": {
+      "archive_sha256": "115b4040d528a3061a3ba45926f19a0199a838cf381932429414fcb8580a1a2b",
+      "path": "evidence/final/native/candidate/build-generation.json",
+      "source_sha256": "115b4040d528a3061a3ba45926f19a0199a838cf381932429414fcb8580a1a2b"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/native/candidate/build/build-receipts.json": {
+      "archive_sha256": "447506aba74bdd852463a686bed1e21f1d3834fe87bef02e918684723408763e",
+      "path": "evidence/final/native/candidate/build/build-receipts.json.gz",
+      "source_sha256": "86bad16b721c0e0b7a20b5e90c872117a8eb92f9b83c52420e915c75b8706c1a"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/native/candidate/composition.json": {
+      "archive_sha256": "71e1e503585cf549dc5bbe23898f59b1089e9a3bbb8386a75d33947b75d13a67",
+      "path": "evidence/final/native/candidate/composition.json.gz",
+      "source_sha256": "7e2b291e20b6c5213c32f4da5e9394e10cfaed592b714bc3d5524f8cd9090ba6"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/native/candidate/native-command-comparison.json": {
+      "archive_sha256": "318285df292bc297174ce3e7dc6a10b2df6376b3152cd4a7b0baaa13552186c9",
+      "path": "evidence/final/native/candidate/native-command-comparison.json",
+      "source_sha256": "318285df292bc297174ce3e7dc6a10b2df6376b3152cd4a7b0baaa13552186c9"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/native/capture-facts.json": {
+      "archive_sha256": "7a4cb1ba19597c44999d1a073db2165a96842bee10256f6186298bfdb1c2df0a",
+      "path": "evidence/final/native/capture-facts.json",
+      "source_sha256": "7a4cb1ba19597c44999d1a073db2165a96842bee10256f6186298bfdb1c2df0a"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/native/command.json": {
+      "archive_sha256": "6a0b197a414ab262769cb9e22cebb5aacf03937cb88427856e1ef75155ac3341",
+      "path": "evidence/final/native/command.json",
+      "source_sha256": "6a0b197a414ab262769cb9e22cebb5aacf03937cb88427856e1ef75155ac3341"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/native/completion.json": {
+      "archive_sha256": "3711ff3123d2e1350c7366436cf48be5f80ad8603250b865d0e0168deea9dd3c",
+      "path": "evidence/final/native/completion.json",
+      "source_sha256": "3711ff3123d2e1350c7366436cf48be5f80ad8603250b865d0e0168deea9dd3c"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/native/generation.log": {
+      "archive_sha256": "a0b292918b3b38224a7964f85adfce73a0c20e380a4329da80ce889bff25cf92",
+      "path": "evidence/final/native/generation.log",
+      "source_sha256": "a0b292918b3b38224a7964f85adfce73a0c20e380a4329da80ce889bff25cf92"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/native/request.json": {
+      "archive_sha256": "bf1064390aa66cd10527b5b1f92b5a2e644aa153eb30e50b7be26fa933d7e4b7",
+      "path": "evidence/final/native/request.json",
+      "source_sha256": "bf1064390aa66cd10527b5b1f92b5a2e644aa153eb30e50b7be26fa933d7e4b7"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/native/run.py": {
+      "archive_sha256": "85c14dd2df0f4611ed1b3660bf26c150868f2edc25a669232d54dc7bd5f686c1",
+      "path": "evidence/final/native/run.py",
+      "source_sha256": "85c14dd2df0f4611ed1b3660bf26c150868f2edc25a669232d54dc7bd5f686c1"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/native/source-after.json": {
+      "archive_sha256": "b91cc3ff80b028a3c96b191f2f7a48bb5bb8ad86d75e0bfe348ba3b85fda1782",
+      "path": "evidence/final/native/source-after.json",
+      "source_sha256": "b91cc3ff80b028a3c96b191f2f7a48bb5bb8ad86d75e0bfe348ba3b85fda1782"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/native/source-before.json": {
+      "archive_sha256": "b91cc3ff80b028a3c96b191f2f7a48bb5bb8ad86d75e0bfe348ba3b85fda1782",
+      "path": "evidence/final/native/source-before.json",
+      "source_sha256": "b91cc3ff80b028a3c96b191f2f7a48bb5bb8ad86d75e0bfe348ba3b85fda1782"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/native/worker-result.json": {
+      "archive_sha256": "df6b47d2fdb262b1905db9eadaf4247b7fc1540c0b5b99ae8232ec81de034da9",
+      "path": "evidence/final/native/worker-result.json",
+      "source_sha256": "df6b47d2fdb262b1905db9eadaf4247b7fc1540c0b5b99ae8232ec81de034da9"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/observations.json": {
+      "archive_sha256": "b4924a8d3a2943ca49b3b90240c93d53beb981058621e32a7c16ce35b214688b",
+      "path": "evidence/observations.json.gz",
+      "source_sha256": "7a83d2078885116a6729224e49c803e4573d203dd5ada08ebb08d8974b24a58a"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/artifacts/scope-manifest.json": {
+      "archive_sha256": "13edb1f0425184feaf6203492031a6b6e512fb21bee0ed205daaa1e4245d8394",
+      "path": "evidence/final/resident/artifacts/scope-manifest.json.gz",
+      "source_sha256": "ccb9d3761d7848e9d898fd7462006c3556a00caa91e6a4d0dfe2711ad8ba0c6e"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/build_candidate.py": {
+      "archive_sha256": "ff653836c4585117cf3a7b00496574156efd7aff76bcb189bae297e7254154d7",
+      "path": "evidence/final/resident/build_candidate.py",
+      "source_sha256": "ff653836c4585117cf3a7b00496574156efd7aff76bcb189bae297e7254154d7"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/candidate/build-generation.json": {
+      "archive_sha256": "57fcc0b4ae1032130b0d046dba91681fe6b5ffee7b7588100dff5bebed0fccfc",
+      "path": "evidence/final/resident/candidate/build-generation.json",
+      "source_sha256": "57fcc0b4ae1032130b0d046dba91681fe6b5ffee7b7588100dff5bebed0fccfc"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/candidate/build/build-receipts.json": {
+      "archive_sha256": "1ec0669c5558c5298f24b39d79c9d777e725fa8ee7dcfefea0e1156a9cc3bb60",
+      "path": "evidence/final/resident/candidate/build/build-receipts.json.gz",
+      "source_sha256": "c283157454c3cacd81934132dbedf84e73a0f1d6123be175f6f26b737695aa22"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/candidate/composition.json": {
+      "archive_sha256": "bd9aa427695f05036c2abce5d43b95999fe08f090ecd5294569b755f9949539f",
+      "path": "evidence/final/resident/candidate/composition.json.gz",
+      "source_sha256": "6a866be6f46d8705463500f026631b434fdf0fc890fa7e308a6b468f2dd7649a"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/candidate/native-command-comparison.json": {
+      "archive_sha256": "85d15e72477b20a320fde26ea9cfa7dfb79bb5ddb08139d819f036279812b7bd",
+      "path": "evidence/final/resident/candidate/native-command-comparison.json",
+      "source_sha256": "85d15e72477b20a320fde26ea9cfa7dfb79bb5ddb08139d819f036279812b7bd"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/capture-facts.json": {
+      "archive_sha256": "7a4cb1ba19597c44999d1a073db2165a96842bee10256f6186298bfdb1c2df0a",
+      "path": "evidence/final/resident/capture-facts.json",
+      "source_sha256": "7a4cb1ba19597c44999d1a073db2165a96842bee10256f6186298bfdb1c2df0a"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/command.json": {
+      "archive_sha256": "4f5e325cbfaf241778da20e8750d604016827cfdc1053d37ffe92fbdbfaebac5",
+      "path": "evidence/final/resident/command.json",
+      "source_sha256": "4f5e325cbfaf241778da20e8750d604016827cfdc1053d37ffe92fbdbfaebac5"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/completion.json": {
+      "archive_sha256": "161a4ff7e5745cf087c0464bc96217300004d38c9d16927c5c5551e6b803234b",
+      "path": "evidence/final/resident/completion.json",
+      "source_sha256": "161a4ff7e5745cf087c0464bc96217300004d38c9d16927c5c5551e6b803234b"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/generation.log": {
+      "archive_sha256": "c321953760f10df2183c188ba1359a898aeb57935254b3b32ea7eb07ba234be1",
+      "path": "evidence/final/resident/generation.log",
+      "source_sha256": "c321953760f10df2183c188ba1359a898aeb57935254b3b32ea7eb07ba234be1"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/request.json": {
+      "archive_sha256": "0d6194a4675639f34517bbf2689fb0ef29f3861e1fd1477be15f88c61f97b9f8",
+      "path": "evidence/final/resident/request.json",
+      "source_sha256": "0d6194a4675639f34517bbf2689fb0ef29f3861e1fd1477be15f88c61f97b9f8"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/run.py": {
+      "archive_sha256": "435623ea252fd866bfb26c6027ff7a7f79e719f5bbdf4aa5c328dfa2dbdc85f7",
+      "path": "evidence/final/resident/run.py",
+      "source_sha256": "435623ea252fd866bfb26c6027ff7a7f79e719f5bbdf4aa5c328dfa2dbdc85f7"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/source-after.json": {
+      "archive_sha256": "b91cc3ff80b028a3c96b191f2f7a48bb5bb8ad86d75e0bfe348ba3b85fda1782",
+      "path": "evidence/final/resident/source-after.json",
+      "source_sha256": "b91cc3ff80b028a3c96b191f2f7a48bb5bb8ad86d75e0bfe348ba3b85fda1782"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/source-before.json": {
+      "archive_sha256": "b91cc3ff80b028a3c96b191f2f7a48bb5bb8ad86d75e0bfe348ba3b85fda1782",
+      "path": "evidence/final/resident/source-before.json",
+      "source_sha256": "b91cc3ff80b028a3c96b191f2f7a48bb5bb8ad86d75e0bfe348ba3b85fda1782"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/worker-result.json": {
+      "archive_sha256": "6d804dc0b22de7efa50fdb4d05eb85bbe0e1125f5b060d49a1509e4ccc8f96e3",
+      "path": "evidence/final/resident/worker-result.json",
+      "source_sha256": "6d804dc0b22de7efa50fdb4d05eb85bbe0e1125f5b060d49a1509e4ccc8f96e3"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/run_case.py": {
+      "archive_sha256": "8bf8508c4bec72f13f7f61b37a011794c6d43826a99fb70deae86158372c2850",
+      "path": "evidence/run_case.py",
+      "source_sha256": "8bf8508c4bec72f13f7f61b37a011794c6d43826a99fb70deae86158372c2850"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/runs/fields/native/command.json": {
+      "archive_sha256": "cc9584bdcd1ed67cebecde08041eaf56fc63d255cb96c7fdcbc6281899bb958e",
+      "path": "evidence/runs/fields/native/command.json",
+      "source_sha256": "cc9584bdcd1ed67cebecde08041eaf56fc63d255cb96c7fdcbc6281899bb958e"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/runs/fields/native/run.json": {
+      "archive_sha256": "818a8b105afc3a9fd6ab6345c246799a897754981c6d49da4e0c04d02eeeaf99",
+      "path": "evidence/runs/fields/native/run.json",
+      "source_sha256": "818a8b105afc3a9fd6ab6345c246799a897754981c6d49da4e0c04d02eeeaf99"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/runs/fields/native/stderr.log": {
+      "archive_sha256": "004c45ef2e695fdfd85647288d5a694741de456884b8bd4833ff70e0f2be8311",
+      "path": "evidence/runs/fields/native/stderr.log",
+      "source_sha256": "004c45ef2e695fdfd85647288d5a694741de456884b8bd4833ff70e0f2be8311"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/runs/fields/native/stdout.log": {
+      "archive_sha256": "688ba122d3b37e3c328c8aaf94f72374f928aee6c3dc7857bcd9764be43ceed4",
+      "path": "evidence/runs/fields/native/stdout.log",
+      "source_sha256": "688ba122d3b37e3c328c8aaf94f72374f928aee6c3dc7857bcd9764be43ceed4"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/runs/fields/resident/command.json": {
+      "archive_sha256": "dca07c40ff52f9ec473e1fe4e8ae7a5a2948e673c1cb379df5a0414b8a3a5696",
+      "path": "evidence/runs/fields/resident/command.json",
+      "source_sha256": "dca07c40ff52f9ec473e1fe4e8ae7a5a2948e673c1cb379df5a0414b8a3a5696"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/runs/fields/resident/run.json": {
+      "archive_sha256": "64721f7eb051d12de19dd2a5041a06da81364da6c5324a74f5c3748fd5591674",
+      "path": "evidence/runs/fields/resident/run.json",
+      "source_sha256": "64721f7eb051d12de19dd2a5041a06da81364da6c5324a74f5c3748fd5591674"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/runs/fields/resident/stderr.log": {
+      "archive_sha256": "f371536677a926c75f40b40e3f5c8032b72459808289631d2360fe53ad2e318f",
+      "path": "evidence/runs/fields/resident/stderr.log.gz",
+      "source_sha256": "2871aae3b2c0593a3f53103eaa21b0ce0176b0efb089eaf6691340dfcdb1625b"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/runs/fields/resident/stdout.log": {
+      "archive_sha256": "2e99b191354f05b388ab3ff440d365285a32769b4c93ecbc796f3e0eb62dc2d4",
+      "path": "evidence/runs/fields/resident/stdout.log",
+      "source_sha256": "2e99b191354f05b388ab3ff440d365285a32769b4c93ecbc796f3e0eb62dc2d4"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/runs/untraced/native/command.json": {
+      "archive_sha256": "76bc736cd8e5d880ae877d82313741df92a9ad63518df26532c4e296de868de9",
+      "path": "evidence/runs/untraced/native/command.json",
+      "source_sha256": "76bc736cd8e5d880ae877d82313741df92a9ad63518df26532c4e296de868de9"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/runs/untraced/native/run.json": {
+      "archive_sha256": "dfa3660d3973888fe36bf27695329960b00419b6c2320a185185e4e050256360",
+      "path": "evidence/runs/untraced/native/run.json",
+      "source_sha256": "dfa3660d3973888fe36bf27695329960b00419b6c2320a185185e4e050256360"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/runs/untraced/native/stderr.log": {
+      "archive_sha256": "e97be226c339c78e67ac9584c12da8be87bc33676cc0a39fe0155b9d1811060f",
+      "path": "evidence/runs/untraced/native/stderr.log",
+      "source_sha256": "e97be226c339c78e67ac9584c12da8be87bc33676cc0a39fe0155b9d1811060f"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/runs/untraced/native/stdout.log": {
+      "archive_sha256": "adf2f444e42770145d8c827d25d739f48612e24caf29425a07d84ed8062477ff",
+      "path": "evidence/runs/untraced/native/stdout.log",
+      "source_sha256": "adf2f444e42770145d8c827d25d739f48612e24caf29425a07d84ed8062477ff"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/runs/untraced/resident/command.json": {
+      "archive_sha256": "c4d5aa56d9981170e26c1814e8336323bdac50aa9d8921df07297856f0d4f922",
+      "path": "evidence/runs/untraced/resident/command.json",
+      "source_sha256": "c4d5aa56d9981170e26c1814e8336323bdac50aa9d8921df07297856f0d4f922"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/runs/untraced/resident/run.json": {
+      "archive_sha256": "d259e2d5bf279778046886b150e7578731d8fc02d1af258bbbaea96944db0333",
+      "path": "evidence/runs/untraced/resident/run.json",
+      "source_sha256": "d259e2d5bf279778046886b150e7578731d8fc02d1af258bbbaea96944db0333"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/runs/untraced/resident/stderr.log": {
+      "archive_sha256": "c9e593541d87421c8d17e6e705cd0109a0406e595e6d7a37391f28b27c84b4f4",
+      "path": "evidence/runs/untraced/resident/stderr.log",
+      "source_sha256": "c9e593541d87421c8d17e6e705cd0109a0406e595e6d7a37391f28b27c84b4f4"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/runs/untraced/resident/stdout.log": {
+      "archive_sha256": "d1cfaf00a6e92ccd1eeafef8223de639064fc1c1cb543347814d49322a10b819",
+      "path": "evidence/runs/untraced/resident/stdout.log",
+      "source_sha256": "d1cfaf00a6e92ccd1eeafef8223de639064fc1c1cb543347814d49322a10b819"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/transfer-ledger.json": {
+      "archive_sha256": "7cd52ed4258ba0b9a70d60e350de9282060e6005dd6a074d8d5cf5b4063c4b3f",
+      "path": "evidence/transfer-ledger.json.gz",
+      "source_sha256": "6e3d02d04642edc5b27c9271a77b84432dc92787974c39a6ac334eed6666def4"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/capture-facts.json": {
+      "archive_sha256": "7a4cb1ba19597c44999d1a073db2165a96842bee10256f6186298bfdb1c2df0a",
+      "path": "evidence/initial/native/capture-facts.json",
+      "source_sha256": "7a4cb1ba19597c44999d1a073db2165a96842bee10256f6186298bfdb1c2df0a"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/command.json": {
+      "archive_sha256": "09b585d943a389be69420bf59acc48c162318a47ad1d7e93029bc2b5a601ce2f",
+      "path": "evidence/initial/native/command.json",
+      "source_sha256": "09b585d943a389be69420bf59acc48c162318a47ad1d7e93029bc2b5a601ce2f"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/completion.json": {
+      "archive_sha256": "2f55332e47732aaf9f98ae720a6dbf5399fea3f1e6f8875ca2f7fd0a63eb9f3b",
+      "path": "evidence/initial/native/completion.json",
+      "source_sha256": "2f55332e47732aaf9f98ae720a6dbf5399fea3f1e6f8875ca2f7fd0a63eb9f3b"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/generation.log": {
+      "archive_sha256": "0813e0d8516e71b1b700553a58cab90747a094921f4b4263a60382fc6d975c17",
+      "path": "evidence/initial/native/generation.log",
+      "source_sha256": "0813e0d8516e71b1b700553a58cab90747a094921f4b4263a60382fc6d975c17"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/request.json": {
+      "archive_sha256": "8d25380eebaeb00b21629b24888c64aa93468be48f8a91536159b2ae281f8075",
+      "path": "evidence/initial/native/request.json",
+      "source_sha256": "8d25380eebaeb00b21629b24888c64aa93468be48f8a91536159b2ae281f8075"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/run.py": {
+      "archive_sha256": "85c14dd2df0f4611ed1b3660bf26c150868f2edc25a669232d54dc7bd5f686c1",
+      "path": "evidence/initial/native/run.py",
+      "source_sha256": "85c14dd2df0f4611ed1b3660bf26c150868f2edc25a669232d54dc7bd5f686c1"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/source-after.json": {
+      "archive_sha256": "83cab514c6b35474674557de15b88fb396e698fd47c339f728915fc9d2285618",
+      "path": "evidence/initial/native/source-after.json",
+      "source_sha256": "83cab514c6b35474674557de15b88fb396e698fd47c339f728915fc9d2285618"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/source-before.json": {
+      "archive_sha256": "83cab514c6b35474674557de15b88fb396e698fd47c339f728915fc9d2285618",
+      "path": "evidence/initial/native/source-before.json",
+      "source_sha256": "83cab514c6b35474674557de15b88fb396e698fd47c339f728915fc9d2285618"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/resident/capture-facts.json": {
+      "archive_sha256": "7a4cb1ba19597c44999d1a073db2165a96842bee10256f6186298bfdb1c2df0a",
+      "path": "evidence/initial/resident/capture-facts.json",
+      "source_sha256": "7a4cb1ba19597c44999d1a073db2165a96842bee10256f6186298bfdb1c2df0a"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/resident/command.json": {
+      "archive_sha256": "6a0f5430b24f7c24695d4298be2bee993d3611f1e641952c4ce3710a981807f3",
+      "path": "evidence/initial/resident/command.json",
+      "source_sha256": "6a0f5430b24f7c24695d4298be2bee993d3611f1e641952c4ce3710a981807f3"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/resident/completion.json": {
+      "archive_sha256": "ec584272146ac423004d11d6e5d6acf31f83a946d8e1694251fd898bdda0fc64",
+      "path": "evidence/initial/resident/completion.json",
+      "source_sha256": "ec584272146ac423004d11d6e5d6acf31f83a946d8e1694251fd898bdda0fc64"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/resident/generation.log": {
+      "archive_sha256": "c43e4dcea7f7d17e03dfe56c0a60039e49d13e9c313beaa5ee68fce72a2aff95",
+      "path": "evidence/initial/resident/generation.log",
+      "source_sha256": "c43e4dcea7f7d17e03dfe56c0a60039e49d13e9c313beaa5ee68fce72a2aff95"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/resident/request.json": {
+      "archive_sha256": "9df951b9d2556dce1bbfadeca5e8a7ed28aedb978e89ad20d25ab92d406eda46",
+      "path": "evidence/initial/resident/request.json",
+      "source_sha256": "9df951b9d2556dce1bbfadeca5e8a7ed28aedb978e89ad20d25ab92d406eda46"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/resident/run.py": {
+      "archive_sha256": "435623ea252fd866bfb26c6027ff7a7f79e719f5bbdf4aa5c328dfa2dbdc85f7",
+      "path": "evidence/initial/resident/run.py",
+      "source_sha256": "435623ea252fd866bfb26c6027ff7a7f79e719f5bbdf4aa5c328dfa2dbdc85f7"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/resident/source-after.json": {
+      "archive_sha256": "83cab514c6b35474674557de15b88fb396e698fd47c339f728915fc9d2285618",
+      "path": "evidence/initial/resident/source-after.json",
+      "source_sha256": "83cab514c6b35474674557de15b88fb396e698fd47c339f728915fc9d2285618"
+    },
+    "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/resident/source-before.json": {
+      "archive_sha256": "83cab514c6b35474674557de15b88fb396e698fd47c339f728915fc9d2285618",
+      "path": "evidence/initial/resident/source-before.json",
+      "source_sha256": "83cab514c6b35474674557de15b88fb396e698fd47c339f728915fc9d2285618"
+    },
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/owner-measurement-final-validation-20261015/final.log": {
+      "archive_sha256": "e292e499efa5faaeb800d804a6b98d02d7861307e35223ddbeda1830cd3f23ae",
+      "path": "evidence/validation/pipeline-final.log",
+      "source_sha256": "e292e499efa5faaeb800d804a6b98d02d7861307e35223ddbeda1830cd3f23ae"
+    },
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/work/owner-measurement-final-validation-20261015/receipt.json": {
+      "archive_sha256": "e67db8b141cf6ca2134d769479d5f46e2a5bee1e79d59c225b7303a0a0da8b50",
+      "path": "evidence/validation/pipeline-receipt.json",
+      "source_sha256": "e67db8b141cf6ca2134d769479d5f46e2a5bee1e79d59c225b7303a0a0da8b50"
+    },
+    "/tmp/scope-measurement-final-tests.log": {
+      "archive_sha256": "1b741c0fff5d3cb46d4a3bd4c7801b4d6a7007bcbb8b60d3e1a0f4bf277b1c6a",
+      "path": "evidence/validation/scope-measurement-final-tests.log",
+      "source_sha256": "1b741c0fff5d3cb46d4a3bd4c7801b4d6a7007bcbb8b60d3e1a0f4bf277b1c6a"
+    },
+    "/tmp/scope-measurement-gpu-recheck.log": {
+      "archive_sha256": "60b8484ee90510874c193c43825b11917e5d1dd52ea1cfea9043d801d4ffa3bf",
+      "path": "evidence/validation/scope-measurement-gpu-recheck.log",
+      "source_sha256": "60b8484ee90510874c193c43825b11917e5d1dd52ea1cfea9043d801d4ffa3bf"
+    },
+    "/tmp/scope-measurement-root-tests.log": {
+      "archive_sha256": "450dac0223f22b06691c2902b680e20457b4ae0ead69bac96b207957e1164632",
+      "path": "evidence/validation/scope-measurement-root-tests.log",
+      "source_sha256": "450dac0223f22b06691c2902b680e20457b4ae0ead69bac96b207957e1164632"
+    },
+    "/tmp/scope-measurement-worker-fix.log": {
+      "archive_sha256": "adbbf2a54d03b90bd949c84e51c157693aa18791eba4b05f8c02dacbe3df0a6d",
+      "path": "evidence/validation/scope-measurement-worker-fix.log",
+      "source_sha256": "adbbf2a54d03b90bd949c84e51c157693aa18791eba4b05f8c02dacbe3df0a6d"
+    }
+  },
+  "archives": {
+    "compiler": {
+      "sha256": "0fb91e020b1f7d199e1e0104d927331075723c43b467dfa5c5a91a536bf2dd13"
+    },
+    "pipeline": {
+      "sha256": "f96e31039946b61dc160a03d7fa96267c1a1c602da95c00272b6b68dba71c560"
+    }
+  },
+  "automatic_estimate_available": false,
+  "calibration_identity": null,
+  "case": "channel-simple",
+  "channel_candidate_executed": false,
+  "compatible_commits": {
+    "compiler": "dd8ea33d55328d7ea7919ae328440f6a047a2cdf",
+    "pipeline": "b9418a9f1c3c242c4b77e948b29fa391b94aee60"
+  },
+  "configurations": {
+    "channel": {
+      "identity": "44fbe5230748585ca7e04d2a849bc4960890a28993a95b14d0f285c22a1cd928",
+      "path": "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/cases/channel"
+    },
+    "channel-simple": {
+      "identity": "47284c289a0b824a86bf074638967f7a9e30d90c1c2631091e96a77bcba28dc4",
+      "path": "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/cases/channel-simple"
+    }
+  },
+  "field_validation": {
+    "driver": {
+      "atol": 1e-06,
+      "dtype": "float64",
+      "field_count": 20,
+      "metadata_format": "storage-shape-bounds-v1",
+      "rtol": 1e-05
+    },
+    "records": 20,
+    "status": "passed"
+  },
+  "initial_compiler_commit": "2f366571d4e10632b0a104a6656ad3e634e4bbb8",
+  "kind": "bounded compiler-owned call observation checkpoint",
+  "measurement_contract": {
+    "automatic_estimate_available": false,
+    "calibration_evidence": false,
+    "call_sites": [
+      {
+        "call_sha256": "36794e3d978c62c3cff4bc7bb933b6850d556de1fa1ab22c656cb9181373245a",
+        "caller": "dynamics::convection",
+        "first_line": 440,
+        "identity": "730b18dfce4a302a4d951a7f64f12f28ae6b5ef2a3fc750a5684fb8c2b580c0a",
+        "last_line": 440,
+        "source": "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/dynamics.f90",
+        "source_sha256": "16c525bf352d92e7ba62b55c3ec17028ffb86ea7db8a79037f0a637f07019618"
+      }
+    ],
+    "capture_facts_identity": "fba4ea35991d3b1adfa0e104436146fba9bb7d0c68ee34837994317f046d65fc",
+    "clock": "system_clock:int64",
+    "compiler_identity": "fbbe5fbe978f67ca0f4b61d81031e715fda0033df8d94d629b10279131db7378",
+    "configuration_identity": "e4f5421c7ca7b61637f5d8a00cb6c751224658665d87888444ec7b6d331e12bf",
+    "execution_identity": "462a890ca1cd184c83afd3e8ec528583bde9e8ff58b191293068ed8d466ed656",
+    "identity": "2d42adccf107b9d1a02917201d957071cb07d54733da34dbd15f1026890f5193",
+    "interval": "before original call argument evaluation through return and finalization",
+    "limitations": [
+      "No runtime workload key; observations are not automatic placement evidence.",
+      "Resident variant may execute guarded native fallbacks; verify runtime traces separately.",
+      "Only listed direct call sites in registered subroutines of the authenticated supplied source graph are observed."
+    ],
+    "observation_prefix": "FORT_SCOPE_MEASUREMENT ",
+    "placement_authority": false,
+    "protocol": "complete-lexical-call-clock-v1",
+    "runtime_identity": "bf08fe71a0355fad3ef077f4b687477983850554a120cd9b378b49ed2cf31ed0",
+    "schema_version": 1,
+    "source_inputs_identity": "7b45a8ff23af3a2090b1eb530bbbfda3847f62fc366f5c8018628d276934ee35",
+    "variant": "resident"
+  },
+  "measurement_identity": "2d42adccf107b9d1a02917201d957071cb07d54733da34dbd15f1026890f5193",
+  "modes": {
+    "native": {
+      "affinity": [
+        4,
+        5,
+        10,
+        11
+      ],
+      "binary": {
+        "path": "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/native/candidate/build/ELMM",
+        "sha256": "93802141d913c02b5027d862a64453c63baaa5772b1ffdd19ca13643684939c5"
+      },
+      "build_receipt_identity": "3445b05d583012716f54b53bac13c0af68b73c4ecb32a791a9c773b1e9f5a608",
+      "complete_process_seconds": 12.515299528007745,
+      "completed_steps": 109,
+      "configuration_sha256": {
+        "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+        "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+        "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+        "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+        "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+        "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+        "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+        "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05"
+      },
+      "owner_calls": 327,
+      "owner_seconds_median": 0.003656492,
+      "owner_seconds_range": [
+        0.003163959,
+        0.071742017
+      ],
+      "owner_seconds_total": 1.367786409,
+      "run_kind": "one full-process diagnostic; no warmup; no qualification",
+      "runtime_environment": {
+        "CUDA_HOME": "/usr/local/cuda",
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "MKL_NUM_THREADS": "1",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PROC_BIND": "false",
+        "OMP_SCHEDULE": "static",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "threads": 4
+    },
+    "resident": {
+      "affinity": [
+        4,
+        5,
+        10,
+        11
+      ],
+      "binary": {
+        "path": "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/resident/candidate/build/ELMM",
+        "sha256": "055edd942a5c798970172e025621aaddfb0c679f7ddaca35ed84ebce8a7d47ef"
+      },
+      "build_receipt_identity": "a345280759b28e1340394c76b5b278056d5e568b4aa22a372525e29024eeeaf9",
+      "complete_process_seconds": 19.748205020994646,
+      "completed_steps": 109,
+      "configuration_sha256": {
+        "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+        "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+        "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+        "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+        "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+        "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+        "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+        "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05"
+      },
+      "owner_calls": 327,
+      "owner_seconds_median": 0.024364511,
+      "owner_seconds_range": [
+        0.02268504,
+        0.297329942
+      ],
+      "owner_seconds_total": 8.500470679,
+      "run_kind": "one full-process diagnostic; no warmup; no qualification",
+      "runtime_environment": {
+        "CUDA_HOME": "/usr/local/cuda",
+        "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "MKL_NUM_THREADS": "1",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_NUM_THREADS": "4",
+        "OMP_PROC_BIND": "false",
+        "OMP_SCHEDULE": "static",
+        "OPENBLAS_NUM_THREADS": "1"
+      },
+      "threads": 4
+    }
+  },
+  "native_outside_measured_diffusion": true,
+  "observed_resident_transfers": {
+    "download_bytes": 4093181952,
+    "download_events": 2943,
+    "launch_events": 981,
+    "upload_bytes": 9987009024,
+    "upload_events": 7848,
+    "wait_events": 2289
+  },
+  "prediction_available": false,
+  "qualification": false,
+  "remaining": [
+    "compiler-selected shared producer/diffusion/accumulation ownership",
+    "workload-keyed calibrated automatic interval pricing and selector",
+    "full channel GPU validation and both seven-round primary qualifications"
+  ],
+  "schema_version": 1,
+  "sgs_offloaded": false,
+  "shared_producer_diffusion_accumulation_window": false,
+  "source_inputs": {
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/advection.f90": "e32b9a1d7bd1c39711ff0dbd5f93938217feed40b34b86f41d42dc2cc080658d",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/advection_variable_z.f90": "1f7a5450a295d9a2f309e2c9a59fb7dd9e847364a6c8eaac46dfb21ebe622bb5",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/alternate_ieee_isnan.f90": "680453fa520cb2c9cc47bdf7deed785e946994184692b63753026c1cc4b81780",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/areasources.f90": "eaca6b9e4ba881c791defdaf5a8e4845ed044010ab70f3e2e7447504c338c9ad",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/arrayutilities.f90": "42bf14bbfeaf13a451fb437ae7233fae75ecf1d83ed6cf4534c73bd2fbf8560f",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/boundaries.f90": "71eb430da9fae8350f7e09a698eb9604750e77320efa5edc590507ed1cbea8fa",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/buoyant_gases.f90": "87b5cb6794581f90e89614333b09b37401e9071e3a9f0001db1ed2efa691f20e",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/diabatic_processes.f90": "dcec151dc52b97b5b4d566030a5c4c1e592ce1386596edda3a900c0d4cc35cf8",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/dummy_cgal_polyhedra.f90": "65147c82f8ccfb908dbc970b6e0e9ca34a2ecec7c74d5c7ef1f5b0f6d8a4d6eb",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/dummy_par.f90": "d7b2f9379cf1621f95feadcff28d5f96c7342f2ef9ca7403dd3de11b0c8dc1c9",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/dynamics.f90": "16c525bf352d92e7ba62b55c3ec17028ffb86ea7db8a79037f0a637f07019618",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/elevationmodels.f90": "4d693387eaa49b3c6843883ce6f538170bede53f35149a018c9ba5d8dfbbe17f",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/endianness.f90": "c5667a9b81d5ec1c06018f353a1b24bff876d609d536d37a492626dad4aa460e",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/filters.f90": "3f3b0cbc59eaf672830104fe0f1e34cd14bacc87242dda5e26466de4e7340305",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/frames.f90": "5102281df453ea5f7eb223e4aff896b9281d05328429f20f0bb5be81108f54ff",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/frames_common.f90": "c129c2e02ad1b5d8301a29d546bb25af40cf16daf97f8a6d75a9b15792d1d940",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/freeunit.f90": "fe562898c3203a36d5396a48f784683cdaba894cd7eb53c9909c915fb5a94866",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/geometricshapes.f90": "b423a132102d3436b110c33c9f0d5738fb36a474b09d4d384c5b3ab97bc1e0f3",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/geometricshapes2d.f90": "617c00d8be94809c6b3403c26cfaf41bed52fa1c8734054010b43ef3646c4244",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/immersedboundary.f90": "d9c0d0979ddbaffbac402c78076c2f0d9d5ebd736056c2ef0dc334c938f49f17",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/initial.f90": "ebb0cc26093503aa594ebb1c4a346488961d7749b037b53cf853e438b0a02c76",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/interpolation.f90": "98a99f9e23aa2658f47bd828d16228b0e842ec56ae7ad04e5f1541ce303bd36a",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/large_scale_processes.f90": "1c707c5987eababc5c66d31bb8cb8cee0b39a09a11cdd0c1b162470b50768299",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/limiters.f90": "6eac2b6b26f44750afa26e0ad8f41ad0afed5a89f5c24805fb9b12465ba69edb",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/linearforcing.f90": "38999167b0c9b9627a7f5481887ee20ce722bca561c349fbbb9b8c74d38877fe",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/linesources.f90": "83bca2c3ea7cdbb875d6ad2f90406e3e7edd92510242bed856beacf9b3be0b4c",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/lists.f90": "ae849de9d91011629c2d2b02c3fad27182014655959ad99c7b6888546fb6babe",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/main.f90": "fd7cec94940953166a913cb49b6ef0d5d95d9c2b9e1bb74e78b78f4d3dca7c17",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/momentum_diffusion.f90": "c282486c02fc0cde8c6298b4cd9248a5e1f49f31297422d94b2572be66836e44",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/multigrid.f90": "275ecbbe799638721bc70e6bc462cd213fb7d9079db0e2e1f6412d558a2a9901",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/multigrid2d.f90": "8083ae0ea0d12d1d7ae6164b3e4f42ad6314af8a4fa47c018d3f277a9abaddf5",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/numerical_operators.f90": "033b719a770097d376c16f768caf7796d92c7ff523aa5180cd553ca1e5380309",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/output_helpers.f90": "2908925d566e66757727f2e7c6af9c0f50182e9950c4743a40733db222686268",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/outputs.f90": "8181c69b82d976334da79e376336574b356bb8133b48bb991de328d7f0d2a0b8",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/parameters.f90": "cb43ff8e48aa161282841d825c5223b22dcf8a2baec68e3a632cc1dfbd3076d3",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/pointsources.f90": "3514b090aee81700d5cb6cd04d61201492c3e4334773ff478e6cac203475b890",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/poisson.f90": "10cfb025f904b58f7e3a21d1858a9c4de3b74994a725e3826c0d4e9aebba94ba",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/pressure.f90": "0548a1a1b33284d5811335beff0051c60faf273f1f9535ef737b34be141bf9af",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/pthreads.f90": "86c9529347c52ce73d14efeb1cbd673ba786696030590633bdb2b87574bb6885",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/puffs.f90": "fcbef9c72f3f3506145b6277b24a4836d5b77e7769588f3cac16480ad01a55e6",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/radiation.f90": "8549d74277f9991c0ee821e45356c194d21c446d5171408d59c5879631d2a5bf",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/rng_par_zig.f90": "ddb083624b41af5078233511718b4ed4e3df36d135ed3fcbe7201597a80fa426",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/scalar_advection.f90": "38788fca947fc1dd3e3ce1e6511032ea3985870104af21b84b5f3bba1bce992f",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/scalar_diffusion.f90": "837c60526933057bbfe02ce2464e0fee5841fda759214273ff945e3c5c16d925",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/scalarboundaries.f90": "972586d7d022f4d222fac3d7a566c2f88f40f8655704507c429608dbd4c271ef",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/scalars.f90": "34926de6c12683ff1c093e6375b0c071bffd63e17e45f2801522652b40f8a0b2",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/simplevtk.f90": "8f8c79c771dab06818cb38cddb87ba2306fbf963cdfb23bb70217d81e0a5059d",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/solarradiation.f90": "252ac8721fb011575bffc109f1251a8b4163fa7f4e8dc2ad76da95a74d562e29",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/solidbodies.f90": "9a158ff5991a6add47111bfb79ff29ad9aa1f9c6ff05a80c63ad5f9a235fd4bd",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/sponge.f90": "98b8de61de748df759f90f80a25352c263a7bdca4c84d7285edaadd0e96027fa",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/stop.f90": "3e3842bf590a35b9baafaa7db84cfb2fc939f07e9033ce0dc3076e6e5c928f4d",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/strings.f90": "b25f6ed3bea2a62b6c611cfeb000badb6b20a990c997973bb123672c297ca39e",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/subgrid.f90": "f89691ebf9bbf2033607f60a1870aada38056215c846ae46a9b521de046247bf",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/subgrid_mixedtimescale.f90": "635c19c76fa3f278f5e0de6d4e6e33f16c769568c9031219ef053541cc8f80dc",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/surfacemapframes.f90": "289c9755d32dec647e572fe1dd1b16b9e93e50921b9b48b95dc1a96cacc36221",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/tiling.f90": "b009e83107e19ca338796dd149c3b44dbff151a3aa3e68b4c647c5f4d9d1830b",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/tsteps.f90": "d78e1c714c2b301dbe8e3cad55d764f546872fcfc1e2b4da0c4838fd68ed83d4",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/turbinlet.f90": "8bb5c64c7c80a8bc99e8a1b01b3fde0ff38d04056cd5cd07745e8a7122dedc28",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/vertical_profiles.f90": "b607ad9df0051ac92dec776721c044e42d0996e3bc5e3613413f8bd3a4e6f55a",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/volumesources.f90": "3846c18a69133092a5d42141b2691035075f80b3d9197f85bfce3d50bf9451a2",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/vtkframes.f90": "157fc125b529b5812c0ab2369bdfa63fa8cfefb7e47ce61b74eedd85bb1b2678",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/wallmodels.f90": "5e31e5296cc0ae4ab72f0a86477fd41798f72b3cd8ae156f09cf8ecd97d404f4",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/ELMM/src/water_thermodynamics.f90": "8f23b33f53a749c1fd429acc0a7e19fc07304926ac0b99f87f2cb2e7125d7eee",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/PoisFFT/src/customfftw3.f90": "4089a4d6bbcd1627549abb6f7873b499cacadbed0d996b0d0678e6f1559a5de3",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/PoisFFT/src/fft.f90": "05cf72789600acf66a269cda9f5450aa9437aae1abd19457c39b7980059fb725",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/PoisFFT/src/main.f90": "c74000f476790177d3c3ab362ff5cd71faa107407c2c0a05eb1ef00fbdbb7a64",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/PoisFFT/src/parameters.f90": "91b31e677244889f71288ebc47b9c820fd394c1ee5089e20f690564e898f84da",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/PoisFFT/src/poisfft.f90": "a32086eaac4091c179806d0931151f357feb6d00bbad6f2d3c2acb1a176c3ce4",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/seed/PoisFFT/src/precisions.f90": "074b72fd8868551e41f5d6bedfe810824870e9de762a8c06a4d120ed60501713"
+  },
+  "stop_condition": "Current measurement slice complete; no further capability or qualification campaign.",
+  "successful_contexts": 327,
+  "trace_attribution_issues": []
+}

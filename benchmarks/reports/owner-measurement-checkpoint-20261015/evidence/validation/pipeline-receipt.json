@@ -1,0 +1,42 @@
+{
+  "actual_application_executed": false,
+  "argv": [
+    "taskset",
+    "-c",
+    "0,1,6,7",
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/test_owner_measurement.py",
+    "tests/test_scoped_adaptation.py",
+    "tests/test_local_scopes.py",
+    "-k",
+    "not real_normal"
+  ],
+  "compiler_base_commit": "a31ec15bb42a2e13a3673104be316ff182802fd8",
+  "compiler_working_tree": true,
+  "cwd": "/home/jirka/research/fortran-abomination/elmm-pipeline",
+  "deselected": 2,
+  "exit_code": 0,
+  "log_sha256": "e292e499efa5faaeb800d804a6b98d02d7861307e35223ddbeda1830cd3f23ae",
+  "passed": 66,
+  "performance_measured": false,
+  "pipeline_base_commit": "9babb9ab6f69ae502dc60d9414a0afe975decb51",
+  "public_compiler_integration": "native and resident generation, apply/composition, equal measurement identities; native normal adaptation uses no CUDA and reports zero optimized regions",
+  "schema_version": 1,
+  "seconds": 35.96,
+  "source_sha256_at_receipt": {
+    "README.md": "b35f803b629d115f995892264388bf9ea6211becfe369f3900f7ec115f7d063f",
+    "elmm_pipeline/cli.py": "623130bf74502c4af52f3badf972d2a1ef42c8a0ec05533bc7507938ac5c9bad",
+    "elmm_pipeline/local_adapter.py": "ddbb5c50544c686f1ee1a267c8dd4c4fc60919cedd56a886f7fce2a6628b3c45",
+    "elmm_pipeline/owner_measurement.py": "da546681963294e6fb61028ecccfd32572fee7cfd02c7487e878a4ee80fc4e63",
+    "elmm_pipeline/scoped_adaptation.py": "0243d1704dab4b4c0c07995b18a2af4307f119f669f70cbf1409308d761442b7",
+    "tests/test_owner_measurement.py": "f9430dad7e6328d6a8fd181c51afbe846525e2912368b0fd17e2527a5f67cf2c",
+    "tests/test_scoped_adaptation.py": "9f7152fc9f9baeaa09d7c4e64249ca4122adb0a650886cea9b1da58832401851"
+  },
+  "validation": {
+    "git_diff_check": "passed",
+    "ruff": "passed"
+  }
+}

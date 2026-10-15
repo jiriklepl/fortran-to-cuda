@@ -1,0 +1,7 @@
+{
+  "binary": "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015-retry/full-fields/native/ELMM-fields",
+  "binary_sha256": "57a9f87d9562193b017973bd81cf3f66a6e01ef25a96db9053941aeb6407fa9f",
+  "performance_measured": false,
+  "plan_sha256": "551df7c728892eaf42e4010e557f1e948f01d60c218e7d24711da3aa247c3cc0",
+  "status": "passed"
+}

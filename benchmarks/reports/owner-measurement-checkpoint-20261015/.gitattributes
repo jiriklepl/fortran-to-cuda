@@ -1,0 +1,4 @@
+# Captured source and logs retain their exact authenticated bytes.
+evidence/** -whitespace
+# Matplotlib emits insignificant whitespace inside SVG path data.
+*.svg -whitespace

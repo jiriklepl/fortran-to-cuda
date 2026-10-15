@@ -1,0 +1,12 @@
+{
+  "changed_source_inputs_or_repositories": [],
+  "compiler_snapshot_sha256": "151c4a0e3b2e273334186658cc4dc0a8f05342dedeefbc0301c9f559aefcdf83",
+  "elapsed_seconds": 61.85202536499128,
+  "exit_code": 1,
+  "log_sha256": "0813e0d8516e71b1b700553a58cab90747a094921f4b4263a60382fc6d975c17",
+  "manifest_exists": false,
+  "pipeline_snapshot_sha256": "f96e31039946b61dc160a03d7fa96267c1a1c602da95c00272b6b68dba71c560",
+  "source_unchanged": true,
+  "timed_out": false,
+  "worker_result_exists": false
+}

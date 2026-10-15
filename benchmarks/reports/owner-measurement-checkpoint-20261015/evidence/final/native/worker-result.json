@@ -1,0 +1,26 @@
+{
+  "application_built": false,
+  "application_executed": false,
+  "automatic_estimate_available": false,
+  "diagnostic_boundaries": [
+    {
+      "first_line": 188,
+      "kind": "candidate_rejection",
+      "last_line": 286,
+      "phase": "inline_numerical_extraction",
+      "reason": "inline numerical boundary: structured source operation lacks an original edit span"
+    }
+  ],
+  "elapsed_seconds": 76.58643937199668,
+  "gpu_leaves": [
+    []
+  ],
+  "joined_teams": 0,
+  "manifest_sha256": "37967862218c26381dec8fe0c2b4dc5cbf3ca50c793bf3056fadf4896e52730f",
+  "numerical_units": [],
+  "owner_boundaries": [
+    []
+  ],
+  "performance_measured": false,
+  "scope_count": 1
+}

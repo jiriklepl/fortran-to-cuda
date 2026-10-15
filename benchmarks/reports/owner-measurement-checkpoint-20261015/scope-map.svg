@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1160" height="920" viewBox="0 0 1160 920" role="img" aria-labelledby="title desc">
+  <title id="title">Complete-owner observation at the original call</title>
+  <desc id="desc">Before, an admitted source-bound owner has no full-invocation observation. After, the compiler instruments an authenticated original standalone call with clocks before argument evaluation and after return. Separate native and resident variants share the checked execution plan and call identity. Logging is outside the measured interval. Measurement does not authorize automatic placement.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#516174"/></marker>
+    <style>
+      text { font-family: DejaVu Sans, Arial, sans-serif; fill: #172d43; }
+      .title { font-size: 28px; font-weight: 700; }
+      .heading { font-size: 20px; font-weight: 700; }
+      .body { font-size: 17px; }
+      .small { font-size: 15px; }
+      .muted { fill: #536576; }
+      .flow { fill: none; stroke: #516174; stroke-width: 2; marker-end: url(#arrow); }
+      .box { stroke-width: 1.5; rx: 10; }
+    </style>
+  </defs>
+  <rect width="1160" height="920" fill="#f7f9fc"/>
+  <text x="36" y="48" class="title">Observe the whole invocation</text>
+  <text x="36" y="77" class="body muted">Compiler-owned timing at an authenticated original CALL; numerical order stays intact.</text>
+
+  <rect x="32" y="103" width="300" height="660" rx="15" fill="#edf1f5" stroke="#d1dae4"/>
+  <text x="54" y="138" class="heading">BEFORE</text>
+  <rect x="54" y="169" width="256" height="116" class="box" fill="white" stroke="#a9b8c8"/>
+  <text x="182" y="202" text-anchor="middle" class="body">Authenticated source</text>
+  <text x="182" y="230" text-anchor="middle" class="body">and checked owner plan</text>
+  <text x="182" y="258" text-anchor="middle" class="small muted">Existing admission proofs</text>
+  <path d="M 182 285 V 328" class="flow"/>
+  <rect x="54" y="338" width="256" height="116" class="box" fill="white" stroke="#a9b8c8"/>
+  <text x="182" y="374" text-anchor="middle" class="body">Original CALL</text>
+  <text x="182" y="402" text-anchor="middle" class="body">executes admitted owner</text>
+  <text x="182" y="430" text-anchor="middle" class="small muted">Existing native / GPU behavior</text>
+  <rect x="54" y="495" width="256" height="126" class="box" fill="#fff5e7" stroke="#d8af72"/>
+  <text x="182" y="530" text-anchor="middle" class="body">No full-invocation</text>
+  <text x="182" y="558" text-anchor="middle" class="body">observation</text>
+  <text x="182" y="590" text-anchor="middle" class="small muted">Prologue and finalization</text>
+  <text x="182" y="611" text-anchor="middle" class="small muted">need an enclosing interval</text>
+
+  <rect x="352" y="103" width="776" height="660" rx="15" fill="white" stroke="#d1dae4"/>
+  <text x="374" y="138" class="heading">AFTER</text>
+  <text x="1106" y="137" text-anchor="end" class="small muted">Separate native and resident artifacts</text>
+  <rect x="396" y="160" width="688" height="72" class="box" fill="#eef3ff" stroke="#8ba5d0"/>
+  <text x="740" y="188" text-anchor="middle" class="body">Compiler selects the original standalone CALL position</text>
+  <text x="740" y="213" text-anchor="middle" class="small muted">Original branch position, CALL text and actual arguments retained</text>
+  <path d="M 740 232 V 253" class="flow"/>
+
+  <rect x="380" y="262" width="720" height="372" rx="12" fill="#f2f8f6" stroke="#6caa94" stroke-width="2"/>
+  <text x="397" y="287" class="small" fill="#31745e">MEASURED INTERVAL</text>
+  <rect x="580" y="300" width="320" height="47" class="box" fill="#dcefe7" stroke="#6caa94"/>
+  <text x="740" y="330" text-anchor="middle" class="body">Clock start</text>
+  <path d="M 740 347 V 367" class="flow"/>
+  <text x="740" y="389" text-anchor="middle" class="body">Original actual-argument evaluation</text>
+  <path d="M 740 401 V 416 H 560 V 432" class="flow"/>
+  <path d="M 740 416 H 920 V 432" class="flow"/>
+  <rect x="401" y="440" width="318" height="109" class="box" fill="#edf1f5" stroke="#a9b8c8"/>
+  <text x="560" y="468" text-anchor="middle" class="heading">Native variant</text>
+  <text x="560" y="497" text-anchor="middle" class="body">Unchanged original callee</text>
+  <text x="560" y="525" text-anchor="middle" class="small muted">Prologue → body → finalization</text>
+  <rect x="761" y="440" width="318" height="109" class="box" fill="#e8f0fb" stroke="#83a7cf"/>
+  <text x="920" y="468" text-anchor="middle" class="heading">Resident variant</text>
+  <text x="920" y="495" text-anchor="middle" class="small">Existing owner: guards, native work,</text>
+  <text x="920" y="519" text-anchor="middle" class="small">transfers, publication and cleanup</text>
+  <text x="740" y="500" text-anchor="middle" class="small muted">OR</text>
+  <path d="M 560 549 V 568 H 740" fill="none" stroke="#516174" stroke-width="2"/>
+  <path d="M 920 549 V 568 H 740 V 585" class="flow"/>
+  <text x="740" y="610" text-anchor="middle" class="body">Return to caller → clock end</text>
+  <path d="M 740 634 V 653" class="flow"/>
+  <rect x="500" y="662" width="480" height="43" class="box" fill="#fff5e7" stroke="#d8af72"/>
+  <text x="740" y="690" text-anchor="middle" class="body">Log observation after timing ends</text>
+  <text x="740" y="737" text-anchor="middle" class="small muted">Same checked execution-plan identity and authenticated call-site identity</text>
+
+  <rect x="32" y="784" width="1096" height="82" rx="10" fill="#fff5e7" stroke="#d8af72"/>
+  <text x="52" y="812" class="heading">Measurement only — no automatic cost or placement authority</text>
+  <text x="52" y="840" class="body">Coverage: admitted standalone direct calls in registered subroutine callers; no speedup claim.</text>
+  <text x="36" y="897" class="small muted">Compiler dd8ea33 · Pipeline b9418a9 · Feature scope, 2026-10-15 · Guarded resident execution may fall back to native</text>
+</svg>

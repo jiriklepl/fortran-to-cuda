@@ -1,0 +1,74 @@
+Traceback (most recent call last):
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/pipeline/elmm_pipeline/local_adapter.py", line 259, in _invoke
+    report = json.loads(result.stdout)
+  File "/usr/lib/python3.13/json/__init__.py", line 352, in loads
+    return _default_decoder.decode(s)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "/usr/lib/python3.13/json/decoder.py", line 345, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/json/decoder.py", line 363, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/run.py", line 153, in <module>
+    if args.worker:worker()
+                   ~~~~~~^^
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/run.py", line 99, in worker
+    result=transform_scopes(Path(request['source']),OUT/'compiler',PYTHON,OUT/'artifacts',entry=ENTRY,
+        source_files=[Path(p) for p in request['source_files']],
+        capture_facts=json.loads(Path(request['capture_facts']).read_text()),
+        gpu_options=request['options'],analysis_sources=Path(request['analysis_sources']))
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/pipeline/elmm_pipeline/local_adapter.py", line 430, in transform_scopes
+    report,command=_invoke(source_path,compiler_root,python,output_dir,entry,arguments,"scope-compiler.log")
+                   ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/pipeline/elmm_pipeline/local_adapter.py", line 261, in _invoke
+    raise LocalAdapterError(
+        "Compiler did not return a JSON result; refresh the explicit compiler snapshot: "
+        + (result.stdout + result.stderr)[-4000:]) from error
+elmm_pipeline.local_adapter.LocalAdapterError: Compiler did not return a JSON result; refresh the explicit compiler snapshot: urces, summary_cache=args.summary_cache)
+                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/compiler/compiler/scopes/source.py", line 2869, in form_source_scopes
+    numerical_sources=numerical_sources, analysis_sources=analysis_sources, summary_cache=summary_cache).run()
+                                                                                                         ~~~^^
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/compiler/compiler/scopes/source.py", line 2755, in run
+    result = self._attempt_lexical_owner(nodes, finalize=True)
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/compiler/compiler/scopes/source.py", line 2676, in _attempt_lexical_owner
+    result = attempt(candidate)
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/compiler/compiler/scopes/source.py", line 2652, in attempt
+    accepted = owner.run(nodes)
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/compiler/compiler/scopes/lexical.py", line 961, in run
+    return self._run_lexical(nodes)
+           ~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/compiler/compiler/scopes/lexical.py", line 967, in _run_lexical
+    self.scan(nodes)
+    ~~~~~~~~~^^^^^^^
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/compiler/compiler/scopes/lexical.py", line 502, in scan
+    self.admit(group)
+    ~~~~~~~~~~^^^^^^^
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/compiler/compiler/scopes/lexical.py", line 414, in admit
+    scope = JoinedTeam(self.builder, nodes, native_host_reads=True)
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/compiler/compiler/scopes/joined_team.py", line 85, in __init__
+    self.tree = self._sequence(self.original_nodes)
+                ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/compiler/compiler/scopes/joined_team.py", line 207, in _sequence
+    facade = self.builder.inline.prepare_worksharing(node, proof)
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/compiler/compiler/scopes/region_dispatch.py", line 295, in prepare_worksharing
+    return self._outline(extraction, sources, collective=True, reservation=sources)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/compiler/compiler/scopes/region_dispatch.py", line 461, in _outline
+    config = replace(self.builder.config, collective=collective, native_participation=native_participation,
+                     source_applicability=applicability)
+  File "/usr/lib/python3.13/dataclasses.py", line 1645, in replace
+    return _replace(obj, **changes)
+  File "/usr/lib/python3.13/dataclasses.py", line 1679, in _replace
+    return self.__class__(**changes)
+           ~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "<string>", line 14, in __init__
+  File "/home/jirka/research/fortran-abomination/benchmarks/results/owner-measurement-checkpoint-20261015/native/compiler/compiler/offload/config.py", line 58, in __post_init__
+    raise ValueError("Scope measurement requires a native/resident serial reached sections owner")
+ValueError: Scope measurement requires a native/resident serial reached sections owner
+
