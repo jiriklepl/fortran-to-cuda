@@ -596,7 +596,8 @@ class ScopeBuilder:
                     from compiler.offload.source_compute import _native_participation
                     participation = _native_participation(analysis, procedure, summary["native_completion"])
                     sources = generate_sources(function, plan,
-                        offload_config=replace(self.config, native_participation=participation), memory_model="scoped")
+                        offload_config=replace(self.config, native_participation=participation,
+                                               scope_measurement=None), memory_model="scoped")
                     if sources.scoped:
                         result = sources
                     else:
@@ -958,7 +959,7 @@ class ScopeBuilder:
                 function, plan = self.numerical_ir[procedure]
                 participation = sources.scoped["compute_estimates"]["native_participation"]
                 self.view_generated[procedure] = generate_scoped(
-                    function, plan, replace(self.config, native_participation=participation),
+                    function, plan, replace(self.config, native_participation=participation, scope_measurement=None),
                     "common_functions.cuh", runtime_id=self.runtime["runtime_id"],
                     root_views=True, root_view_abi=2)
             companion = self.view_generated[procedure]

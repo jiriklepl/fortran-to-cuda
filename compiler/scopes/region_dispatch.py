@@ -458,8 +458,9 @@ class InlineRegions:
         # source's compiled form or participation protocol.
         function, plan = (self.artifact_ir(value, source_name, extraction.source_identity)
                           for value in (function, plan))
+        # Observation wraps the original owning CALL, never a derived worker.
         config = replace(self.builder.config, collective=collective, native_participation=native_participation,
-                         source_applicability=applicability)
+                         source_applicability=applicability, scope_measurement=None)
         generated = generate_sources(function, plan, offload_config=config, memory_model="scoped")
         if generated.scoped is None:
             raise CompilationError("inline numerical candidate has no shared numerical entry")

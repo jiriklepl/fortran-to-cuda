@@ -79,6 +79,46 @@ def test_variants_share_identity_but_native_keeps_original_callee(tmp_path, team
     assert records["native"]["execution_identity"] == records["resident"]["execution_identity"]
 
 
+def test_owner_measurement_is_not_inherited_by_original_worksharing_workers(tmp_path, monkeypatch):
+    from compiler.scopes import region_dispatch
+    from compiler.tests.test_joined_team_source import TEAM
+
+    text = source()
+    first, last = text.index("visits=visits+1"), text.index("end subroutine")
+    text = text[:first] + "visits=visits+1\n" + TEAM.replace("flag", "escape") + text[last:]
+    prepare = region_dispatch.InlineRegions.prepare_worksharing
+    generate = region_dispatch.generate_sources
+    owning_modes, worker_configs = [], []
+
+    def prepare_worksharing(inline, *args, **kwargs):
+        owning_modes.append(inline.builder.config.scope_measurement)
+        return prepare(inline, *args, **kwargs)
+
+    def generate_sources(*args, **kwargs):
+        worker_configs.append(kwargs["offload_config"])
+        assert kwargs["offload_config"].scope_measurement is None
+        return generate(*args, **kwargs)
+
+    monkeypatch.setattr(region_dispatch.InlineRegions, "prepare_worksharing", prepare_worksharing)
+    monkeypatch.setattr(region_dispatch, "generate_sources", generate_sources)
+    identities = []
+    for variant in ("native", "resident"):
+        outputs, report = builder(tmp_path / "original.f90", variant, text).run()
+        scope, = report["scopes"]
+        identities.append(scope["owner_measurement"]["identity"])
+        assert owning_modes.count(variant) >= 2
+        assert scope["checked_execution_plan"]["numerical_invocations"] == 2
+        transformed = outputs[report["sources"][str(tmp_path / "original.f90")]["replacement"]]
+        if variant == "native":
+            assert transformed.startswith(text[:text.index("subroutine caller(")])
+            assert all(row["role"] == "original_source" for row in report["build_sources"])
+        else:
+            assert "run_team" in transformed
+            assert transformed.count("b(i)=b(i)+sum(a)") == 1
+    assert identities[0] == identities[1]
+    assert any(config.collective and config.native_participation == "existing_team" for config in worker_configs)
+
+
 @pytest.mark.parametrize("call", ["if(escape) call step(a,b,out,n,escape)",
                                   "100 call step(a,b,out,n,escape)",
                                   "n=1;call step(a,b,out,n,escape)"])
