@@ -226,11 +226,20 @@ def test_measured_auto_uses_one_guard_and_preserves_native_without_estimates(pre
     assert "fort_scope_team_fortran_compatible_v1" in selector
     assert "#if !defined(FORT_EXACT_WINDOW_BUILD_" in selector
     assert report["scopes"][0]["estimate_available"]
-    outputs, _report, missing = emit(source, {})
+    outputs, missing_report, missing = emit(source, {})
     assert missing["selection"] == "native"
     assert not missing["available"]
     text = next(value for name, value in outputs.items() if name.startswith("sources/"))
-    assert "= .false." in text
+    assert text == source.read_text()
+    assert not missing_report["scopes"][0]["estimate_available"]
+    assert missing_report["scopes"][0]["automatic_preflight"]["caller_source_unchanged"]
+    assert not any(name.startswith("exact/") for name in outputs)
+    outputs, native_report, native = emit(source, {"evidence": observations(record["contract"], resident=2.0)})
+    assert native["selection"] == "native"
+    assert native["available"]
+    assert native_report["scopes"][0]["estimate_available"]
+    assert native_report["scopes"][0]["automatic_preflight"]["selection"] == "native"
+    assert next(value for name, value in outputs.items() if name.startswith("sources/")) == source.read_text()
     assert not any(name.startswith("exact/") for name in outputs)
 
 
@@ -260,6 +269,9 @@ def test_complete_original_teams_have_independent_source_bound_calibration(tmp_p
     generated = next(value for name, value in outputs.items() if name.startswith("sources/"))
     assert "fort_mode = 1" in generated
     assert "fort_choose(" not in generated
+    assert "fort_team_choose" not in generated
+    assert "fort_scope_plan_validate(fort_context)" in generated
+    assert "fort_scope_wait(fort_context)" in generated
     assert source.read_text() == text
     # Serial evidence cannot authorize a team, even for identical descriptors.
     evidence = copy.deepcopy(evidence)
