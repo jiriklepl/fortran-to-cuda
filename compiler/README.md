@@ -2120,6 +2120,16 @@ proofs retain their exact in-process validation in both paths.
 Calibration reuse remains limited to the complete-original-window admission
 class below; the fingerprint does not expand that class to reached suffixes.
 
+The checked plan also retains one `IntervalResourceDemand`, available through
+`plan.resource_demand()`. It covers all admitted members, canonical child
+associations, later numerical uses, section dependencies, and original controls,
+including guards that close ownership without containing a numerical unit.
+`resource_demand_from_reached_window` can issue a prospective inventory from
+registered interval states before scanning. Every such inventory must cover
+the final plan before emission; a prefix-only inventory is insufficient.
+These inventories establish neither native effects nor storage separation or
+cost coverage. They do not change placement or public build manifests.
+
 The compilation session shares one authenticated immutable original source
 graph across private lowering and generation transactions. Original syntax,
 declarations, namespaces, source text and configured-source identities are
@@ -2165,6 +2175,26 @@ An optional API `observer` receives detached `analysis_started`,
 `procedure_started`, `operation_started`, and `operation_complete` events so
 long inspections can retain progress. Events remain explicitly provisional;
 only a returned snapshot has passed final source and policy reauthentication.
+
+`preflight_scope(builder, resource_demands={procedure: bindings})` additionally
+inspects native calls against explicit tuples of original `Binding` objects.
+The bounded `prove_resource_reachability` provider visits original selections
+and resolved callees without first materializing complete effect summaries.
+It records may-accesses, source-call associations, unsupported operations and
+storage-separation obligations. Selected allocatable object fields can be
+identified without granting their numerical layout or capture authority.
+Distinct names do not prove nonaliasing; unresolved calls, pointer association,
+implicit calls and completion remain barriers. Demanded effects are incomplete
+when any barrier remains. Source, namespace, binding and declaration authority
+is rechecked before publication; returned JSON cannot authorize execution.
+
+These explicit preflight demands are procedure-local observations, not a
+discovered complete interval inventory. Resource-budget exhaustion marks that
+observation `not_checked` and keeps later independent diagnostics; an invalid
+source or foreign binding aborts publication. Existing numerical/cost gates
+remain independent. This provider does not yet replace complete native-effect
+admission with selective coherence hooks, and supplies no automatic application
+placement or measured transfer saving.
 
 One-shot module owners close before excluded allocation
 swaps and do not retain state across backedges or invocations.
