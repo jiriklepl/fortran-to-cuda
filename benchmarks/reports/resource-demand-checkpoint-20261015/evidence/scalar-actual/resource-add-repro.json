@@ -1,0 +1,81 @@
+[
+  {
+    "variant": "rank_reduced_literal",
+    "source": "call add(a(:,:,n), 1.0_8)",
+    "resolved": "shape_probe::add2",
+    "first_actual_source_rank": 3,
+    "first_actual_logical_rank": 2,
+    "second_actual_signature": [
+      "real",
+      8,
+      0
+    ],
+    "selection_covered": true,
+    "barriers": [],
+    "indexed_array_reads": []
+  },
+  {
+    "variant": "rank_reduced_scalar_arithmetic",
+    "source": "call add(a(:,:,n), -dt*flux/spacing)",
+    "resolved": "shape_probe::add2",
+    "first_actual_source_rank": 3,
+    "first_actual_logical_rank": 2,
+    "second_actual_signature": [
+      "real",
+      8,
+      0
+    ],
+    "selection_covered": true,
+    "barriers": [],
+    "indexed_array_reads": []
+  },
+  {
+    "variant": "rank_reduced_indexed_arithmetic",
+    "source": "call add(a(:,:,n), -dt*flux/dzPr(n))",
+    "resolver_error": "source call is unresolved or ambiguous: add",
+    "second_actual_error": "array-element/section actual requires in-place mapping and coherence: - dt * flux / dzPr(n)",
+    "selection_covered": false,
+    "barriers": [
+      {
+        "kind": "call",
+        "procedure": "shape_probe::owner",
+        "source": "CALL add(a(:, :, n), - dt * flux / dzPr(n))",
+        "reason": "source call is unresolved or ambiguous: add"
+      }
+    ],
+    "indexed_array_reads": []
+  },
+  {
+    "variant": "direct_candidate_indexed_arithmetic",
+    "source": "call add2(a(:,:,n), -dt*flux/dzPr(n))",
+    "resolver_error": "array-element/section actual requires in-place mapping and coherence: - dt * flux / dzPr(n)",
+    "second_actual_error": "array-element/section actual requires in-place mapping and coherence: - dt * flux / dzPr(n)",
+    "selection_covered": false,
+    "barriers": [
+      {
+        "kind": "call",
+        "procedure": "shape_probe::owner",
+        "source": "CALL add2(a(:, :, n), - dt * flux / dzPr(n))",
+        "reason": "array-element/section actual requires in-place mapping and coherence: - dt * flux / dzPr(n)"
+      }
+    ],
+    "indexed_array_reads": []
+  },
+  {
+    "variant": "original_indexed_read_then_scalar_actual",
+    "source": "value=dzPr(n)\ncall add(a(:,:,n), -dt*flux/value)",
+    "resolved": "shape_probe::add2",
+    "first_actual_source_rank": 3,
+    "first_actual_logical_rank": 2,
+    "second_actual_signature": [
+      "real",
+      8,
+      0
+    ],
+    "selection_covered": true,
+    "barriers": [],
+    "indexed_array_reads": [
+      "dzPr(n)"
+    ]
+  }
+]

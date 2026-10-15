@@ -1,0 +1,129 @@
+{
+  "bounds": {
+    "analysis_budgets_increased": false,
+    "cpu_affinity": [
+      4,
+      5,
+      10,
+      11
+    ],
+    "depth": 8,
+    "operations": 256,
+    "procedures": 64,
+    "seconds_per_process": 60,
+    "termination_grace_seconds": 5
+  },
+  "claims": {
+    "alias_obligations_discharged": false,
+    "application_execution": false,
+    "automatic_application_placement": false,
+    "executable_window": false,
+    "final_probe_publication": false,
+    "full_interval_batch_completed": false,
+    "full_summary_comparison": false,
+    "performance_improvement": false,
+    "transfer_improvement": false
+  },
+  "followup_explanation": {
+    "conclusion": "The scalar actual -dt*flux/dzPr(n) requires indexed-payload coherence proof. Rank-three to rank-two slicing resolves successfully.",
+    "kind": "five small generic shape diagnostics; no application source edits",
+    "not_a_new_application_attempt": true,
+    "results": "evidence/scalar-actual/resource-add-repro.json",
+    "revision_inventory_at_execution_captured": false,
+    "runner": "evidence/scalar-actual/resource-add-repro.py"
+  },
+  "frontend_import_binding": {
+    "mechanism": "Recorded worker imports this module under PYTHONPATH set to repository root; source bytes match both recorded inventories. Exact second-probe source is archived.",
+    "path": "compiler/frontend/resource_reachability.py",
+    "sys_modules_runtime_receipt": false
+  },
+  "implementation": {
+    "base_commit": "43e2c6edd323e826d304b58a0cb9053da78cc32a",
+    "final_production_commit": "c85ce431bd8f435151549dda93a98aacdcb8670f",
+    "note": "Probes used uncommitted production files on this base; exact inventories, not base commit alone, bind them.",
+    "pipeline_commit": "b9418a9f1c3c242c4b77e948b29fa391b94aee60",
+    "validation": {
+      "committed_source_inventory": "evidence/final-validation/committed-source-inventory.json",
+      "compiler_cuda": {
+        "log": "evidence/final-validation/resource-demand-cuda-final-20261015.log",
+        "passed": 3,
+        "seconds": 233.19
+      },
+      "compiler_host": {
+        "log": "evidence/final-validation/resource-demand-host-final-20261015.log",
+        "passed": 314,
+        "seconds": 303.72
+      },
+      "complete_suite_claim": false,
+      "coordinator_reports_source_stable": true,
+      "duplicate_preflight_rerun": {
+        "included_in_distinct_host_total": true,
+        "log": "evidence/final-validation/resource-demand-preflight-style-rerun-20261015.log",
+        "passed": 14,
+        "purpose": "Assertion-only test style change; no additional production change",
+        "seconds": 1.76
+      },
+      "earlier_diagnostics": {
+        "host": {
+          "explanation": "Three stale-evidence failures while production sources changed and two implementation regressions subsequently fixed",
+          "failed": 5,
+          "passed": 299,
+          "source_stable": false
+        },
+        "pipeline": "First collection used the wrong working directory; corrected invocation passed without a pipeline code change"
+      },
+      "git_diff_check": "passed; coordinator reported",
+      "pipeline": {
+        "log": "evidence/final-validation/resource-demand-pipeline-rerun-20261015.log",
+        "passed": 111,
+        "seconds": 3.09,
+        "skipped": 2
+      },
+      "ruff": "passed; coordinator reported"
+    }
+  },
+  "inputs": {
+    "case_names": [
+      "channel-simple",
+      "channel"
+    ],
+    "configured_source_count": 69,
+    "count": 178,
+    "inventory": "evidence/input-inventory.json",
+    "source_repair": "Existing authenticated six INTENT declaration corrections; original case configurations retained",
+    "specialization": "No runtime predicate evaluated or assumed constant from configuration files"
+  },
+  "kind": "bounded source-resource diagnostic; not an executable residency milestone",
+  "map": "operation-resource-map.svg",
+  "post_probe_source_change": "evidence/frontend-only/post-run-source-change.json",
+  "runs": [
+    {
+      "compiler_after": "evidence/scope-builder/compiler-after.json",
+      "compiler_before": "evidence/scope-builder/compiler-before.json",
+      "completion": "evidence/scope-builder/completion.json",
+      "elapsed_seconds": 60.10568242899899,
+      "exit_code": 124,
+      "frontend_module_sha256": "25c998801c46ab060570acf642a4d19fc44dddf49e34fc3b78c10eb5d77b4536",
+      "name": "scope-builder",
+      "setup": "ScopeBuilder with existing source/config/capture facts",
+      "source_session_completion_observed": false,
+      "validated_observations": 0
+    },
+    {
+      "compiler_after": "evidence/frontend-only/compiler-after.json",
+      "compiler_before": "evidence/frontend-only/compiler-before.json",
+      "completion": "evidence/frontend-only/completion.json",
+      "diagnostic": "evidence/frontend-only/diagnostic.json",
+      "elapsed_seconds": 60.07149059099902,
+      "exit_code": 124,
+      "frontend_module_sha256": "8679ae7691194aae85a99e4b456ef1a51d007da2831ba07bf160040ac81962f5",
+      "frontend_module_source": "evidence/frontend-only/resource_reachability.py",
+      "name": "frontend-only",
+      "setup": "Unsealed SourceEffects directly; capture facts authenticated but not applied",
+      "source_effects_construction_seconds": 43.62884924300306,
+      "validated_observations": 4
+    }
+  ],
+  "schema_version": 1,
+  "status": "final-implementation-bound; application diagnostic incomplete"
+}

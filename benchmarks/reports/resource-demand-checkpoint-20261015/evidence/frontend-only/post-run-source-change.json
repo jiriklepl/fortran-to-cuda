@@ -1,0 +1,11 @@
+{
+  "current_file_mtime_utc": "2026-10-15T11:53:41.217521+00:00",
+  "current_sha256": "d68a4c33b656f1b4cdf00e497ecb31a348d653bf9619fabe1c45e6f59c46552e",
+  "import_inventory_captured": false,
+  "included_in_probe": false,
+  "interpretation": "Root reported adding registry type checks. The changed file timestamp is after the completed probe and both probe inventories contain its preceding bytes; do not bind these results to the later correction.",
+  "kind": "post-run source correction observed",
+  "path": "compiler/scopes/execution_plan.py",
+  "probe_completion_receipt_mtime_utc": "2026-10-15T11:53:23.858130+00:00",
+  "probe_inventory_sha256": "b8dabbe97fec5eb26097ea36de0af049139f6f3a6ed6b32eee1c02797344e862"
+}

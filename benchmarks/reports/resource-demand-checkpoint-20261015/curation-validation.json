@@ -1,0 +1,16 @@
+{
+  "authenticated_input_hashes_verified": 178,
+  "evidence_entries_verified": 31,
+  "figure_reproduction_command": [
+    ".venv/bin/python",
+    "benchmarks/reports/resource-demand-checkpoint-20261015/render.py",
+    "--output",
+    "/tmp/resource-demand-final-render-check"
+  ],
+  "figure_rerender_byte_identical": true,
+  "probe_before_after_inventories_identical": true,
+  "report_is_application_performance_evidence": false,
+  "schema_version": 1,
+  "svg_xml_valid": true,
+  "visual_inspection": "Final PNG inspected after commit/test subtitle and selective-hooks wording corrections; text legible with no overlap."
+}

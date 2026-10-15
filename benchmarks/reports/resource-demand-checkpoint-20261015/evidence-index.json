@@ -1,0 +1,281 @@
+{
+  "entries": [
+    {
+      "bytes": 10369,
+      "compression": null,
+      "original_bytes": 10369,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/probe.py",
+      "original_sha256": "043962d45714d91ab140ea115e439c53418be4cf3451ad8fe9cbbbd5f3b84faa",
+      "path": "evidence/scope-builder/probe.py",
+      "sha256": "043962d45714d91ab140ea115e439c53418be4cf3451ad8fe9cbbbd5f3b84faa"
+    },
+    {
+      "bytes": 981,
+      "compression": null,
+      "original_bytes": 981,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/launch.json",
+      "original_sha256": "5d92a8cec51ba4ddb3223072607136c310166595523d530146ac4c69da30e3c9",
+      "path": "evidence/scope-builder/launch.json",
+      "sha256": "5d92a8cec51ba4ddb3223072607136c310166595523d530146ac4c69da30e3c9"
+    },
+    {
+      "bytes": 1211,
+      "compression": null,
+      "original_bytes": 1211,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/completion.json",
+      "original_sha256": "93b0e58127e0ee7d151af0d370547ccc9739bb23311357874ef93377049d4048",
+      "path": "evidence/scope-builder/completion.json",
+      "sha256": "93b0e58127e0ee7d151af0d370547ccc9739bb23311357874ef93377049d4048"
+    },
+    {
+      "bytes": 18458,
+      "compression": null,
+      "original_bytes": 18458,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/compiler-before.json",
+      "original_sha256": "581ec8d9320535812cfb57a7597ed743b65d5d4668582f17426dce490750fe87",
+      "path": "evidence/scope-builder/compiler-before.json",
+      "sha256": "581ec8d9320535812cfb57a7597ed743b65d5d4668582f17426dce490750fe87"
+    },
+    {
+      "bytes": 18458,
+      "compression": null,
+      "original_bytes": 18458,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/compiler-after.json",
+      "original_sha256": "581ec8d9320535812cfb57a7597ed743b65d5d4668582f17426dce490750fe87",
+      "path": "evidence/scope-builder/compiler-after.json",
+      "sha256": "581ec8d9320535812cfb57a7597ed743b65d5d4668582f17426dce490750fe87"
+    },
+    {
+      "bytes": 944,
+      "compression": null,
+      "original_bytes": 944,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/diagnostic.json",
+      "original_sha256": "b1fbd8e9931419a94a29c8f83d16bbcf487bfdc08d9f6139a16b3d9360b7cba0",
+      "path": "evidence/scope-builder/diagnostic.json",
+      "sha256": "b1fbd8e9931419a94a29c8f83d16bbcf487bfdc08d9f6139a16b3d9360b7cba0"
+    },
+    {
+      "bytes": 1125,
+      "compression": null,
+      "original_bytes": 1125,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/launcher.log",
+      "original_sha256": "bc57f2fad0bfe268c5ab23c513257581a392e375a2f5ace9ee56d090d2b54f1a",
+      "path": "evidence/scope-builder/launcher.log",
+      "sha256": "bc57f2fad0bfe268c5ab23c513257581a392e375a2f5ace9ee56d090d2b54f1a"
+    },
+    {
+      "bytes": 20,
+      "compression": "gzip",
+      "original_bytes": 0,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/output.jsonl",
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "path": "evidence/scope-builder/output.jsonl.gz",
+      "sha256": "9ceffb7310338057cfe71a4ae1e2c98d2c485d81cdef906532a801f457a38d64"
+    },
+    {
+      "bytes": 10878,
+      "compression": null,
+      "original_bytes": 10878,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/frontend-only/probe.py",
+      "original_sha256": "01a02c86b930c26b93a4f6010f6f8e63ab0c0a17b658bb7225dfa6575a4a0649",
+      "path": "evidence/frontend-only/probe.py",
+      "sha256": "01a02c86b930c26b93a4f6010f6f8e63ab0c0a17b658bb7225dfa6575a4a0649"
+    },
+    {
+      "bytes": 1110,
+      "compression": null,
+      "original_bytes": 1110,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/frontend-only/launch.json",
+      "original_sha256": "84acbcfef972e5af96bb4dc06ca1a4b48ea3437ad49179b0672f48f7c50a94b6",
+      "path": "evidence/frontend-only/launch.json",
+      "sha256": "84acbcfef972e5af96bb4dc06ca1a4b48ea3437ad49179b0672f48f7c50a94b6"
+    },
+    {
+      "bytes": 1340,
+      "compression": null,
+      "original_bytes": 1340,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/frontend-only/completion.json",
+      "original_sha256": "51889bd509479c2753a18839394075747f184b8533d1b5884b568daa2a513e2b",
+      "path": "evidence/frontend-only/completion.json",
+      "sha256": "51889bd509479c2753a18839394075747f184b8533d1b5884b568daa2a513e2b"
+    },
+    {
+      "bytes": 18458,
+      "compression": null,
+      "original_bytes": 18458,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/frontend-only/compiler-before.json",
+      "original_sha256": "984cee01293e113b1d2578dc3479f1b12a2b9cd3349bebb26a214823d96bec2a",
+      "path": "evidence/frontend-only/compiler-before.json",
+      "sha256": "984cee01293e113b1d2578dc3479f1b12a2b9cd3349bebb26a214823d96bec2a"
+    },
+    {
+      "bytes": 18458,
+      "compression": null,
+      "original_bytes": 18458,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/frontend-only/compiler-after.json",
+      "original_sha256": "984cee01293e113b1d2578dc3479f1b12a2b9cd3349bebb26a214823d96bec2a",
+      "path": "evidence/frontend-only/compiler-after.json",
+      "sha256": "984cee01293e113b1d2578dc3479f1b12a2b9cd3349bebb26a214823d96bec2a"
+    },
+    {
+      "bytes": 4260,
+      "compression": null,
+      "original_bytes": 4260,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/frontend-only/diagnostic.json",
+      "original_sha256": "64ae6449b5bf2b8e1f844e029002b330b76e3c5eaffbbafa46d7f5a5716c5dd7",
+      "path": "evidence/frontend-only/diagnostic.json",
+      "sha256": "64ae6449b5bf2b8e1f844e029002b330b76e3c5eaffbbafa46d7f5a5716c5dd7"
+    },
+    {
+      "bytes": 1250,
+      "compression": null,
+      "original_bytes": 1250,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/frontend-only/launcher.log",
+      "original_sha256": "8320687f6249f9a3400402fda4d81f346d4a406a8f13b2ca88a8218edfd77943",
+      "path": "evidence/frontend-only/launcher.log",
+      "sha256": "8320687f6249f9a3400402fda4d81f346d4a406a8f13b2ca88a8218edfd77943"
+    },
+    {
+      "bytes": 7959,
+      "compression": "gzip",
+      "original_bytes": 194223,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/frontend-only/output.jsonl",
+      "original_sha256": "c009b0b4708b842b6f5ff68cd3d71582981e7f5abb83d45822c401a63b35065a",
+      "path": "evidence/frontend-only/output.jsonl.gz",
+      "sha256": "f65a495ba211b4cacb375150c0807fd1bd28b7187e3b7b0ee3a11ef7c6bfc1a5"
+    },
+    {
+      "bytes": 720,
+      "compression": null,
+      "original_bytes": 720,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/frontend-only/post-run-source-change.json",
+      "original_sha256": "435df97e18cd8315b0bb34df186cbec5e9829f03506c66693b7988bab3f85257",
+      "path": "evidence/frontend-only/post-run-source-change.json",
+      "sha256": "435df97e18cd8315b0bb34df186cbec5e9829f03506c66693b7988bab3f85257"
+    },
+    {
+      "bytes": 35280,
+      "compression": null,
+      "original_bytes": 35280,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/resource-demand-checkpoint-20261015/input-inventory.json",
+      "original_sha256": "d650d1815ff96c37b1d73368953ecb4ea43c23bad37506aacf0a52ce98f0c98b",
+      "path": "evidence/input-inventory.json",
+      "sha256": "d650d1815ff96c37b1d73368953ecb4ea43c23bad37506aacf0a52ce98f0c98b"
+    },
+    {
+      "bytes": 24130,
+      "compression": null,
+      "original_bytes": 24130,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/request.json",
+      "original_sha256": "e14b57cb21316b557c59d80a6170cd3d7f0b0e41d1ee93cbea7462e8b6568881",
+      "path": "evidence/inputs/request.json",
+      "sha256": "e14b57cb21316b557c59d80a6170cd3d7f0b0e41d1ee93cbea7462e8b6568881"
+    },
+    {
+      "bytes": 6861,
+      "compression": null,
+      "original_bytes": 6861,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/input-bundle.json",
+      "original_sha256": "5a8b86c102a1cb65de0f3095dc55051c16b12e33d347ac82ce886ba1d3f52554",
+      "path": "evidence/inputs/input-bundle.json",
+      "sha256": "5a8b86c102a1cb65de0f3095dc55051c16b12e33d347ac82ce886ba1d3f52554"
+    },
+    {
+      "bytes": 16591,
+      "compression": null,
+      "original_bytes": 16591,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/capture-facts.json",
+      "original_sha256": "1bea5abea7e5c512cb8ec880c0ab8c419a20f3e0a3804dff495711dcd89465c2",
+      "path": "evidence/inputs/capture-facts.json",
+      "sha256": "1bea5abea7e5c512cb8ec880c0ab8c419a20f3e0a3804dff495711dcd89465c2"
+    },
+    {
+      "bytes": 1312,
+      "compression": null,
+      "original_bytes": 1312,
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/capture-facts-provenance.json",
+      "original_sha256": "99f181cbb15aed43fbd1d9daa88bfec082c4a216c4cfbee481d2b22d6bbaef11",
+      "path": "evidence/inputs/capture-facts-provenance.json",
+      "sha256": "99f181cbb15aed43fbd1d9daa88bfec082c4a216c4cfbee481d2b22d6bbaef11"
+    },
+    {
+      "bytes": 30357,
+      "compression": null,
+      "original_bytes": 30357,
+      "original_path": "/home/jirka/research/fortran-abomination/compiler/frontend/resource_reachability.py",
+      "original_sha256": "8679ae7691194aae85a99e4b456ef1a51d007da2831ba07bf160040ac81962f5",
+      "path": "evidence/frontend-only/resource_reachability.py",
+      "sha256": "8679ae7691194aae85a99e4b456ef1a51d007da2831ba07bf160040ac81962f5"
+    },
+    {
+      "bytes": 2753,
+      "compression": null,
+      "original_bytes": 2753,
+      "original_path": "/tmp/resource-add-repro.py",
+      "original_sha256": "eb3eae720c3a7bdb8e4acc10b201159ddca4f3033c5110f1575cbae74304b355",
+      "path": "evidence/scalar-actual/resource-add-repro.py",
+      "sha256": "eb3eae720c3a7bdb8e4acc10b201159ddca4f3033c5110f1575cbae74304b355"
+    },
+    {
+      "bytes": 2450,
+      "compression": null,
+      "original_bytes": 2450,
+      "original_path": "/tmp/resource-add-repro.json",
+      "original_sha256": "3fdeb8907f9029cc6130d37f0751d37b9ac1f7e0ac5442b99b6b91aabe3307b3",
+      "path": "evidence/scalar-actual/resource-add-repro.json",
+      "sha256": "3fdeb8907f9029cc6130d37f0751d37b9ac1f7e0ac5442b99b6b91aabe3307b3"
+    },
+    {
+      "bytes": 2450,
+      "compression": null,
+      "original_bytes": 2450,
+      "original_path": "/tmp/resource-add-repro.log",
+      "original_sha256": "3fdeb8907f9029cc6130d37f0751d37b9ac1f7e0ac5442b99b6b91aabe3307b3",
+      "path": "evidence/scalar-actual/resource-add-repro.log",
+      "sha256": "3fdeb8907f9029cc6130d37f0751d37b9ac1f7e0ac5442b99b6b91aabe3307b3"
+    },
+    {
+      "bytes": 432,
+      "compression": null,
+      "original_bytes": 432,
+      "original_path": "/tmp/resource-demand-host-final-20261015.log",
+      "original_sha256": "d3e0d758ef275e060d3a412130569c1d6cf420fce64c5331e1aad1a1e4e0a302",
+      "path": "evidence/final-validation/resource-demand-host-final-20261015.log",
+      "sha256": "d3e0d758ef275e060d3a412130569c1d6cf420fce64c5331e1aad1a1e4e0a302"
+    },
+    {
+      "bytes": 110,
+      "compression": null,
+      "original_bytes": 110,
+      "original_path": "/tmp/resource-demand-cuda-final-20261015.log",
+      "original_sha256": "504da45b3047c27c3474c7127b81ad2ad5d7d4da6860ebbc1209b5e5d20ec75b",
+      "path": "evidence/final-validation/resource-demand-cuda-final-20261015.log",
+      "sha256": "504da45b3047c27c3474c7127b81ad2ad5d7d4da6860ebbc1209b5e5d20ec75b"
+    },
+    {
+      "bytes": 191,
+      "compression": null,
+      "original_bytes": 191,
+      "original_path": "/tmp/resource-demand-pipeline-rerun-20261015.log",
+      "original_sha256": "f4af4fa16db7c44b1e5ef5eacf4382cc0486b5f9957d6f4f715bdbafa5b61a4f",
+      "path": "evidence/final-validation/resource-demand-pipeline-rerun-20261015.log",
+      "sha256": "f4af4fa16db7c44b1e5ef5eacf4382cc0486b5f9957d6f4f715bdbafa5b61a4f"
+    },
+    {
+      "bytes": 29240,
+      "path": "evidence/final-validation/committed-source-inventory.json",
+      "sha256": "5702cea53281161d8867f1f557d824ee6fd045a1effda15afe5a6c8ed45ce64e",
+      "source": "Generated from exact git archives and compared with current production files"
+    },
+    {
+      "bytes": 99,
+      "compression": null,
+      "original_bytes": 99,
+      "original_path": "/tmp/resource-demand-preflight-style-rerun-20261015.log",
+      "original_sha256": "0bd2621ad1ffa8fb17111c5e4f6d681a4cbac8671eb16a322e4434f3d8ee8e01",
+      "path": "evidence/final-validation/resource-demand-preflight-style-rerun-20261015.log",
+      "sha256": "0bd2621ad1ffa8fb17111c5e4f6d681a4cbac8671eb16a322e4434f3d8ee8e01"
+    }
+  ],
+  "schema_version": 1
+}

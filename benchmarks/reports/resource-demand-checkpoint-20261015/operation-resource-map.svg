@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="864pt" height="648pt" viewBox="0 0 864 648" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>resource-demand-report-v1</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 648
+L 864 648
+L 864 0
+L 0 0
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 29.5416 132.7176
+L 268.0344 132.7176
+Q 272.9736 132.7176 272.9736 127.7784
+L 272.9736 76.2696
+Q 272.9736 71.3304 268.0344 71.3304
+L 29.5416 71.3304
+Q 24.6024 71.3304 24.6024 76.2696
+L 24.6024 127.7784
+Q 24.6024 132.7176 29.5416 132.7176
+z
+" clip-path="url(#p9bb58413b1)" style="fill: #edf2f8; stroke: #8da0b3; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 311.7816 132.7176
+L 553.8024 132.7176
+Q 558.7416 132.7176 558.7416 127.7784
+L 558.7416 76.2696
+Q 558.7416 71.3304 553.8024 71.3304
+L 311.7816 71.3304
+Q 306.8424 71.3304 306.8424 76.2696
+L 306.8424 127.7784
+Q 306.8424 132.7176 311.7816 132.7176
+z
+" clip-path="url(#p9bb58413b1)" style="fill: #edf2f8; stroke: #8da0b3; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 597.5496 132.7176
+L 843.0984 132.7176
+Q 848.0376 132.7176 848.0376 127.7784
+L 848.0376 76.2696
+Q 848.0376 71.3304 843.0984 71.3304
+L 597.5496 71.3304
+Q 592.6104 71.3304 592.6104 76.2696
+L 592.6104 127.7784
+Q 592.6104 132.7176 597.5496 132.7176
+z
+" clip-path="url(#p9bb58413b1)" style="fill: #edf2f8; stroke: #8da0b3; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 29.5416 262.548
+L 843.0984 262.548
+Q 848.0376 262.548 848.0376 257.6088
+L 848.0376 215.2728
+Q 848.0376 210.3336 843.0984 210.3336
+L 29.5416 210.3336
+Q 24.6024 210.3336 24.6024 215.2728
+L 24.6024 257.6088
+Q 24.6024 262.548 29.5416 262.548
+z
+" clip-path="url(#p9bb58413b1)" style="fill: #fff2e1; stroke: #d4ad75; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 29.5416 318.996
+L 843.0984 318.996
+Q 848.0376 318.996 848.0376 314.0568
+L 848.0376 271.7208
+Q 848.0376 266.7816 843.0984 266.7816
+L 29.5416 266.7816
+Q 24.6024 266.7816 24.6024 271.7208
+L 24.6024 314.0568
+Q 24.6024 318.996 29.5416 318.996
+z
+" clip-path="url(#p9bb58413b1)" style="fill: #fff2e1; stroke: #d4ad75; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 29.5416 375.444
+L 843.0984 375.444
+Q 848.0376 375.444 848.0376 370.5048
+L 848.0376 328.1688
+Q 848.0376 323.2296 843.0984 323.2296
+L 29.5416 323.2296
+Q 24.6024 323.2296 24.6024 328.1688
+L 24.6024 370.5048
+Q 24.6024 375.444 29.5416 375.444
+z
+" clip-path="url(#p9bb58413b1)" style="fill: #edf4f8; stroke: #94aebe; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 29.5416 431.892
+L 843.0984 431.892
+Q 848.0376 431.892 848.0376 426.9528
+L 848.0376 384.6168
+Q 848.0376 379.6776 843.0984 379.6776
+L 29.5416 379.6776
+Q 24.6024 379.6776 24.6024 384.6168
+L 24.6024 426.9528
+Q 24.6024 431.892 29.5416 431.892
+z
+" clip-path="url(#p9bb58413b1)" style="fill: #edf4f8; stroke: #94aebe; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 29.5416 536.3208
+L 423.2664 536.3208
+Q 428.2056 536.3208 428.2056 531.3816
+L 428.2056 476.3448
+Q 428.2056 471.4056 423.2664 471.4056
+L 29.5416 471.4056
+Q 24.6024 471.4056 24.6024 476.3448
+L 24.6024 531.3816
+Q 24.6024 536.3208 29.5416 536.3208
+z
+" clip-path="url(#p9bb58413b1)" style="fill: #f2f2f2; stroke: #b1b6bb; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 449.3736 536.3208
+L 843.0984 536.3208
+Q 848.0376 536.3208 848.0376 531.3816
+L 848.0376 476.3448
+Q 848.0376 471.4056 843.0984 471.4056
+L 449.3736 471.4056
+Q 444.4344 471.4056 444.4344 476.3448
+L 444.4344 531.3816
+Q 444.4344 536.3208 449.3736 536.3208
+z
+" clip-path="url(#p9bb58413b1)" style="fill: #f2f2f2; stroke: #b1b6bb; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 29.5416 611.1144
+L 843.0984 611.1144
+Q 848.0376 611.1144 848.0376 606.1752
+L 848.0376 558.1944
+Q 848.0376 553.2552 843.0984 553.2552
+L 29.5416 553.2552
+Q 24.6024 553.2552 24.6024 558.1944
+L 24.6024 606.1752
+Q 24.6024 611.1144 29.5416 611.1144
+z
+" clip-path="url(#p9bb58413b1)" style="fill: #fff2e1; stroke: #d4ad75; stroke-width: 1.1; stroke-linejoin: miter"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 17px; font-family: 'DejaVu Sans'; text-anchor: start" x="27.072" y="27.936" transform="rotate(-0 27.072 27.936)">Resource-directed analysis: first observations, no executable window</text>
+   </g>
+   <g id="text_2">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #596b7a" x="27.072" y="54.0432" transform="rotate(-0 27.072 54.0432)">Final compiler c85ce431bd8f · 314 host + 3 CUDA + 111 pipeline tests passed (2 skipped)</text>
+   </g>
+   <g id="text_3">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'" transform="translate(63.683312 97.533375)">Whole-interval resource inventory</text>
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'" transform="translate(68.530187 112.033375)">Includes future uses and guards</text>
+   </g>
+   <g id="text_4">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'" transform="translate(356.366219 97.533375)">Exact original source selection</text>
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'" transform="translate(356.906062 112.033375)">Selective reachability demand</text>
+   </g>
+   <g id="text_5">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'" transform="translate(651.181812 97.533375)">Accesses + explicit barriers</text>
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'" transform="translate(642.606031 112.033375)">Unresolved storage obligations</text>
+   </g>
+   <g id="patch_12">
+    <path d="M 276.028128 102.024
+Q 289.905363 102.024 302.105547 102.024
+" style="fill: none; stroke: #536a7c; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 298.105547 100.024
+L 302.105547 102.024
+L 298.105547 104.024
+" style="fill: none; stroke: #536a7c; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 561.796128 102.024
+Q 575.673363 102.024 587.873547 102.024
+" style="fill: none; stroke: #536a7c; stroke-width: 1.5; stroke-linecap: round"/>
+    <path d="M 583.873547 100.024
+L 587.873547 102.024
+L 583.873547 104.024
+" style="fill: none; stroke: #536a7c; stroke-width: 1.5; stroke-linecap: round"/>
+   </g>
+   <g id="text_6">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #596b7a" x="27.072" y="154.2384" transform="rotate(-0 27.072 154.2384)">The actual-source observations below used unsealed SourceEffects, not the immutable application pipeline.</text>
+   </g>
+   <g id="text_7">
+    <text style="font-weight: 700; font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start" x="34.128" y="188.1072" transform="rotate(-0 34.128 188.1072)">Original native operation</text>
+   </g>
+   <g id="text_8">
+    <text style="font-weight: 700; font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start" x="295.2" y="188.1072" transform="rotate(-0 295.2 188.1072)">Old U / V / W</text>
+   </g>
+   <g id="text_9">
+    <text style="font-weight: 700; font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start" x="453.96" y="188.1072" transform="rotate(-0 453.96 188.1072)">Viscosity</text>
+   </g>
+   <g id="text_10">
+    <text style="font-weight: 700; font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start" x="595.08" y="188.1072" transform="rotate(-0 595.08 188.1072)">Coverage and remaining obligations</text>
+   </g>
+   <g id="text_11">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start" x="37.656" y="238.240252" transform="rotate(-0 37.656 238.240252)">StressBoundaryFlux</text>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start" x="295.2" y="237.980447" transform="rotate(-0 295.2 237.980447)">None found*</text>
+   </g>
+   <g id="text_13">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: start" x="453.96" y="237.720642" transform="rotate(-0 453.96 237.720642)">None found*</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: start" x="595.08" y="232.075842" transform="rotate(-0 595.08 232.075842)">Blocked: indexed scalar-actual payload</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #596b7a" x="595.08" y="251.127042" transform="rotate(-0 595.08 251.127042)">36 separation obligations unresolved</text>
+   </g>
+   <g id="text_16">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start" x="37.656" y="294.688252" transform="rotate(-0 37.656 294.688252)">ComputeUVWFluxesWM</text>
+   </g>
+   <g id="text_17">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start" x="295.2" y="294.428447" transform="rotate(-0 295.2 294.428447)">Association only*</text>
+   </g>
+   <g id="text_18">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: start" x="453.96" y="294.168642" transform="rotate(-0 453.96 294.168642)">None found*</text>
+   </g>
+   <g id="text_19">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: start" x="595.08" y="288.523842" transform="rotate(-0 595.08 288.523842)">Blocked: 18 derived-array associations</text>
+   </g>
+   <g id="text_20">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #596b7a" x="595.08" y="307.575042" transform="rotate(-0 595.08 307.575042)">21 separation obligations unresolved</text>
+   </g>
+   <g id="text_21">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start" x="37.656" y="351.136252" transform="rotate(-0 37.656 351.136252)">BoundViscosity</text>
+   </g>
+   <g id="text_22">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start" x="295.2" y="350.876447" transform="rotate(-0 295.2 350.876447)">No direct access</text>
+   </g>
+   <g id="text_23">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: start" x="453.96" y="350.616642" transform="rotate(-0 453.96 350.616642)">Associate / read / write</text>
+   </g>
+   <g id="text_24">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: start" x="595.08" y="344.971842" transform="rotate(-0 595.08 344.971842)">Reachability covered; no execution proof</text>
+   </g>
+   <g id="text_25">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #596b7a" x="595.08" y="364.023042" transform="rotate(-0 595.08 364.023042)">19 separation obligations unresolved</text>
+   </g>
+   <g id="text_26">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start" x="37.656" y="407.584252" transform="rotate(-0 37.656 407.584252)">ComputeTDiff</text>
+   </g>
+   <g id="text_27">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start" x="295.2" y="407.324447" transform="rotate(-0 295.2 407.324447)">Association only</text>
+   </g>
+   <g id="text_28">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: start" x="453.96" y="407.064642" transform="rotate(-0 453.96 407.064642)">Read</text>
+   </g>
+   <g id="text_29">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: start" x="595.08" y="401.419842" transform="rotate(-0 595.08 401.419842)">Reachability covered; no execution proof</text>
+   </g>
+   <g id="text_30">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #596b7a" x="595.08" y="420.471042" transform="rotate(-0 595.08 420.471042)">36 separation obligations unresolved</text>
+   </g>
+   <g id="text_31">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #8b531e" x="27.072" y="454.824" transform="rotate(-0 27.072 454.824)">* Incomplete selections: barriers may hide accesses. “None found” does not prove noninterference.</text>
+   </g>
+   <g id="text_32">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'" transform="translate(125.355562 499.372575)">Pass 1 · ScopeBuilder · timeout 60.106 s</text>
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'" transform="translate(107.814156 513.872575)">No completed session event; zero observations</text>
+   </g>
+   <g id="text_33">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'" transform="translate(544.625844 499.372575)">Pass 2 · frontend only · timeout 60.071 s</text>
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'" transform="translate(536.482094 513.872575)">Setup 43.629 s; four validated observations</text>
+   </g>
+   <g id="text_34">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'" transform="translate(122.6575 577.694175)">Both batches stopped at the original 60-second cap. Remaining operations and full-summary comparisons were not reached.</text>
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'" transform="translate(139.730156 592.194175)">No final publication phase · no selective native hooks or application cost source added · no performance improvement</text>
+   </g>
+   <g id="text_35">
+    <text style="font-size: 8px; font-family: 'DejaVu Sans'; text-anchor: start; fill: #596b7a" x="27.072" y="629.8128" transform="rotate(-0 27.072 629.8128)">Archived diagnostic SHA256 64ae6449b5bf2b8e · 178 authenticated inputs unchanged · alias and execution authority remain false</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p9bb58413b1">
+   <rect x="12.96" y="3.24" width="846.72" height="635.04"/>
+  </clipPath>
+ </defs>
+</svg>

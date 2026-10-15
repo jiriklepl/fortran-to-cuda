@@ -1,0 +1,151 @@
+{
+  "application_executed": false,
+  "classifications": [
+    {
+      "authority_flags": {
+        "alias_authorized": false,
+        "capture_authorized": false,
+        "definition_authorized": false,
+        "execution_authorized": false
+      },
+      "barrier_count": 2,
+      "barrier_reasons": [
+        "source call is unresolved or ambiguous: add"
+      ],
+      "demands": {
+        "argument::u": [],
+        "argument::v": [],
+        "argument::w": [],
+        "parameters::viscosity": []
+      },
+      "elapsed_seconds": 4.428690204993472,
+      "label": "CALL StressBoundaryFlux(Ustar, Vstar, dt)",
+      "proof_validate_completed": true,
+      "scan_work": {
+        "procedures": 2,
+        "statements": 11,
+        "syntax_nodes": 5989
+      },
+      "selection_covered": false,
+      "storage_separation_obligations": 36
+    },
+    {
+      "authority_flags": {
+        "alias_authorized": false,
+        "capture_authorized": false,
+        "definition_authorized": false,
+        "execution_authorized": false
+      },
+      "barrier_count": 18,
+      "barrier_reasons": [
+        "source object requires fixed nonoptional scalar original storage"
+      ],
+      "demands": {
+        "argument::u": [
+          "association"
+        ],
+        "argument::v": [
+          "association"
+        ],
+        "argument::w": [
+          "association"
+        ],
+        "parameters::viscosity": []
+      },
+      "elapsed_seconds": 3.260505184996873,
+      "label": "CALL ComputeUVWFluxesWM(U, V, W, Pr, Temperature, Moisture)",
+      "proof_validate_completed": true,
+      "scan_work": {
+        "procedures": 2,
+        "statements": 19,
+        "syntax_nodes": 1639
+      },
+      "selection_covered": false,
+      "storage_separation_obligations": 21
+    },
+    {
+      "authority_flags": {
+        "alias_authorized": false,
+        "capture_authorized": false,
+        "definition_authorized": false,
+        "execution_authorized": false
+      },
+      "barrier_count": 0,
+      "barrier_reasons": [],
+      "demands": {
+        "argument::u": [],
+        "argument::v": [],
+        "argument::w": [],
+        "parameters::viscosity": [
+          "association",
+          "read",
+          "write"
+        ]
+      },
+      "elapsed_seconds": 3.0666955950000556,
+      "label": "CALL BoundViscosity(Viscosity)",
+      "proof_validate_completed": true,
+      "scan_work": {
+        "procedures": 2,
+        "statements": 82,
+        "syntax_nodes": 4778
+      },
+      "selection_covered": true,
+      "storage_separation_obligations": 19
+    },
+    {
+      "authority_flags": {
+        "alias_authorized": false,
+        "capture_authorized": false,
+        "definition_authorized": false,
+        "execution_authorized": false
+      },
+      "barrier_count": 0,
+      "barrier_reasons": [],
+      "demands": {
+        "argument::u": [
+          "association"
+        ],
+        "argument::v": [
+          "association"
+        ],
+        "argument::w": [
+          "association"
+        ],
+        "parameters::viscosity": [
+          "read"
+        ]
+      },
+      "elapsed_seconds": 5.529117329002474,
+      "label": "CALL ComputeTDiff(U, V, W)",
+      "proof_validate_completed": true,
+      "scan_work": {
+        "procedures": 2,
+        "statements": 18,
+        "syntax_nodes": 4537
+      },
+      "selection_covered": true,
+      "storage_separation_obligations": 36
+    }
+  ],
+  "completion_receipt": "completion.json",
+  "elapsed_seconds": 60.07149059099902,
+  "execution_authorized": false,
+  "exit_code": 124,
+  "final_publication_check": "not reached before timeout",
+  "full_summary_comparisons": "not reached before timeout",
+  "further_retry_performed": false,
+  "generated": false,
+  "incomplete_next_demand": "CALL BoundViscosity(TDiff)",
+  "input_inventory": "input-inventory.json",
+  "kind": "partial unsealed frontend-only resource-demand diagnostic",
+  "parent_compiler_inventory_recheck_passed": true,
+  "parent_input_hash_recheck_passed": true,
+  "performance_measured": false,
+  "raw_output": "output.jsonl",
+  "remaining_requested_demands": "not reached",
+  "schema_version": 1,
+  "setup_seconds": 43.62884924300306,
+  "source_session_sealed": false,
+  "status": "timeout-after-four-demand-classifications"
+}
