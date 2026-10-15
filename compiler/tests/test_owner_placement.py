@@ -1,9 +1,9 @@
 """Original-team emitters inherit placement without inheriting new legality.
 
-These emitter tests stage source-proved units and install an internal placement
-marker after scanning. They do not publish a runnable owner, admit a measured
-window, or manufacture calibration evidence. Public admission is tested by the
-exact-window suite and remains restricted to its existing serial source class.
+These emitter tests stage source-proved child units and compare automatic leaf
+pricing with explicitly forced execution. An unissued marker cannot substitute
+for placement authority. Admitted complete original windows and their measured
+decisions are exercised by the separate exact-window tests.
 """
 
 from hashlib import sha256
@@ -11,6 +11,7 @@ from hashlib import sha256
 import pytest
 
 from compiler.driver.options import CompilerOptions
+from compiler.ir import CompilationError
 from compiler.offload.config import OffloadConfig
 from compiler.scopes.combined_team import CombinedNumericalTeam
 from compiler.scopes.joined_team import JoinedTeam
@@ -21,7 +22,7 @@ from compiler.tests.test_joined_team_source import CONSUMER, CORRECTION, OPENING
 from compiler.tests.test_source_scopes import FACT
 
 
-def emit_child_team(directory, *, mixed, complete_window):
+def emit_child_team(directory, *, mixed, forced=False, forged=False):
     """Retain registered proofs while exercising only the emission boundary."""
     team = OPENING + PRODUCER + (CORRECTION if mixed else "") + CONSUMER + "!$omp end parallel\n"
     source = SOURCE.replace(
@@ -48,7 +49,7 @@ def emit_child_team(directory, *, mixed, complete_window):
         "joined_owner::step",
         facts=facts,
         options=CompilerOptions(),
-        config=OffloadConfig(policy="auto", scope_execution="reached", host_threads=4),
+        config=OffloadConfig(policy="sections" if forced else "auto", scope_execution="reached", host_threads=4),
     )
     nodes = builder.inline.prepare(builder.entry.execution.content)
     builder.generated.update(builder.inline.generated)
@@ -59,13 +60,11 @@ def emit_child_team(directory, *, mixed, complete_window):
         owner.scan(nodes)
         owner.leaves = {leaf for member in owner.members.values() for unit in member.units for leaf in unit.leaves}
         assert all(not member.boundaries for member in owner.members.values())
-        # The admitted whole-window selector is deliberately outside this
-        # emitter test. No generated source is published or executed here.
-        owner.emission.exact_window = {} if complete_window else None
+        owner.emission.exact_window = {} if forged else None
         child = owner.members["joined_owner::step::advance"]
         assert child.exact_window is None
         assert child.owner is owner
-        assert child.price_units is (not complete_window)
+        assert child.price_units is (not forced)
         (unit,) = (unit for unit in child.units if isinstance(unit.scope, (JoinedTeam, CombinedNumericalTeam)))
         assert isinstance(unit.scope, JoinedTeam if mixed else CombinedNumericalTeam)
         patches = child.emit_unit(unit, child.units.index(unit))
@@ -76,11 +75,11 @@ def emit_child_team(directory, *, mixed, complete_window):
 
 
 @pytest.mark.parametrize("mixed", [False, True], ids=["combined", "joined"])
-@pytest.mark.parametrize("complete_window", [False, True], ids=["per-unit", "whole-window"])
-def test_original_child_team_obeys_owning_placement_and_keeps_execution_proofs(tmp_path, mixed, complete_window):
-    text = emit_child_team(tmp_path, mixed=mixed, complete_window=complete_window)
-    assert ("fort_team_choose" in text) is (not complete_window)
-    assert f"fort_mode = {1 if complete_window else 2}" in text
+@pytest.mark.parametrize("forced", [False, True], ids=["per-unit", "forced"])
+def test_original_child_team_obeys_owning_placement_and_keeps_execution_proofs(tmp_path, mixed, forced):
+    text = emit_child_team(tmp_path, mixed=mixed, forced=forced)
+    assert ("fort_team_choose" in text) is (not forced)
+    assert f"fort_mode = {1 if forced else 2}" in text
     assert "fort_scope_plan_validate(fort_context)" in text
     assert "fort_scope_numerical_environment_supported() == 0" in text
     assert "fort_team_omp_level() /= 1" in text
@@ -95,9 +94,15 @@ def test_original_child_team_obeys_owning_placement_and_keeps_execution_proofs(t
         assert "fort_scope_host_begin(" in text
         assert "fort_scope_host_end(" in text
         assert "error stop 'original team numerical execution failed'" in text
-        if complete_window:
+        if forced:
             assert "fort_team_run = .true." in text
     else:
         assert "error stop 'combined original team numerical execution failed'" in text
         assert "error stop 'combined original team completion failed'" in text
         assert text.index("fort_scope_plan_validate(") < text.index("fort_team_run = .true.")
+
+
+@pytest.mark.parametrize("mixed", [False, True], ids=["combined", "joined"])
+def test_original_child_team_rejects_unissued_placement_marker(tmp_path, mixed):
+    with pytest.raises(CompilationError, match="placement requires its checked execution plan"):
+        emit_child_team(tmp_path, mixed=mixed, forged=True)

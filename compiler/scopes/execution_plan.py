@@ -412,6 +412,7 @@ class CheckedExecutionPlan:
     def validate(self):
         """One emission checkpoint; never another discovery or proof search."""
         self._require_owner()
+        self.exact_window_placement()
         for builder, analysis, routine, configuration, facts in self._contexts:
             if (builder.analysis is not analysis or builder.entry is not routine
                     or _configuration(builder) != configuration or _digest(builder.facts) != facts):
@@ -429,10 +430,26 @@ class CheckedExecutionPlan:
                 return json.loads(item.record)["units"][ordinal]["operations"]
         raise CompilationError("execution plan does not own this procedure")
 
-    def automatic_native_reason(self, *, complete_window=False):
+    def exact_window_placement(self):
+        """Return only the exact issuer-registered attachment for this plan."""
         self._require_owner()
-        if self._owner.builder.config.policy != "auto" or complete_window:
+        from compiler.offload.exact_window import ExactWindowPlacement
+
+        placement = self._owner.emission.exact_window
+        if placement is None:
+            if self.identity in getattr(self._owner.builder, "_exact_window_placements", {}):
+                raise CompilationError("checked execution plan lost its issued placement attachment")
             return None
+        if type(placement) is not ExactWindowPlacement:
+            raise CompilationError("checked execution plan requires an issued exact-window placement")
+        return placement.validate(self)
+
+    def automatic_native_reason(self):
+        placement = self.exact_window_placement()
+        if self._owner.builder.config.policy != "auto":
+            return None
+        if placement is not None:
+            return placement.native_reason
         reasons = self.public()["cost_requirements"]
         # Keep the existing conservative policy. A complete-window observation
         # can cover these costs only after its independent admission checks.

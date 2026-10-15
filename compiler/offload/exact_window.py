@@ -14,7 +14,8 @@ from __future__ import annotations
 import json
 import math
 import statistics
-from dataclasses import asdict
+from copy import deepcopy
+from dataclasses import asdict, dataclass
 from hashlib import sha256
 from pathlib import Path
 
@@ -39,6 +40,46 @@ ENVIRONMENT = (
     "GOMP_CPU_AFFINITY",
     "CUDA_VISIBLE_DEVICES",
 )
+_PLACEMENT_ISSUER = object()
+
+
+def _request_snapshot(request):
+    # Retain malformed numeric observations too: evidence_decision must still
+    # select native for them. This snapshot authenticates the request, rather
+    # than supplying numerical or placement authority by itself.
+    return json.dumps(request, sort_keys=True, separators=(",", ":"))
+
+
+@dataclass(frozen=True, slots=True)
+class ExactWindowPlacement:
+    """One issued placement result for one checked owning execution plan."""
+
+    record: object
+    _plan: object
+    _request: str
+    _issuer: object
+
+    def validate(self, plan):
+        """Check attachment identity cheaply; plan.validate owns proof checks."""
+        plan._require_owner()
+        owner = plan._owner
+        registry = getattr(owner.builder, "_exact_window_placements", {})
+        if (self._issuer is not _PLACEMENT_ISSUER or self._plan is not plan
+                or owner.emission.exact_window is not self
+                or registry.get(plan.identity) is not self):
+            raise CompilationError("exact-window placement requires its issued checked-plan attachment")
+        if _request_snapshot(owner.builder.config.exact_window) != self._request:
+            raise CompilationError("exact-window placement request or evidence changed after issuance")
+        return self
+
+    @property
+    def native_reason(self):
+        return (self.record["reason"] if not self.record["capture"]
+                and self.record["selection"] == "native" else None)
+
+    def public(self):
+        return deepcopy({key: value for key, value in self.record.items()
+                         if key not in {"expressions", "guards"}})
 
 
 def build_contract(architecture="sm_86"):
@@ -266,12 +307,14 @@ def prepare(owner):
     from compiler.frontend.source_effects import _kind
 
     builder, routine = owner.builder, owner.routine
-    request = builder.config.exact_window
+    request = deepcopy(builder.config.exact_window)
     if request is None:
         return None
+    request_snapshot = _request_snapshot(request)
     plan = owner.execution_plan
     if plan is None:
         raise CompilationError("exact window requires the checked owning execution plan")
+    plan.validate()
     units = plan.units(owner)
     if owner.parent is not None or len(plan.members) != 1 or owner.boundaries:
         raise CompilationError("exact window requires one complete owner without child owners or closures")
@@ -507,7 +550,7 @@ def prepare(owner):
     # Placement is an immutable result, separate from the admitted execution
     # graph. In particular, evidence key/identity containers must not retain
     # writable aliases into the caller's calibration document.
-    owner.emission.exact_window = freeze_graph({
+    record = freeze_graph({
         "contract": contract,
         "contract_sha256": digest(contract),
         **decision,
@@ -515,6 +558,14 @@ def prepare(owner):
         "guards": guards,
         "capture": capture,
     })
+    placement = ExactWindowPlacement(record, plan, request_snapshot, _PLACEMENT_ISSUER)
+    registry = getattr(builder, "_exact_window_placements", None)
+    if registry is None:
+        registry = builder._exact_window_placements = {}
+    if plan.identity in registry:
+        raise CompilationError("exact-window placement has already been issued for this plan")
+    registry[plan.identity] = placement
+    owner.emission.exact_window = placement
     return owner.exact_window
 
 
@@ -522,7 +573,10 @@ def control(owner):
     """Emit the only policy decision before original work and ownership."""
     from compiler.emission.common.resources import read_common_header
 
-    record = owner.exact_window
+    placement = owner.exact_window
+    if placement is None:
+        raise CompilationError("exact-window control requires an issued placement")
+    record = placement.record
     enabled = owner.enabled
     if not record["capture"] and record["selection"] != "resident":
         return [], [enabled + " = .false."]

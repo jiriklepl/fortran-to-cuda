@@ -189,7 +189,12 @@ class LexicalOwner:
 
     @property
     def exact_window(self):
-        return self.emission.exact_window
+        root = self.owner
+        if root.execution_plan is None:
+            if root.emission.exact_window is not None:
+                raise CompilationError("exact-window placement requires its checked execution plan")
+            return None
+        return root.execution_plan.exact_window_placement()
 
     def unit_emission(self, unit):
         ordinal = next((index for index, admitted in enumerate(self.units) if admitted is unit), None)
@@ -983,11 +988,15 @@ class LexicalOwner:
             return emit_native(self, nodes, checkpoint, measurement)
         from compiler.offload.exact_window import prepare as prepare_exact_window
         prepare_exact_window(self)
-        native_reason = plan.automatic_native_reason(complete_window=self.exact_window is not None)
+        placement = plan.exact_window_placement()
+        native_reason = plan.automatic_native_reason()
         if native_reason:
-            # No reached runtime fact can make these alternatives estimable.
+            # Missing estimates or a measured native advantage settle placement
+            # before any reached runtime fact or owning instrumentation.
             # Preserve the lexical owner, including declarations and internal
             # procedures, instead of adding TARGET and coordination guards.
+            plan.validate()
+            exact_public = placement.public() if placement is not None else None
             transfer_configuration = builder.numerical(sorted(self.leaves)[0]).scoped["transfer_configuration"]
             builder.restore_scope_checkpoint(checkpoint)
             first, last = statement_span(nodes[0])[0], statement_span(nodes[-1])[1]
@@ -995,13 +1004,16 @@ class LexicalOwner:
             builder.scopes.append({
                 "owner": self.context, "owner_variant": None,
                 "path": str(self.routine.scope.path), "first_line": first, "last_line": last,
-                "gpu_leaves": sorted(self.leaves), "mode": "auto", "estimate_available": False,
+                "gpu_leaves": sorted(self.leaves), "mode": "auto",
+                "estimate_available": exact_public["available"] if exact_public is not None else False,
+                **({"exact_window": exact_public} if exact_public is not None else {}),
                 "planning_reason": native_reason,
                 "source_authority": {"version": 1, "structured_summary_identity": self.graph.identity},
                 "checked_execution_plan": plan.public(),
                 "automatic_preflight": {
                     "selection": "native", "successful": True, "reason": native_reason,
-                    "authority": "compiler-produced offline estimate availability for every numerical alternative",
+                    "authority": ("compiler-issued complete-window placement" if exact_public is not None else
+                                  "compiler-produced offline estimate availability for every numerical alternative"),
                     "position": "before source instrumentation and runtime evaluation",
                     "runtime_decision_inputs": [], "contexts_created": 0,
                     "registrations": 0, "queries_constructed": 0,
@@ -1125,10 +1137,10 @@ class LexicalOwner:
             "registration": "first reached use after original allocation and descriptor guards",
             "reopen_after_boundary": False})
         if self.exact_window is not None:
-            builder.scopes[-1]["exact_window"] = {key: value for key, value in self.exact_window.items()
-                                                  if key not in {"expressions", "guards"}}
-            builder.scopes[-1]["estimate_available"] = self.exact_window["available"]
-            builder.scopes[-1]["planning_reason"] = self.exact_window["reason"]
+            exact_public = self.exact_window.public()
+            builder.scopes[-1]["exact_window"] = exact_public
+            builder.scopes[-1]["estimate_available"] = exact_public["available"]
+            builder.scopes[-1]["planning_reason"] = exact_public["reason"]
         builder.scopes[-1]["transfer_configuration"] = builder.numerical(sorted(self.leaves)[0]).scoped["transfer_configuration"]
         builder.boundaries.extend(boundary for member in self.members.values() for boundary in member.boundaries)
         from compiler.offload.scope_measurement import emit as emit_measurement

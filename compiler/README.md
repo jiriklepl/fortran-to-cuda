@@ -2924,6 +2924,17 @@ and GPU identity bind each observation. A mismatch selects the existing native
 path before work. The normal numerical, effect, definition, alias and execution
 guards still apply, including publication without replay after a GPU prefix.
 
+The compiler retains this decision as an immutable attachment registered to the
+exact checked plan and its evidence request. The cost gate, per-unit pricing,
+control emission and diagnostics consume that same attachment; a public record,
+copied token or boolean marker cannot substitute for it. Changed evidence
+invalidates the attachment, while source, configuration and numerical proofs
+still undergo their existing checks. Missing or unprofitable complete-window
+evidence preserves the original native routine, including its declarations,
+before adding ownership instrumentation. Valid evidence that selects native
+still reports its estimate as available. The fixture build consumer retains its
+existing runtime linkage even for this static native selection.
+
 The **independent producer is currently the only supported build consumer**.
 It records and validates exact semantic CUDA/Fortran compile options before
 defining the contract-specific selector attestation macro. Without that macro,
