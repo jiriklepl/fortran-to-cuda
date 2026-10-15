@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+from contextlib import contextmanager
 from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
@@ -21,18 +22,50 @@ def build_validation(monkeypatch):
     import sys
 
     module = ModuleType("compiler.offload.application_build")
-    checked = []
 
-    def validate(value, *, contract, mode):
+    class CheckedBuilds(list):
+        pass
+
+    checked = CheckedBuilds()
+    checked.numerical = []
+    verified = set()
+
+    @contextmanager
+    def session():
+        verified.clear()
+        yield
+
+    def validate(value, *, contract, mode, selection_contract_identity=None):
         if value != {"contract_identity": contract["identity"], "variant": mode, "checked_fixture": True}:
             raise ValueError("executed build attestation differs")
-        checked.append(mode)
+        if mode not in verified:
+            verified.add(mode)
+            checked.append(mode)
         return value
 
+    module.application_build_validation = session
     module.validate_application_build_observation = validate
     module.require_application_build_contract = lambda requested, **identity: {
         "identity": digest(identity), "checked_fixture": True, **identity}
     monkeypatch.setitem(sys.modules, module.__name__, module)
+    # These tests exercise cost/identity orchestration. Raw-file numerical and
+    # relink authentication have independent tests against their real helpers.
+    numerical = ModuleType("compiler.offload.selection_validation")
+
+    def normalize(requested, *, build_contract):
+        if requested != {"checked_policy_fixture": True}:
+            raise ValueError("numerical policy differs")
+        return {**requested, "identity": digest(requested)}
+
+    def validate_numerics(campaign, **arguments):
+        if campaign.get("numerical_validation") != {"path": "checked-comparison.json", "sha256": "e" * 64}:
+            raise ValueError("numerical payload verification failed")
+        checked.numerical.append(arguments)
+        return {"receipt_sha256": "e" * 64, "policy_identity": arguments["contract"]["validation_policy"]["identity"]}
+
+    numerical.normalize_policy = normalize
+    numerical.validate_campaign_numerics = validate_numerics
+    monkeypatch.setitem(sys.modules, numerical.__name__, numerical)
     return checked
 
 
@@ -41,7 +74,8 @@ def process_fixture(*, resident=.1, native=1.0):
     bundle["identity"] = digest(bundle)
     contract = {"protocol": PROTOCOL, "key": [{"resource": "n", "property": "integer_value"}],
                 "threads": 4, "selection_identity": "a" * 64, "selection_bundle": bundle,
-                "build_contract": {"identity": "b" * 64}, "expected_launches": 1}
+                "build_contract": {"identity": "b" * 64}, "expected_launches": 1,
+                "validation_policy": {"checked_policy_fixture": True, "identity": digest({"checked_policy_fixture": True})}}
     campaign = observations(contract, resident=resident, native=native)
     campaign["protocol"] = PROTOCOL
     workload = {"argv": ["application", "case"], "environment": {"EXAMPLE": None},
@@ -50,6 +84,7 @@ def process_fixture(*, resident=.1, native=1.0):
     campaign["workload"] = workload
     contract["workloads"] = [workload]
     campaign["selection_bundle"] = bundle
+    campaign["numerical_validation"] = {"path": "checked-comparison.json", "sha256": "e" * 64}
     for row in campaign["observations"]:
         row["process"] = {"returncode": 0, "workload_identity": workload["identity"],
                           **{name: workload[name] for name in ("argv", "environment", "files", "completion")},
@@ -70,10 +105,46 @@ def test_complete_process_pairs_bind_both_builds_and_all_observed_keys(build_val
     result = process_evidence_decision(evidence, contract)
     assert result["selection"] == "resident", result
     assert [entry["key"] for entry in result["accepted_keys"]] == [[96], [128]]
-    assert len(build_validation) == 18
-    assert build_validation.count("native") == 9
+    assert len(build_validation) == 2
+    assert build_validation.count("native") == 1
+    assert len(build_validation.numerical) == 1
+    assert build_validation.numerical[0]["key_sequence"] == [(96,), (128,), (96,)]
     assert result["campaigns"][0]["invocations"] == 3
     assert "no future invocation-count guarantee" in result["applicability"]
+
+
+def test_process_numerical_authority_is_separate_from_legacy_flags_and_hashes(build_validation):
+    contract, evidence = process_fixture()
+    for index, row in enumerate(evidence["campaigns"][0]["observations"]):
+        row["agreement"] = False
+        row["fields_sha256"] = digest(index)
+    result = process_evidence_decision(evidence, contract)
+    assert result["available"], result
+    assert result["selection"] == "resident", result
+    assert len(build_validation.numerical) == 1
+    evidence["campaigns"][0].pop("numerical_validation")
+    for row in evidence["campaigns"][0]["observations"]:
+        row["agreement"], row["fields_sha256"] = True, "f" * 64
+    result = process_evidence_decision(evidence, contract)
+    assert not result["available"], result
+    assert result["selection"] == "native", result
+    assert "numerical payload verification failed" in result["reason"]
+
+
+def test_build_session_final_recheck_precedes_placement_authority(build_validation, monkeypatch):
+    import sys
+
+    @contextmanager
+    def changed_build():
+        yield
+        raise ValueError("build input changed before decision completed")
+
+    monkeypatch.setattr(sys.modules["compiler.offload.application_build"], "application_build_validation", changed_build)
+    contract, evidence = process_fixture()
+    result = process_evidence_decision(evidence, contract)
+    assert not result["available"], result
+    assert result["selection"] == "native", result
+    assert "build input changed" in result["reason"]
 
 
 @pytest.mark.parametrize("mutation", [
@@ -160,7 +231,8 @@ def test_checked_tiled_group_capture_keeps_reached_prefix_and_complete_key(tmp_p
                        config=OffloadConfig(policy="auto", scope_execution="bounded",
                                             exact_window={"coverage": "original_selection", "calibration": variant,
                                                           "workloads": process_fixture()[0]["workloads"],
-                                                          "build_contract": {"checked_fixture": True}}))
+                                                          "build_contract": {"checked_fixture": True},
+                                                          "validation_policy": {"checked_policy_fixture": True}}))
     outputs, report = selected.run()
     assert report["scope_count"] == 2
     source = outputs[report["sources"][str(tmp_path / "original.f90")]["replacement"]]
@@ -255,7 +327,8 @@ def test_generated_selection_observers_and_original_team_wrappers_compile(tmp_pa
     selected = builder(tmp_path / "original.f90", options=CompilerOptions(gpu_policy="auto"),
                        config=OffloadConfig(policy="auto", scope_execution="bounded", exact_window={
                            "coverage": "original_selection", "calibration": variant,
-                           "workloads": process_fixture()[0]["workloads"], "build_contract": {"checked_fixture": True}}))
+                           "workloads": process_fixture()[0]["workloads"], "build_contract": {"checked_fixture": True},
+                           "validation_policy": {"checked_policy_fixture": True}}))
     outputs, report = selected.run()
     generated = tmp_path / "generated"
     generated.mkdir()
@@ -264,8 +337,11 @@ def test_generated_selection_observers_and_original_team_wrappers_compile(tmp_pa
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(contents)
     for scope in report["scopes"]:
+        assert scope["exact_window"]["contract"]["protocol"] == PROTOCOL
         identity = scope["exact_window"]["contract_sha256"]
         relative = "exact/fort_selection_" + identity[:12] + ".cu"
+        assert relative in outputs
+        assert "exact/fort_exact_window_" + identity[:12] + ".cu" not in outputs
         macros = [] if variant == "native" else ["-DFORT_EXACT_WINDOW_BUILD_" + identity + "=1"]
         # Each issued translation unit carries its own non-toolchain headers;
         # application recipes do not add an artifact-root include directory.
@@ -295,7 +371,8 @@ def test_native_and_resident_capture_bind_the_same_checked_semantics(tmp_path, b
         selected = builder(tmp_path / "original.f90", options=CompilerOptions(gpu_policy="auto"),
                            config=OffloadConfig(policy="auto", scope_execution="bounded", exact_window={
                                "coverage": "original_selection", "calibration": variant,
-                               "workloads": process_fixture()[0]["workloads"], "build_contract": {"checked_fixture": True}}))
+                               "workloads": process_fixture()[0]["workloads"], "build_contract": {"checked_fixture": True},
+                               "validation_policy": {"checked_policy_fixture": True}}))
         _, report = selected.run()
         contracts.append([scope["exact_window"]["contract"] for scope in report["scopes"]])
     assert contracts[0] == contracts[1]
@@ -313,7 +390,8 @@ def test_original_private_descriptor_costs_are_not_erased_by_lowering(tmp_path, 
     selected = builder(tmp_path / "original.f90", source, options=CompilerOptions(gpu_policy="auto"),
                        config=OffloadConfig(policy="auto", scope_execution="bounded", exact_window={
                            "coverage": "original_selection", "calibration": "native",
-                           "workloads": process_fixture()[0]["workloads"], "build_contract": {"checked_fixture": True}}))
+                           "workloads": process_fixture()[0]["workloads"], "build_contract": {"checked_fixture": True},
+                           "validation_policy": {"checked_policy_fixture": True}}))
     outputs, report = selected.run()
     for scope in report["scopes"]:
         key = scope["exact_window"]["contract"]["key"]
@@ -338,6 +416,7 @@ end module""")
     selected = builder(tmp_path / "original.f90", source, options=CompilerOptions(gpu_policy="auto"),
                        config=OffloadConfig(policy="auto", scope_execution="bounded", exact_window={
                            "coverage": "original_selection", "calibration": "resident",
-                           "workloads": process_fixture()[0]["workloads"], "build_contract": {"checked_fixture": True}}))
+                           "workloads": process_fixture()[0]["workloads"], "build_contract": {"checked_fixture": True},
+                           "validation_policy": {"checked_policy_fixture": True}}))
     with pytest.raises(CompilationError, match="workload control depends on payload"):
         selected.run()

@@ -126,7 +126,37 @@ def valid_effective_schedule(schedule):
 
 
 def evidence_decision(evidence, contract, *, protocol=PROTOCOL):
-    """Reconstruct acceptance from raw paired observations; no trusted flag."""
+    """Legacy exact-window acceptance retains its bitwise numerical policy."""
+    decision = _paired_timing_decision(evidence, contract, protocol=protocol)
+    if not decision["available"]:
+        return decision
+    try:
+        rows = evidence["observations"]
+        for order, row in enumerate(rows):
+            if row.get("agreement") is not True:
+                raise ValueError("complete-window observation order/identity/agreement differs")
+            field_hash = row.get("fields_sha256")
+            if (
+                not isinstance(field_hash, str)
+                or len(field_hash) != 64
+                or any(char not in "0123456789abcdef" for char in field_hash)
+                or order % 2
+                and field_hash != rows[order - 1].get("fields_sha256")
+            ):
+                raise ValueError("complete-window full-field comparison differs")
+        return decision
+    except (KeyError, TypeError, ValueError, OverflowError) as error:
+        return {"available": False, "selection": "native", "reason": str(error)}
+
+
+def _paired_timing_decision(evidence, contract, *, protocol):
+    """Reconstruct paired timing/identity evidence, without numerical authority.
+
+    Both callers must establish their numerical policy independently: the
+    legacy wrapper above requires bitwise fields, while selected-process
+    placement verifies source/build-bound payload comparisons. No evidence
+    flag can disable either numerical check.
+    """
     try:
         if not isinstance(evidence, dict) or evidence.get("protocol") != protocol:
             raise ValueError("complete-window calibration missing")
@@ -226,22 +256,12 @@ def evidence_decision(evidence, contract, *, protocol=PROTOCOL):
                 or type(observed_identity) is not dict
                 or not valid_effective_schedule(observed_identity.get("effective_schedule"))
                 or observed_identity != identity
-                or row.get("agreement") is not True
                 or type(observed_cpu) is not dict
                 or not valid_effective_schedule(observed_cpu.get("effective_schedule"))
                 or observed_cpu != expected_cpu
                 or row.get("observed_key") != key
             ):
                 raise ValueError("complete-window observation order/identity/agreement differs")
-            field_hash = row.get("fields_sha256")
-            if (
-                not isinstance(field_hash, str)
-                or len(field_hash) != 64
-                or any(char not in "0123456789abcdef" for char in field_hash)
-                or order % 2
-                and field_hash != rows[order - 1].get("fields_sha256")
-            ):
-                raise ValueError("complete-window full-field comparison differs")
             elapsed = row.get("seconds")
             if type(elapsed) not in (int, float) or not math.isfinite(elapsed) or elapsed <= 0:
                 raise ValueError("complete-window time invalid")
@@ -587,7 +607,9 @@ def control(owner):
     if placement is None:
         raise CompilationError("exact-window control requires an issued placement")
     record = placement.record
-    if record["contract"].get("protocol") == "checked-selection-process-v1":
+    from compiler.offload.selection_cost import PROTOCOL as selection_protocol
+
+    if record["contract"].get("protocol") == selection_protocol:
         from compiler.offload.selection_cost import control as selection_control
 
         return selection_control(owner)

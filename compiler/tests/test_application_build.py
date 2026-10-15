@@ -12,11 +12,13 @@ import pytest
 from compiler.numerical_contract import cuda_compile_options
 from compiler.offload.application_build import (
     PROTOCOL,
+    application_build_validation,
     attest_application_build,
     digest,
     preflight_application_build,
     require_application_build_contract,
     validate_application_build_observation,
+    validate_diagnostic_relink,
 )
 
 
@@ -74,27 +76,30 @@ def synthetic_receipt(root, application, original, generated, *, macro=None, hea
     return {**value, "identity": digest(value)}
 
 
-@pytest.fixture
-def prepared(tmp_path):
+def prepared_receipts(tmp_path):
     current = write(tmp_path / "original" / "source.f90", "original\n")
+    driver = write(current.parent / "driver.f90", "original driver\n")
     header = write(current.parent / "values.inc", "integer, parameter :: n=4\n")
     native = write(tmp_path / "native" / "source.f90", current.read_text())
+    native_driver = write(native.parent / "driver.f90", driver.read_text())
     native_header = write(native.parent / "values.inc", header.read_text())
     resident = write(tmp_path / "resident" / "source.f90", "old approved replacement\n")
+    resident_driver = write(resident.parent / "driver.f90", driver.read_text())
     worker = write(tmp_path / "old-artifacts" / "worker.cu", "numerical worker\n")
     interface = write(worker.parent / "interface.f90", "interface\n")
     old_manifest = {"sources": {str(current): {"sha256": hashed(current), "replacement": "old.f90"}},
                     "artifacts_sha256": {"old.f90": hashed(resident), "worker.cu": hashed(worker), "interface.f90": hashed(interface)}}
     manifest_path, manifest_hash = save(tmp_path / "old-manifest.json", old_manifest)
-    n = synthetic_receipt(tmp_path / "native-build", native.parent, native, [], header=native_header)
-    r = synthetic_receipt(tmp_path / "resident-build", resident.parent, resident, [interface, worker])
+    n = synthetic_receipt(tmp_path / "native-build", native.parent, native, [native_driver], header=native_header)
+    r = synthetic_receipt(tmp_path / "resident-build", resident.parent, resident, [resident_driver, interface, worker])
     np, nh = save(tmp_path / "native-receipt.json", n)
     rp, rh = save(tmp_path / "resident-receipt.json", r)
     request = {"schema_version": 1, "protocol": PROTOCOL, "origins": {
         "native": {"receipt": np, "receipt_sha256": nh, "build_root": str(tmp_path / "native-build"),
-                   "source_mapping": {str(native): str(current), str(native_header): str(header)}},
+                   "source_mapping": {str(native): str(current), str(native_header): str(header), str(native_driver): str(driver)}},
         "resident": {"receipt": rp, "receipt_sha256": rh, "build_root": str(tmp_path / "resident-build"),
-                     "source_mapping": {str(resident): str(current)}, "manifest": manifest_path, "manifest_sha256": manifest_hash}}}
+                     "source_mapping": {str(resident): str(current), str(resident_driver): str(driver)},
+                     "manifest": manifest_path, "manifest_sha256": manifest_hash}}}
     arguments = dict(sources={str(current): hashed(current)}, source_inputs_identity="1" * 64,
                      configuration_identity="2" * 64, compiler_identity="3" * 64, options_identity="4" * 64,
                      worker_artifacts={"entries/leaf/shared_entry.cu": hashed(worker)}, runtime_identity="5" * 64)
@@ -103,7 +108,7 @@ def prepared(tmp_path):
     new_worker = write(artifact_root / "entries/leaf/shared_entry.cu", worker.read_text())
     new_interface = write(artifact_root / "interface.f90", interface.read_text())
     replacement = write(artifact_root / "replacement.f90", "new compiler approved replacement\n")
-    selection_contract = {"protocol": "checked-selection-process-v1", "sources": arguments["sources"], "build_contract": contract}
+    selection_contract = {"protocol": "checked-selection-process-v2", "sources": arguments["sources"], "build_contract": contract}
     selection_identity = digest(selection_contract)
     selector = write(artifact_root / "selector.cu", "#ifndef FORT_EXACT_WINDOW_BUILD_" + selection_identity + "\n#error attestation required\n#endif\n")
     files = [new_worker, new_interface, replacement, selector]
@@ -117,15 +122,23 @@ def prepared(tmp_path):
     mp, mh = save(artifact_root / "scope-manifest.json", manifest)
     destination = write(tmp_path / "new-application" / "source.f90", replacement.read_text())
     destination_header = write(destination.parent / "values.inc", header.read_text())
+    destination_driver = write(destination.parent / "driver.f90", driver.read_text())
     build_root = tmp_path / "new-build"
     preflight_request = {"manifest": mp, "manifest_sha256": mh, "artifact_root": str(artifact_root), "build_root": str(build_root),
-                         "destinations": {str(current): str(destination), str(header): str(destination_header)}}
+                         "destinations": {str(current): str(destination), str(header): str(destination_header),
+                                          str(driver): str(destination_driver)}}
     preflight = preflight_application_build(preflight_request)
-    actual = synthetic_receipt(build_root, destination.parent, destination, [new_worker, new_interface, selector],
+    actual = synthetic_receipt(build_root, destination.parent, destination, [destination_driver, new_worker, new_interface, selector],
                                macro=preflight["macros"][str(selector)], header=destination_header)
     ap, ah = save(tmp_path / "actual-receipt.json", actual)
     return {"request": request, "arguments": arguments, "contract": contract, "preflight": preflight,
-            "actual": actual, "receipt": ap, "receipt_sha256": ah, "manifest": manifest, "root": tmp_path}
+            "actual": actual, "receipt": ap, "receipt_sha256": ah, "manifest": manifest, "root": tmp_path,
+            "driver": str(driver)}
+
+
+@pytest.fixture
+def prepared(tmp_path):
+    return prepared_receipts(tmp_path)
 
 
 def test_relocated_exact_build_contract_and_post_build_observation(prepared):
@@ -242,7 +255,7 @@ def test_native_capture_binds_resident_identity_without_its_removed_workers(prep
     destination = next(Path(path) for path in result["expected_inputs"] if path.endswith("source.f90"))
     header = next(Path(path) for path in result["expected_inputs"] if path.endswith(".inc"))
     receipt = synthetic_receipt(Path(request["build_root"]), destination.parent, destination,
-                                [Path(path) for path in result["generated"]], header=header)
+                                [destination.parent / "driver.f90", *[Path(path) for path in result["generated"]]], header=header)
     path, recorded = save(p["root"] / "native-capture-receipt.json", receipt)
     attestation = attest_application_build(result, path, recorded)
     assert attestation["variant"] == "native"
@@ -265,3 +278,134 @@ def test_public_verifier_cli_publishes_only_successful_result(prepared):
     assert not result.stdout
     assert not output.exists()
     assert "file changed" in result.stderr
+
+
+def observed_build(p, mode):
+    """Build an authenticated file/receipt fixture, not measured execution."""
+    if mode == "resident":
+        preflight, receipt, path, recorded = p["preflight"], p["actual"], p["receipt"], p["receipt_sha256"]
+    else:
+        artifact_root = p["root"] / "native-artifacts"
+        manifest = deepcopy(p["manifest"])
+        manifest["scopes"][0]["exact_window"]["capture_variant"] = "native"
+        old_root = Path(p["preflight"]["request"]["artifact_root"])
+        for name in manifest["artifacts_sha256"]:
+            target = write(artifact_root / name, (old_root / name).read_text())
+            if name == "selector.cu":
+                target.write_text('extern "C" void native_observer() {}\n')
+            manifest["artifacts_sha256"][name] = hashed(target)
+        request = deepcopy(p["preflight"]["request"])
+        request.update(artifact_root=str(artifact_root), build_root=str(p["root"] / "native-capture-build"))
+        request["manifest"], request["manifest_sha256"] = save(artifact_root / "scope-manifest.json", manifest)
+        request["destinations"] = {original: str(write(p["root"] / "native-application" / Path(path).name,
+                                                       Path(path).read_text()))
+                                   for original, path in request["destinations"].items()}
+        preflight = preflight_application_build(request)
+        source = Path(request["destinations"][next(iter(p["arguments"]["sources"]))])
+        header = source.parent / "values.inc"
+        receipt = synthetic_receipt(Path(request["build_root"]), source.parent, source,
+                                    [source.parent / "driver.f90", *map(Path, preflight["generated"])], header=header)
+        path, recorded = save(p["root"] / "native-actual.json", receipt)
+    attestation = attest_application_build(preflight, path, recorded)
+    ap, ah = save(p["root"] / (mode + "-attestation.json"), attestation)
+    return {"receipt": path, "receipt_sha256": recorded, "attestation": ap, "attestation_sha256": ah,
+            "binary_sha256": attestation["binary_sha256"], "contract_identity": attestation["contract_identity"],
+            "variant": mode}
+
+
+def diagnostic_fixture(p, observation, mode):
+    """Two exact command receipts for a policy-approved driver replacement."""
+    receipt = json.loads(Path(observation["receipt"]).read_text())
+    attestation = json.loads(Path(observation["attestation"]).read_text())
+    original = p["driver"]
+    destination = attestation["preflight"]["request"]["destinations"][original]
+    unit = next(unit for unit in receipt["units"] if unit["source"] == destination)
+    output = p["root"] / (mode + "-diagnostic")
+    source = write(output / "dump.f90", "reviewed dump driver\n")
+    obj, binary = write(output / "dump.o", "diagnostic object\n"), write(output / "program", "diagnostic " + mode)
+    module = write(output / "numeric.mod", "recorded diagnostic module\n")
+    commands = [deepcopy(unit["execution"]), deepcopy(receipt["link"])]
+    replacements = [{destination: str(source), unit["object"]: str(obj)},
+                    {unit["object"]: str(obj), receipt["binary"]: str(binary)}]
+    references = []
+    for index, (command, mapping) in enumerate(zip(commands, replacements, strict=True)):
+        command["argv"] = [mapping.get(arg, arg) for arg in command["argv"]]
+        for role in ("inputs", "outputs"):
+            command[role] = [{"path": mapping.get(item["path"], item["path"]),
+                              "sha256": hashed(mapping.get(item["path"], item["path"]))}
+                             for item in command[role]]
+        command["inputs"].append({"path": str(module), "sha256": hashed(module)})
+        path, recorded = save(output / f"command-{index}.json", command)
+        references.append({"path": path, "sha256": recorded})
+    plan = {"application_build_identity": receipt["identity"], "application_build_receipt": observation["receipt"],
+            "application_binary": receipt["binary"], "diagnostic_binary": str(binary),
+            "module_inputs": {str(module): hashed(module)}, "files_sha256": {str(source): hashed(source)},
+            "relink": {"compile_argv": commands[0]["argv"], "link_argv": commands[1]["argv"],
+                       "cwd": commands[0]["cwd"]}}
+    pp, ph = save(output / "plan.json", plan)
+    bp, bh = save(output / "build.json", {"status": "passed", "plan_sha256": ph,
+                                         "binary": str(binary), "binary_sha256": hashed(binary)})
+    driver = {"original_source": original, "original_sha256": hashed(original), "replacement_sha256": hashed(source)}
+    return driver, {"plan": {"path": pp, "sha256": ph}, "build": {"path": bp, "sha256": bh}, "commands": references}
+
+
+@pytest.mark.parametrize("mode", ["native", "resident"])
+def test_reviewed_diagnostic_relink_preserves_actual_numerical_objects(prepared, mode):
+    observation = observed_build(prepared, mode)
+    driver, diagnostic = diagnostic_fixture(prepared, observation, mode)
+    with application_build_validation():
+        result = validate_diagnostic_relink(diagnostic, application_build=observation,
+                                            contract=prepared["contract"], driver=driver, mode=mode)
+    assert result["binary_sha256"] == hashed(result["binary"])
+    assert result["binary_sha256"] != observation["binary_sha256"]
+
+
+@pytest.mark.parametrize("change", ["flag", "link_object", "environment", "driver", "module"])
+def test_diagnostic_relink_rejects_changes_beyond_the_approved_driver(prepared, change):
+    observation = observed_build(prepared, "resident")
+    driver, diagnostic = diagnostic_fixture(prepared, observation, "resident")
+    if change in {"flag", "link_object", "environment"}:
+        reference = diagnostic["commands"][int(change == "link_object")]
+        command = json.loads(Path(reference["path"]).read_text())
+        if change == "flag":
+            command["argv"].insert(1, "-ffast-math")
+        elif change == "environment":
+            command["environment"]["FCFLAGS"] = "-Ofast"
+        else:
+            command["argv"][2] = str(write(prepared["root"] / "foreign.o", "foreign numerical object"))
+        _, reference["sha256"] = save(Path(reference["path"]), command)
+    elif change == "driver":
+        driver["replacement_sha256"] = "0" * 64
+    else:
+        plan = json.loads(Path(diagnostic["plan"]["path"]).read_text())
+        Path(next(iter(plan["module_inputs"]))).write_text("changed module")
+    with pytest.raises(ValueError, match="application build"), application_build_validation():
+        validate_diagnostic_relink(diagnostic, application_build=observation,
+                                   contract=prepared["contract"], driver=driver, mode="resident")
+
+
+def test_repeated_observation_is_verified_once_then_every_dependency_rechecked(prepared, monkeypatch):
+    import compiler.offload.application_build as module
+
+    observation = observed_build(prepared, "resident")
+    original = module._raw_hash
+    reads = []
+
+    def counted(path):
+        reads.append(str(path))
+        return original(path)
+
+    monkeypatch.setattr(module, "_raw_hash", counted)
+    with application_build_validation():
+        first = validate_application_build_observation(observation, contract=prepared["contract"], mode="resident")
+        before = len(reads)
+        assert validate_application_build_observation(observation, contract=prepared["contract"], mode="resident") == first
+        assert len(reads) == before
+    assert len(reads) > before
+    def mutate_checked_build():
+        with application_build_validation():
+            validate_application_build_observation(observation, contract=prepared["contract"], mode="resident")
+            Path(prepared["actual"]["binary"]).write_text("changed after verification")
+
+    with pytest.raises(ValueError, match="before build validation completed"):
+        mutate_checked_build()

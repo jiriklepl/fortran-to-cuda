@@ -11,26 +11,67 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from contextlib import contextmanager
+from contextvars import ContextVar
 from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
 
 PROTOCOL = "executed-application-build-v1"
-SELECTION_PROTOCOL = "checked-selection-process-v1"
+SELECTION_PROTOCOL = "checked-selection-process-v2"
 LIMITATION = "Implicit system headers and libraries are not inventoried"
 SOURCE_SUFFIXES = {".f", ".for", ".ftn", ".f90", ".f95", ".f03", ".f08", ".c", ".cc", ".cpp", ".cxx", ".cu"}
 HEADER_SUFFIXES = {".h", ".hh", ".hpp", ".cuh", ".inc"}
+_VALIDATION = ContextVar("application_build_validation", default=None)
 
 
 def digest(value):
     return sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def _hash(path):
+def _raw_hash(path):
     with Path(path).open("rb") as stream:
         from hashlib import file_digest
 
         return file_digest(stream, "sha256").hexdigest()
+
+
+def _remember(path, recorded):
+    scope = _VALIDATION.get()
+    if scope is not None:
+        name = str(Path(path).absolute())
+        _check(name not in scope["files"] or scope["files"][name] == recorded,
+               "input changed during build validation: " + name)
+        scope["files"][name] = recorded
+    return recorded
+
+
+def _hash(path):
+    return _remember(path, _raw_hash(path))
+
+
+def _bytes(path):
+    raw = Path(path).read_bytes()
+    _remember(path, sha256(raw).hexdigest())
+    return raw
+
+
+@contextmanager
+def application_build_validation():
+    """Share checked observations for one decision, then recheck every input.
+
+    This scope has no persistent cache. A successful context exit, after fresh
+    dependency hashes, is required before its caller can publish a decision.
+    """
+    _check(_VALIDATION.get() is None, "build validation scopes must not nest")
+    scope = {"files": {}, "observations": {}}
+    token = _VALIDATION.set(scope)
+    try:
+        yield
+        for path, recorded in scope["files"].items():
+            _check(_raw_hash(path) == recorded, "input changed before build validation completed: " + path)
+    finally:
+        _VALIDATION.reset(token)
 
 
 def _check(condition, message):
@@ -49,8 +90,9 @@ def _identified(value):
 
 
 def _read(path, expected):
-    _check(_sha(expected) and _hash(path) == expected, "receipt or manifest file changed")
-    return json.loads(Path(path).read_text())
+    raw = _bytes(path)
+    _check(_sha(expected) and sha256(raw).hexdigest() == expected, "receipt or manifest file changed")
+    return json.loads(raw)
 
 
 def _receipt(path, expected):
@@ -316,7 +358,7 @@ def preflight_application_build(request):
         if variant == "native" or not selection.get("capture") and selection.get("selection") == "native":
             continue
         name = "FORT_EXACT_WINDOW_BUILD_" + selection["contract_sha256"]
-        selectors = [path for path, unit in units.items() if unit["language"] == "cuda" and name in Path(path).read_text()]
+        selectors = [path for path, unit in units.items() if unit["language"] == "cuda" and name in _bytes(path).decode()]
         _check(len(selectors) == 1 and selectors[0] not in macros, "one distinct compiler-issued attestation guard per selection required")
         macros[selectors[0]] = name + "=1"
     _check(macros or variant == "native", "no emitted application selector requires build attestation")
@@ -378,19 +420,153 @@ def attest_application_build(preflight, receipt, receipt_sha256):
     return {**result, "identity": digest(result)}
 
 
-def validate_application_build_observation(observation_build, *, contract, mode):
+def validate_application_build_observation(observation_build, *, contract, mode, selection_contract_identity=None):
     """Reconstruct a measured build attestation; a claimed success flag is insufficient."""
     _contract(contract)
     _check(type(observation_build) is dict and set(observation_build) == {
         "receipt", "receipt_sha256", "attestation", "attestation_sha256", "binary_sha256", "contract_identity", "variant"},
         "complete executed observation build required")
     _check(mode in {"native", "resident"} and observation_build["variant"] == mode, "observation build variant differs")
+    scope = _VALIDATION.get()
+    key = digest({"observation": observation_build, "contract": contract, "mode": mode})
+    if scope is not None and key in scope["observations"]:
+        checked = scope["observations"][key]
+        _check(selection_contract_identity is None or _sha(selection_contract_identity)
+               and selection_contract_identity in checked["selection_contract_identities"],
+               "observation selection contract differs")
+        return checked["identity"]
     attestation = _identified(_read(observation_build["attestation"], observation_build["attestation_sha256"]))
     _check(contract in attestation["preflight"]["contracts"], "observation expected build differs")
+    if selection_contract_identity is not None:
+        _check(_sha(selection_contract_identity)
+               and selection_contract_identity in attestation["selection_contract_identities"],
+               "observation selection contract differs")
     actual = attest_application_build(attestation["preflight"], observation_build["receipt"], observation_build["receipt_sha256"])
     _check(actual == attestation and all(actual[name] == observation_build[name] for name in
                                       ("binary_sha256", "contract_identity", "variant")), "observation attestation differs")
+    if scope is not None:
+        scope["observations"][key] = {name: actual[name] for name in ("identity", "selection_contract_identities")}
     return actual["identity"]
+
+
+def _reference(reference):
+    _check(type(reference) is dict and set(reference) == {"path", "sha256"}
+           and type(reference["path"]) is str and Path(reference["path"]).is_absolute(),
+           "absolute diagnostic receipt reference required")
+    return _read(reference["path"], reference["sha256"])
+
+
+def _command_files(command, role):
+    values = command[role]
+    _check(type(values) is list and all(type(item) is dict and set(item) == {"path", "sha256"}
+           and type(item["path"]) is str and Path(item["path"]).is_absolute()
+           and _sha(item["sha256"]) for item in values), "invalid diagnostic command file inventory")
+    result = {item["path"]: item["sha256"] for item in values}
+    _check(len(result) == len(values), "duplicate diagnostic command input/output")
+    return result
+
+
+def _operand(argv, path, cwd):
+    indices = [index for index, arg in enumerate(argv[1:], 1)
+               if not arg.startswith("-") and _path(arg, cwd) == path]
+    _check(len(indices) == 1, "diagnostic replacement requires one exact original operand")
+    return indices[0]
+
+
+def validate_diagnostic_relink(observation, *, application_build, contract, driver, mode):
+    """Authenticate one reviewed diagnostic source replacement and its relink.
+
+    The source hash authorizes the explicitly trusted validation driver; it does
+    not prove the driver's numerical noninterference. Every other linked object
+    and ordered compiler/link argument is preserved. Diagnostic module inputs
+    are freshly checked, but existing application receipts do not establish an
+    original compile-time module inventory or an implicit toolchain closure.
+    """
+    authority = validate_application_build_observation(application_build, contract=contract, mode=mode)
+    _check(type(driver) is dict and set(driver) == {"original_source", "original_sha256", "replacement_sha256"}
+           and type(driver["original_source"]) is str and _sha(driver["original_sha256"])
+           and _sha(driver["replacement_sha256"]), "source-bound diagnostic driver required")
+    original = driver["original_source"]
+    _check(original in contract["original_units"] and contract["original_inputs"].get(original) == driver["original_sha256"]
+           and _hash(original) == driver["original_sha256"], "diagnostic driver original source differs")
+    _check(type(observation) is dict and set(observation) == {"plan", "build", "commands"}
+           and type(observation["commands"]) is list and len(observation["commands"]) == 2,
+           "diagnostic plan, build and two executed command receipts required")
+    plan, build = _reference(observation["plan"]), _reference(observation["build"])
+    commands = [_reference(item) for item in observation["commands"]]
+    _check(len({item["path"] for item in observation["commands"]}) == 2, "duplicate diagnostic command receipt")
+    for command in commands:
+        _command(command)
+        for path, recorded in {**_command_files(command, "inputs"), **_command_files(command, "outputs"),
+                               command["compiler"]["path"]: command["compiler"]["sha256"]}.items():
+            _check(_sha(recorded) and _hash(path) == recorded, "diagnostic command input/output changed: " + path)
+    compiled = [command for command in commands if command["argv"].count("-c") == 1]
+    linked = [command for command in commands if "-c" not in command["argv"]]
+    _check(len(compiled) == len(linked) == 1, "one diagnostic compile and link required")
+    compiled, linked = compiled[0], linked[0]
+    attestation = _read(application_build["attestation"], application_build["attestation_sha256"])
+    receipt = _read(application_build["receipt"], application_build["receipt_sha256"])
+    destination = attestation["preflight"]["request"]["destinations"][original]
+    units = [unit for unit in receipt["units"] if unit["source"] == destination]
+    _check(len(units) == 1 and receipt["source_inputs"][destination] == driver["original_sha256"],
+           "diagnostic driver must replace one unchanged original compilation unit")
+    unit = units[0]
+    before_compile, before_link = unit["execution"], receipt["link"]
+    _check(plan["application_build_identity"] == receipt["identity"]
+           and plan["application_build_receipt"] == application_build["receipt"]
+           and plan["application_binary"] == receipt["binary"], "diagnostic plan application build differs")
+    _check(build.get("status") == "passed" and build["plan_sha256"] == observation["plan"]["sha256"],
+           "diagnostic build does not bind its plan")
+    for current, previous in ((compiled, before_compile), (linked, before_link)):
+        _check(all(current[name] == previous[name] for name in ("cwd", "compiler", "environment")),
+               "diagnostic compiler, working directory or environment differs")
+    source_index = _operand(before_compile["argv"], destination, before_compile["cwd"])
+    object_index = before_compile["argv"].index("-o") + 1
+    binary_index = before_link["argv"].index("-o") + 1
+    link_object_index = _operand(before_link["argv"], unit["object"], before_link["cwd"])
+    _check(len(compiled["argv"]) == len(before_compile["argv"])
+           and len(linked["argv"]) == len(before_link["argv"]), "diagnostic ordered arguments differ")
+    source, obj, binary = (_path(compiled["argv"][source_index], compiled["cwd"]),
+                           _path(compiled["argv"][object_index], compiled["cwd"]),
+                           _path(linked["argv"][binary_index], linked["cwd"]))
+    _check(len({source, obj, binary}) == 3 and all(path not in receipt["files_sha256"] for path in (source, obj, binary)),
+           "diagnostic artifacts overwrite an application input/output")
+    expected_compile, expected_link = list(before_compile["argv"]), list(before_link["argv"])
+    expected_compile[source_index], expected_compile[object_index] = source, obj
+    expected_link[link_object_index], expected_link[binary_index] = obj, binary
+    _check(compiled["argv"] == expected_compile and linked["argv"] == expected_link,
+           "diagnostic arguments must preserve every other source, object, flag and link position")
+    compile_outputs, link_outputs = _command_files(compiled, "outputs"), _command_files(linked, "outputs")
+    _check(set(compile_outputs) == {obj} and set(link_outputs) == {binary}
+           and _hash(source) == driver["replacement_sha256"], "diagnostic source or command output differs")
+    modules = plan["module_inputs"]
+    _check(type(modules) is dict and all(type(path) is str and Path(path).is_absolute()
+           and Path(path).suffix.lower() in {".mod", ".smod"} and _sha(recorded)
+           and _hash(path) == recorded for path, recorded in modules.items()), "diagnostic module inputs differ")
+    expected_inputs = _command_files(before_compile, "inputs")
+    del expected_inputs[destination]
+    expected_inputs[source] = driver["replacement_sha256"]
+    for path, recorded in modules.items():
+        _check(path not in expected_inputs or expected_inputs[path] == recorded, "diagnostic module identity conflicts")
+        expected_inputs[path] = recorded
+    _check(_command_files(compiled, "inputs") == expected_inputs, "diagnostic compile inputs differ")
+    expected_inputs = _command_files(before_link, "inputs")
+    del expected_inputs[unit["object"]]
+    expected_inputs[obj] = compile_outputs[obj]
+    for path, recorded in modules.items():
+        _check(path not in expected_inputs or expected_inputs[path] == recorded, "diagnostic module identity conflicts")
+        expected_inputs[path] = recorded
+    _check(_command_files(linked, "inputs") == expected_inputs, "diagnostic link inputs differ")
+    relink = plan["relink"]
+    _check(relink["compile_argv"] == compiled["argv"] and relink["link_argv"] == linked["argv"]
+           and relink["cwd"] == compiled["cwd"] == linked["cwd"]
+           and plan["diagnostic_binary"] == build["binary"] == binary
+           and build["binary_sha256"] == link_outputs[binary], "diagnostic plan/build differs from executed commands")
+    for path, recorded in plan["files_sha256"].items():
+        _check(_sha(recorded) and _hash(path) == recorded, "diagnostic plan input changed: " + path)
+    value = {"binary": binary, "binary_sha256": link_outputs[binary], "application_build_identity": authority}
+    return {**value, "identity": digest({"schema_version": 1, "observation": observation,
+                                        "driver": driver, "mode": mode, **value})}
 
 
 def main(argv=None):

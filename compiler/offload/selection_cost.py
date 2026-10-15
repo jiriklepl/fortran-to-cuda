@@ -19,13 +19,13 @@ from compiler.offload.exact_window import (
     HOLDOUTS,
     SAMPLES,
     _issue_placement,
+    _paired_timing_decision,
     _request_snapshot,
     digest,
-    evidence_decision,
     implementation_identity,
 )
 
-PROTOCOL = "checked-selection-process-v1"
+PROTOCOL = "checked-selection-process-v2"
 PREFIX = "FORT_SELECTION_OBSERVATION "
 
 
@@ -54,6 +54,17 @@ def _valid_workload(workload):
 
 
 def process_evidence_decision(evidence, contract):
+    """Keep build verification local to one decision and recheck before return."""
+    try:
+        from compiler.offload.application_build import application_build_validation
+
+        with application_build_validation():
+            return _process_evidence_decision(evidence, contract)
+    except (CompilationError, KeyError, TypeError, ValueError, OverflowError, OSError) as error:
+        return {"available": False, "selection": "native", "reason": str(error)}
+
+
+def _process_evidence_decision(evidence, contract):
     """Reconstruct complete-process acceptance and every usable reached key.
 
     Every campaign is one explicit observed workload class. A key observed in an
@@ -63,6 +74,7 @@ def process_evidence_decision(evidence, contract):
     """
     try:
         from compiler.offload.application_build import validate_application_build_observation
+        from compiler.offload.selection_validation import validate_campaign_numerics
 
         if (type(evidence) is not dict or evidence.get("protocol") != PROTOCOL
                 or type(evidence.get("campaigns")) is not list or not evidence["campaigns"]):
@@ -82,7 +94,7 @@ def process_evidence_decision(evidence, contract):
                 raise ValueError("complete-process enabled selection bundle differs")
             if type(rows) is not list or len(rows) != 2 * (SAMPLES + HOLDOUTS):
                 raise ValueError("complete-process calibration requires seven pairs and two holdouts")
-            key_sequence, all_keys, per_key_outcomes = None, set(), {}
+            key_sequence, all_keys, per_key_outcomes, builds = None, set(), {}, {}
             projected = deepcopy(campaign)
             first_key = None
             for order, row in enumerate(rows):
@@ -101,7 +113,11 @@ def process_evidence_decision(evidence, contract):
                         or process.get("wall_time_includes") != ["startup", "first_invocation", "all_invocations", "output", "teardown"]
                         or process.get("seconds") != row.get("seconds")):
                     raise ValueError("complete-process observation does not establish unchanged workload completion")
-                validate_application_build_observation(row.get("build"), contract=contract["build_contract"], mode=mode)
+                validate_application_build_observation(row.get("build"), contract=contract["build_contract"], mode=mode,
+                                                      selection_contract_identity=digest(contract))
+                if mode in builds and row["build"] != builds[mode]:
+                    raise ValueError("complete-process numerical validation requires the same measured build per mode")
+                builds[mode] = row["build"]
                 invocations = row.get("invocations")
                 if type(invocations) is not list or not invocations:
                     raise ValueError("complete-process observation lacks actual selected invocations")
@@ -137,15 +153,18 @@ def process_evidence_decision(evidence, contract):
                 elif sequence != key_sequence:
                     raise ValueError("paired complete-process selection key sequence changed")
                 # Reuse the strict original raw-pair order, hardware, independent
-                # CPU, float64 agreement and complete elapsed-time checks. Keys
+                # CPU and complete elapsed-time checks. Keys
                 # are authenticated above as a sequence, not silently collapsed.
                 projected["observations"][order]["key"] = first_key
                 projected["observations"][order]["observed_key"] = first_key
             projected["key"] = first_key
-            decision = evidence_decision(projected, contract, protocol=PROTOCOL)
+            decision = _paired_timing_decision(projected, contract, protocol=PROTOCOL)
             if not decision["available"]:
                 raise ValueError(decision["reason"])
             identity = decision["identity"]
+            numerical = validate_campaign_numerics(
+                campaign, contract=contract, workload=workload, builds=builds,
+                key_sequence=key_sequence, identity=identity)
             identity_key = digest(identity)
             identities[identity_key] = identity
             workloads[workload["identity"]] = workload
@@ -160,7 +179,7 @@ def process_evidence_decision(evidence, contract):
                 rejected.update(all_keys - usable)
             campaigns.append({"workload_identity": workload["identity"], "invocations": len(key_sequence),
                               "native_seconds": decision["native_seconds"], "resident_seconds": decision["resident_seconds"],
-                              "selection": decision["selection"]})
+                              "selection": decision["selection"], "numerical_validation": numerical})
         if any(campaign["selection"] != "resident" for campaign in campaigns):
             rejected.update(accepted)
         entries = [{"key": list(key), "identity": identities[identity], "workload": workloads[workload]}
@@ -326,6 +345,7 @@ def prepare(owner):
     from compiler.frontend.immutable_graph import freeze_graph
     from compiler.numerical_contract import numerical_build_contract
     from compiler.offload.application_build import require_application_build_contract
+    from compiler.offload.selection_validation import normalize_policy
     from compiler.scopes.combined_team import CombinedNumericalTeam
 
     builder = owner.builder
@@ -365,6 +385,7 @@ def prepare(owner):
         configuration_identity=public["configuration_identity"],
         compiler_identity=digest(implementation), options_identity=digest(asdict(builder.options)),
         worker_artifacts=artifacts, runtime_identity=builder.runtime["runtime_id"])
+    validation_policy = normalize_policy(request.get("validation_policy"), build_contract=build)
     contract = {
         "schema_version": 1, "protocol": PROTOCOL, "entry": owner.routine.qualified,
         "sources": dict(sorted(builder.analysis.sources.items())), "selection": deepcopy(owner.selection_context),
@@ -375,7 +396,7 @@ def prepare(owner):
         "common_functions_sha256": sha256(read_common_header().encode()).hexdigest(),
         "source_inputs": builder.analysis.inputs.identity(), "facts": builder.facts,
         "compiler_options": asdict(builder.options), "numerical_contract": numerical_build_contract(),
-        "build_contract": build, "threads": builder.config.host_threads,
+        "build_contract": build, "validation_policy": validation_policy, "threads": builder.config.host_threads,
         "original_participation": units[0].scope.completion.public(),
         "transfers": builder.config.scope_transfers, "device_budget_bytes": builder.device_budget, "key": key,
         "expected_launches": len(units[0].scope.prepared.offload.units),
