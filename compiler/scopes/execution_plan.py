@@ -486,6 +486,16 @@ class CheckedExecutionPlan:
             return reasons[-1]["reason"]
         return self._owner.builder.automatic_native_preflight(self.leaves)
 
+    def interval_applicability(self):
+        """Explain workload evidence for this same checked interval.
+
+        The detached result identifies key candidates and unresolved coverage;
+        it cannot replace an issued placement or change native fallback.
+        """
+        from compiler.offload.interval_applicability import analyze_interval_applicability
+
+        return analyze_interval_applicability(self)
+
     def public(self):
         self._require_owner()
         return json.loads(self._record)
