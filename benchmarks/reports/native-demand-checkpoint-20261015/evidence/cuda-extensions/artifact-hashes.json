@@ -1,0 +1,16 @@
+[
+  {
+    "binary_sha256": "3ae5fc2a742c32b2dfc8282814eab12b42f637c0bef064bd21b84771dd27608f",
+    "bytes": 32840,
+    "complete_field_sha256": "32cbe93f683297171b82837e212492b41640c5ab62300b5e692f7d807c272e95",
+    "source_sha256": "58dd2b619c09b1abb85cb6b3dabbb83d7a41e5a6b20dad75acab4633c1a8898d",
+    "variant": "managed_correction"
+  },
+  {
+    "binary_sha256": "e035504d98620a62a1ad536dfabc4cf4e3fc0de3818df665bb57830638ff096b",
+    "bytes": 32840,
+    "complete_field_sha256": "003b40d929cb0d184795e9d30e5b701134445f4df2fc7154a4e672c597bfe998",
+    "source_sha256": "5fc8a3d255feea46346ab13e2957c2cad81a7ae432a148f49d40ff3798dcf9ab",
+    "variant": "pointer_boundary"
+  }
+]

@@ -1,0 +1,29 @@
+{
+  "changed_compiler_files": [],
+  "command": [
+    "taskset",
+    "-c",
+    "4,5,10,11",
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "compiler/tests/test_native_demand_cuda.py",
+    "-k",
+    "managed_correction or pointer_boundary",
+    "--basetemp",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-suffix-validation-20261015/pytest"
+  ],
+  "compiler_head": "166d4891c9f05ad88219bb5858928eaabc31f92e",
+  "cwd": "/home/jirka/research/fortran-abomination",
+  "environment": {
+    "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "4",
+    "OMP_SCHEDULE": "static"
+  },
+  "exit_code": 0,
+  "kind": "partial native correction and reached-prefix fallback CUDA extensions; baseline not rerun; no performance claim",
+  "seconds": 53.157627090011374,
+  "test_sha256": "6913069429c28278ed2f58ffe1f1a2f6f3bbe8f35ad456b64659c38974efb809"
+}

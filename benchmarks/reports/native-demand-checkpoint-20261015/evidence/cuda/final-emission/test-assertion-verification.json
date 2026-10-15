@@ -1,0 +1,8 @@
+{
+  "test_sha256": "1f10eecd5bec09e4651e440fcba7ae7a9ffc77ee52e01531c517102cd6267e7f",
+  "change_after_test": "Added exact2upload/3download event assertions; no fixture/build/execution changes.",
+  "archived_ledger_sha256": "6220584707c6d9b248e5158b0d9c57235fc493d5d561f0aa617ff2b9d87fa303",
+  "both_branch_ledgers_satisfy_new_assertions": true,
+  "cuda_rerun": false,
+  "reason": "Only assertion strengthening; archived observations checked exactly."
+}

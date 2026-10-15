@@ -1,0 +1,281 @@
+{
+  "application_probe": {
+    "budgets_unchanged": true,
+    "cap_seconds": 60,
+    "cases": {
+      "channel": {
+        "identity": "44fbe5230748585ca7e04d2a849bc4960890a28993a95b14d0f285c22a1cd928",
+        "path": "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/cases/channel"
+      },
+      "channel-simple": {
+        "identity": "47284c289a0b824a86bf074638967f7a9e30d90c1c2631091e96a77bcba28dc4",
+        "path": "/home/jirka/research/fortran-abomination/benchmarks/results/checked-plan-application-20261014/cases/channel-simple"
+      }
+    },
+    "completed_selections": 4,
+    "final_production_differences": [
+      "compiler/frontend/native_demand.py"
+    ],
+    "full_effect_summaries_requested": false,
+    "input_count": 178,
+    "note": "This is a source-bound analysis of four individual CALLs, not generation or execution of an application interval. Its before/after inventories are authoritative for the observed run; later stricter declaration guards are not retroactively part of that run.",
+    "raw_result": "evidence/application-probe/result.json.gz",
+    "receipt": "evidence/application-probe/completion.json",
+    "rows": [
+      {
+        "label": "CALL StressBoundaryFlux(Ustar, Vstar, dt)",
+        "native_execution_admitted": false,
+        "procedure": "dynamics::convection",
+        "reachability_covered": true,
+        "reason": "native resource separation requires independent original owned storage: argument::ustar versus argument::u",
+        "storage_obligations": 48
+      },
+      {
+        "label": "CALL ComputeUVWFluxesWM(U, V, W, Pr, Temperature, Moisture)",
+        "native_execution_admitted": false,
+        "procedure": "dynamics::subgridstresses",
+        "reachability_covered": false,
+        "reason": "resource reachability source scan budget exhausted",
+        "storage_obligations": null
+      },
+      {
+        "label": "CALL BoundViscosity(Viscosity)",
+        "native_execution_admitted": false,
+        "procedure": "dynamics::subgridstresses",
+        "reachability_covered": true,
+        "reason": "native resource separation requires independent original owned storage: parameters::viscosity versus argument::u",
+        "storage_obligations": 19
+      },
+      {
+        "label": "CALL ComputeTDiff(U, V, W)",
+        "native_execution_admitted": false,
+        "procedure": "dynamics::subgridstresses",
+        "reachability_covered": true,
+        "reason": "native resource separation requires independent original owned storage: argument::u versus argument::v",
+        "storage_obligations": 36
+      }
+    ],
+    "seconds": 43.29629850998754,
+    "source_repair": "Same authenticated six INTENT declaration corrections as existing controls",
+    "source_session_identity": "94189986b02c0cf6b1ceab73ed3d601c359629ff470cb14a48237d5e3f09be31",
+    "whole_interval_inventory_proved": false
+  },
+  "automatic_placement": {
+    "hardware_profile_alone_sufficient": false,
+    "original_source_unchanged": true,
+    "reason": "native interval costs require compatible source-bound observations",
+    "selection": "native"
+  },
+  "claims": {
+    "application_execution": false,
+    "application_generation": false,
+    "application_performance_improvement": false,
+    "application_transfer_improvement": false,
+    "automatic_application_placement": false,
+    "fixture_cuda_execution": true,
+    "public_fixture_generation": true,
+    "qualification": false
+  },
+  "fixture": {
+    "after": "Demanded effects retain the CALL between existing numerical workers",
+    "before": "Complete native-call admission closes ownership before the CALL",
+    "native_operation": "Unchanged CALL; current host read of a; native metadata updates",
+    "numerical_operations": [
+      "Producer",
+      "Diffusion",
+      "Accumulation"
+    ],
+    "policy": "sections diagnostic",
+    "receipt": "evidence/cuda/fixture-summary.json",
+    "runtime_validation": "3 GPU launches \u00b7 native CALL once \u00b7 complete fields bitwise equal",
+    "shape": "Four float64 arrays with bounds -1:6 in each of three dimensions; interior 0:5",
+    "source": "compiler/tests/test_native_demand_cuda.py"
+  },
+  "fixture_extensions": [
+    {
+      "complete_fields_bitwise_equal": true,
+      "contexts": 1,
+      "download_bytes": 7552,
+      "downloads": 3,
+      "interruption": "Publishes all 4,096 bytes of b before native partial RMW; reuploads only 1,728 bytes needed by subsequent GPU diffusion. Whole-resource invalidation remains conservative.",
+      "launches": 3,
+      "native_call_once": true,
+      "receipt": "evidence/cuda-extensions/managed_correction/transfer-ledger.json",
+      "upload_bytes": 7552,
+      "uploads": 3,
+      "variant": "managed_correction"
+    },
+    {
+      "complete_fields_bitwise_equal": true,
+      "completed_prefix_not_replayed": true,
+      "contexts": 1,
+      "download_bytes": 4096,
+      "downloads": 1,
+      "interruption": "Unproved pointer metadata closes ownership after one non-idempotent GPU producer. Original native CALL and unexecuted suffix run once.",
+      "launches": 1,
+      "native_call_once": true,
+      "receipt": "evidence/cuda-extensions/pointer_boundary/transfer-ledger.json",
+      "upload_bytes": 8192,
+      "uploads": 2,
+      "variant": "pointer_boundary"
+    }
+  ],
+  "implementation": {
+    "base_commit": "166d4891c9f05ad88219bb5858928eaabc31f92e",
+    "compatible_pair_verified": true,
+    "compiler_commit": "b1aff80ca87ebc7159abac95883be00653985f0d",
+    "cuda_test_source": {
+      "archived_source": "evidence/cuda/native-demand-cuda-test.py",
+      "commit_binding": "Exact source is committed alongside this report, separately from the production commit.",
+      "path": "compiler/tests/test_native_demand_cuda.py",
+      "sha256": "6913069429c28278ed2f58ffe1f1a2f6f3bbe8f35ad456b64659c38974efb809"
+    },
+    "pipeline_commit": "b9418a9f1c3c242c4b77e948b29fa391b94aee60",
+    "source_binding": "evidence/committed-source-binding.json"
+  },
+  "kind": "native-demand-execution-checkpoint",
+  "limits": [
+    "Original source numerical ordering is unchanged; no pressure or cross-stage ownership.",
+    "Whole demanded array accesses require whole entry definitions; no new overwrite or partial-section proof.",
+    "Unknown aliases, demanded INTENT(OUT), demanded scalar writes, lifetime changes and unsupported completion reject.",
+    "Prospective root inventories must cover every final member; missing future child resources reject the whole candidate.",
+    "The operation map is a source-placement explanation, not a measured before/after performance comparison."
+  ],
+  "primary_targets": [
+    {
+      "case": "channel-simple",
+      "new_qualification": false,
+      "status": "unmet",
+      "target": "complete-process median below 9 seconds"
+    },
+    {
+      "case": "channel",
+      "new_qualification": false,
+      "status": "unmet",
+      "target": "at most 74.4% of fresh native and faster than SGS direct"
+    }
+  ],
+  "schema_version": 1,
+  "status": "complete-diagnostic-checkpoint",
+  "transfer_ledger": {
+    "baseline_transfer_saving_claim": false,
+    "observations": [
+      {
+        "download_bytes": 0,
+        "resource": "a",
+        "upload_bytes": 4096
+      },
+      {
+        "download_bytes": 4096,
+        "resource": "b",
+        "upload_bytes": 0
+      },
+      {
+        "download_bytes": 1728,
+        "resource": "star",
+        "upload_bytes": 0
+      },
+      {
+        "download_bytes": 1728,
+        "resource": "out",
+        "upload_bytes": 1728
+      }
+    ],
+    "observed_counts": {
+      "closes": 1,
+      "downloads": 3,
+      "launches": 3,
+      "uploads": 2
+    },
+    "prediction": [
+      {
+        "download_bytes": 0,
+        "resource": "a",
+        "upload_bytes": 4096
+      },
+      {
+        "download_bytes": 4096,
+        "resource": "b",
+        "upload_bytes": 0
+      },
+      {
+        "download_bytes": 1728,
+        "resource": "star",
+        "upload_bytes": 0
+      },
+      {
+        "download_bytes": 1728,
+        "resource": "out",
+        "upload_bytes": 1728
+      }
+    ],
+    "prediction_basis": "Source array bounds: full 8**3 float64=4096 bytes; interior 6**3 float64=1728 bytes. Expected accesses were asserted in the fixture before runtime observations.",
+    "scope": "All fixture transfers from owner entry through close; metadata remains native",
+    "source": "evidence/cuda/fixture/transfer-ledger.json",
+    "unit": "bytes per invocation"
+  },
+  "validation": {
+    "broad_intermediate": {
+      "failed": 2,
+      "failure_cause": "Exact-window measurement evidence fingerprints changed while production edits were active.",
+      "log": "evidence/validation/host-final.log",
+      "passed": 357,
+      "seconds": 244.13,
+      "source_stable": false
+    },
+    "complete_suite_claim": false,
+    "counts_must_not_be_added": true,
+    "cuda_extensions": {
+      "coverage": "Managed partial native correction and pointer-boundary suffix; each tests both branches and traced/untraced/device-disabled execution. Baseline was not rerun.",
+      "deselected": 2,
+      "log": "evidence/cuda-extensions/pytest.log",
+      "passed": 2,
+      "production_source_unchanged": true,
+      "receipt": "evidence/cuda-extensions/completion.json",
+      "seconds": 52.88
+    },
+    "cuda_integration": {
+      "compared_source_and_header_count": 33,
+      "compiler_changed_during_run": [
+        "compiler/frontend/native_demand.py"
+      ],
+      "coverage": "One AUTO host check and one CUDA test with two original branch outcomes, traced/untraced/device-disabled execution.",
+      "final_compiled_artifacts_identical": true,
+      "final_emission_comparison": "evidence/cuda/final-emission/comparison.json",
+      "log": "evidence/cuda/pytest.log",
+      "passed": 2,
+      "seconds": 27.35
+    },
+    "final_native_proof_and_owner": {
+      "coverage": "Nineteen native proof checks plus seven public owner checks, including the final Cray POINTER declaration guard.",
+      "log": "evidence/validation/proof-final.log",
+      "passed": 26,
+      "seconds": 1.94
+    },
+    "final_stable_host": {
+      "coverage": "Full selected host suite for this capability slice; overlaps earlier targeted runs.",
+      "log": "evidence/validation/host-stable.log",
+      "passed": 364,
+      "seconds": 239.4,
+      "source_stable": "coordinator-reported; final committed production inventory verified separately"
+    },
+    "initial_diagnostics": "evidence/cuda/earlier/diagnostic-status.json",
+    "notes": [
+      "The first CUDA run failed while compiling its combined ALLOCATE driver statement. A corrected driver then ran only on the CPU because sandbox device access was blocked; neither is resident evidence.",
+      "The true-GPU run overlapped a further proof rejection guard. A separate final-source regeneration matched all 33 compiled/header artifacts byte for byte. This is an emitted-artifact equivalence check, not a rerun of the final Python implementation.",
+      "The explicit two-upload/three-download assertions were added later and checked against both archived branch ledgers; the fixture was not rerun solely for those assertions."
+    ],
+    "pipeline": {
+      "log": "evidence/validation/pipeline-final.log",
+      "passed": 111,
+      "seconds": 2.22,
+      "skipped": 2
+    },
+    "stable_targeted_rerun": {
+      "coverage": "The two former failures plus eighteen native proof checks; overlaps the other runs.",
+      "log": "evidence/validation/stable-rerun.log",
+      "passed": 20,
+      "seconds": 18.89
+    }
+  }
+}

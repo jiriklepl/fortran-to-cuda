@@ -1,0 +1,108 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______ test_3d_native_demand_keeps_current_host_read_and_complete_fields _______
+
+tmp_path = PosixPath('/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0')
+
+    @pytest.mark.cuda
+    def test_3d_native_demand_keeps_current_host_read_and_complete_fields(tmp_path):
+        fc = shutil.which("gfortran-15") or shutil.which("gfortran")
+        nvcc = shutil.which("nvcc")
+        host = shutil.which("g++-14") or shutil.which("g++")
+        if not all((fc, nvcc, host)):
+            pytest.skip("native Fortran and CUDA toolchain required")
+        require_explicit_cuda_environment()
+        source, _builder, outputs, manifest = generate(tmp_path, SOURCE)
+        owner, = manifest["scopes"]
+        operation, = demanded_operations(manifest)
+        assert not owner["boundaries"], owner["boundaries"]
+        assert owner["checked_execution_plan"]["numerical_invocations"] == 3
+        assert operation["resource_effects"] == {"demand_owner::a": ["read"]}
+        resources = owner["checked_execution_plan"]["resources"]
+        assert {row["resource"] for row in resources} == {
+            "demand_owner::a", "demand_owner::b", "demand_owner::star", "demand_owner::out"}
+        identities = {row["resource"].split("::")[-1]: row["registration_identity"] for row in resources}
+        assert len(set(identities.values())) == 4
+        replacement = manifest["sources"][str(source)]["replacement"]
+        assert outputs[replacement].count("call correct(-0.5d0*a(0,0,0))") == 1
+        build = tmp_path / "build"
+        build.mkdir()
+        for name, text in outputs.items():
+            path = build / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+        environment = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "OMP_SCHEDULE": "static"}
+        environment.pop("FORT_RUNTIME_TRACE", None)
+        commands = []
+    
+        def run(argv, *, trace=False, disabled=False):
+            ordinal = len(commands)
+            commands.append({"argv": argv, "cwd": str(build), "trace": trace, "device_disabled": disabled})
+            (tmp_path / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")
+            result = subprocess.run(argv, cwd=build, env={**environment,
+                **({"FORT_RUNTIME_TRACE": "1"} if trace else {}),
+                **({"CUDA_VISIBLE_DEVICES": ""} if disabled else {})},
+                capture_output=True, text=True, timeout=180, check=False)
+            (tmp_path / f"command-{ordinal:02}.stdout").write_text(result.stdout)
+            (tmp_path / f"command-{ordinal:02}.stderr").write_text(result.stderr)
+            (tmp_path / f"command-{ordinal:02}.json").write_text(json.dumps({"exit_code": result.returncode}) + "\n")
+            assert result.returncode == 0, result.stdout + result.stderr
+            return result
+    
+        fflags = [fc, "-O3", "-fopenmp", "-ffp-contract=off", "-fcheck=all", "-J", str(build), "-I", str(build)]
+        objects, compiled = [], set()
+        for role in ("common_runtime", "shared_entry", "original_source"):
+            for descriptor in manifest["build_sources"]:
+                if descriptor["role"] != role:
+                    continue
+                path = build / descriptor["path"]
+                assert sha256(path.read_bytes()).hexdigest() == manifest["artifacts_sha256"][descriptor["path"]]
+                target = build / f"artifact-{len(objects):02}.o"
+                flags = fflags
+                if descriptor["language"] == "cuda":
+                    contract = descriptor["numerical_contract"]
+                    require_numerical_build_contract(contract)
+                    flags = [nvcc, "-O3", "-std=c++17", "-ccbin", host, "-Xcompiler=-fopenmp",
+                             "-arch=" + os.environ.get("FORT_TEST_CUDA_ARCH", "native"),
+                             *contract["required_cuda_options"],
+                             *("-Xcompiler=" + option for option in contract["required_host_options"])]
+                run([*flags, "-c", str(path), "-o", str(target)])
+                objects.append(str(target))
+                compiled.add(descriptor["path"])
+        assert compiled == {item["path"] for item in manifest["build_sources"]}
+        for name, text in (("reference", SOURCE.replace("demand_owner", "reference_owner")), ("driver", DRIVER)):
+            path, target = build / (name + ".f90"), build / (name + ".o")
+            path.write_text(text)
+>           run([*fflags, "-c", str(path), "-o", str(target)])
+
+compiler/tests/test_native_demand_cuda.py:201: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+argv = ['/usr/bin/gfortran-15', '-O3', '-fopenmp', '-ffp-contract=off', '-fcheck=all', '-J', ...]
+trace = False, disabled = False
+
+    def run(argv, *, trace=False, disabled=False):
+        ordinal = len(commands)
+        commands.append({"argv": argv, "cwd": str(build), "trace": trace, "device_disabled": disabled})
+        (tmp_path / "commands.json").write_text(json.dumps(commands, indent=2) + "\n")
+        result = subprocess.run(argv, cwd=build, env={**environment,
+            **({"FORT_RUNTIME_TRACE": "1"} if trace else {}),
+            **({"CUDA_VISIBLE_DEVICES": ""} if disabled else {})},
+            capture_output=True, text=True, timeout=180, check=False)
+        (tmp_path / f"command-{ordinal:02}.stdout").write_text(result.stdout)
+        (tmp_path / f"command-{ordinal:02}.stderr").write_text(result.stderr)
+        (tmp_path / f"command-{ordinal:02}.json").write_text(json.dumps({"exit_code": result.returncode}) + "\n")
+>       assert result.returncode == 0, result.stdout + result.stderr
+E       AssertionError: /home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/driver.f90:9:10-30:
+E         
+E             9 | allocate(metadata%flux(-1:2),nm%flux(-1:2))
+E               |          1~~~~~~~~~~~~~~~~~~ 2~~~~~~~~~~~~
+E         Error: Allocate-object at (1) also appears at (2)
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/usr/bin/gfortran-15', '-O3', '-fopenmp', '-ffp-contract=off', '-fcheck=all', '-J', '/home/jir...%flux(-1:2))\n      |          1~~~~~~~~~~~~~~~~~~ 2~~~~~~~~~~~~\nError: Allocate-object at (1) also appears at (2)\n').returncode
+
+compiler/tests/test_native_demand_cuda.py:174: AssertionError
+=========================== short test summary info ============================
+FAILED compiler/tests/test_native_demand_cuda.py::test_3d_native_demand_keeps_current_host_read_and_complete_fields
+1 failed, 1 deselected in 27.04s

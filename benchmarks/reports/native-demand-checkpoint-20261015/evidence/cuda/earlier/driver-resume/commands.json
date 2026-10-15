@@ -1,0 +1,83 @@
+[
+  {
+    "name": "driver",
+    "argv": [
+      "/usr/bin/gfortran-15",
+      "-O3",
+      "-fopenmp",
+      "-ffp-contract=off",
+      "-fcheck=all",
+      "-J",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build",
+      "-I",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build",
+      "-c",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/driver.f90",
+      "-o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/driver.o"
+    ],
+    "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build",
+    "environment": {},
+    "exit_code": 0
+  },
+  {
+    "name": "link",
+    "argv": [
+      "/usr/local/cuda/bin/nvcc",
+      "-ccbin",
+      "/usr/bin/g++-14",
+      "-Xcompiler=-fopenmp",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/artifact-00.o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/artifact-01.o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/artifact-02.o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/artifact-03.o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/artifact-04.o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/artifact-05.o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/artifact-06.o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/artifact-07.o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/artifact-08.o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/artifact-09.o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/artifact-10.o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/reference.o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/driver.o",
+      "-lgfortran",
+      "-o",
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/verify"
+    ],
+    "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build",
+    "environment": {},
+    "exit_code": 0
+  },
+  {
+    "name": "traced",
+    "argv": [
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/verify"
+    ],
+    "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build",
+    "environment": {
+      "FORT_RUNTIME_TRACE": "1"
+    },
+    "exit_code": 0
+  },
+  {
+    "name": "untraced",
+    "argv": [
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/verify"
+    ],
+    "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build",
+    "environment": {},
+    "exit_code": 0
+  },
+  {
+    "name": "fallback",
+    "argv": [
+      "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build/verify"
+    ],
+    "cwd": "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest/test_3d_native_demand_keeps_cu0/build",
+    "environment": {
+      "FORT_RUNTIME_TRACE": "1",
+      "CUDA_VISIBLE_DEVICES": ""
+    },
+    "exit_code": 0
+  }
+]

@@ -1,0 +1,115 @@
+{
+  "binary_sha256": "adcc5981d69a1587401fe9e45b8dbb64a423a6d211782d94409827cd2b17ccce",
+  "field_comparison": {
+    "bitwise_equal": true,
+    "complete_bounds_and_halos": true,
+    "dumps": {
+      "candidate-fields.bin": {
+        "bytes": 32840,
+        "sha256": "87ef404a6be2b6053f7689ae37449d94f672218eb52230f9d4b161613742d025"
+      },
+      "native-fields.bin": {
+        "bytes": 32840,
+        "sha256": "87ef404a6be2b6053f7689ae37449d94f672218eb52230f9d4b161613742d025"
+      }
+    },
+    "native_call_count_per_invocation": 1,
+    "stored_dump_last_mode": "CUDA-disabled fallback"
+  },
+  "invocations": [
+    {
+      "closes": 1,
+      "contexts": 1,
+      "interruption_transfers": 0,
+      "invocation": 1,
+      "launches": 3,
+      "resources": [
+        {
+          "download_bytes": 0,
+          "downloads": 0,
+          "resource": "a",
+          "upload_bytes": 4096,
+          "uploads": 1
+        },
+        {
+          "download_bytes": 4096,
+          "downloads": 1,
+          "resource": "b",
+          "upload_bytes": 0,
+          "uploads": 0
+        },
+        {
+          "download_bytes": 1728,
+          "downloads": 1,
+          "resource": "star",
+          "upload_bytes": 0,
+          "uploads": 0
+        },
+        {
+          "download_bytes": 1728,
+          "downloads": 1,
+          "resource": "out",
+          "upload_bytes": 1728,
+          "uploads": 1
+        }
+      ]
+    },
+    {
+      "closes": 1,
+      "contexts": 1,
+      "interruption_transfers": 0,
+      "invocation": 2,
+      "launches": 3,
+      "resources": [
+        {
+          "download_bytes": 0,
+          "downloads": 0,
+          "resource": "a",
+          "upload_bytes": 4096,
+          "uploads": 1
+        },
+        {
+          "download_bytes": 4096,
+          "downloads": 1,
+          "resource": "b",
+          "upload_bytes": 0,
+          "uploads": 0
+        },
+        {
+          "download_bytes": 1728,
+          "downloads": 1,
+          "resource": "star",
+          "upload_bytes": 0,
+          "uploads": 0
+        },
+        {
+          "download_bytes": 1728,
+          "downloads": 1,
+          "resource": "out",
+          "upload_bytes": 1728,
+          "uploads": 1
+        }
+      ]
+    }
+  ],
+  "ledger_sha256": "6220584707c6d9b248e5158b0d9c57235fc493d5d561f0aa617ff2b9d87fa303",
+  "observed_per_invocation": {
+    "closes": 1,
+    "contexts": 1,
+    "download_bytes": 7552,
+    "downloads": 3,
+    "launches": 3,
+    "upload_bytes": 5824,
+    "uploads": 2
+  },
+  "policy": "sections diagnostic",
+  "prediction_basis": {
+    "full_array_bytes": "8**3 * 8 = 4096",
+    "interior_bytes": "6**3 * 8 = 1728",
+    "source_assertions_precede_execution": true
+  },
+  "qualification": false,
+  "schema_version": 1,
+  "source_sha256": "2ddfad455b3db359e4c466d284f46ca973fde014035d8a5f9330ea76e6266efb",
+  "trace_sha256": "5914e0be26cd43e59b51b0c8c8e1a44e47c8c453de41a5884387b4fe66f4769b"
+}

@@ -1,0 +1,56 @@
+........................................................................ [ 20%]
+........................................................................ [ 40%]
+........................................................................ [ 60%]
+.............................................F.......................... [ 80%]
+...........................................F...........................  [100%]
+=================================== FAILURES ===================================
+_ test_complete_original_teams_have_independent_source_bound_calibration[True] _
+
+tmp_path = PosixPath('/tmp/pytest-of-jirka/pytest-1756/test_complete_original_teams_h0')
+combined = True
+
+    @pytest.mark.parametrize("combined", [True, False])
+    def test_complete_original_teams_have_independent_source_bound_calibration(tmp_path, combined):
+        source = tmp_path / "original.f90"
+        text = fixture_source(original_teams=True)
+        if not combined:
+            text = text.replace(
+                "!$omp parallel do private(i,j,k,v) schedule(static)",
+                "!$omp parallel private(i,j,k,v)\n!$omp do schedule(static)",
+            )
+            text = text.replace(
+                "!$omp parallel do private(i,j,k) schedule(static)",
+                "!$omp parallel private(i,j,k)\n!$omp do schedule(static)",
+            )
+            text = text.replace("!$omp end parallel do", "!$omp end do\n!$omp end parallel")
+        source.write_text(text)
+        _outputs, _report, calibrated = emit(source, {"calibration": True})
+        participation = calibrated["contract"]["original_participation"]
+        assert participation["kind"] == "original_joined_teams"
+        assert len(participation["teams"]) == 3
+        assert all(team["proof_identity"] and team["selected_original_nodes"] for team in participation["teams"])
+        evidence = observations(calibrated["contract"])
+        outputs, _report, automatic = emit(source, {"evidence": evidence})
+>       assert automatic["selection"] == "resident"
+E       AssertionError: assert 'native' == 'resident'
+E         
+E         - resident
+E         + native
+
+compiler/tests/test_exact_window.py:268: AssertionError
+_____________ test_production_schedule_guard_precedes_cuda_queries _____________
+
+prepared = (PosixPath('/tmp/pytest-of-jirka/pytest-1756/exact-window0/original.f90'), {'entries/entry_abc1b9a8c2e7/shared_entry.c...39ceb8061af7bf6ec4534fdaaebab9f746d915045871e4833e23dceb1b0d8f6', 'available': False, 'selection': 'calibration', ...})
+
+    def test_production_schedule_guard_precedes_cuda_queries(prepared):
+        source, _outputs, _report, record = prepared
+        outputs, _, _ = emit(source, {"evidence": observations(record["contract"])})
+>       selector = next(text for name, text in outputs.items() if name.startswith("exact/") and name.endswith(".cu"))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       StopIteration
+
+compiler/tests/test_exact_window.py:447: StopIteration
+=========================== short test summary info ============================
+FAILED compiler/tests/test_exact_window.py::test_complete_original_teams_have_independent_source_bound_calibration[True]
+FAILED compiler/tests/test_exact_window.py::test_production_schedule_guard_precedes_cuda_queries
+2 failed, 357 passed in 244.13s (0:04:04)

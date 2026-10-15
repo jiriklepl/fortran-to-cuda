@@ -1,0 +1,57 @@
+{
+  "test_results": "2 passed, 2 deselected in 52.88s",
+  "production_source_unchanged": true,
+  "per_invocation": [
+    {
+      "variant": "managed_correction",
+      "contexts": 1,
+      "launches": 3,
+      "transfers": {
+        "upload_bytes": 7552,
+        "download_bytes": 7552,
+        "upload_count": 3,
+        "download_count": 3
+      },
+      "artifact_directory": "benchmarks/results/native-demand-suffix-validation-20261015/pytest/test_3d_native_demand_keeps_cu0"
+    },
+    {
+      "variant": "managed_correction",
+      "contexts": 1,
+      "launches": 3,
+      "transfers": {
+        "upload_bytes": 7552,
+        "download_bytes": 7552,
+        "upload_count": 3,
+        "download_count": 3
+      },
+      "artifact_directory": "benchmarks/results/native-demand-suffix-validation-20261015/pytest/test_3d_native_demand_keeps_cu0"
+    },
+    {
+      "variant": "pointer_boundary",
+      "contexts": 1,
+      "launches": 1,
+      "transfers": {
+        "upload_bytes": 8192,
+        "download_bytes": 4096,
+        "upload_count": 2,
+        "download_count": 1
+      },
+      "artifact_directory": "benchmarks/results/native-demand-suffix-validation-20261015/pytest/test_3d_native_demand_keeps_cu1"
+    },
+    {
+      "variant": "pointer_boundary",
+      "contexts": 1,
+      "launches": 1,
+      "transfers": {
+        "upload_bytes": 8192,
+        "download_bytes": 4096,
+        "upload_count": 2,
+        "download_count": 1
+      },
+      "artifact_directory": "benchmarks/results/native-demand-suffix-validation-20261015/pytest/test_3d_native_demand_keeps_cu1"
+    }
+  ],
+  "validation": "Both native branches; complete32,840-byte float64 fields/halos and metadata/counters match native; traced/untraced/device-disabled; pointer producer deliberately nonidempotent.",
+  "test_sha256": "6913069429c28278ed2f58ffe1f1a2f6f3bbe8f35ad456b64659c38974efb809",
+  "performance_claim": false
+}

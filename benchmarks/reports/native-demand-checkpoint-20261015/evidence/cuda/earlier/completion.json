@@ -1,0 +1,31 @@
+{
+  "changed_compiler_files": [
+    "compiler/frontend/native_demand.py"
+  ],
+  "command": [
+    "taskset",
+    "-c",
+    "4,5,10,11",
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "-m",
+    "pytest",
+    "-q",
+    "compiler/tests/test_native_demand_cuda.py",
+    "-m",
+    "cuda",
+    "--basetemp",
+    "/home/jirka/research/fortran-abomination/benchmarks/results/native-demand-cuda-checkpoint-20261015/pytest"
+  ],
+  "compiler_head": "166d4891c9f05ad88219bb5858928eaabc31f92e",
+  "cwd": "/home/jirka/research/fortran-abomination",
+  "environment": {
+    "CUDA_VISIBLE_DEVICES": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_NUM_THREADS": "4",
+    "OMP_SCHEDULE": "static"
+  },
+  "exit_code": 1,
+  "kind": "diagnostic while production integration remains under review; no performance claim",
+  "seconds": 27.297768984004506,
+  "test_sha256": "7cf4e5c479f1e8beaa3344ad4e5cb48463bba99a0b4cce3cff7b25cfab167d20"
+}

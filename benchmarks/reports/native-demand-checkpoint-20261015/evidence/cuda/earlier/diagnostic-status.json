@@ -1,0 +1,11 @@
+{
+  "initial_pytest": "completion.json",
+  "driver_resume": "driver-resume/commands.json",
+  "initial_test_failure": "Driver combined allocation statement rejected by GFortran15; corrected to two original allocations.",
+  "driver_resume_fields": "Traced, untraced and disabled-device runs pass all32,840 bytes of complete float64 fields/halos plus metadata and once counters.",
+  "resident_result": "not established; zero GPU launches",
+  "reason": "Sandbox prevents GPU device access. nvidia-smi reports GPU access blocked by operating system. Generated code already has fort_mode=1.",
+  "withdrawn_diagnosis": "Earlier suspicion that mismatched CompilerOptions caused CPU selection was incorrect; default gpu_policy=always and emitted mode requests GPU.",
+  "test_setup_update": "Helper now explicitly passes requested sections/scoped options; numerical source is unchanged.",
+  "requires": "Actual GPU-access run and transfer/count assertions before residency claim."
+}
