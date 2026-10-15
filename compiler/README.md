@@ -2959,7 +2959,7 @@ The original-selection request uses `"coverage": "original_selection"`,
 `"calibration": "native"` or `"resident"` for separate observation artifacts,
 an executed application `build_contract`, and explicit `workloads`. Production
 omits `calibration` and supplies `evidence`. All three variants use the same
-automatic numerical options. The `checked-selection-process-v1` protocol
+automatic numerical options. The `checked-selection-process-v2` protocol
 compares complete application processes, including startup, every invocation,
 output and teardown. It checks seven rotated pairs and two holdouts, full-field
 agreement, actual completed GPU launches, reached descriptor/control keys and
@@ -2975,11 +2975,31 @@ selection per bundle. Discovery may retain additional declined groups unchanged;
 multiple admitted selections support diagnostic capture but select native until
 complete bundle pricing is available.
 
-The current process-evidence reader still inherits the fixture's bitwise field
-hash comparison. Application validation that permits numerical differences
-within fixed tolerances needs a separately verified comparison receipt before
-it can authorize this pricing path. Capture generation and build attestation
-alone therefore do not establish application AUTO qualification.
+The process request binds its numerical validation policy before capture:
+required full-precision fields, storage layouts, ordinary output files,
+comparison tolerances and a reviewed diagnostic driver source. The compiler
+verifies actual payload hashes and numerical comparisons; a reported pass flag
+does not authorize placement. Distinct field hashes are retained when values
+agree within that fixed policy. The existing complete-window fixture protocol
+keeps its bitwise comparison requirement.
+
+Each declared ordinary output lists required data fields. The verifier requires
+the native and resident files to have matching complete layouts and compares
+every field present, including additional fields; other recorded output files
+need not be selected for comparison. The build attestation must bind the exact
+selection contract, including this policy and its workload identities.
+
+Each workload needs one full-float64 diagnostic pair from its native and
+resident capture builds, including original bounds and halos. Every measured
+pair also needs its required ordinary output comparisons. The diagnostic relink
+replaces one explicitly identified source/object and preserves the remaining
+objects, ordered compiler/link arguments and recorded environment. Its reviewed
+driver source is a trusted validation input: authenticating its hash does not
+prove that arbitrary instrumentation preserves numerical semantics. Diagnostic
+module inputs are checked against their recorded hashes; existing application
+receipts do not establish an original compile-time module inventory. Capture
+generation and build attestation alone do not establish application AUTO
+qualification. Version 1 evidence cannot be relabeled as version 2 evidence.
 
 `python -m compiler.offload.application_build preflight|attest` verifies the
 consumer's build through a versioned JSON request. Preflight binds original
