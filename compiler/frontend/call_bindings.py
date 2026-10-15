@@ -8,6 +8,7 @@ claim physical transfer coordinates without a runtime descriptor proof.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from types import MappingProxyType
 
 from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.integers import INTEGER_MAX, INTEGER_MIN, integer_literal
@@ -528,7 +529,13 @@ def _scalar_element_actual(analysis, scope, actual, binding, section, formal):
     return SourceScalarElementActual(binding, actual, index, bounds, initializer, declaration, visits)
 
 
-def _resolve_source_invocation(analysis, scope, call_node, *, function=False):
+def _match_signature(declaration, signature):
+    if (signature is None or None in (declaration.kind, signature[1])
+            or declaration.signature() != signature):
+        raise CompilationError("source-call type, kind or rank mismatch: " + declaration.name)
+
+
+def _resolve_candidates(analysis, scope, call_node, associate, *, function=False):
     target, arguments = call_node.items
     if _kind(target) not in ({"Name", "Type_Name"} if function else {"Name"}):
         raise CompilationError("indirect calls are scope boundaries")
@@ -550,62 +557,10 @@ def _resolve_source_invocation(analysis, scope, call_node, *, function=False):
                 if any(_kind(item) == "Actual_Arg_Spec" for item in original):
                     raise CompilationError("external keyword arguments require a proven explicit interface: " + procedure)
             actuals, original_arguments = _arrange(callee, original, function=function)
-            mappings = []
-            for formal, actual in zip(callee.arguments, actuals, strict=True):
-                declaration = callee.scope.bindings[formal]
-                from compiler.frontend.component_bindings import _typename
-                derived = _typename(declaration.dtype) is not None
-                if function and (derived or declaration.intent != "in"
-                                 or declaration.dtype not in {"real", "integer", "logical"}
-                                 or declaration.kind not in {4, 8}
-                                 or declaration.attributes & {"optional", "pointer", "allocatable", "value",
-                                                              "volatile", "asynchronous"}
-                                 or declaration.rank and "target" in declaration.attributes):
-                    raise CompilationError("native source function requires fixed INTENT(IN) arguments")
-                if actual is None:
-                    if derived:
-                        raise CompilationError("source object requires fixed nonoptional scalar original storage")
-                    mappings.append(SourceActualMapping(formal, None, declaration, presence="omitted"))
-                    continue
-                signature, binding, section = _actual(analysis, scope, actual)
-                scalar_element = None
-                if section is not None and not section.logical_rank:
-                    if function:
-                        raise CompilationError("array-element actual requires scalar payload coherence: "
-                                               "source function association needs separate authority: " + str(actual))
-                    try:
-                        scalar_element = _scalar_element_actual(analysis, scope, actual, binding, section, declaration)
-                    except CompilationError as error:
-                        raise CompilationError("array-element actual requires scalar payload coherence: "
-                                               + str(error) + ": " + str(actual)) from error
-                    section = None
-                source_object = None
-                if derived:
-                    from compiler.frontend.source_objects import source_object_mapping
-                    source_object = source_object_mapping(analysis, declaration, binding, actual, call_node, scope)
-                elif (signature is None or None in (declaration.kind, signature[1])
-                        or declaration.signature() != signature):
-                    raise CompilationError("source-call type, kind or rank mismatch: " + formal)
-                if function and declaration.rank:
-                    _function_array_mapping(analysis, declaration, binding, section)
-                if binding is None and (declaration.intent in {"out", "inout"} or "allocatable" in declaration.attributes):
-                    raise CompilationError("source-call writable or descriptor actual requires original storage: " + formal)
-                presence = ("forwarded_optional" if binding is not None and section is None
-                            and "optional" in binding.attributes else "supplied")
-                if presence == "forwarded_optional" and "optional" not in declaration.attributes:
-                    raise CompilationError("optional actual requires an optional callee formal: " + formal)
-                if binding is not None and section is None and presence == "supplied" and "optional" in declaration.attributes:
-                    if "allocatable" in binding.attributes and "allocatable" not in declaration.attributes:
-                        presence = "allocation_dependent"
-                    elif "pointer" in binding.attributes and "pointer" not in declaration.attributes:
-                        presence = "association_dependent"
-                if "allocatable" in declaration.attributes and (binding is None or section is not None
-                                                                or "allocatable" not in binding.attributes):
-                    raise CompilationError("allocatable callee formal requires its original allocation descriptor: " + formal)
-                mappings.append(SourceActualMapping(formal, actual, declaration, binding, section, presence,
-                                                    source_object, scalar_element))
-            matches.append(ResolvedSourceCall(procedure, callee.arguments, actuals, tuple(mappings),
-                                              original_arguments, str(target), callee.source_kind))
+            associations = associate(callee, actuals)
+            matches.append((callee, actuals, associations, original_arguments))
+        except OriginalCallBudgetExceeded:
+            raise
         except CompilationError as error:
             errors.append(error)
     if len(matches) != 1:
@@ -613,3 +568,382 @@ def _resolve_source_invocation(analysis, scope, call_node, *, function=False):
             raise errors[0]
         raise CompilationError("source call is unresolved or ambiguous: " + str(target))
     return matches[0]
+
+
+def _mapped_arguments(analysis, scope, call_node, callee, actuals, *, function=False):
+    mappings = []
+    for formal, actual in zip(callee.arguments, actuals, strict=True):
+        declaration = callee.scope.bindings[formal]
+        from compiler.frontend.component_bindings import _typename
+        derived = _typename(declaration.dtype) is not None
+        if function and (derived or declaration.intent != "in"
+                         or declaration.dtype not in {"real", "integer", "logical"}
+                         or declaration.kind not in {4, 8}
+                         or declaration.attributes & {"optional", "pointer", "allocatable", "value",
+                                                      "volatile", "asynchronous"}
+                         or declaration.rank and "target" in declaration.attributes):
+            raise CompilationError("native source function requires fixed INTENT(IN) arguments")
+        if actual is None:
+            if derived:
+                raise CompilationError("source object requires fixed nonoptional scalar original storage")
+            mappings.append(SourceActualMapping(formal, None, declaration, presence="omitted"))
+            continue
+        signature, binding, section = _actual(analysis, scope, actual)
+        scalar_element = None
+        if section is not None and not section.logical_rank:
+            if function:
+                raise CompilationError("array-element actual requires scalar payload coherence: "
+                                       "source function association needs separate authority: " + str(actual))
+            try:
+                scalar_element = _scalar_element_actual(analysis, scope, actual, binding, section, declaration)
+            except CompilationError as error:
+                raise CompilationError("array-element actual requires scalar payload coherence: "
+                                       + str(error) + ": " + str(actual)) from error
+            section = None
+        source_object = None
+        if derived:
+            from compiler.frontend.source_objects import source_object_mapping
+            source_object = source_object_mapping(analysis, declaration, binding, actual, call_node, scope)
+        else:
+            _match_signature(declaration, signature)
+        if function and declaration.rank:
+            _function_array_mapping(analysis, declaration, binding, section)
+        if binding is None and (declaration.intent in {"out", "inout"} or "allocatable" in declaration.attributes):
+            raise CompilationError("source-call writable or descriptor actual requires original storage: " + formal)
+        presence = ("forwarded_optional" if binding is not None and section is None
+                    and "optional" in binding.attributes else "supplied")
+        if presence == "forwarded_optional" and "optional" not in declaration.attributes:
+            raise CompilationError("optional actual requires an optional callee formal: " + formal)
+        if binding is not None and section is None and presence == "supplied" and "optional" in declaration.attributes:
+            if "allocatable" in binding.attributes and "allocatable" not in declaration.attributes:
+                presence = "allocation_dependent"
+            elif "pointer" in binding.attributes and "pointer" not in declaration.attributes:
+                presence = "association_dependent"
+        if "allocatable" in declaration.attributes and (binding is None or section is not None
+                                                        or "allocatable" not in binding.attributes):
+            raise CompilationError("allocatable callee formal requires its original allocation descriptor: " + formal)
+        mappings.append(SourceActualMapping(formal, actual, declaration, binding, section, presence,
+                                            source_object, scalar_element))
+    return tuple(mappings)
+
+
+def _resolve_source_invocation(analysis, scope, call_node, *, function=False):
+    callee, actuals, mappings, original_arguments = _resolve_candidates(
+        analysis, scope, call_node,
+        lambda callee, actuals: _mapped_arguments(analysis, scope, call_node, callee, actuals, function=function),
+        function=function)
+    return ResolvedSourceCall(callee.qualified, callee.arguments, actuals, mappings, original_arguments,
+                              str(call_node.items[0]), callee.source_kind)
+
+# This association layer retains original source semantics only. In particular,
+# its storage reference is not a rectangle, a capture, or a no-alias proof.
+class OriginalCallBudgetExceeded(CompilationError):
+    """Original association inspection exceeded a bounded source scan."""
+
+
+_ORIGINAL_CALL_ISSUER = object()
+
+
+@dataclass(frozen=True)
+class OriginalActualType:
+    dtype: str
+    kind: int | None
+    rank: int
+    binding: object = field(default=None, compare=False, repr=False)
+    schema: object = field(default=None, compare=False, repr=False)
+
+    def public(self):
+        return {"type": self.dtype, "kind": self.kind, "rank": self.rank,
+                "storage_resource": self.binding.root if self.binding is not None else None,
+                "declaring_type": ({"module": self.schema.scope.module, "name": self.schema.name}
+                                   if self.schema is not None else None)}
+
+
+@dataclass(frozen=True)
+class OriginalArgumentAssociation:
+    formal: str
+    actual: object = field(compare=False, repr=False)
+    formal_binding: object = field(compare=False, repr=False)
+    actual_type: OriginalActualType | None
+
+    @property
+    def binding(self):
+        return self.actual_type.binding if self.actual_type is not None else None
+
+    def public(self):
+        return {"formal": self.formal, "actual": str(self.actual) if self.actual is not None else None,
+                "formal_descriptor": self.formal_binding.public(),
+                "actual_type": self.actual_type.public() if self.actual_type is not None else None,
+                "entry_definition_kill": self.formal_binding.intent == "out"}
+
+
+@dataclass(frozen=True)
+class ResolvedOriginalCall:
+    procedure: str
+    formals: tuple[str, ...]
+    actuals: tuple = field(compare=False, repr=False)
+    associations: tuple[OriginalArgumentAssociation, ...]
+    original_arguments: tuple[SourceCallArgument, ...]
+    target: str
+    source_kind: str
+    callee: object = field(compare=False, repr=False)
+    _caller: object = field(compare=False, repr=False)
+    _analysis: object = field(compare=False, repr=False)
+    _scope: object = field(compare=False, repr=False)
+    _original: object = field(compare=False, repr=False)
+    _scopes: tuple = field(compare=False, repr=False)
+    _roles: object = field(compare=False, repr=False)
+    _schemas: tuple = field(compare=False, repr=False)
+    _limits: tuple = field(compare=False, repr=False)
+    _issuer: object = field(compare=False, repr=False)
+
+    def public(self):
+        return {"schema_version": 1, "procedure": self.procedure, "target": self.target,
+                "source_kind": self.source_kind, "formal_arguments": list(self.formals),
+                "actual_arguments": [str(actual) if actual is not None else None for actual in self.actuals],
+                "original_arguments": [item.public() for item in self.original_arguments],
+                "associations": [item.public() for item in self.associations],
+                "actual_evaluation": "unchanged original call position and guards",
+                "effect_authority": False, "capture_authority": False, "alias_authority": False,
+                "completion_authority": False, "execution_authority": False}
+
+    def validate(self, analysis, scope, original):
+        from compiler.frontend.source_functions import _original, _validate_scope, _validate_scope_roles
+        from compiler.frontend.source_objects import _members, _TypeBuilder
+
+        if (self._issuer is not _ORIGINAL_CALL_ISSUER or analysis is not self._analysis
+                or scope is not self._scope or original is not self._original
+                or getattr(analysis, "_original_call_associations", {}).get((id(analysis), id(original))) is not self):
+            raise CompilationError("original call requires exact issued source association")
+        if self._limits != (analysis.depth_limit, analysis.procedure_limit, analysis.operation_limit):
+            raise CompilationError("original call association inspection budgets changed")
+        analysis.verify_source()
+        if (_original(analysis, self._caller.qualified) is not self._caller
+                or _original(analysis, self.procedure) is not self.callee):
+            raise CompilationError("original call procedure authority changed")
+        for retained in self._scopes:
+            _validate_scope(analysis, retained)
+        _validate_scope_roles(analysis, self._roles, {id(scope) for scope in self._scopes})
+        builder = _TypeBuilder(analysis)
+        for schema in self._schemas:
+            record = builder.scope(schema.scope)[5].get(schema.name)
+            if (record is None or record[0] is not schema or record[1] is not schema.node
+                    or record[2] != str(schema.node) or record[3] != _members(schema)):
+                raise CompilationError("original call declaring type authority changed")
+        return self
+
+
+class _OriginalTypes:
+    """Bounded declaration/type inspection; no layout, payload or index evaluation."""
+    def __init__(self, analysis):
+        from compiler.frontend.source_objects import _TypeBuilder
+
+        self.analysis, self.scopes, self.schemas = analysis, {}, {}
+        self.visits = 0
+        reader = self
+
+        class Types(_TypeBuilder):
+            def scope(self, scope):
+                reader.scope(scope)
+                return super().scope(scope)
+
+        self.types = Types(analysis)
+
+    def scope(self, scope):
+        from compiler.frontend.source_functions import _validate_scope
+
+        if scope is not None and id(scope) not in self.scopes:
+            _validate_scope(self.analysis, scope)
+            self.scopes[id(scope)] = scope
+        return scope
+
+    def schema(self, scope, dtype):
+        from compiler.frontend.component_bindings import _typename
+
+        name = _typename(dtype)
+        if name is None:
+            if dtype not in {"real", "integer", "logical"}:
+                raise CompilationError("original call requires a known nonpolymorphic declared type")
+            return None
+        schema = self.types.resolve(scope, name)
+        if schema is None or schema.reason:
+            raise CompilationError("original call declaring type is unavailable or unsupported")
+        self.schemas[id(schema)] = schema
+        return schema
+
+    def declared(self, binding):
+        self.scope(binding.declaring_scope)
+        if binding.declaring_scope.bindings.get(binding.name) is not binding:
+            raise CompilationError("original call requires an exact declared binding")
+        return OriginalActualType(binding.dtype, binding.kind, binding.rank, binding,
+                                  self.schema(binding.declaring_scope, binding.dtype))
+
+    def indices(self, scope, part, rank, depth):
+        if _kind(part) != "Part_Ref":
+            return rank
+        indices = tuple(_children(part.items[1]))
+        if len(indices) != rank:
+            raise CompilationError("original call array subscripts do not match declared rank")
+        logical_rank = 0
+        for index in indices:
+            values = index.items if _kind(index) == "Subscript_Triplet" else (index,)
+            logical_rank += _kind(index) == "Subscript_Triplet"
+            for value in values:
+                if value is not None:
+                    typed = self.actual(scope, value, depth + 1)
+                    if typed.dtype != "integer" or typed.rank:
+                        raise CompilationError("original call requires scalar INTEGER section indices")
+        return logical_rank
+
+    def storage(self, scope, node, depth):
+        parts = tuple(node.items) if _kind(node) == "Data_Ref" else (node,)
+        base = parts[0].items[0] if _kind(parts[0]) == "Part_Ref" else parts[0]
+        if _kind(base) != "Name":
+            return None
+        binding = self.analysis._binding(scope, base)
+        if binding is None:
+            return None
+        typed = self.declared(binding)
+        rank = self.indices(scope, parts[0], typed.rank, depth)
+        dtype, width, schema = typed.dtype, typed.kind, typed.schema
+        for part in parts[1:]:
+            self.tick(depth)
+            if schema is None:
+                raise CompilationError("original call component requires a declared source type")
+            name = str(part.items[0] if _kind(part) == "Part_Ref" else part).lower()
+            declaration = schema.members.get(name)
+            if declaration is None:
+                raise CompilationError("original call component declaration unavailable: " + name)
+            spec, attributes, entity = declaration
+            flags = {str(item).split("(")[0].lower() for item in attributes}
+            if (schema.private or "private" in flags) and scope.module != schema.scope.module:
+                raise CompilationError("original call component is inaccessible: " + name)
+            dimension = next((item.items[1] for item in attributes
+                              if _kind(item) == "Dimension_Component_Attr_Spec"), None)
+            shape = entity.items[1] if entity.items[1] is not None else dimension
+            field_rank = len(_children(shape))
+            if rank and field_rank:
+                raise CompilationError("original call requires at most one array part in a component reference")
+            if _kind(spec) == "Intrinsic_Type_Spec":
+                base_type, selector = spec.items
+                dtype = str(base_type).lower()
+                width = 8 if dtype == "double precision" else 4
+                dtype = "real" if dtype == "double precision" else dtype
+                if selector is not None:
+                    width = schema.scope.kinds.integer(selector.items[1], SourceLocation(str(scope.path)))
+            else:
+                dtype, width = str(spec).lower(), None
+            owner = schema.scope
+            schema = self.schema(owner, dtype)
+            rank += self.indices(scope, part, field_rank, depth)
+        return OriginalActualType(dtype, width, rank, binding, schema)
+
+    def tick(self, depth):
+        self.visits += 1
+        if depth > self.analysis.depth_limit or self.visits > self.analysis.operation_limit:
+            raise OriginalCallBudgetExceeded("original call type inspection budget exhausted")
+
+    def actual(self, scope, node, depth=0):
+        self.tick(depth)
+        self.scope(scope)
+        if _kind(node) in {"Name", "Part_Ref", "Data_Ref"}:
+            storage = self.storage(scope, node, depth)
+            if storage is not None:
+                return storage
+        items = _children(node)
+        if _kind(node) == "Parenthesis":
+            typed = self.actual(scope, items[1], depth + 1)
+            return OriginalActualType(typed.dtype, typed.kind, typed.rank, schema=typed.schema)
+        if len(items) == 2 and str(items[0]) in {"+", "-"}:
+            typed = self.actual(scope, items[1], depth + 1)
+            if typed.dtype in {"integer", "real"} and typed.kind in {4, 8} and not typed.rank:
+                return OriginalActualType(typed.dtype, typed.kind, 0)
+        if len(items) == 3 and str(items[1]) in {"+", "-", "*", "/"}:
+            left, right = (self.actual(scope, child, depth + 1) for child in (items[0], items[2]))
+            if ((left.dtype, left.kind, left.rank) == (right.dtype, right.kind, right.rank)
+                    and left.dtype in {"integer", "real"} and left.kind in {4, 8} and not left.rank):
+                return OriginalActualType(left.dtype, left.kind, 0)
+        if _kind(node) in {"Int_Literal_Constant", "Real_Literal_Constant", "Logical_Literal_Constant"}:
+            signature = self.analysis._signature(scope, node)
+            if signature is not None and signature[1] is not None:
+                return OriginalActualType(*signature)
+        raise CompilationError("original call actual type requires separate source expression authority: " + str(node))
+
+    def associate(self, callee, actuals):
+        result = []
+        self.scope(callee.scope)
+        for formal, actual in zip(callee.arguments, actuals, strict=True):
+            declaration = callee.scope.bindings[formal]
+            expected = self.declared(declaration)
+            typed = self.actual(self.caller_scope, actual) if actual is not None else None
+            if typed is not None:
+                if expected.schema is not None:
+                    if expected.schema is not typed.schema or expected.rank != typed.rank:
+                        raise CompilationError("source-call canonical declaring type or rank mismatch: " + formal)
+                else:
+                    _match_signature(declaration, (typed.dtype, typed.kind, typed.rank))
+                if typed.binding is None and (declaration.intent in {"out", "inout"}
+                                              or declaration.attributes & {"pointer", "allocatable"}):
+                    raise CompilationError("source-call writable or descriptor actual requires original storage: " + formal)
+            result.append(OriginalArgumentAssociation(formal, actual, declaration, typed))
+        return tuple(result)
+
+
+def _resolve_original_invocation(analysis, scope, original, *, function=False):
+    from compiler.frontend.source_functions import _original, _scope_roles, _validate_resolution, _walk
+
+    analysis.verify_source()
+    allowed = {"Part_Ref", "Function_Reference", "Structure_Constructor"} if function else {"Call_Stmt"}
+    if _kind(original) not in allowed:
+        raise CompilationError("original association requires the corresponding CALL or function syntax")
+    existing = getattr(analysis, "_original_call_associations", {}).get((id(analysis), id(original)))
+    if existing is not None:
+        return existing.validate(analysis, scope, original)
+    # Find the exact enclosing original routine, including lexical ASSOCIATE
+    # scopes. No projected statement or equal-text clone can issue authority.
+    pending, caller = scope, None
+    while pending is not None:
+        caller = next((routine for routine in analysis.numerical_helpers.values()
+                       if routine.scope is pending), None)
+        if caller is not None:
+            break
+        pending = pending.parent
+    if (caller is None or _original(analysis, caller.qualified) is not caller
+            or not any(node is original for node in _walk(caller.execution))
+            or analysis.source_scope_for(original, caller.scope) is not scope):
+        raise CompilationError("original call requires its exact original statement and lexical scope")
+    roles = _scope_roles(analysis)
+    if isinstance(roles, dict):
+        roles = MappingProxyType(roles)
+    reader = _OriginalTypes(analysis)
+    reader.caller_scope = scope
+    _validate_resolution(analysis, scope, _walk(original), tick=lambda _kind: reader.tick(0),
+                         _scope_validator=reader.scope)
+    callee, actuals, associations, arguments = _resolve_candidates(
+        analysis, scope, original, reader.associate, function=function)
+    if _original(analysis, callee.qualified) is not callee:
+        raise CompilationError("original call requires its exact original callee")
+    proof = ResolvedOriginalCall(callee.qualified, callee.arguments, actuals, associations, arguments,
+                                str(original.items[0]), callee.source_kind, callee, caller, analysis, scope,
+                                original, tuple(reader.scopes.values()), roles, tuple(reader.schemas.values()),
+                                (analysis.depth_limit, analysis.procedure_limit, analysis.operation_limit),
+                                _ORIGINAL_CALL_ISSUER)
+    registry = getattr(analysis, "_original_call_associations", None)
+    if registry is None:
+        registry = analysis._original_call_associations = {}
+    registry[id(analysis), id(original)] = proof
+    try:
+        return proof.validate(analysis, scope, original)
+    except BaseException:
+        del registry[id(analysis), id(original)]
+        raise
+
+
+def resolve_original_call(analysis, scope, call_node):
+    """Match an unchanged original CALL without granting physical mapping."""
+    return _resolve_original_invocation(analysis, scope, call_node)
+
+
+def resolve_original_function(analysis, scope, expression):
+    """Match original function arguments; result/effects require separate proofs."""
+    return _resolve_original_invocation(analysis, scope, expression, function=True)

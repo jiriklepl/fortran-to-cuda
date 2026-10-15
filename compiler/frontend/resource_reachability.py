@@ -11,7 +11,11 @@ import json
 from dataclasses import dataclass, field
 from hashlib import sha256
 
-from compiler.frontend.call_bindings import resolve_source_call, resolve_source_function
+from compiler.frontend.call_bindings import (
+    OriginalCallBudgetExceeded,
+    resolve_original_call,
+    resolve_original_function,
+)
 from compiler.frontend.component_bindings import _schema, _typename
 from compiler.frontend.native_group_structure import (
     NATIVE_GROUP_SCAN_LIMIT,
@@ -24,7 +28,7 @@ from compiler.frontend.source_objects import _members, _TypeBuilder
 from compiler.ir import CompilationError
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
-VERSION = 1
+VERSION = 2
 
 
 class ResourceReachabilityBudgetExceeded(CompilationError):
@@ -200,6 +204,8 @@ class ResourceReachabilityProof:
             _authenticate_schema(analysis, schema)
         for binding in self.demanded:
             _authenticate_binding(analysis, binding)
+        for edge in self.calls:
+            edge.resolved.validate(analysis, edge.resolved._scope, edge.original)
         for name, selection, proof in self._completion:
             proof.validate(analysis, name, selection)
         return self
@@ -365,7 +371,9 @@ class _Scan:
                     self.barrier("callback", routine, node, "procedure-dummy association requires exact callback authority")
                     return
         try:
-            resolved = (resolve_source_function if function else resolve_source_call)(self.analysis, scope, node)
+            resolved = (resolve_original_function if function else resolve_original_call)(self.analysis, scope, node)
+        except OriginalCallBudgetExceeded as error:
+            raise ResourceReachabilityBudgetExceeded(str(error)) from error
         except CompilationError as error:
             self.barrier("call", routine, node, str(error))
             return
@@ -374,7 +382,7 @@ class _Scan:
             return
         self.calls.append(SourceCallEdge(routine.qualified, resolved.procedure, node, resolved))
         child_mapping = dict(mapping)
-        for item in resolved.mappings:
+        for item in resolved.associations:
             self.scope(item.formal_binding.declaring_scope)
             if item.actual is None:
                 self.barrier("association", routine, node, "omitted optional actual needs separate presence authority")
@@ -390,6 +398,7 @@ class _Scan:
                 child_mapping[id(item.formal_binding)] = path
                 self.access(routine, item.actual, mapping, "association")
                 if item.formal_binding.intent == "out":
+                    self.access(routine, item.actual, mapping, "undefine")
                     self.access(routine, item.actual, mapping, "write")
             else:
                 child_mapping[id(item.formal_binding)] = None
@@ -525,7 +534,7 @@ def prove_resource_reachability(analysis, procedure, original_selection, demande
     scan.routine(procedure, {}, original_selection)
     obligations = {}
     for access in scan.accesses:
-        if not access.external or access.kind not in {"read", "write", "association"}:
+        if not access.external or access.kind not in {"read", "write", "association", "undefine"}:
             continue
         for binding in demanded:
             scan.tick()

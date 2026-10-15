@@ -2192,9 +2192,54 @@ These explicit preflight demands are procedure-local observations, not a
 discovered complete interval inventory. Resource-budget exhaustion marks that
 observation `not_checked` and keeps later independent diagnostics; an invalid
 source or foreign binding aborts publication. Existing numerical/cost gates
-remain independent. This provider does not yet replace complete native-effect
-admission with selective coherence hooks, and supplies no automatic application
-placement or measured transfer saving.
+remain independent. The reachability provider alone supplies neither executable
+coherence nor automatic application placement or measured transfer saving.
+
+Reached lexical owners can retain one unchanged original native `CALL` when
+the separate `prove_native_demand` consumer establishes its effects relative
+to the entire prospective resource inventory. This path is attempted only when
+ordinary complete-call admission declines. It uses the existing lexical owner,
+host-access hooks, completion waits and native suffix continuation. It does not
+create another scheduler or mark an incomplete procedure summary complete.
+Original argument expressions, branches and the call body retain their native
+evaluation positions; an indexed scalar actual is not evaluated for planning.
+
+`resolve_original_call` authenticates source targets and actual/formal type
+associations independently of generated execution mappings. The stronger
+`resolve_source_call` interface keeps its existing mapping requirements.
+Reachability records alone cannot authorize the new path: its registered
+`SourceBoundNativeDemandEffects` token must discharge every storage-separation
+obligation and reject unknown calls, unsupported completion, allocation changes,
+pointer association and implicit execution. The initial separation proof uses
+exact distinct owned module or non-dummy local declarations, including selected
+native allocatable component payloads. Unknown dummy aliases and storage
+association remain boundaries. A component that stays native gains no GPU
+capture or device layout.
+
+The native call uses conservative whole-resource read/write accesses for
+demanded arrays, requiring whole entry definitions and the ordinary capture and
+descriptor checks. It grants no new definitions or overwrite guarantees.
+Demanded `INTENT(OUT)` entry changes and writes to demanded planning scalars
+remain unsupported. Current host reads use the existing coherence rules and
+retain valid device copies; native writes invalidate the affected managed
+resource. Precise native sections are not inferred by this new route.
+
+`resource_demand_from_inline_owner` inventories all prepared root numerical
+regions and original scalar, descriptor and control dependencies before native
+admission. It is prospective, not a whole-call effects closure. The final checked
+plan must validate every member and later use against that exact inventory;
+an uncovered child resource rejects the candidate before publication instead
+of authorizing a prefix-only demand. Source/configuration identities and exact
+registered proof objects are rechecked before emission. This bounded route
+does not yet discover a complete prospective inventory for arbitrary borrowed
+children.
+
+Automatic placement additionally requires source-bound native-interval cost
+observations. Hardware or leaf-kernel profiles do not cover this interruption;
+the checked plan records the missing requirement and selects unchanged native
+execution. `sections` execution is a numerical/coherence diagnostic. This
+capability alone establishes neither an automatic application candidate nor
+either channel performance target.
 
 One-shot module owners close before excluded allocation
 swaps and do not retain state across backedges or invocations.
