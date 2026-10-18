@@ -129,6 +129,41 @@ class UnitEmission:
     native_preflight: dict | None = None
 
 
+@dataclass(frozen=True)
+class LexicalBoundaryPatch:
+    """Retain original continuation; bind cleanup only after placement exists."""
+
+    originals: tuple
+    first: int
+    last: int
+    reason: str
+    conditional_guard: str | None
+    original_source: str
+
+    def validate(self, member, *, require_source=False):
+        span = statement_span(self.originals[0])[0], statement_span(self.originals[-1])[1]
+        if span != (self.first, self.last) or member.original(self.originals) != self.original_source:
+            raise CompilationError("lexical boundary lost its original source position")
+        if require_source:
+            graph, selected = member.builder.analysis._selected_source(member.routine.qualified, self.originals)
+            if graph is not member.graph or not selected:
+                raise CompilationError("lexical boundary lost its exact original selection")
+        if self.conditional_guard is not None and (
+                len(self.originals) != 1 or _kind(self.originals[0]) != "If_Stmt"
+                or str(self.originals[0].items[0]) != self.conditional_guard
+                or condition_fragment(member.builder, self.originals[0]).effects):
+            raise CompilationError("lexical boundary changed its original conditional close")
+        return self
+
+    def render(self, member):
+        self.validate(member)
+        close = member.close(reason=self.reason, span=(self.first, self.last))
+        if self.conditional_guard is not None:
+            return "\n".join(fortran_lines([f"if ({self.conditional_guard}) then", *close,
+                                             str(self.originals[0].items[1]), "endif"])) + "\n"
+        return "\n".join(fortran_lines(close)) + "\n" + self.original_source
+
+
 class OwnerEmission:
     def __init__(self):
         self.exact_window = None
@@ -380,11 +415,8 @@ class LexicalOwner:
                                 "execution": "publish and close when reached; original continuation once",
                                 "conditional_close": reached_guard,
                                 "reopen": False})
-        if reached_guard is not None:
-            replacement = "\n".join(fortran_lines([f"if ({reached_guard}) then", *self.close(reason=reason, span=(first, last)),
-                                                   str(nodes[0].items[1]), "endif"])) + "\n"
-        else:
-            replacement = "\n".join(fortran_lines(self.close(reason=reason, span=(first, last)))) + "\n" + self.original(nodes)
+        originals = self.builder.inline.original_selection(tuple(nodes))
+        replacement = LexicalBoundaryPatch(originals, first, last, reason, reached_guard, self.original(nodes))
         self.patches.append((first, last, replacement))
 
     def planned_source(self, nodes):
@@ -1189,6 +1221,11 @@ class LexicalOwner:
         for member in plan.members:
             edits = [edit for index,unit in enumerate(plan.units(member)) for edit in member.emit_unit(unit,index)]
             for first,last,text in [*plan.patches(member), *edits]:
+                if isinstance(text, LexicalBoundaryPatch):
+                    plan.validate()
+                    if (first, last) != (text.first, text.last):
+                        raise CompilationError("checked lexical boundary patch position changed")
+                    text = text.render(member)
                 from compiler.scopes.call_registration import finish_original_registrations
                 text = finish_original_registrations(member, text)
                 builder.add_edit(member.routine.scope.path, first,last,text)

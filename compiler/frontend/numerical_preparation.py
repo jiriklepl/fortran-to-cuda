@@ -559,7 +559,7 @@ class PreparedOriginalRegion:
         routine, graph, identities, source = _source_authority(analysis, procedure, selection,
                                                               self.extraction.numerical_helpers, budget)
         from compiler.scopes.region_context import original_region_context
-        context = original_region_context(routine, selection, consume=budget.tick)
+        context = original_region_context(routine, selection, consume=budget.tick, analysis=analysis)
         _validate_completion(analysis, procedure, selection, identities, self.completion, self.completion_proof)
         # The configured caller can reach IEEE imports through namespaces
         # outside this selected region's helper closure. Reauthenticate the
@@ -622,7 +622,7 @@ def _prepare(analysis, procedure, exact_original_selection, provider, *, consume
     budget = _Budget(consume)
     selection = tuple(exact_original_selection)
     routine, graph, identities, _source = _source_authority(analysis, procedure, selection, (), budget)
-    context = context or original_region_context(routine, selection, consume=budget.tick)
+    context = context or original_region_context(routine, selection, consume=budget.tick, analysis=analysis)
     if extraction is None:
         # A reached owner also visits complete native teams, such as original
         # IEEE setup. Authenticate their source first, then decline numerical

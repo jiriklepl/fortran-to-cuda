@@ -1,6 +1,7 @@
 """Original-position intervals reuse closed-selection control and proofs."""
 
 from copy import copy
+from dataclasses import replace
 from hashlib import sha256
 
 import pytest
@@ -11,6 +12,7 @@ from compiler.offload.config import OffloadConfig
 from compiler.scopes.closed_selection import ClosedIntervalOwner, interval_candidates
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_interval_draft import SOURCE
+from compiler.tests.test_selection_cost import build_validation, process_fixture  # noqa: F401
 from compiler.tests.test_source_scopes import FACT
 
 MIXED_SOURCE = SOURCE.replace(
@@ -24,7 +26,7 @@ MIXED_SOURCE = SOURCE.replace(
 )
 
 
-def builder(path, *, repeated=False, prefix="", suffix="", source=None):
+def builder(path, *, repeated=False, prefix="", suffix="", source=None, config=None):
     source = source or SOURCE
     start = "call producer(old,viscosity,n)"
     end = "call momentum(old,viscosity,star,out,n,correcting)"
@@ -41,15 +43,17 @@ def builder(path, *, repeated=False, prefix="", suffix="", source=None):
              "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {"interval_fields::" + name: dict(FACT)
                           for name in ("old", "viscosity", "star", "out")}}
+    config = config or OffloadConfig(policy="sections", scope_execution="reached")
     return ScopeBuilder([path], "interval_fields::advance", facts=facts,
-                        options=CompilerOptions(gpu_policy="sections"),
-                        config=OffloadConfig(policy="sections", scope_execution="reached"))
+                        options=CompilerOptions(gpu_policy=config.policy), config=config)
 
 
 def call_pair(selected):
     return next(site for site in interval_candidates(selected)
                 if sum(type(node).__name__ == "Call_Stmt" for node in site.originals) == 2
-                and all(type(node).__name__ in {"Call_Stmt", "Comment"} for node in site.originals))
+                and all(type(node).__name__ in {"Call_Stmt", "Comment"} for node in site.originals)
+                and str(next(node for node in reversed(site.originals)
+                             if type(node).__name__ == "Call_Stmt").items[0]).lower() == "momentum")
 
 
 def owner_for(selected, site):
@@ -64,6 +68,113 @@ def emit_repeated_interval(path, *, mixed=True):
     assert owner.run(site.originals)
     outputs, report = selected.finish()
     return selected, owner, outputs, report
+
+
+def absorbing_boundary_source():
+    source = SOURCE.replace("integer::visits=0", "integer::visits=0,bad_visits=0\nreal(8),pointer::scratch(:)")
+    source = source.replace("advance(n,correcting)", "advance(n,correcting,early)")
+    source = source.replace("logical,intent(in)::correcting", "logical,intent(in)::correcting,early")
+    source = source.replace("call producer(old,viscosity,n)", "call producer(old,viscosity,n,correcting,early)")
+    source = source.replace("call momentum(old,viscosity,star,out,n,correcting)",
+                            "call momentum(old,viscosity,star,out,n,correcting,early)")
+    source = source.replace("subroutine producer(a,v,n)",
+                            "subroutine producer(a,v,n,correcting,early)\nlogical,intent(in)::correcting,early")
+    source = source.replace("integer::i\n!$omp", "integer::i\nif(correcting.and.early) call unsupported(v)\n!$omp", 1)
+    source = source.replace("v(i)=2.d0*a(i)", "v(i)=v(i)+2.d0*a(i)")
+    source = source.replace("momentum(a,v,s,o,n,correcting)", "momentum(a,v,s,o,n,correcting,early)")
+    source = source.replace("visits=visits+1", "if(correcting.and..not.early) call unsupported(v)\nvisits=visits+1")
+    return source.replace("end module", """subroutine unsupported(v)
+real(8),intent(inout)::v(-1:)
+scratch(0)=scratch(0)+1.d0
+v(0)=v(0)+7.d0
+bad_visits=bad_visits+1
+end subroutine
+end module""")
+
+
+def emit_absorbing_interval(path, *, config=None):
+    selected = builder(path, source=absorbing_boundary_source(), config=config)
+    site = call_pair(selected)
+    owner = owner_for(selected, site)
+    assert owner.run(site.originals)
+    outputs, report = selected.finish()
+    return selected, owner, outputs, report
+
+
+def test_original_interval_retains_checked_conditional_closes(tmp_path):
+    from compiler.scopes.lexical import LexicalBoundaryPatch
+
+    selected, owner, outputs, report = emit_absorbing_interval(tmp_path / "owner.f90")
+    plan = owner.execution_plan
+    patches = [(member, patch) for member in plan.members for _first, _last, patch in plan.patches(member)
+               if isinstance(patch, LexicalBoundaryPatch)]
+    assert len(patches) == 2
+    assert plan.numerical_invocations == 3
+    assert {member.routine.qualified for member, _patch in patches} == {
+        "interval_fields::producer", "interval_fields::momentum"}
+    for member, patch in patches:
+        patch.validate(member, require_source=True)
+        assert patch.conditional_guard is not None
+        text = patch.render(member)
+        assert text.index("fort_scope_close(") < text.index("CALL unsupported(v)")
+        assert text.count("CALL unsupported(v)") == 1
+        assert member.enabled + " = .false." in text
+        assert member.enabled + " = .true." not in text
+    assert plan.validate() is plan
+    assert outputs[report["sources"][str(tmp_path / "owner.f90")]["replacement"]].count("bad_visits=bad_visits+1") == 1
+    assert selected.facts["captures"]["interval_fields::viscosity"]["initialized"] == "whole"
+
+
+def test_original_interval_binds_close_observers_after_capture_placement(tmp_path, build_validation):  # noqa: F811
+    from compiler.scopes.lexical import LexicalBoundaryPatch
+
+    contracts = []
+    for variant in ("native", "resident"):
+        config = OffloadConfig(policy="auto", scope_execution="reached", exact_window={
+            "coverage": "checked_interval", "calibration": variant,
+            "workloads": process_fixture()[0]["workloads"], "build_contract": {"checked_fixture": True},
+            "validation_policy": {"checked_policy_fixture": True}})
+        path = tmp_path / "owner.f90"
+        _selected, owner, outputs, report = emit_absorbing_interval(path, config=config)
+        scope, = report["scopes"]
+        contracts.append(scope["exact_window"]["contract"])
+        if variant == "native":
+            continue
+        name = "fort_selection_" + scope["exact_window"]["contract_sha256"][:12]
+        source = outputs[report["sources"][str(path)]["replacement"]]
+        for member in owner.execution_plan.members:
+            for _first, _last, patch in owner.execution_plan.patches(member):
+                if not isinstance(patch, LexicalBoundaryPatch):
+                    continue
+                rendered = patch.render(member)
+                assert rendered in source
+                assert rendered.index(name + "_fallback()") < rendered.index("CALL unsupported(v)")
+                assert rendered.index(name + "_close(") < rendered.index("fort_scope_close(")
+    assert contracts[0] == contracts[1]
+
+
+@pytest.mark.parametrize("mutation", ["position", "guard", "source", "removed", "reopen"])
+def test_original_interval_rejects_unchecked_boundary_changes(tmp_path, mutation):
+    from compiler.scopes.lexical import LexicalBoundaryPatch
+
+    selected = builder(tmp_path / "owner.f90", source=absorbing_boundary_source())
+    site = call_pair(selected)
+    owner = owner_for(selected, site)
+    assert owner._prepare_lexical(site.originals)
+    member = next(member for member in owner.members.values() if member.boundaries)
+    index, (first, last, patch) = next((index, patch) for index, patch in enumerate(member.patches)
+                                      if isinstance(patch[2], LexicalBoundaryPatch))
+    if mutation == "removed":
+        del member.patches[index]
+    elif mutation == "reopen":
+        member.boundaries[0]["reopen"] = True
+    else:
+        patch = replace(patch, **{"position": {"first": first+1}, "guard": {"conditional_guard": ".true."},
+                                 "source": {"original_source": "call wrong()\n"}}[mutation])
+        member.patches[index] = first, last, patch
+    with pytest.raises(CompilationError, match="boundary|boundaries"):
+        owner.validate_plan(owner.builder.inline.prepare(site.originals))
+    assert not selected.scopes
 
 
 def test_repeated_interval_keeps_complete_mixed_team_native_correction(tmp_path):
