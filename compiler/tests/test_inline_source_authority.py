@@ -147,3 +147,32 @@ def test_regrouping_does_not_grant_a_copied_loop_authority(tmp_path):
                 if _kind(node) == "Block_Nonlabel_Do_Construct")
     with pytest.raises(CompilationError, match="source selection"):
         builder.inline.grouped_nodes((copy.copy(loop),))
+
+
+def test_selection_uses_session_membership_without_rewalking_or_formatting_owner(tmp_path, monkeypatch):
+    builder, originals, projected, facade, _ = prepared(tmp_path)
+    expected = builder.inline.original_selection(projected)
+
+    def unexpected(*args, **kwargs):
+        pytest.fail("source selection scanned an already immutable procedure")
+
+    monkeypatch.setattr("compiler.scopes.region_dispatch.walk", unexpected)
+    monkeypatch.setattr(type(builder.entry.execution), "tostr", unexpected)
+    assert builder.inline.original_selection(originals) == originals
+    assert builder.inline.original_selection(projected) == expected
+    assert builder.inline.original_selection(facade)
+
+
+def test_session_membership_rejects_foreign_original_and_routine_projection(tmp_path):
+    source = SOURCE.replace("end module", "subroutine foreign(a)\nreal(8)::a\na=7\nend subroutine\nend module")
+    builder, originals, _, _, _ = prepared(tmp_path, source)
+    foreign = builder.analysis.routines["renamed_owner::foreign"].execution.content[0]
+    with pytest.raises(CompilationError, match="source selection"):
+        builder.inline.original_selection(foreign)
+    with pytest.raises(CompilationError, match="source selection"):
+        builder.inline.original_selection(copy.copy(originals[0]))
+    private = builder.analysis.private_projection(routines=True)
+    private.routines[builder.entry.qualified] = copy.copy(builder.entry)
+    builder.analysis = private
+    with pytest.raises(CompilationError, match="original source-backed"):
+        builder.inline.original_selection(originals)

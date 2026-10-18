@@ -63,9 +63,12 @@ class SourceSession:
     identity: str
     roots: object
     objects: object
+    _execution_nodes: object
 
     @classmethod
     def create(cls, analysis):
+        from fparser.two.utils import walk
+
         from compiler.frontend.component_bindings import AssociationScope, ComponentAccess, ComponentSchema
         from compiler.frontend.lowering import _KindScope
         from compiler.frontend.source_effects import Binding, Routine, Scope
@@ -103,7 +106,13 @@ class SourceSession:
         roots = {name: freezer.freeze(getattr(analysis, name)) for name in _ROOTS}
         for name, value in roots.items():
             setattr(analysis, name, value)
-        return cls(identity, MappingProxyType(roots), MappingProxyType(freezer.objects))
+        # The syntax snapshot already bounded and authenticated these trees.
+        # Keep exact per-routine membership beside that immutable authority;
+        # consumers need not format or walk a whole procedure for every node.
+        execution_nodes = {name: MappingProxyType({id(node): node for node in walk(routine.execution)})
+                           for name, routine in roots["routines"].items()}
+        return cls(identity, MappingProxyType(roots), MappingProxyType(freezer.objects),
+                   MappingProxyType(execution_nodes))
 
     def verify(self, analysis):
         for name, expected in self.roots.items():
@@ -115,6 +124,11 @@ class SourceSession:
 
     def contains(self, value):
         return self.objects.get(id(value)) is value
+
+    def execution_nodes(self, analysis, routine):
+        if self.routine(analysis, routine.qualified) is not routine:
+            raise CompilationError("original execution membership requires its exact source routine")
+        return self._execution_nodes[routine.qualified]
 
     def routine(self, analysis, name, *, function=False):
         self.verify(analysis)
