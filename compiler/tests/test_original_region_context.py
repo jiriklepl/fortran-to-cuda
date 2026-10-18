@@ -1,5 +1,6 @@
 """Original span indexing preserves lexical liveness and source coordinates."""
 
+from copy import copy
 from hashlib import sha256
 from types import SimpleNamespace
 
@@ -271,3 +272,135 @@ def test_empty_original_selection_still_fails(tmp_path):
     routine = fixture(tmp_path)
     with pytest.raises(CompilationError, match="nonempty selection"):
         original_region_context(routine, ())
+
+
+def sealed_fixture(directory, source=SOURCE):
+    path = directory / "sealed_context.f90"
+    path.write_text(source)
+    analysis = SourceEffects([path])
+    analysis.seal_session()
+    return analysis, analysis.routines[ENTRY]
+
+
+def test_sealed_context_reuses_exact_full_paths_and_replays_scan_charges(tmp_path, monkeypatch):
+    from compiler.scopes import region_context
+
+    source = SOURCE.replace("tail=counter+i", "b(0)=b(1)\nb(n+1)=b(n)\ntail=counter+i")
+    analysis, routine = sealed_fixture(tmp_path, source)
+    loop = selected_loop(routine)
+    cold_charges, reused_charges, uncached_charges = [], [], []
+    uncached = original_region_context(routine, (loop,), consume=uncached_charges.append)
+    cold = original_region_context(routine, (loop,), analysis=analysis, consume=cold_charges.append)
+    expected, _visits = legacy_context(routine, (loop,))
+    assert_same_context(cold, expected)
+    assert_same_context(cold, uncached)
+    assert any(node is assignment(routine, "b(0)") for node in cold.following)
+    assert any(node is assignment(routine, "b(n + 1)") for node in cold.following)
+
+    def no_rewalk(*_args, **_kwargs):
+        raise AssertionError("immutable exact selection should not reconstruct its AST context")
+
+    monkeypatch.setattr(region_context, "_derive_original_region_context", no_rewalk)
+    reused = original_region_context(routine, (loop,), analysis=analysis, consume=reused_charges.append)
+    assert reused is cold
+    assert reused_charges == cold_charges == uncached_charges == [1] * len(cold_charges)
+    assert len(cold_charges) > 7
+    assert reused.public() == expected.public()
+
+
+@pytest.mark.parametrize("cached", [False, True])
+def test_sealed_context_cold_and_cached_queries_obey_identical_parent_budget(tmp_path, cached):
+    analysis, routine = sealed_fixture(tmp_path)
+    selection = (selected_loop(routine),)
+    if cached:
+        original_region_context(routine, selection, analysis=analysis)
+    charged = []
+
+    def consume(amount):
+        charged.append(amount)
+        if len(charged) == 7:
+            raise CompilationError("parent context work budget exhausted")
+
+    with pytest.raises(CompilationError, match="parent context work budget exhausted"):
+        original_region_context(routine, selection, analysis=analysis, consume=consume)
+    assert charged == [1] * 7
+
+
+@pytest.mark.parametrize("replacement", ["copied_selection", "foreign_selection", "projection", "foreign_session"])
+def test_sealed_context_does_not_lend_cached_authority_to_other_sources(tmp_path, replacement):
+    from compiler.frontend.source_session import ProjectedRoutines
+
+    analysis, routine = sealed_fixture(tmp_path)
+    selection = (selected_loop(routine),)
+    original_region_context(routine, selection, analysis=analysis)
+    other_path = tmp_path / "other"
+    other_path.mkdir()
+    other_analysis, other = sealed_fixture(other_path)
+    if replacement == "copied_selection":
+        selection = (copy(selection[0]),)
+    elif replacement == "foreign_selection":
+        selection = (selected_loop(other),)
+    elif replacement == "projection":
+        analysis.routines = ProjectedRoutines(analysis.routines)
+        analysis.routines[ENTRY] = copy(routine)
+    else:
+        analysis = other_analysis
+    with pytest.raises(CompilationError):
+        original_region_context(routine, selection, analysis=analysis)
+
+
+@pytest.mark.parametrize("cached", [False, True])
+def test_context_callbacks_cannot_replace_authenticated_registry_before_return(tmp_path, cached):
+    from compiler.frontend.source_session import ProjectedRoutines
+
+    analysis, routine = sealed_fixture(tmp_path)
+    selection = (selected_loop(routine),)
+    if cached:
+        original_region_context(routine, selection, analysis=analysis)
+    analysis.routines = ProjectedRoutines(analysis.routines)
+    charged = []
+
+    def consume(amount):
+        charged.append(amount)
+        if len(charged) == 7:
+            analysis.routines[ENTRY] = copy(routine)
+
+    with pytest.raises(CompilationError, match="original source-backed procedure authority"):
+        original_region_context(routine, selection, analysis=analysis, consume=consume)
+    assert len(charged) > 7
+
+
+def test_sealed_context_survives_only_unchanged_original_projection(tmp_path):
+    analysis, routine = sealed_fixture(tmp_path)
+    selection = (selected_loop(routine),)
+    context = original_region_context(routine, selection, analysis=analysis)
+    projection = analysis.private_projection(routines=True)
+    assert original_region_context(routine, selection, analysis=projection) is context
+    with pytest.raises(CompilationError, match="immutable"):
+        assignment(routine, "tail").item.span = (1, 1)
+    assert original_region_context(routine, selection, analysis=analysis) is context
+
+
+def test_prepared_reuse_keeps_configuration_source_and_context_authentication(tmp_path):
+    from compiler.driver.options import CompilerOptions
+    from compiler.frontend.numerical_preparation import NumericalPreparationProvider
+    from compiler.offload.config import OffloadConfig
+    from compiler.tests.test_numerical_selection_authority import CONFIG, OPTIONS, selection_fixture
+
+    path, analysis, _provider, selection = selection_fixture(tmp_path)
+    analysis.seal_session()
+    provider = NumericalPreparationProvider(analysis, options=OPTIONS, config=CONFIG,
+                                            environment_root="selection_owner::advance")
+    prepared = provider.prepare(analysis, "selection_owner::advance", selection)
+    assert prepared.validate(analysis, "selection_owner::advance", selection) is prepared
+    with pytest.raises(CompilationError, match="compiler policy changed"):
+        prepared.validate_configuration(options=CompilerOptions(), config=OffloadConfig(),
+                                         environment_root="selection_owner::advance")
+    original_context = prepared.context
+    object.__setattr__(prepared, "context", OriginalRegionContext((), (), ()))
+    with pytest.raises(CompilationError, match="context or checked IR authority changed"):
+        prepared.validate(analysis, "selection_owner::advance", selection)
+    object.__setattr__(prepared, "context", original_context)
+    path.write_text(path.read_text().replace("scratch=", "scratch=1+", 1))
+    with pytest.raises(CompilationError):
+        analysis.verify_publication()

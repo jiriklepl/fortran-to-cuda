@@ -247,23 +247,21 @@ def interval_candidates(builder):
     from compiler.scopes.window_discovery import MAX_ADJACENT_UNITS, MAX_ATTEMPTS
 
     visits = 0
-    choices = []
-    seen = set()
+    contexts = []
 
     def flatten(units):
         return tuple(node for unit in units for node in unit)
 
     def sequence(nodes, prefix=(), controls=(), loops=(), suffix=(), depth=0):
         nonlocal visits
-        if len(choices) >= MAX_ATTEMPTS:
-            return
         if depth > builder.analysis.depth_limit:
             raise CompilationError("original interval control depth budget exhausted")
         grouped = tuple(grouped_original_sequence(nodes, {}))
         units = tuple(item.original_nodes if isinstance(item, NativeGroupCandidate) else (item,)
                       for item in grouped)
-        # Reached loop/branch bodies precede their containing constructs, so
-        # discovery does not first attempt ownership across the backedge.
+        contexts.append((units, prefix, controls, loops, suffix, depth))
+        # Inventory source positions before spending admission attempts. A
+        # deep early branch must not hide a later producer/consumer pair.
         for index, item in enumerate(grouped):
             visits += 1
             if visits > builder.analysis.operation_limit:
@@ -291,15 +289,21 @@ def interval_candidates(builder):
                             guards.append(child)
                     else:
                         body.append(child)
-        if len(choices) >= MAX_ATTEMPTS:
-            return
-        # Comments do not consume the adjacency budget but remain in the
-        # exact selected span. Prefer the longest permitted original sequence.
-        active = [index for index, unit in enumerate(units)
-                  if any(_kind(node) != "Comment" for node in unit)]
-        for position, first in enumerate(active):
-            maximum = min(MAX_ADJACENT_UNITS, len(active)-position)
-            for width in range(maximum, 0, -1):
+
+    sequence(_children(builder.entry.execution))
+    # Reached loop bodies still precede their enclosing loop. Within that
+    # lifetime, visit outer source sequences before their nested branches.
+    # Try one maximal selection per position before overlapping shorter cuts.
+    contexts.sort(key=lambda context: (-len(context[3]), context[5] - len(context[3])))
+    choices, seen = [], set()
+    for shortening in range(MAX_ADJACENT_UNITS):
+        for units, prefix, controls, loops, suffix, _depth in contexts:
+            active = [index for index, unit in enumerate(units)
+                      if any(_kind(node) != "Comment" for node in unit)]
+            for position, first in enumerate(active):
+                width = min(MAX_ADJACENT_UNITS, len(active)-position) - shortening
+                if width < 1:
+                    continue
                 last = active[position+width-1] + 1
                 originals = flatten(units[first:last])
                 if not any(_kind(node) in {"Call_Stmt", "Block_Nonlabel_Do_Construct"}
@@ -312,10 +316,8 @@ def interval_candidates(builder):
                 choices.append(OriginalIntervalSite(originals, (*prefix, *flatten(units[:first])), controls,
                                                     loops, (*flatten(units[last:]), *suffix) if loops else ()))
                 if len(choices) >= MAX_ATTEMPTS:
-                    return
-
-    sequence(_children(builder.entry.execution))
-    return tuple(choices[:MAX_ATTEMPTS])
+                    return tuple(choices)
+    return tuple(choices)
 
 
 class ClosedIntervalOwner(OriginalSelectionOwner):
@@ -382,6 +384,27 @@ class ClosedIntervalOwner(OriginalSelectionOwner):
         self.builder.numerical_reasons.update({name: None for name in self.builder.inline.regions})
         return super()._prepare_lexical(prepared)
 
+    def _validate_absorbing_boundaries(self):
+        from compiler.scopes.lexical import LexicalBoundaryPatch
+
+        for member in self.members.values():
+            originals = (self.closed_selection if member is self else tuple(_children(member.routine.execution)))
+            allowed = {id(node) for original in originals for node in walk(original)}
+            patches = [(first, last, patch) for first, last, patch in member.patches
+                       if isinstance(patch, LexicalBoundaryPatch)]
+            if len(patches) != len(member.boundaries):
+                raise CompilationError("original interval boundary inventory differs from its checked patches")
+            for boundary, (first, last, patch) in zip(member.boundaries, patches, strict=True):
+                patch.validate(member, require_source=True)
+                if (any(id(node) not in allowed for node in patch.originals)
+                        or (first, last) != (patch.first, patch.last)
+                        or (first, last) != (boundary["first_line"], boundary["last_line"])
+                        or patch.reason != boundary["reason"]
+                        or patch.conditional_guard != boundary.get("conditional_close")
+                        or boundary.get("reopen") is not False
+                        or boundary.get("execution") != "publish and close when reached; original continuation once"):
+                    raise CompilationError("original interval requires exact absorbing original boundaries")
+
     def validate_plan(self, nodes):
         originals = self.builder.inline.original_selection(tuple(nodes))
         if len(originals) != len(self.closed_selection) or any(
@@ -394,9 +417,7 @@ class ClosedIntervalOwner(OriginalSelectionOwner):
             if member is not self:
                 self._validate_edit_boundaries(self.builder, tuple(_children(member.routine.execution)),
                                                routine=member.routine)
-        if any(member.boundaries for member in self.members.values()):
-            raise CompilationError("original interval requires every selected operation to be admitted: "
-                + "; ".join(row["reason"] for member in self.members.values() for row in member.boundaries))
+        self._validate_absorbing_boundaries()
         if not any(unit.leaves for member in self.members.values() for unit in member.units):
             raise CompilationError("original interval has no admitted numerical operation")
         from compiler.scopes.execution_plan import _invocations

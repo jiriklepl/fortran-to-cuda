@@ -2982,10 +2982,23 @@ restricted suffix. A fresh context does not prove allocation lifetime or restore
 definitions lost by native work; those cases remain native. Each admitted
 interval requires at least two numerical invocations and the complete existing
 native-effect, resource and completion checks.
+Unsupported consumers may instead have checked close points at their exact
+original positions. Reaching one publishes pending device writes, disables
+offloading for the remaining activation, and executes the original native
+suffix once. An unreached branch grants no effect authority. Close patches are
+rendered after placement is attached so process calibration observes every
+fallback; qualifying resident measurements still require zero fallbacks.
 Line-based replacements also require distinct original statement lines in the
 selection and its borrowed procedures. Sharing a line with another executable
 statement declines the interval; punctuation inside comments or literals does
 not count as another statement.
+
+Discovery inventories bounded source positions before spending admission
+attempts. Reached loop bodies precede their enclosing loop; outer sequences
+precede nested branches, and maximal selections at distinct positions precede
+shorter overlapping cuts. The existing source, adjacency and attempt limits
+still apply. An early branch therefore cannot consume the entire attempt budget
+by offering many overlapping cuts before later positions are considered.
 
 Entry keys use only the finalized plan's safely readable root descriptors and
 proved root controls. Original native branches, child-local tiling and private
@@ -3010,6 +3023,10 @@ that same preparation. Unsupported corrections remain ordered native units.
 The complete team must satisfy every original DO barrier before a subregion
 can be prepared. Numerical preparation issues no capture, native-effect,
 definition or execution authority, and emits no artifacts.
+Exact lexical contexts over a sealed compilation session are reused without
+rewalking their immutable syntax. Reuse charges the same logical traversal work
+as a fresh query and retains source, configuration and publication checks;
+mutable standalone source analyses still derive fresh contexts.
 
 Workload documents bind arguments, relevant environment, input-file hashes and
 completion facts. The selector checks actual arguments, environment and bounded

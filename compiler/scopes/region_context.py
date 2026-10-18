@@ -1,6 +1,8 @@
 """Original lexical liveness context shared by preparation and emission."""
 
+from collections import OrderedDict
 from dataclasses import dataclass
+from weakref import ref
 
 from fparser.two.utils import Base
 
@@ -19,7 +21,84 @@ class OriginalRegionContext:
                 for name in ("preceding", "following", "cyclic_following")}
 
 
-def original_region_context(routine, sources, *, consume=None):
+@dataclass(frozen=True)
+class _SessionContext:
+    session: object
+    owner: object
+    routine: object
+    sources: tuple
+    context: OriginalRegionContext
+    visits: int
+
+
+# Only completed queries over a sealed original graph enter this private memo.
+# A weak analysis reference releases entries with their compilation owner; the
+# LRU also bounds simultaneous selections. Exact objects prevent recycled IDs
+# from identifying a different source. Mutable standalone analyses never enter.
+_SESSION_CONTEXTS = OrderedDict()
+_SESSION_CONTEXT_LIMIT = 128
+
+
+def original_region_context(routine, sources, *, consume=None, analysis=None):
+    """Reuse exact immutable-session contexts without reducing proof budgets.
+
+    Source/configuration and prepared-IR authentication remain with the caller.
+    A memo hit replays every logical scan debit, including callback failures;
+    it only avoids reconstructing the same lexical result from immutable ASTs.
+    """
+    session = getattr(analysis, "_source_session", None)
+    if session is None:
+        return _derive_original_region_context(routine, sources, consume=consume)
+    sources = tuple(sources)
+
+    def authenticate():
+        if (getattr(analysis, "_source_session", None) is not session
+                or session.routine(analysis, routine.qualified) is not routine):
+            raise CompilationError("original numerical context requires exact compilation-session source")
+
+    authenticate()
+    key = id(session), id(routine), tuple(map(id, sources))
+    saved = _SESSION_CONTEXTS.get(key)
+    if (saved is not None and saved.session is session and saved.routine is routine
+            and len(saved.sources) == len(sources)
+            and all(left is right for left, right in zip(saved.sources, sources, strict=True))):
+        if consume is not None:
+            for _visit in range(saved.visits):
+                consume(1)
+        # A budget consumer can invoke compiler callbacks that replace a
+        # registry/projection after the initial authentication.
+        authenticate()
+        if _SESSION_CONTEXTS.get(key) is saved:
+            _SESSION_CONTEXTS.move_to_end(key)
+        return saved.context
+
+    # Validate exact original membership once before retaining this selection.
+    # Session sealing then prevents its syntax, provenance or order changing.
+    analysis._selected_source(routine.qualified, sources)
+    visits = 0
+
+    def account(amount):
+        nonlocal visits
+        visits += amount
+        if consume is not None:
+            consume(amount)
+
+    context = _derive_original_region_context(routine, sources, consume=account)
+    authenticate()
+
+    def expire(owner_ref):
+        current = _SESSION_CONTEXTS.get(key)
+        if current is not None and current.owner is owner_ref:
+            del _SESSION_CONTEXTS[key]
+
+    _SESSION_CONTEXTS[key] = _SessionContext(session, ref(analysis, expire), routine, sources, context, visits)
+    _SESSION_CONTEXTS.move_to_end(key)
+    while len(_SESSION_CONTEXTS) > _SESSION_CONTEXT_LIMIT:
+        _SESSION_CONTEXTS.popitem(last=False)
+    return context
+
+
+def _derive_original_region_context(routine, sources, *, consume=None):
     """Keep excluded suffixes and backedges as distinct original paths.
 
     Prepared coordinates establish order, including included source that has no
