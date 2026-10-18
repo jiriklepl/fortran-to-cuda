@@ -280,7 +280,7 @@ def test_instantiation_budget_includes_repeated_effect_work(tmp_path, monkeypatc
 
 
 @pytest.mark.parametrize("sealed", [False, True])
-def test_prefix_typed_result_without_declaration_scope_is_explicit_barrier(tmp_path, sealed):
+def test_prefix_typed_result_retains_original_declaring_scope(tmp_path, sealed):
     source = """module work
 implicit none
 real(8)::a(4),b(4),source(4),observed
@@ -295,15 +295,14 @@ end function
 end module
 """
     _path, analysis, selected, demands = setup(tmp_path, source, seal=sealed)
-    # The existing frontend stores prefix-typed results without a declaring
-    # scope. A graph cannot invent that authority or crash while reporting it.
-    result = analysis.numerical_helpers["work::value"].scope.bindings["value"]
-    assert result.declaring_scope is None
+    scope = analysis.numerical_helpers["work::value"].scope
+    result = scope.bindings["value"]
+    assert result.declaring_scope is scope
     proof = prove(analysis, selected, demands)
     public = proof.public()
-    assert not public["selection_covered"]
-    assert any(item.kind == "storage" and "declaration scope is unavailable" in item.reason
-               for item in proof.barriers)
+    assert public["selection_covered"], public["barriers"]
     assert [item.callee for item in proof.calls] == ["work::value"]
-    assert not any(item.storage.binding is result for item in proof.accesses)
+    writes = [item for item in proof.accesses if item.storage.binding is result and item.kind == "write"]
+    assert len(writes) == 1
+    assert not writes[0].external
     assert proof.validate(analysis, "work::owner", selected, demands) is proof
