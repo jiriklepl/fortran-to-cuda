@@ -229,11 +229,17 @@ type(point),allocatable,target::items(:)""").replace("if(present(option)) increm
 ])
 def test_other_optional_associations_remain_boundaries(tmp_path, declaration):
     # Omission is legal for every signature; none grants a companion.
-    _, _, report = emit_optional(tmp_path, calls=("call renamed(x=b,n=n,escape=escape)",),
-                                declaration=declaration)
-    owner, = report["scopes"]
-    assert not owner["module_coordinators"]
-    assert owner["boundaries"]
+    original_call = "call renamed(x=b,n=n,escape=escape)"
+    _, outputs, report = emit_optional(tmp_path, calls=(original_call,), declaration=declaration)
+    # A declined owning call can leave an independent numerical fragment.
+    # Fragment reports have no module-coordinator or owning-boundary fields.
+    assert report["scopes"]
+    assert all(not scope.get("module_coordinators") for scope in report["scopes"])
+    assert all(leaf.startswith(ENTRY + "#region") for scope in report["scopes"] for leaf in scope["gpu_leaves"])
+    assert any("requires all original arguments" in item["reason"] for item in report["boundaries"])
+    text = source_text(outputs)
+    assert text.count(original_call) == 1
+    assert not re.search(r"^\s*entry\s", text, flags=re.M)
 
 
 @pytest.mark.parametrize("attribute", ["allocatable", "pointer", "allocatable,optional", "pointer,optional"])

@@ -337,6 +337,7 @@ class ClosedIntervalOwner(OriginalSelectionOwner):
             raise CompilationError("original interval cannot contain lifetime changes or early exits")
         self._validate_edit_boundaries(builder, originals)
         super().__init__(builder, originals, prefix, controls, bundle=bundle)
+        self.selection_activation_ready = False
         self.selection_context = {**self.selection_context, "schema_version": 2,
             "activation": "each original serial selection after unchanged prefix and controls",
             "lifetime": "one reached selection; close before every excluded suffix or backedge",
@@ -371,10 +372,41 @@ class ClosedIntervalOwner(OriginalSelectionOwner):
         if any(right[0] <= left[1] for left, right in zip(ordered, ordered[1:], strict=False)):
             raise CompilationError("original interval statements share a source edit line")
 
-    def _prepare_lexical(self, nodes):
+    def _bind_activation(self, nodes):
         if len(nodes) != len(self.closed_selection) or any(
                 left is not right for left, right in zip(nodes, self.closed_selection, strict=True)):
             raise CompilationError("original interval selection changed before preparation")
+        if self.selection_activation_ready:
+            return
+
+        # Retain the small established scalar contract when it is sufficient.
+        # Otherwise transfer the unchanged original native prefix before any
+        # capture or owner-bound draft is issued. This copy keeps supplied
+        # facts unchanged and cannot grant a selected-position lifetime.
+        from compiler.frontend.selection_activation import (
+            prove_selection_activation,
+            selection_activation_demands,
+        )
+
+        demanded = selection_activation_demands(self)
+        try:
+            self._validate_scalar_prefix(tuple(binding for binding in demanded if binding.rank))
+        except CompilationError:
+            proof = prove_selection_activation(self, demanded)
+            self.builder = self.builder.bind_selection_activation(proof, self.closed_selection, demanded)
+            self.closed_initializations = proof.initializations
+            self.emission.selection_prefix = proof
+        self.selection_activation_ready = True
+
+    def run(self, nodes=None):
+        nodes = self.closed_selection if nodes is None else tuple(nodes)
+        # The ordinary numerical consumption pass and its checkpoint must be
+        # owned by the already bound builder, never by the superseded parent.
+        self._bind_activation(nodes)
+        return super().run(nodes)
+
+    def _prepare_lexical(self, nodes):
+        self._bind_activation(nodes)
         from compiler.scopes.interval_draft import prepare_interval_draft
 
         prepare_interval_draft(self, self.closed_selection)
@@ -428,7 +460,15 @@ class ClosedIntervalOwner(OriginalSelectionOwner):
         managed = tuple({id(member.canonical(binding)): member.canonical(binding)
                          for member in self.members.values() for unit in member.units
                          for binding in unit.arrays.values()}.values())
-        self._validate_scalar_prefix(managed)
+        from compiler.frontend.selection_activation import SelectionActivationProof
+
+        if type(self.emission.selection_prefix) is SelectionActivationProof:
+            proof = self.emission.selection_prefix.validate_prefix(self)
+            for binding in managed:
+                if self.builder.visible_binding(self.routine, binding.root) is binding:
+                    proof.capture_state(binding.root)
+        else:
+            self._validate_scalar_prefix(managed)
         # A fresh block does not prove fresh definitions after a previous
         # traversal. Until an independent reached-definition proof is supplied,
         # only unchanged local scalar work may surround a repeated selection.
@@ -484,6 +524,7 @@ def discover_closed_selections(builder):
                     raise CompilationError("closed original selection has no numerical alternative")
                 admitted.append(owner)
                 if interval:
+                    candidate = owner.builder
                     break  # One nonoverlapping alternative per priced bundle.
             except CompilationError as error:
                 candidate.restore_scope_checkpoint(before)

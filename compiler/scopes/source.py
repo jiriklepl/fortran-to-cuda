@@ -202,6 +202,47 @@ class ScopeBuilder:
         consumption = getattr(self, "_reached_consumption", None)
         return consumption.check(self) if consumption is not None else self._validate_reached_window_fresh()
 
+    def bind_selection_activation(self, proof, original_selection, demanded):
+        """Project one checked native prefix without changing supplied facts."""
+        from compiler.frontend.selection_activation import SelectionActivationProof
+
+        if type(proof) is not SelectionActivationProof:
+            raise CompilationError("selection activation requires registered source authority")
+        if (getattr(self, "_reached_window_binding", None) is not None
+                or getattr(self, "_selection_activation_binding", None) is not None):
+            raise CompilationError("selection activation cannot replace an existing owner binding")
+        proof.validate(self.analysis, self.entry.qualified, original_selection, demanded)
+        proof.validate_configuration(self)
+        identity = sha256(json.dumps(self.facts, sort_keys=True, separators=(",", ":"),
+                                    allow_nan=False).encode()).hexdigest()
+        if proof.public()["entry_facts_identity"] != identity:
+            raise CompilationError("selection activation entry facts differ from admitted captures")
+        result = copy(self)
+        result._selection_activation_binding = proof, original_selection, demanded
+        result.inline = copy(self.inline)
+        result.inline.builder = result
+        result.inline.definition_proofs = {}
+        result.region_owners = dict(self.region_owners)
+        result.region_owners[self.entry.qualified] = result.inline
+        return result
+
+    def validate_selection_activation(self):
+        binding = getattr(self, "_selection_activation_binding", None)
+        if binding is None:
+            return None
+        from compiler.frontend.selection_activation import SelectionActivationProof
+
+        proof, selection, demanded = binding
+        if type(proof) is not SelectionActivationProof:
+            raise CompilationError("selection activation lost its registered source authority")
+        proof.validate(self.analysis, self.entry.qualified, selection, demanded)
+        proof.validate_configuration(self)
+        identity = sha256(json.dumps(self.facts, sort_keys=True, separators=(",", ":"),
+                                    allow_nan=False).encode()).hexdigest()
+        if proof.public()["entry_facts_identity"] != identity:
+            raise CompilationError("selection activation admitted entry facts changed")
+        return proof
+
     def consume_reached_plan(self):
         from compiler.scopes.reached_consumption import _ReachedPlanConsumption
 
@@ -931,6 +972,21 @@ class ScopeBuilder:
             if state["initialized"] == "sections":
                 if sections is None:
                     raise CompilationError("reached partial activation lacks typed original source geometry")
+                result["source_sections"] = sections
+            return result
+        activation = self.validate_selection_activation()
+        if activation is not None:
+            if self.visible_binding(self.entry, binding.root) is not binding:
+                raise CompilationError("selection capture requires its exact original storage binding")
+            state = activation.capture_state(binding.root)
+            if (fact.get("lifetime") == "selected_window"
+                    and state.get("selected_position_lifetime_proven") is not True):
+                raise CompilationError("selection capture lacks selected-position lifetime authority: " + binding.root)
+            result = {**fact, "initialized": state["initialized"]}
+            if state["initialized"] == "sections":
+                sections = activation.activation_sections(binding.root)
+                if sections is None:
+                    raise CompilationError("selection partial activation lacks typed source geometry")
                 result["source_sections"] = sections
             return result
         if fact.get("lifetime") == "selected_window":
@@ -2784,6 +2840,7 @@ class ScopeBuilder:
         """Publish source edits and build artifacts after approved scope work."""
         self._check_reached_publication()
         self._validate_reached_window_fresh()
+        self.validate_selection_activation()
         self._validate_numerical_regions()
         self.analysis.verify_publication()
         if any(sha256(package.path.read_bytes()).hexdigest() != package.digest for package in self.packages.values()):

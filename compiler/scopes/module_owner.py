@@ -35,11 +35,16 @@ def _caller_arrays(parent, resolved, child, immutable_inputs, reached):
     arrays = [mapping for mapping in associations
               if parent.owner.resources.get(parent.canonical(mapping.binding).root, (None, None))[1] in numbers]
     preflight_arrays = list(associations)
-    if reached is not None and parent is parent.owner:
+    activation = (parent.builder.validate_selection_activation() if parent is parent.owner else None)
+    if (reached is not None or activation is not None) and parent is parent.owner:
         from compiler.scopes.call_registration import OriginalActual
 
-        record = parent.owner.builder.reached_plan_record()
-        partial = {state["resource"] for state in record["states"] if state["initialized"] == "sections"}
+        if activation is not None:
+            partial = {binding.root for binding, _number in parent.owner.resources.values()
+                       if activation.capture_state(binding.root)["initialized"] == "sections"}
+        else:
+            record = parent.owner.builder.reached_plan_record()
+            partial = {state["resource"] for state in record["states"] if state["initialized"] == "sections"}
         present = {parent.canonical(mapping.binding).root for mapping in arrays}
         for binding, number in parent.owner.resources.values():
             if number in numbers and binding.root in partial and binding.root not in present:
@@ -54,12 +59,13 @@ def _caller_arrays(parent, resolved, child, immutable_inputs, reached):
     conditions = [condition for mapping in arrays for condition in expected_descriptor_conditions(
         parent.builder.capture(mapping.binding), mapping.binding.rank, str(mapping.actual))]
     outputs = [mapping for mapping in associations if mapping.formal_binding.intent == "out"]
+    registrations = arrays if reached is not None or activation is not None else outputs
     # Validate new caller storage while companion creation can still roll back.
-    for mapping in arrays if reached is not None else outputs:
+    for mapping in registrations:
         if str(mapping.actual).lower().startswith("fort_"):
             raise CompilationError("original mapped actual conflicts with compiler-private registration names")
         parent.declaration(mapping.binding)
-    return arrays, preflight_arrays, outputs, conditions
+    return arrays, preflight_arrays, registrations, conditions
 
 
 class ModuleOwner(MappedReachedControl, LexicalOwner):
@@ -312,7 +318,7 @@ def borrow_module(parent, node, *, reached=None):
     # A CONTIGUOUS callee dummy can conceal a caller-created temporary. Check
     # actual storage before that association exists, otherwise a retained
     # handle might outlive temporary copyback at the original call return.
-    arrays, preflight_arrays, outputs, descriptor_conditions = caller_arrays
+    arrays, preflight_arrays, registrations, descriptor_conditions = caller_arrays
     preflight = []
     if elements:
         # Only the original INTEGER selector is observed here, inside the
@@ -344,11 +350,11 @@ def borrow_module(parent, node, *, reached=None):
                           "if (.not. fort_actuals_contiguous) then",
                           *parent.close(reason="capture expected descriptor mismatch"), "endif", "endif"]
         preflight += ["end block"]
-    if reached is not None or outputs:
+    if reached is not None or registrations:
         from compiler.scopes.call_registration import register_original_actuals
         # A zero handle must become an undefined tracked range at OUT entry,
         # rather than being freshly seeded from caller facts after return.
-        preflight += register_original_actuals(parent, arrays if reached is not None else outputs,
+        preflight += register_original_actuals(parent, registrations,
                                               scalar_elements=elements)
     lines = [f"if ({parent.enabled}) then", *preflight, "endif",
              f"if ({parent.enabled}) then", *_call(existing.entry, [*arguments, *controls]),

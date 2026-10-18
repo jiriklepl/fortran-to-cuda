@@ -87,12 +87,15 @@ def _native_analysis(analysis):
     # foreign authority or mutate the original owner's proof state.
     for name in ("_descriptor_window_proofs", "_native_prefix_proofs", "_reached_window_proofs",
                  "_native_definition_proofs", "_native_definition_state_proofs", "_numerical_preparations", "_numerical_preparation_providers",
+                 "_native_preservation_proofs", "_selection_activation_proofs",
                  "_numerical_effect_proofs", "_original_call_associations", "_native_effect_templates",
                  "_native_effect_graphs", "_resource_reachability_proofs", "_native_demand_effects",
                  "_native_graph_completions", "_worksharing_completions", "_worksharing_native_completions",
                  "_ordered_worksharing_inventories",
                  "_prepared_worksharing_inventories"):
         setattr(result, name, {})
+    result._native_preservation_registry_owner = None
+    result._selection_activation_registry_owner = None
     result._summary_cache = SummaryCache(max_entries=0)
     return result
 

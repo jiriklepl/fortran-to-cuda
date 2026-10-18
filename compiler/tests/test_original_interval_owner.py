@@ -230,12 +230,19 @@ def test_original_interval_rejects_forged_or_noncontiguous_source(tmp_path):
     assert not selected.edits
 
 
-def test_original_interval_does_not_bless_prior_native_prefix(tmp_path):
+def test_original_interval_preserves_complete_native_prefix_effects(tmp_path):
+    from compiler.frontend.selection_activation import SelectionActivationProof
+
     selected = builder(tmp_path / "owner.f90", prefix="visits=visits+1\n")
     site = call_pair(selected)
     owner = owner_for(selected, site)
-    with pytest.raises(CompilationError, match="prefix changes storage"):
-        owner._prepare_lexical(site.originals)
+    assert owner.run(site.originals)
+    assert type(owner.emission.selection_prefix) is SelectionActivationProof
+    assert owner.execution_plan.validate() is owner.execution_plan
+    outputs, report = selected.finish()
+    source = outputs[report["sources"][str(tmp_path / "owner.f90")]["replacement"]]
+    assert source.index("visits=visits+1") < source.index("block")
+    assert selected.facts["captures"]["interval_fields::out"]["initialized"] == "whole"
 
 
 @pytest.mark.parametrize("position", ["prefix", "suffix", "loop_header", "loop_end"])

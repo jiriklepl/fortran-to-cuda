@@ -144,17 +144,19 @@ def _registered_authorities(owner, owned_types):
     from compiler.frontend.descriptor_windows import DescriptorWindowProof
     from compiler.frontend.native_call_coordinates import NativeCallCoordinatesProof
     from compiler.frontend.native_completion import NativeCompletionProof
-    from compiler.frontend.native_definitions import NativeDefinitionProof
+    from compiler.frontend.native_definitions import NativeDefinitionProof, NativeDefinitionStateProof
     from compiler.frontend.native_demand import SourceBoundNativeDemandEffects
     from compiler.frontend.native_environment import NativeEnvironmentProof, NativeLocalStateProof
     from compiler.frontend.native_intrinsics import NativePredicateProof
     from compiler.frontend.native_prefix import NativePrefixProof
+    from compiler.frontend.native_preservation import NativePreservationProof
     from compiler.frontend.numerical_completion import NumericalCompletionProof
     from compiler.frontend.numerical_effects import NumericalEffectProof
     from compiler.frontend.numerical_preparation import NumericalPreparationProvider, PreparedOriginalRegion
     from compiler.frontend.omp_reductions import OpenMPReductionProof
     from compiler.frontend.reached_windows import ReachedWindowProof
     from compiler.frontend.reductions import ReductionProof
+    from compiler.frontend.selection_activation import SelectionActivationProof
     from compiler.frontend.source_effects import SourceEffects
     from compiler.frontend.source_functions import NativeSourceFunctionProof
     from compiler.frontend.structured_effects import StructuredSummary
@@ -169,11 +171,13 @@ def _registered_authorities(owner, owned_types):
         NativeCallCoordinatesProof: "_native_definition_proofs",
         NativeCompletionProof: "_joined_completions",
         NativeDefinitionProof: "_native_definition_proofs",
+        NativeDefinitionStateProof: "_native_definition_state_proofs",
         SourceBoundNativeDemandEffects: "_native_demand_effects",
         NativeEnvironmentProof: "_native_environments",
         NativeLocalStateProof: "_native_environment_states",
         NativePredicateProof: "_native_predicates",
         NativePrefixProof: "_native_prefix_proofs",
+        NativePreservationProof: "_native_preservation_proofs",
         NumericalCompletionProof: "_numerical_completions",
         NumericalEffectProof: "_numerical_effect_proofs",
         NumericalPreparationProvider: "_numerical_preparation_providers",
@@ -181,6 +185,7 @@ def _registered_authorities(owner, owned_types):
         OpenMPReductionProof: "_omp_reduction_proofs",
         ReachedWindowProof: "_reached_window_proofs",
         ReductionProof: "_reduction_proofs",
+        SelectionActivationProof: "_selection_activation_proofs",
         NativeSourceFunctionProof: "_native_functions",
         WorksharingCompletionProof: "_worksharing_completions",
         WorksharingNativeCompletionProof: "_worksharing_native_completions",
@@ -482,7 +487,15 @@ class CheckedExecutionPlan:
         for member, proof in self._selection_prefixes:
             if member.emission.selection_prefix is not proof:
                 raise CompilationError("execution plan lost its exact original selection prefix authority")
-            proof.validate(member.builder.analysis, member.routine.qualified, proof._selection, proof.demanded)
+            from compiler.frontend.resource_reachability import ResourceReachabilityProof
+            from compiler.frontend.selection_activation import SelectionActivationProof
+
+            if type(proof) is SelectionActivationProof:
+                proof.validate_prefix(member)
+            elif type(proof) is ResourceReachabilityProof:
+                proof.validate(member.builder.analysis, member.routine.qualified, proof._selection, proof.demanded)
+            else:
+                raise CompilationError("execution plan prefix lacks a supported registered authority")
         if self.interval is not None:
             self.interval.validate(self)
         return self
