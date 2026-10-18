@@ -69,10 +69,11 @@ def build_validation(monkeypatch):
     return checked
 
 
-def process_fixture(*, resident=.1, native=1.0):
+def process_fixture(*, resident=.1, native=1.0, criterion="strict_advantage"):
     bundle = {"schema_version": 1, "entry": "fixture::advance", "groups": ["s"]}
     bundle["identity"] = digest(bundle)
-    contract = {"protocol": PROTOCOL, "key": [{"resource": "n", "property": "integer_value"}],
+    contract = {"schema_version": 2, "protocol": PROTOCOL, "key": [{"resource": "n", "property": "integer_value"}],
+                "acceptance": {"criterion": criterion},
                 "threads": 4, "selection_identity": "a" * 64, "selection_bundle": bundle,
                 "build_contract": {"identity": "b" * 64},
                 "outcome_contract": {"successful_completion": True, "fallbacks": 0, "requires_process_gpu_launch": True},
@@ -114,8 +115,9 @@ def test_complete_process_pairs_bind_both_builds_and_all_observed_keys(build_val
     assert "no future invocation-count guarantee" in result["applicability"]
 
 
-def test_process_numerical_authority_is_separate_from_legacy_flags_and_hashes(build_validation):
-    contract, evidence = process_fixture()
+@pytest.mark.parametrize("criterion", ["strict_advantage", "paired_non_regression"])
+def test_process_numerical_authority_is_separate_from_legacy_flags_and_hashes(build_validation, criterion):
+    contract, evidence = process_fixture(criterion=criterion)
     for index, row in enumerate(evidence["campaigns"][0]["observations"]):
         row["agreement"] = False
         row["fields_sha256"] = digest(index)
@@ -204,6 +206,71 @@ def test_expensive_complete_process_is_native_even_if_warm_invocations_are_fast(
     assert result["available"]
     assert result["selection"] == "native"
     assert result["accepted_keys"] == []
+
+
+@pytest.mark.parametrize("resident", [1.0, .99])
+def test_paired_non_regression_is_explicit_and_preserves_default_margin(build_validation, resident):
+    contract, evidence = process_fixture(resident=resident)
+    default = process_evidence_decision(evidence, contract)
+    assert default["available"]
+    assert default["selection"] == "native"
+    contract, evidence = process_fixture(resident=resident, criterion="paired_non_regression")
+    selected = process_evidence_decision(evidence, contract)
+    assert selected["available"], selected
+    assert selected["selection"] == "resident", selected
+    assert selected["acceptance"] == {"criterion": "paired_non_regression"}
+    assert "paired non-regression" in selected["reason"]
+    assert len(build_validation.numerical) == 2
+
+
+@pytest.mark.parametrize("round_index", [0, 6, 7, 8])
+def test_non_regression_requires_every_fit_and_holdout_pair(build_validation, round_index):
+    contract, evidence = process_fixture(resident=.99, criterion="paired_non_regression")
+    row = next(row for row in evidence["campaigns"][0]["observations"]
+               if row["round"] == round_index and row["mode"] == "resident")
+    row["seconds"] = row["process"]["seconds"] = 1.01
+    selected = process_evidence_decision(evidence, contract)
+    assert selected["available"], selected
+    assert selected["selection"] == "native", selected
+    assert selected["accepted_keys"] == []
+    assert "paired non-regression not established" in selected["reason"]
+
+
+def test_non_regression_compares_corresponding_rotated_rounds(build_validation):
+    contract, evidence = process_fixture(criterion="paired_non_regression")
+    for row in evidence["campaigns"][0]["observations"]:
+        elapsed = 1.0 + row["round"] / 10
+        if row["mode"] == "resident":
+            elapsed -= .01
+        row["seconds"] = row["process"]["seconds"] = elapsed
+    selected = process_evidence_decision(evidence, contract)
+    assert selected["available"], selected
+    assert selected["selection"] == "resident", selected
+
+
+def test_non_regression_cannot_reinterpret_different_or_legacy_calibration(build_validation):
+    contract, evidence = process_fixture(resident=.99)
+    changed = deepcopy(contract)
+    changed["acceptance"] = {"criterion": "paired_non_regression"}
+    selected = process_evidence_decision(evidence, changed)
+    assert not selected["available"]
+    assert selected["selection"] == "native"
+    assert "identity differs" in selected["reason"]
+    evidence["protocol"] = "checked-interval-process-v3"
+    selected = process_evidence_decision(evidence, contract)
+    assert not selected["available"]
+    assert selected["selection"] == "native"
+
+
+@pytest.mark.parametrize("acceptance", [None, {}, {"criterion": "median_non_regression"},
+                                        {"criterion": "paired_non_regression", "tolerance": .1}])
+def test_missing_or_unknown_acceptance_never_selects_resident(build_validation, acceptance):
+    contract, evidence = process_fixture()
+    contract["acceptance"] = acceptance
+    selected = process_evidence_decision(evidence, contract)
+    assert not selected["available"], selected
+    assert selected["selection"] == "native", selected
+    assert "timing acceptance" in selected["reason"]
 
 
 def test_empirical_interval_accepts_conditional_work_without_fixed_launch_prediction(build_validation):
@@ -479,7 +546,8 @@ def test_native_and_resident_capture_bind_the_same_checked_semantics(tmp_path, b
     assert json.loads(json.dumps(contracts[0])) == contracts[0]
 
 
-def test_cross_procedure_interval_uses_one_native_and_resident_cost_contract(tmp_path, build_validation):
+@pytest.mark.parametrize("criterion", [None, "paired_non_regression"])
+def test_cross_procedure_interval_uses_one_native_and_resident_cost_contract(tmp_path, build_validation, criterion):
     from compiler.offload.config import OffloadConfig
     from compiler.tests.test_interval_draft import generate
 
@@ -488,7 +556,8 @@ def test_cross_procedure_interval_uses_one_native_and_resident_cost_contract(tmp
         config = OffloadConfig(policy="auto", scope_execution="reached", exact_window={
             "coverage": "checked_interval", "calibration": variant,
             "workloads": process_fixture()[0]["workloads"], "build_contract": {"checked_fixture": True},
-            "validation_policy": {"checked_policy_fixture": True}})
+            "validation_policy": {"checked_policy_fixture": True},
+            **({"acceptance": {"criterion": criterion}} if criterion else {})})
         path, _builder, outputs, report = generate(tmp_path, config=config)
         assert report["scope_count"] == 1, report.get("lexical_owner_attempt")
         scope, = report["scopes"]
@@ -498,6 +567,8 @@ def test_cross_procedure_interval_uses_one_native_and_resident_cost_contract(tmp
         assert not scope["boundaries"]
         record = scope["exact_window"]
         contract = record["contract"]
+        assert contract["schema_version"] == 2
+        assert contract["acceptance"] == {"criterion": criterion or "strict_advantage"}
         contracts.append(contract)
         bundle = contract["selection_bundle"]
         assert {group["selection_identity"] for group in bundle["groups"]} == {contract["selection_identity"]}

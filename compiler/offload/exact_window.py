@@ -149,7 +149,7 @@ def evidence_decision(evidence, contract, *, protocol=PROTOCOL):
         return {"available": False, "selection": "native", "reason": str(error)}
 
 
-def _paired_timing_decision(evidence, contract, *, protocol):
+def _paired_timing_decision(evidence, contract, *, protocol, criterion="strict_advantage"):
     """Reconstruct paired timing/identity evidence, without numerical authority.
 
     Both callers must establish their numerical policy independently: the
@@ -158,6 +158,8 @@ def _paired_timing_decision(evidence, contract, *, protocol):
     flag can disable either numerical check.
     """
     try:
+        if criterion not in {"strict_advantage", "paired_non_regression"}:
+            raise ValueError("unsupported complete-window timing acceptance criterion")
         if not isinstance(evidence, dict) or evidence.get("protocol") != protocol:
             raise ValueError("complete-window calibration missing")
         if evidence.get("contract") != contract:
@@ -270,11 +272,18 @@ def _paired_timing_decision(evidence, contract, *, protocol):
         # interruptions, transfers, publication and close; never add them again.
         native = statistics.median(values["native"][:SAMPLES])
         resident = statistics.median(values["resident"][:SAMPLES])
-        profitable = max(values["resident"]) < min(values["native"]) * 0.95
+        if criterion == "paired_non_regression":
+            profitable = all(resident <= native for resident, native in
+                             zip(values["resident"], values["native"], strict=True))
+            reason = ("measured complete-window paired non-regression" if profitable else
+                      "complete-window paired non-regression not established")
+        else:
+            profitable = max(values["resident"]) < min(values["native"]) * 0.95
+            reason = "measured complete-window advantage" if profitable else "complete-window saving not established"
         return {
             "available": True,
             "selection": "resident" if profitable else "native",
-            "reason": "measured complete-window advantage" if profitable else "complete-window saving not established",
+            "reason": reason,
             "native_seconds": native,
             "resident_seconds": resident,
             "key": key,

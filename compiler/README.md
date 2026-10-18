@@ -2982,7 +2982,7 @@ checked-plan attachment. Both use
 `"calibration": "native"` or `"resident"` for separate observation artifacts,
 an executed application `build_contract`, and explicit `workloads`. Production
 omits `calibration` and supplies `evidence`. All three variants use the same
-automatic numerical options. The `checked-interval-process-v3` protocol
+automatic numerical options. The `checked-interval-process-v4` protocol
 compares complete application processes, including startup, every invocation,
 output and teardown. It checks seven rotated pairs and two holdouts, full-field
 agreement, actual completed GPU launches, reached descriptor/control keys and
@@ -2991,6 +2991,17 @@ are required, with actual GPU work in each resident process. Planned native
 interruptions are part of the measured alternative; a GPU prefix followed by a
 native suffix cannot qualify as complete resident evidence. Warm group timing
 alone cannot establish an application gain.
+
+The selection contract (schema 2) binds a timing acceptance criterion before
+calibration. Omitting `acceptance` retains `{"criterion": "strict_advantage"}`:
+every resident sample must be more than 5% faster than every native sample.
+An explicit `"acceptance": {"criterion": "paired_non_regression"}` instead
+requires the resident process to take no longer than its corresponding native
+process in each of the seven measured rounds and both holdouts. Equality is
+allowed; one slower pair rejects residency even if its median improves. This
+choice changes only the timing criterion. Numerical validation, build identity,
+completed GPU work and zero-fallback requirements remain unchanged. Changing the
+criterion or supplying earlier protocol evidence requires fresh calibration.
 
 Checked-interval discovery uses the same original-position block control as
 closed numerical groups. It considers contiguous serial source selections,
@@ -3111,8 +3122,8 @@ prove that arbitrary instrumentation preserves numerical semantics. Diagnostic
 module inputs are checked against their recorded hashes; existing application
 receipts do not establish an original compile-time module inventory. Capture
 generation and build attestation alone do not establish application AUTO
-qualification. Earlier version 1 or 2 process evidence cannot be relabeled as
-version 3 interval evidence.
+qualification. Earlier version 1, 2 or 3 process evidence cannot be relabeled as
+version 4 interval evidence.
 
 `python -m compiler.offload.application_build preflight|attest` verifies the
 consumer's build through a versioned JSON request. Preflight binds original
