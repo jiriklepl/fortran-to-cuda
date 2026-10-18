@@ -165,7 +165,10 @@ class NativeIntervalContext:
     def validate(self, analysis, procedure, originals):
         from compiler.scopes.resource_demand import _covered_nodes
 
-        draft = self._draft.validate()
+        # Native effects consume the original member and call associations,
+        # not numerical preparations elsewhere in the interval. Their own
+        # reachability/effect issuer still checks the complete demanded set.
+        draft = self._draft.validate_source()
         builder = draft._owner.builder
         if (type(self) is not NativeIntervalContext or self._issuer is not _ISSUER
                 or analysis is not builder.analysis or procedure != self._member.procedure
@@ -262,7 +265,7 @@ class SourceIntervalDraft:
         return self
 
     def native_source(self):
-        self.validate()
+        self.validate_source()
         return self._owner.original(self.originals)
 
     def call_route(self, original_call, *, owner=None):
@@ -279,7 +282,10 @@ class SourceIntervalDraft:
         return choices[0]
 
     def member(self, owner):
-        self.validate()
+        # Looking up canonical source bindings grants no authority to execute
+        # a prepared numerical payload. Validate those at their consumers and
+        # at finalization, rather than once per native operation in this member.
+        self.validate_source()
         matches = [member for member in self.members if member.procedure == owner.routine.qualified
                    and all(owner.canonical(local) is target for local, target in member.mappings)]
         if not matches:
