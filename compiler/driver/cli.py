@@ -153,7 +153,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--scope-measurement", choices=("native", "resident"),
                         help="Diagnostic complete-owner timing; requires reached sections scopes and supplies no AUTO costs.")
     parser.add_argument("--scope-cost", metavar="FILE",
-                        help="Source-bound cost request JSON for automatic source scopes, including original selections.")
+                        help="Source-bound cost request JSON for automatic source scopes, original selections or checked intervals.")
     parser.add_argument("--calibration-profile", metavar="FILE", help="Explicit offline hardware calibration JSON.")
     parser.add_argument("--host-threads", type=int, default=4, help="Total host-thread budget, including GPU coordination.")
     parser.add_argument("--gpu-collective", action="store_true",

@@ -53,7 +53,7 @@ class OffloadConfig:
             if type(self.exact_window) is not dict:
                 raise ValueError("Exact window cost request must be an object")
             coverage = self.exact_window.get("coverage")
-            if coverage is not None and coverage != "original_selection":
+            if coverage not in {None, "original_selection", "checked_interval"}:
                 raise ValueError("Unknown exact window cost coverage")
             execution = "bounded" if coverage == "original_selection" else "reached"
             if self.scope_execution != execution or self.policy not in {"auto", "sections"} or self.collective:

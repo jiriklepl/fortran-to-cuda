@@ -138,15 +138,17 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
         header = _part(routine.scope.node, "Subroutine_Stmt")
         first = statement_span(self.nodes[0])[0]
         start = _span(header)[1]+1
-        builder.add_edit(routine.scope.path, start, start-1,
-                         f"use iso_c_binding, only: {self.kind} => c_int64_t\n")
+        kind_import = f"use iso_c_binding, only: {self.kind} => c_int64_t"
+        if start != first:
+            builder.add_edit(routine.scope.path, start, start-1, kind_import + "\n")
         handles = [f"fort_buffer_{number}" for number in self.handle_numbers()]
         labels = {int(node.item.label) for node in walk(routine.execution)
                   if getattr(node, "item", None) is not None and getattr(node.item, "label", None)}
         label = next((number for number in range(99999, 99900, -1) if number not in labels), None)
         if label is None:
             raise CompilationError("original module companion has no bounded free statement label")
-        prologue = [f"logical :: {self.control_guard}",
+        prologue = [*([kind_import] if start == first else []),
+                    f"logical :: {self.control_guard}",
                     f"integer({self.kind}), intent(inout) :: " + ", ".join([self.context, *handles]),
                     f"logical, intent(inout) :: {self.enabled}",
                     f"{self.control_guard} = .false.", f"goto {label}",

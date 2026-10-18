@@ -87,7 +87,9 @@ def _native_analysis(analysis):
     # foreign authority or mutate the original owner's proof state.
     for name in ("_descriptor_window_proofs", "_native_prefix_proofs", "_reached_window_proofs",
                  "_native_definition_proofs", "_numerical_preparations", "_numerical_preparation_providers",
-                 "_numerical_effect_proofs"):
+                 "_numerical_effect_proofs", "_original_call_associations", "_native_effect_templates",
+                 "_native_effect_graphs", "_resource_reachability_proofs", "_native_demand_effects",
+                 "_native_graph_completions"):
         setattr(result, name, {})
     result._summary_cache = SummaryCache(max_entries=0)
     return result
@@ -539,8 +541,12 @@ def renamed(builder, node, parameters, *, lexical_scope=None, native_metadata=Fa
     return str(clone_ast(node))
 
 
-def native_demand_fragment(builder, nodes, demand):
-    """Surround one unchanged original call using demanded coherence only."""
+def native_demand_fragment(builder, nodes, demand, *, context=None):
+    """Coherently retain an original operation within its complete interval.
+
+    Effects use source-local names. Only the registered call context may map
+    them to the owner's storage identities; section coordinates stay local.
+    """
     from compiler.frontend.native_demand import prove_native_demand
     from compiler.frontend.native_sections import NativeSections
     from compiler.scopes.resource_demand import IntervalResourceDemand
@@ -549,37 +555,77 @@ def native_demand_fragment(builder, nodes, demand):
         raise CompilationError("native demand requires an issued whole-interval resource inventory")
     demand.validate()
     originals = tuple(builder.inline.original_selection(nodes))
-    if len(originals) != 1 or _kind(originals[0]) != "Call_Stmt":
+    if context is None and (len(originals) != 1 or _kind(originals[0]) != "Call_Stmt"):
         raise CompilationError("demand-relative native hooks require one unchanged original CALL")
-    proof = prove_native_demand(builder.analysis, builder.entry.qualified, originals, demand.bindings)
+    if context is not None:
+        context.validate(builder.analysis, builder.entry.qualified, originals)
+        if context.demand is not demand:
+            raise CompilationError("native operation uses a different interval inventory")
+    demanded = demand.bindings if context is None else context.local_bindings
+    proof = prove_native_demand(builder.analysis, builder.entry.qualified, originals, demanded, context=context)
     effects, bindings = {}, {}
     managed = {id(binding) for binding in demand.managed_bindings}
     for binding, actions in proof.effects:
+        bindings[binding.root] = binding
         if not binding.rank:
             continue  # Original scalar evaluation is never outlined or hoisted.
-        if id(binding) not in managed:
+        canonical = binding if context is None else context.canonical(binding)
+        if id(canonical) not in managed:
             raise CompilationError("native array effect is outside the prospective managed inventory")
-        # Whole conservative accesses cannot invent missing halo definitions.
-        if builder.capture(binding)["initialized"] != "whole":
-            raise CompilationError("demand-relative native whole access requires whole initialized storage: "
-                                   + binding.root)
         effects[binding.root] = set(actions)
-        bindings[binding.root] = binding
+
+    sections = NativeSections(False, "conservative whole demanded resources; no overwrite authority")
+    if context is not None:
+        analysis = _native_analysis(builder.analysis)
+        for binding in bindings.values():
+            if (binding.rank and "allocatable" in binding.attributes
+                    and builder.capture(binding).get("lifetime") != "selected_window"):
+                analysis._stable_module_allocatables = analysis._stable_module_allocatables | {binding.root}
+        try:
+            descriptor = (builder.descriptor_window_for(analysis, builder.entry.qualified, originals)
+                          if hasattr(builder, "descriptor_window_for") else None)
+            sections = analysis.native_sections_for_nodes(builder.entry.qualified, originals,
+                capture_locals=True, descriptor_window=descriptor)
+        except CompilationError as error:
+            sections = NativeSections(False, str(error))
+        if sections.available:
+            sections = replace(sections, resources=tuple(item for item in sections.resources
+                                                        if item.resource in effects))
+            covered = {item.resource for item in sections.resources}
+            if set(effects) - covered:
+                raise CompilationError("native sections omit demanded array effects")
+            for item in sections.resources:
+                for dependency in item.dependencies:
+                    bindings[dependency.resource] = dependency.binding
+    if not sections.available:
+        for root in effects:
+            # Unknown footprints cannot invent missing halo definitions.
+            if builder.capture(bindings[root])["initialized"] != "whole":
+                raise CompilationError("demand-relative native whole access requires whole initialized storage: "
+                                       + root + "; " + str(sections.reason))
     record = proof.public()
     summary = {"complete": False, "whole_procedure_effects_complete": False,
                "native_completion": record["native_completion"], "demand_identity": proof.identity,
-               "operations": [{"kind": action, "resource": root, "rank": bindings[root].rank}
-                              for root, actions in effects.items() for action in sorted(actions)]}
-    span = statement_span(nodes[0])
-    return Native(tuple(nodes), effects, set(), bindings, summary, "original demand-relative native call",
-                  sections=NativeSections(False, "conservative whole demanded resources; no overwrite authority"),
-                  span=span, preserve_original=True, proof_analysis=builder.analysis,
+               "operations": [{"kind": action, "resource": binding.root, "rank": binding.rank}
+                              for binding, actions in proof.effects for action in sorted(actions)]}
+    span = statement_span(nodes[0])[0], statement_span(nodes[-1])[1]
+    return Native(tuple(nodes), effects, set(), bindings, summary, "original demand-relative native operation",
+                  sections=sections,
+                  # Exact native access temporaries live across host_begin/end
+                  # in the ordinary lexical emitter. Whole-call hooks can
+                  # instead surround the unchanged source outside that block.
+                  span=span, preserve_original=not sections.available or not effects, proof_analysis=builder.analysis,
                   demand_effects=proof, resource_demand=demand)
 
 
 class StructuredScope:
+    @classmethod
+    def from_native(cls, builder, nodes, operation):
+        """Use an admitted interval operation through the ordinary emitter."""
+        return cls(builder, nodes, lexical_native=True, native_operation=operation)
+
     def __init__(self, builder, nodes, *, condition_only=False, native_metadata=False, lexical_native=False,
-                 native_host_reads=False, native_call_demand=None):
+                 native_host_reads=False, native_call_demand=None, native_operation=None):
         self.builder, self.nodes = builder, tuple(nodes)
         self.native_metadata = native_metadata
         self.native_host_reads = native_host_reads
@@ -587,10 +633,17 @@ class StructuredScope:
         self.guarded = {}
         self.close_guards = {}
         self.operation_count = 0
-        if native_call_demand is not None:
+        if native_call_demand is not None or native_operation is not None:
             if condition_only or not lexical_native:
                 raise CompilationError("demand-relative native call requires original lexical emission")
-            operation = native_demand_fragment(builder, nodes, native_call_demand)
+            if native_call_demand is not None and native_operation is not None:
+                raise CompilationError("native interval operation cannot have two admission authorities")
+            operation = (native_demand_fragment(builder, nodes, native_call_demand)
+                         if native_operation is None else native_operation)
+            if (type(operation) is not Native or operation.demand_effects is None
+                    or len(operation.nodes) != len(self.nodes)
+                    or any(left is not right for left, right in zip(operation.nodes, self.nodes, strict=True))):
+                raise CompilationError("native interval operation differs from its original source nodes")
             self.native.append(operation)
             self.operation_count = len(operation.summary["operations"])
             self.tree = [operation]
@@ -973,6 +1026,10 @@ class StructuredScope:
                                              on_error=("exit " + _name("fort_prepare_", str(self.native.index(operation))),) if query else
                                              ("error stop 'structured native section preparation failed'",))
             except CompilationError:
+                if operation.demand_effects is not None and operation.coherence_sections.available:
+                    # Admission may rely on partial definitions. A failed
+                    # exact mapping cannot silently become whole-array access.
+                    raise
                 return None
 
         def choose():
@@ -985,7 +1042,7 @@ class StructuredScope:
             if operation.demand_effects is not None:
                 operation.resource_demand.validate()
                 operation.demand_effects.validate(builder.analysis, builder.entry.qualified,
-                    tuple(builder.inline.original_selection(operation.nodes)), operation.resource_demand.bindings)
+                    tuple(builder.inline.original_selection(operation.nodes)), operation.demand_effects.demanded)
             identity = source_id(builder, "native_operation", span=operation.span or (self.first, self.last),
                                  operation_kind=operation.kind)
             implementation = source_id(builder, "implementation", span=operation.span or (self.first, self.last),

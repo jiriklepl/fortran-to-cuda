@@ -141,6 +141,20 @@ def test_unsealed_changed_owned_declaration_invalidates_token(tmp_path):
         proof.validate(analysis, "fields::advance", selected, demanded)
 
 
+def test_private_native_projection_reissues_its_own_graph_authority(tmp_path):
+    from compiler.scopes.segments import _native_analysis
+
+    _path, analysis, selected, demanded = fixture(tmp_path)
+    original = prove_native_demand(analysis, "fields::advance", selected, demanded)
+    projected = _native_analysis(analysis)
+    proof = prove_native_demand(projected, "fields::advance", selected, demanded)
+    assert proof is not original
+    assert proof.validate(projected, "fields::advance", selected, demanded) is proof
+    assert original.validate(analysis, "fields::advance", selected, demanded) is original
+    with pytest.raises(CompilationError, match="exact registered source"):
+        proof.validate(analysis, "fields::advance", selected, demanded)
+
+
 @pytest.mark.parametrize("association", ["common /shared/ future", "equivalence(future,other)",
                                         "!$omp threadprivate(future)",
                                         "integer(8)::address\npointer(address,future)"])

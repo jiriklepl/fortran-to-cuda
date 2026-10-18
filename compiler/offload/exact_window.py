@@ -330,7 +330,7 @@ def prepare(owner):
     request = deepcopy(builder.config.exact_window)
     if request is None:
         return None
-    if request.get("coverage") == "original_selection":
+    if request.get("coverage") in {"original_selection", "checked_interval"}:
         from compiler.offload.selection_cost import prepare as prepare_selection
 
         return prepare_selection(owner)

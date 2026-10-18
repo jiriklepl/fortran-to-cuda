@@ -108,7 +108,7 @@ def prepared_receipts(tmp_path):
     new_worker = write(artifact_root / "entries/leaf/shared_entry.cu", worker.read_text())
     new_interface = write(artifact_root / "interface.f90", interface.read_text())
     replacement = write(artifact_root / "replacement.f90", "new compiler approved replacement\n")
-    selection_contract = {"protocol": "checked-selection-process-v2", "sources": arguments["sources"], "build_contract": contract}
+    selection_contract = {"protocol": "checked-interval-process-v3", "sources": arguments["sources"], "build_contract": contract}
     selection_identity = digest(selection_contract)
     selector = write(artifact_root / "selector.cu", "#ifndef FORT_EXACT_WINDOW_BUILD_" + selection_identity + "\n#error attestation required\n#endif\n")
     files = [new_worker, new_interface, replacement, selector]

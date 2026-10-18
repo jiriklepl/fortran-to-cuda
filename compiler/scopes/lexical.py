@@ -164,6 +164,7 @@ class LexicalOwner:
         self.units, self.boundaries, self.patches = [], [], []
         self.emission = OwnerEmission()
         self.execution_plan = None
+        self.interval_draft = None
         self.numerical_team_declines, self.numerical_team_decline_count = [], 0
         self.counted_controls = []
         self.lines = self.builder.analysis.source_text(self.routine.scope.path).splitlines(keepends=True)
@@ -333,18 +334,28 @@ class LexicalOwner:
         return "".join(self.lines[first-1:last])
 
     def before_close(self):
-        if hasattr(self.owner, "closed_selection") and self.owner.exact_window is not None:
+        if self.interval_placement:
             from compiler.offload.selection_cost import before_close
             return before_close(self.owner, self.context)
         return []
+
+    @property
+    def interval_placement(self):
+        from compiler.offload.selection_cost import PROTOCOL
+        placement = self.owner.exact_window
+        return placement is not None and placement.record["contract"].get("protocol") == PROTOCOL
 
     def close(self, *, disable=True, reason=None, span=None):
         from compiler.scopes.provenance import position, source_id
         boundary = source_id(self.builder, "boundary", span=span,
                              reason=reason or "owner cleanup or native fallback at the current source position")
+        fallback = []
+        if disable and self.interval_placement:
+            from compiler.offload.selection_cost import fallback as record_fallback
+            fallback = [f"if ({self.enabled}) then", *record_fallback(self.owner), "endif"]
         lines = ["block", "use iso_c_binding, only: c_int, c_int32_t, c_null_char, c_null_ptr",
                  "use fort_scoped_memory, only: fort_scope_close, FORT_SCOPE_OK, fort_scope_trace_set_v1",
-                 "integer(c_int) :: fort_close_status", f"if ({self.context} /= 0) then",
+                 "integer(c_int) :: fort_close_status", *fallback, f"if ({self.context} /= 0) then",
                  *position(self.builder, context=self.context, owner=self.trace_owner, boundary=boundary),
                  *self.before_close(),
                  f"fort_close_status = fort_scope_close({self.context})",
@@ -432,31 +443,27 @@ class LexicalOwner:
                         before = self.owner.builder.scope_checkpoint()
             if scope is None:
                 try:
-                    scope = StructuredScope(self.builder, nodes, condition_only=condition_only,
-                                            native_metadata=True, lexical_native=True, native_host_reads=True)
-                except CompilationError as complete_error:
-                    if (condition_only or self is not self.owner or source_guard is not None
-                            or len(nodes) != 1 or _kind(nodes[0]) != "Call_Stmt"
-                            or hasattr(nodes[0], "fort_inline_region")):
-                        raise
-                    # One unchanged CALL can have sufficient demanded effects
-                    # without a complete numerical/capture closure. Keep the
-                    # ordinary resolver strict for every other consumer.
-                    self.owner.builder.restore_scope_checkpoint(before)
-                    self.refresh()
-                    from compiler.scopes.resource_demand import resource_demand_from_inline_owner
-
-                    previous = set(getattr(self.builder, "_resource_demands", {}))
+                    if (not condition_only and self.owner.interval_draft is not None
+                            and not any(hasattr(node, "fort_inline_region") for node in nodes)):
+                        # The complete source interval was collected before this
+                        # scan. Native admission must not first demand a full
+                        # child numerical/capture closure.
+                        operation = self.owner.interval_draft.native_operation(self, tuple(nodes))
+                        scope = StructuredScope.from_native(self.builder, tuple(nodes), operation)
+                    if scope is None:
+                        scope = StructuredScope(self.builder, nodes, condition_only=condition_only,
+                                                native_metadata=True, lexical_native=True, native_host_reads=True)
+                except CompilationError as demand_error:
+                    # Existing precise original-source effects may be stronger
+                    # than conservative demand effects (e.g. indirect sections).
+                    # They remain the same ordered native consumer, not a new
+                    # inventory or permission to ignore a source barrier.
                     try:
-                        demand = resource_demand_from_inline_owner(self)
-                        scope = StructuredScope(self.builder, nodes, lexical_native=True,
-                                                native_call_demand=demand)
-                    except CompilationError as demand_error:
-                        registry = getattr(self.builder, "_resource_demands", {})
-                        for identity in set(registry) - previous:
-                            del registry[identity]
-                        raise CompilationError(str(complete_error) + "; demanded native continuation: "
-                                               + str(demand_error)) from demand_error
+                        scope = StructuredScope(self.builder, nodes, condition_only=condition_only,
+                                                native_metadata=True, lexical_native=True, native_host_reads=True)
+                    except CompilationError as complete_error:
+                        raise CompilationError(str(demand_error) + "; precise native path: "
+                                               + str(complete_error)) from complete_error
             from compiler.scopes.views import view_call
             if any(view_call(call) for call in scope.calls):
                 raise CompilationError("lexical rectangular calls require reached view preflight")
@@ -498,7 +505,7 @@ class LexicalOwner:
             definitions = summarize(scope)
             leaves = {leaf for call in scope.calls for leaf in self.builder.closure(call.procedure)[0]}
             if (not arrays and not leaves and not metadata
-                    and not any(operation.native_environment or operation.demand_effects for operation in scope.native)):
+                    and not any(operation.native_environment for operation in scope.native)):
                 self._retain_numerical_team_declines(nodes, joined_rejections, scope)
                 return  # Original scalar operations need no runtime context.
             self.builder.scope_budget(scope.calls)
@@ -529,6 +536,10 @@ class LexicalOwner:
             self.boundary(tuple(boundary_nodes or nodes), str(error))
 
     def scan(self, nodes, depth=0):
+        if self is self.owner and depth == 0 and self.interval_draft is None:
+            from compiler.scopes.interval_draft import prepare_interval_draft
+
+            prepare_interval_draft(self, self.builder.inline.original_selection(tuple(nodes)))
         if depth > self.builder.analysis.depth_limit:
             self.boundary(tuple(nodes), "bounded lexical control depth exhausted")
             return
@@ -574,8 +585,11 @@ class LexicalOwner:
                             try:
                                 call = self.builder.execution_source_call(self.routine, group)
                                 child = self.builder.analysis.routines[call.procedure]
-                                if (self.allow_child_continuation() and child.source_kind == "module" and any(_kind(item) == "Return_Stmt"
-                                        for item in walk(child.execution))):
+                                prospective = (self.owner.interval_draft is not None
+                                               and self.owner.interval_draft.has_numerical_child(group))
+                                if (self.allow_child_continuation() and child.source_kind == "module"
+                                        and (prospective or any(_kind(item) == "Return_Stmt"
+                                                                for item in walk(child.execution)))):
                                     from compiler.scopes.module_owner import borrow_module
                                     if borrow_module(self, group):
                                         continue
@@ -910,6 +924,13 @@ class LexicalOwner:
             execution = (joined_prepare, ["fort_status = fort_scope_wait(fort_context)",
                               "if (fort_status /= FORT_SCOPE_OK) error stop 'original team completion failed'"])
         else:
+            if self.interval_placement and unit.leaves:
+                from compiler.offload.selection_cost import choice
+                spec += ["logical :: fort_interval_selected"]
+                prepare += ["fort_interval_selected = .true.",
+                            *choice(self, unit, handles, values, context=self.context,
+                                    enabled=self.enabled, rejected="fort_interval_selected"),
+                            "if (.not. fort_interval_selected) exit " + block]
             execution = unit.scope.emit(handles, values, actuals, imports, selector=selector,
                                     terminal_owner=False, preflight_failure=failure,
                                     provenance_segment=trace_segment,
@@ -976,8 +997,9 @@ class LexicalOwner:
         start = _span(_part(self.routine.scope.node, "Subroutine_Stmt"))[1]+1
         first = statement_span(nodes[0])[0]
         last = statement_span(nodes[-1])[1]
-        builder.add_edit(self.routine.scope.path, start,start-1,
-                         f"use iso_c_binding, only: {self.kind} => c_int64_t\n")
+        kind_import = f"use iso_c_binding, only: {self.kind} => c_int64_t"
+        if start != first:
+            builder.add_edit(self.routine.scope.path, start,start-1, kind_import + "\n")
         declarations = [f"integer({self.kind}) :: {self.context}", f"logical :: {self.enabled}",
                         *[f"integer({self.kind}) :: fort_buffer_{number}" for _binding, number in self.resources.values()]]
         from compiler.offload.exact_window import control as exact_window_control
@@ -986,9 +1008,41 @@ class LexicalOwner:
                       "block", "use fort_scoped_memory, only: fort_scope_serial_caller", *exact_spec,
                       f"{self.enabled} = fort_scope_serial_caller() /= 0", *exact_code, "end block"]
         builder.add_edit(self.routine.scope.path, first,first-1,
-                         "\n".join(fortran_lines([*declarations,*initialize]))+"\n", prepend=True)
-        builder.add_edit(self.routine.scope.path, last+1,last,"\n".join(fortran_lines(self.close(
-            disable=False, reason="original owning invocation end", span=(last, last))))+"\n")
+                         "\n".join(fortran_lines([*([kind_import] if start == first else []),
+                                                   *declarations,*initialize]))+"\n", prepend=True)
+        ending = self.close(disable=False, reason="original owning invocation end", span=(last, last))
+        if self.interval_placement:
+            from compiler.offload.selection_cost import finish
+            ending += finish(self)
+        builder.add_edit(self.routine.scope.path, last+1,last,"\n".join(fortran_lines(ending))+"\n")
+
+    def emit_native_capture(self, nodes, checkpoint, interval_applicability, *, cleanup=True):
+        """Measure the original interval, retaining its original declarations."""
+        from compiler.offload.selection_cost import native_control
+
+        builder, plan = self.builder, self.execution_plan.validate()
+        specification, entry, ending = native_control(self)
+        observer_outputs = {name: text for name, text in builder.outputs.items() if name.startswith("exact/")}
+        public = self.exact_window.public()
+        if cleanup:
+            builder.restore_scope_checkpoint(checkpoint)
+            builder.outputs.update(observer_outputs)
+        plan.validate()
+        first, last = self.interval_draft.selection_context["first_line"], self.interval_draft.selection_context["last_line"]
+        builder.add_edit(self.routine.scope.path, first, first-1,
+                         "\n".join(fortran_lines(["block", *specification, *entry])) + "\n", prepend=True)
+        builder.add_edit(self.routine.scope.path, last+1, last,
+                         "\n".join(fortran_lines([*ending, "end block"])) + "\n")
+        builder.scopes.append({
+            "owner": self.context, "owner_variant": None, "path": str(self.routine.scope.path),
+            "first_line": first, "last_line": last, "gpu_leaves": [], "mode": builder.config.policy,
+            "estimate_available": False, "planning_reason": public["reason"], "exact_window": public,
+            "source_authority": {"version": 1, "structured_summary_identity": self.graph.identity},
+            "checked_execution_plan": plan.public(), "interval_applicability": interval_applicability,
+            "boundaries": [], "execution": "original source interval once; independent native capture",
+        })
+        return True
+
 
     def run(self, nodes):
         if getattr(self.builder, "_reached_window_binding", None) is not None:
@@ -1007,6 +1061,11 @@ class LexicalOwner:
 
     def _prepare_lexical(self, nodes):
         """Admit once; bundle discovery may retain this inventory before emission."""
+        if self is self.owner and self.interval_draft is None:
+            from compiler.scopes.interval_draft import prepare_interval_draft
+
+            originals = self.builder.inline.original_selection(tuple(nodes))
+            prepare_interval_draft(self, originals)
         self.active.append(self.routine.qualified)
         try:
             self.scan(nodes)
@@ -1024,7 +1083,8 @@ class LexicalOwner:
         """Consume the retained admitted inventory, without another source scan."""
         builder = self.builder
         from compiler.scopes.execution_plan import build_execution_plan
-        plan = build_execution_plan(self)
+        plan = (self.interval_draft.finalize(self) if self.interval_draft is not None
+                else build_execution_plan(self))
         from compiler.offload.scope_measurement import emit_native
         from compiler.offload.scope_measurement import prepare as prepare_measurement
         measurement = prepare_measurement(self)
@@ -1034,7 +1094,7 @@ class LexicalOwner:
         prepare_exact_window(self)
         placement = plan.exact_window_placement()
         interval_applicability = plan.interval_applicability().public()
-        if (hasattr(self, "closed_selection") and placement is not None
+        if (self.interval_placement and placement is not None
                 and placement.public().get("capture_variant") == "native"):
             return self.emit_native_capture(nodes, checkpoint, interval_applicability, cleanup=native_cleanup)
         native_reason = plan.automatic_native_reason()

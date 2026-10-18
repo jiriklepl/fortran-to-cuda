@@ -143,6 +143,18 @@ def test_explicit_shape_dummy_does_not_claim_the_whole_larger_actual_storage(tmp
     assert sections.resources == ()
 
 
+def test_unused_explicit_shape_dummy_does_not_block_other_exact_sections(tmp_path):
+    _, sections = analyze(tmp_path, "b(2,1)=1", declaration="real(8),intent(inout)::a(8,3)")
+    assert sections.available, sections.reason
+    resource, = sections.resources
+    assert resource.resource == "argument::b"
+    assert resource.writes[0].axes[0].lower.value == 2
+    # An actual use still needs the physical mapping, even a single element.
+    _, accessed = analyze(tmp_path, "b(2,1)=a(1,1)", declaration="real(8),intent(inout)::a(8,3)")
+    assert not accessed.available
+    assert "assumed-shape array dummies" in accessed.reason
+
+
 @pytest.mark.parametrize("directive", ["task", "target nowait", "target"])
 def test_native_directives_require_completion_proof_even_before_first_assignment(tmp_path, directive):
     end = "target" if directive.startswith("target") else directive

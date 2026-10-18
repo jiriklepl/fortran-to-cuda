@@ -258,12 +258,13 @@ class IntervalResourceDemand:
                 raise CompilationError("resource demand original selection changed")
         return self
 
-    def validate_plan(self, plan):
+    def validate_plan(self, plan, *, validate_plan=True):
         """Require every final member/use; prospective inventories cannot shrink."""
         self.validate()
         if type(plan) is not CheckedExecutionPlan:
             raise CompilationError("resource demand requires an exact checked execution plan")
-        plan.validate()
+        if validate_plan:
+            plan.validate()
         if self._plan is not None and plan is not self._plan:
             raise CompilationError("resource demand belongs to a different checked plan")
         if (plan._owner.builder.analysis is not self._context[0]
@@ -342,40 +343,3 @@ def resource_demand_from_reached_window(builder, proof):
     if proof.public()["entry_facts_identity"] != _digest(builder.facts):
         raise CompilationError("resource demand reached-window capture facts differ")
     return _issue(builder, _reached_inventory(builder, proof), proof=proof)
-
-
-def resource_demand_from_inline_owner(owner):
-    """Seal a conservative prospective inventory before native admission.
-
-    Inline preparation already considered every original numerical region in
-    this owner. This inventory is deliberately not a transitive effect scan.
-    A subsequently borrowed child must fit the same canonical resources and
-    original selections at final ``validate_plan``; otherwise the entire
-    candidate is discarded before emission. Capture facts add no effect or
-    lifetime authority here.
-    """
-    if owner is not owner.owner:
-        raise CompilationError("prospective inline demand requires the original root owner")
-    builder, routine = owner.builder, owner.routine
-    analysis = builder.analysis
-    originals = tuple(routine.execution.content)
-    inventory = _Inventory()
-    inventory.select(analysis, routine.qualified, originals, owner.canonical)
-    for region in builder.inline.regions.values():
-        for binding in region.bindings:
-            inventory.add(routine.qualified, binding, owner.canonical(binding),
-                          "managed" if binding.rank else "planning")
-        for precondition in region.preconditions:
-            for dependency in precondition.dependencies:
-                inventory.add(routine.qualified, dependency.binding, owner.canonical(dependency.binding),
-                              "descriptor_or_control")
-    # Keep source-referenced arrays too: they may be native inputs now and
-    # become managed in a later original unit. They are potential resources,
-    # not registrations, initialized coverage or permission to capture them.
-    for node in originals:
-        for binding, _reference in inventory.references(analysis, routine.scope, node):
-            if binding.rank:
-                inventory.add(routine.qualified, binding, owner.canonical(binding), "managed")
-    if not any("managed" in item.roles for item in inventory.finish()):
-        raise CompilationError("prospective native demand requires prepared numerical resources")
-    return _issue(builder, inventory)

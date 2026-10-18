@@ -74,7 +74,8 @@ def process_fixture(*, resident=.1, native=1.0):
     bundle["identity"] = digest(bundle)
     contract = {"protocol": PROTOCOL, "key": [{"resource": "n", "property": "integer_value"}],
                 "threads": 4, "selection_identity": "a" * 64, "selection_bundle": bundle,
-                "build_contract": {"identity": "b" * 64}, "expected_launches": 1,
+                "build_contract": {"identity": "b" * 64},
+                "outcome_contract": {"successful_completion": True, "fallbacks": 0, "requires_process_gpu_launch": True},
                 "validation_policy": {"checked_policy_fixture": True, "identity": digest({"checked_policy_fixture": True})}}
     campaign = observations(contract, resident=resident, native=native)
     campaign["protocol"] = PROTOCOL
@@ -95,7 +96,7 @@ def process_fixture(*, resident=.1, native=1.0):
                         "variant": row["mode"], "checked_fixture": True}
         row["invocations"] = [{"ordinal": ordinal, "selection": contract["selection_identity"],
                                "key": [value], "seconds": .01, "outcome": row["mode"],
-                               "launches": int(row["mode"] == "resident")}
+                               "launches": int(row["mode"] == "resident"), "complete": True, "fallbacks": 0}
                               for ordinal, value in enumerate((96, 128, 96))]
     return contract, {"protocol": PROTOCOL, "campaigns": [campaign]}
 
@@ -150,6 +151,7 @@ def test_build_session_final_recheck_precedes_placement_authority(build_validati
 @pytest.mark.parametrize("mutation", [
     "startup", "completion", "sequence", "missing_native", "fake_gpu", "mixed_gpu",
     "build", "bundle", "observed_bundle", "nan_time", "bool_launches", "missing_first",
+    "unfinished_interval", "missing_completion", "bool_fallbacks", "no_gpu_work",
 ])
 def test_incomplete_or_incompatible_process_evidence_cannot_authorize_gpu(build_validation, mutation):
     contract, evidence = process_fixture()
@@ -169,7 +171,16 @@ def test_incomplete_or_incompatible_process_evidence_cannot_authorize_gpu(build_
                 for invocation in observation["invocations"]:
                     invocation.update(outcome="native", launches=0)
     elif mutation == "mixed_gpu":
-        row["invocations"][0]["launches"] = 2
+        row["invocations"][0].update(launches=2, fallbacks=1)
+    elif mutation == "unfinished_interval":
+        row["invocations"][0]["complete"] = False
+    elif mutation == "missing_completion":
+        row["invocations"][0].pop("complete")
+    elif mutation == "bool_fallbacks":
+        row["invocations"][0]["fallbacks"] = False
+    elif mutation == "no_gpu_work":
+        for invocation in row["invocations"]:
+            invocation["launches"] = 0
     elif mutation == "build":
         row["build"]["contract_identity"] = "d" * 64
     elif mutation == "bundle":
@@ -193,6 +204,19 @@ def test_expensive_complete_process_is_native_even_if_warm_invocations_are_fast(
     assert result["available"]
     assert result["selection"] == "native"
     assert result["accepted_keys"] == []
+
+
+def test_empirical_interval_accepts_conditional_work_without_fixed_launch_prediction(build_validation):
+    contract, evidence = process_fixture()
+    contract["completion_manifest"] = {"native_interruptions": ["original correction"],
+                                       "conditional_gpu_operations": ["producer", "diffusion", "accumulation"]}
+    for row in evidence["campaigns"][0]["observations"]:
+        if row["mode"] == "resident":
+            for invocation, launches in zip(row["invocations"], (3, 0, 7), strict=True):
+                invocation["launches"] = launches
+    decision = process_evidence_decision(evidence, contract)
+    assert decision["selection"] == "resident", decision
+    assert decision["available"]
 
 
 def test_one_unprofitable_workload_vetoes_shared_key_from_profitable_workload(build_validation):
@@ -242,8 +266,9 @@ def test_checked_tiled_group_capture_keeps_reached_prefix_and_complete_key(tmp_p
         assert record["capture_variant"] == variant
         assert record["contract"]["protocol"] == PROTOCOL
         scalar = {item["resource"] for item in record["contract"]["key"] if item["property"] == "integer_value"}
-        assert scalar == {"selected_groups::" + name for name in ("nx", "ny", "nz")} | {
-            "selected_groups::advance::" + name for name in ("tx", "ty", "tz")}
+        assert {"selected_groups::advance::" + name for name in ("tx", "ty", "tz")} <= scalar
+        assert "entry_projection_identity" in record["contract"]
+        assert "internal native work is measured, not predicted" in record["contract"]["applicability"]
         assert len([item for item in record["contract"]["key"] if item["property"] == "size"]) == 6
     if variant == "native":
         assert "TARGET :: a" not in source
@@ -251,7 +276,8 @@ def test_checked_tiled_group_capture_keeps_reached_prefix_and_complete_key(tmp_p
         assert not any("cudaGetDevice(" in text for path, text in outputs.items()
                        if path.startswith("exact/") and path.endswith(".cu"))
     else:
-        assert source.index("fort_scope_plan_validate") < source.index("fort_selection_key(1)")
+        assert source.index("fort_interval_key(1)") < source.index("fort_scope_plan_validate")
+        assert source.index("fort_scope_plan_validate") < source.index("_choose() == 0")
         assert "fort_team_run = .true." in source
 
 
@@ -311,6 +337,80 @@ def test_generated_digest_matches_independent_sha256_across_padding_boundaries(t
     Path(tmp_path / "case.conf").write_bytes(payload)
     result = subprocess.run([str(binary), "--case"], cwd=tmp_path, capture_output=True, text=True, check=True)
     assert result.stdout.splitlines()[1] == sha256(payload).hexdigest()
+
+
+def test_interval_observer_latches_root_key_and_records_later_fallback(tmp_path, monkeypatch):
+    """Exercise emitted observer state with a fake selector, not GPU evidence."""
+    from compiler.offload.selection_cost import _observer_source
+
+    compiler = shutil.which("g++")
+    if compiler is None:
+        pytest.skip("C++ compiler unavailable")
+    contract, _evidence = process_fixture()
+    (tmp_path / "case.conf").write_text("fixed input\n")
+    contract["workloads"][0]["files"]["case.conf"] = sha256(b"fixed input\n").hexdigest()
+
+    def selector(name, _record, *, observer):
+        return r'''
+#include <omp.h>
+#include <sched.h>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <sstream>
+#include <string>
+#include "scoped_runtime.h"
+namespace generated_kernels { namespace offload {
+static std::string cpu_identity(){return "fixture CPU";}
+}}
+static std::string quoted(const std::string &s){return "\""+s+"\"";}
+static int selector_calls=0;
+static void OBSERVER(const int64_t*,const std::string&);
+extern "C" int SELECT(const int64_t *key,const char*,const char*) {
+ ++selector_calls;if(key[0]!=96||omp_get_level()!=1||omp_get_num_threads()!=4)return 0;
+ OBSERVER(key,"{}");return 1;
+}
+extern "C" int fort_scope_stats_get(fort_scope_t,fort_scope_stats *stats) {
+ *stats=fort_scope_stats{};stats->launches=3;return 0;
+}
+'''.replace("OBSERVER", observer).replace("SELECT", name)
+
+    monkeypatch.setattr("compiler.offload.exact_window.selector_source", selector)
+    record = {"contract": contract, "capture": True, "capture_variant": "resident", "expressions": ["n"]}
+    source = _observer_source("observed", record) + r'''
+int main() {
+ int64_t key[]={96};observed_begin();observed_key(key,"compiler","flags");key[0]=999;
+ int selected=0;
+ #pragma omp parallel num_threads(4) shared(selected)
+ {
+  #pragma omp master
+  selected=observed_choose();
+ }
+ if(selected!=1||observed_choose()!=1||selector_calls!=1)return 10;
+ observed_close(1);observed_fallback();
+ #pragma omp parallel num_threads(4) shared(selected)
+ {
+  #pragma omp master
+  selected=observed_choose();
+ }
+ if(selected!=0||selector_calls!=1)return 11;
+ observed_end();return 0;
+}
+'''
+    path = tmp_path / "observer.cpp"
+    path.write_text(source)
+    runtime = Path(__file__).resolve().parents[1] / "runtime"
+    subprocess.run([compiler, "-std=c++17", "-fopenmp", "-I" + str(runtime), str(path),
+                    "-o", str(tmp_path / "observer")], check=True, capture_output=True, text=True)
+    environment = {key: value for key, value in os.environ.items() if key != "EXAMPLE"}
+    result = subprocess.run([str(tmp_path / "observer"), "case"], cwd=tmp_path, env=environment,
+                            check=True, capture_output=True, text=True)
+    row = json.loads(result.stderr.removeprefix("FORT_SELECTION_OBSERVATION "))
+    assert row["key"] == [96]
+    assert row["launches"] == 3
+    assert row["complete"] is True
+    assert row["fallbacks"] == 1
+    assert row["outcome"] == "fallback"
 
 
 @pytest.mark.parametrize("variant", ["native", "resident"])
@@ -379,7 +479,47 @@ def test_native_and_resident_capture_bind_the_same_checked_semantics(tmp_path, b
     assert json.loads(json.dumps(contracts[0])) == contracts[0]
 
 
-def test_original_private_descriptor_costs_are_not_erased_by_lowering(tmp_path, build_validation):
+def test_cross_procedure_interval_uses_one_native_and_resident_cost_contract(tmp_path, build_validation):
+    from compiler.offload.config import OffloadConfig
+    from compiler.tests.test_interval_draft import generate
+
+    contracts = []
+    for variant in ("native", "resident"):
+        config = OffloadConfig(policy="auto", scope_execution="reached", exact_window={
+            "coverage": "checked_interval", "calibration": variant,
+            "workloads": process_fixture()[0]["workloads"], "build_contract": {"checked_fixture": True},
+            "validation_policy": {"checked_policy_fixture": True}})
+        path, _builder, outputs, report = generate(tmp_path, config=config)
+        assert report["scope_count"] == 1, report.get("lexical_owner_attempt")
+        scope, = report["scopes"]
+        plan = scope["checked_execution_plan"]
+        assert len(plan["procedures"]) == 3
+        assert plan["numerical_invocations"] == 3
+        assert not scope["boundaries"]
+        record = scope["exact_window"]
+        contract = record["contract"]
+        contracts.append(contract)
+        assert record["capture_variant"] == variant
+        assert len(contract["completion_manifest"]["operations"]) == 3
+        assert {item["resource"] for item in contract["key"]} == {
+            "argument::n", *("interval_fields::" + name for name in ("old", "viscosity", "star", "out"))}
+        source = outputs[report["sources"][str(path)]["replacement"]]
+        assert source.count("visits=visits+1") == 1
+        assert "v(0)=v(0)+a(0)" in source
+        if variant == "native":
+            assert source.count("v(0)=v(0)+a(0)") == 1
+            assert "call producer(old,viscosity,n)" in source
+            assert "call momentum(old,viscosity,star,out,n,correcting)" in source
+            assert not any(name.startswith("entries/") for name in outputs)
+        else:
+            assert source.index("fort_interval_key(1)") < source.index("_choose() == 0")
+            assert source.count("_choose() == 0") == 3
+            assert "_fallback()" in source
+            assert "_end()" in source
+    assert contracts[0] == contracts[1]
+
+
+def test_original_private_work_remains_in_checked_empirical_alternative(tmp_path, build_validation):
     from compiler.driver.options import CompilerOptions
     from compiler.offload.config import OffloadConfig
     from compiler.tests.test_closed_selection import SOURCE, builder
@@ -394,16 +534,16 @@ def test_original_private_descriptor_costs_are_not_erased_by_lowering(tmp_path, 
                            "validation_policy": {"checked_policy_fixture": True}}))
     outputs, report = selected.run()
     for scope in report["scopes"]:
-        key = scope["exact_window"]["contract"]["key"]
-        assert [item["property"] for item in key if item["resource"].endswith("::scratch")] == ["size", "lbound"]
+        contract = scope["exact_window"]["contract"]
+        assert any(item["resource"].endswith("::scratch") for team in contract["original_participation"]
+                   for item in team["original_private_arrays"])
+        assert contract["entry_projection_identity"]
     rewritten = outputs[report["sources"][str(tmp_path / "original.f90")]["replacement"]]
-    assert "size(scratch,1,kind=c_int64_t)" in rewritten
-    assert "lbound(scratch,1,kind=c_int64_t)" in rewritten
+    assert "private(i,j,k,bi,bj,bk,scratch)" in rewritten
 
 
-def test_inlined_helper_payload_work_does_not_disappear_from_the_key_proof(tmp_path, build_validation):
+def test_internal_payload_branch_is_measured_without_entry_re_evaluation(tmp_path, build_validation):
     from compiler.driver.options import CompilerOptions
-    from compiler.ir import CompilationError
     from compiler.offload.config import OffloadConfig
     from compiler.tests.test_closed_selection import SOURCE, builder
 
@@ -418,5 +558,12 @@ end module""")
                            "coverage": "original_selection", "calibration": "resident",
                            "workloads": process_fixture()[0]["workloads"], "build_contract": {"checked_fixture": True},
                            "validation_policy": {"checked_policy_fixture": True}}))
-    with pytest.raises(CompilationError, match="workload control depends on payload"):
-        selected.run()
+    outputs, report = selected.run()
+    assert report["scope_count"] == 2
+    for scope in report["scopes"]:
+        contract = scope["exact_window"]["contract"]
+        assert "internal native work is measured, not predicted" in contract["applicability"]
+        assert not any(item["property"] == "payload" for item in contract["key"])
+    source = outputs[report["sources"][str(tmp_path / "original.f90")]["replacement"]]
+    assert "cell(" in source  # Original guarded native alternative remains present.
+    assert not any("cell(" in text for path, text in outputs.items() if path.startswith("exact/"))

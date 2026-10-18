@@ -169,7 +169,7 @@ def analyze_interval_applicability(plan):
                     row["native_graph"] = record
                     row["native_graph_identity"] = digest(record)
                     proofs.append((proof, graph))
-                    require("native_graph_workload", "Bind parameterized call occurrences, loop/branch controls and native payload work to a safe runtime key; effect coverage alone is insufficient.", **location, operation=index)
+                    require("native_graph_workload", "Bind this original native graph to complete-process source/workload observations; internal branch values and iteration counts need not be predicted at entry.", **location, operation=index)
                 else:
                     row["native_graph"] = None
                     require("native_workload", "Native operation has execution/effect authority but no source-bound workload observation contract.", **location, operation=index)
@@ -185,11 +185,19 @@ def analyze_interval_applicability(plan):
                                   "native_participation": "preserve original checked completion and team context"})
     for item in public["cost_requirements"]:
         require(item["kind"], item["reason"], **{key: value for key, value in item.items() if key not in {"kind", "reason"}})
-    require("runtime_workload_key", "Bind descriptor and workload candidates to safe original evaluation points and whole-interval stability; no candidate is an emitted key yet.")
+    require("runtime_workload_key", "Bind only the finalized safe root-entry geometry and original workload identity; never hoist internal native controls or child initializers.")
     require("same_measured_alternative", "Preserve the checked source/configuration/worker identity across measurement and production; policy/profile fields have not been removed or declared equivalent.")
     require("application_build_attestation", "Bind executed compiler/options/source/header/object receipts for every original and generated object to a compiler-issued application build contract.")
     require("actual_execution_outcome", "Record whether the measured resident invocation executed the admitted alternative or guarded native fallback, with the independently observed native identity.")
     require("complete_interval_observations", "Measure paired complete original invocations including guards, inspectors, original teams, entry/interruption/exit transfers, synchronization, planning and cleanup; do not add these costs twice.")
+    if placement is not None:
+        from compiler.offload.selection_cost import PROTOCOL
+
+        attached = placement.public()
+        if attached["contract"].get("protocol") == PROTOCOL and attached.get("available") is True:
+            for requirement in requirements:
+                requirement["status"] = "covered_by_checked_interval_attachment"
+                requirement["attachment"] = attached["contract_sha256"]
     record = {
         "schema_version": 1, "kind": "checked-interval-cost-applicability",
         "plan_identity": plan.identity, "execution_identity": plan.execution_identity,
