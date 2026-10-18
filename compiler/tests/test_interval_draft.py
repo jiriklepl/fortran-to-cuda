@@ -398,6 +398,69 @@ def test_source_route_does_not_validate_unrelated_numerical_payloads(tmp_path, m
     assert draft.validate() is draft
 
 
+def test_native_context_does_not_consume_unrelated_numerical_payloads(tmp_path, monkeypatch):
+    from compiler.frontend.native_demand import prove_native_demand
+    from compiler.frontend.numerical_preparation import PreparedOriginalRegion
+
+    source = SOURCE.replace("call producer(old,viscosity,n)",
+                            "visits=visits+1\ncall producer(old,viscosity,n)")
+    draft = draft_only(tmp_path, source)
+    owner = draft._owner
+    original = tuple(owner.routine.execution.content)[0]
+    original_validate = PreparedOriginalRegion.validate
+    visited = []
+
+    def reject_payload(self, *_args, **_kwargs):
+        visited.append(self)
+        raise CompilationError("changed numerical payload must reject consumption")
+
+    monkeypatch.setattr(PreparedOriginalRegion, "validate", reject_payload)
+    context = draft.native_context(owner)
+    assert context.validate(owner.builder.analysis, owner.routine.qualified, (original,)) is context
+    assert "visits=visits+1" in draft.native_source()
+    effects = prove_native_demand(owner.builder.analysis, owner.routine.qualified,
+                                 (original,), context.local_bindings, context=context)
+    assert effects.validate(owner.builder.analysis, owner.routine.qualified,
+                            (original,), context.local_bindings) is effects
+    assert not visited
+    # Canonical context does not grant even the native operation permission to
+    # omit a demanded resource, or the numerical consumer/finalizer permission
+    # to reuse a changed payload.
+    with pytest.raises(CompilationError, match="complete interval context"):
+        effects.validate(owner.builder.analysis, owner.routine.qualified,
+                         (original,), context.local_bindings[:-1])
+    anchor = next(anchor for anchor in draft.numerical_anchors if anchor.prepared is not None)
+    with pytest.raises(CompilationError, match="changed numerical payload"):
+        anchor.prepared.validate(owner.builder.analysis, anchor.procedure, anchor.originals)
+    with pytest.raises(CompilationError, match="changed numerical payload"):
+        draft.finalize(owner)
+    monkeypatch.setattr(PreparedOriginalRegion, "validate", original_validate)
+    assert draft.validate() is draft
+
+
+@pytest.mark.parametrize("mutation", ["facts", "configuration", "source_registry", "mapping"])
+def test_native_context_rejects_stale_source_authority(tmp_path, mutation):
+    draft = draft_only(tmp_path, SOURCE)
+    builder = draft._owner.builder
+    context = draft.native_context(draft._owner)
+    original = tuple(draft._owner.routine.execution.content)[0]
+    if mutation == "facts":
+        builder.facts["captures"]["interval_fields::star"]["initialized"] = "none"
+    elif mutation == "configuration":
+        builder.config = replace(builder.config, host_threads=2)
+    elif mutation == "source_registry":
+        builder.analysis.routines = dict(builder.analysis.routines)
+    else:
+        edge = next(edge for edge in draft.edges if edge.association is not None)
+        member = draft.members[edge.callee]
+        local, target = member.mappings[0]
+        other = next(binding for binding in draft.demand.bindings if binding.rank and binding is not target)
+        changed = replace(member, mappings=((local, other), *member.mappings[1:]))
+        object.__setattr__(draft, "members", tuple(changed if item is member else item for item in draft.members))
+    with pytest.raises(CompilationError):
+        context.validate(builder.analysis, builder.entry.qualified, (original,))
+
+
 @pytest.mark.parametrize("mutation", ["facts", "configuration", "source_registry"])
 def test_source_route_rejects_stale_compilation_context(tmp_path, mutation):
     draft = draft_only(tmp_path, routing_source())
