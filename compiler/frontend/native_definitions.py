@@ -29,6 +29,7 @@ from compiler.frontend.native_sections import (
     RECTANGLE_LIMIT,
     NativeRectangle,
     NativeSections,
+    analyze_native_logical_accesses,
     analyze_native_sections,
 )
 from compiler.frontend.structured_effects import _freeze, _thaw
@@ -314,7 +315,8 @@ def _transfer_steps(steps, resources, entry_rectangles=None, *, kills=(), joined
     return NativeDefinitionTransfer(MappingProxyType(state), tuple(uncovered))
 
 
-def _derive_joined(analysis, procedure, selection, include_entry, descriptor_window, completion, consume):
+def _derive_joined(analysis, procedure, selection, include_entry, descriptor_window, completion, consume,
+                   *, logical=False):
     """Retain the whole original team; definitions become available at its join.
 
     Unit projections describe source accesses only. In particular, preceding
@@ -454,7 +456,8 @@ def _derive_joined(analysis, procedure, selection, include_entry, descriptor_win
         if ordered_effects > analysis.operation_limit:
             raise CompilationError("joined definition ordered effect budget exhausted")
         charge(len(summary["ordered_effects"]))
-        sections = analyze_native_sections(projection, local)
+        sections = (analyze_native_logical_accesses(projection, local) if logical
+                    else analyze_native_sections(projection, local))
         if not sections.available:
             raise CompilationError("joined definition sections unavailable: " + str(sections.reason))
         for resource in sections.resources:
@@ -492,9 +495,11 @@ def _derive_joined(analysis, procedure, selection, include_entry, descriptor_win
     return tuple(steps), (), record
 
 
-def _derive(analysis, procedure, selection, include_entry, descriptor_window=None, completion=None, consume=None):
+def _derive(analysis, procedure, selection, include_entry, descriptor_window=None, completion=None, consume=None,
+            *, logical=False):
     if completion is not None:
-        return _derive_joined(analysis, procedure, selection, include_entry, descriptor_window, completion, consume)
+        return _derive_joined(analysis, procedure, selection, include_entry, descriptor_window, completion, consume,
+                              logical=logical)
     routine = analysis._require_original(procedure)
     if (not isinstance(selection, tuple) or not selection or len(selection) > analysis.operation_limit
             or any(isinstance(item, str) for item in selection) or type(include_entry) is not bool):
@@ -575,8 +580,14 @@ def _derive(analysis, procedure, selection, include_entry, descriptor_window=Non
                 or any(effect["kind"] not in {"read", "write", "overwrite", "descriptor_read"}
                        for effect in summary["ordered_effects"])):
             raise CompilationError("native definitions require complete original ordered effects and completion")
-        sections = analysis.native_sections_for_nodes(procedure, (identity,), capture_locals=True,
-                                                     descriptor_window=descriptor)
+        if logical:
+            projection, local, _guard = analysis._segment_projection(procedure, (identity,),
+                capture_locals=True, descriptor_window=descriptor)
+            projection._native_sections_include_entry = False
+            sections = analyze_native_logical_accesses(projection, local)
+        else:
+            sections = analysis.native_sections_for_nodes(procedure, (identity,), capture_locals=True,
+                                                         descriptor_window=descriptor)
         if not sections.available:
             raise CompilationError("native definition sections unavailable: " + str(sections.reason))
         scalar_writes, iterators = set(), set()
@@ -696,5 +707,238 @@ def prove_native_definitions(analysis, procedure, original_selection, *, include
         raise CompilationError("native definition proof registry budget exhausted")
     proof = NativeDefinitionProof(procedure, identity, steps, analysis, original_selection, include_entry,
                                   descriptor_window, kills, _freeze(record), completion)
+    registry[identity] = proof
+    return proof
+
+
+@dataclass(frozen=True)
+class NativeDefinitionValueRead:
+    node_id: str
+    guard: tuple[str, ...]
+    source: object
+
+    def public(self):
+        return {"node_id": self.node_id, "guard": list(self.guard), **self.source.public()}
+
+
+@dataclass(frozen=True)
+class NativeDefinitionStateTransfer:
+    definitions: object
+    candidate_definitions: object
+    uncovered_reads: tuple[NativeDefinitionRead, ...]
+    immutable_reads: tuple[NativeDefinitionRead, ...]
+    original_reads: tuple[NativeDefinitionValueRead, ...]
+
+    @property
+    def reads_covered(self):
+        return not self.uncovered_reads
+
+    def public(self):
+        return {"defined_sections": {root: [box.public() for box in boxes]
+                                     for root, boxes in self.definitions.items()},
+                "candidate_sections": {root: [box.public() for box in boxes]
+                                       for root, boxes in self.candidate_definitions.items()},
+                "uncovered_array_reads": [read.public() for read in self.uncovered_reads],
+                "immutable_value_reads": [read.public() for read in self.immutable_reads],
+                "original_read_obligations": [read.public() for read in self.original_reads],
+                "array_reads_covered": self.reads_covered,
+                "requires_valid_original_native_execution": True,
+                "requires_original_scalar_and_index_read_validity": True,
+                "entry_rectangles_require_independent_admission": True,
+                "physical_mapping_authority": False, "execution_authorized": False}
+
+
+def _state_reads(steps):
+    result = []
+
+    def visit(step):
+        if step.sections is not None:
+            result.extend(NativeDefinitionValueRead(step.node_id, step.guard, read)
+                          for read in getattr(step.sections, "original_reads", ()))
+        for child in step.children:
+            visit(child)
+        for condition, body in step.alternatives:
+            if condition is not None:
+                visit(condition)
+            visit(body)
+
+    for step in steps:
+        visit(step)
+    return tuple(result)
+
+
+def _state_access_authorities(steps):
+    """Exact source/binding references are distinct from portable geometry."""
+    result = []
+
+    def bound(item):
+        if item is not None:
+            result.extend((dependency.resource, dependency.kind, id(dependency.binding))
+                          for dependency in item.dependencies)
+            for child in item.children:
+                bound(child)
+
+    def visit(step):
+        if step.sections is not None:
+            result.extend((id(read.binding), id(read.node))
+                          for read in getattr(step.sections, "original_reads", ()))
+            for resource in step.sections.resources:
+                for label in ("reads", "writes", "overwrites"):
+                    for box in getattr(resource, label):
+                        result.append(id(box.node))
+                        for axis in box.axes:
+                            bound(axis.lower)
+                            bound(axis.upper)
+                        for iteration in box.iterations:
+                            bound(iteration.lower)
+                            bound(iteration.upper)
+        for child in step.children:
+            visit(child)
+        for condition, body in step.alternatives:
+            if condition is not None:
+                visit(condition)
+            visit(body)
+
+    for step in steps:
+        visit(step)
+    return tuple(result)
+
+
+def _derive_definition_state(analysis, procedure, selection, outputs, include_entry,
+                             descriptor_window, completion, immutable_inputs, consume):
+    from compiler.scopes.immutable_inputs import ImmutableArrayInput
+
+    routine = analysis._require_original(procedure)
+    if (not isinstance(outputs, tuple) or not outputs or len(outputs) > analysis.operation_limit
+            or len({id(binding) for binding in outputs}) != len(outputs)):
+        raise CompilationError("native definition state requires bounded exact output bindings")
+    for binding in outputs:
+        if (analysis._binding(routine.scope, binding.name) is not binding or not 1 <= binding.rank <= 4
+                or binding.dtype not in {"real", "integer", "logical"}):
+            raise CompilationError("native definition state output lacks its original array binding")
+    associations = {}
+    for proof in immutable_inputs:
+        if type(proof) is not ImmutableArrayInput:
+            raise CompilationError("native definition immutable reads require original association authority")
+        proof.validate(analysis, routine)
+        if proof.resource in associations:
+            raise CompilationError("native definition immutable input association is repeated")
+        if any(proof.formal is binding for binding in outputs):
+            raise CompilationError("native definition immutable input cannot be an output")
+        associations[proof.resource] = proof
+    steps, kills, record = _derive(analysis, procedure, selection, include_entry, descriptor_window,
+                                   completion, consume, logical=True)
+    record = {**record, "schema_version": 1, "kind": "native_logical_definition_state",
+              "outputs": [binding.public() for binding in outputs],
+              "immutable_inputs": [associations[root].public() for root in sorted(associations)],
+              "original_read_obligations": [read.public() for read in _state_reads(steps)],
+              "physical_mapping_authority": False, "descriptor_lifetime_authority": False,
+              "requires_runtime_layout_alias_and_coverage_checks": False,
+              "requires_independent_entry_definition_and_lifetime_authority": True,
+              "requires_valid_original_native_execution": True,
+              "requires_covered_array_reads_before_output_credit": True}
+    return steps, kills, _thaw(_freeze(record))
+
+
+def _definition_state_registry(analysis):
+    registry = getattr(analysis, "_native_definition_state_proofs", None)
+    if (registry is None
+            or getattr(analysis, "_native_definition_state_registry_owner", None) is not analysis):
+        registry = {}
+        analysis._native_definition_state_proofs = registry
+        analysis._native_definition_state_registry_owner = analysis
+    return registry
+
+
+@dataclass(frozen=True)
+class NativeDefinitionStateProof:
+    """Logical native output transfer, separate from device coherence proofs."""
+
+    procedure: str
+    identity: str
+    steps: tuple[NativeDefinitionStep, ...]
+    outputs: tuple
+    immutable_inputs: tuple
+    _analysis: object = field(repr=False, compare=False)
+    _selection: tuple = field(repr=False, compare=False)
+    _include_entry: bool = field(repr=False, compare=False)
+    _descriptor_window: object = field(repr=False, compare=False)
+    _completion: object = field(repr=False, compare=False)
+    _kills: tuple[str, ...] = field(repr=False, compare=False)
+    _record: object = field(repr=False, compare=False)
+
+    @property
+    def original_reads(self):
+        return _state_reads(self.steps)
+
+    def public(self):
+        return {"proof_identity": self.identity, **_thaw(self._record)}
+
+    def validate(self, analysis, procedure, original_selection, *, consume=None):
+        if (analysis is not self._analysis or procedure != self.procedure
+                or not isinstance(original_selection, tuple) or len(original_selection) != len(self._selection)
+                or any(left is not right for left, right in zip(original_selection, self._selection, strict=True))
+                or getattr(analysis, "_native_definition_state_registry_owner", None) is not analysis
+                or getattr(analysis, "_native_definition_state_proofs", {}).get(self.identity) is not self):
+            raise CompilationError("native definition state lacks registered exact source authority")
+        steps, kills, record = _derive_definition_state(analysis, procedure, original_selection,
+            self.outputs, self._include_entry, self._descriptor_window, self._completion, self.immutable_inputs, consume)
+        if (record != _thaw(self._record) or kills != self._kills
+                or [step.public() for step in steps] != [step.public() for step in self.steps]
+                or _state_access_authorities(steps) != _state_access_authorities(self.steps)):
+            raise CompilationError("native definition state source or read authority changed")
+        return self
+
+    def transfer(self, entry_rectangles=None, *, consume=None):
+        self.validate(self._analysis, self.procedure, self._selection, consume=consume)
+        resources = {item["resource"]: item["rank"] for item in _thaw(self._record)["resources"]}
+        result = _transfer_steps(self.steps, resources, entry_rectangles, kills=self._kills,
+            joined=self._completion is not None, operation_limit=self._analysis.operation_limit, consume=consume)
+        associations = {proof.resource: proof for proof in self.immutable_inputs}
+        original_reads = self.original_reads
+        uncovered, immutable = [], []
+        for read in result.uncovered_reads:
+            proof = associations.get(read.resource)
+            if proof is not None and any(item.source.binding is proof.formal and item.source.node is read.rectangle.node
+                                         for item in original_reads):
+                # The fixed PARAMETER association proves value-definedness for
+                # valid original reads. It grants no index range, early payload
+                # evaluation, whole output fact or device storage identity.
+                immutable.append(read)
+            else:
+                uncovered.append(read)
+        candidates = {binding.root: result.definitions.get(binding.root, ()) for binding in self.outputs}
+        definitions = {root: () if uncovered else boxes for root, boxes in candidates.items()}
+        return NativeDefinitionStateTransfer(MappingProxyType(definitions), MappingProxyType(candidates),
+            tuple(uncovered), tuple(immutable), original_reads)
+
+
+def prove_native_definition_state(analysis, procedure, original_selection, *, outputs, include_entry=False,
+                                  descriptor_window=None, completion=None, immutable_inputs=None, consume=None):
+    """Issue conditional native definition state, without physical sections."""
+    if immutable_inputs is None:
+        immutable_inputs = {}
+    if not isinstance(immutable_inputs, (dict, MappingProxyType)):
+        raise CompilationError("native definition immutable inputs require an original association map")
+    associations = tuple(immutable_inputs[key] for key in sorted(immutable_inputs))
+    if any(key != proof.resource for key, proof in zip(sorted(immutable_inputs), associations, strict=True)):
+        raise CompilationError("native definition immutable input key differs from its original formal")
+    steps, kills, record = _derive_definition_state(analysis, procedure, original_selection, outputs,
+        include_entry, descriptor_window, completion, associations, consume)
+    identity = _hash(record)
+    registry = _definition_state_registry(analysis)
+    if identity in registry:
+        proof = registry[identity]
+        if (type(proof) is not NativeDefinitionStateProof or proof._analysis is not analysis
+                or proof.procedure != procedure or len(proof._selection) != len(original_selection)
+                or any(left is not right for left, right in zip(proof._selection, original_selection, strict=True))
+                or _thaw(proof._record) != record
+                or _state_access_authorities(proof.steps) != _state_access_authorities(steps)):
+            raise CompilationError("native definition state cached authority changed")
+        return proof
+    if len(registry) >= analysis.procedure_limit:
+        raise CompilationError("native definition state registry budget exhausted")
+    proof = NativeDefinitionStateProof(procedure, identity, steps, outputs, associations, analysis,
+        original_selection, include_entry, descriptor_window, completion, kills, _freeze(record))
     registry[identity] = proof
     return proof

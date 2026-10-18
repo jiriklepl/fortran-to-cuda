@@ -4,17 +4,109 @@ Both require original synchronized work inside a complete joined team. Neither
 proof authorizes standalone execution or establishes GPU legality by itself.
 """
 
+import json
 from dataclasses import dataclass, field
 from hashlib import sha256
-import json
 
 from fparser.two.utils import walk
 
 from compiler.frontend.native_completion import _directive, _joined_completion_facts
 from compiler.ir import CompilationError
 
-WORKSHARING_COMPLETION_VERSION = 1
-WORKSHARING_NATIVE_COMPLETION_VERSION = 1
+WORKSHARING_COMPLETION_VERSION = 2
+WORKSHARING_NATIVE_COMPLETION_VERSION = 2
+ORDERED_WORKSHARING_VERSION = 1
+
+
+def _inventory_registry(analysis):
+    registry = getattr(analysis, "_ordered_worksharing_inventories", None)
+    if registry is None or getattr(analysis, "_ordered_worksharing_registry_owner", None) is not analysis:
+        registry = {}
+        analysis._ordered_worksharing_inventories = registry
+        analysis._ordered_worksharing_registry_owner = analysis
+    return registry
+
+
+@dataclass(frozen=True)
+class OrderedWorksharingInventory:
+    """One source-authenticated team and its complete ordered worksharing cuts.
+
+    The inventory proves participation and completion only. Numerical lowering,
+    native effects and physical sections keep their distinct proof issuers.
+    """
+    procedure: str
+    structured_identity: str
+    identity: str
+    selected_node_ids: tuple[str, ...]
+    parent: object = field(repr=False, compare=False)
+    units: tuple = field(repr=False, compare=False)
+    owned_nodes: frozenset = field(repr=False, compare=False)
+    covered_units: tuple = field(repr=False, compare=False)
+    _analysis: object = field(repr=False, compare=False)
+    _key: tuple = field(repr=False, compare=False)
+    _limits: tuple = field(repr=False)
+
+    def validate(self, analysis, procedure, selected):
+        graph, identities = analysis._selected_source(procedure, selected)
+        limits = (analysis.depth_limit, analysis.procedure_limit, analysis.operation_limit)
+        if (analysis is not self._analysis or procedure != self.procedure
+                or graph.identity != self.structured_identity or identities != self.selected_node_ids
+                or limits != self._limits or _inventory_registry(analysis).get(self._key) is not self):
+            raise CompilationError("ordered worksharing inventory lacks registered original-team authority")
+        self.parent.validate(analysis, procedure, identities)
+        return self
+
+    def public(self):
+        return {"schema_version": ORDERED_WORKSHARING_VERSION,
+                "proof_role": "ordered_original_worksharing_inventory",
+                "inventory_identity": self.identity, "procedure": self.procedure,
+                "structured_identity": self.structured_identity,
+                "parent_completion_identity": self.parent.identity,
+                "selected_original_nodes": list(self.selected_node_ids),
+                "worksharing_units": len(self.units), "native_effects_authority": False,
+                "gpu_legality_established": False, "execution_authorized": False}
+
+
+def ordered_worksharing_inventory(analysis, procedure, selected):
+    """Issue the complete source-only team inventory once per exact analysis.
+
+    Reuse reauthenticates the source, parent token and unchanged logical limits;
+    it never substitutes remembered success for numerical or native effects.
+    """
+    graph, identities = analysis._selected_source(procedure, selected)
+    limits = (analysis.depth_limit, analysis.procedure_limit, analysis.operation_limit)
+    key = (id(analysis), procedure, graph.identity, identities, limits)
+    registry = _inventory_registry(analysis)
+    if key in registry:
+        return registry[key].validate(analysis, procedure, selected)
+    parent = analysis.joined_completion(procedure, selected)
+    units = []
+    _joined_completion_facts(analysis, procedure, selected, worksharing=units)
+    if not units:
+        raise CompilationError("worksharing inventory requires a separate original PARALLEL and DO")
+    if len(units) > analysis.operation_limit:
+        raise CompilationError("ordered worksharing inventory source-unit budget exhausted")
+    if any(_directive(ending) == "end do nowait" for _, _, ending in units if ending is not None):
+        raise CompilationError("worksharing cuts require completion at every original DO; NOWAIT remains native")
+    originals = tuple(node for identity in identities for node in graph.source_nodes(identity))
+    owned = frozenset(id(node) for original in originals for node in walk(original))
+    covered = []
+    for original in originals:
+        for node in walk(original):
+            if type(node).__name__ in {"Block_Nonlabel_Do_Construct", "If_Construct"}:
+                descendants = {id(item) for item in walk(node)}
+                covered.append((id(node), tuple(index for index, (_, loop, _) in enumerate(units)
+                                                if id(loop) in descendants)))
+    record = {"version": ORDERED_WORKSHARING_VERSION, "parent": parent.identity,
+              "selected": identities, "units": [graph.node_id(loop) for _, loop, _ in units],
+              "limits": limits}
+    identity = sha256(json.dumps(record, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    token = OrderedWorksharingInventory(procedure, graph.identity, identity, identities, parent,
+        tuple(units), owned, tuple(covered), analysis, key, limits)
+    if len(registry) >= analysis.operation_limit * analysis.procedure_limit:
+        raise CompilationError("ordered worksharing inventory registry budget exhausted")
+    registry[key] = token
+    return token.validate(analysis, procedure, selected)
 
 
 @dataclass(frozen=True)
@@ -25,6 +117,7 @@ class WorksharingCompletionProof:
     selected_node_ids: tuple[str, ...]
     private_roots: tuple[str, ...]
     parent: object = field(repr=False, compare=False)
+    inventory: object = field(repr=False, compare=False)
     opening: object = field(repr=False, compare=False)
     loop: object = field(repr=False, compare=False)
     ending: object = field(repr=False, compare=False)
@@ -35,7 +128,7 @@ class WorksharingCompletionProof:
                 or identities != self.selected_node_ids
                 or analysis._worksharing_completions.get(self.identity) is not self):
             raise CompilationError('worksharing subregion lacks registered original-team authority')
-        self.parent.validate(analysis, procedure, self.parent.selected_node_ids)
+        self.inventory.validate(analysis, procedure, self.parent.selected_node_ids)
         return self
 
     def public(self):
@@ -44,6 +137,7 @@ class WorksharingCompletionProof:
                 'available': True,
                 'procedure': self.procedure, 'structured_identity': self.structured_identity,
                 'parent_completion_identity': self.parent.identity,
+                'ordered_inventory_identity': self.inventory.identity,
                 'selected_original_nodes': list(self.selected_node_ids),
                 'private_resources': list(self.private_roots),
                 'caller_contract': 'all members of the original team at the original reached DO',
@@ -101,6 +195,7 @@ class WorksharingNativeCompletionProof:
     selected_node_ids: tuple[str, ...]
     private_roots: tuple[str, ...]
     parent: object = field(repr=False, compare=False)
+    inventory: object = field(repr=False, compare=False)
     original_nodes: tuple[object, ...] = field(repr=False, compare=False)
     units: tuple[tuple[object, object, object | None], ...] = field(repr=False, compare=False)
 
@@ -110,7 +205,7 @@ class WorksharingNativeCompletionProof:
                 or identities != self.selected_node_ids
                 or analysis._worksharing_native_completions.get(self.identity) is not self):
             raise CompilationError('native worksharing completion lacks registered original-team authority')
-        self.parent.validate(analysis, procedure, self.parent.selected_node_ids)
+        self.inventory.validate(analysis, procedure, self.parent.selected_node_ids)
         return self
 
     def public(self):
@@ -120,6 +215,7 @@ class WorksharingNativeCompletionProof:
                 'reason': 'selected original native worksharing units complete before coherence commit',
                 'procedure': self.procedure, 'structured_identity': self.structured_identity,
                 'parent_completion_identity': self.parent.identity,
+                'ordered_inventory_identity': self.inventory.identity,
                 'selected_original_nodes': list(self.selected_node_ids),
                 'private_resources': list(self.private_roots), 'worksharing_units': len(self.units),
                 'caller_contract': 'all members of the original team at the original reached worksharing units',
@@ -140,27 +236,20 @@ def prove_worksharing_native_completion(analysis, procedure, joined, selected):
     units cannot be skipped or taken from differently guarded sibling arms.
     Source effects and physical sections still require their separate proofs.
     """
-    parent = analysis.joined_completion(procedure, joined)
-    units = []
-    _joined_completion_facts(analysis, procedure, joined, worksharing=units)
-    if not units:
-        raise CompilationError('native worksharing subsegment requires a separate original PARALLEL and DO')
-    if any(_directive(ending) == 'end do nowait' for _, _, ending in units if ending is not None):
-        raise CompilationError('native worksharing subsegments require completion at every original DO; NOWAIT remains native')
+    inventory = ordered_worksharing_inventory(analysis, procedure, joined)
+    parent, units = inventory.parent, inventory.units
     graph, identities = analysis._selected_source(procedure, selected)
     if not identities or len(identities) > analysis.operation_limit:
         raise CompilationError('native worksharing selection requires a bounded nonempty original segment')
     originals = tuple(node for identity in identities for node in graph.source_nodes(identity))
-    owned = {id(node) for identity in parent.selected_node_ids
-             for original in graph.source_nodes(identity) for node in walk(original)}
+    covered_by_node = dict(inventory.covered_units)
     unit_indices = []
     for node in originals:
-        if id(node) not in owned:
+        if id(node) not in inventory.owned_nodes:
             raise CompilationError('native worksharing selection must remain inside its original joined team')
         if type(node).__name__ not in {'Block_Nonlabel_Do_Construct', 'If_Construct'}:
             raise CompilationError('native worksharing selection requires associated original DOs or complete uniform branches')
-        descendants = {id(item) for item in walk(node)}
-        covered = [index for index, (_, loop, _) in enumerate(units) if id(loop) in descendants]
+        covered = covered_by_node.get(id(node), ())
         if not covered or (type(node).__name__ == 'Block_Nonlabel_Do_Construct'
                            and not any(node is units[index][1] for index in covered)):
             raise CompilationError('native worksharing selection must retain complete associated original DOs')
@@ -169,10 +258,11 @@ def prove_worksharing_native_completion(analysis, procedure, joined, selected):
         raise CompilationError('native worksharing selection must retain a contiguous ordered set of original units')
     selected_units = tuple(units[index] for index in unit_indices)
     record = {'version': WORKSHARING_NATIVE_COMPLETION_VERSION, 'parent': parent.identity,
+              'ordered_inventory': inventory.identity,
               'selected': identities, 'units': [graph.node_id(loop) for _, loop, _ in selected_units]}
     identity = sha256(json.dumps(record, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     return WorksharingNativeCompletionProof(procedure, graph.identity, identity, identities,
-                                            parent.private_roots, parent, originals, selected_units)
+                                            parent.private_roots, parent, inventory, originals, selected_units)
 
 
 def prove_worksharing_completion(analysis, procedure, joined, selected):
@@ -182,13 +272,8 @@ def prove_worksharing_completion(analysis, procedure, joined, selected):
     unit may still be running when a later unit reaches its coordinator.
     Combined PARALLEL DO continues to use the whole-group analysis path.
     """
-    parent = analysis.joined_completion(procedure, joined)
-    units = []
-    _joined_completion_facts(analysis, procedure, joined, worksharing=units)
-    if not units:
-        raise CompilationError('worksharing subregion requires a separate original PARALLEL and DO')
-    if any(_directive(ending) == 'end do nowait' for _, _, ending in units if ending is not None):
-        raise CompilationError('worksharing subregions require completion at every original DO; NOWAIT remains native')
+    inventory = ordered_worksharing_inventory(analysis, procedure, joined)
+    parent, units = inventory.parent, inventory.units
     graph, identities = analysis._selected_source(procedure, selected)
     # The enclosing proof authenticated these original loop objects already.
     # Revalidating the complete source graph for every possible sibling makes
@@ -199,7 +284,8 @@ def prove_worksharing_completion(analysis, procedure, joined, selected):
         raise CompilationError('worksharing selection must be exactly one associated original DO')
     opening, loop, ending = matches[0]
     record = {'version': WORKSHARING_COMPLETION_VERSION, 'parent': parent.identity,
+              'ordered_inventory': inventory.identity,
               'selected': identities, 'barrier': 'explicit' if ending is not None else 'implicit'}
     identity = sha256(json.dumps(record, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
     return WorksharingCompletionProof(procedure, graph.identity, identity, identities,
-                                      parent.private_roots, parent, opening, loop, ending)
+                                      parent.private_roots, parent, inventory, opening, loop, ending)

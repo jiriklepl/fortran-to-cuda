@@ -136,7 +136,71 @@ class NativeSections:
                 "rectangle_limit": RECTANGLE_LIMIT, "resources": [resource.public() for resource in self.resources]}
 
 
+@dataclass(frozen=True)
+class NativeOriginalRead:
+    binding: object = field(compare=False, repr=False)
+    node: object = field(compare=False, repr=False)
+    kind: str
+    iterations: tuple[NativeIteration, ...] = ()
+    loop_control_defined: bool = False
+
+    def public(self):
+        return {"resource": self.binding.root, "rank": self.binding.rank,
+                "source_expression": str(self.node), "kind": self.kind,
+                "iteration_guards": [item.public() for item in self.iterations],
+                "defined_by_original_loop_control": self.loop_control_defined,
+                "evaluation": "unchanged original native position; validity remains required"}
+
+
+@dataclass(frozen=True)
+class NativeLogicalResourceAccess:
+    resource: str
+    rank: int
+    reads: tuple[NativeRectangle, ...]
+    writes: tuple[NativeRectangle, ...]
+    overwrites: tuple[NativeRectangle, ...]
+
+    @property
+    def dependencies(self):
+        # Only the typed expressions are shared with physical refinement.
+        # Empty lower-bound metadata supplies no storage mapping authority.
+        return NativeResourceSections(self.resource, self.rank, (), self.reads,
+                                      self.writes, self.overwrites).dependencies
+
+    def public(self):
+        return {"resource": self.resource, "rank": self.rank,
+                "dependencies": [item.public() for item in self.dependencies],
+                **{label: [box.public() for box in getattr(self, label)]
+                   for label in ("reads", "writes", "overwrites")}}
+
+
+@dataclass(frozen=True)
+class NativeLogicalAccesses:
+    available: bool
+    reason: str | None = None
+    resources: tuple[NativeLogicalResourceAccess, ...] = ()
+    original_reads: tuple[NativeOriginalRead, ...] = ()
+
+    def public(self):
+        return {"schema_version": 1, "available": self.available, "reason": self.reason,
+                "coordinate_system": "original source subscripts only",
+                "physical_mapping_authority": False, "descriptor_lifetime_authority": False,
+                "rectangle_limit": RECTANGLE_LIMIT,
+                "resources": [resource.public() for resource in self.resources],
+                "original_reads": [read.public() for read in self.original_reads]}
+
+
 def analyze_native_sections(analysis, routine):
+    """Physical refinement retains its original assumed-shape requirements."""
+    return _analyze_native_accesses(analysis, routine, logical=False)
+
+
+def analyze_native_logical_accesses(analysis, routine):
+    """Source-coordinate definition geometry; never a physical capture proof."""
+    return _analyze_native_accesses(analysis, routine, logical=True)
+
+
+def _analyze_native_accesses(analysis, routine, *, logical):
     """Derive exact bounded rectangles from original assignment/DO syntax.
 
     Every runtime bound remains a typed, source-backed expression. An admitted
@@ -150,6 +214,26 @@ def analyze_native_sections(analysis, routine):
     operation_count = 0
     completion = getattr(analysis, "_native_sections_completion", None)
     private_roots = set(completion.private_roots) if completion is not None else set()
+    original_reads = {}
+
+    def original_binding(binding, node):
+        source = getattr(analysis, "_descriptor_source", analysis)
+        original = source.routines[routine.qualified]
+        scope = source.source_scope_for(node, original.scope)
+        retained = source._binding(scope, binding.name)
+        if retained is None or retained.root != binding.root:
+            raise CompilationError("logical native access lost its original binding")
+        return retained
+
+    def read(binding, node, kind):
+        if not logical:
+            return
+        binding = original_binding(binding, node)
+        key = id(node), binding.root, kind
+        original_reads.setdefault(key, NativeOriginalRead(binding, node, kind,
+            tuple(item[0] for item in loops.values()), binding.root in loops))
+        if len(original_reads) > analysis.operation_limit * RECTANGLE_LIMIT:
+            raise CompilationError("native logical read-obligation budget exhausted")
 
     def scope_for(node):
         return analysis.source_scope_for(node, routine.scope)
@@ -175,8 +259,11 @@ def analyze_native_sections(analysis, routine):
     def convert(item):
         if item.kind == "literal":
             integer_literal(str(item.value), location)
+        dependencies = (tuple(SourceDependency(dep.resource, dep.kind,
+                            original_binding(dep.binding, routine.execution)) for dep in item.dependencies)
+                        if logical else item.dependencies)
         return NativeBound(item.kind, item.value, item.dimension, item.resource, item.operator,
-                           tuple(convert(child) for child in item.children), item.dependencies)
+                           tuple(convert(child) for child in item.children), dependencies)
 
     def constant(item):
         if item.kind == "literal":
@@ -235,7 +322,10 @@ def analyze_native_sections(analysis, routine):
                 if other is not None and other.rank:
                     binding = other
             result = convert(_bound(analysis, scope_for(node), node, binding, dimension))
+        if logical:
+            result = convert(result)
         for dependency in result.dependencies:
+            read(dependency.binding, node, dependency.kind)
             if (not declaration and dependency.kind == "scalar_read" and dependency.resource in scalar_writes
                     and dependency.resource not in loops):
                 raise CompilationError("native section bound changes within the reached segment: " + dependency.resource)
@@ -247,6 +337,11 @@ def analyze_native_sections(analysis, routine):
 
     def resource(binding):
         if binding.root not in resources:
+            if logical:
+                if binding.attributes & {"pointer", "optional", "volatile", "asynchronous"}:
+                    raise CompilationError("native logical association requires separate authority: " + binding.root)
+                resources[binding.root] = {"binding": binding, "reads": [], "writes": [], "overwrites": []}
+                return resources[binding.root]
             if binding.name in routine.arguments and "allocatable" not in binding.attributes and any(
                     _kind(axis) != "Assumed_Shape_Spec" for axis in binding.shape_nodes):
                 # An explicit-shape dummy may describe only a prefix of its
@@ -394,8 +489,13 @@ def analyze_native_sections(analysis, routine):
         binding, indices = reference(node)
         if binding is None:
             raise CompilationError("native section storage is unresolved: " + str(node))
-        if binding.root in private_roots:
+        if binding.root in private_roots and not logical:
             return
+        if action == "reads":
+            read(binding, node, "array_read" if binding.rank else "scalar_read")
+        if logical:
+            for index in indices:
+                expression(index)
         if not binding.rank:
             if indices:
                 raise CompilationError("native section reference may be an unresolved function or indexed scalar")
@@ -443,6 +543,8 @@ def analyze_native_sections(analysis, routine):
                 raise CompilationError("native descriptor/model inquiries require positional whole-variable arguments")
             if descriptor and analysis._binding(scope, arguments[0]) is None:
                 raise CompilationError("native descriptor/model inquiry storage is unresolved")
+            if descriptor:
+                read(analysis._binding(scope, arguments[0]), arguments[0], "descriptor_read")
             for index, argument in enumerate(arguments):
                 if _kind(argument) == "Actual_Arg_Spec":
                     argument = argument.items[1]
@@ -540,7 +642,7 @@ def analyze_native_sections(analysis, routine):
                         scalar_writes.add(binding.root)
         specification = next((node for node in _children(routine.scope.node)
                               if _kind(node) == "Specification_Part"), None)
-        for declaration in _children(specification):
+        for declaration in () if logical else _children(specification):
             if _kind(declaration) != "Type_Declaration_Stmt":
                 continue
             _, attributes, entities = declaration.items
@@ -567,10 +669,15 @@ def analyze_native_sections(analysis, routine):
             if (getattr(analysis, "_native_sections_include_entry", True)
                     and entry["binding"].intent == "out" and entry["reads"]):
                 raise CompilationError("native INTENT(OUT) reads require original-position definition hooks")
+        if logical:
+            return NativeLogicalAccesses(True, resources=tuple(
+                NativeLogicalResourceAccess(root, entry["binding"].rank,
+                    *(tuple(entry[label]) for label in ("reads", "writes", "overwrites")))
+                for root, entry in sorted(resources.items())), original_reads=tuple(original_reads.values()))
         return NativeSections(True, resources=tuple(
             NativeResourceSections(root, entry["binding"].rank, entry["lowers"],
                                    *(tuple(entry[label]) for label in ("reads", "writes", "overwrites")),
                                    entry["lower_expressions"], entry["descriptor"], entry["descriptor_origin"])
             for root, entry in sorted(resources.items())))
     except CompilationError as error:
-        return NativeSections(False, str(error))
+        return NativeLogicalAccesses(False, str(error)) if logical else NativeSections(False, str(error))

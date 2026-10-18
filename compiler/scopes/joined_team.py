@@ -11,6 +11,7 @@ from copy import copy
 from fparser.two.utils import walk
 
 from compiler.frontend.source_effects import _kind
+from compiler.frontend.worksharing_completion import ordered_worksharing_inventory
 from compiler.ir import CompilationError
 from compiler.scopes.segments import (
     Branch,
@@ -55,8 +56,11 @@ class JoinedTeam(StructuredScope):
         self.close_guards = {}
         self.operation_count, self.numerical_units, self.rejections = 0, [], []
         self.original_nodes = original_roots(builder.inline.original_selection(nodes))
+        inventory = ordered_worksharing_inventory(builder.analysis, builder.entry.qualified, self.original_nodes)
         self.completion, candidates = prepare_worksharing_inventory(builder, builder.entry.qualified,
                                                                     self.original_nodes)
+        if self.completion is not inventory.parent:
+            raise CompilationError("mixed original team completion differs from its source inventory")
         self.candidates_by_loop = {id(candidate.unit[1]): candidate for candidate in candidates}
         self.units_by_loop = {key: candidate.unit for key, candidate in self.candidates_by_loop.items()}
         self.first = statement_span(nodes[0])[0]
