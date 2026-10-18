@@ -19,6 +19,7 @@ from compiler.offload.application_build import (
 from compiler.offload.selection_cost import process_evidence_decision
 from compiler.offload.selection_validation import (
     POLICY_PROTOCOL,
+    RAW_FORMAT,
     RECEIPT_PROTOCOL,
     VTK_FORMAT,
     _compare_field,
@@ -87,8 +88,7 @@ def bind_selection(p, contract):
     p["receipt"], p["receipt_sha256"] = save(p["root"] / "actual-receipt.json", p["actual"])
 
 
-@pytest.fixture
-def campaign(prepared):
+def _campaign(prepared, *, output_format=VTK_FORMAT, version=2):
     p = prepared
     contract, evidence = process_fixture()
     contract["selection_bundle"]["groups"] = [{"selection_identity": contract["selection_identity"]}]
@@ -96,7 +96,8 @@ def campaign(prepared):
                                                        if key != "identity"})
     contract["sources"] = p["arguments"]["sources"]
     contract["build_contract"] = p["contract"]
-    policy = {"schema_version": 1, "protocol": POLICY_PROTOCOL, "dtype": "<f8",
+    policy = {"schema_version": version,
+              "protocol": POLICY_PROTOCOL if version == 2 else "full-float64-comparison-v1", "dtype": "<f8",
               "fields": {"state": {"payload": "fields.bin", "metadata": "fields.shape"}},
               "metadata_format": "storage-shape-bounds-v1", "atol": 1e-6, "rtol": 1e-5,
               "finite_only": True, "exact_layouts": True,
@@ -105,6 +106,10 @@ def campaign(prepared):
                   "output/average.vtk": ["temperature", "velocity"]}},
               "driver": {"original_source": p["driver"], "original_sha256": hashed(p["driver"]),
                          "replacement_sha256": digest_text("reviewed dump driver\n")}}
+    if output_format == RAW_FORMAT:
+        policy["outputs"] = {"format": RAW_FORMAT, "files": {
+            name: {"payload": f"output/{name}.bin", "metadata": f"output/{name}.shape"}
+            for name in ("final", "average")}}
     contract["validation_policy"] = normalize_policy(policy, build_contract=p["contract"])
     item = evidence["campaigns"][0]
     workload = item["workload"]
@@ -113,7 +118,9 @@ def campaign(prepared):
     bind_selection(p, contract)
     builds = {mode: observed_build(p, mode) for mode in ("native", "resident")}
     diagnostics = {mode: diagnostic_fixture(p, build, mode)[1] for mode, build in builds.items()}
-    receipt = {"schema_version": 1, "protocol": RECEIPT_PROTOCOL, "contract_sha256": digest(contract),
+    receipt = {"schema_version": version,
+               "protocol": RECEIPT_PROTOCOL if version == 2 else "checked-selection-numerics-v1",
+               "contract_sha256": digest(contract),
                "policy_identity": contract["validation_policy"]["identity"], "workload_identity": workload["identity"],
                "selection_bundle_identity": contract["selection_bundle"]["identity"], "variants": {}, "pairs": []}
     identity = item["identity"]
@@ -123,12 +130,21 @@ def campaign(prepared):
         directory.mkdir(parents=True)
         write(directory / "case.conf", "unchanged configuration\n")
         delta = 1e-7 if mode == "resident" else 0.0
-        outputs = {}
-        for name in policy["outputs"]["files"]:
-            path = directory / name
-            path.parent.mkdir(exist_ok=True)
-            path.write_bytes(vtk(delta))
-            outputs[name] = reference(path)
+        outputs, output_hashes = {}, {}
+        for name, specification in policy["outputs"]["files"].items():
+            if output_format == RAW_FORMAT:
+                payload, metadata = (directory / specification[kind] for kind in ("payload", "metadata"))
+                payload.parent.mkdir(exist_ok=True)
+                payload.write_bytes(struct.pack("<8d", *([1.0 + delta] * 8)))
+                write(metadata, "64\n2 2 2\n-1 0 2\n0 1 3\n")
+                outputs[name] = {"payload": reference(payload), "metadata": reference(metadata)}
+                output_hashes.update({path: outputs[name][kind]["sha256"] for kind, path in specification.items()})
+            else:
+                path = directory / name
+                path.parent.mkdir(exist_ok=True)
+                path.write_bytes(vtk(delta))
+                outputs[name] = reference(path)
+                output_hashes[name] = outputs[name]["sha256"]
         # Additional recorded files must not invalidate required comparisons.
         snapshot = write(directory / "other-output.txt", "unselected output\n")
         invocations = [{"ordinal": index, "selection": contract["selection_identity"], "key": [value],
@@ -145,7 +161,7 @@ def campaign(prepared):
                  "configuration_sha256": workload["files"], "environment": workload["environment"],
                  "cwd": str(directory), "affinity": identity["affinity"], "threads": identity["threads"],
                  "completion": workload["completion"], "diagnostic_complete_process_seconds": seconds,
-                 "output_hashes": {name: ref["sha256"] for name, ref in outputs.items()} | {snapshot.name: hashed(snapshot)}}
+                 "output_hashes": output_hashes | {snapshot.name: hashed(snapshot)}}
         path, recorded = save(directory / "run.json", value)
         return {"run": {"path": path, "sha256": recorded}, "observations": reference(log), "outputs": outputs}
 
@@ -174,6 +190,16 @@ def campaign(prepared):
     path, recorded = save(p["root"] / "numerical.json", receipt)
     item["numerical_validation"] = {"path": path, "sha256": recorded}
     return {"contract": contract, "evidence": evidence, "receipt": receipt, "prepared": p}
+
+
+@pytest.fixture
+def campaign(prepared):
+    return _campaign(prepared)
+
+
+@pytest.fixture
+def raw_campaign(prepared):
+    return _campaign(prepared, output_format=RAW_FORMAT)
 
 
 def digest_text(text):
@@ -316,3 +342,144 @@ def test_selection_contract_binding_is_checked_even_after_build_memoization(prep
         with pytest.raises(ValueError, match="selection contract"):
             validate_application_build_observation(observation, contract=prepared["contract"], mode="resident",
                                                    selection_contract_identity="0" * 64)
+
+
+def test_raw_outputs_compare_complete_storage_for_diagnostic_and_every_timed_pair(raw_campaign):
+    result = decide(raw_campaign)
+    assert result["available"], result
+    report = result["campaigns"][0]["numerical_validation"]
+    assert report["protocol"] == RECEIPT_PROTOCOL
+    assert report["fields"]["state"]["values"] == 8
+    assert len(report["timed_pairs"]) == 9
+    for outputs in [report["diagnostic_outputs"], *(pair["outputs"] for pair in report["timed_pairs"])]:
+        assert set(outputs) == {"final", "average"}
+        for field in outputs.values():
+            assert field["values"] == 8
+            assert field["layout"]["lower_bounds"] == [-1, 0, 2]
+            assert field["layout"]["upper_bounds"] == [0, 1, 3]
+            assert 0 < field["max_absolute_error"] < 1e-6
+
+
+def test_frozen_v1_vtk_policy_and_receipt_remain_valid(prepared):
+    result = decide(_campaign(prepared, version=1))
+    assert result["available"], result
+    report = result["campaigns"][0]["numerical_validation"]
+    assert report["protocol"] == "checked-selection-numerics-v1"
+    assert "material" in report["diagnostic_outputs"]["output/final.vtk"]["fields"]
+
+
+def _refresh_output_run(variant):
+    """Record actual changed output hashes, so comparisons cannot hide behind stale receipts."""
+    run = json.loads(Path(variant["run"]["path"]).read_text())
+    for field in variant["outputs"].values():
+        for ref in field.values():
+            relative = str(Path(ref["path"]).relative_to(run["cwd"]))
+            run["output_hashes"][relative] = ref["sha256"]
+    rewrite(variant["run"], run)
+
+
+@pytest.mark.parametrize("location", ["diagnostic", "timed"])
+@pytest.mark.parametrize(("change", "reason"), [
+    ("halo", "exceeds source-bound tolerance"),
+    ("interior", "exceeds source-bound tolerance"),
+    ("native_nan", "nonfinite numerical value"),
+    ("resident_inf", "nonfinite numerical value"),
+    ("bounds", "bounds or shape differ"),
+    ("shape", "bounds or shape differ"),
+    ("truncated", "byte count differs"),
+])
+def test_raw_output_payloads_are_revalidated(raw_campaign, location, change, reason):
+    variants = (raw_campaign["receipt"]["variants"] if location == "diagnostic"
+                else raw_campaign["receipt"]["pairs"][8])
+    variant = variants["native" if change == "native_nan" else "resident"]
+    field = variant["outputs"]["final"]
+    if change in {"shape", "bounds"}:
+        metadata = "64\n4 2 1\n-1 0 2\n2 1 2\n" if change == "shape" else "64\n2 2 2\n0 0 2\n1 1 3\n"
+        Path(field["metadata"]["path"]).write_text(metadata)
+        field["metadata"]["sha256"] = hashed(field["metadata"]["path"])
+    else:
+        values = [1.0] * 8
+        values[0 if change == "halo" else 3] = {
+            "native_nan": float("nan"), "resident_inf": float("inf")}.get(change, 5.0)
+        payload = struct.pack("<8d", *values)
+        rewrite(field["payload"], payload[:-8] if change == "truncated" else payload)
+    _refresh_output_run(variant)
+    result = decide(raw_campaign)
+    assert not result["available"], result
+    assert result["selection"] == "native", result
+    assert reason in result["reason"], result
+
+
+@pytest.mark.parametrize("round_index", range(9))
+@pytest.mark.parametrize("mode", ["native", "resident"])
+def test_raw_output_inventory_is_mandatory_in_every_timed_run(raw_campaign, round_index, mode):
+    raw_campaign["receipt"]["pairs"][round_index][mode]["outputs"].pop("final")
+    result = decide(raw_campaign)
+    assert not result["available"], result
+    assert result["selection"] == "native", result
+    assert "required output file inventory differs" in result["reason"], result
+
+
+@pytest.mark.parametrize(("change", "reason"), [
+    ("metadata_reference", "raw-output references differ"),
+    ("metadata_inventory", "required output file inventory differs"),
+    ("payload_inventory", "output differs from run inventory"),
+    ("payload_hash", "comparison input hash differs"),
+    ("cross_run_metadata", "outside the recorded run"),
+    ("diagnostic_fields", "required full-field inventory differs"),
+    ("receipt_version", "numerical receipt source, policy or workload differs"),
+])
+def test_raw_output_authority_is_not_inferred_from_comparison_claims(raw_campaign, change, reason):
+    receipt = raw_campaign["receipt"]
+    variant = receipt["pairs"][0]["resident"]
+    field = variant["outputs"]["final"]
+    run = json.loads(Path(variant["run"]["path"]).read_text())
+    if change == "metadata_reference":
+        field.pop("metadata")
+    elif change == "metadata_inventory":
+        run["output_hashes"].pop("output/final.shape")
+        rewrite(variant["run"], run)
+    elif change == "payload_inventory":
+        run["output_hashes"]["output/final.bin"] = "0" * 64
+        rewrite(variant["run"], run)
+    elif change == "payload_hash":
+        field["payload"]["sha256"] = "0" * 64
+        _refresh_output_run(variant)
+    elif change == "cross_run_metadata":
+        field["metadata"] = receipt["pairs"][0]["native"]["outputs"]["final"]["metadata"]
+    elif change == "diagnostic_fields":
+        receipt["variants"]["resident"]["fields"].clear()
+    else:
+        receipt["schema_version"] = 1
+        receipt["protocol"] = "checked-selection-numerics-v1"
+    result = decide(raw_campaign)
+    assert not result["available"], result
+    assert result["selection"] == "native", result
+    assert reason in result["reason"], result
+
+
+@pytest.mark.parametrize(("change", "reason"), [
+    ("empty_outputs", "explicit output format and inventory required"),
+    ("empty_diagnostics", "explicit full-field inventory required"),
+    ("missing_metadata", "invalid raw-output inventory"),
+    ("duplicate_path", "comparison paths must be distinct"),
+    ("diagnostic_path", "comparison paths must be distinct"),
+    ("v1_raw", "explicit output format and inventory required"),
+])
+def test_raw_policy_requires_explicit_nonempty_distinct_storage(raw_campaign, change, reason):
+    policy = raw_campaign["contract"]["validation_policy"]
+    policy.pop("identity")
+    if change == "empty_outputs":
+        policy["outputs"]["files"].clear()
+    elif change == "empty_diagnostics":
+        policy["fields"].clear()
+    elif change == "missing_metadata":
+        policy["outputs"]["files"]["final"].pop("metadata")
+    elif change == "duplicate_path":
+        policy["outputs"]["files"]["average"]["payload"] = "output/final.bin"
+    elif change == "diagnostic_path":
+        policy["outputs"]["files"]["final"]["payload"] = "fields.bin"
+    else:
+        policy["schema_version"], policy["protocol"] = 1, "full-float64-comparison-v1"
+    with pytest.raises(ValueError, match=reason):
+        normalize_policy(policy, build_contract=raw_campaign["prepared"]["contract"])
