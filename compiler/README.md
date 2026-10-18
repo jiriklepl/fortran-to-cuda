@@ -2977,6 +2977,16 @@ work remain at their original evaluation points and are included in measured
 process time. Their exact iteration counts need not be predicted. This empirical
 cost model grants no alias, lifetime, definition, numerical or completion proof.
 
+Before admitting operations, a source interval records numerical anchors and
+prospective resources across original calls. Repeated calls share an inventory
+member only when their original procedure, source selection and canonical array
+bindings match. Every resolved call edge retains its own checked association;
+unresolved calls remain obligations. Sharing analysis does not merge executions
+or assume equivalent scalar values.
+The draft's version 2 record represents this graph without expanding every call
+path. Existing analysis limits and independent native-effect, definition and
+completion checks still apply before a checked execution plan can be emitted.
+
 Workload documents bind arguments, relevant environment, input-file hashes and
 completion facts. The selector checks actual arguments, environment and bounded
 regular input files at the first eligible operation of each interval; these checks also run during
