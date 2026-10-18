@@ -3,6 +3,7 @@
 import shutil
 import subprocess
 from copy import copy
+from dataclasses import FrozenInstanceError, replace
 from hashlib import sha256
 
 import pytest
@@ -11,6 +12,8 @@ from compiler.driver.options import CompilerOptions
 from compiler.ir import CompilationError
 from compiler.offload.config import OffloadConfig
 from compiler.scopes.generation_transaction import GenerationTransaction
+from compiler.scopes.interval_draft import prepare_interval_draft
+from compiler.scopes.lexical import LexicalOwner
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT
 
@@ -73,6 +76,20 @@ def generate(directory, *, source=SOURCE, config=None):
                            options=CompilerOptions(gpu_policy=config.policy), config=config)
     outputs, report = builder.run()
     return path, builder, outputs, report
+
+
+def draft_only(directory, source):
+    path = directory / "interval.f90"
+    path.write_text(source)
+    facts = {"schema_version": 1, "participation": "serial",
+             "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
+             "captures": {"interval_fields::" + name: dict(FACT)
+                          for name in ("old", "viscosity", "star", "out")}}
+    builder = ScopeBuilder([path], "interval_fields::advance", facts=facts,
+        options=CompilerOptions(gpu_policy="sections"),
+        config=OffloadConfig(policy="sections", scope_execution="reached"))
+    owner = LexicalOwner(builder)
+    return prepare_interval_draft(owner, tuple(builder.entry.execution.content))
 
 
 def test_cross_procedure_interval_keeps_one_inventory_and_original_correction(tmp_path):
@@ -216,3 +233,74 @@ end module
                 capture_output=True, text=True, check=False, timeout=30)
             assert result.returncode == 0, result.stdout + result.stderr
             ordinal += 1
+
+
+def test_diamond_and_repeated_calls_share_members_but_keep_original_edges(tmp_path):
+    wrappers = """subroutine left(a,v,n)
+real(8),intent(in)::a(-1:)
+real(8),intent(inout)::v(-1:)
+integer,intent(in)::n
+call producer(a,v,n)
+end subroutine
+subroutine right(a,v,n)
+real(8),intent(in)::a(-1:)
+real(8),intent(inout)::v(-1:)
+integer,intent(in)::n
+call producer(a,v,n)
+call producer(a,v,n-1)
+end subroutine
+"""
+    source = SOURCE.replace("call producer(old,viscosity,n)",
+                            "call left(old,viscosity,n)\ncall right(old,viscosity,n)")
+    source = source.replace("subroutine producer(a,v,n)", wrappers + "subroutine producer(a,v,n)")
+    draft = draft_only(tmp_path, source)
+    producer, = [member for member in draft.members if member.procedure.endswith("::producer")]
+    incoming = [edge for edge in draft.edges if edge.callee == producer.ordinal]
+    assert len(draft.members) == 5
+    assert len(draft.edges) == 6
+    assert len(incoming) == 3
+    assert len({id(edge.original) for edge in incoming}) == 3
+    assert len({edge.caller for edge in incoming}) == 2
+    assert len(draft.numerical_anchors) == 3
+    assert draft.public()["work"]["call_instances"] == 6
+    root_edges = [edge for edge in draft.edges if edge.caller == 0]
+    assert [str(edge.original.items[0]).lower() for edge in root_edges] == ["left", "right", "momentum"]
+    assert all(draft.has_numerical_child(edge.original) for edge in root_edges)
+    assert draft.validate() is draft
+    with pytest.raises(FrozenInstanceError):
+        incoming[0].callee = 0
+
+
+def test_distinct_actual_members_and_same_procedure_retarget_rejection(tmp_path):
+    source = SOURCE.replace("call producer(old,viscosity,n)",
+        "call producer(old,viscosity,n)\ncall producer(old,star,n)")
+    draft = draft_only(tmp_path, source)
+    producers = [member for member in draft.members if member.procedure.endswith("::producer")]
+    assert len(producers) == 2
+    targets = [{binding.root for _local, binding in member.mappings} for member in producers]
+    assert targets == [{"interval_fields::old", "interval_fields::viscosity"},
+                       {"interval_fields::old", "interval_fields::star"}]
+    original_edges = draft.edges
+    first = next(edge for edge in original_edges if edge.callee == producers[0].ordinal)
+    corrupted = replace(first, callee=producers[1].ordinal)
+    # Even bypassing the frozen dataclass cannot retarget a valid source CALL
+    # to a same-procedure member with a different canonical actual allocation.
+    object.__setattr__(draft, "edges", tuple(corrupted if edge is first else edge for edge in original_edges))
+    try:
+        with pytest.raises(CompilationError, match="canonical mapping changed"):
+            draft.validate()
+    finally:
+        object.__setattr__(draft, "edges", original_edges)
+    assert draft.validate() is draft
+    object.__setattr__(draft, "edges", original_edges[:-1])
+    try:
+        with pytest.raises(CompilationError, match="call edge inventory changed"):
+            draft.validate()
+    finally:
+        object.__setattr__(draft, "edges", original_edges)
+
+
+def test_dag_memoization_does_not_hide_recursion(tmp_path):
+    source = SOURCE.replace("integer::i\n!$omp", "integer::i\ncall producer(a,v,n)\n!$omp", 1)
+    with pytest.raises(CompilationError, match="recursive or over-depth"):
+        draft_only(tmp_path, source)

@@ -28,6 +28,14 @@ from compiler.scopes.segments import statement_span
 _ISSUER = object()
 
 
+def _call_mapping(call, caller):
+    return tuple((argument.formal_binding, caller.canonical(argument.binding))
+                 for argument in call.associations
+                 if argument.formal_binding.rank and argument.binding is not None
+                 and _kind(argument.actual) == "Name"
+                 and argument.formal_binding.rank == argument.binding.rank)
+
+
 @dataclass(frozen=True)
 class IntervalMember:
     ordinal: int
@@ -35,20 +43,33 @@ class IntervalMember:
     originals: tuple = field(repr=False)
     selected: tuple
     graph: object = field(repr=False)
-    parent: int | None
-    association: object = field(repr=False)
     mappings: tuple = field(repr=False)
-    chain: tuple = field(repr=False)
 
     def canonical(self, binding):
         return next((target for source, target in self.mappings if source is binding), binding)
 
     def public(self):
-        return {"ordinal": self.ordinal, "procedure": self.procedure, "parent": self.parent,
+        return {"ordinal": self.ordinal, "procedure": self.procedure,
                 "selected_node_ids": list(self.selected),
-                "association": self.association.public() if self.association is not None else None,
                 "canonical_bindings": [{"local": local.public(), "canonical": target.public()}
                                        for local, target in self.mappings]}
+
+
+@dataclass(frozen=True)
+class IntervalCallEdge:
+    ordinal: int
+    caller: int
+    callee: int | None
+    original: object = field(repr=False)
+    selected: tuple
+    association: object = field(repr=False)
+    reason: str | None
+
+    def public(self):
+        return {"ordinal": self.ordinal, "caller": self.caller, "callee": self.callee,
+                "selected_node_ids": list(self.selected), "original_call": str(self.original),
+                "association": self.association.public() if self.association is not None else None,
+                "unresolved_reason": self.reason}
 
 
 @dataclass(frozen=True)
@@ -103,6 +124,7 @@ class SourceIntervalDraft:
     identity: str
     originals: tuple = field(repr=False)
     members: tuple[IntervalMember, ...]
+    edges: tuple[IntervalCallEdge, ...]
     numerical_anchors: tuple[NumericalAnchor, ...]
     demand: object = field(repr=False)
     _owner: object = field(repr=False)
@@ -131,9 +153,22 @@ class SourceIntervalDraft:
             graph, selected = builder.analysis._selected_source(member.procedure, member.originals)
             if graph is not member.graph or selected != member.selected:
                 raise CompilationError("source interval original selection changed")
-            if member.association is not None:
-                call = member.association
-                call.validate(builder.analysis, call._scope, call._original)
+        for edge in self.edges:
+            caller = self.members[edge.caller]
+            graph, selected = builder.analysis._selected_source(caller.procedure, (edge.original,))
+            if graph is not caller.graph or selected != edge.selected:
+                raise CompilationError("source interval original call edge changed")
+            if edge.association is not None:
+                edge.association.validate(builder.analysis, edge.association._scope, edge.original)
+                if edge.callee is None or edge.association.procedure != self.members[edge.callee].procedure:
+                    raise CompilationError("source interval call edge target changed")
+                mapping = _call_mapping(edge.association, caller)
+                expected = self.members[edge.callee].mappings
+                if len(mapping) != len(expected) or any(left is not right or actual is not canonical
+                        for (left, actual), (right, canonical) in zip(mapping, expected, strict=True)):
+                    raise CompilationError("source interval call edge canonical mapping changed")
+        if _json([edge.public() for edge in self.edges]) != _json(json.loads(self._record)["call_edges"]):
+            raise CompilationError("source interval call edge inventory changed")
         for anchor in self.numerical_anchors:
             if anchor.prepared is not None:
                 anchor.prepared.validate(builder.analysis, anchor.procedure, anchor.originals)
@@ -149,11 +184,15 @@ class SourceIntervalDraft:
 
     def has_numerical_child(self, original_call):
         self.validate()
-        children = {member.ordinal for member in self.members
-                    if member.association is not None and member.association._original is original_call}
-        for member in self.members:
-            if member.parent in children:
-                children.add(member.ordinal)
+        children = {edge.callee for edge in self.edges
+                    if edge.original is original_call and edge.association is not None}
+        pending = list(children)
+        while pending:
+            parent = pending.pop()
+            for edge in self.edges:
+                if edge.caller == parent and edge.callee is not None and edge.callee not in children:
+                    children.add(edge.callee)
+                    pending.append(edge.callee)
         procedures = {member.procedure for member in self.members if member.ordinal in children}
         return any(anchor.procedure in procedures and anchor.prepared is not None
                    for anchor in self.numerical_anchors)
@@ -164,8 +203,8 @@ class SourceIntervalDraft:
                    and all(owner.canonical(local) is target for local, target in member.mappings)]
         if not matches:
             raise CompilationError("native interval member lacks its exact original call association")
-        # Existing companions admit one canonical mapping. Repeated occurrences
-        # with that mapping share the implementation, not their source edges.
+        # Canonical members share implementations; every original incoming
+        # edge retains its own source association in the validated graph.
         return matches[0]
 
     def native_context(self, owner):
@@ -182,7 +221,9 @@ class SourceIntervalDraft:
         key = self.identity, member.ordinal
         if key not in registry:
             registry[key] = NativeIntervalContext(self.demand, tuple({id(value): value for value in local}.values()),
-                member.mappings, member.chain, self, member, _ISSUER)
+                member.mappings, tuple(edge.association for edge in self.edges
+                                       if edge.callee == member.ordinal and edge.association is not None),
+                self, member, _ISSUER)
         return registry[key]
 
     def native_operation(self, owner, originals):
@@ -264,11 +305,21 @@ def prepare_interval_draft(owner, originals):
     provider = NumericalPreparationProvider(analysis, options=builder.options, config=builder.config,
         environment_root=builder._numerical_environment_root,
         immutable_inputs=getattr(builder, "immutable_inputs", {}))
-    members, anchors, templates, active, reasons = [], [], {}, [], []
+    members, edges, anchors, templates, active, reasons = [], [], [], {}, [], []
+    canonical_members = {}
     work = {"source_nodes": 0, "call_instances": 0}
 
-    def references(procedure, nodes, canonical):
+    def reserve_edge():
+        work["call_instances"] += 1
+        if work["call_instances"] > analysis.operation_limit:
+            raise CompilationError("source interval call-instance budget exhausted")
+        ordinal = len(edges)
+        edges.append(None)
+        return ordinal
+
+    def references(procedure, nodes):
         routine = analysis.routines[procedure]
+        found = {}
         for original in nodes:
             for node in walk(original):
                 work["source_nodes"] += 1
@@ -282,13 +333,15 @@ def prepare_interval_draft(owner, originals):
                     continue
                 role = ("managed" if binding.rank else "scalar_or_guard") if binding.dtype in {
                     "real", "integer", "logical"} else "source_storage"
-                inventory.add(procedure, binding, canonical(binding), role)
+                found[id(binding)] = binding, role
+        return tuple(found.values())
 
     def template(procedure, nodes):
         key = procedure, tuple(map(id, nodes))
         if key in templates:
             return templates[key]
         calls, local_anchors = [], []
+        bindings = references(procedure, nodes)
         peeled = {}
 
         def sequence(sequence_nodes):
@@ -326,30 +379,33 @@ def prepare_interval_draft(owner, originals):
                     else:
                         calls.extend(node for node in walk(item) if _kind(node) == "Call_Stmt")
         sequence(nodes)
-        templates[key] = tuple({id(node): node for node in calls}.values()), tuple(local_anchors)
+        templates[key] = tuple({id(node): node for node in calls}.values()), tuple(local_anchors), bindings
         anchors.extend(local_anchors)
         return templates[key]
 
-    def visit(procedure, nodes, mappings=(), parent=None, association=None, chain=()):
+    def visit(procedure, nodes, mappings=()):
         if procedure in active or len(active) >= analysis.depth_limit:
             raise CompilationError("source interval recursive or over-depth call graph")
+        key = procedure, tuple(map(id, nodes)), tuple((id(local), id(target)) for local, target in mappings)
+        if key in canonical_members:
+            return canonical_members[key]
         if len({member.procedure for member in members} | {procedure}) > analysis.procedure_limit:
             raise CompilationError("source interval procedure budget exhausted")
         graph, selected = analysis._selected_source(procedure, nodes)
-        member = IntervalMember(len(members), procedure, nodes, selected, graph, parent, association, mappings, chain)
+        member = IntervalMember(len(members), procedure, nodes, selected, graph, mappings)
         members.append(member)
+        canonical_members[key] = member
         inventory.selections.append((analysis, procedure, graph, nodes, selected))
         inventory.controls(analysis, procedure, graph, selected, member.canonical)
-        references(procedure, nodes, member.canonical)
-        calls, _anchors = template(procedure, nodes)
+        calls, _anchors, bindings = template(procedure, nodes)
+        for binding, role in bindings:
+            inventory.add(procedure, binding, member.canonical(binding), role)
         active.append(procedure)
         try:
             for node in calls:
-                work["call_instances"] += 1
-                if work["call_instances"] > analysis.operation_limit:
-                    raise CompilationError("source interval call-instance budget exhausted")
                 routine = analysis.routines[procedure]
                 scope = analysis.source_scope_for(node, routine.scope)
+                _graph, call_selected = analysis._selected_source(procedure, (node,))
                 try:
                     call = resolve_original_call(analysis, scope, node)
                 except CompilationError as error:
@@ -359,21 +415,27 @@ def prepare_interval_draft(owner, originals):
                     # declarations still belong in the conservative inventory.
                     # Retain no canonical mapping or native-call authority.
                     targets = analysis._candidates(scope, str(node.items[0]).lower())
+                    recorded = False
                     for target in targets:
                         callee = analysis.routines.get(target)
                         if callee is not None:
-                            visit(target, tuple(_children(callee.execution)), parent=member.ordinal)
+                            ordinal = reserve_edge()
+                            child = visit(target, tuple(_children(callee.execution)))
+                            edges[ordinal] = IntervalCallEdge(ordinal, member.ordinal, child.ordinal,
+                                node, call_selected, None, str(error))
+                            recorded = True
+                    if not recorded:
+                        ordinal = reserve_edge()
+                        edges[ordinal] = IntervalCallEdge(ordinal, member.ordinal, None,
+                            node, call_selected, None, str(error))
                     continue  # Original conditional close still requires its own proof.
-                mapping = []
-                for argument in call.associations:
-                    if (argument.formal_binding.rank and argument.binding is not None
-                            and _kind(argument.actual) == "Name"
-                            and argument.formal_binding.rank == argument.binding.rank):
-                        mapping.append((argument.formal_binding, member.canonical(argument.binding)))
-                visit(call.procedure, tuple(_children(call.callee.execution)), tuple(mapping), member.ordinal,
-                      call, (*chain, call))
+                ordinal = reserve_edge()
+                child = visit(call.procedure, tuple(_children(call.callee.execution)),
+                              _call_mapping(call, member))
+                edges[ordinal] = IntervalCallEdge(ordinal, member.ordinal, child.ordinal, node, call_selected, call, None)
         finally:
             active.pop()
+        return member
 
     visit(owner.routine.qualified, originals)
     for anchor in anchors:
@@ -397,8 +459,10 @@ def prepare_interval_draft(owner, originals):
                "original_source_sha256": _digest(text),
                "activation": "original source position and original control",
                "fallback": "publish and continue only the unexecuted suffix"}
-    record = {"schema_version": 1, "selection_context": context,
+    record = {"schema_version": 2, "selection_context": context,
               "members": [member.public() for member in members],
+              "call_edges": [edge.public() for edge in edges],
+              "member_sharing": "same original procedure, selection and canonical mapping; all original call edges retained",
               "numerical_anchors": [anchor.public() for anchor in anchors],
               "unresolved_source_calls": reasons, "work": work,
               "sources": dict(analysis.sources), "configuration_identity": _configuration(builder),
@@ -408,7 +472,7 @@ def prepare_interval_draft(owner, originals):
     # source identity does not depend on their per-process Python identities.
     identity = _digest({key: value for key, value in record.items() if key != "numerical_anchors"})
     record["identity"] = identity
-    result = SourceIntervalDraft(identity, originals, tuple(members), tuple(anchors), demand, owner,
+    result = SourceIntervalDraft(identity, originals, tuple(members), tuple(edges), tuple(anchors), demand, owner,
         _configuration(builder), _digest(builder.facts), _json(context), _json(record), _ISSUER)
     registry = getattr(builder, "_interval_drafts", None)
     if registry is None:
