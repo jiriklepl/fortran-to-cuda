@@ -7,6 +7,7 @@ closure. A failed preparation closes before the original team executes once.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from hashlib import sha256
 from types import SimpleNamespace
 
@@ -106,8 +107,13 @@ def candidates(builder):
     yield from sequence(_children(builder.entry.execution))
 
 
-class ClosedNumericalOwner(LexicalOwner):
-    """One reached original team, one checked plan and one local context."""
+class OriginalSelectionOwner(LexicalOwner):
+    """One source-position block shared by numerical and interval owners.
+
+    This only supplies control and cleanup. Subclasses must establish source
+    selection, participation, effects, definitions and completion before any
+    block can be emitted.
+    """
 
     def __init__(self, builder, originals, prefix=(), controls=(), *, bundle=None):
         super().__init__(builder)
@@ -117,8 +123,8 @@ class ClosedNumericalOwner(LexicalOwner):
         self.closed_initializations = ()
         self.selection_bundle = bundle
         graph, selected = builder.analysis._selected_source(self.routine.qualified, self.closed_selection)
-        if graph is not self.graph or not is_combined_group(builder, self.closed_selection):
-            raise CompilationError("closed numerical owner requires an exact whole original team")
+        if graph is not self.graph or not selected:
+            raise CompilationError("original selection requires its exact source graph")
         first, last = statement_span(originals[0])[0], statement_span(originals[-1])[1]
         identity = f"{self.routine.qualified}:{first}:{last}"
         self.context = _name("fort_selection_context_", identity)
@@ -128,23 +134,11 @@ class ClosedNumericalOwner(LexicalOwner):
         self.trace_owner = source_id(builder, "owner", span=(first, last), lifetime="closed original selection")
         self.selection_context = selection_context(builder, originals, prefix, controls)
 
-    def scan(self, nodes, depth=0):
-        if len(nodes) != len(self.closed_selection) or any(
-                left is not right for left, right in zip(nodes, self.closed_selection, strict=True)):
-            raise CompilationError("closed numerical owner selection changed")
-        self.admit(tuple(nodes))
-
     def validate_plan(self, nodes):
-        if (len(self.units) != 1 or self.boundaries or len(self.members) != 1
-                or not isinstance(self.units[0].scope, CombinedNumericalTeam)):
-            reason = "; ".join(str(row.get("reason", "")) for row in self.boundaries)
-            raise CompilationError("closed numerical selection requires one admitted complete original team"
-                                   + (": " + reason if reason else ""))
-        scope = self.units[0].scope
-        scope._validate()
-        if scope.native or scope.guarded:
-            raise CompilationError("closed numerical selection cannot borrow native interruption effects")
-        managed = tuple(self.units[0].arrays.values())
+        raise CompilationError("original selection control requires a concrete admission validator")
+
+    def _validate_scalar_prefix(self, managed):
+        """Retain the existing strict prefix contract, including its proof."""
         executable_prefix = tuple(node for node in self.closed_prefix if _kind(node) != "Comment")
         if executable_prefix:
             if any(_kind(node) not in {"Assignment_Stmt", "If_Then_Stmt", "Else_If_Stmt"}
@@ -174,6 +168,9 @@ class ClosedNumericalOwner(LexicalOwner):
         self.builder.analysis._selected_source(self.routine.qualified, self.closed_selection)
 
     def emit_control(self, nodes):
+        if self.execution_plan is None:
+            raise CompilationError("original selection control requires its checked execution plan")
+        self.execution_plan.validate()
         from compiler.offload.exact_window import control
         specification, entry = control(self) if self.exact_window is not None else ([], [])
         declarations = [f"integer({self.kind}) :: {self.context}", f"logical :: {self.enabled}",
@@ -196,12 +193,253 @@ class ClosedNumericalOwner(LexicalOwner):
                               "\n".join(fortran_lines(after)) + "\n")
 
 
+class ClosedNumericalOwner(OriginalSelectionOwner):
+    """One reached original team, one checked plan and one local context."""
+
+    def __init__(self, builder, originals, prefix=(), controls=(), *, bundle=None):
+        if not is_combined_group(builder, tuple(originals)):
+            raise CompilationError("closed numerical owner requires an exact whole original team")
+        super().__init__(builder, originals, prefix, controls, bundle=bundle)
+
+    def scan(self, nodes, depth=0):
+        if len(nodes) != len(self.closed_selection) or any(
+                left is not right for left, right in zip(nodes, self.closed_selection, strict=True)):
+            raise CompilationError("closed numerical owner selection changed")
+        self.admit(tuple(nodes))
+
+    def validate_plan(self, nodes):
+        if (len(self.units) != 1 or self.boundaries or len(self.members) != 1
+                or not isinstance(self.units[0].scope, CombinedNumericalTeam)):
+            reason = "; ".join(str(row.get("reason", "")) for row in self.boundaries)
+            raise CompilationError("closed numerical selection requires one admitted complete original team"
+                                   + (": " + reason if reason else ""))
+        scope = self.units[0].scope
+        scope._validate()
+        if scope.native or scope.guarded:
+            raise CompilationError("closed numerical selection cannot borrow native interruption effects")
+        self._validate_scalar_prefix(tuple(self.units[0].arrays.values()))
+
+
+@dataclass(frozen=True)
+class OriginalIntervalSite:
+    originals: tuple
+    prefix: tuple
+    controls: tuple
+    loops: tuple
+    repeated_suffix: tuple
+
+
+_INTERVAL_EXITS = frozenset({
+    "Return_Stmt", "Exit_Stmt", "Cycle_Stmt", "Goto_Stmt", "Computed_Goto_Stmt",
+    "Arithmetic_If_Stmt", "Allocate_Stmt", "Deallocate_Stmt", "Pointer_Assignment_Stmt",
+    "Nullify_Stmt", "Stop_Stmt", "Error_Stop_Stmt", "Entry_Stmt",
+})
+
+
+def interval_candidates(builder):
+    """Bounded contiguous selections at original serial source positions.
+
+    Complete joined groups stay indivisible. Candidate syntax grants no
+    numerical, native-effect or lifetime authority; the owner checks those
+    independently before publication.
+    """
+    from compiler.scopes.native_guard import descriptor_loop_body
+    from compiler.scopes.window_discovery import MAX_ADJACENT_UNITS, MAX_ATTEMPTS
+
+    visits = 0
+    choices = []
+    seen = set()
+
+    def flatten(units):
+        return tuple(node for unit in units for node in unit)
+
+    def sequence(nodes, prefix=(), controls=(), loops=(), suffix=(), depth=0):
+        nonlocal visits
+        if len(choices) >= MAX_ATTEMPTS:
+            return
+        if depth > builder.analysis.depth_limit:
+            raise CompilationError("original interval control depth budget exhausted")
+        grouped = tuple(grouped_original_sequence(nodes, {}))
+        units = tuple(item.original_nodes if isinstance(item, NativeGroupCandidate) else (item,)
+                      for item in grouped)
+        # Reached loop/branch bodies precede their containing constructs, so
+        # discovery does not first attempt ownership across the backedge.
+        for index, item in enumerate(grouped):
+            visits += 1
+            if visits > builder.analysis.operation_limit:
+                raise CompilationError("original interval source discovery budget exhausted")
+            before = (*prefix, *flatten(units[:index]))
+            after = (*flatten(units[index+1:]), *suffix)
+            if isinstance(item, NativeGroupCandidate):
+                continue
+            if _kind(item) == "Block_Nonlabel_Do_Construct":
+                try:
+                    body = descriptor_loop_body(builder, item)
+                except CompilationError:
+                    continue
+                header = next(node for node in _children(item) if _kind(node) == "Nonlabel_Do_Stmt")
+                sequence(body, before, (*controls, header), (*loops, item), after, depth+1)
+            elif _kind(item) == "If_Construct":
+                body, guards, header = [], [], None
+                for child in _children(item):
+                    if _kind(child) in {"If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt"}:
+                        if header is not None:
+                            sequence(body, (*before, *guards), (*controls, header), loops, after, depth+1)
+                        body = []
+                        header = child if _kind(child) != "End_If_Stmt" else None
+                        if _kind(child) in {"If_Then_Stmt", "Else_If_Stmt"}:
+                            guards.append(child)
+                    else:
+                        body.append(child)
+        if len(choices) >= MAX_ATTEMPTS:
+            return
+        # Comments do not consume the adjacency budget but remain in the
+        # exact selected span. Prefer the longest permitted original sequence.
+        active = [index for index, unit in enumerate(units)
+                  if any(_kind(node) != "Comment" for node in unit)]
+        for position, first in enumerate(active):
+            maximum = min(MAX_ADJACENT_UNITS, len(active)-position)
+            for width in range(maximum, 0, -1):
+                last = active[position+width-1] + 1
+                originals = flatten(units[first:last])
+                if not any(_kind(node) in {"Call_Stmt", "Block_Nonlabel_Do_Construct"}
+                           for original in originals for node in walk(original)):
+                    continue
+                key = tuple(map(id, originals))
+                if key in seen:
+                    continue
+                seen.add(key)
+                choices.append(OriginalIntervalSite(originals, (*prefix, *flatten(units[:first])), controls,
+                                                    loops, (*flatten(units[last:]), *suffix) if loops else ()))
+                if len(choices) >= MAX_ATTEMPTS:
+                    return
+
+    sequence(_children(builder.entry.execution))
+    return tuple(choices[:MAX_ATTEMPTS])
+
+
+class ClosedIntervalOwner(OriginalSelectionOwner):
+    """Checked multi-operation ownership, fresh at each original execution."""
+
+    def __init__(self, builder, originals, prefix=(), controls=(), *, bundle=None):
+        originals = tuple(originals)
+        matches = [site for site in interval_candidates(builder)
+                   if len(site.originals) == len(originals)
+                   and all(left is right for left, right in zip(site.originals, originals, strict=True))]
+        if len(matches) != 1:
+            raise CompilationError("original interval requires an exact contiguous serial selection")
+        self.interval_site = matches[0]
+        if tuple(prefix) != self.interval_site.prefix or tuple(controls) != self.interval_site.controls:
+            raise CompilationError("original interval source prefix or enclosing controls changed")
+        if any(_kind(node) in _INTERVAL_EXITS for original in originals for node in walk(original)):
+            raise CompilationError("original interval cannot contain lifetime changes or early exits")
+        self._validate_edit_boundaries(builder, originals)
+        super().__init__(builder, originals, prefix, controls, bundle=bundle)
+        self.selection_context = {**self.selection_context, "schema_version": 2,
+            "activation": "each original serial selection after unchanged prefix and controls",
+            "lifetime": "one reached selection; close before every excluded suffix or backedge",
+            "fallback": "publish and execute only the remaining original suffix once"}
+
+    @staticmethod
+    def _validate_edit_boundaries(builder, originals, *, routine=None):
+        """Line insertions and replacements must own complete statements.
+
+        Use original statement spans, as caller-observer instrumentation does;
+        punctuation in a literal or comment cannot create a second statement.
+        """
+        from compiler.frontend.native_group_structure import NATIVE_GROUP_SCAN_LIMIT
+
+        routine = builder.entry if routine is None else routine
+        selected = {id(node) for original in originals for node in walk(original)}
+        first, last = statement_span(originals[0])[0], statement_span(originals[-1])[1]
+        statements = {}
+        for count, node in enumerate(walk(routine.scope.node), 1):
+            if count > NATIVE_GROUP_SCAN_LIMIT:
+                raise CompilationError("original interval edit-boundary scan budget exhausted")
+            item = getattr(node, "item", None)
+            if item is None or _kind(node) == "Comment":
+                continue
+            span = getattr(item, "fort_original_span", item.span)
+            if span is None or span[1] < first or span[0] > last:
+                continue
+            if id(node) not in selected and any(span[0] <= line <= span[1] for line in (first, last)):
+                raise CompilationError("original interval edit boundary shares a source line with another statement")
+            statements[id(item)] = span
+        ordered = sorted(statements.values())
+        if any(right[0] <= left[1] for left, right in zip(ordered, ordered[1:], strict=False)):
+            raise CompilationError("original interval statements share a source edit line")
+
+    def _prepare_lexical(self, nodes):
+        if len(nodes) != len(self.closed_selection) or any(
+                left is not right for left, right in zip(nodes, self.closed_selection, strict=True)):
+            raise CompilationError("original interval selection changed before preparation")
+        from compiler.scopes.interval_draft import prepare_interval_draft
+
+        prepare_interval_draft(self, self.closed_selection)
+        prepared = self.builder.inline.prepare(self.closed_selection)
+        self.builder.generated.update(self.builder.inline.generated)
+        self.builder.numerical_ir.update(self.builder.inline.ir)
+        self.builder.numerical_reasons.update({name: None for name in self.builder.inline.regions})
+        return super()._prepare_lexical(prepared)
+
+    def validate_plan(self, nodes):
+        originals = self.builder.inline.original_selection(tuple(nodes))
+        if len(originals) != len(self.closed_selection) or any(
+                left is not right for left, right in zip(originals, self.closed_selection, strict=True)):
+            raise CompilationError("original interval prepared selection lost source authority")
+        # Child companions rewrite their original bodies with the same
+        # line-based editor as the root selection. Their CALL patches must
+        # not absorb adjacent scalar preparation or native side effects.
+        for member in self.members.values():
+            if member is not self:
+                self._validate_edit_boundaries(self.builder, tuple(_children(member.routine.execution)),
+                                               routine=member.routine)
+        if any(member.boundaries for member in self.members.values()):
+            raise CompilationError("original interval requires every selected operation to be admitted: "
+                + "; ".join(row["reason"] for member in self.members.values() for row in member.boundaries))
+        if not any(unit.leaves for member in self.members.values() for unit in member.units):
+            raise CompilationError("original interval has no admitted numerical operation")
+        from compiler.scopes.execution_plan import _invocations
+        if _invocations(self, tuple(self.members.values())) < 2:
+            raise CompilationError("original interval needs two admitted numerical invocations")
+        managed = tuple({id(member.canonical(binding)): member.canonical(binding)
+                         for member in self.members.values() for unit in member.units
+                         for binding in unit.arrays.values()}.values())
+        self._validate_scalar_prefix(managed)
+        # A fresh block does not prove fresh definitions after a previous
+        # traversal. Until an independent reached-definition proof is supplied,
+        # only unchanged local scalar work may surround a repeated selection.
+        if self.interval_site.loops:
+            suffix = tuple(node for node in self.interval_site.repeated_suffix if _kind(node) != "Comment")
+            if suffix:
+                if any(_kind(node) != "Assignment_Stmt" for node in suffix):
+                    raise CompilationError("repeated original interval requires a local scalar suffix")
+                proof = prove_resource_reachability(self.builder.analysis, self.routine.qualified, suffix, managed)
+                if proof.barriers or proof.calls:
+                    raise CompilationError("repeated original interval suffix has unproved source effects")
+                for access in proof.accesses:
+                    binding = access.storage.binding
+                    if access.kind in {"write", "undefine"} and (
+                            access.kind != "write" or binding.rank or access.storage.components
+                            or binding.declaring_scope is not self.routine.scope
+                            or binding.name in self.routine.arguments
+                            or binding.attributes & {"save", "pointer", "target", "optional", "volatile", "asynchronous"}):
+                        raise CompilationError("repeated original interval suffix changes nonlocal storage")
+            from compiler.scopes.native_guard import descriptor_loop_body
+            for loop in self.interval_site.loops:
+                descriptor_loop_body(self.builder, loop)
+        self.builder.analysis._selected_source(self.routine.qualified, self.closed_selection)
+
+
 
 def discover_closed_selections(builder):
-    """Replace bounded synthetic ownership for complete original team sites."""
-    if builder.config.scope_execution != "bounded":
+    """Use the same block control for original teams and checked intervals."""
+    request = builder.config.exact_window or {}
+    interval = request.get("coverage") == "checked_interval"
+    if builder.config.scope_execution != ("reached" if interval else "bounded"):
         return ()
-    choices = tuple(candidates(builder))
+    choices = (tuple((site.originals, site.prefix, site.controls) for site in interval_candidates(builder))
+               if interval else tuple(candidates(builder)))
     if not choices:
         return ()
     if len(choices) > 32:
@@ -217,27 +455,33 @@ def discover_closed_selections(builder):
         for originals, prefix, controls in choices:
             before = candidate.scope_checkpoint()
             try:
-                owner = ClosedNumericalOwner(candidate, originals, prefix, controls)
+                factory = ClosedIntervalOwner if interval else ClosedNumericalOwner
+                owner = factory(candidate, originals, prefix, controls)
                 if not owner._prepare_lexical(originals):
                     raise CompilationError("closed original selection has no numerical alternative")
                 admitted.append(owner)
+                if interval:
+                    break  # One nonoverlapping alternative per priced bundle.
             except CompilationError as error:
                 candidate.restore_scope_checkpoint(before)
                 candidate.boundaries.append({"first_line": statement_span(originals[0])[0],
                     "last_line": statement_span(originals[-1])[1], "reason": str(error),
-                    "execution": "unchanged original complete team", "kind": "closed_numerical_selection_decline"})
+                    "execution": "unchanged original selection" if interval else "unchanged original complete team",
+                    "kind": "original_interval_decline" if interval else "closed_numerical_selection_decline"})
         bundle = {"schema_version": 1, "entry": candidate.entry.qualified, "groups": []}
         for owner in admitted:
-            context = owner.selection_context
+            # Pricing and build attestation bind the issued interval source
+            # context. Owner lifecycle diagnostics are a separate record.
+            context = owner.interval_draft.selection_context
             bundle["groups"].append({"selection_identity": digest(context), **{key: context[key] for key in
                                      ("first_line", "last_line", "original_source_sha256")}})
         bundle["identity"] = digest(bundle)
         for owner in admitted:
             owner.selection_bundle = bundle
             owner._emit_lexical(owner.closed_selection, candidate.scope_checkpoint(), native_cleanup=False)
-            candidate.scopes[-1]["closed_selection"] = dict(owner.selection_context)
-        request = candidate.config.exact_window or {}
-        native_capture = request.get("coverage") == "original_selection" and request.get("calibration") == "native"
+            candidate.scopes[-1]["original_interval" if interval else "closed_selection"] = dict(owner.selection_context)
+        native_capture = (request.get("coverage") in {"original_selection", "checked_interval"}
+                          and request.get("calibration") == "native")
         static_native = (candidate.config.policy == "auto" and admitted
                          and all(owner.execution_plan.automatic_native_reason() is not None for owner in admitted))
         if native_capture or static_native:

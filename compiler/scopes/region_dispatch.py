@@ -289,18 +289,27 @@ class InlineRegions:
         self.attempts += 1
         self.operations += operations
 
-    def prepare_worksharing(self, loop, proof, *, preceding=(), following=()):
+    def prepare_worksharing(self, loop, proof, *, preceding=(), following=(), prepared=None):
         """Register one original DO for execution by its complete original team.
 
         The caller retains the original team and native effects. This method
         authenticates participation and numerical legality only; its facade
         cannot be executed through the serial dispatcher.
         """
+        from compiler.frontend.numerical_preparation import NumericalPreparationProvider, PreparedOriginalRegion
+
         sources = self.original_selection(loop)
-        extraction = extract_region(self.builder.analysis, self.builder.entry, loop,
-                                    preceding=preceding, following=following, worksharing=proof,
-                                    immutable_inputs=getattr(self.builder, "immutable_inputs", {}))
-        return self._outline(extraction, sources, collective=True, reservation=sources)
+        if len(sources) != 1:
+            raise CompilationError("worksharing preparation requires one exact original loop")
+        if prepared is None:
+            provider = NumericalPreparationProvider(self.builder.analysis, options=self.builder.options,
+                config=self.builder.config, environment_root=self.builder._numerical_environment_root,
+                immutable_inputs=getattr(self.builder, "immutable_inputs", {}))
+            prepared = provider.prepare_worksharing(self.builder.analysis, self.builder.entry.qualified,
+                sources[0], proof, preceding=preceding, following=following)
+        if type(prepared) is not PreparedOriginalRegion or prepared.completion_proof is not proof:
+            raise CompilationError("worksharing preparation requires its exact original-team token")
+        return self._outline(prepared.extraction, sources, collective=True, reservation=sources, prepared=prepared)
 
     def prepare_combined_team(self, nodes):
         """Consume one retained whole numerical group through its original team.
@@ -394,9 +403,20 @@ class InlineRegions:
                 raise CompilationError("ordinary numerical region registry selection changed")
             self.resolved_numerical_region(region.selection)
 
-    def _outline(self, extraction, sources, *, collective, reservation=None):
+    def _outline(self, extraction, sources, *, collective, reservation=None, prepared=None):
         """Lower an authenticated extraction and register its private facade."""
-        from compiler.frontend.numerical_preparation import NumericalPreparationProvider, _prepare
+        from compiler.frontend.numerical_preparation import (
+            NumericalPreparationProvider,
+            PreparedOriginalRegion,
+            _prepare,
+        )
+        if prepared is not None:
+            if type(prepared) is not PreparedOriginalRegion or extraction is not prepared.extraction:
+                raise CompilationError("inline preparation requires its exact original extraction")
+            prepared.validate_configuration(options=self.builder.options, config=self.builder.config,
+                environment_root=self.builder._numerical_environment_root,
+                immutable_inputs=getattr(self.builder, "immutable_inputs", {}))
+            prepared.validate(self.builder.analysis, self.builder.entry.qualified, sources)
         if collective and extraction.scalar_element_captures:
             raise CompilationError("immutable element preparation requires a serial reached preflight; collective execution remains native")
         # Publishing arrays cannot reconstruct CPU exception flags produced by
@@ -414,9 +434,13 @@ class InlineRegions:
             self.builder.analysis, self.builder.entry.qualified, sources)
         if region is not None:
             retained = region.prepared
+            if prepared is not None and retained is not prepared:
+                raise CompilationError("inline preparation differs from its registered numerical effects")
             # Source preparation retains the exact original full context. The
             # extraction below is only enriched by reached descriptor guards.
             extraction = retained.extraction
+        elif prepared is not None:
+            retained = prepared
         else:
             provider = NumericalPreparationProvider(self.builder.analysis, options=self.builder.options,
                 config=self.builder.config, environment_root=self.builder._numerical_environment_root,

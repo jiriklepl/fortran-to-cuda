@@ -2751,6 +2751,14 @@ class ScopeBuilder:
                                         "execution": "unchanged native source"})
                 return self.finish()
             from compiler.scopes.window_discovery import discover_reached_window
+            if (self.config.exact_window or {}).get("coverage") == "checked_interval":
+                from compiler.scopes.closed_selection import discover_closed_selections
+
+                # Repeated original intervals have one checked admission path.
+                # A decline cannot retry through the one-shot or whole-entry
+                # owner with different source-position/lifetime semantics.
+                discover_closed_selections(self)
+                return self.finish()
             if self.config.scope_measurement is None and discover_reached_window(self):
                 return self.finish()
         from compiler.scopes.closed_selection import discover_closed_selections, has_residual_candidates

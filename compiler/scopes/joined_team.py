@@ -10,7 +10,6 @@ from copy import copy
 
 from fparser.two.utils import walk
 
-from compiler.frontend.native_completion import _joined_completion_facts
 from compiler.frontend.source_effects import _kind
 from compiler.ir import CompilationError
 from compiler.scopes.segments import (
@@ -24,22 +23,7 @@ from compiler.scopes.segments import (
     original_roots,
     statement_span,
 )
-
-
-def prepared_span(node):
-    spans = [item.item.span for item in walk(node) if getattr(item, 'item', None)]
-    if not spans or any(span is None for span in spans):
-        raise CompilationError('original team unit lacks prepared source order')
-    return min(span[0] for span in spans), max(span[1] for span in spans)
-
-
-def unit_span(unit):
-    opening, loop, ending = unit
-    # An original loop may own a prefix including PARALLEL or preceding
-    # comments. Its associated DO directive is the exact replacement start.
-    first = statement_span(opening)[0]
-    last = statement_span(ending)[1] if ending is not None else statement_span(loop.content[-1])[1]
-    return first, last
+from compiler.scopes.worksharing_inventory import prepare_worksharing_inventory, prepared_span, unit_span
 
 
 def declared_names(specification):
@@ -71,15 +55,10 @@ class JoinedTeam(StructuredScope):
         self.close_guards = {}
         self.operation_count, self.numerical_units, self.rejections = 0, [], []
         self.original_nodes = original_roots(builder.inline.original_selection(nodes))
-        self.completion = builder.analysis.joined_completion(builder.entry.qualified, self.original_nodes)
-        units = []
-        _joined_completion_facts(builder.analysis, builder.entry.qualified, self.original_nodes, worksharing=units)
-        if not units:
-            raise CompilationError('mixed execution requires separate original PARALLEL and synchronized DOs')
-        # Issue a native token first: it also rejects NOWAIT in an otherwise
-        # unrelated sibling before any cut or generated artifact is admitted.
-        builder.analysis.worksharing_native_completion(builder.entry.qualified, self.original_nodes, (units[0][1],))
-        self.units_by_loop = {id(loop): unit for unit in units for loop in (unit[1],)}
+        self.completion, candidates = prepare_worksharing_inventory(builder, builder.entry.qualified,
+                                                                    self.original_nodes)
+        self.candidates_by_loop = {id(candidate.unit[1]): candidate for candidate in candidates}
+        self.units_by_loop = {key: candidate.unit for key, candidate in self.candidates_by_loop.items()}
         self.first = statement_span(nodes[0])[0]
         self.last = statement_span(nodes[-1])[1]
         self.tree = self._sequence(self.original_nodes)
@@ -201,10 +180,11 @@ class JoinedTeam(StructuredScope):
             if unit is None:
                 raise CompilationError('mixed original team lost its associated worksharing source')
             try:
-                span = unit_span(unit)
-                proof = self.builder.analysis.worksharing_completion(
-                    self.builder.entry.qualified, self.original_nodes, (node,))
-                facade = self.builder.inline.prepare_worksharing(node, proof)
+                candidate = self.candidates_by_loop[id(node)]
+                if candidate.prepared is None:
+                    raise CompilationError(candidate.reason)
+                span, proof = candidate.span, candidate.completion
+                facade = self.builder.inline.prepare_worksharing(node, proof, prepared=candidate.prepared)
                 call = self.builder.inline.call(facade)
             except CompilationError as error:
                 self.rejections.append({'reason': str(error), 'prepared_span': prepared_span(node)})

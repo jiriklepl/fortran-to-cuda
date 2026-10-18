@@ -2152,8 +2152,27 @@ class SourceEffects:
         group = graph.native_group_for_selection(selected)
         if group is not None:
             return graph, (group.node_id,)
+        # Deferred groups deliberately register no member identities. A wider
+        # selection may nevertheless contain their exact complete source
+        # sequence. Collapse only those contiguous originals, then apply the
+        # same ordering, guard and overlap checks as every other graph node.
+        group_starts = {}
+        for group in graph.native_groups.values():
+            group_starts.setdefault(id(group.original_nodes[0]), []).append(group)
+        normalized, index = [], 0
+        while index < len(selected):
+            matches = [group for group in group_starts.get(id(selected[index]), ())
+                       if group.matches(selected[index:index + len(group.original_nodes)])]
+            if len(matches) > 1:
+                raise CompilationError("selected native group lacks unambiguous original source authority")
+            if matches:
+                normalized.append(matches[0].node_id)
+                index += len(matches[0].original_nodes)
+            else:
+                normalized.append(selected[index])
+                index += 1
         identities, original_node_ids = [], None
-        for item in selected:
+        for item in normalized:
             if _kind(item) == "Comment" and not str(item).lstrip().lower().startswith("!$omp"):
                 # Documentation has no execution identity. It may accompany
                 # an exact original group, but a foreign comment cannot grant
