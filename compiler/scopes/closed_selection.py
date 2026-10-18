@@ -388,6 +388,8 @@ class ClosedIntervalOwner(OriginalSelectionOwner):
         from compiler.scopes.lexical import LexicalBoundaryPatch
 
         for member in self.members.values():
+            for suffix in member.closed_suffixes:
+                suffix.validate(member)
             originals = (self.closed_selection if member is self else tuple(_children(member.routine.execution)))
             allowed = {id(node) for original in originals for node in walk(original)}
             patches = [(first, last, patch) for first, last, patch in member.patches

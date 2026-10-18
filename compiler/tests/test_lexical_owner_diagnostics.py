@@ -29,9 +29,15 @@ end module
 NATIVE_SOURCE = SOURCE.replace("integer::i\ndo i=1,n\na(i)=2*a(i)+real(i,8)\nenddo",
                                "call manage()").replace("end subroutine\nend module", """contains
 subroutine manage()
+if(n>0) then
 call opaque_one(a,n)
+endif
+if(n>1) then
 call opaque_two(a,n)
+endif
+if(n>2) then
 call opaque_three(a,n)
+endif
 end subroutine
 end subroutine
 end module""")

@@ -85,6 +85,65 @@ class NumericalAnchor:
                 "preparation": self.prepared.public() if self.prepared is not None else None,
                 "reason": self.reason}
 
+    def source_public(self):
+        """The recorded source choice is not permission to use its payload."""
+        return {"procedure": self.procedure,
+                "span": [statement_span(self.originals[0])[0], statement_span(self.originals[-1])[1]],
+                "prepared": self.prepared is not None, "reason": self.reason}
+
+
+@dataclass(frozen=True)
+class IntervalCallRoute:
+    ordinal: int
+    caller: int
+    edge_ordinals: tuple[int, ...]
+    original: object = field(repr=False)
+    selected: tuple
+    kind: str
+    anchor_ordinals: tuple[int, ...]
+    reason: str
+
+    def public(self):
+        return {"ordinal": self.ordinal, "caller": self.caller, "edge_ordinals": list(self.edge_ordinals),
+                "selected_node_ids": list(self.selected), "kind": self.kind,
+                "anchor_ordinals": list(self.anchor_ordinals), "reason": self.reason,
+                "execution_authorized": False, "numerical_authority": False}
+
+    def validate(self, draft, original_call, *, owner=None):
+        if draft.call_route(original_call, owner=owner) is not self:
+            raise CompilationError("interval call route requires its exact issued source record")
+        return self
+
+
+def _call_routes(members, edges, anchors):
+    """Choose once from retained source alternatives, never native effects."""
+    calls = {}
+    for edge in edges:
+        calls.setdefault((edge.caller, id(edge.original)), []).append(edge)
+    result = []
+    for (caller, _original_id), source_edges in calls.items():
+        first = source_edges[0]
+        reachable = {edge.callee for edge in source_edges if edge.association is not None}
+        pending = list(reachable)
+        while pending:
+            parent = pending.pop()
+            for edge in edges:
+                if (edge.caller == parent and edge.association is not None
+                        and edge.callee not in reachable):
+                    reachable.add(edge.callee)
+                    pending.append(edge.callee)
+        procedures = {members[index].procedure for index in reachable}
+        selected_anchors = tuple(index for index, anchor in enumerate(anchors) if anchor.procedure in procedures)
+        if any(anchors[index].prepared is not None for index in selected_anchors):
+            kind, reason = "prepared_child", "source child has retained numerical preparation; admission still required"
+        elif selected_anchors:
+            kind, reason = "declined_numerical_child", "source child has only declined numerical alternatives; original native effects still required"
+        else:
+            kind, reason = "native", "no prepared or declined numerical child; original native effects still required"
+        result.append(IntervalCallRoute(len(result), caller, tuple(edge.ordinal for edge in source_edges),
+            first.original, first.selected, kind, selected_anchors, reason))
+    return tuple(result)
+
 
 @dataclass(frozen=True)
 class NativeIntervalContext:
@@ -126,6 +185,7 @@ class SourceIntervalDraft:
     members: tuple[IntervalMember, ...]
     edges: tuple[IntervalCallEdge, ...]
     numerical_anchors: tuple[NumericalAnchor, ...]
+    call_routes: tuple[IntervalCallRoute, ...]
     demand: object = field(repr=False)
     _owner: object = field(repr=False)
     _configuration: str
@@ -141,7 +201,8 @@ class SourceIntervalDraft:
     def public(self):
         return json.loads(self._record)
 
-    def validate(self, plan=None):
+    def validate_source(self):
+        """Authenticate route inputs without revalidating numerical payloads."""
         owner, builder = self._owner, self._owner.builder
         if (type(self) is not SourceIntervalDraft or self._issuer is not _ISSUER
                 or getattr(builder, "_interval_drafts", {}).get(self.identity) is not self
@@ -149,11 +210,16 @@ class SourceIntervalDraft:
                 or _configuration(builder) != self._configuration or _digest(builder.facts) != self._facts):
             raise CompilationError("source interval requires its exact unchanged issued inventory")
         builder.analysis.verify_source()
-        for member in self.members:
+        for ordinal, member in enumerate(self.members):
+            if member.ordinal != ordinal:
+                raise CompilationError("source interval member inventory changed")
             graph, selected = builder.analysis._selected_source(member.procedure, member.originals)
             if graph is not member.graph or selected != member.selected:
                 raise CompilationError("source interval original selection changed")
-        for edge in self.edges:
+        for ordinal, edge in enumerate(self.edges):
+            if (edge.ordinal != ordinal or edge.caller not in range(len(self.members))
+                    or edge.callee is not None and edge.callee not in range(len(self.members))):
+                raise CompilationError("source interval call edge inventory changed")
             caller = self.members[edge.caller]
             graph, selected = builder.analysis._selected_source(caller.procedure, (edge.original,))
             if graph is not caller.graph or selected != edge.selected:
@@ -167,8 +233,25 @@ class SourceIntervalDraft:
                 if len(mapping) != len(expected) or any(left is not right or actual is not canonical
                         for (left, actual), (right, canonical) in zip(mapping, expected, strict=True)):
                     raise CompilationError("source interval call edge canonical mapping changed")
-        if _json([edge.public() for edge in self.edges]) != _json(json.loads(self._record)["call_edges"]):
+        recorded = json.loads(self._record)
+        if _json([edge.public() for edge in self.edges]) != _json(recorded["call_edges"]):
             raise CompilationError("source interval call edge inventory changed")
+        if _json([member.public() for member in self.members]) != _json(recorded["members"]):
+            raise CompilationError("source interval member inventory changed")
+        if _json([anchor.source_public() for anchor in self.numerical_anchors]) != _json(recorded["source_numerical_anchors"]):
+            raise CompilationError("source interval numerical choice inventory changed")
+        expected = _call_routes(self.members, self.edges, self.numerical_anchors)
+        if (len(self.call_routes) != len(expected)
+                or any(actual.original is not original.original
+                       for actual, original in zip(self.call_routes, expected, strict=True))
+                or _json([route.public() for route in self.call_routes]) != _json(recorded["call_routes"])
+                or _json([route.public() for route in expected]) != _json(recorded["call_routes"])):
+            raise CompilationError("source interval call routing inventory changed")
+        return self
+
+    def validate(self, plan=None):
+        self.validate_source()
+        owner, builder = self._owner, self._owner.builder
         for anchor in self.numerical_anchors:
             if anchor.prepared is not None:
                 anchor.prepared.validate(builder.analysis, anchor.procedure, anchor.originals)
@@ -182,20 +265,18 @@ class SourceIntervalDraft:
         self.validate()
         return self._owner.original(self.originals)
 
-    def has_numerical_child(self, original_call):
-        self.validate()
-        children = {edge.callee for edge in self.edges
-                    if edge.original is original_call and edge.association is not None}
-        pending = list(children)
-        while pending:
-            parent = pending.pop()
-            for edge in self.edges:
-                if edge.caller == parent and edge.callee is not None and edge.callee not in children:
-                    children.add(edge.callee)
-                    pending.append(edge.callee)
-        procedures = {member.procedure for member in self.members if member.ordinal in children}
-        return any(anchor.procedure in procedures and anchor.prepared is not None
-                   for anchor in self.numerical_anchors)
+    def call_route(self, original_call, *, owner=None):
+        """Return an exact source choice; effects and payloads remain unproved."""
+        self.validate_source()
+        owner = self._owner if owner is None else owner
+        if owner.owner is not self._owner:
+            raise CompilationError("interval call routing requires its original owning interval")
+        callers = {member.ordinal for member in self.members if member.procedure == owner.routine.qualified
+                   and all(owner.canonical(local) is target for local, target in member.mappings)}
+        choices = [route for route in self.call_routes if route.original is original_call and route.caller in callers]
+        if len(choices) != 1:
+            raise CompilationError("interval call routing requires one exact original call and canonical caller")
+        return choices[0]
 
     def member(self, owner):
         self.validate()
@@ -476,11 +557,14 @@ def prepare_interval_draft(owner, originals):
                "original_source_sha256": _digest(text),
                "activation": "original source position and original control",
                "fallback": "publish and continue only the unexecuted suffix"}
-    record = {"schema_version": 2, "selection_context": context,
+    routes = _call_routes(members, edges, anchors)
+    record = {"schema_version": 3, "selection_context": context,
               "members": [member.public() for member in members],
               "call_edges": [edge.public() for edge in edges],
               "member_sharing": "same original procedure, selection and canonical mapping; all original call edges retained",
               "numerical_anchors": [anchor.public() for anchor in anchors],
+              "source_numerical_anchors": [anchor.source_public() for anchor in anchors],
+              "call_routes": [route.public() for route in routes],
               "unresolved_source_calls": reasons, "work": work,
               "sources": dict(analysis.sources), "configuration_identity": _configuration(builder),
               "capture_facts_identity": _digest(builder.facts),
@@ -489,7 +573,7 @@ def prepare_interval_draft(owner, originals):
     # source identity does not depend on their per-process Python identities.
     identity = _digest({key: value for key, value in record.items() if key != "numerical_anchors"})
     record["identity"] = identity
-    result = SourceIntervalDraft(identity, originals, tuple(members), tuple(edges), tuple(anchors), demand, owner,
+    result = SourceIntervalDraft(identity, originals, tuple(members), tuple(edges), tuple(anchors), routes, demand, owner,
         _configuration(builder), _digest(builder.facts), _json(context), _json(record), _ISSUER)
     registry = getattr(builder, "_interval_drafts", None)
     if registry is None:

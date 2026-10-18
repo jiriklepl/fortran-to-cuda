@@ -52,7 +52,8 @@ def test_mixed_child_borrows_context_and_plans_at_original_points(tmp_path):
                   if item["procedure"] == "original::child" and item["role"] == "call_worker")
     generated = (output / manifest["sources"][str(original)]["replacement"]).read_text()
     body = generated[generated.index("subroutine " + worker):generated.index("end subroutine " + worker)]
-    assert "fort_scope_create(" not in body and "fort_scope_close(" not in body
+    assert "fort_scope_create(" not in body
+    assert "fort_scope_close(" not in body
     assert "FORT_SCOPE_PLAN_CONTINUE" in body
     assert body.index("choose =") < body.index("fort_branch =")
     assert "if (fort_mode == 0_c_int) then" in body
@@ -86,36 +87,62 @@ def test_calibrated_auto_child_imports_its_own_public_selector(tmp_path):
 
 
 def test_auto_reached_alias_rollback_restores_retained_compute_identities(tmp_path):
-    profile = tmp_path / "profile.json"
-    profile.write_text(json.dumps(profile_v2()))
+    from hashlib import sha256
+
+    from compiler.driver.options import CompilerOptions
+    from compiler.offload.config import OffloadConfig
+    from compiler.scopes.source import ScopeBuilder
+
     text = source().replace("call child(a,b,out,n)",
         "if(n<0) then\ncall child(a,b,b,n)\nendif\ncall child(a,b,out,n)")
-    original, output, manifest = generate(tmp_path, text, mode="auto", profile=profile,
-        scope_execution="reached", facts={
+    original = tmp_path / "original.f90"
+    original.write_text(text)
+    digest = sha256(original.read_bytes()).hexdigest()
+    builder = ScopeBuilder([original], "original::step",
+        options=CompilerOptions(gpu_policy="auto", memory_model="scoped"),
+        config=OffloadConfig(policy="auto", profile=profile_v2(), scope_execution="reached"), facts={
             "schema_version": 1, "participation": "serial",
+            "sources": {str(original): digest},
             "captures": {"argument::" + name: FACT for name in ("a", "b", "out")}})
+    outputs, manifest = builder.run()
     assert original.read_text() == text
     scope, = manifest["scopes"]
     assert scope["estimate_available"], scope["planning_reason"]
     assert scope["planning_reason"] is None
     assert set(scope["gpu_leaves"]) == {
-        "original::producer", "original::consumer", "original::transform#region1"}
-    segment, = scope["planning_segments"]
-    identity = segment["compute_identity"]
-    assert identity["available"]
-    assert {name for item in identity["requirements"] for name in item["procedures"]} == (
-        set(scope["gpu_leaves"]))
+        "original::producer#region1", "original::consumer#region1", "original::transform#region1"}
+    draft, = builder._interval_drafts.values()
+    plan = draft._owner.execution_plan.validate()
+    assert plan.numerical_invocations == 3
+    # Original-body members own the reached units. A failed alias attempt must
+    # not leave their retained numerical artifacts without identity guards.
+    identities = [(unit, member.unit_emission(unit).compute_identity)
+                  for member in plan.members for unit in plan.units(member) if unit.leaves]
+    assert len(identities) == 3
+    requirements = []
+    for unit, identity in identities:
+        assert identity["available"]
+        assert identity["required"]
+        assert {name for item in identity["requirements"] for name in item["procedures"]} == unit.leaves
+        requirements.extend(identity["requirements"])
+    assert {name for item in requirements for name in item["procedures"]} == set(scope["gpu_leaves"])
+    assert all(item["source"] == str(original) and item["source_sha256"] == digest for item in requirements)
     supported = {item["procedure"] for item in manifest["numerical_decisions"] if item["supported"]}
     assert set(scope["gpu_leaves"]) <= supported
     boundary, = scope["boundaries"]
     assert "alias" in boundary["reason"]
     assert not boundary["reopen"]
     assert text.splitlines()[boundary["first_line"] - 1] == "call child(a,b,b,n)"
-    assert text.splitlines()[segment["first_line"] - 1] == "call child(a,b,out,n)"
-    generated = (output / manifest["sources"][str(original)]["replacement"]).read_text()
+    child = next(item for item in scope["module_coordinators"] if item["procedure"] == "original::child")
+    call, = child["calls"]
+    assert call["caller"] == "original::step"
+    assert text.splitlines()[call["first_line"] - 1] == "call child(a,b,out,n)"
+    generated = outputs[manifest["sources"][str(original)]["replacement"]]
     assert "if(n<0) then" in generated
-    for item in identity["requirements"]:
-        assert "logical function " + item["helper"] + "(" in generated
+    assert generated.count("call child(a,b,b,n)") == 1
+    for item in requirements:
+        assert generated.count("logical function " + item["helper"] + "(") == 1
+        assert "if (.not. (" + item["helper"] + "())) then" in generated
 
 
 def test_child_original_dummy_bounds_are_captured_before_mutable_controls(tmp_path):

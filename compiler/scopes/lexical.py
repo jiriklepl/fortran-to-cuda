@@ -164,6 +164,41 @@ class LexicalBoundaryPatch:
         return "\n".join(fortran_lines(close)) + "\n" + self.original_source
 
 
+@dataclass(frozen=True)
+class LexicalClosedSuffix:
+    """Exact native remainder after an unconditional close in one sequence.
+
+    This is source retention, not effect authority. It cannot be used to skip
+    sibling branches, an enclosing continuation, or a later loop activation.
+    """
+
+    sequence: tuple
+    originals: tuple
+    boundary: LexicalBoundaryPatch
+    original_source: str
+
+    def validate(self, member):
+        self.boundary.validate(member, require_source=True)
+        if self.boundary.conditional_guard is not None:
+            raise CompilationError("closed source suffix requires an unconditional original close")
+        graph, selected = member.builder.analysis._selected_source(member.routine.qualified, self.sequence)
+        if graph is not member.graph or not selected:
+            raise CompilationError("closed source suffix lost its original sequence")
+        prefix = self.boundary.originals
+        matches = [index for index in range(len(self.sequence) - len(prefix) + 1)
+                   if all(left is right for left, right in
+                          zip(self.sequence[index:index + len(prefix)], prefix, strict=True))]
+        if len(matches) != 1:
+            raise CompilationError("closed source suffix lacks one exact original boundary")
+        expected = self.sequence[matches[0] + len(prefix):]
+        if (len(expected) != len(self.originals)
+                or any(left is not right for left, right in zip(expected, self.originals, strict=True))
+                or member.original(self.originals) != self.original_source
+                or not any(patch is self.boundary for _first, _last, patch in member.patches)):
+            raise CompilationError("closed source suffix changed its retained native continuation")
+        return self
+
+
 class OwnerEmission:
     def __init__(self):
         self.exact_window = None
@@ -197,6 +232,7 @@ class LexicalOwner:
         self.control_guard = parent.control_guard if parent else None
         self.forwarded_handles = parent.forwarded_handles if parent else set()
         self.units, self.boundaries, self.patches = [], [], []
+        self.closed_suffixes = []
         self.emission = OwnerEmission()
         self.execution_plan = None
         self.interval_draft = None
@@ -555,7 +591,8 @@ class LexicalOwner:
                                          + "; ".join(route + ": " + reason for route, reason in joined_rejections))
             if condition_only:
                 raise
-            if source_guard is None and len(nodes) == 1 and _kind(nodes[0]) == "Call_Stmt" and self.allow_child_continuation():
+            if (self.owner.interval_draft is None and source_guard is None and len(nodes) == 1
+                    and _kind(nodes[0]) == "Call_Stmt" and self.allow_child_continuation()):
                 try:
                     self.check_host_read_actuals(nodes[0])
                     from compiler.scopes.module_owner import borrow_module
@@ -575,107 +612,141 @@ class LexicalOwner:
         if depth > self.builder.analysis.depth_limit:
             self.boundary(tuple(nodes), "bounded lexical control depth exhausted")
             return
-        for group in self.builder.inline.grouped_nodes(nodes):
-            self.refresh()
-            if self.planned_source(group if isinstance(group, tuple) else (group,)):
+        groups = tuple(self.builder.inline.grouped_nodes(nodes))
+        for index, group in enumerate(groups):
+            patch_start = len(self.patches)
+            self._scan_group(group, depth)
+            originals = self.builder.inline.original_selection(group if isinstance(group, tuple) else (group,))
+            closes = [patch for _first, _last, patch in self.patches[patch_start:]
+                      if isinstance(patch, LexicalBoundaryPatch) and patch.conditional_guard is None
+                      and len(patch.originals) == len(originals)
+                      and all(left is right for left, right in zip(patch.originals, originals, strict=True))]
+            if not closes:
                 continue
-            if isinstance(group, tuple):
-                self.admit(group)
-                continue
-            kind = _kind(group)
-            if kind == "Comment":
-                continue
-            if kind == "If_Construct":
-                try:
-                    publication = None
-                    for header in group.content:
-                        if _kind(header) in {"If_Then_Stmt", "Else_If_Stmt"}:
-                            proof = condition_fragment(self.builder, header, native_host_reads=True)
-                            if proof.effects:
-                                if _kind(header) == "Else_If_Stmt":
-                                    raise CompilationError("ELSEIF payload publication requires nested original guards")
-                                publication = header
-                    if publication is not None:
-                        self.admit((publication,), condition_only=True)
-                except CompilationError as error:
-                    self.boundary((group,), str(error))
-                    continue
-                body = []
-                for item in group.content:
-                    if _kind(item) in {"If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt"}:
-                        if body:
-                            self.scan(body, depth+1)
-                        body = []
-                    else:
-                        body.append(item)
-            elif kind == "Call_Stmt":
-                try:
-                    if self.mapped_child(group):
-                        continue
-                    if not self.internal(group):
-                        if not hasattr(group, "fort_inline_region"):
-                            try:
-                                call = self.builder.execution_source_call(self.routine, group)
-                                child = self.builder.analysis.routines[call.procedure]
-                                prospective = (self.owner.interval_draft is not None
-                                               and self.owner.interval_draft.has_numerical_child(group))
-                                if (self.allow_child_continuation() and child.source_kind == "module"
-                                        and (prospective or any(_kind(item) == "Return_Stmt"
-                                                                for item in walk(child.execution)))):
-                                    from compiler.scopes.module_owner import borrow_module
-                                    if borrow_module(self, group):
-                                        continue
-                            except CompilationError:
-                                # Complete native effects may still provide a
-                                # safe ordinary call when a companion cannot.
-                                pass
-                        self.admit((group,))
-                except CompilationError as error:
-                    self.boundary((group,), str(error))
-            elif kind == "If_Stmt":
-                try:
-                    proof = condition_fragment(self.builder, group, native_host_reads=True)
-                    if proof.effects:
-                        self.admit((group,), condition_only=True)
-                    if (self.parent is not None and _kind(group.items[1]) == "Return_Stmt"
-                            and str(group.items[1]).strip().lower() == "return"):
-                        # Returning from a borrowed child ends no managed
-                        # allocation lifetime. Its outer owner remains live.
-                        continue
-                    action = self.builder.inline.statement_projection(group.items[1], group)
-                    self.admit((action,), source_guard=str(group.items[0]), native_source=str(group.items[1]),
-                               boundary_nodes=(group,))
-                except CompilationError as error:
-                    self.boundary((group,), str(error))
-            elif kind == "Associate_Construct":
-                original = self.builder.inline.original_selection(group)
-                record = (self.builder.analysis._associate_scopes.get(id(original[0]))
-                          if len(original) == 1 else None)
-                if record is None or not record.available:
-                    self.boundary((group,), "lexical association requires its original selector proof")
+            if len(closes) != 1:
+                raise CompilationError("source sequence has duplicate unconditional closes")
+            # Only a close at this exact sequence position absorbs the tail.
+            # Nested branches and loop bodies own separate cursors; no path
+            # predicate is assumed true and no child return is propagated.
+            remaining = tuple(node for item in groups[index + 1:]
+                              for node in (item if isinstance(item, tuple) else (item,)))
+            if remaining:
+                suffix = self.builder.inline.original_selection(remaining)
+                sequence = self.builder.inline.original_selection(tuple(nodes))
+                record = LexicalClosedSuffix(sequence, suffix, closes[0], self.original(suffix))
+                record.validate(self)
+                self.closed_suffixes.append(record)
+            return
+
+    def _scan_call(self, node):
+        try:
+            draft = self.owner.interval_draft
+            route = (draft.call_route(node, owner=self) if draft is not None
+                     and not hasattr(node, "fort_inline_region") else None)
+            if route is not None and route.kind == "declined_numerical_child":
+                # Numerical ineligibility does not rule out a useful native
+                # correction. Try its native effects once, without borrowing
+                # another implementation after failure.
+                self.admit((node,))
+                return
+            if self.mapped_child(node):
+                return
+            if self.internal(node):
+                return
+            if ((route is None or route.kind == "prepared_child")
+                    and not hasattr(node, "fort_inline_region") and self.allow_child_continuation()):
+                call = self.builder.execution_source_call(self.routine, node)
+                child = self.builder.analysis.routines[call.procedure]
+                if child.source_kind == "module":
+                    from compiler.scopes.module_owner import borrow_module
+                    if borrow_module(self, node):
+                        return
+            # Native is one route, with existing precise/demand proof issuers.
+            # A failed child route closes at its original CALL; it never tries
+            # the full native closure and then scans the same child again.
+            self.admit((node,))
+        except CompilationError as error:
+            self.boundary((node,), str(error))
+
+    def _scan_group(self, group, depth):
+        self.refresh()
+        if self.planned_source(group if isinstance(group, tuple) else (group,)):
+            return
+        if isinstance(group, tuple):
+            self.admit(group)
+            return
+        kind = _kind(group)
+        if kind == "Comment":
+            return
+        if kind == "If_Construct":
+            try:
+                publication = None
+                for header in group.content:
+                    if _kind(header) in {"If_Then_Stmt", "Else_If_Stmt"}:
+                        proof = condition_fragment(self.builder, header, native_host_reads=True)
+                        if proof.effects:
+                            if _kind(header) == "Else_If_Stmt":
+                                raise CompilationError("ELSEIF payload publication requires nested original guards")
+                            publication = header
+                if publication is not None:
+                    self.admit((publication,), condition_only=True)
+            except CompilationError as error:
+                self.boundary((group,), str(error))
+                return
+            body = []
+            for item in group.content:
+                if _kind(item) in {"If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt"}:
+                    if body:
+                        self.scan(body, depth+1)
+                    body = []
                 else:
-                    # Retain the original association and edit individual
-                    # reached operations inside it. A later failure cannot
-                    # restart the association's earlier numerical prefix.
-                    self.scan(group.content[1:-1], depth+1)
-            elif kind == "Block_Nonlabel_Do_Construct":
-                if any(_kind(item) == "Call_Stmt" for item in walk(group)):
-                    try:
-                        from compiler.scopes.counted_loops import reached_counted_body
-                        body = reached_counted_body(self.builder, group)
-                    except CompilationError:
-                        self.admit((group,))
-                    else:
-                        self.counted_controls.append(body.authority)
-                        self.scan(body.nodes, depth+1)
-                else:
-                    self.admit((group,))
-            elif kind == "Assignment_Stmt":
-                self.admit((group,))
-            elif kind == "Return_Stmt" and self.parent is not None and str(group).strip().lower() == "return":
-                continue
+                    body.append(item)
+        elif kind == "Call_Stmt":
+            self._scan_call(group)
+        elif kind == "If_Stmt":
+            try:
+                proof = condition_fragment(self.builder, group, native_host_reads=True)
+                if proof.effects:
+                    self.admit((group,), condition_only=True)
+                if (self.parent is not None and _kind(group.items[1]) == "Return_Stmt"
+                        and str(group.items[1]).strip().lower() == "return"):
+                    # Returning from a borrowed child ends no managed
+                    # allocation lifetime. Its outer owner remains live.
+                    return
+                action = self.builder.inline.statement_projection(group.items[1], group)
+                self.admit((action,), source_guard=str(group.items[0]), native_source=str(group.items[1]),
+                           boundary_nodes=(group,))
+            except CompilationError as error:
+                self.boundary((group,), str(error))
+        elif kind == "Associate_Construct":
+            original = self.builder.inline.original_selection(group)
+            record = (self.builder.analysis._associate_scopes.get(id(original[0]))
+                      if len(original) == 1 else None)
+            if record is None or not record.available:
+                self.boundary((group,), "lexical association requires its original selector proof")
             else:
-                self.boundary((group,), "unsupported reached source operation: " + kind)
+                # Retain the original association and edit individual
+                # reached operations inside it. A later failure cannot
+                # restart the association's earlier numerical prefix.
+                self.scan(group.content[1:-1], depth+1)
+        elif kind == "Block_Nonlabel_Do_Construct":
+            if any(_kind(item) == "Call_Stmt" for item in walk(group)):
+                try:
+                    from compiler.scopes.counted_loops import reached_counted_body
+                    body = reached_counted_body(self.builder, group)
+                except CompilationError:
+                    self.admit((group,))
+                else:
+                    self.counted_controls.append(body.authority)
+                    self.scan(body.nodes, depth+1)
+            else:
+                self.admit((group,))
+        elif kind == "Assignment_Stmt":
+            self.admit((group,))
+        elif kind == "Return_Stmt" and self.parent is not None and str(group).strip().lower() == "return":
+            return
+        else:
+            self.boundary((group,), "unsupported reached source operation: " + kind)
 
     def declaration(self, binding):
         """Locate actual storage; adding TARGET never moves its ownership."""
@@ -1103,6 +1174,9 @@ class LexicalOwner:
             self.scan(nodes)
         finally:
             self.active.pop()
+        for member in self.members.values():
+            for suffix in member.closed_suffixes:
+                suffix.validate(member)
         self.validate_plan(nodes)
         managed = {member.canonical(binding).root for member in self.members.values()
                    for unit in member.units for binding in unit.arrays.values()}

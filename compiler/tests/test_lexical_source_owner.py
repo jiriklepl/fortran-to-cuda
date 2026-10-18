@@ -342,10 +342,11 @@ def test_array_elseif_stays_native_without_hoisting_payload_read(tmp_path):
     source = SOURCE.replace('call opaque(b,n)\nendif',
                             'call opaque(b,n)\nelse if(b(-2)>10.d0) then\ncall opaque(b,n)\nendif')
     path, outputs, report = emit(tmp_path, source)
-    assert len(report['scopes'][0]['planning_segments']) == 2
+    assert len(report['scopes'][0]['planning_segments']) == 1
     assert 'ELSEIF' in report['scopes'][0]['boundaries'][0]['reason']
     text = outputs[report['sources'][str(path)]['replacement']]
     assert 'if(escape) then\ncall opaque(b,n)\nelse if(b(-2)>10.d0) then' in text
+    assert text.count('out(i)=a(i)+b(i)') == 1
 
 
 def test_module_companion_different_mapping_has_explicit_native_boundary(tmp_path):
@@ -370,10 +371,14 @@ def test_module_companion_out_first_registration_cannot_reuse_caller_freshness(t
 
 def test_module_companion_rejects_unproved_explicit_shape_storage_mapping(tmp_path):
     source = MODULE_SOURCE.replace('intent(inout)::x(-4:)', 'intent(inout)::x(-4:n-5)')
-    _, _, report = emit(tmp_path, source)
+    path, outputs, report = emit(tmp_path, source)
     owner, = report['scopes']
     assert not owner['module_coordinators']
-    assert len(owner['boundaries']) == 2
+    assert len(owner['boundaries']) == 1
+    text = outputs[report['sources'][str(path)]['replacement']]
+    assert text.count('call adjust(b,n,escape)') == 1
+    assert text.count('call adjust(b,n,.false.)') == 1
+    assert text.count('out(i)=a(i)+b(i)') == 1
 
 
 def test_nested_module_companion_forwards_hidden_resource_handles(tmp_path):
@@ -492,10 +497,14 @@ def test_native_guard_rejects_associations_that_may_copy_or_define_before_body(t
     for index, declaration in enumerate(('real(8),contiguous,intent(inout)::x(:)',
                                          'real(8),intent(out)::x(:)', 'real(8),intent(inout)::x(8)',
                                          'real(8),intent(inout)::x(size(b):)')):
-        _, _, report = emit(tmp_path/str(index), GUARDED_NATIVE_SOURCE.replace(
+        path, outputs, report = emit(tmp_path/str(index), GUARDED_NATIVE_SOURCE.replace(
             'real(8),intent(inout)::x(:)', declaration))
-        assert len(report['scopes'][0]['boundaries']) == 2
+        assert len(report['scopes'][0]['boundaries']) == 1
         assert not report['scopes'][0]['internal_coordinators']
+        text = outputs[report['sources'][str(path)]['replacement']]
+        assert text.count('call guarded(b,metadata,transform)') == 1
+        assert text.count('call guarded(out,metadata,transform)') == 1
+        assert text.count('out(i)=a(i)+b(i)') == 1
 
 
 def test_owner_prologue_precedes_publication_for_first_original_condition(tmp_path):
