@@ -1875,6 +1875,14 @@ definitions. This token grants no physical mapping, allocation lifetime,
 activation, or execution authority. Native coherence continues to require its
 existing physical-section proofs.
 
+`prove_native_preservation` filters existing definition coverage through an
+unchanged native prefix. Complete ordinary reads and payload writes preserve
+already defined points; they grant no new coverage. Original OUT associations,
+possible hazardous aliases and scalar-bound changes remove affected facts.
+Descriptor changes and unknown effects clear coverage. Scalar and descriptor
+dependencies retain their exact original bindings. This dormant-state proof
+does not authorize active host/device coherence or allocation lifetime.
+
 Partial activation uses registered typed source geometry, distinct from external
 literal physical `sections` facts. First registration maps that geometry through
 the guarded original descriptor before a runtime handle exists, retaining
@@ -3009,9 +3017,16 @@ keeps complete OpenMP groups indivisible, and opens a fresh context each time
 the selected site executes. The context publishes and closes before an excluded
 suffix or backedge. This path does not retry a declined selection through the
 older first-traversal or whole-entry owner. It currently requires proved local
-scalar preparation before the selection and, for repeated sites, a similarly
-restricted suffix. A fresh context does not prove allocation lifetime or restore
-definitions lost by native work; those cases remain native. Each admitted
+scalar preparation or a registered native-prefix activation proof before the
+selection. The latter combines independently admitted invocation facts with
+complete native preservation and exact joined initialization. It registers only
+proved sections, before borrowed dummy association can rebase their coordinates.
+The unchanged prefix and its conditions still execute once. Missing effects,
+uncovered initialization reads, unstable registration bounds and unproved
+selected-position lifetimes reject that alternative. Native-prefix activation
+does not yet support repeated selections; the existing scalar-prefix repeated
+path retains its restricted suffix checks. A fresh context does not prove
+allocation lifetime or restore definitions lost by native work. Each admitted
 interval requires at least two numerical invocations and the complete existing
 native-effect, resource and completion checks.
 Unsupported consumers may instead have checked close points at their exact
