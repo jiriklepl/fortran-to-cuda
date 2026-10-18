@@ -492,9 +492,11 @@ class CheckedExecutionPlan:
             analysis.verify_publication()
         for proof in self._numerical_authorities:
             proof.validate(proof._provider._analysis, proof.procedure, proof._selection)
-        from compiler.scopes.source_reads import validate_source_reads
+        from compiler.scopes.source_reads import validate_native_source_reads, validate_source_reads
         for member in self.members:
             for unit in self.units(member):
+                for operation in unit.scope.native:
+                    validate_native_source_reads(member.builder, operation)
                 proofs = getattr(unit.scope, "source_reads", None)
                 for call in unit.scope.calls:
                     proof = proofs.get(call.procedure) if isinstance(proofs, (dict, MappingProxyType)) else proofs

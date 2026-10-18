@@ -3,11 +3,13 @@
 import json
 import os
 import re
+from functools import partial
 from hashlib import sha256
 
 import pytest
 
 from compiler.tests.support.numerical_cuda import _transfers, build_reached_numerical_binaries
+from compiler.tests.test_native_source_reads import emit_native_metadata_fixture
 from compiler.tests.test_selection_activation import emit_activation_fixture
 from compiler.tests.test_source_scopes import run
 
@@ -61,12 +63,26 @@ def emit(directory, *, precision, device_budget):
     return [path], outputs, report, builder
 
 
+def emit_with_metadata(directory, *, precision, device_budget, protected=False):
+    assert precision == 8
+    assert device_budget is None
+    path = directory / "prefix.f90"
+    builder, owner, outputs, report = emit_native_metadata_fixture(path, protected=protected)
+    assert owner.execution_plan.validate().numerical_invocations == 3
+    return [path], outputs, report, builder
+
+
 @pytest.mark.cuda
-def test_original_reads_survive_borrowing_and_retain_current_device_sections(tmp_path_factory):
+@pytest.mark.parametrize("metadata", [None, "demand", "precise"],
+                         ids=["numerical_reads", "native_demand_reads", "native_precise_reads"])
+def test_original_reads_survive_borrowing_and_retain_current_device_sections(tmp_path_factory, metadata):
     directory, candidate, native, _precision, _fallback, resources = build_reached_numerical_binaries(
-        tmp_path_factory, 8, False, emit_fixture=emit, prefix="selection_activation_",
+        tmp_path_factory, 8, False,
+        emit_fixture=partial(emit_with_metadata, protected=metadata == "precise") if metadata else emit,
+        prefix="selection_activation_",
         driver_source=lambda _precision: DRIVER, expected_gpu_leaves=3,
-        expected_capture_states={"interval_fields::out": "none"})
+        expected_capture_states={"interval_fields::out": "none",
+                                 **({"interval_fields::tiles": "none"} if metadata else {})})
     environment = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "OMP_SCHEDULE": "static"}
     environment.pop("FORT_RUNTIME_TRACE", None)
     run([str(native)], cwd=directory, env=environment)

@@ -3050,6 +3050,16 @@ to host definition coverage. Already current device values remain current;
 unread halos acquire no authority. This precedes the local planning query, whose
 cost and transfer simulation therefore sees the same coverage as execution.
 
+Unconditional native assignments can use the same reached-read admission before
+their native planning query. The existing ordered native-effect proof authenticates
+the original assignment, and exact read sections are rederived from that source.
+This covers native scalar setup from array elements and point corrections, through
+both precise native effects and demand-relative interval effects. Conditional
+expressions, masked operations, function calls and loop unions acquire no new read
+authority. Reads retain current device copies; subsequent native writes still
+invalidate only their proved sections. Entry state and unread sections remain
+unknown, and a rejected preflight continues only the unexecuted native suffix.
+
 These read preconditions grant no storage lifetime, alias freedom, native-effect
 or numerical-execution authority. Opaque native operations inside ownership still
 require the complete existing effects and coherence checks. General-prefix

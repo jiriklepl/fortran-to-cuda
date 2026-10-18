@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
+from fparser.two.utils import walk
+
 from compiler.frontend.native_definitions import _covers, _unique
 from compiler.frontend.native_sections import NativeSections
 from compiler.frontend.numerical_effects import _hash, _Mapper, prove_numerical_effects
@@ -22,6 +24,55 @@ REACHED_READ_REQUIREMENTS_VERSION = 1
 
 class ReachedReadRequirementsUnsupported(CompilationError):
     """Original reads cannot justify the numerical upload requirement exactly."""
+
+
+def _native_read_selection(analysis, procedure, selection):
+    """An original assignment reads its RHS before changing its target.
+
+    A union of conditional/loop accesses is not a must-read set. Keep those
+    operations on their existing definition path. Function arguments can also
+    be conditionally consumed; only descriptor inquiries are admitted here.
+    """
+    from compiler.ir.intrinsics import ARRAY_INQUIRIES, MODEL_INQUIRIES
+
+    analysis._selected_source(procedure, selection)
+    if len(selection) != 1 or type(selection[0]).__name__ != "Assignment_Stmt":
+        return False
+    for node in walk(selection[0]):
+        kind = type(node).__name__
+        if (isinstance(node, str) and node.lower() in {".and.", ".or."}
+                or kind in {"Function_Reference", "Structure_Constructor"}
+                or kind == "Intrinsic_Function_Reference"
+                and str(node.items[0]).lower() not in ARRAY_INQUIRIES | MODEL_INQUIRIES):
+            return False
+    return True
+
+
+def prove_native_read_requirements(analysis, procedure, selection):
+    """Reuse ordered native authority for one reached unconditional assignment."""
+    from compiler.frontend.native_definitions import prove_native_definitions
+
+    if not _native_read_selection(analysis, procedure, selection):
+        return None
+    proof = prove_native_definitions(analysis, procedure, selection)
+    return proof if any(step.sections and any(item.reads for item in step.sections.resources)
+                        for step in proof.steps) else None
+
+
+def native_read_sections(analysis, procedure, selection, proof):
+    """Fresh exact reads; no prefix, whole-array or may-read definition credit."""
+    from compiler.frontend.native_definitions import NativeDefinitionProof
+
+    if type(proof) is not NativeDefinitionProof or not _native_read_selection(analysis, procedure, selection):
+        raise CompilationError("native reached reads require exact original assignment authority")
+    proof.validate(analysis, procedure, selection)
+    # Derive from authenticated source instead of consuming mutable detached
+    # summaries or trusting a caller-supplied section/payload replacement.
+    sections = analysis.native_sections_for_nodes(procedure, selection, capture_locals=True)
+    if not sections.available:
+        raise CompilationError("native reached read sections are unavailable")
+    return replace(sections, resources=tuple(replace(item, writes=(), overwrites=())
+                                             for item in sections.resources if item.reads))
 
 
 @dataclass(frozen=True)
