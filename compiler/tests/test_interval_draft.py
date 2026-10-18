@@ -265,7 +265,7 @@ end subroutine
     assert draft.public()["work"]["call_instances"] == 6
     root_edges = [edge for edge in draft.edges if edge.caller == 0]
     assert [str(edge.original.items[0]).lower() for edge in root_edges] == ["left", "right", "momentum"]
-    assert all(draft.has_numerical_child(edge.original) for edge in root_edges)
+    assert all(draft.call_route(edge.original).kind == "prepared_child" for edge in root_edges)
     assert draft.validate() is draft
     with pytest.raises(FrozenInstanceError):
         incoming[0].callee = 0
@@ -289,6 +289,8 @@ def test_distinct_actual_members_and_same_procedure_retarget_rejection(tmp_path)
     try:
         with pytest.raises(CompilationError, match="canonical mapping changed"):
             draft.validate()
+        with pytest.raises(CompilationError, match="canonical mapping changed"):
+            draft.call_route(first.original)
     finally:
         object.__setattr__(draft, "edges", original_edges)
     assert draft.validate() is draft
@@ -304,3 +306,117 @@ def test_dag_memoization_does_not_hide_recursion(tmp_path):
     source = SOURCE.replace("integer::i\n!$omp", "integer::i\ncall producer(a,v,n)\n!$omp", 1)
     with pytest.raises(CompilationError, match="recursive or over-depth"):
         draft_only(tmp_path, source)
+
+
+def routing_source():
+    helpers = """subroutine native_touch()
+visits=visits+1
+end subroutine
+subroutine declined(a,s,n)
+real(8),intent(in)::a(-1:)
+real(8),intent(inout)::s(-1:)
+integer,intent(in)::n
+integer::i
+!$omp parallel do private(i) schedule(runtime)
+do i=0,n-1
+s(i)=s(i)+sum(a)
+enddo
+!$omp end parallel do
+end subroutine
+"""
+    return SOURCE.replace("call momentum(old,viscosity,star,out,n,correcting)",
+        "call native_touch()\nif(correcting) call declined(old,star,n)\n"
+        "call unknown()\ncall momentum(old,viscosity,star,out,n,correcting)").replace(
+            "end module", helpers + "end module")
+
+
+def test_routes_preserve_source_choices_without_admitting_declined_or_unknown_calls(tmp_path):
+    draft = draft_only(tmp_path, routing_source())
+    routes = {str(route.original.items[0]).lower(): route for route in draft.call_routes if route.caller == 0}
+    assert {name: route.kind for name, route in routes.items()} == {
+        "producer": "prepared_child", "momentum": "prepared_child", "native_touch": "native",
+        "declined": "declined_numerical_child", "unknown": "native"}
+    assert draft.public()["schema_version"] == 3
+    for route in routes.values():
+        assert draft.call_route(route.original) is route
+        assert route.validate(draft, route.original) is route
+        assert not route.public()["execution_authorized"]
+        assert not route.public()["numerical_authority"]
+        with pytest.raises(FrozenInstanceError):
+            route.kind = "native"
+        with pytest.raises(CompilationError, match="exact issued source record"):
+            copy(route).validate(draft, route.original)
+        with pytest.raises(CompilationError, match="exact original call"):
+            draft.call_route(copy(route.original))
+    assert routes["declined"].anchor_ordinals
+    assert all(draft.numerical_anchors[index].prepared is None for index in routes["declined"].anchor_ordinals)
+    assert not routes["unknown"].anchor_ordinals
+    assert draft._owner.units == []
+    assert draft._owner.execution_plan is None
+    assert not draft._owner.builder.outputs
+
+
+@pytest.mark.parametrize("mutation", ["kind", "source", "edge", "removed"])
+def test_source_route_rejects_changed_choices_or_original_edges(tmp_path, mutation):
+    draft = draft_only(tmp_path, routing_source())
+    routes = draft.call_routes
+    selected = next(route for route in routes if route.kind == "declined_numerical_child")
+    if mutation == "removed":
+        corrupted = tuple(route for route in routes if route is not selected)
+    else:
+        updates = {"kind": {"kind": "prepared_child"}, "source": {"original": routes[0].original},
+                   "edge": {"edge_ordinals": routes[0].edge_ordinals}}[mutation]
+        corrupted = tuple(replace(route, **updates) if route is selected else route for route in routes)
+    object.__setattr__(draft, "call_routes", corrupted)
+    try:
+        with pytest.raises(CompilationError, match="call routing inventory changed"):
+            draft.call_route(selected.original)
+    finally:
+        object.__setattr__(draft, "call_routes", routes)
+    assert draft.validate() is draft
+
+
+def test_source_route_does_not_validate_unrelated_numerical_payloads(tmp_path, monkeypatch):
+    from compiler.frontend.numerical_preparation import PreparedOriginalRegion
+
+    draft = draft_only(tmp_path, routing_source())
+    route = next(route for route in draft.call_routes if route.kind == "declined_numerical_child")
+    original_validate = PreparedOriginalRegion.validate
+    visited = []
+
+    def reject_payload(self, *_args, **_kwargs):
+        visited.append(self)
+        raise CompilationError("changed numerical payload must reject finalization")
+
+    monkeypatch.setattr(PreparedOriginalRegion, "validate", reject_payload)
+    assert draft.call_route(route.original) is route
+    assert not visited
+    with pytest.raises(CompilationError, match="changed numerical payload"):
+        draft.finalize(draft._owner)
+    assert visited
+    monkeypatch.setattr(PreparedOriginalRegion, "validate", original_validate)
+    assert draft.validate() is draft
+
+
+@pytest.mark.parametrize("mutation", ["facts", "configuration", "source_registry"])
+def test_source_route_rejects_stale_compilation_context(tmp_path, mutation):
+    draft = draft_only(tmp_path, routing_source())
+    builder = draft._owner.builder
+    if mutation == "facts":
+        builder.facts["captures"]["interval_fields::star"]["initialized"] = "none"
+    elif mutation == "configuration":
+        builder.config = replace(builder.config, host_threads=2)
+    else:
+        builder.analysis.routines = dict(builder.analysis.routines)
+    with pytest.raises(CompilationError):
+        draft.call_route(draft.call_routes[0].original)
+
+
+def test_source_route_retains_session_text_until_live_publication_check(tmp_path):
+    draft = draft_only(tmp_path, routing_source())
+    route = draft.call_routes[0]
+    path = tmp_path / "interval.f90"
+    path.write_text(path.read_text().replace("visits=visits+1", "visits=visits+2"))
+    assert draft.call_route(route.original) is route
+    with pytest.raises(CompilationError, match="source changed"):
+        draft._owner.builder.analysis.verify_publication()

@@ -3012,9 +3012,22 @@ member only when their original procedure, source selection and canonical array
 bindings match. Every resolved call edge retains its own checked association;
 unresolved calls remain obligations. Sharing analysis does not merge executions
 or assume equivalent scalar values.
-The draft's version 2 record represents this graph without expanding every call
-path. Existing analysis limits and independent native-effect, definition and
-completion checks still apply before a checked execution plan can be emitted.
+The draft's version 3 record represents this graph without expanding every call
+path. Each exact original call and canonical caller has one source-authenticated
+route: prepared numerical child, declined numerical child, or native operation.
+A numerical decline still permits one native admission attempt with the existing
+effect proofs; it does not imply that a native correction must close residency.
+Failed child or native admission closes at the original call without retrying
+through another child implementation. Source routing does not
+revalidate unrelated numerical payloads; final plan validation still checks
+every admitted preparation, native effect, definition and completion proof.
+
+An unconditional checked close ends admission of its exact original sequence.
+The remaining native text is authenticated and retained once. A close inside a
+branch, child, or loop does not truncate sibling branches, caller continuations,
+or later loop paths. Conditional closes retain later eligible operations, and
+the runtime's absorbing disable state prevents execution from replaying a GPU
+prefix or reactivating after a reached close.
 
 Mixed original teams share one source-only worksharing inventory between
 interval discovery and `JoinedTeam` admission. Each supported original DO
