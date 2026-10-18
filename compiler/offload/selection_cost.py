@@ -1,9 +1,10 @@
-"""Measured complete-process placement for one checked original numerical group.
+"""Measured complete-process placement for one checked original source interval.
 
-The checked plan remains the execution authority.  This module derives a reached
-workload key from its prepared numerical IR and attaches complete-process paired
-observations through the existing exact-window issuer.  Empirical applicability
-does not assert a future invocation count or price cold startup using warm calls.
+The checked plan remains the execution authority. A finalized entry projection
+supplies safe root geometry; internal native work is observed without hoisting
+its controls. Complete-process paired observations use the existing exact-window
+issuer. Empirical applicability does not assert a future invocation count or
+price cold startup using warm calls.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ from compiler.offload.exact_window import (
     implementation_identity,
 )
 
-PROTOCOL = "checked-selection-process-v2"
+PROTOCOL = "checked-interval-process-v3"
 PREFIX = "FORT_SELECTION_OBSERVATION "
 
 
@@ -121,13 +122,15 @@ def _process_evidence_decision(evidence, contract):
                 invocations = row.get("invocations")
                 if type(invocations) is not list or not invocations:
                     raise ValueError("complete-process observation lacks actual selected invocations")
-                sequence, summed = [], 0.0
+                sequence, summed, launched = [], 0.0, 0
                 for ordinal, invocation in enumerate(invocations):
                     if (type(invocation) is not dict or invocation.get("ordinal") != ordinal
                             or type(invocation.get("ordinal")) is not int
                             or invocation.get("selection") != contract["selection_identity"]
                             or not _valid_key(invocation.get("key"), count)
                             or type(invocation.get("launches")) is not int or invocation["launches"] < 0
+                            or invocation.get("complete") is not True
+                            or type(invocation.get("fallbacks")) is not int or invocation["fallbacks"] != 0
                             or type(invocation.get("seconds")) not in {int, float}
                             or not math.isfinite(invocation["seconds"]) or invocation["seconds"] <= 0):
                         raise ValueError("selected invocation key/outcome/timing is invalid")
@@ -135,16 +138,17 @@ def _process_evidence_decision(evidence, contract):
                     sequence.append(key)
                     all_keys.add(key)
                     summed += invocation["seconds"]
+                    launched += invocation["launches"]
                     if mode == "native":
                         if invocation.get("outcome") != "native" or invocation["launches"] != 0:
                             raise ValueError("independent native process executed a resident alternative")
                     else:
-                        resident = (invocation.get("outcome") == "resident"
-                                    and invocation["launches"] == contract["expected_launches"])
-                        fallback = invocation.get("outcome") == "native" and invocation["launches"] == 0
-                        if not resident and not fallback:
+                        resident = invocation.get("outcome") == "resident"
+                        if not resident:
                             raise ValueError("selected resident outcome is incomplete or mixed")
                         per_key_outcomes.setdefault(key, []).append(resident)
+                if mode == "resident" and not launched:
+                    raise ValueError("resident process has no completed GPU work")
                 if summed > row["seconds"]:
                     raise ValueError("selected invocation times exceed complete-process elapsed time")
                 if key_sequence is None:
@@ -195,182 +199,85 @@ def _process_evidence_decision(evidence, contract):
         return {"available": False, "selection": "native", "reason": str(error)}
 
 
-def _workload_key(owner, unit):
-    """Derive controls from the same lowered, prepared numerical computation."""
-    from compiler.ir.nodes import (
-        ArrayAccess,
-        Assignment,
-        Binary,
-        If,
-        IntrinsicCall,
-        Literal,
-        Loop,
-        Reference,
-        Size,
-        Unary,
-    )
+def _workload_key(owner, interval):
+    """Use only the finalized interval's safe root-entry projection.
 
-    prepared = unit.scope.prepared
-    extraction = prepared.extraction
-    if extraction.operation_kind != "numerical_loop" or not prepared.all_runtime_guards_typed:
-        raise CompilationError("selected pricing requires a complete typed original numerical group")
-    if extraction.scalar_element_captures or extraction.immutable_array_reads:
-        raise CompilationError("selected pricing lacks a workload contract for indirect scalar captures")
-    if prepared.scalar_changes:
-        raise CompilationError("selected pricing requires unchanged external scalar controls")
-    parameters = {symbol.name.lower(): symbol for symbol in prepared.function.parameters}
-    integer_parameters = {symbol.id for symbol in parameters.values() if not symbol.rank and symbol.dtype.value == "integer"}
-    needed, visits = set(), 0
-
-    def control(expression, iterators):
-        nonlocal visits
-        visits += 1
-        if visits > 65536:
-            raise CompilationError("selected workload analysis budget exhausted")
-        if type(expression) is int or isinstance(expression, Literal) and expression.dtype.value == "integer":
-            return
-        if isinstance(expression, Reference):
-            if expression.symbol.id in iterators:
-                return
-            if expression.symbol.id in integer_parameters:
-                needed.add(expression.symbol.name.lower())
-                return
-        if isinstance(expression, Size):
-            return
-        if isinstance(expression, Unary) and expression.operator in {"+", "-", ".not."}:
-            control(expression.operand, iterators)
-            return
-        if isinstance(expression, Binary) and expression.operator.lower() in {
-                "+", "-", "*", "/", "<", ">", "<=", ">=", "==", "/=", ".and.", ".or."}:
-            control(expression.left, iterators)
-            control(expression.right, iterators)
-            return
-        if isinstance(expression, IntrinsicCall) and expression.name.lower() in {"min", "max", "int"}:
-            for argument in expression.arguments:
-                control(argument, iterators)
-            return
-        raise CompilationError("selected workload control depends on payload, modified private state or unsupported work")
-
-    def expression_indices(expression, iterators):
-        from compiler.ir.nodes import walk_expr
-
-        for node in walk_expr(expression):
-            if isinstance(node, ArrayAccess):
-                for index in node.indices:
-                    control(index, iterators)
-
-    def block(body, iterators=frozenset()):
-        for statement in body.statements:
-            if isinstance(statement, Loop):
-                for value in (statement.lower, statement.upper, statement.step):
-                    control(value, iterators)
-                block(statement.body, iterators | {statement.iterator.id})
-            elif isinstance(statement, If):
-                control(statement.condition, iterators)
-                block(statement.then_body, iterators)
-                block(statement.else_body, iterators)
-            elif isinstance(statement, Assignment):
-                expression_indices(statement.target, iterators)
-                expression_indices(statement.value, iterators)
-            else:
-                raise CompilationError("selected workload has unsupported prepared numerical work")
-
-    # PreparedOriginalRegion.function is the fully lowered helper closure, not
-    # just the outer source body: calls have been inlined into this typed IR.
-    # Its control walk therefore rejects variable helper work as well. Tiling
-    # normalization can remove tile steps from numerical IR, so retain every
-    # external INTEGER parameter of the authenticated extraction too.
-    block(prepared.function.body)
-    needed.update(symbol.name.lower() for symbol in parameters.values()
-                  if not symbol.rank and symbol.dtype.value == "integer")
-    binding_by_root = {binding.root: binding for binding in extraction.bindings}
+    The key distinguishes reached geometry. Internal native branches, child
+    tiling and private work remain in the empirical source/workload class;
+    they are never hoisted or replayed to predict an instruction count.
+    """
+    entry = interval.cost_entry()
+    if type(entry) is not dict or set(entry) != {"arrays", "integers", "identity"} or not _sha(entry["identity"]):
+        raise CompilationError("interval pricing requires a finalized safe entry projection")
     key, expressions, guards, seen = [], [], [], set()
-    for parameter in extraction.parameters:
-        binding = binding_by_root.get(parameter.resource)
-        if binding is None:
-            raise CompilationError("selected workload parameter lacks exact original binding")
-        canonical = owner.canonical(binding)
-        root = canonical.root
-        if root in seen or "parameter" in binding.attributes:
-            continue
-        name = owner.builder.visible(owner.routine, binding.root)
-        if binding.attributes & {"optional", "pointer", "volatile", "asynchronous"}:
-            raise CompilationError("selected workload requires stable present original descriptors and controls")
-        if binding.rank:
-            if binding.dtype != "real" or binding.kind not in {4, 8}:
-                raise CompilationError("selected workload descriptor requires a real numerical array")
-            if "allocatable" in binding.attributes:
-                guards.append(f"allocated({name})")
-            guards.append(f"is_contiguous({name})")
-            for axis in range(1, binding.rank + 1):
-                for inquiry in ("size", "lbound"):
-                    key.append({"resource": root, "property": inquiry, "axis": axis})
-                    expressions.append(f"{inquiry}({name},{axis},kind=c_int64_t)")
-        elif parameter.name.lower() in needed:
-            if binding.dtype != "integer" or binding.kind != 4:
-                raise CompilationError("selected workload requires original default INTEGER controls")
-            if (binding.declaring_scope is owner.routine.scope and binding.name not in owner.routine.arguments
-                    and not any(binding is item for item in owner.closed_initializations)):
-                raise CompilationError("selected local workload control lacks an original reached definition")
-            if binding.name in owner.routine.arguments and binding.intent != "in":
-                raise CompilationError("selected dummy workload control requires original INTENT(IN)")
-            key.append({"resource": root, "property": "integer_value"})
-            expressions.append(f"int({name},c_int64_t)")
-        else:
-            continue
-        seen.add(root)
-    from compiler.frontend.native_private import original_private_array
-
-    private_arrays = unit.scope.completion.public().get("original_private_arrays", ())
-    declarations = {binding.root: binding for binding in owner.routine.scope.bindings.values()}
-    for root in sorted({item["resource"] for item in private_arrays}):
-        if root in seen:
-            continue
-        binding = declarations.get(root)
-        if binding is None:
-            raise CompilationError("selected original PRIVATE descriptor unavailable")
-        original_private_array(owner.routine, binding)
-        for axis in range(1, binding.rank + 1):
-            for inquiry in ("size", "lbound"):
-                key.append({"resource": root, "property": inquiry, "axis": axis})
-                expressions.append(f"{inquiry}({binding.name},{axis},kind=c_int64_t)")
+    for rank, bindings in ((True, entry["arrays"]), (False, entry["integers"])):
+        for binding in bindings:
+            if binding.root in seen:
+                continue
+            if bool(binding.rank) != rank or binding.attributes & {"optional", "pointer", "volatile", "asynchronous"}:
+                raise CompilationError("interval cost entry has an unsafe original descriptor or control")
+            name = owner.builder.visible(owner.routine, binding.root)
+            if binding.rank:
+                if "allocatable" in binding.attributes:
+                    guards.append(f"allocated({name})")
+                guards.append(f"is_contiguous({name})")
+                for axis in range(1, binding.rank + 1):
+                    for inquiry in ("size", "lbound"):
+                        key.append({"resource": binding.root, "property": inquiry, "axis": axis})
+                        expressions.append(f"{inquiry}({name},{axis},kind=c_int64_t)")
+            else:
+                if binding.dtype != "integer" or binding.kind not in {4, 8}:
+                    raise CompilationError("interval cost entry requires an original INTEGER control")
+                key.append({"resource": binding.root, "property": "integer_value"})
+                expressions.append(f"int({name},c_int64_t)")
+            seen.add(binding.root)
     if not key or len(key) > 256:
-        raise CompilationError("selected workload descriptor/control inventory unavailable")
-    return key, expressions, guards
+        raise CompilationError("interval workload entry geometry unavailable")
+    return key, expressions, guards, entry["identity"]
 
 
 def prepare(owner):
-    """Price an already checked closed original group; never widen admission."""
+    """Price one exact admitted interval; measurements never widen legality."""
     from compiler.emission.common.resources import read_common_header
     from compiler.frontend.immutable_graph import freeze_graph
     from compiler.numerical_contract import numerical_build_contract
     from compiler.offload.application_build import require_application_build_contract
     from compiler.offload.selection_validation import normalize_policy
-    from compiler.scopes.combined_team import CombinedNumericalTeam
 
     builder = owner.builder
     request = deepcopy(builder.config.exact_window)
     snapshot = _request_snapshot(request)
     plan = owner.execution_plan.validate()
-    units = plan.units(owner)
-    if (not getattr(owner, "closed_selection", None) or len(plan.members) != 1
-            or len(units) != 1 or not isinstance(units[0].scope, CombinedNumericalTeam)
-            or owner.parent is not None or owner.boundaries or units[0].scope.native):
-        raise CompilationError("selected pricing requires one checked closed original numerical team")
+    interval = getattr(plan, "interval", None)
+    if interval is None:
+        raise CompilationError("interval pricing requires an issued checked source interval")
+    interval.validate(plan)
+    if owner is not plan._owner or owner.parent is not None:
+        raise CompilationError("interval pricing requires its exact owning root")
+    units = tuple(unit for member in plan.members for unit in plan.units(member))
+    if not units or not plan.leaves:
+        raise CompilationError("interval pricing requires checked numerical work")
     variant = request.get("calibration")
     if variant is not None and variant not in {"native", "resident"}:
         raise CompilationError("selected calibration requires an explicit native or resident artifact")
     if builder.config.policy != "auto":
         raise CompilationError("selected calibration and production require identical automatic numerical options")
-    key, expressions, guards = _workload_key(owner, units[0])
+    key, expressions, guards, entry_identity = _workload_key(owner, interval)
     workloads = request.get("workloads")
     if (type(workloads) is not list or not workloads or len(workloads) > 32
             or any(not _valid_workload(workload) for workload in workloads)
             or len({workload["identity"] for workload in workloads}) != len(workloads)):
         raise CompilationError("selected calibration requires explicit runtime workload input identities")
     public = plan.public()
+    selection = deepcopy(interval.selection_context)
+    bundle = getattr(owner, "selection_bundle", None)
+    if bundle is None:
+        bundle = {"schema_version": 1, "entry": owner.routine.qualified,
+                  "groups": [{"selection_identity": digest(selection), **{name: selection[name] for name in
+                              ("first_line", "last_line", "original_source_sha256")}}]}
+        bundle["identity"] = digest(bundle)
     workers, artifacts = {}, {}
-    for leaf in units[0].leaves:
+    for leaf in sorted(plan.leaves):
         generated = builder.numerical(leaf)
         if generated is None:
             raise CompilationError("selected pricing requires the checked numerical artifacts")
@@ -388,23 +295,23 @@ def prepare(owner):
     validation_policy = normalize_policy(request.get("validation_policy"), build_contract=build)
     contract = {
         "schema_version": 1, "protocol": PROTOCOL, "entry": owner.routine.qualified,
-        "sources": dict(sorted(builder.analysis.sources.items())), "selection": deepcopy(owner.selection_context),
-        "selection_bundle": deepcopy(owner.selection_bundle),
+        "sources": dict(sorted(builder.analysis.sources.items())), "selection": selection,
+        "selection_bundle": deepcopy(bundle),
         "workloads": workloads,
-        "selection_identity": digest(owner.selection_context), "checked_execution_identity": plan.execution_identity,
+        "selection_identity": digest(selection), "checked_execution_identity": plan.execution_identity,
+        "entry_projection_identity": entry_identity, "completion_manifest": interval.completion_manifest(),
         "workers": workers, "runtime": builder.runtime["runtime_id"], "implementation": implementation,
         "common_functions_sha256": sha256(read_common_header().encode()).hexdigest(),
         "source_inputs": builder.analysis.inputs.identity(), "facts": builder.facts,
         "compiler_options": asdict(builder.options), "numerical_contract": numerical_build_contract(),
         "build_contract": build, "validation_policy": validation_policy, "threads": builder.config.host_threads,
-        "original_participation": units[0].scope.completion.public(),
+        "original_participation": [unit.scope.completion.public() for unit in units
+                                   if getattr(unit.scope, "completion", None) is not None],
         "transfers": builder.config.scope_transfers, "device_budget_bytes": builder.device_budget, "key": key,
-        "expected_launches": len(units[0].scope.prepared.offload.units),
-        "coverage": "complete application process; reached group timing includes controls, original team, transfers and cleanup",
-        "applicability": "empirical observed workload class; exact reached keys; no future invocation-count guarantee",
+        "outcome_contract": {"successful_completion": True, "fallbacks": 0, "requires_process_gpu_launch": True},
+        "coverage": "complete application process; checked interval includes original controls, native interruptions, teams, transfers and cleanup",
+        "applicability": "empirical observed source/workload class and safe entry geometry; internal native work is measured, not predicted; no future invocation-count guarantee",
     }
-    if contract["expected_launches"] < 1:
-        raise CompilationError("selected pricing requires a nonempty checked numerical launch inventory")
     # This versioned contract is a JSON wire record. Normalize tuple-valued
     # options now, before both capture and consumption, so saved evidence does
     # not acquire a different meaning merely by crossing the public interface.
@@ -445,43 +352,68 @@ def _publish(owner):
         owner.builder.outputs["exact/" + header] = owner.builder.runtime_outputs[header]
 
 
-def control(owner):
-    """Start the complete-group observer before preparation; never read a key."""
+def _entry_control(owner, *, native):
     name, record = _names(owner)
+    _publish(owner)
+    count = len(record["expressions"])
+    suffix = "_native" if native else "_key"
+    declarations = [*_imports(), *_interface(name + "_begin"), *_interface(name + "_end"),
+                    *_interface(name + suffix, "key,version,options", (
+                        f"integer(c_int64_t), intent(in) :: key({count})",
+                        "character(c_char), intent(in) :: version(*),options(*)")),
+                    "logical :: fort_interval_key_ready", f"integer(c_int64_t) :: fort_interval_key({count})"]
+    entry = [f"call {name}_begin()", "fort_interval_key_ready = .true."]
+    # Never depend on Fortran conjunction short-circuiting or re-evaluate a
+    # child initializer. The finalized projection owns every queried binding.
+    entry += [f"if (fort_interval_key_ready) fort_interval_key_ready = {guard}" for guard in record["guards"]]
+    entry += ["if (fort_interval_key_ready) then"]
+    entry += [f"fort_interval_key({index}) = {expression}" for index, expression in enumerate(record["expressions"], 1)]
+    entry += [f"call {name}{suffix}(fort_interval_key,fort_version()//c_null_char,fort_options()//c_null_char)", "endif"]
+    return declarations, entry
+
+
+def control(owner):
+    """Store a safe root key without CUDA, before original interval execution."""
+    _name, record = _names(owner)
     if not record["capture"] and record["selection"] != "resident":
         return [], [owner.enabled + " = .false."]
-    _publish(owner)
-    return [*_imports(), *_interface(name + "_begin")], [f"call {name}_begin()"]
+    return _entry_control(owner, native=False)
 
 
-def choice(owner, unit, handles, values):
-    """Inspect descriptors only at the checked reached master preparation point."""
+def choice(owner, unit, handles, values, *, context="fort_team_context", enabled="fort_team_enabled",
+           rejected="fort_native_ready"):
+    """Choose after existing reached legality checks, using the stored root key."""
     del handles, values
-    name, record = _names(owner)
-    if unit.scope is not owner.execution_plan.units(owner)[0].scope:
-        raise CompilationError("selected workload choice requires the exact checked numerical group")
-    count = len(record["expressions"])
-    # The original team has already validated its environment, descriptors,
-    # typed activation preconditions and complete numerical query. No key is
-    # evaluated for a rejected/inactive group. Block locals are master-private.
+    root = owner.owner
+    plan = root.execution_plan
+    if not any(unit is item for member in plan.members for item in plan.units(member)):
+        raise CompilationError("interval workload choice requires an exact checked operation")
+    name, _record = _names(root)
     lines = ["block", *_imports(), "interface",
-             f"function {name}(key,version,options) bind(C) result(selected)",
-             "import c_int,c_int64_t,c_char", f"integer(c_int64_t), intent(in) :: key({count})",
-             "character(c_char), intent(in) :: version(*),options(*)", "integer(c_int) :: selected",
-             "end function", "end interface", f"integer(c_int64_t) :: fort_selection_key({count})"]
-    lines += [f"fort_selection_key({index}) = {expression}" for index, expression in enumerate(record["expressions"], 1)]
+             f"function {name}_choose() bind(C) result(selected)",
+             "import c_int", "integer(c_int) :: selected", "end function", "end interface"]
     from copy import copy
 
     close_owner = copy(owner)
-    close_owner.context, close_owner.enabled, close_owner.control_guard = "fort_team_context", "fort_team_enabled", None
-    lines += [f"if ({name}(fort_selection_key,fort_version()//c_null_char,fort_options()//c_null_char) == 0) then",
-              *close_owner.close(), "fort_native_ready = .false.", "endif", "end block"]
+    close_owner.context, close_owner.enabled, close_owner.control_guard = context, enabled, None
+    lines += [f"if ({name}_choose() == 0) then", *close_owner.close(),
+              f"{rejected} = .false.", "endif", "end block"]
     return lines
 
 
+def fallback(owner):
+    """Record an owning GPU/native or suffix transition, never a planned CALL."""
+    root = owner.owner
+    name, record = _names(root)
+    if not record["capture"] and record["selection"] != "resident":
+        return []
+    return ["block", "use iso_c_binding, only: c_int64_t,c_char", *_interface(name + "_fallback"),
+            f"call {name}_fallback()", "end block"]
+
+
 def before_close(owner, context):
-    """Retain actual launches before destruction; final elapsed time includes close."""
-    name, record = _names(owner)
+    """Retain actual launches before destruction; close time remains measured."""
+    name, record = _names(owner.owner)
     if not record["capture"] and record["selection"] != "resident":
         return []
     return ["block", "use iso_c_binding, only: c_int64_t,c_char",
@@ -490,7 +422,8 @@ def before_close(owner, context):
 
 
 def finish(owner):
-    name, record = _names(owner)
+    """Only the successful final cleanup reaches this completion event."""
+    name, record = _names(owner.owner)
     if not record["capture"] and record["selection"] != "resident":
         return []
     return ["block", "use iso_c_binding, only: c_int64_t,c_char", *_interface(name + "_end"),
@@ -498,30 +431,9 @@ def finish(owner):
 
 
 def native_control(owner):
-    """Independent native artifact: original group, CPU identity, no CUDA query."""
-    from compiler.scopes.numerical_preflight import preparation_preflight
-
-    name, record = _names(owner)
-    _publish(owner)
-    unit, = owner.execution_plan.units(owner)
-    call, = unit.scope.calls
-    specification, preflight = preparation_preflight(owner.builder, call, {})
-    count = len(record["expressions"])
-    declarations = [*_imports(), "use fort_scoped_memory, only: fort_scope_numerical_environment_supported",
-                    *_interface(name + "_begin"), *_interface(name + "_end"),
-                    *_interface(name + "_native", "key,version,options", (
-                        f"integer(c_int64_t), intent(in) :: key({count})",
-                        "character(c_char), intent(in) :: version(*),options(*)")),
-                    "logical :: fort_numerical_guard", f"integer(c_int64_t) :: fort_selection_key({count})",
-                    *specification]
-    # Presence/contiguity checks are ordered statements, never Fortran logical
-    # conjunctions whose operands could be evaluated speculatively.
-    entry = [f"call {name}_begin()", "fort_numerical_guard = .true."]
-    entry += [f"if (fort_numerical_guard) fort_numerical_guard = {guard}" for guard in record["guards"]]
-    entry += ["if (fort_numerical_guard) then", *preflight, "endif", "if (fort_numerical_guard) then"]
-    entry += [f"fort_selection_key({index}) = {expression}" for index, expression in enumerate(record["expressions"], 1)]
-    entry += [f"call {name}_native(fort_selection_key,fort_version()//c_null_char,fort_options()//c_null_char)", "endif"]
-    return declarations, entry, [f"call {name}_end()"]
+    """The same root key, followed by the exact original interval once."""
+    declarations, entry = _entry_control(owner, native=True)
+    return declarations, entry, finish(owner)
 
 
 def _observer_source(name, record):
@@ -554,7 +466,8 @@ static std::string quoted(const std::string &s) {
         # The shared exact selector's serial check is replaced by the identical
         # original-team identity, while environment/key/build checks remain.
         source = selector_source(name + "_select", record, observer=observe)
-        source = source.replace("omp_get_level()!=0", "omp_get_level()!=1||omp_get_num_threads()!=@THREADS@")
+        source = source.replace("omp_get_level()!=0",
+                                "(omp_get_level()!=0&&(omp_get_level()!=1||omp_get_num_threads()!=@THREADS@))")
         source = source.replace("@THREADS@", str(record["contract"]["threads"]))
         source += workload_source([{"workload": workload} for workload in record["contract"]["workloads"]]
                                    if capture else record.get("accepted_keys", ()))
@@ -573,7 +486,10 @@ static std::string quoted(const std::string &s) {
 #include <chrono>
 namespace {
 struct selection_observation {
- bool active=false, keyed=false; uint64_t launches=0;
+ bool active=false, keyed=false, has_key=false; uint64_t launches=0, fallbacks=0;
+ int decision=-1;
+ int64_t values[@COUNT@]{};
+ std::string version, options;
  std::chrono::steady_clock::time_point start;
  std::string key="null", identity="null", cpu="null";
 };
@@ -607,6 +523,20 @@ static void @OBSERVER@(const int64_t *key,const std::string &identity) {
  if(!selection_state.active)return;
  selection_state.keyed=true;selection_state.key=key_json(key);selection_state.identity=identity;
 }
+extern "C" void @NAME@_key(const int64_t *key,const char *version,const char *options) {
+ if(!key||!version||!options)return;
+ for(int i=0;i<@COUNT@;++i)selection_state.values[i]=key[i];
+ selection_state.version=version;selection_state.options=options;selection_state.has_key=true;
+}
+extern "C" int @NAME@_choose() {
+ if(selection_state.decision>=0)return selection_state.decision;
+ if(!selection_state.has_key)return selection_state.decision=0;
+ return selection_state.decision=@SELECT@;
+}
+extern "C" void @NAME@_fallback() {
+ ++selection_state.fallbacks;
+ selection_state.decision=0;
+}
 extern "C" void @NAME@_native(const int64_t *key,const char *version,const char *options) {
  if(!selection_state.active||!key||!version||!options)return;
  if(!fort_selection_workload_matches(key))return;
@@ -615,20 +545,24 @@ extern "C" void @NAME@_native(const int64_t *key,const char *version,const char 
 extern "C" void @NAME@_close(int64_t context) {
  if(!selection_state.active||!context)return;
  fort_scope_stats stats{};
- if(fort_scope_stats_get(context,&stats)!=FORT_SCOPE_OK){selection_state.keyed=false;return;}
+ if(fort_scope_stats_get(context,&stats)!=FORT_SCOPE_OK){selection_state.keyed=false;++selection_state.fallbacks;return;}
  selection_state.launches+=stats.launches;
 }
 extern "C" void @NAME@_end() {
  if(!selection_state.active)return;
  const double seconds=std::chrono::duration<double>(std::chrono::steady_clock::now()-selection_state.start).count();
- std::fprintf(stderr,"FORT_SELECTION_OBSERVATION {\"selection\":\"@SELECTION@\",\"key\":%s,\"identity\":%s,\"cpu_identity\":%s,\"launches\":%llu,\"outcome\":\"%s\",\"seconds\":%.17g}\n",
+ const char *outcome=!selection_state.keyed?"unkeyed":
+   (@NATIVE@?"native":(selection_state.fallbacks?"fallback":"resident"));
+ std::fprintf(stderr,"FORT_SELECTION_OBSERVATION {\"selection\":\"@SELECTION@\",\"key\":%s,\"identity\":%s,\"cpu_identity\":%s,\"launches\":%llu,\"fallbacks\":%llu,\"complete\":true,\"outcome\":\"%s\",\"seconds\":%.17g}\n",
  selection_state.key.c_str(),selection_state.identity.c_str(),selection_state.cpu.c_str(),
- static_cast<unsigned long long>(selection_state.launches),selection_state.keyed?(selection_state.launches?"resident":"native"):"unkeyed",seconds);
+ static_cast<unsigned long long>(selection_state.launches),static_cast<unsigned long long>(selection_state.fallbacks),
+ outcome,seconds);
  selection_state.active=false;
 }
 '''
     for token, value in {"COUNT": str(count), "NAME": name, "OBSERVER": observe,
                          "ENVIRONMENT": "\n".join(environment), "CAPTURE": "true" if capture else "false",
-                         "SELECTION": record["contract"]["selection_identity"]}.items():
+                         "SELECTION": record["contract"]["selection_identity"], "NATIVE": "true" if native else "false",
+                         "SELECT": ("0" if native else name + "(selection_state.values,selection_state.version.c_str(),selection_state.options.c_str())")}.items():
         source = source.replace("@" + token + "@", value)
     return source

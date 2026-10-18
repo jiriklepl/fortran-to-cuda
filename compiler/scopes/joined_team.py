@@ -389,9 +389,13 @@ class JoinedTeam(StructuredScope):
                     public, _ = builder.entry_artifacts(call.procedure)
                     imports.append(f"use {public['fortran_module']}, only: fort_team_choose_{number} => {public['planning']['fortran_selector']}")
                     lines += [f'if (fort_status == FORT_SCOPE_OK) fort_status = fort_team_choose_{number}(fort_context, fort_decision)']
+                if owner.interval_placement:
+                    from compiler.offload.selection_cost import choice
+                    lines += ['if (fort_status == FORT_SCOPE_OK) then',
+                              *choice(owner, unit, handles, values), 'endif']
                 selected = 'fort_decision%gpu_units > 0' if price_units else '.true.'
                 lines += ['if (fort_status /= FORT_SCOPE_OK) then', *fail(),
-                          'else', 'fort_team_run = ' + selected, 'endif', 'endif',
+                          'else', 'fort_team_run = fort_native_ready .and. (' + selected + ')', 'endif', 'endif',
                           'if (fort_native_ready .and. .not. fort_team_run) then', *prepare, 'endif']
             else:
                 lines += prepare

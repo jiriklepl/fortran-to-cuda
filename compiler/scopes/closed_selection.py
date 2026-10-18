@@ -180,9 +180,9 @@ class ClosedNumericalOwner(LexicalOwner):
                         *[f"integer({self.kind}) :: fort_buffer_{number}" for _binding, number in self.resources.values()]]
         before = ["block", f"use iso_c_binding, only: {self.kind} => c_int64_t",
                   "use fort_scoped_memory, only: fort_scope_serial_caller", *specification, *declarations,
-                  *entry, f"{self.context} = 0",
+                  f"{self.context} = 0",
                   *[f"fort_buffer_{number} = 0" for _binding, number in self.resources.values()],
-                  f"{self.enabled} = fort_scope_serial_caller() /= 0"]
+                  f"{self.enabled} = fort_scope_serial_caller() /= 0", *entry]
         first, last = self.selection_context["first_line"], self.selection_context["last_line"]
         self.builder.add_edit(self.routine.scope.path, first, first - 1,
                               "\n".join(fortran_lines(before)) + "\n", prepend=True)
@@ -195,32 +195,6 @@ class ClosedNumericalOwner(LexicalOwner):
         self.builder.add_edit(self.routine.scope.path, last + 1, last,
                               "\n".join(fortran_lines(after)) + "\n")
 
-    def emit_native_capture(self, nodes, checkpoint, interval_applicability, *, cleanup=True):
-        """Measure the reached original group, retaining its original declarations."""
-        from compiler.offload.selection_cost import native_control
-
-        builder, plan = self.builder, self.execution_plan.validate()
-        specification, entry, ending = native_control(self)
-        observer_outputs = {name: text for name, text in builder.outputs.items() if name.startswith("exact/")}
-        public = self.exact_window.public()
-        if cleanup:
-            builder.restore_scope_checkpoint(checkpoint)
-            builder.outputs.update(observer_outputs)
-        plan.validate()
-        first, last = self.selection_context["first_line"], self.selection_context["last_line"]
-        builder.add_edit(self.routine.scope.path, first, first-1,
-                         "\n".join(fortran_lines(["block", *specification, *entry])) + "\n", prepend=True)
-        builder.add_edit(self.routine.scope.path, last+1, last,
-                         "\n".join(fortran_lines([*ending, "end block"])) + "\n")
-        builder.scopes.append({
-            "owner": self.context, "owner_variant": None, "path": str(self.routine.scope.path),
-            "first_line": first, "last_line": last, "gpu_leaves": [], "mode": builder.config.policy,
-            "estimate_available": False, "planning_reason": public["reason"], "exact_window": public,
-            "source_authority": {"version": 1, "structured_summary_identity": self.graph.identity},
-            "checked_execution_plan": plan.public(), "interval_applicability": interval_applicability,
-            "boundaries": [], "execution": "original complete numerical team once; independent native capture",
-        })
-        return True
 
 
 def discover_closed_selections(builder):

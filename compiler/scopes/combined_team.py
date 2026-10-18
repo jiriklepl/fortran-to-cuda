@@ -463,7 +463,7 @@ class CombinedNumericalTeam(StructuredScope):
                  *builder.inline.emit_call(call, handles, values, imports, query=True),
                  "endif",
                  "if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_plan_validate(fort_context)"]
-        if owner is not None and hasattr(owner, "closed_selection") and owner.exact_window is not None:
+        if owner is not None and owner.interval_placement:
             from compiler.offload.selection_cost import choice
             lines += ["if (fort_status == FORT_SCOPE_OK) then", *choice(owner, unit, handles, values), "endif",
                       "if (.not. fort_native_ready) exit " + block]

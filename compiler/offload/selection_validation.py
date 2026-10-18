@@ -343,7 +343,9 @@ def _observations(reference, run, *, mode, contract, key_sequence, identity):
                    and type(row.get("key")) is list and all(type(item) is int for item in row["key"])
                    and row["key"] == list(key_sequence[ordinal]) and row.get("outcome") == mode
                    and type(row.get("launches")) is int
-                   and row["launches"] == (0 if mode == "native" else contract["expected_launches"]),
+                   and row["launches"] >= 0 and (mode != "native" or row["launches"] == 0)
+                   and row.get("complete") is True
+                   and type(row.get("fallbacks")) is int and row["fallbacks"] == 0,
                    "diagnostic selected key, invocation or completion outcome differs")
             if mode == "native":
                 _check(row.get("identity") is None and _normalized_identity(row.get("cpu_identity"))
@@ -355,9 +357,11 @@ def _observations(reference, run, *, mode, contract, key_sequence, identity):
             _check(type(seconds) in {int, float} and math.isfinite(seconds) and seconds > 0,
                    "invalid selected invocation time")
             observed.append({"ordinal": ordinal, **{name: row[name] for name in
-                            ("selection", "key", "launches", "outcome", "seconds")}})
+                            ("selection", "key", "launches", "fallbacks", "complete", "outcome", "seconds")}})
     _check(len(observed) == len(key_sequence) and sum(row["seconds"] for row in observed)
            <= run["diagnostic_complete_process_seconds"], "selected invocation sequence or total time differs")
+    _check(mode == "native" or any(row["launches"] > 0 for row in observed),
+           "resident process has no completed GPU work")
     return observed
 
 

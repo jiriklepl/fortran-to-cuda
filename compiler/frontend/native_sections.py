@@ -11,10 +11,10 @@ from itertools import product
 
 from fparser.two.utils import walk
 
+from compiler.frontend.call_bindings import SourceDependency, _bound
 from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.integers import integer_literal
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
-from compiler.frontend.call_bindings import SourceDependency, _bound
 
 RECTANGLE_LIMIT = 32
 
@@ -247,6 +247,12 @@ def analyze_native_sections(analysis, routine):
 
     def resource(binding):
         if binding.root not in resources:
+            if binding.name in routine.arguments and "allocatable" not in binding.attributes and any(
+                    _kind(axis) != "Assumed_Shape_Spec" for axis in binding.shape_nodes):
+                # An explicit-shape dummy may describe only a prefix of its
+                # actual. Reject a physical access, not an unrelated unused
+                # declaration elsewhere in the original procedure.
+                raise CompilationError("native physical sections require assumed-shape array dummies")
             identity_boundary = analysis.resource_identity_boundary(binding)
             if identity_boundary:
                 raise CompilationError(identity_boundary)
@@ -549,10 +555,6 @@ def analyze_native_sections(analysis, routine):
                     # fixed local storage stays private to the retained native
                     # team. It is not a synthetic assumed-shape capture.
                     continue
-                if str(entity.items[0]).lower() in routine.arguments and not (
-                        binding is not None and "allocatable" in binding.attributes) and any(
-                            _kind(axis) != "Assumed_Shape_Spec" for axis in axes):
-                    raise CompilationError("native physical sections require assumed-shape array dummies")
                 for axis in axes:
                     for bound_node in axis.items:
                         if bound_node is not None:

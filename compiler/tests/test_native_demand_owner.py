@@ -122,7 +122,7 @@ def test_partial_entry_definitions_cannot_use_conservative_whole_native_access(t
                for item in scope.get("boundaries", []))
 
 
-def test_future_child_resource_omission_rejects_entire_demanded_candidate(tmp_path):
+def test_future_child_resource_is_inventoried_before_native_admission(tmp_path):
     source = SOURCE.replace("real(8)::a(-1:6)", "real(8)::extra(-1:6)\nreal(8)::a(-1:6)").replace(
         "call correct(-0.5d0*a(0))", "call correct(-0.5d0*a(0))\ncall later()").replace(
         "end module", """subroutine later()
@@ -132,8 +132,13 @@ extra(j)=2*a(j)
 enddo
 end subroutine
 end module""")
-    path, _builder, outputs, report = generate(tmp_path, source,
+    path, builder, outputs, report = generate(tmp_path, source,
         captures={"demand_owner::extra": dict(FACT)})
-    assert not demanded_operations(report)
-    assert "resource demand misses final" in report["lexical_owner_attempt"]["error"]
+    assert demanded_operations(report)
+    assert report["lexical_owner_attempt"]["error"] is None
+    draft, = builder._interval_drafts.values()
+    assert "demand_owner::extra" in {binding.root for binding in draft.demand.managed_bindings}
+    scope, = report["scopes"]
+    assert not scope["boundaries"]
+    assert scope["checked_execution_plan"]["numerical_invocations"] == 4
     assert outputs[report["sources"][str(path)]["replacement"]].count("call correct(-0.5d0*a(0))") == 1

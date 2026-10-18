@@ -18,7 +18,7 @@ from hashlib import sha256
 from pathlib import Path
 
 PROTOCOL = "executed-application-build-v1"
-SELECTION_PROTOCOL = "checked-selection-process-v2"
+SELECTION_PROTOCOL = "checked-interval-process-v3"
 LIMITATION = "Implicit system headers and libraries are not inventoried"
 SOURCE_SUFFIXES = {".f", ".for", ".ftn", ".f90", ".f95", ".f03", ".f08", ".c", ".cc", ".cpp", ".cxx", ".cu"}
 HEADER_SUFFIXES = {".h", ".hh", ".hpp", ".cuh", ".inc"}

@@ -43,8 +43,8 @@ def _configuration(builder):
                          getattr(builder, "immutable_inputs", {}), _Budget())
 
 
-def _portable_numerical_references(analysis):
-    """Describe registered numerical work without exporting Python identities.
+def _portable_proof_references(analysis, authorities):
+    """Describe registered work without exporting Python identities.
 
     Tokens still authenticate exact parser/binding objects in this process.
     Calibration instead binds the source selection, checked numerical payload,
@@ -78,6 +78,40 @@ def _portable_numerical_references(analysis):
         public.pop("proof_identity")
         references[proof.identity] = _digest({"portable_numerical_effect_version": 1,
                                                "effects": portable(public)})
+
+    from compiler.frontend.native_demand import SourceBoundNativeDemandEffects
+
+    def original_selection(source, procedure, originals):
+        graph, selected = source._selected_source(procedure, originals)
+        return {"source_inputs": source.inputs.identity(), "procedure": procedure,
+                "structured_identity": graph.identity, "selected_node_ids": list(selected)}
+
+    def reference(proof, identity_key, payload):
+        public = proof.public()
+        if public.pop(identity_key) != proof.identity:
+            raise CompilationError("portable proof reference differs from its registered authority")
+        references[proof.identity] = _digest({"portable_native_proof_version": 1,
+            "kind": type(proof).__name__, "source_selection": payload, "proof": portable(public)})
+
+    # Native demand identities deliberately authenticate parser and binding
+    # objects. Keep those exact tokens for emission; calibration fingerprints
+    # instead bind their original selections, complete checked graph and
+    # canonical effects. No arbitrary diagnostic identity is stripped.
+    for proof in authorities:
+        if type(proof) is not SourceBoundNativeDemandEffects:
+            continue
+        source = proof._analysis
+        proof.validate(source, proof.procedure, proof._selection, proof.demanded)
+        reachability = proof.reachability
+        graph = reachability.native_graph
+        for template in graph.templates:
+            originals = (template._selection if template._selection is not None else
+                         tuple(template._routine.execution.content))
+            reference(template, "identity", original_selection(source, template.procedure, originals))
+        reference(graph, "identity", original_selection(source, graph.procedure, graph._selection))
+        reference(reachability, "proof_identity",
+                  original_selection(source, reachability.procedure, reachability._selection))
+        reference(proof, "identity", original_selection(source, proof.procedure, proof._selection))
     return portable
 
 
@@ -125,6 +159,7 @@ def _registered_authorities(owner, owned_types):
     from compiler.frontend.source_functions import NativeSourceFunctionProof
     from compiler.frontend.structured_effects import StructuredSummary
     from compiler.frontend.worksharing_completion import WorksharingCompletionProof, WorksharingNativeCompletionProof
+    from compiler.scopes.interval_draft import SourceIntervalDraft
     from compiler.scopes.lexical import OwnerEmission
     from compiler.scopes.resource_demand import IntervalResourceDemand
     from compiler.scopes.source import ScopeBuilder
@@ -166,7 +201,7 @@ def _registered_authorities(owner, owned_types):
             builders[id(value)] = value
             pending.append(value.analysis)
         elif (isinstance(value, (Base, OwnerEmission, StructuredSummary))
-              or type(value) in registries or type(value) is IntervalResourceDemand
+              or type(value) in registries or type(value) in {IntervalResourceDemand, SourceIntervalDraft}
               or session is not None and session.contains(value)):
             continue
         elif isinstance(value, (dict, MappingProxyType)):
@@ -179,6 +214,9 @@ def _registered_authorities(owner, owned_types):
                            (getattr(value, part.name) for part in fields(value)))
     authorities = {id(member.graph): member.graph for member in owner.members.values()}
     for builder in builders.values():
+        for value in getattr(builder, "_interval_drafts", {}).values():
+            if type(value) is SourceIntervalDraft and builder._interval_drafts.get(value.identity) is value:
+                authorities[id(value)] = value
         for value in getattr(builder, "_resource_demands", {}).values():
             if (type(value) is IntervalResourceDemand
                     and builder._resource_demands.get(value.identity) is value):
@@ -192,7 +230,7 @@ def _registered_authorities(owner, owned_types):
         for graph in analysis._structures.values():
             if type(graph) is StructuredSummary:
                 authorities[id(graph)] = graph
-    return authorities, (*registries, StructuredSummary, IntervalResourceDemand)
+    return authorities, (*registries, StructuredSummary, IntervalResourceDemand, SourceIntervalDraft)
 
 
 def _seal_execution(owner):
@@ -217,7 +255,7 @@ def _seal_execution(owner):
                    Delegated, Call, BorrowedCoordinator)
     authorities, authority_types = _registered_authorities(owner, owned_types)
     syntax = {}
-    portable_numerical = _portable_numerical_references(owner.builder.analysis)
+    portable_proof = _portable_proof_references(owner.builder.analysis, authorities.values())
     # Prepared extractions belong to registered numerical authority. They share
     # identity-sensitive completion/precondition objects with their proof;
     # changing those aliases would invalidate rather than strengthen the proof.
@@ -259,7 +297,9 @@ def _seal_execution(owner):
         seen = {}
 
         def visit(value):
-            if value is None or isinstance(value, (str, bool, float)):
+            if isinstance(value, str):
+                return portable_proof(value)
+            if value is None or isinstance(value, (bool, float)):
                 return value
             if isinstance(value, int):
                 return value
@@ -279,10 +319,10 @@ def _seal_execution(owner):
                 return {"source_role": getattr(value, "qualified", scope.module), "path": str(scope.path)}
             if id(value) in extractions and extractions[id(value)].extraction is value:
                 return {"authority": "registered numerical extraction",
-                        "preparation_identity": portable_numerical(extractions[id(value)].identity),
-                        "extraction": portable_numerical(value.public())}
+                        "preparation_identity": portable_proof(extractions[id(value)].identity),
+                        "extraction": portable_proof(value.public())}
             if borrowed(value):
-                return {"authority": original_type(value).__name__, "proof": portable_numerical(value.public())}
+                return {"authority": original_type(value).__name__, "proof": portable_proof(value.public())}
             if id(value) in seen:
                 return {"reference": seen[id(value)]}
             seen[id(value)] = len(seen)
@@ -402,6 +442,11 @@ class CheckedExecutionPlan:
     _issuer: object
 
     @property
+    def interval(self):
+        self._require_owner()
+        return self._owner.interval_draft
+
+    @property
     def members(self):
         return tuple(item.member for item in self._procedures)
 
@@ -438,6 +483,8 @@ class CheckedExecutionPlan:
             if member.emission.selection_prefix is not proof:
                 raise CompilationError("execution plan lost its exact original selection prefix authority")
             proof.validate(member.builder.analysis, member.routine.qualified, proof._selection, proof.demanded)
+        if self.interval is not None:
+            self.interval.validate(self)
         return self
 
     def operations(self, member, ordinal):
@@ -569,7 +616,7 @@ def build_execution_plan(owner):
     # Current complete-window admission excludes reached-window names derived
     # from private proof tokens; no portability claim is made for that path.
     execution_identity = _digest({
-        "execution_identity_version": 1,
+        "execution_identity_version": 2,
         "entry": record["entry"], "sources": record["sources"],
         "source_inputs_identity": record["source_inputs_identity"],
         "configuration_identity": config, "capture_facts_identity": facts,
@@ -590,13 +637,20 @@ def build_execution_plan(owner):
                                   _json(record), _ISSUER)
     # The only publication of authority occurs after the entire graph is sealed.
     object.__setattr__(owner, "execution_plan", result)
+    if owner.interval_draft is not None:
+        owner.interval_draft.validate(result)
     # A native proof made against a prospective reached inventory must cover
     # every final member, including resources first used by later workers.
     # Validate before any source emission, then retain one inventory for the
     # complete checked interval. A prefix inventory cannot grant admission.
     from compiler.scopes.resource_demand import IntervalResourceDemand
 
-    for demand in tuple(getattr(owner.builder, "_resource_demands", {}).values()):
+    used_demands = {id(operation.resource_demand): operation.resource_demand
+                    for member in members for unit in member.units for operation in unit.scope.native
+                    if operation.resource_demand is not None}
+    if owner.interval_draft is not None:
+        used_demands[id(owner.interval_draft.demand)] = owner.interval_draft.demand
+    for demand in used_demands.values():
         if type(demand) is not IntervalResourceDemand:
             raise CompilationError("execution plan requires an issued interval resource demand")
         if demand._plan is None:

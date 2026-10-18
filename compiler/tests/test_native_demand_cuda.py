@@ -117,6 +117,16 @@ end program
 
 
 def fixture_source(variant):
+    if variant == "cross_procedure":
+        return SOURCE.replace("subroutine advance()\ninteger::i,j,k", """subroutine advance()
+call produce()
+call momentum()
+end subroutine
+subroutine produce()
+integer::i,j,k""").replace("call correct(-0.5d0*a(0,0,0))", """end subroutine
+subroutine momentum()
+integer::i,j,k
+call correct(-0.5d0*a(0,0,0))""")
     if variant == "managed_correction":
         return SOURCE.replace("if(scale<0.d0)then", "b(0,0,0)=b(0,0,0)+scale+metadata%flux(1)\nif(scale<0.d0)then")
     if variant == "pointer_boundary":
@@ -145,7 +155,7 @@ def test_3d_native_demand_cost_is_not_inferred_from_numerical_profile(tmp_path):
 
 
 @pytest.mark.cuda
-@pytest.mark.parametrize("variant", ["host_read", "managed_correction", "pointer_boundary"])
+@pytest.mark.parametrize("variant", ["host_read", "managed_correction", "pointer_boundary", "cross_procedure"])
 def test_3d_native_demand_keeps_current_host_read_and_complete_fields(tmp_path, variant):
     fc = shutil.which("gfortran-15") or shutil.which("gfortran")
     nvcc = shutil.which("nvcc")
@@ -157,6 +167,8 @@ def test_3d_native_demand_keeps_current_host_read_and_complete_fields(tmp_path, 
     source, _builder, outputs, manifest = generate(tmp_path, original)
     owner, = manifest["scopes"]
     assert owner["checked_execution_plan"]["numerical_invocations"] == 3
+    if variant == "cross_procedure":
+        assert len(owner["checked_execution_plan"]["procedures"]) >= 2
     if variant == "pointer_boundary":
         assert not demanded_operations(manifest)
         assert len(owner["boundaries"]) == 1, owner["boundaries"]
@@ -174,7 +186,8 @@ def test_3d_native_demand_keeps_current_host_read_and_complete_fields(tmp_path, 
     identities = {row["resource"].split("::")[-1]: row["registration_identity"] for row in resources}
     assert len(set(identities.values())) == 4
     replacement = manifest["sources"][str(source)]["replacement"]
-    assert outputs[replacement].count("call correct(-0.5d0*a(0,0,0))") == 1
+    if variant != "cross_procedure":
+        assert outputs[replacement].count("call correct(-0.5d0*a(0,0,0))") == 1
     build = tmp_path / "build"
     build.mkdir()
     for name, text in outputs.items():
@@ -261,7 +274,7 @@ def test_3d_native_demand_keeps_current_host_read_and_complete_fields(tmp_path, 
             assert downloaded == downloads[name], trace
             assert len({item["buffer_handle"] for item in selected}) == int(bool(selected)), trace
         launches = [index for index, item in enumerate(events) if item["kind"] == "launch"]
-        if variant == "host_read":
+        if variant in {"host_read", "cross_procedure"}:
             assert not any(item["kind"] in {"upload", "download"} for item in events[launches[0]+1:launches[1]]), trace
         elif variant == "managed_correction":
             interrupted = [item for item in events[launches[0]+1:launches[1]] if item["kind"] in {"upload", "download"}]

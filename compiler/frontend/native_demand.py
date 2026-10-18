@@ -1,13 +1,14 @@
 """Effects of unchanged native source relative to a complete resource demand.
 
 This consumer discharges storage separation; reachability alone cannot do so.
-The initial contract uses whole-resource read/write obligations and never grants
+The contract records resource read/write obligations. Original-coordinate
+sections are derived separately by its consumer. This proof never grants
 definitions, captured storage, native timing estimates, or reordered execution.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from fparser.two.utils import walk
 
@@ -19,7 +20,7 @@ from compiler.frontend.resource_reachability import (
 )
 from compiler.ir import CompilationError
 
-VERSION = 1
+VERSION = 2
 _ISSUER = object()
 _UNSTABLE = frozenset({"pointer", "optional", "volatile", "asynchronous", "value", "external", "intrinsic"})
 
@@ -83,6 +84,41 @@ def _separation(analysis, native, demanded, declarations):
     return (native.resource, demanded.root)
 
 
+def _validate_context(context, analysis, procedure, originals, demanded):
+    if context is None:
+        return
+    from compiler.scopes.interval_draft import NativeIntervalContext
+
+    if type(context) is not NativeIntervalContext:
+        raise CompilationError("native demand canonical mapping requires an issued interval context")
+    context.validate(analysis, procedure, originals)
+    if len(demanded) != len(context.local_bindings) or any(
+            left is not right for left, right in zip(demanded, context.local_bindings, strict=True)):
+        raise CompilationError("native demand differs from its complete interval context")
+
+
+def _separations(analysis, reachability, context):
+    declarations = _Declarations()
+    separated = []
+    for item in reachability.obligations:
+        native, demanded = item.native, item.demanded
+        if context is not None:
+            # Scalar values stay in original host storage and are read only at
+            # reached source points. They are inventory/control dependencies,
+            # not resident payload. Native scalar accesses must still be
+            # separated from every demanded array (the converse obligations).
+            if not demanded.rank:
+                continue
+            native = replace(native, binding=context.canonical(native.binding))
+            demanded = context.canonical(demanded)
+            # Distinct source views of one actual need a section/alias proof;
+            # canonical identity alone must not hide an original effect.
+            if native.binding is demanded:
+                raise CompilationError("native demand contains aliased original interval views: " + demanded.root)
+        separated.append(_separation(analysis, native, demanded, declarations))
+    return tuple(separated)
+
+
 @dataclass(frozen=True, slots=True)
 class SourceBoundNativeDemandEffects:
     procedure: str
@@ -93,6 +129,7 @@ class SourceBoundNativeDemandEffects:
     _analysis: object = field(repr=False, compare=False)
     _selection: tuple = field(repr=False, compare=False)
     _separated: tuple = field(repr=False, compare=False)
+    _context: object = field(repr=False, compare=False)
     _issuer: object = field(repr=False, compare=False)
 
     def validate(self, analysis, procedure, originals, demanded):
@@ -100,14 +137,14 @@ class SourceBoundNativeDemandEffects:
                 or analysis is not self._analysis or procedure != self.procedure
                 or getattr(analysis, "_native_demand_effects", {}).get(self.identity) is not self):
             raise CompilationError("native demand effects require exact registered source authority")
+        _validate_context(self._context, analysis, procedure, originals, demanded)
         self.reachability.validate(analysis, procedure, originals, demanded)
         # Registered source tokens are immutable, but standalone source graphs
         # remain mutable. Revalidate storage identities and attributes too.
         for binding in demanded:
             _authenticate_binding(analysis, binding)
-        declarations = _Declarations()
-        for obligation in self.reachability.obligations:
-            _separation(analysis, obligation.native, obligation.demanded, declarations)
+        if _separations(analysis, self.reachability, self._context) != self._separated:
+            raise CompilationError("native demand canonical storage authority changed")
         return self
 
     def public(self):
@@ -116,6 +153,7 @@ class SourceBoundNativeDemandEffects:
             "identity": self.identity,
             "procedure": self.procedure,
             "reachability_identity": self.reachability.identity,
+            "interval_context_identity": self._context.identity if self._context is not None else None,
             "demanded_resources": [binding.root for binding in self.demanded],
             "effects": [{"resource": binding.root, "actions": sorted(actions), "coverage": "whole"}
                         for binding, actions in self.effects],
@@ -128,7 +166,7 @@ class SourceBoundNativeDemandEffects:
                 "reason": "unchanged source calls with closed synchronous reachability and original joins",
                 "internal_cuts_authorized": False,
             },
-            "execution": "unchanged original selection after required whole-resource host coherence",
+            "execution": "unchanged original selection after separately checked host coherence",
             "definitions": "no new definition or whole-overwrite authority",
             "demand_scope": "consumer must validate against the entire final checked interval",
             "capture_authorized": False,
@@ -137,7 +175,7 @@ class SourceBoundNativeDemandEffects:
         }
 
 
-def prove_native_demand(analysis, procedure, originals, demanded):
+def prove_native_demand(analysis, procedure, originals, demanded, *, context=None):
     """Authorize coherent original native execution for exact demanded objects.
 
     The owner must independently establish whole entry definitions and stable
@@ -145,6 +183,7 @@ def prove_native_demand(analysis, procedure, originals, demanded):
     against its final checked execution plan before publishing any generated
     edits. Unknown effects or aliases reject before this token can be issued.
     """
+    _validate_context(context, analysis, procedure, originals, demanded)
     reachability = prove_resource_reachability(analysis, procedure, originals, demanded)
     if reachability.barriers:
         raise CompilationError("native demand reachability incomplete: " + "; ".join(
@@ -154,9 +193,7 @@ def prove_native_demand(analysis, procedure, originals, demanded):
             raise CompilationError("native demand requires stable present original storage: " + binding.root)
         if binding.dtype not in {"real", "integer", "logical"} or binding.kind not in {4, 8}:
             raise CompilationError("native demand requires intrinsic numeric storage: " + binding.root)
-    declarations = _Declarations()
-    separated = tuple(_separation(analysis, item.native, item.demanded, declarations)
-                      for item in reachability.obligations)
+    separated = _separations(analysis, reachability, context)
     effects = []
     for binding in demanded:
         accesses = tuple(item for item in reachability.accesses if item.storage.binding is binding)
@@ -166,11 +203,12 @@ def prove_native_demand(analysis, procedure, originals, demanded):
         if actions - {"read", "write", "association", "descriptor"}:
             raise CompilationError("native demand cannot preserve definitions across an entry or lifetime change: "
                                    + binding.root)
-        if not binding.rank and "write" in actions:
+        if context is None and not binding.rank and "write" in actions:
             raise CompilationError("native demanded scalar writes require reached planning authority: " + binding.root)
-        if binding.rank and actions & {"read", "write"}:
+        if (binding.rank or context is not None) and actions & {"read", "write"}:
             effects.append((binding, frozenset(actions & {"read", "write"})))
     identity = _digest({"version": VERSION, "reachability": reachability.identity,
+                        "interval_context": context.identity if context is not None else None,
                         "effects": [(id(binding), sorted(actions)) for binding, actions in effects],
                         "separated": separated})
     registry = getattr(analysis, "_native_demand_effects", None)
@@ -181,7 +219,7 @@ def prove_native_demand(analysis, procedure, originals, demanded):
     if len(registry) >= analysis.procedure_limit:
         raise CompilationError("native demand effect registry budget exhausted")
     result = SourceBoundNativeDemandEffects(procedure, identity, demanded, tuple(effects), reachability,
-                                            analysis, originals, separated, _ISSUER)
+                                            analysis, originals, separated, context, _ISSUER)
     registry[identity] = result
     try:
         return result.validate(analysis, procedure, originals, demanded)

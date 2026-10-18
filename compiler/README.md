@@ -2955,19 +2955,31 @@ request does not establish that its evidence is available, compatible or
 profitable. The automatic policy retains native execution when those checks
 fail. Diagnostic `--scope-measurement` and `--scope-cost` are mutually exclusive.
 
-The original-selection request uses `"coverage": "original_selection"`,
+The checked-interval request uses `"coverage": "checked_interval"`; original
+numerical-group requests use `"coverage": "original_selection"` through the same
+checked-plan attachment. Both use
 `"calibration": "native"` or `"resident"` for separate observation artifacts,
 an executed application `build_contract`, and explicit `workloads`. Production
 omits `calibration` and supplies `evidence`. All three variants use the same
-automatic numerical options. The `checked-selection-process-v2` protocol
+automatic numerical options. The `checked-interval-process-v3` protocol
 compares complete application processes, including startup, every invocation,
 output and teardown. It checks seven rotated pairs and two holdouts, full-field
 agreement, actual completed GPU launches, reached descriptor/control keys and
-build identities. Warm group timing alone cannot establish an application gain.
+build identities. Successful interval cleanup and a sticky zero-fallback count
+are required, with actual GPU work in each resident process. Planned native
+interruptions are part of the measured alternative; a GPU prefix followed by a
+native suffix cannot qualify as complete resident evidence. Warm group timing
+alone cannot establish an application gain.
+
+Entry keys use only the finalized plan's safely readable root descriptors and
+proved root controls. Original native branches, child-local tiling and private
+work remain at their original evaluation points and are included in measured
+process time. Their exact iteration counts need not be predicted. This empirical
+cost model grants no alias, lifetime, definition, numerical or completion proof.
 
 Workload documents bind arguments, relevant environment, input-file hashes and
 completion facts. The selector checks actual arguments, environment and bounded
-regular input files at each reached group; these checks also run during
+regular input files at the first eligible operation of each interval; these checks also run during
 calibration. No cached timestamp or launcher approval replaces the file contents.
 This is empirical applicability to observed complete workloads, not a proof of
 future invocation counts. Initially production pricing supports one admitted
@@ -2999,7 +3011,8 @@ prove that arbitrary instrumentation preserves numerical semantics. Diagnostic
 module inputs are checked against their recorded hashes; existing application
 receipts do not establish an original compile-time module inventory. Capture
 generation and build attestation alone do not establish application AUTO
-qualification. Version 1 evidence cannot be relabeled as version 2 evidence.
+qualification. Earlier version 1 or 2 process evidence cannot be relabeled as
+version 3 interval evidence.
 
 `python -m compiler.offload.application_build preflight|attest` verifies the
 consumer's build through a versioned JSON request. Preflight binds original

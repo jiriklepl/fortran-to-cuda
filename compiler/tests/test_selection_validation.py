@@ -132,7 +132,8 @@ def campaign(prepared):
         # Additional recorded files must not invalidate required comparisons.
         snapshot = write(directory / "other-output.txt", "unselected output\n")
         invocations = [{"ordinal": index, "selection": contract["selection_identity"], "key": [value],
-                        "seconds": .01, "outcome": mode, "launches": int(mode == "resident")}
+                        "seconds": .01, "outcome": mode, "launches": int(mode == "resident"),
+                        "complete": True, "fallbacks": 0}
                        for index, value in enumerate((96, 128, 96))]
         log = directory / "stderr.log"
         log.write_text("".join("FORT_SELECTION_OBSERVATION " + json.dumps(
@@ -202,7 +203,7 @@ def test_real_payloads_and_attestations_allow_distinct_hashes_at_fixed_tolerance
 
 @pytest.mark.parametrize("change", ["halo", "interior", "nan", "bounds", "truncated", "payload_hash", "tolerance",
                                    "binary", "gpu_outcome", "sequence", "missing_output", "extra_field_value",
-                                   "extra_field_inventory", "pair_order", "selection_contract"])
+                                   "extra_field_inventory", "pair_order", "selection_contract", "fallback", "unfinished"])
 def test_changed_actual_payload_or_evidence_never_authorizes_placement(campaign, change):
     receipt = campaign["receipt"]
     variant = receipt["variants"]["resident"]
@@ -224,13 +225,17 @@ def test_changed_actual_payload_or_evidence_never_authorizes_placement(campaign,
         run = json.loads(Path(variant["run"]["path"]).read_text())
         run["binary_sha256"] = "0" * 64
         rewrite(variant["run"], run)
-    elif change in {"gpu_outcome", "sequence"}:
+    elif change in {"gpu_outcome", "sequence", "fallback", "unfinished"}:
         log = Path(variant["observations"]["path"])
         lines = log.read_text().splitlines()
         if change == "sequence":
             lines.pop()
+        elif change == "fallback":
+            lines[0] = lines[0].replace('"fallbacks": 0', '"fallbacks": 1')
+        elif change == "unfinished":
+            lines[0] = lines[0].replace('"complete": true', '"complete": false')
         else:
-            lines[0] = lines[0].replace('"launches": 1', '"launches": 0')
+            lines[0] = lines[0].replace('"outcome": "resident"', '"outcome": "native"')
         log.write_text("\n".join(lines) + "\n")
         variant["observations"]["sha256"] = hashed(log)
     elif change == "missing_output":
@@ -256,6 +261,7 @@ def test_changed_actual_payload_or_evidence_never_authorizes_placement(campaign,
         "sequence": "selected invocation sequence", "missing_output": "output file inventory differs",
         "extra_field_value": "exceeds source-bound tolerance", "extra_field_inventory": "field declaration differs",
         "pair_order": "output pair order differs", "selection_contract": "selection contract differs",
+        "fallback": "selected key, invocation", "unfinished": "selected key, invocation",
     }
     assert expected[change] in result["reason"], result
 
