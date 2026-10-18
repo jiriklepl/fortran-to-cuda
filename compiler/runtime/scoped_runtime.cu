@@ -2275,6 +2275,18 @@ extern "C" int fort_scope_register_sections(fort_scope_t h, uint64_t identity, u
                                             size_t count, fort_buffer_t *out) {
     return register_buffer(h, identity, generation, layout, false, defined, count, out);
 }
+extern "C" int fort_scope_admit_source_reads_v1(fort_scope_t h, fort_buffer_t handle,
+                                                const fort_scope_section *items, size_t count) {
+    return with(h, [&](Context &c) {
+        auto &b = buffer(c, handle);
+        require(!b.prepared, FORT_SCOPE_STATE, "source read admission during a prepared buffer access");
+        const auto reads = sections(b, items, count, false);
+        auto admitted = fort_scoped::coherence::admit_source_reads(b, reads);
+        b.initialized = std::move(admitted.initialized);
+        b.host_current = std::move(admitted.host_current);
+        trace(c, "admit_source_reads", &b);
+    });
+}
 extern "C" int fort_scope_forget_definition(fort_scope_t h, fort_buffer_t handle) {
     return with(h, [&](Context &c) {
         auto &b = buffer(c, handle);

@@ -168,6 +168,51 @@ void coalesced_upload(bool stale_gap) {
                     stale_gap?"stale gap":"dense upload",invocation);
     }
 }
+__global__ void source_read_update(double *array, int first, int last, double increment) {
+    const int index=threadIdx.x;
+    if (index>=first && index<last) array[index]+=increment;
+}
+void source_reads() {
+    fort_scope_t context=0; check(fort_scope_create(0,&context));
+    double values[8]; for(int i=0;i<8;++i) values[i]=i;
+    size_t extents[]={8}; int64_t lower[]={-3};
+    fort_scope_layout layout{1,FORT_SCOPE_REAL64,8,values,extents,lower,1};
+    fort_buffer_t buffer=0; check(fort_scope_register(context,1,1,&layout,0,&buffer));
+    size_t first[]={2},last[]={4}; fort_scope_section section{first,last};
+    check(fort_scope_admit_source_reads_v1(context,buffer,&section,1));
+    for(int round=0;round<2;++round) {
+        if(round) {
+            fort_scope_stats before{},after{}; check(fort_scope_stats_get(context,&before));
+            first[0]=1;last[0]=6;
+            check(fort_scope_admit_source_reads_v1(context,buffer,&section,1));
+            check(fort_scope_admit_source_reads_v1(context,buffer,&section,1));
+            check(fort_scope_stats_get(context,&after));
+            assert(before.waits==after.waits && before.upload_bytes==after.upload_bytes &&
+                   before.download_bytes==after.download_bytes);
+        }
+        fort_scope_access access{}; access.read_count=access.write_count=1;
+        access.reads=access.writes=&section;
+        void *pointer=nullptr,*stream=nullptr;int previous=0;
+        check(fort_scope_device_begin(context,buffer,&access,&pointer));
+        check(fort_scope_gpu_enter(context,&previous,&stream));
+        source_read_update<<<1,32,0,static_cast<cudaStream_t>(stream)>>>(
+            static_cast<double *>(pointer),int(first[0]),int(last[0]),round?1.0:100.0);
+        assert(cudaGetLastError()==cudaSuccess);
+        check(fort_scope_note_launch(context));check(fort_scope_device_end(context,buffer));
+        check(fort_scope_gpu_leave(context,previous));
+    }
+    size_t halo_lo[]={0},halo_hi[]={1};fort_scope_section halo{halo_lo,halo_hi};
+    fort_scope_access missing{};missing.read_count=1;missing.reads=&halo;
+    assert(fort_scope_host_begin(context,buffer,&missing)==FORT_SCOPE_UNINITIALIZED);
+    fort_scope_access read{};read.read_count=1;read.reads=&section;
+    check(fort_scope_host_begin(context,buffer,&read));check(fort_scope_host_end(context,buffer));
+    fort_scope_stats stats{};check(fort_scope_stats_get(context,&stats));
+    assert(stats.launches==2 && stats.upload_bytes==40 && stats.download_bytes==40);
+    check(fort_scope_close(context));
+    const double expected[]={0,2,103,104,5,6,6,7};
+    for(int i=0;i<8;++i) assert(values[i]==expected[i]);
+    std::puts("source reads preserve pending device values and untouched halos");
+}
 void chain() {
     double a[8], b[8]={}, out[8]={};
     for (int i=0;i<8;++i) a[i]=i+1;
@@ -427,6 +472,7 @@ int main(int argc,char **argv) {
     if (argc>1 && (!std::strcmp(argv[1],"close-publication") || !std::strcmp(argv[1],"publish-boundary")))
         close_publication(!std::strcmp(argv[1],"publish-boundary"));
     else if (argc>1 && !std::strcmp(argv[1],"invocation-reuse")) invocation_reuse();
+    else if (argc>1 && !std::strcmp(argv[1],"source-reads")) source_reads();
     else if (argc>1 && !std::strcmp(argv[1],"coalesced-stencil")) coalesced_stencil();
     else if (argc>1 && !std::strcmp(argv[1],"dense-upload")) coalesced_upload(false);
     else if (argc>1 && !std::strcmp(argv[1],"stale-gap")) coalesced_upload(true);
@@ -464,7 +510,7 @@ def cuda_runtime_executable(tmp_path_factory):
 
 
 @pytest.mark.cuda
-@pytest.mark.parametrize("mode", ["chain", "sections", "coalesced-stencil", "invocation-reuse", "lazy", "pinned-budget", "pinned-allocation", "pinned-record"])
+@pytest.mark.parametrize("mode", ["chain", "sections", "coalesced-stencil", "invocation-reuse", "source-reads", "lazy", "pinned-budget", "pinned-allocation", "pinned-record"])
 def test_scoped_cuda_public_consumers(cuda_runtime_executable, mode):
     result = subprocess.run([str(cuda_runtime_executable), mode], capture_output=True, text=True, timeout=30)
     if result.returncode == 77:

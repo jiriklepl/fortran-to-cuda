@@ -203,7 +203,7 @@ class ScopeBuilder:
         return consumption.check(self) if consumption is not None else self._validate_reached_window_fresh()
 
     def bind_selection_activation(self, proof, original_selection, demanded):
-        """Project one checked native prefix without changing supplied facts."""
+        """Bind unknown definitions after one unchanged original native prefix."""
         from compiler.frontend.selection_activation import SelectionActivationProof
 
         if type(proof) is not SelectionActivationProof:

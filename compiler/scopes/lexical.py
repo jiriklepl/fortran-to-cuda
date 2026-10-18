@@ -569,6 +569,14 @@ class LexicalOwner:
             for binding in metadata.values():
                 self.declaration(binding)
             scope.prepare(arrays)
+            if (getattr(self.builder, "_selection_activation_binding", None) is not None
+                    and not hasattr(scope, "source_reads")):
+                from compiler.scopes.source_reads import prepare_source_reads
+                scope.source_reads = {call.procedure: prepare_source_reads(self.builder, call)
+                                      for call in scope.calls if call.region is not None}
+                for segment in scope.segments:
+                    if any(call.procedure in scope.source_reads for call in segment.calls) and len(segment.calls) != 1:
+                        raise CompilationError("original read admission requires one reached numerical operation")
             from compiler.scopes.definitions import summarize
             definitions = summarize(scope)
             leaves = {leaf for call in scope.calls for leaf in self.builder.closure(call.procedure)[0]}

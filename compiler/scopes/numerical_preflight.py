@@ -5,7 +5,7 @@ from compiler.ir import CompilationError
 from compiler.ir.integers import INTEGER_MAX, INTEGER_MIN
 
 
-def preparation_preflight(builder, call, parameters):
+def preparation_preflight(builder, call, parameters, *, read_requirements=None):
     """Use original descriptors/scalars, in source activation order.
 
     The caller has already checked allocation, contiguity and descriptor ranges.
@@ -19,10 +19,20 @@ def preparation_preflight(builder, call, parameters):
 
     from compiler.scopes.segments import renamed
 
-    region = builder._consume_call_numerical_region(call)
-    if region is None:
-        raise CompilationError("numerical preflight requires registered exact physical effects")
-    effect = region.effects
+    if read_requirements is None:
+        region = builder._consume_call_numerical_region(call)
+        if region is None:
+            raise CompilationError("numerical preflight requires registered exact physical effects")
+        effect = region.effects
+    else:
+        from compiler.frontend.reached_read_requirements import ReachedReadRequirementsProof
+        if type(read_requirements) is not ReachedReadRequirementsProof:
+            raise CompilationError("numerical preflight requires registered original read authority")
+        prepared = builder.inline_for(call.procedure).prepared_regions.get(call.procedure)
+        if prepared is not read_requirements.prepared:
+            raise CompilationError("numerical preflight read preparation differs from the original call")
+        read_requirements.validate(builder.analysis, builder.entry.qualified, prepared._selection, prepared)
+        effect = read_requirements
     original = builder.inline.original_selection(call.node)
     specification, lines = [], ["fort_numerical_guard = .true."]
     ordinal = 0

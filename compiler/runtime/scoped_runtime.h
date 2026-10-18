@@ -143,6 +143,14 @@ int fort_scope_view_get_v2(fort_scope_t context, const fort_scope_view_v2 *view,
  * them unchanged. Existing allocation and unrelated current values survive. */
 int fort_scope_forget_sections_v1(fort_scope_t context, fort_buffer_t buffer,
                                   const fort_scope_section *sections, size_t count);
+/* Compiler-established exact upward reads at the reached original operation,
+ * after its guards and original descriptor checks. This is a precondition of
+ * well-defined original execution, never a prefix/halo or alias proof. Only
+ * requested values absent from initialized coverage gain a current host copy;
+ * existing host/device freshness is untouched. No transfers or waits occur.
+ * All region algebra succeeds before committing either coverage set. */
+int fort_scope_admit_source_reads_v1(fort_scope_t context, fort_buffer_t buffer,
+                                     const fort_scope_section *sections, size_t count);
 typedef struct fort_scope_stats {
     uint64_t uploads, downloads, upload_bytes, download_bytes;
     uint64_t allocations, allocated_bytes, peak_device_bytes;

@@ -1,4 +1,4 @@
-"""Native prefix state consumed by the original checked resident interval."""
+"""Exact original-read admission after an unchanged native prefix."""
 
 from copy import copy
 from dataclasses import replace
@@ -43,26 +43,21 @@ def emit_activation_fixture(path, *, config=None):
     return selected, owner, outputs, report
 
 
-def test_original_joined_initialization_registers_only_defined_sections(tmp_path):
+def test_original_native_prefix_does_not_seed_selected_definitions(tmp_path):
     selected, owner, outputs, report = emit_activation_fixture(tmp_path / "prefix.f90")
     proof = owner.emission.selection_prefix
     assert type(proof) is SelectionActivationProof
-    assert proof.capture_state("interval_fields::out")["initialized"] == "sections"
-    section = proof.activation_sections("interval_fields::out")
-    assert section.lower_bounds == (-1,)
-    box, = section.overwrites
-    assert box.axes[0].lower.value == 0
-    assert box.axes[0].upper.value == 7
-    assert not section.reads
-    assert not section.writes
+    assert all(state["initialized"] == "none" for state in proof.public()["states"])
+    assert proof.activation_sections("interval_fields::out") is None
     assert selected.facts["captures"]["interval_fields::out"]["initialized"] == "none"
-    assert owner.builder.capture(selected.analysis._binding(selected.entry.scope, "out"))["source_sections"] is section
+    assert owner.builder.capture(selected.analysis._binding(selected.entry.scope, "out"))["initialized"] == "none"
     assert owner.execution_plan.validate() is owner.execution_plan
     assert owner.execution_plan.numerical_invocations == 3
     text = outputs[report["sources"][str(tmp_path / "prefix.f90")]["replacement"]]
     assert text.count("out(i)=0.d0") == 1
     assert text.index("out(i)=0.d0") < text.index("block")
-    assert "fort_scope_register_sections" in text
+    assert "fort_scope_admit_source_reads_v1" in text
+    assert "fort_scope_register_sections" not in text
 
 
 @pytest.mark.parametrize("empty", ["then", "else"])
@@ -77,7 +72,7 @@ def test_empty_native_branch_arm_cannot_grant_intersection(tmp_path, empty):
     assert proof.activation_sections("interval_fields::out") is None
 
 
-@pytest.mark.parametrize("mutation", ["facts", "configuration", "source", "selection", "token", "geometry"])
+@pytest.mark.parametrize("mutation", ["facts", "configuration", "source", "selection", "token", "state"])
 def test_activation_rejects_stale_or_forged_authority(tmp_path, mutation):
     selected, owner, site = activation_fixture(tmp_path / "prefix.f90")
     demanded = selection_activation_demands(owner)
@@ -102,20 +97,26 @@ def test_activation_rejects_stale_or_forged_authority(tmp_path, mutation):
         forged = replace(proof)
         action = partial(forged.validate, selected.analysis, selected.entry.qualified, site.originals, demanded)
     else:
-        resource, = proof._sections
-        object.__setattr__(proof, "_sections", (replace(resource, lower_bounds=(0,)),))
+        from compiler.frontend.structured_effects import _freeze, _thaw
+        record = _thaw(proof._record)
+        record["states"][0]["initialized"] = "whole"
+        object.__setattr__(proof, "_record", _freeze(record))
         action = partial(proof.validate, selected.analysis, selected.entry.qualified, site.originals, demanded)
     with pytest.raises(CompilationError):
         action()
 
 
-def test_unknown_native_prefix_declines_before_any_owner_emission(tmp_path):
+def test_unknown_native_prefix_stays_original_without_any_definition_credit(tmp_path):
     selected, owner, site = activation_fixture(tmp_path / "prefix.f90", prefix=PREFIX + "call opaque()\n")
-    with pytest.raises(CompilationError, match="complete preservation"):
-        owner._prepare_lexical(site.originals)
-    assert not selected.edits
-    assert not selected.outputs
-    assert not selected.scopes
+    assert owner.run(site.originals)
+    outputs, report = owner.builder.finish()
+    proof = owner.emission.selection_prefix
+    assert all(state["initialized"] == "none" for state in proof.public()["states"])
+    text = outputs[report["sources"][str(tmp_path / "prefix.f90")]["replacement"]]
+    assert text.count("call opaque()") == 1
+    assert text.index("call opaque()") < text.index("fort_scope_create")
+    assert "fort_scope_admit_source_reads_v1" in text
+    assert selected.facts["captures"]["interval_fields::old"]["initialized"] == "whole"
 
 
 def test_automatic_prefix_interval_uses_same_native_and_resident_contract(tmp_path, build_validation):  # noqa: F811
@@ -144,13 +145,14 @@ def test_public_discovery_adopts_bound_activation_builder(tmp_path, build_valida
     outputs, report = selected.run()
     proof = selected.validate_selection_activation()
     assert type(proof) is SelectionActivationProof
-    assert proof.capture_state("interval_fields::out")["initialized"] == "sections"
+    assert proof.capture_state("interval_fields::out")["initialized"] == "none"
     assert selected.inline.builder is selected
     assert selected.region_owners[selected.entry.qualified] is selected.inline
     assert report["scopes"]
     text = outputs[report["sources"][str(tmp_path / "prefix.f90")]["replacement"]]
     assert text.count("out(i)=0.d0") == 1
-    assert "fort_scope_register_sections" in text
+    assert "fort_scope_admit_source_reads_v1" in text
+    assert "fort_scope_register_sections" not in text
 
 
 def test_native_out_after_initialization_forgets_output_coverage(tmp_path):
@@ -194,9 +196,93 @@ def test_registered_token_rejects_mutated_internal_authority(tmp_path, mutation)
     if mutation == "policy":
         object.__setattr__(proof, "_configuration", "different policy")
     elif mutation == "initialization_binding":
-        binding, = proof.initializations
-        object.__setattr__(proof, "initializations", (copy(binding),))
+        binding = selected.analysis._binding(selected.entry.scope, "prepared")
+        object.__setattr__(proof, "initializations", (binding,))
     else:
         object.__setattr__(proof, "_prefix", ())
     with pytest.raises(CompilationError, match="payload changed"):
         proof.validate(selected.analysis, selected.entry.qualified, site.originals, demanded)
+
+
+def test_module_threadprivate_storage_remains_ineligible(tmp_path):
+    source = SOURCE.replace("integer::visits=0", "integer::visits=0\n!$omp threadprivate(out)")
+    selected = builder(tmp_path / "prefix.f90", source=source, prefix=PREFIX)
+    site = call_pair(selected)
+    owner = ClosedIntervalOwner(selected, site.originals, site.prefix, site.controls)
+    with pytest.raises(CompilationError, match="module OpenMP ownership"):
+        prove_selection_activation(owner, selection_activation_demands(owner))
+    assert not selected.edits
+
+
+def test_selected_reads_require_original_alias_safe_registration(tmp_path):
+    _selected, owner, outputs, report = emit_activation_fixture(tmp_path / "prefix.f90")
+    text = outputs[report["sources"][str(tmp_path / "prefix.f90")]["replacement"]]
+    first_claim = text.index("fort_scope_admit_source_reads_v1")
+    assert text.index("fort_scope_register(") < first_claim
+    assert text.index("is_contiguous(") < first_claim
+    assert text.index("fort_scope_layout_get(") < first_claim
+    assert "0_c_int, fort_buffer_" in text
+    for member in owner.execution_plan.members:
+        for unit in owner.execution_plan.units(member):
+            requirements = getattr(unit.scope, "source_reads", {})
+            if hasattr(requirements, "values"):
+                for proof in requirements.values():
+                    assert proof.validate(member.builder.analysis, member.routine.qualified,
+                                          proof.prepared._selection, proof.prepared) is proof
+
+
+def test_source_read_token_cannot_move_to_another_original_call(tmp_path):
+    from compiler.scopes.source_reads import validate_source_reads
+    _selected, owner, _outputs, _report = emit_activation_fixture(tmp_path / "prefix.f90")
+    member = next(member for member in owner.execution_plan.members
+                  if member.routine.qualified == "interval_fields::momentum")
+    pairs = [(call, unit.scope.source_reads[call.procedure])
+             for unit in owner.execution_plan.units(member) for call in unit.scope.calls
+             if call.region is not None]
+    assert len(pairs) == 2
+    (first, first_proof), (second, second_proof) = pairs
+    assert first_proof.procedure == second_proof.procedure
+    validate_source_reads(member.builder, first, first_proof)
+    with pytest.raises(CompilationError, match="exact original numerical call"):
+        validate_source_reads(member.builder, second, first_proof)
+
+
+def test_zero_state_activation_does_not_project_explicit_shape_dummy_geometry(tmp_path):
+    from compiler.tests.test_source_scopes import FACT
+    source = SOURCE.replace("advance(n,correcting)", "advance(n,correcting,beta)")
+    source = source.replace("integer,intent(in)::n", "real(8),intent(in)::beta(1:3)\ninteger,intent(in)::n", 1)
+    selected = builder(tmp_path / "prefix.f90", source=source, prefix=PREFIX)
+    selected.facts["captures"]["argument::beta"] = dict(FACT)
+    site = call_pair(selected)
+    owner = ClosedIntervalOwner(selected, site.originals, site.prefix, site.controls)
+    proof = prove_selection_activation(owner, selection_activation_demands(owner))
+    assert proof.capture_state("argument::beta")["initialized"] == "none"
+    assert proof.activation_sections("argument::beta") is None
+    assert proof.public()["new_lifetime_authority"] is False
+
+
+def test_borrowed_native_metadata_keeps_reservation_without_numeric_capture(tmp_path):
+    from compiler.tests.test_original_interval_owner import MIXED_SOURCE
+    source = MIXED_SOURCE.replace("integer::visits=0", """type marker_t
+integer::index
+real(8)::value
+end type
+type(marker_t)::markers(1)
+integer::visits=0""").replace("v(i)=v(i)+sum(a)", "v(i)=v(i)+markers(1)%value")
+    selected = builder(tmp_path / "prefix.f90", source=source, prefix=PREFIX)
+    site = call_pair(selected)
+    owner = ClosedIntervalOwner(selected, site.originals, site.prefix, site.controls)
+    assert owner.run(site.originals)
+    outputs, report = owner.builder.finish()
+    proof = owner.emission.selection_prefix
+    root = "interval_fields::markers"
+    assert root not in selected.facts["captures"]
+    assert root not in {state["resource"] for state in proof.public()["states"]}
+    assert root in owner.resources
+    member = next(member for member in owner.execution_plan.members
+                  if member.routine.qualified == "interval_fields::momentum")
+    assert not member.boundaries
+    assert any(root in unit.host_metadata for unit in owner.execution_plan.units(member))
+    text = outputs[report["sources"][str(tmp_path / "prefix.f90")]["replacement"]]
+    assert "FORT_SCOPE_BYTES" in text
+    assert "fort_scope_admit_source_reads_v1" in text

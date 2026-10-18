@@ -33,7 +33,7 @@ _CACHES = ("summaries", "_closures", "_structures", "_segments", "_descriptor_pr
            "_reduction_candidates", "_omp_reduction_proofs", "_native_environments",
            "_native_environment_states", "_native_predicates", "_native_functions",
            "_native_prefix_proofs", "_native_definition_proofs", "_native_definition_state_proofs",
-           "_native_preservation_proofs", "_selection_activation_proofs",
+           "_native_preservation_proofs", "_selection_activation_proofs", "_reached_read_requirements_proofs",
            "_numerical_effect_proofs",
            "_numerical_preparations", "_numerical_preparation_providers",
            "_ordered_worksharing_inventories", "_prepared_worksharing_inventories")
@@ -102,6 +102,7 @@ def _fork(analysis, roots):
         setattr(result, name, {})
     result._native_preservation_registry_owner = None
     result._selection_activation_registry_owner = None
+    result._reached_read_requirements_proofs_owner = result
     result.contracts = copy.deepcopy(analysis.contracts)
     result._source_function_used_scopes = set()
     result._summary_cache = SummaryCache(max_entries=0)

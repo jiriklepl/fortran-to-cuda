@@ -55,6 +55,7 @@ class JoinedTeam(StructuredScope):
         self.calls, self.native, self.segments, self.guarded = [], [], [], {}
         self.close_guards = {}
         self.operation_count, self.numerical_units, self.rejections = 0, [], []
+        self.source_reads = {}
         self.original_nodes = original_roots(builder.inline.original_selection(nodes))
         inventory = ordered_worksharing_inventory(builder.analysis, builder.entry.qualified, self.original_nodes)
         self.completion, candidates = prepare_worksharing_inventory(builder, builder.entry.qualified,
@@ -190,6 +191,8 @@ class JoinedTeam(StructuredScope):
                 span, proof = candidate.span, candidate.completion
                 facade = self.builder.inline.prepare_worksharing(node, proof, prepared=candidate.prepared)
                 call = self.builder.inline.call(facade)
+                from compiler.scopes.source_reads import prepare_source_reads
+                source_reads = prepare_source_reads(self.builder, call)
             except CompilationError as error:
                 self.rejections.append({'reason': str(error), 'prepared_span': prepared_span(node)})
                 pending.append(node)
@@ -198,6 +201,7 @@ class JoinedTeam(StructuredScope):
             fallback = self._native((node,))
             self.guarded[id(call.node)] = fallback
             self.calls.append(call)
+            self.source_reads[call.procedure] = source_reads
             self.numerical_units.append((call, proof, span))
             result.append(Segment([call]))
         flush()
@@ -213,6 +217,7 @@ class JoinedTeam(StructuredScope):
         result = super().public()
         result['joined_team'] = {'schema_version': 1, 'completion': self.completion.public(),
             'execution': 'original team; master runtime coordination; collective numerical workers',
+            'source_reads': {name: proof.public() for name, proof in self.source_reads.items() if proof is not None},
             'numerical_units': [{'first_line': span[0], 'last_line': span[1], 'procedure': call.procedure,
                                  'completion': proof.public()} for call, proof, span in self.numerical_units],
             'native_rejections': self.rejections,
@@ -364,8 +369,26 @@ class JoinedTeam(StructuredScope):
                         '!$omp atomic write', 'fort_numerical_guard = .false.', 'endif', 'endif', '!$omp barrier']
                 else:
                     lines += ['fort_numerical_guard = .true.']
-                lines += ['if (fort_numerical_guard) fort_numerical_guard = ' + guard for guard in guards]
-                lines += ['if (fort_numerical_guard) then',
+                if self.source_reads[call.procedure] is not None:
+                    from compiler.scopes.numerical_preflight import preparation_preflight
+                    guard_specification, guard_code = preparation_preflight(builder, call, values,
+                        read_requirements=self.source_reads[call.procedure])
+                    # Each original DO reaches these master-local temporaries
+                    # after the previous worksharing completion. Identical
+                    # typed declarations may share storage across those DOs.
+                    extra += [declaration for declaration in guard_specification if declaration not in extra]
+                    # Preserve the original all-participant environment vote.
+                    # Typed domains suppress dormant inner bound evaluation.
+                    lines += ['if (fort_numerical_guard) then', *guard_code, 'endif']
+                else:
+                    lines += ['if (fort_numerical_guard) fort_numerical_guard = ' + guard for guard in guards]
+                from compiler.scopes.source_reads import build_source_reads
+                read_block = 'fort_source_prepare_' + str(number)
+                read_code = build_source_reads(builder, self.source_reads[call.procedure], handles, values,
+                    'fort_source_read_' + str(number), call=call, on_error=(*fail(), 'exit ' + read_block),
+                    logical_lower_bounds=lowers)
+                extra += read_code.specification
+                lines += ['if (fort_numerical_guard) then', read_block + ': block', *read_code.prepare,
                           'fort_status = fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)',
                           *builder.inline.emit_call(call, handles, values, imports, query=True),
                           'if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_plan_validate(fort_context)']
@@ -379,7 +402,7 @@ class JoinedTeam(StructuredScope):
                               *choice(owner, unit, handles, values), 'endif']
                 selected = 'fort_decision%gpu_units > 0' if price_units else '.true.'
                 lines += ['if (fort_status /= FORT_SCOPE_OK) then', *fail(),
-                          'else', 'fort_team_run = fort_native_ready .and. (' + selected + ')', 'endif', 'endif',
+                          'else', 'fort_team_run = fort_native_ready .and. (' + selected + ')', 'endif', 'end block ' + read_block, 'endif',
                           'if (fort_native_ready .and. .not. fort_team_run) then', *prepare, 'endif']
             else:
                 lines += prepare
