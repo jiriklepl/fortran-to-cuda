@@ -48,10 +48,17 @@ def _native_read_selection(analysis, procedure, selection):
     return True
 
 
-def prove_native_read_requirements(analysis, procedure, selection):
-    """Reuse ordered native authority for one reached unconditional assignment."""
+def prove_native_read_requirements(analysis, procedure, selection, *, completion=None):
+    """Retain existing original-source authority for exact reached reads.
+
+    Assignment authority and unchanged native-team completion share this
+    contract. Communication geometry alone never grants a read precondition.
+    """
     from compiler.frontend.native_definitions import prove_native_definitions
 
+    if completion is not None:
+        sections = _native_team_read_sections(analysis, procedure, selection, completion)
+        return completion if sections.available else None
     if not _native_read_selection(analysis, procedure, selection):
         return None
     proof = prove_native_definitions(analysis, procedure, selection)
@@ -62,7 +69,13 @@ def prove_native_read_requirements(analysis, procedure, selection):
 def native_read_sections(analysis, procedure, selection, proof):
     """Fresh exact reads; no prefix, whole-array or may-read definition credit."""
     from compiler.frontend.native_definitions import NativeDefinitionProof
+    from compiler.frontend.worksharing_completion import WorksharingNativeCompletionProof
 
+    if type(proof) is WorksharingNativeCompletionProof:
+        sections = _native_team_read_sections(analysis, procedure, selection, proof)
+        if not sections.available:
+            raise CompilationError("native original entry reads unavailable: " + str(sections.reason))
+        return sections
     if type(proof) is not NativeDefinitionProof or not _native_read_selection(analysis, procedure, selection):
         raise CompilationError("native reached reads require exact original assignment authority")
     proof.validate(analysis, procedure, selection)
@@ -73,6 +86,17 @@ def native_read_sections(analysis, procedure, selection, proof):
         raise CompilationError("native reached read sections are unavailable")
     return replace(sections, resources=tuple(replace(item, writes=(), overwrites=())
                                              for item in sections.resources if item.reads))
+
+
+def _native_team_read_sections(analysis, procedure, selection, completion):
+    from compiler.frontend.indirect_sections import analyze_indirect_sections
+    from compiler.frontend.worksharing_completion import WorksharingNativeCompletionProof
+
+    if type(completion) is not WorksharingNativeCompletionProof:
+        raise CompilationError("native original entry reads require unchanged worksharing completion")
+    completion.validate(analysis, procedure, selection)
+    return analyze_indirect_sections(analysis, procedure, selection, completion=completion,
+                                     capture_locals=True, require_entry_reads=True)
 
 
 @dataclass(frozen=True)

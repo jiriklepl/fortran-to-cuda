@@ -3054,8 +3054,14 @@ Unconditional native assignments can use the same reached-read admission before
 their native planning query. The existing ordered native-effect proof authenticates
 the original assignment, and exact read sections are rederived from that source.
 This covers native scalar setup from array elements and point corrections, through
-both precise native effects and demand-relative interval effects. Conditional
-expressions, masked operations, function calls and loop unions acquire no new read
+both precise native effects and demand-relative interval effects. The same contract
+can cover original native worksharing loops with stable indirect metadata when
+every managed write first reads that exact destination. Existing native completion
+authority and a fresh source derivation authenticate this condition; communication
+geometry alone cannot establish it. The coordinator reuses the already prepared
+exact inspector unions, including original empty-loop, bounds and budget guards,
+before the native query. It does not scan the metadata twice. Conditional operands,
+masked operations, function calls and unproved loop unions acquire no new read
 authority. Reads retain current device copies; subsequent native writes still
 invalidate only their proved sections. Entry state and unread sections remain
 unknown, and a rejected preflight continues only the unexecuted native suffix.

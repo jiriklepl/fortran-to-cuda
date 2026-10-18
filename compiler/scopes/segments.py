@@ -993,7 +993,7 @@ class StructuredScope:
                                    "native_environment": [proof.public() for proof in operation.native_environment],
                                    "native_local_state": [proof.public() for proof in operation.native_states.values()],
                                    "source_read_requirements": ({"proof_identity": operation.source_reads.identity,
-                                       "validity": "well-defined original assignment at this reached source point",
+                                       "validity": "well-defined original reads at this reached source point",
                                        "prefix_definitions_authorized": False}
                                        if operation.source_reads is not None else None),
                                    "demand_relative_effects": (operation.demand_effects.public()
