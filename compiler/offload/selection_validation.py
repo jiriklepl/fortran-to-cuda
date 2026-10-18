@@ -20,9 +20,12 @@ from pathlib import Path
 
 from compiler.offload.collective_calibration import normalize_fortran_options
 
-POLICY_PROTOCOL = "full-float64-comparison-v1"
-RECEIPT_PROTOCOL = "checked-selection-numerics-v1"
+POLICY_PROTOCOL = "full-float64-comparison-v2"
+RECEIPT_PROTOCOL = "checked-selection-numerics-v2"
 VTK_FORMAT = "legacy-binary-rectilinear-vtk-v1"
+RAW_FORMAT = "raw-float64-storage-v1"
+_POLICY_PROTOCOLS = {1: "full-float64-comparison-v1", 2: POLICY_PROTOCOL}
+_RECEIPT_PROTOCOLS = {1: "checked-selection-numerics-v1", 2: RECEIPT_PROTOCOL}
 OBSERVATION_PREFIX = b"FORT_SELECTION_OBSERVATION "
 CHUNK_BYTES = 64 * 1024
 MAX_JSON_BYTES = 64 * 1024 * 1024
@@ -47,6 +50,17 @@ def _relative(value):
             and not value.startswith("/") and all(part not in {"", ".", ".."} for part in value.split("/")))
 
 
+def _storage_inventory(fields, *, label, maximum=128):
+    _check(type(fields) is dict and 0 < len(fields) <= maximum, f"explicit {label} inventory required")
+    paths = []
+    for name, field in fields.items():
+        _check(type(name) is str and 0 < len(name) <= 256 and "\0" not in name
+               and type(field) is dict and set(field) == {"payload", "metadata"}
+               and all(_relative(path) for path in field.values()), f"invalid {label} inventory")
+        paths.extend(field.values())
+    return paths
+
+
 def normalize_policy(requested, *, build_contract):
     """Bind an explicit comparison policy to an original executed source unit."""
     _check(type(requested) is dict, "explicit validation policy required")
@@ -54,31 +68,30 @@ def normalize_policy(requested, *, build_contract):
     supplied_identity = policy.pop("identity", None)
     _check(set(policy) == {"schema_version", "protocol", "dtype", "fields", "metadata_format", "atol", "rtol",
                           "finite_only", "exact_layouts", "outputs", "driver"}, "policy fields differ")
-    _check(type(policy["schema_version"]) is int and policy["schema_version"] == 1
-           and policy["protocol"] == POLICY_PROTOCOL and policy["dtype"] in {"<f8", ">f8"}
+    _check(type(policy["schema_version"]) is int and policy["schema_version"] in _POLICY_PROTOCOLS
+           and policy["protocol"] == _POLICY_PROTOCOLS[policy["schema_version"]]
+           and policy["dtype"] in {"<f8", ">f8"}
            and policy["metadata_format"] == "storage-shape-bounds-v1"
            and policy["finite_only"] is True and policy["exact_layouts"] is True, "unsupported comparison policy")
     for name in ("atol", "rtol"):
         _check(type(policy[name]) in {int, float} and math.isfinite(policy[name]) and policy[name] >= 0,
                "tolerances must be finite and nonnegative")
-    fields = policy["fields"]
-    _check(type(fields) is dict and 0 < len(fields) <= 128, "explicit full-field inventory required")
-    paths = []
-    for name, field in fields.items():
-        _check(type(name) is str and 0 < len(name) <= 256 and "\0" not in name
-               and type(field) is dict and set(field) == {"payload", "metadata"}
-               and all(_relative(path) for path in field.values()), "invalid full-field inventory")
-        paths.extend(field.values())
+    paths = _storage_inventory(policy["fields"], label="full-field")
     outputs = policy["outputs"]
-    _check(type(outputs) is dict and set(outputs) == {"format", "files"} and outputs["format"] == VTK_FORMAT
+    formats = {VTK_FORMAT, RAW_FORMAT} if policy["schema_version"] == 2 else {VTK_FORMAT}
+    _check(type(outputs) is dict and set(outputs) == {"format", "files"}
+           and type(outputs["format"]) is str and outputs["format"] in formats
            and type(outputs["files"]) is dict and 0 < len(outputs["files"]) <= 32,
            "explicit output format and inventory required")
-    for path, names in outputs["files"].items():
-        _check(_relative(path) and type(names) is list and bool(names) and len(names) <= 128
-               and all(type(name) is str and name and len(name) <= 256 and not any(c.isspace() for c in name)
-                       and "\0" not in name and name not in {"X_COORDINATES", "Y_COORDINATES", "Z_COORDINATES"}
-                       for name in names) and len(set(names)) == len(names), "invalid output field inventory")
-        paths.append(path)
+    if outputs["format"] == RAW_FORMAT:
+        paths.extend(_storage_inventory(outputs["files"], label="raw-output", maximum=32))
+    else:
+        for path, names in outputs["files"].items():
+            _check(_relative(path) and type(names) is list and bool(names) and len(names) <= 128
+                   and all(type(name) is str and name and len(name) <= 256 and not any(c.isspace() for c in name)
+                           and "\0" not in name and name not in {"X_COORDINATES", "Y_COORDINATES", "Z_COORDINATES"}
+                           for name in names) and len(set(names)) == len(names), "invalid output field inventory")
+            paths.append(path)
     _check(len(set(paths)) == len(paths), "comparison paths must be distinct")
     driver = policy["driver"]
     _check(type(driver) is dict and set(driver) == {"original_source", "original_sha256", "replacement_sha256"},
@@ -367,14 +380,24 @@ def _observations(reference, run, *, mode, contract, key_sequence, identity):
 
 def _outputs(variants, runs, policy):
     expected = policy["outputs"]["files"]
+    raw = policy["outputs"]["format"] == RAW_FORMAT
     for mode in ("native", "resident"):
         _check(type(variants[mode].get("outputs")) is dict and set(variants[mode]["outputs"]) == set(expected)
-               and type(runs[mode].get("output_hashes")) is dict
-               and set(expected) <= set(runs[mode]["output_hashes"]), "required output file inventory differs")
+               and type(runs[mode].get("output_hashes")) is dict, "required output file inventory differs")
         for name, reference in variants[mode]["outputs"].items():
-            _within(reference, runs[mode]["cwd"], name)
-            _check(runs[mode]["output_hashes"][name] == reference.get("sha256"), "output differs from run inventory")
-    return {name: _compare_vtk(variants["native"]["outputs"][name], variants["resident"]["outputs"][name], fields, policy)
+            if raw:
+                _check(type(reference) is dict and set(reference) == {"payload", "metadata"},
+                       "raw-output references differ")
+                references = [(path, reference[kind]) for kind, path in expected[name].items()]
+            else:
+                references = [(name, reference)]
+            for path, item in references:
+                _check(path in runs[mode]["output_hashes"], "required output file inventory differs")
+                _within(item, runs[mode]["cwd"], path)
+                _check(runs[mode]["output_hashes"][path] == item.get("sha256"), "output differs from run inventory")
+    return {name: (_compare_field(variants["native"]["outputs"][name], variants["resident"]["outputs"][name], policy)
+                   if raw else _compare_vtk(variants["native"]["outputs"][name],
+                                             variants["resident"]["outputs"][name], fields, policy))
             for name, fields in expected.items()}
 
 
@@ -386,8 +409,9 @@ def validate_campaign_numerics(campaign, *, contract, workload, builds, key_sequ
     receipt = _json(campaign.get("numerical_validation"))
     _check(set(receipt) == {"schema_version", "protocol", "contract_sha256", "policy_identity", "workload_identity",
                             "selection_bundle_identity", "variants", "pairs"}
-           and type(receipt["schema_version"]) is int and receipt["schema_version"] == 1
-           and receipt["protocol"] == RECEIPT_PROTOCOL and receipt["contract_sha256"] == _digest(contract)
+           and type(receipt["schema_version"]) is int and receipt["schema_version"] == policy["schema_version"]
+           and receipt["protocol"] == _RECEIPT_PROTOCOLS[policy["schema_version"]]
+           and receipt["contract_sha256"] == _digest(contract)
            and receipt["policy_identity"] == policy["identity"] and receipt["workload_identity"] == workload["identity"]
            and receipt["selection_bundle_identity"] == contract["selection_bundle"]["identity"],
            "numerical receipt source, policy or workload differs")
@@ -442,6 +466,6 @@ def validate_campaign_numerics(campaign, *, contract, workload, builds, key_sequ
                                          key_sequence=key_sequence, identity=identity)
             _check(observations == row["invocations"], "timed invocation rows differ from original observation log")
         comparisons.append({"round": ordinal, "outputs": _outputs(pair, runs, policy)})
-    return {"protocol": RECEIPT_PROTOCOL, "receipt_sha256": campaign["numerical_validation"]["sha256"],
+    return {"protocol": receipt["protocol"], "receipt_sha256": campaign["numerical_validation"]["sha256"],
             "policy_identity": policy["identity"], "diagnostic_builds": diagnostic_builds,
             "fields": fields, "diagnostic_outputs": diagnostic_outputs, "timed_pairs": comparisons}

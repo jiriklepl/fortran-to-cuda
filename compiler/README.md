@@ -3005,11 +3005,26 @@ does not authorize placement. Distinct field hashes are retained when values
 agree within that fixed policy. The existing complete-window fixture protocol
 keeps its bitwise comparison requirement.
 
-Each declared ordinary output lists required data fields. The verifier requires
-the native and resident files to have matching complete layouts and compares
-every field present, including additional fields; other recorded output files
-need not be selected for comparison. The build attestation must bind the exact
-selection contract, including this policy and its workload identities.
+Version 2 policies (`full-float64-comparison-v2`) and numerical receipts
+(`checked-selection-numerics-v2`) support either legacy binary VTK or raw
+float64 storage as ordinary outputs. Both use `schema_version: 2`.
+For raw outputs, declare `outputs: {"format": "raw-float64-storage-v1",
+"files": {"state": {"payload": "output/state.bin", "metadata":
+"output/state.shape"}}}`. Each receipt's `outputs.state` contains `payload`
+and `metadata` file references with absolute `path` and `sha256`; both files
+must appear in that run's `output_hashes`. Metadata uses the same
+`storage-shape-bounds-v1` format as diagnostic fields: precision `64`, then
+shape, lower bounds and upper bounds in dimension order. Payloads use the
+policy's `<f8` or `>f8` byte order, finite values and fixed tolerances; storage
+shapes and bounds must match exactly. Normal output and diagnostic field paths
+must be distinct, and both inventories remain nonempty and mandatory.
+
+For VTK, each declared ordinary output lists required data fields. The verifier
+requires matching complete layouts and compares every field present, including
+additional fields; other recorded output files need not be selected for
+comparison. Existing version 1 VTK policies and receipts retain their checks
+and tolerances; raw outputs require version 2. The build attestation binds the
+exact selection contract, including this policy and its workload identities.
 
 Each workload needs one full-float64 diagnostic pair from its native and
 resident capture builds, including original bounds and halos. Every measured
