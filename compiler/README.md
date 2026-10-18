@@ -3013,7 +3013,16 @@ criterion or supplying earlier protocol evidence requires fresh calibration.
 
 Checked-interval discovery uses the same original-position block control as
 closed numerical groups. It considers contiguous serial source selections,
-keeps complete OpenMP groups indivisible, and opens a fresh context each time
+keeps complete OpenMP groups indivisible, and prioritizes possible array reuse
+between bulk producers and consumers that write separate outputs. These hints
+use original assignments, loops and call argument intents; they are neither
+effect summaries nor cost estimates. Tied reuse counts prefer fewer complete
+source units. Candidates without visible reuse retain their original order,
+as does the entire search if its existing source-scan budget is exhausted.
+The candidate and admission budgets are unchanged. The manifest's
+`original_interval_discovery` records hints, attempts and the selected span;
+the selected interval still requires independent legality and placement proofs.
+Discovery opens a fresh context each time
 the selected site executes. The context publishes and closes before an excluded
 suffix or backedge. This path does not retry a declined selection through the
 older first-traversal or whole-entry owner. A proved local scalar prefix retains

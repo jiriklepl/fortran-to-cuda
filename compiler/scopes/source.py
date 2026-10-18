@@ -2885,6 +2885,8 @@ class ScopeBuilder:
             **({"reached_plan_schema_version": 1} if self.config.scope_execution == "reached" else {}),
             **({"reached_window_discovery": self.reached_window_discovery}
                if hasattr(self, "reached_window_discovery") else {}),
+            **({"original_interval_discovery": self.original_interval_discovery}
+               if hasattr(self, "original_interval_discovery") else {}),
             **({"lexical_owner_attempt": deepcopy(self.lexical_owner_attempt)}
                if hasattr(self, "lexical_owner_attempt") else {}),
             "automatic_scope_available":bool(self.scopes), "scope_count":len(self.scopes),
