@@ -26,8 +26,17 @@ from compiler.offload.exact_window import (
     implementation_identity,
 )
 
-PROTOCOL = "checked-interval-process-v3"
+PROTOCOL = "checked-interval-process-v4"
 PREFIX = "FORT_SELECTION_OBSERVATION "
+
+
+def _acceptance(value):
+    """An explicit source-bound performance criterion never changes legality."""
+    if (type(value) is not dict or set(value) != {"criterion"}
+            or type(value["criterion"]) is not str
+            or value["criterion"] not in {"strict_advantage", "paired_non_regression"}):
+        raise CompilationError("selected timing acceptance requires strict_advantage or paired_non_regression")
+    return dict(value)
 
 
 def _valid_key(key, count):
@@ -80,6 +89,10 @@ def _process_evidence_decision(evidence, contract):
         if (type(evidence) is not dict or evidence.get("protocol") != PROTOCOL
                 or type(evidence.get("campaigns")) is not list or not evidence["campaigns"]):
             raise ValueError("complete-process selection calibration missing")
+        if (type(contract) is not dict or type(contract.get("schema_version")) is not int
+                or contract["schema_version"] != 2 or contract.get("protocol") != PROTOCOL):
+            raise ValueError("complete-process selection contract version differs")
+        acceptance = _acceptance(contract.get("acceptance"))
         if len(contract["selection_bundle"]["groups"]) != 1:
             raise ValueError("complete-process production pricing currently requires one admitted selection per bundle")
         accepted, rejected, identities, campaigns, workloads = {}, set(), {}, [], {}
@@ -162,7 +175,8 @@ def _process_evidence_decision(evidence, contract):
                 projected["observations"][order]["key"] = first_key
                 projected["observations"][order]["observed_key"] = first_key
             projected["key"] = first_key
-            decision = _paired_timing_decision(projected, contract, protocol=PROTOCOL)
+            decision = _paired_timing_decision(projected, contract, protocol=PROTOCOL,
+                                              criterion=acceptance["criterion"])
             if not decision["available"]:
                 raise ValueError(decision["reason"])
             identity = decision["identity"]
@@ -190,9 +204,12 @@ def _process_evidence_decision(evidence, contract):
                    for key in sorted(accepted.keys() - rejected) for identity, workload in sorted(accepted[key])]
         if len(identities) != 1:
             raise ValueError("complete-process campaigns require one compatible execution environment")
+        requirement = ("paired non-regression" if acceptance["criterion"] == "paired_non_regression" else
+                       "selection advantage")
         return {"available": True, "selection": "resident" if entries else "native",
-                "reason": ("measured complete-process selection advantage" if entries else
-                           "complete-process selection saving not established"),
+                "reason": (f"measured complete-process {requirement}" if entries else
+                           f"complete-process {requirement} not established"),
+                "acceptance": acceptance,
                 "accepted_keys": entries, "campaigns": campaigns, "evidence_sha256": digest(evidence),
                 "applicability": "empirical observed complete-process workload classes; no future invocation-count guarantee"}
     except (CompilationError, KeyError, TypeError, ValueError, OverflowError, OSError) as error:
@@ -247,6 +264,7 @@ def prepare(owner):
     builder = owner.builder
     request = deepcopy(builder.config.exact_window)
     snapshot = _request_snapshot(request)
+    acceptance = _acceptance(request.get("acceptance", {"criterion": "strict_advantage"}))
     plan = owner.execution_plan.validate()
     interval = getattr(plan, "interval", None)
     if interval is None:
@@ -294,7 +312,8 @@ def prepare(owner):
         worker_artifacts=artifacts, runtime_identity=builder.runtime["runtime_id"])
     validation_policy = normalize_policy(request.get("validation_policy"), build_contract=build)
     contract = {
-        "schema_version": 1, "protocol": PROTOCOL, "entry": owner.routine.qualified,
+        "schema_version": 2, "protocol": PROTOCOL, "entry": owner.routine.qualified,
+        "acceptance": acceptance,
         "sources": dict(sorted(builder.analysis.sources.items())), "selection": selection,
         "selection_bundle": deepcopy(bundle),
         "workloads": workloads,
