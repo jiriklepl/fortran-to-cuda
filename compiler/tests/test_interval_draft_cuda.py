@@ -9,6 +9,7 @@ import pytest
 
 from compiler.tests.support.numerical_cuda import _transfers, build_reached_numerical_binaries
 from compiler.tests.test_interval_draft import generate
+from compiler.tests.test_interval_native_artifacts import cross_module_builder
 from compiler.tests.test_source_scopes import run
 
 DRIVER = """program verify
@@ -47,10 +48,23 @@ def emit(directory, *, precision, device_budget):
     return [path], outputs, report, builder
 
 
+def emit_cross_module(directory, *, precision, device_budget):
+    from compiler.offload.config import OffloadConfig
+
+    assert precision == 8
+    assert device_budget is None
+    sources, builder = cross_module_builder(directory, OffloadConfig(policy="sections", scope_execution="reached"))
+    outputs, report = builder.run()
+    assert report["scope_count"] == 1
+    assert not report["scopes"][0]["boundaries"]
+    return sources, outputs, report, builder
+
+
 @pytest.mark.cuda
-def test_original_teams_share_storage_across_guarded_exact_native_correction(tmp_path_factory):
+@pytest.mark.parametrize("emit_fixture", [emit, emit_cross_module], ids=["internal", "cross_module"])
+def test_original_teams_share_storage_across_guarded_exact_native_correction(tmp_path_factory, emit_fixture):
     directory, candidate, native, _precision, _fallback, resources = build_reached_numerical_binaries(
-        tmp_path_factory, 8, False, emit_fixture=emit, prefix="interval_draft_",
+        tmp_path_factory, 8, False, emit_fixture=emit_fixture, prefix="interval_draft_",
         driver_source=lambda _precision: DRIVER, expected_gpu_leaves=3, expected_capture_states={})
     environment = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "OMP_SCHEDULE": "static"}
     environment.pop("FORT_RUNTIME_TRACE", None)

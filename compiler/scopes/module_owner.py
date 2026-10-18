@@ -299,19 +299,9 @@ def borrow_module(parent, node, *, reached=None):
     else:
         caller_arrays = _caller_arrays(parent, resolved, existing, immutable_inputs, reached)
     # Reached child admission can roll back rejected local candidates. Rebind
-    # the caller's artifact maps before adding its companion import.
+    # the caller's artifact maps before retaining its checked call patch.
     parent.refresh()
     first, last = statement_span(node)
-    if routine.scope.module != parent.routine.scope.module:
-        header = _part(parent.routine.scope.node, "Subroutine_Stmt")
-        line = _span(header)[1]+1
-        key = (parent.routine.qualified, routine.qualified)
-        imports = getattr(owner, "companion_imports", set())
-        owner.companion_imports = imports
-        if key not in imports:
-            parent.builder.add_edit(parent.routine.scope.path, line, line-1,
-                                    f"use {routine.scope.module}, only: {existing.entry}\n")
-            imports.add(key)
     parent.forwarded_handles.update(existing.handle_numbers())
     handles = ["fort_buffer_"+str(number) for number in existing.handle_numbers()]
     arguments = resolved.render_original_arguments()
@@ -361,6 +351,11 @@ def borrow_module(parent, node, *, reached=None):
     lines = [f"if ({parent.enabled}) then", *preflight, "endif",
              f"if ({parent.enabled}) then", *_call(existing.entry, [*arguments, *controls]),
              "else", *parent.original((node,)).splitlines(), "endif"]
+    if routine.scope.module != parent.routine.scope.module:
+        # The import belongs to the checked replacement, just like its call.
+        # Admission must not edit the original procedure: native placement or
+        # capture discards this patch together with the companion definition.
+        lines = ["block", f"use {routine.scope.module}, only: {existing.entry}", *lines, "end block"]
     if parent.control_guard:
         lines = [f"if ({parent.control_guard}) then", *lines, "else", *parent.original((node,)).splitlines(), "endif"]
     from compiler.scopes.provenance import borrowed
