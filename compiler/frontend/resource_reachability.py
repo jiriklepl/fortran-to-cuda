@@ -28,7 +28,7 @@ from compiler.frontend.source_objects import _members, _TypeBuilder
 from compiler.ir import CompilationError
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
-VERSION = 3
+VERSION = 4
 
 
 class ResourceReachabilityBudgetExceeded(CompilationError):
@@ -162,8 +162,56 @@ class NativeTemplateCall:
 def _association_public(formal, path):
     return {"formal_resource": formal.root,
             "formal_scope": getattr(formal.declaring_scope, "qualified", formal.declaring_scope.module),
-            "actual_storage": path.public() if path is not None else None,
-            "expression_actual": path is None}
+            "actual_storage": path.public() if isinstance(path, StoragePath) else None,
+            "expression_actual": path is None, "omitted": path is _ABSENT}
+
+
+@dataclass(frozen=True)
+class _AbsentActual:
+    """Absence is distinct from an evaluated expression without backing storage."""
+
+
+_ABSENT = _AbsentActual()
+
+
+@dataclass(frozen=True)
+class NativePresenceConditional:
+    binding: Binding = field(repr=False, compare=False)
+    original: object = field(repr=False, compare=False)
+    present: tuple
+    absent: tuple
+
+    def public(self):
+        return {"kind": "original_presence_conditional", "resource": self.binding.root,
+                "source": str(self.original), "present": [item.public() for item in self.present],
+                "absent": [item.public() for item in self.absent]}
+
+
+@dataclass(frozen=True)
+class ConfinedNativePointer:
+    """One original local descriptor, rebound before every loop-iteration use."""
+    binding: Binding = field(repr=False, compare=False)
+    target: StoragePath
+    loop: object = field(repr=False, compare=False)
+    assignment: object = field(repr=False, compare=False)
+    iterator: Binding = field(repr=False, compare=False)
+
+    def public(self):
+        return {"resource": self.binding.root, "target": self.target.public(),
+                "source": str(self.assignment), "iterator": self.iterator.root,
+                "coverage": "original scalar record pointer confined to one counted loop",
+                "payload_is_private": False, "physical_section_authority": False}
+
+
+@dataclass(frozen=True)
+class NativeDeferredCompletion:
+    procedure: str
+    originals: tuple = field(repr=False, compare=False)
+    reason: str
+
+    def public(self):
+        return {"kind": "graph_completion_obligation", "procedure": self.procedure,
+                "source": str(self.originals), "ordinary_completion_reason": self.reason}
 
 
 @dataclass(frozen=True)
@@ -189,6 +237,7 @@ class NativeEffectTemplate:
     nodes: tuple[NativeEffectNode, ...]
     calls: tuple[NativeTemplateCall, ...]
     completion: tuple = field(repr=False, compare=False)
+    confined_pointers: tuple[ConfinedNativePointer, ...]
     source_work: tuple
     _analysis: object = field(repr=False, compare=False)
     _routine: object = field(repr=False, compare=False)
@@ -219,6 +268,7 @@ class NativeEffectTemplate:
         return {"identity": self.identity, "procedure": self.procedure,
                 "scope": "complete callee" if self._selection is None else "exact original root selection",
                 "nodes": [node.public() for node in self.nodes], "source_work": dict(self.source_work),
+                "confined_pointers": [item.public() for item in self.confined_pointers],
                 "completion_identities": [proof.identity for _name, _selected, proof in self.completion]}
 
 
@@ -244,6 +294,8 @@ class NativeEffectGraph:
     instances: tuple[NativeCallInstance, ...]
     source_work: tuple
     instantiation_work: tuple
+    completion_eligible: bool
+    deferred_completion: tuple[NativeDeferredCompletion, ...]
     _analysis: object = field(repr=False, compare=False)
     _selection: tuple = field(repr=False, compare=False)
     _source_identity: str = field(repr=False, compare=False)
@@ -268,6 +320,8 @@ class NativeEffectGraph:
                 "templates": [template.public() for template in self.templates],
                 "instances": [instance.public() for instance in self.instances],
                 "source_work": dict(self.source_work), "instantiation_work": dict(self.instantiation_work),
+                "effect_and_association_barriers_absent": self.completion_eligible,
+                "joined_completion_obligations": [item.public() for item in self.deferred_completion],
                 "counting": "unique template source statements and call instances have separate existing operation bounds",
                 "limits": {"depth": self._limits[0], "procedures": self._limits[1],
                            "source_statements": self._limits[2], "call_instances": self._limits[2],
@@ -318,8 +372,8 @@ class ResourceReachabilityProof:
                 "native_graph": self.native_graph.public(),
                 "whole_procedure_effects_complete": False, "execution_authorized": False,
                 "capture_authorized": False, "definition_authorized": False, "alias_authorized": False,
-                "scope": "exact original selection and statically resolved source callees; all original branches",
-                "control": "unchanged original source; no predicates evaluated, hoisted or assumed"}
+                "scope": "exact original selection and statically resolved source callees; original optional associations",
+                "control": "unchanged original source; PRESENT follows exact supplied/omitted associations only"}
 
     def validate(self, analysis, procedure, original_selection, demanded):
         if (self._issuer is not _ISSUER or analysis is not self._analysis or procedure != self.procedure
@@ -377,6 +431,8 @@ class _Scan:
         self.specifications = set()
         self.nodes, self.frames = [], []
         self.template_calls = []
+        self.confined_pointers = {}
+        self.joined_depth = 0
 
     def record(self, item):
         (self.frames[-1] if self.frames else self.nodes).append(item)
@@ -410,6 +466,129 @@ class _Scan:
                 self.scopes[id(pending)] = pending
             pending = pending.parent
         return scope
+
+    def confined_loop_pointers(self, routine):
+        """Recognize a closed lexical association, never a general pointer alias.
+
+        The descriptor must be a non-SAVE local scalar record pointer. Its sole
+        association is the first operation of one counted loop, to one element
+        of a nonpointer TARGET array indexed by that loop's iterator. Every use
+        is a component access within that loop; whole-pointer passing, inquiries,
+        reassociation, escape and use after the loop retain the ordinary barrier.
+        The target is still a whole storage path: no alias or bounds proof is
+        inferred from the syntax.
+        """
+        nodes, parents, pending = [], {}, [(routine.execution, None)]
+        while pending:
+            node, parent = pending.pop()
+            self.tick()
+            nodes.append(node)
+            parents[id(node)] = parent
+            pending.extend((child, node) for child in reversed(_children(node)))
+        assignments = [node for node in nodes if _kind(node) == "Pointer_Assignment_Stmt"]
+        for assignment in assignments:
+            left, bounds, right = assignment.items
+            if _kind(left) != "Name" or bounds is not None or _kind(right) != "Part_Ref":
+                continue
+            scope = self.scope(self.analysis.source_scope_for(assignment, routine.scope))
+            binding = self.analysis._binding(scope, left)
+            target = self.analysis._binding(scope, right.items[0])
+            loop = parents.get(id(assignment))
+            if (binding is None or target is None or _kind(loop) != "Block_Nonlabel_Do_Construct"
+                    or binding.declaring_scope is not routine.scope or binding.name in routine.arguments
+                    or binding.rank or binding.attributes != frozenset({"pointer"})
+                    or not _typename(binding.dtype) or target.rank != 1 or "target" not in target.attributes
+                    or target.attributes & {"pointer", "optional", "volatile", "asynchronous"}):
+                continue
+            body = tuple(node for node in _children(loop) if _kind(node) != "Comment")
+            control = body[0].items[1] if body and _kind(body[0]) == "Nonlabel_Do_Stmt" else None
+            indices = _children(right.items[1])
+            if (len(body) < 3 or body[1] is not assignment or _kind(body[-1]) != "End_Do_Stmt"
+                    or control is None or control.items[1] is None or len(indices) != 1
+                    or _kind(indices[0]) != "Name" or str(indices[0]).lower() != str(control.items[1][0]).lower()):
+                continue
+            iterator = self.analysis._binding(self.analysis.source_scope_for(control, routine.scope), control.items[1][0])
+            if (iterator is None or iterator.declaring_scope is not routine.scope or iterator.rank
+                    or iterator.dtype != "integer" or iterator.attributes & {"pointer", "save", "optional"}):
+                continue
+            if sum(_kind(item.items[0]) == "Name" and str(item.items[0]).lower() == binding.name
+                   for item in assignments) != 1:
+                continue
+            schema = _schema(self.analysis, binding.declaring_scope, _typename(binding.dtype))
+            target_schema = _schema(self.analysis, target.declaring_scope, _typename(target.dtype))
+            if schema is None or schema is not target_schema or schema.reason:
+                continue
+            _authenticate_schema(self.analysis, schema)
+            self.schemas[id(schema)] = schema
+            uses = [node for node in nodes if _kind(node) == "Name" and str(node).lower() == binding.name]
+            confined = True
+            for use in uses:
+                if use is left:
+                    continue
+                parent = parents.get(id(use))
+                if _kind(parent) != "Data_Ref" or parent.items[0] is not use:
+                    confined = False
+                    break
+                enclosing = parent
+                while enclosing is not None and enclosing is not loop:
+                    enclosing = parents.get(id(enclosing))
+                if enclosing is None:
+                    confined = False
+                    break
+            if not confined:
+                continue
+            # Pointer initialization is not a fresh iteration-local association.
+            specification = next((part for part in _children(routine.scope.node)
+                                  if _kind(part) == "Specification_Part"), None)
+            pending = [specification]
+            initialized = False
+            while pending:
+                node = pending.pop()
+                self.tick()
+                if (_kind(node) == "Entity_Decl" and str(node.items[0]).lower() == binding.name
+                        and node.items[-1] is not None):
+                    initialized = True
+                pending.extend(_children(node))
+            if not initialized:
+                self.confined_pointers[id(binding)] = ConfinedNativePointer(
+                    binding, StoragePath(target), loop, assignment, iterator)
+
+    def presence_condition(self, routine, expression):
+        positive = True
+        if _kind(expression) == "Parenthesis":
+            expression = expression.items[1]
+        if len(_children(expression)) == 2 and str(expression.items[0]).lower() == ".not.":
+            expression, positive = expression.items[1], False
+        if _kind(expression) not in {"Intrinsic_Function_Reference", "Part_Ref"}:
+            return None
+        name, arguments = expression.items
+        scope = self.scope(self.analysis.source_scope_for(expression, routine.scope))
+        args = _children(arguments)
+        if (str(name).lower() != "present" or len(args) != 1 or _kind(args[0]) != "Name"
+                or self.analysis._binding(scope, name) or self.analysis._candidates(scope, name)
+                or self.analysis._unknown_exports(scope)):
+            return None
+        binding = self.analysis._binding(scope, args[0])
+        if binding is None or "optional" not in binding.attributes or binding.name not in routine.arguments:
+            return None
+        return binding, positive
+
+    def presence_branch(self, routine, node, condition, then, otherwise, mapping, *, called, depth):
+        presence = self.presence_condition(routine, condition)
+        if presence is None:
+            return False
+        branches = []
+        for body in (then, otherwise):
+            self.frames.append([])
+            try:
+                self.sequence(routine, body, mapping, called=called, depth=depth + 1)
+                branches.append(tuple(self.frames[-1]))
+            finally:
+                self.frames.pop()
+        binding, positive = presence
+        present, absent = branches if positive else reversed(branches)
+        self.record(NativePresenceConditional(binding, node, present, absent))
+        return True
 
     def storage(self, routine, node, mapping):
         scope = self.scope(self.analysis.source_scope_for(node, routine.scope))
@@ -464,7 +643,7 @@ class _Scan:
             return
         if "parameter" in path.attributes:
             return
-        if path.attributes & {"pointer", "volatile", "asynchronous", "optional"}:
+        if path.attributes & {"pointer", "volatile", "asynchronous"}:
             self.barrier("association", routine, node, "pointer, optional or asynchronous storage needs separate authority")
         local = (binding.declaring_scope is routine.scope and binding.name not in routine.arguments
                  and "save" not in binding.attributes and id(binding) not in mapping)
@@ -543,9 +722,9 @@ class _Scan:
         for item in resolved.associations:
             self.scope(item.formal_binding.declaring_scope)
             if item.actual is None:
-                self.barrier("association", routine, node, "omitted optional actual needs separate presence authority")
+                associations.append((item.formal_binding, _ABSENT))
                 continue
-            if item.formal_binding.attributes & {"pointer", "optional", "allocatable", "value"}:
+            if item.formal_binding.attributes & {"pointer", "allocatable", "value"}:
                 self.barrier("association", routine, node, "callee descriptor/presence association needs separate authority")
             if item.binding is not None:
                 try:
@@ -555,9 +734,6 @@ class _Scan:
                     continue
                 associations.append((item.formal_binding, path))
                 self.access(routine, item.actual, mapping, "association")
-                if item.formal_binding.intent == "out":
-                    self.access(routine, item.actual, mapping, "undefine")
-                    self.access(routine, item.actual, mapping, "write")
             else:
                 associations.append((item.formal_binding, None))
                 self.expression(routine, item.actual, mapping)
@@ -577,11 +753,15 @@ class _Scan:
                         proof = self.analysis.joined_completion(routine.qualified, originals)
                         self.completion.append((routine.qualified, proof.selected_node_ids, proof))
                     except CompilationError as error:
-                        self.barrier("completion", routine, originals, str(error))
-                    for node in originals:
-                        if _kind(node) != "Comment":
-                            self.statement(routine, node, mapping, called=called, depth=depth + 1,
-                                           ignore_directives=True)
+                        self.record(NativeDeferredCompletion(routine.qualified, originals, str(error)))
+                    self.joined_depth += 1
+                    try:
+                        for node in originals:
+                            if _kind(node) != "Comment":
+                                self.statement(routine, node, mapping, called=called, depth=depth + 1,
+                                               ignore_directives=True)
+                    finally:
+                        self.joined_depth -= 1
                 self.frame("joined_group", originals, group)
             else:
                 self.statement(routine, item, mapping, called=called, depth=depth)
@@ -602,12 +782,26 @@ class _Scan:
         elif kind == "Call_Stmt":
             self.call(routine, node, mapping)
         elif kind == "If_Stmt":
+            if self.presence_branch(routine, node, node.items[0], (node.items[1],), (), mapping,
+                                    called=called, depth=depth):
+                return
             self.expression(routine, node.items[0], mapping)
             self.statement(routine, node.items[1], mapping, called=called, depth=depth + 1)
         elif kind in {"If_Construct", "Block_Nonlabel_Do_Construct", "Case_Construct"}:
             children = tuple(child for child in _children(node)
                              if not (ignore_directives and _kind(child) == "Comment"
                                      and str(child).lstrip().lower().startswith("!$omp")))
+            if kind == "If_Construct":
+                labels = tuple(_kind(child) for child in children)
+                if (labels and labels[0] == "If_Then_Stmt" and labels[-1] == "End_If_Stmt"
+                        and "Else_If_Stmt" not in labels):
+                    split = labels.index("Else_Stmt") if "Else_Stmt" in labels else len(children) - 1
+                    if self.presence_branch(routine, node, children[0].items[0], children[1:split],
+                                            children[split + 1:-1], mapping, called=called, depth=depth):
+                        return
+            if kind == "Block_Nonlabel_Do_Construct":
+                mapping = {**mapping, **{identity: pointer.target
+                           for identity, pointer in self.confined_pointers.items() if pointer.loop is node}}
             self.sequence(routine, children, mapping, called=called, depth=depth + 1)
         elif kind in {"If_Then_Stmt", "Else_If_Stmt", "Nonlabel_Do_Stmt", "Select_Case_Stmt", "Case_Stmt"}:
             if kind == "Nonlabel_Do_Stmt":
@@ -620,9 +814,13 @@ class _Scan:
                 self.expression(routine, child, mapping)
         elif kind in {"Else_Stmt", "End_If_Stmt", "End_Do_Stmt", "End_Select_Stmt", "Continue_Stmt"}:
             pass
-        elif kind == "Return_Stmt" and called:
+        elif kind == "Return_Stmt" and called and not self.joined_depth:
             self.expression(routine, node, mapping)
         elif kind in {"Allocate_Stmt", "Deallocate_Stmt", "Pointer_Assignment_Stmt"}:
+            pointer = next((item for item in self.confined_pointers.values() if item.assignment is node), None)
+            if pointer is not None:
+                self.access(routine, node.items[2], mapping, "association")
+                return
             self.barrier("association", routine, node, "allocation or pointer association changes need separate authority")
             self.expression(routine, node, mapping, "association")
         else:
@@ -653,6 +851,7 @@ class _Scan:
         self.scope(routine.scope)
         self.specification_authority(routine)
         self.active.append(name)
+        self.confined_loop_pointers(routine)
         if selection is None:
             header = next((part for part in _children(routine.scope.node)
                            if _kind(part) in {"Subroutine_Stmt", "Function_Stmt"}), None)
@@ -670,7 +869,8 @@ class _Scan:
                 self.frame("declaration", tuple(binding.shape_nodes),
                            lambda binding=binding: [self.expression(routine, shape, mapping)
                                                     for shape in binding.shape_nodes], declaration=binding)
-                if _typename(binding.dtype) and binding.name not in routine.arguments:
+                if (_typename(binding.dtype) and binding.name not in routine.arguments
+                        and id(binding) not in self.confined_pointers):
                     self.barrier("implicit_call", routine, routine.scope.node,
                                  "local derived-object lifetime needs initialization/finalization authority")
             selection = tuple(_children(routine.execution))
@@ -700,7 +900,8 @@ def _template(analysis, procedure, selection):
     identity = _digest({"version": VERSION, "source_identity": analysis.inputs.identity(),
                         "procedure": procedure, "selection": None if selection is None else list(map(id, selection)),
                         "source_work": dict(work), "nodes": root.public()})
-    value = NativeEffectTemplate(procedure, identity, (root,), tuple(scan.template_calls), tuple(scan.completion), work,
+    value = NativeEffectTemplate(procedure, identity, (root,), tuple(scan.template_calls), tuple(scan.completion),
+        tuple(scan.confined_pointers.values()), work,
         analysis, routine, selection, tuple(scan.scopes.values()), tuple(scan.schemas.values()), _limits(analysis), _ISSUER)
     registry[key] = value
     try:
@@ -719,6 +920,7 @@ class _Instantiate:
         self.accesses, self.barriers, self.calls, self.completion = [], [], [], []
         self.routines, self.scopes, self.schemas = {}, {}, {}
         self.source_visits = self.source_operations = self.steps = 0
+        self.deferred_completion = []
 
     def tick(self):
         self.steps += 1
@@ -745,14 +947,14 @@ class _Instantiate:
 
     def substitute(self, path, mapping):
         self.tick()
-        if path is None:
-            return None
+        if path is None or path is _ABSENT:
+            return path
         replacement = mapping.get(id(path.binding))
         if replacement is None:
             return path
         _formal, storage = replacement
-        if storage is None:
-            return None
+        if storage is None or storage is _ABSENT:
+            return storage
         return StoragePath(storage.binding, (*storage.components, *path.components))
 
     def barrier(self, value):
@@ -761,6 +963,11 @@ class _Instantiate:
 
     def access(self, item, mapping):
         storage = self.substitute(item.storage, mapping)
+        if storage is _ABSENT:
+            if item.kind != "association":
+                self.barrier(ReachabilityBarrier("association", item.procedure, item.source,
+                             "absent optional actual accessed outside its original PRESENT branch"))
+            return
         if storage is None:
             # Expression values were evaluated by the original outer CALL.
             # Readonly forwarding needs no invented backing resource. An
@@ -786,11 +993,35 @@ class _Instantiate:
                 self.access(item, mapping)
             elif isinstance(item, ReachabilityBarrier):
                 self.barrier(item)
+            elif isinstance(item, NativeDeferredCompletion):
+                self.deferred_completion.append((instance, item))
+            elif isinstance(item, NativePresenceConditional):
+                actual = mapping.get(id(item.binding))
+                if actual is None or (isinstance(actual[1], StoragePath) and "optional" in actual[1].attributes):
+                    self.barrier(ReachabilityBarrier("association", instance.template.procedure, str(item.original),
+                                 "original optional presence requires an exact supplied or omitted call association"))
+                    self.items(item.present, instance, mapping)
+                    self.items(item.absent, instance, mapping)
+                else:
+                    self.items(item.absent if actual[1] is _ABSENT else item.present, instance, mapping)
             elif isinstance(item, NativeTemplateCall):
                 self.calls.append(item.edge)
                 child_mapping = dict(mapping)
                 for formal, path in item.associations:
-                    child_mapping[id(formal)] = formal, self.substitute(path, mapping)
+                    actual = self.substitute(path, mapping)
+                    child_mapping[id(formal)] = formal, actual
+                    if actual is _ABSENT and "optional" not in formal.attributes:
+                        self.barrier(ReachabilityBarrier("association", item.edge.caller, str(item.edge.original),
+                                     "absent actual requires an original OPTIONAL callee formal"))
+                    if isinstance(actual, StoragePath) and "optional" in formal.attributes:
+                        terminal = actual.components[-1].attributes if actual.components else actual.binding.attributes
+                        if terminal & {"allocatable", "pointer"}:
+                            self.barrier(ReachabilityBarrier("association", item.edge.caller, str(item.edge.original),
+                                         "optional allocatable/pointer actual needs descriptor-dependent presence authority"))
+                    if isinstance(actual, StoragePath) and formal.intent == "out":
+                        for action in ("undefine", "write"):
+                            self.accesses.append(ResourceAccess(actual, action, item.edge.caller,
+                                str(item.edge.original), True, item.edge.original))
                 self.instance(item.edge.callee, child_mapping, parent=instance.ordinal, call=item)
             else:
                 raise CompilationError("native effect template contains an unknown node")
@@ -828,8 +1059,10 @@ class _Instantiate:
         if len(registry) >= self.analysis.procedure_limit:
             raise ResourceReachabilityBudgetExceeded("native effect graph registry budget exhausted")
         source_identity = json.dumps(self.analysis.inputs.identity(), sort_keys=True, separators=(",", ":"))
+        deferred = tuple({(item.procedure, tuple(map(id, item.originals))): item
+                          for _instance, item in self.deferred_completion}.values())
         value = NativeEffectGraph(identity, procedure, tuple(self.templates.values()), tuple(self.instances),
-                                  source_work, instance_work, self.analysis, selection, source_identity,
+                                  source_work, instance_work, not self.barriers, deferred, self.analysis, selection, source_identity,
                                   _limits(self.analysis), _ISSUER)
         registry[identity] = value
         try:
@@ -862,6 +1095,14 @@ def prove_resource_reachability(analysis, procedure, original_selection, demande
     scan = _Instantiate(analysis)
     scan.instance(procedure, {}, selection=original_selection)
     graph = scan.graph(procedure, original_selection)
+    for obligation in graph.deferred_completion:
+        try:
+            from compiler.frontend.native_completion import prove_graph_joined_completion
+            proof = prove_graph_joined_completion(analysis, obligation.procedure, obligation.originals, graph)
+            scan.completion.append((obligation.procedure, proof.selected_node_ids, proof))
+        except CompilationError as error:
+            scan.barrier(ReachabilityBarrier("completion", obligation.procedure, str(obligation.originals),
+                                           obligation.reason + "; native graph: " + str(error)))
     obligations = {}
     for access in scan.accesses:
         if not access.external or access.kind not in {"read", "write", "association", "undefine"}:

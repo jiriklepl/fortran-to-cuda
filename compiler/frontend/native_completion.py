@@ -55,7 +55,8 @@ class NativeCompletionProof:
         return self
 
 
-def _joined_completion_facts(analysis, procedure, selected, *, call_completion=None, worksharing=None):
+def _joined_completion_facts(analysis, procedure, selected, *, call_completion=None, worksharing=None,
+                             graph_pointers=None):
     """Verify one original group; serialized facts cannot grant a token.
 
     The retained native source supplies its original team, private storage,
@@ -143,6 +144,10 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                     written.update(call_completion(node))
 
     def local_private(binding):
+        if graph_pointers is not None and any(pointer.binding is binding for pointer in graph_pointers):
+            # Only the descriptor is private. Its pointed-to record remains a
+            # shared effect in the separately authenticated native graph.
+            return
         if (binding.attributes & {"save", "pointer", "allocatable", "optional", "volatile", "asynchronous", "parameter"}
                 or not binding.root.startswith(procedure + "::")
                 or binding.dtype not in {"real", "integer", "logical"} or binding.kind not in {4, 8}):
@@ -168,7 +173,8 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                 if values not in {"1", "2", "3", "4"}:
                     raise CompilationError("unsupported native OpenMP COLLAPSE")
             elif kind == "schedule":
-                if values not in {"static", "runtime"}:
+                guided = graph_pointers is not None and re.fullmatch(r"guided(?:\s*,\s*[1-9][0-9]*)?", values)
+                if values not in {"static", "runtime"} and not guided:
                     raise CompilationError("unsupported native OpenMP SCHEDULE")
             else:
                 for name in values.split(","):
@@ -470,3 +476,106 @@ def prove_joined_completion(analysis, procedure, selected):
     identity = sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return NativeCompletionProof(procedure, graph.identity, identity, identities, executable,
                                  private, _freeze(record))
+
+
+_GRAPH_COMPLETION_ISSUER = object()
+
+
+@dataclass(frozen=True)
+class NativeGraphCompletionProof:
+    """Whole unchanged joined execution conditional on one complete effect graph.
+
+    This token cannot be used by ordinary native-section or worksharing-cut
+    consumers. In particular, a private pointer descriptor grants no private
+    payload, independence, physical section or numerical authority.
+    """
+    procedure: str
+    identity: str
+    selected_node_ids: tuple
+    _record: object = field(repr=False, compare=False)
+    _graph: object = field(repr=False, compare=False)
+    _structure: object = field(repr=False, compare=False)
+    _analysis: object = field(repr=False, compare=False)
+    _issuer: object = field(repr=False, compare=False)
+
+    def validate(self, analysis, procedure, selected):
+        if (self._issuer is not _GRAPH_COMPLETION_ISSUER or analysis is not self._analysis
+                or procedure != self.procedure or tuple(selected) != self.selected_node_ids
+                or getattr(analysis, "_native_graph_completions", {}).get(self.identity) is not self
+                or analysis.structure(procedure) is not self._structure):
+            raise CompilationError("native graph completion requires exact registered source and graph authority")
+        self._graph.validate(analysis, self._graph.procedure, self._graph._selection)
+        if not self._graph.completion_eligible:
+            raise CompilationError("native graph has unresolved effect or association barriers")
+        return self
+
+    def public(self):
+        return {"schema_version": 1, "proof_identity": self.identity, "procedure": self.procedure,
+                "native_graph_identity": self._graph.identity, **_thaw(self._record)}
+
+
+def prove_graph_joined_completion(analysis, procedure, selected, native_graph):
+    """Validate joined structure using that graph's exact original call closure."""
+    from compiler.frontend.resource_reachability import NativeEffectGraph
+
+    if type(native_graph) is not NativeEffectGraph:
+        raise CompilationError("native joined graph completion requires an issued native effect graph")
+    native_graph.validate(analysis, native_graph.procedure, native_graph._selection)
+    if not native_graph.completion_eligible:
+        raise CompilationError("native graph has unresolved effect or association barriers")
+    checked = {}
+    for obligation in native_graph.deferred_completion:
+        key = obligation.procedure, tuple(map(id, obligation.originals))
+        checked[key] = _graph_joined_facts(analysis, obligation.procedure, obligation.originals, native_graph)
+    key = procedure, tuple(map(id, selected))
+    if key not in checked:
+        raise CompilationError("joined group is absent from the complete native graph's obligations")
+    structure, identities, record = checked[key]
+    identity = sha256(json.dumps({"version": 1, "native_graph": native_graph.identity,
+                                  "procedure": procedure, "selected": identities, "record": record},
+                                 sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    registry = getattr(analysis, "_native_graph_completions", None)
+    if registry is None:
+        registry = analysis._native_graph_completions = {}
+    if identity in registry:
+        return registry[identity].validate(analysis, procedure, identities)
+    if len(registry) >= analysis.procedure_limit:
+        raise CompilationError("native graph completion proof registry budget exhausted")
+    proof = NativeGraphCompletionProof(procedure, identity, identities, _freeze(record), native_graph,
+                                        structure, analysis, _GRAPH_COMPLETION_ISSUER)
+    registry[identity] = proof
+    return proof.validate(analysis, procedure, identities)
+
+
+def _graph_joined_facts(analysis, procedure, selected, native_graph):
+    template = next((item for item in native_graph.templates if item.procedure == procedure), None)
+    if template is None:
+        raise CompilationError("joined native procedure is absent from the effect graph")
+    # The extension retains one complete combined team. Broader parallel bodies
+    # continue to require their existing uniform-control/completion authority.
+    directives = [_directive(node) for original in selected for node in walk(original)
+                  if _directive(node) is not None]
+    if not directives or not re.match(r"parallel\s+do(?:\s|$)", directives[0]):
+        raise CompilationError("graph-owned native completion requires one complete original PARALLEL DO")
+    calls = {id(instance.call.edge.original): instance.call.edge
+             for instance in native_graph.instances if instance.call is not None}
+
+    def complete_call(node):
+        edge = calls.get(id(node))
+        if edge is None or edge.caller != procedure:
+            raise CompilationError("native joined call is absent from the complete instantiated graph")
+        edge.resolved.validate(analysis, edge.resolved._scope, node)
+        # No call is hoisted across a worksharing bound or shared predicate in
+        # this combined-loop-only contract. All payload effects remain in graph.
+        return ()
+
+    selected_nodes = {id(node) for original in selected for node in walk(original)}
+    pointers = tuple(item for item in template.confined_pointers if id(item.loop) in selected_nodes)
+    structure, identities, _executable, private, record = _joined_completion_facts(
+        analysis, procedure, selected, call_completion=complete_call, graph_pointers=pointers)
+    if any(pointer.binding.root not in private for pointer in pointers):
+        raise CompilationError("confined native pointer requires explicit original PRIVATE descriptor storage")
+    record.update(native_only=True, internal_cuts_authorized=False, gpu_legality_established=False,
+                  effect_graph_required=True, private_pointer_descriptors=[item.binding.root for item in pointers],
+                  private_pointer_payload_authority=False)
+    return structure, identities, record

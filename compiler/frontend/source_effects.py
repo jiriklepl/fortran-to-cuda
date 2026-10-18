@@ -522,7 +522,7 @@ class SourceEffects:
                 width = None
                 with suppress(CompilationError):
                     width = child.kinds.integer(selector.items[1], SourceLocation(str(child.path)))
-            binding = Binding(result, qualified + "::" + result, base, width, 0)
+            binding = Binding(result, qualified + "::" + result, base, width, 0, declaring_scope=child)
             child.bindings[result] = binding
             if selector is not None:
                 self.kind_expressions.append((binding, child, selector.items[1]))
