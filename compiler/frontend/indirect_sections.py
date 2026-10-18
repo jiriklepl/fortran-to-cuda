@@ -7,12 +7,12 @@ scatter independence nor permission to move a native worksharing operation.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from fparser.two.utils import walk
 
 from compiler.frontend.call_bindings import _bound
-from compiler.frontend.native_sections import NativeResourceSections, RECTANGLE_LIMIT
+from compiler.frontend.native_sections import RECTANGLE_LIMIT, NativeResourceSections
 from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.integers import integer_literal
 
@@ -102,7 +102,8 @@ class IndirectSections:
                 "references": [item.public() for item in self.references]}
 
 
-def analyze_indirect_sections(analysis, requested, selected, *, completion=None, capture_locals=False):
+def analyze_indirect_sections(analysis, requested, selected, *, completion=None, capture_locals=False,
+                              require_entry_reads=False):
     """Inspect affine offsets of original INTEGER metadata fields in counted DOs.
 
     Selection and completion tokens retain original AST authority.  Initially
@@ -130,18 +131,20 @@ def analyze_indirect_sections(analysis, requested, selected, *, completion=None,
             requested, identities, include_entry=False, capture_locals=capture_locals)
         projected._native_metadata = True
         projected._native_sections_include_entry = False
-        return _analyze(projected, routine, originals, completion, graph.identity, identities)
+        return _analyze(projected, routine, originals, completion, graph.identity, identities,
+                        require_entry_reads=require_entry_reads)
     except CompilationError as error:
         return IndirectSections(False, str(error))
 
 
-def _analyze(analysis, routine, originals, completion, identity, identities):
+def _analyze(analysis, routine, originals, completion, identity, identities, *, require_entry_reads=False):
     from compiler.frontend.component_bindings import component_access
 
     location = SourceLocation(str(routine.scope.path))
     private = set(completion.private_roots) if completion is not None else set()
     resources, metadata, scalars, references, loops = {}, {}, {}, [], []
     scalar_writes, object_writes = set(), set()
+    assignment_reads = []
     operation_count = 0
 
     def scope(node):
@@ -336,10 +339,15 @@ def _analyze(analysis, routine, originals, completion, identity, identities):
         descriptor(binding)
         coordinates = tuple(expression(item) for item in indices)
         result = IndirectReference(binding.root, action, coordinates, tuple(loops), str(node))
+        if action == "read":
+            assignment_reads.append(result)
         if result not in references:
             references.append(result)
+        return result
 
     def reads(node):
+        if require_entry_reads and isinstance(node, str) and node.lower() in {".and.", ".or."}:
+            raise CompilationError("indirect entry reads cannot include conditional operands")
         if node is None or isinstance(node, (str, int)):
             return
         kind = _kind(node)
@@ -356,6 +364,8 @@ def _analyze(analysis, routine, originals, completion, identity, identities):
                     or analysis._unknown_exports(scope(node))):
                 raise CompilationError("indirect native intrinsic effects are unresolved")
             arguments = _children(node.items[1])
+            if require_entry_reads and name not in ARRAY_INQUIRIES | MODEL_INQUIRIES:
+                raise CompilationError("indirect entry reads require unconditional original operands")
             if name in ARRAY_INQUIRIES | MODEL_INQUIRIES:
                 if not arguments or _kind(arguments[0]) != "Name":
                     raise CompilationError("indirect native descriptor inquiry requires a whole variable")
@@ -379,8 +389,17 @@ def _analyze(analysis, routine, originals, completion, identity, identities):
                 raise CompilationError("indirect native operation budget exceeded")
             if kind == "Assignment_Stmt":
                 target, _, value = node.items
+                assignment_reads.clear()
                 reads(value)
-                add(target, "write")
+                written = add(target, "write")
+                if (require_entry_reads and written is not None
+                        and replace(written, action="read") not in assignment_reads):
+                    # Every changed point depends on its previous value. Thus
+                    # an earlier write cannot manufacture a later read's entry
+                    # definition. This remains true for overlapping scatter
+                    # coordinates and repeated worksharing units. Execution
+                    # and race freedom remain the original native contract.
+                    raise CompilationError("indirect entry reads require a same-point read before every managed write")
             elif kind == "Block_Nonlabel_Do_Construct":
                 body = tuple(item for item in _children(node) if _kind(item) != "Comment")
                 control = body[0].items[1]

@@ -66,6 +66,15 @@ def validate_native_source_reads(builder, operation):
         raise CompilationError("native reached reads lost their original source session")
     sections = native_read_sections(analysis, builder.entry.qualified,
         tuple(builder.inline.original_selection(operation.nodes)), operation.source_reads)
+    from compiler.frontend.indirect_sections import IndirectSections
+
+    if type(sections) is IndirectSections:
+        existing = getattr(operation, "indirect_sections", None)
+        if existing is None or existing.public() != sections.public():
+            raise CompilationError("native read requirements differ from their exact source inspector")
+        if {item.resource for item in sections.resources} != set(operation.coherence_effects):
+            raise CompilationError("native read requirements differ from managed coherence resources")
+        return sections
     return replace(sections, resources=tuple(item for item in sections.resources
                                              if item.resource in operation.coherence_effects))
 
@@ -91,8 +100,16 @@ def _build_read_sections(sections, handles, values, prefix, *, on_error, logical
     for access in accesses:
         specification.extend(access.specification)
         prepare.extend(access.prepare)
-        prepare.extend([
+        prepare.extend(admit_prepared_source_reads((access,), on_error=on_error))
+    return RegistrationCode(tuple(specification), tuple(prepare))
+
+
+def admit_prepared_source_reads(accesses, *, on_error):
+    """Use already checked access unions after their source proof is validated."""
+    lines = []
+    for access in accesses:
+        lines.extend([
             "fort_status = fort_scope_admit_source_reads_v1(fort_context, " + access.handle + ", &",
             f"{access.access_name}%reads, {access.access_name}%read_count)",
             "if (fort_status /= FORT_SCOPE_OK) then", *on_error, "endif"])
-    return RegistrationCode(tuple(specification), tuple(prepare))
+    return lines

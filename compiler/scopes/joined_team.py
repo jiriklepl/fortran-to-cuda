@@ -143,6 +143,12 @@ class JoinedTeam(StructuredScope):
                 # this native operation; it cannot establish a definition.
                 operation.affine_sections = operation.sections
                 operation.sections = NativeSections(True, resources=())
+                if getattr(self.builder, '_selection_activation_binding', None) is not None:
+                    from compiler.frontend.reached_read_requirements import prove_native_read_requirements
+                    operation.source_reads = prove_native_read_requirements(self.builder.analysis,
+                        self.builder.entry.qualified, tuple(loops), completion=proof)
+                    if operation.source_reads is not None:
+                        operation.proof_analysis = self.builder.analysis
         # These units are never reproduced from prepared text or renamed ASTs.
         operation.preserve_original = True
         operation.completion_proof = proof
@@ -334,6 +340,13 @@ class JoinedTeam(StructuredScope):
                     begins += _checked(f'fort_scope_host_begin(fort_context, {access.handle}, {access.access_name})')
                     ends += _checked(f'fort_scope_host_end(fort_context, {access.handle})')
                 count = len(accesses)
+                if operation.source_reads is not None:
+                    from compiler.scopes.source_reads import admit_prepared_source_reads, validate_native_source_reads
+                    validate_native_source_reads(builder, operation)
+                    # Reuse the one reached inspector, including its empty-loop
+                    # and bounded-union guards. Do not rescan metadata or
+                    # manufacture whole-buffer definitions before planning.
+                    prepare += admit_prepared_source_reads(accesses, on_error=('exit ' + block,))
             else:
                 for index, (root, actions) in enumerate(sorted(operation.coherence_effects.items()), 1):
                     flags = (['FORT_SCOPE_READ_ALL'] if 'read' in actions else []) + (['FORT_SCOPE_WRITE_ALL'] if 'write' in actions else [])
