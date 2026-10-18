@@ -311,6 +311,8 @@ class CombinedNumericalTeam(StructuredScope):
         if outlined is None or outlined.prepared is not self.prepared or outlined.effects is not self.effect:
             raise CompilationError("combined numerical team requires exact registered physical effects")
         self.completion = self.prepared.completion_proof
+        from compiler.scopes.source_reads import prepare_source_reads
+        self.source_reads = prepare_source_reads(builder, call)
         self.native_metadata = True
         self.native_host_reads = False
         self.calls, self.native, self.segments = [call], [], []
@@ -326,6 +328,8 @@ class CombinedNumericalTeam(StructuredScope):
         region = builder._consume_numerical_region(builder.analysis, builder.entry.qualified, self.original_nodes)
         if region is None or region.prepared is not self.prepared or region.effects is not self.effect:
             raise CompilationError("combined numerical team lost its registered prepared/effect pair")
+        from compiler.scopes.source_reads import validate_source_reads
+        validate_source_reads(builder, self.calls[0], self.source_reads)
         if _source_partition(builder, self.original_nodes) != self.partition:
             raise CompilationError("combined numerical team original source partition changed")
 
@@ -335,6 +339,7 @@ class CombinedNumericalTeam(StructuredScope):
             "schema_version": 2, "completion": self.completion.public(),
             "group_kind": self.partition["group_kind"], "unit_count": self.partition["unit_count"],
             "preparation_identity": self.prepared.identity, "effect_proof_identity": self.effect.identity,
+            "source_reads": self.source_reads.public() if self.source_reads is not None else None,
             "original_span_sha256": self.partition["source_sha256"],
             "parallel_clauses": list(self.partition["parallel_clauses"]),
             "do_clauses": list(self.partition["do_clauses"]),
@@ -378,9 +383,11 @@ class CombinedNumericalTeam(StructuredScope):
         after = ["if (fort_team_owned) then", f"{owner.context} = fort_team_context",
                  f"{owner.enabled} = fort_team_enabled",
                  *[f"fort_buffer_{owner.resources[root][1]} = {handle}" for root, handle in handles.items()], "endif"]
-        lines, generated = self._emit_team(handles, values, imports, [*specification, *extra],
+        all_specification = [*specification, *extra]
+        lines, generated = self._emit_team(handles, values, imports, all_specification,
             preparation=preparation, block=block, failure=failure, price_units=price_units,
             owner=owner, unit=unit)
+        extra += all_specification[len(specification) + len(extra):]
         _narrow_runtime_imports(imports, [*specification, *extra], [*before, *generated, *after])
         _check_generated_names(self.original_nodes, [*specification, *extra], imports, generated, block)
         replacement = "\n".join(fortran_lines(lines)) + "\n"
@@ -392,6 +399,8 @@ class CombinedNumericalTeam(StructuredScope):
         from compiler.scopes.source import _checked
 
         self._validate()
+        if self.source_reads is not None:
+            raise CompilationError("original read admission requires an original lexical owning team")
         operation = self.borrowed_fallback
         if (len(self.native) != 1 or self.native[0] is not operation
                 or len(self.guarded) != 1 or self.guarded.get(id(self.calls[0].node)) is not operation
@@ -444,6 +453,13 @@ class CombinedNumericalTeam(StructuredScope):
         builder = self.builder
         call, = self.calls
         imports.append("use omp_lib, only: fort_team_omp_level => omp_get_level, fort_team_omp_threads => omp_get_num_threads")
+        from compiler.scopes.source_reads import build_source_reads
+        read_code = build_source_reads(builder, self.source_reads, handles, values, "fort_source_read",
+            call=call, on_error=(*failure, "exit " + block),
+            logical_lower_bounds={root: tuple(f"lbound({values[root]}, {axis}, kind=c_int64_t)"
+                for axis in range(1, binding.rank + 1)) for root, binding in
+                ((binding.root, binding) for binding in call.region.bindings if binding.rank)})
+        specification.extend(read_code.specification)
         shared = tuple(dict.fromkeys((*declared_names(specification), "fort_native_ready")))
         parallel = "!$omp parallel" + "".join(" " + clause for clause in self.partition["parallel_clauses"])
         parallel += " shared(" + ",".join(shared) + ")"
@@ -457,7 +473,7 @@ class CombinedNumericalTeam(StructuredScope):
                  "endif", "endif", "!$omp barrier", "!$omp master", "if (fort_native_ready) then",
                  "associate(fort_context => fort_team_context)", block + ": block",
                  "if (.not. fort_team_environment_supported) then", *failure, "exit " + block, "endif",
-                 *preparation,
+                 *preparation, *read_code.prepare,
                  "fort_status = fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)",
                  "if (fort_status == FORT_SCOPE_OK) then",
                  *builder.inline.emit_call(call, handles, values, imports, query=True),

@@ -213,6 +213,7 @@ module fort_scoped_memory
   public :: fort_scope_register_sections, fort_scope_forget_definition
   public :: fort_scope_view_get_v1, fort_scope_view_get_v2
   public :: fort_scope_forget_sections_v1, fort_scope_plan_forget_sections_v1
+  public :: fort_scope_admit_source_reads_v1
   public :: fort_scope_set_device_budget
   public :: fort_scope_scratch_acquire_v1, fort_scope_scratch_release_v1, fort_scope_scratch_stats_get_v1
   public :: fort_scope_set_transfers, fort_scope_transfer_stats_get_v1
@@ -308,6 +309,13 @@ module fort_scoped_memory
       integer(c_int) :: status
     end function
     function fort_scope_forget_sections_v1(context, buffer, sections, count) bind(C) result(status)
+      import c_int, c_int64_t, c_ptr, c_size_t
+      integer(c_int64_t), value :: context, buffer
+      type(c_ptr), value :: sections
+      integer(c_size_t), value :: count
+      integer(c_int) :: status
+    end function
+    function fort_scope_admit_source_reads_v1(context, buffer, sections, count) bind(C) result(status)
       import c_int, c_int64_t, c_ptr, c_size_t
       integer(c_int64_t), value :: context, buffer
       type(c_ptr), value :: sections

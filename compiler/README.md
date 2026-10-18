@@ -3016,19 +3016,31 @@ closed numerical groups. It considers contiguous serial source selections,
 keeps complete OpenMP groups indivisible, and opens a fresh context each time
 the selected site executes. The context publishes and closes before an excluded
 suffix or backedge. This path does not retry a declined selection through the
-older first-traversal or whole-entry owner. It currently requires proved local
-scalar preparation or a registered native-prefix activation proof before the
-selection. The latter combines independently admitted invocation facts with
-complete native preservation and exact joined initialization. It registers only
-proved sections, before borrowed dummy association can rebase their coordinates.
-The unchanged prefix and its conditions still execute once. Missing effects,
-uncovered initialization reads, unstable registration bounds and unproved
-selected-position lifetimes reject that alternative. Native-prefix activation
-does not yet support repeated selections; the existing scalar-prefix repeated
-path retains its restricted suffix checks. A fresh context does not prove
-allocation lifetime or restore definitions lost by native work. Each admitted
-interval requires at least two numerical invocations and the complete existing
-native-effect, resource and completion checks.
+older first-traversal or whole-entry owner. A proved local scalar prefix retains
+the existing entry contract. For a general native prefix, registered selection
+activation instead starts every managed resource with unknown definition state.
+The original prefix and conditions execute once, before any context opens; no
+complete prefix effect closure or invocation-entry payload fact is reused.
+Canonical roots register before borrowed dummy association rebases coordinates.
+
+At each reached numerical operation, a separate source-bound proof establishes
+the exact values required by well-defined original execution. It retains ordered
+unconditional reads before any write to that resource, exact affine sections,
+typed tiled-domain guards and independent joined-unit entry requirements.
+Conditional operands, whole-array or synthetic preservation uploads, shifted
+self updates and conflicting joined units decline this proof. Every upload must
+be covered by the exact original reads. After safe descriptor and original guard
+checks, `fort_scope_admit_source_reads_v1` adds only previously untracked sections
+to host definition coverage. Already current device values remain current;
+unread halos acquire no authority. This precedes the local planning query, whose
+cost and transfer simulation therefore sees the same coverage as execution.
+
+These read preconditions grant no storage lifetime, alias freedom, native-effect
+or numerical-execution authority. Opaque native operations inside ownership still
+require the complete existing effects and coherence checks. General-prefix
+activation does not yet support repeated selections; the scalar-prefix repeated
+path retains its restricted suffix checks. Every admitted interval still needs
+at least two numerical invocations and checked resource and completion proofs.
 Unsupported consumers may instead have checked close points at their exact
 original positions. Reaching one publishes pending device writes, disables
 offloading for the remaining activation, and executes the original native
@@ -3139,6 +3151,21 @@ receipts do not establish an original compile-time module inventory. Capture
 generation and build attestation alone do not establish application AUTO
 qualification. Earlier version 1, 2 or 3 process evidence cannot be relabeled as
 version 4 interval evidence.
+
+`python -m compiler.offload.selection_cost builds|evaluate --request FILE
+--output FILE` provides the independent collector interface. `builds` accepts
+hashed contract JSON plus both application build observations and diagnostic
+relink observations; it returns the verified binary paths after rechecking all
+receipt inputs. `evaluate` accepts hashed contract and complete-process evidence
+JSON. It canonicalizes only observed CPU Fortran option paths using the existing
+raw-log verifier's normalization, then verifies the unchanged timing, build and
+numerical requirements. Its response includes the canonical evidence and either
+a resident/native decision or rejection. Neither command issues an execution
+plan or placement attachment; production generation revalidates the evidence
+against its own checked interval. The pipeline's `selection_campaign` collector
+uses these commands without importing compiler implementation modules. Compiler
+verification has a 180-second hard limit; application runs retain their separate,
+explicitly supplied runtime limit.
 
 `python -m compiler.offload.application_build preflight|attest` verifies the
 consumer's build through a versioned JSON request. Preflight binds original

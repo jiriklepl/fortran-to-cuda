@@ -380,9 +380,9 @@ class ClosedIntervalOwner(OriginalSelectionOwner):
             return
 
         # Retain the small established scalar contract when it is sufficient.
-        # Otherwise transfer the unchanged original native prefix before any
-        # capture or owner-bound draft is issued. This copy keeps supplied
-        # facts unchanged and cannot grant a selected-position lifetime.
+        # Otherwise start with unknown payload definitions after the unchanged
+        # native prefix. Exact source reads are admitted only when their
+        # numerical operation is reached; this token grants no new lifetime.
         from compiler.frontend.selection_activation import (
             prove_selection_activation,
             selection_activation_demands,

@@ -585,3 +585,95 @@ extern "C" void @NAME@_end() {
                          "SELECT": ("0" if native else name + "(selection_state.values,selection_state.version.c_str(),selection_state.options.c_str())")}.items():
         source = source.replace("@" + token + "@", value)
     return source
+
+
+def verify_capture_builds(request):
+    """Public collector preflight; JSON records never supply execution proofs."""
+    from compiler.offload.application_build import (
+        application_build_validation,
+        validate_application_build_observation,
+        validate_diagnostic_relink,
+    )
+    from compiler.offload.selection_validation import _json, normalize_policy
+
+    contract = _json(request["contract"])
+    if contract.get("protocol") != PROTOCOL or contract.get("schema_version") != 2:
+        raise ValueError("capture collection requires the current checked-interval contract")
+    _acceptance(contract.get("acceptance"))
+    policy = normalize_policy(contract["validation_policy"], build_contract=contract["build_contract"])
+    if any(type(request.get(name)) is not dict or set(request[name]) != {"native", "resident"}
+           for name in ("builds", "diagnostics")):
+        raise ValueError("both application and diagnostic capture variants are required")
+    variants = {}
+    with application_build_validation():
+        for mode in ("native", "resident"):
+            build = request["builds"][mode]
+            validate_application_build_observation(build, contract=contract["build_contract"], mode=mode,
+                                                  selection_contract_identity=digest(contract))
+            attestation = _json({"path": build["attestation"], "sha256": build["attestation_sha256"]})
+            diagnostic = validate_diagnostic_relink(request["diagnostics"][mode], application_build=build,
+                contract=contract["build_contract"], driver=policy["driver"], mode=mode)
+            variants[mode] = {"application": {"binary": attestation["binary"], "binary_sha256": build["binary_sha256"]},
+                              "diagnostic": {key: diagnostic[key] for key in ("binary", "binary_sha256")}}
+    return {"status": "verified", "contract_sha256": digest(contract), "variants": variants,
+            "placement_authority": False}
+
+
+def evaluate_capture_evidence(request):
+    """Canonicalize observed CPU options, then independently verify all evidence.
+
+    The exact contract and resident execution identity are left untouched. This
+    uses the same Fortran-option normalization as raw-log numerical validation;
+    it does not change the authenticated compiler argv or build recipes.
+    """
+    from compiler.offload.collective_calibration import normalize_fortran_options
+    from compiler.offload.selection_validation import _json
+
+    contract, evidence = _json(request["contract"]), _json(request["evidence"])
+    for campaign in evidence.get("campaigns", ()):
+        if type(campaign) is not dict:
+            continue
+        for row in campaign.get("observations", ()):
+            if type(row) is not dict:
+                continue
+            cpu = row.get("observed_cpu_identity")
+            if type(cpu) is dict and type(cpu.get("fortran_options")) is str:
+                cpu["fortran_options"] = normalize_fortran_options(cpu["fortran_options"])
+    decision = process_evidence_decision(evidence, contract)
+    return {"status": "verified" if decision["available"] else "rejected", "decision": decision,
+            "evidence": evidence, "placement_authority": False}
+
+
+def main(argv=None):
+    """Verify collector inputs through the explicitly selected compiler CLI."""
+    import argparse
+    import sys
+    from pathlib import Path
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("phase", choices=("builds", "evaluate"))
+    parser.add_argument("--request", type=Path, required=True)
+    parser.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args(argv)
+    try:
+        if args.request.stat().st_size > 64 * 1024 * 1024:
+            raise ValueError("collector request exceeds the supported bound")
+        raw = args.request.read_bytes()
+        request = json.loads(raw)
+        if type(request) is not dict:
+            raise ValueError("collector request must be a JSON object")
+        result = (verify_capture_builds(request) if args.phase == "builds" else evaluate_capture_evidence(request))
+        result["identity"] = digest(result)
+        args.output.write_text(json.dumps(result, indent=2, sort_keys=True, allow_nan=False) + "\n")
+        print(json.dumps({"status": result["status"], "identity": result["identity"]}))
+        if result["status"] != "verified":
+            print(result["decision"]["reason"], file=sys.stderr)
+            return 1
+        return 0
+    except (CompilationError, OSError, ValueError, KeyError, TypeError, OverflowError) as error:
+        print(str(error), file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

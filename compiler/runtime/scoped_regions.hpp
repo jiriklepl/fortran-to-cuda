@@ -115,6 +115,17 @@ inline Region unite(Region a, const Region &b, Budget &budget) {
     return a;
 }
 struct Effects { Region reads, writes, overwrites; };
+struct AdmittedReads { Region initialized, host_current; };
+// The compiler establishes these exact upward reads at their original source
+// point. Already tracked values keep their current mirror; only previously
+// unknown values acquire a host source. Compute both sets before committing.
+template<class State> inline AdmittedReads admit_source_reads(const State &b, const Region &reads) {
+    Budget budget;
+    const auto missing = difference(reads, b.initialized, budget);
+    auto initialized = unite(b.initialized, missing, budget);
+    auto host = unite(b.host_current, missing, budget);
+    return {std::move(initialized), std::move(host)};
+}
 struct Prepared { bool device; Region initialized, current, opposite; };
 template<class State> inline Prepared prepare(State &b, const Effects &e, bool device) {
     Budget budget;

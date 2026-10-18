@@ -40,8 +40,10 @@ def _caller_arrays(parent, resolved, child, immutable_inputs, reached):
         from compiler.scopes.call_registration import OriginalActual
 
         if activation is not None:
-            partial = {binding.root for binding, _number in parent.owner.resources.values()
-                       if activation.capture_state(binding.root)["initialized"] == "sections"}
+            # Root identity is established before any dummy can rebase it.
+            # Unknown prefix state grants no payload definitions here.
+            partial = {state["resource"] for state in activation.public()["states"]
+                       if state["initialized"] == "none"}
         else:
             record = parent.owner.builder.reached_plan_record()
             partial = {state["resource"] for state in record["states"] if state["initialized"] == "sections"}

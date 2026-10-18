@@ -11,6 +11,7 @@ import copy
 import hashlib
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 
 from fparser.two import Fortran2003 as F
@@ -87,7 +88,7 @@ def _native_analysis(analysis):
     # foreign authority or mutate the original owner's proof state.
     for name in ("_descriptor_window_proofs", "_native_prefix_proofs", "_reached_window_proofs",
                  "_native_definition_proofs", "_native_definition_state_proofs", "_numerical_preparations", "_numerical_preparation_providers",
-                 "_native_preservation_proofs", "_selection_activation_proofs",
+                 "_native_preservation_proofs", "_selection_activation_proofs", "_reached_read_requirements_proofs",
                  "_numerical_effect_proofs", "_original_call_associations", "_native_effect_templates",
                  "_native_effect_graphs", "_resource_reachability_proofs", "_native_demand_effects",
                  "_native_graph_completions", "_worksharing_completions", "_worksharing_native_completions",
@@ -96,6 +97,7 @@ def _native_analysis(analysis):
         setattr(result, name, {})
     result._native_preservation_registry_owner = None
     result._selection_activation_registry_owner = None
+    result._reached_read_requirements_proofs_owner = result
     result._summary_cache = SummaryCache(max_entries=0)
     return result
 
@@ -961,6 +963,9 @@ class StructuredScope:
                                    else "original native operation with coherence hooks; earlier work is retained"),
                  "numerical_effect_proofs": [self.close_guards[id(call.node)].public()
                                             for call in segment.calls if id(call.node) in self.close_guards],
+                 "source_read_requirements": [getattr(self, "source_reads", {})[call.procedure].public()
+                    for call in segment.calls if isinstance(getattr(self, "source_reads", None), Mapping)
+                    and getattr(self, "source_reads", {}).get(call.procedure) is not None],
                  "position": "when reached after preceding source operations"}
                 for segment in self.segments],
             "native_operations": [{"operation_id": index, "kind": operation.kind,
@@ -1120,6 +1125,15 @@ class StructuredScope:
                         *_checked("fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"),
                         *execute(item.calls, "0_c_int", terminal=terminal), *_checked("fort_scope_wait(fort_context)")]
             lines = []
+            source_reads = getattr(self, "source_reads", {})
+            proof = source_reads.get(item.calls[0].procedure) if source_reads else None
+            if proof is not None:
+                if len(item.calls) != 1 or preflight_failure is None:
+                    raise CompilationError("original read admission requires one reached lexical operation")
+                from compiler.scopes.source_reads import build_source_reads
+                read_code = build_source_reads(builder, proof, handles, parameters, "fort_source_read",
+                    call=item.calls[0], on_error=preflight_failure, logical_lower_bounds=logical_lower_bounds)
+                lines += ["block", *read_code.specification, *read_code.prepare]
             if item.payload:
                 publication = Native((), {root: {"read"} for root in item.payload}, set(), {}, {}, "query payload read")
                 lines += [*native_plan(publication), *native_hooks(publication), *native_end(publication),
@@ -1156,6 +1170,8 @@ class StructuredScope:
                         *execute(item.calls, "0_c_int", terminal=terminal)]),
                       "else", *execute(item.calls, "fort_mode", terminal=terminal), "endif",
                       *_checked("fort_scope_wait(fort_context)")]
+            if proof is not None:
+                lines += ["end block"]
             return lines
 
         def segment_impl(item, *, terminal=False):

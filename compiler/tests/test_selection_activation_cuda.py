@@ -1,4 +1,4 @@
-"""Native initialization supplies exact entry sections to a resident suffix."""
+"""Original reached reads admit missing host sections after an opaque prefix."""
 
 import json
 import os
@@ -62,7 +62,7 @@ def emit(directory, *, precision, device_budget):
 
 
 @pytest.mark.cuda
-def test_native_prefix_sections_survive_borrowing_and_late_coverage_fallback(tmp_path_factory):
+def test_original_reads_survive_borrowing_and_retain_current_device_sections(tmp_path_factory):
     directory, candidate, native, _precision, _fallback, resources = build_reached_numerical_binaries(
         tmp_path_factory, 8, False, emit_fixture=emit, prefix="selection_activation_",
         driver_source=lambda _precision: DRIVER, expected_gpu_leaves=3,
@@ -78,16 +78,13 @@ def test_native_prefix_sections_survive_borrowing_and_late_coverage_fallback(tmp
     assert [number for number, _trace in traces] == ["1", "2", "3"]
     identities = {root.split("::")[-1]: item["registration_identity"] for root, item in resources.items()}
     ledger = []
-    for (number, trace), launches in zip(traces, (3, 3, 2), strict=True):
+    for (number, trace), launches in zip(traces, (3, 3, 3), strict=True):
         assert trace.count("FORT_SCOPED launch ") == launches, trace
         assert trace.count("FORT_SCOPED close ") == 1, trace
         traffic = _transfers(trace)
-        expected_uploads = {identities["old"]: 64 if launches == 3 else 128}
-        expected_downloads = {identities[name]: 64 if launches == 3 else 128
-                              for name in ("viscosity", "star")}
-        if launches == 3:
-            expected_uploads[identities["out"]] = 64
-            expected_downloads[identities["out"]] = 64
+        size = 128 if number == "3" else 64
+        expected_uploads = {identities["old"]: size, identities["out"]: size}
+        expected_downloads = {identities[name]: size for name in ("viscosity", "star", "out")}
         if number == "2":
             # The original native point correction uses current host old,
             # publishes eight stale viscosity bytes, then uploads that update.
@@ -110,6 +107,6 @@ def test_native_prefix_sections_survive_borrowing_and_late_coverage_fallback(tmp
     (directory / "result.json").write_text(json.dumps({
         "full_float64_arrays_bounds_and_halos": "bitwise_equal",
         "native_sha256": sha256(expected).hexdigest(), "resident_sha256": sha256(observed).hexdigest(),
-        "launches_per_invocation": [3, 3, 2], "native_prefix_and_remaining_suffix_executed_once": True,
+        "launches_per_invocation": [3, 3, 3], "native_prefix_and_remaining_suffix_executed_once": True,
         "automatic_pricing_qualified": False, "performance_samples": 0,
     }, indent=2) + "\n")

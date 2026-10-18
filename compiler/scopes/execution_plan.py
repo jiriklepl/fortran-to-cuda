@@ -79,6 +79,12 @@ def _portable_proof_references(analysis, authorities):
         references[proof.identity] = _digest({"portable_numerical_effect_version": 1,
                                                "effects": portable(public)})
 
+    for proof in getattr(analysis, "_reached_read_requirements_proofs", {}).values():
+        public = proof.public()
+        public.pop("proof_identity")
+        references[proof.identity] = _digest({"portable_reached_read_requirements_version": 1,
+                                              "requirements": portable(public)})
+
     from compiler.frontend.native_demand import SourceBoundNativeDemandEffects
 
     def original_selection(source, procedure, originals):
@@ -154,6 +160,7 @@ def _registered_authorities(owner, owned_types):
     from compiler.frontend.numerical_effects import NumericalEffectProof
     from compiler.frontend.numerical_preparation import NumericalPreparationProvider, PreparedOriginalRegion
     from compiler.frontend.omp_reductions import OpenMPReductionProof
+    from compiler.frontend.reached_read_requirements import ReachedReadRequirementsProof
     from compiler.frontend.reached_windows import ReachedWindowProof
     from compiler.frontend.reductions import ReductionProof
     from compiler.frontend.selection_activation import SelectionActivationProof
@@ -184,6 +191,7 @@ def _registered_authorities(owner, owned_types):
         PreparedOriginalRegion: "_numerical_preparations",
         OpenMPReductionProof: "_omp_reduction_proofs",
         ReachedWindowProof: "_reached_window_proofs",
+        ReachedReadRequirementsProof: "_reached_read_requirements_proofs",
         ReductionProof: "_reduction_proofs",
         SelectionActivationProof: "_selection_activation_proofs",
         NativeSourceFunctionProof: "_native_functions",
@@ -484,6 +492,13 @@ class CheckedExecutionPlan:
             analysis.verify_publication()
         for proof in self._numerical_authorities:
             proof.validate(proof._provider._analysis, proof.procedure, proof._selection)
+        from compiler.scopes.source_reads import validate_source_reads
+        for member in self.members:
+            for unit in self.units(member):
+                proofs = getattr(unit.scope, "source_reads", None)
+                for call in unit.scope.calls:
+                    proof = proofs.get(call.procedure) if isinstance(proofs, (dict, MappingProxyType)) else proofs
+                    validate_source_reads(member.builder, call, proof)
         for member, proof in self._selection_prefixes:
             if member.emission.selection_prefix is not proof:
                 raise CompilationError("execution plan lost its exact original selection prefix authority")
