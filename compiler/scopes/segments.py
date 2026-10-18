@@ -44,6 +44,7 @@ class Native:
     immutable_inputs: dict = field(default_factory=dict)
     demand_effects: object = field(default=None, repr=False, compare=False)
     resource_demand: object = field(default=None, repr=False, compare=False)
+    source_reads: object = field(default=None, repr=False, compare=False)
 
     @property
     def coherence_effects(self):
@@ -453,12 +454,20 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     sections = replace(sections, resources=tuple(item for item in sections.resources
                                                 if item.resource not in private_roots
                                                 and item.resource not in native_states))
+    source_reads = None
+    if (getattr(builder, "_selection_activation_binding", None) is not None
+            and selected is None and kind == "native source" and sections.available
+            and any(item.reads for item in sections.resources)):
+        from compiler.frontend.reached_read_requirements import prove_native_read_requirements
+
+        source_reads = prove_native_read_requirements(analysis, builder.entry.qualified, original)
     return Native(tuple(nodes), effects, set(summary["guaranteed_whole_overwrites"]) - set(private_roots),
                   bindings, summary, kind, sections, span, private_bindings, host_metadata,
                   preserve_original=bool(native_environment),
                   host_only_reads=host_only_reads, host_only_proof=host_only_proof,
                   native_states=native_states, native_environment=tuple(native_environment.values()),
-                  proof_analysis=analysis if native_environment else None, immutable_inputs=immutable_inputs)
+                  proof_analysis=analysis if native_environment or source_reads is not None else None,
+                  immutable_inputs=immutable_inputs, source_reads=source_reads)
 
 
 def condition_fragment(builder, header, *, native_host_reads=False):
@@ -610,6 +619,12 @@ def native_demand_fragment(builder, nodes, demand, *, context=None):
             if builder.capture(bindings[root])["initialized"] != "whole":
                 raise CompilationError("demand-relative native whole access requires whole initialized storage: "
                                        + root + "; " + str(sections.reason))
+    source_reads = None
+    if (context is not None and getattr(builder, "_selection_activation_binding", None) is not None
+            and sections.available and any(item.reads for item in sections.resources)):
+        from compiler.frontend.reached_read_requirements import prove_native_read_requirements
+
+        source_reads = prove_native_read_requirements(analysis, builder.entry.qualified, originals)
     record = proof.public()
     summary = {"complete": False, "whole_procedure_effects_complete": False,
                "native_completion": record["native_completion"], "demand_identity": proof.identity,
@@ -621,8 +636,9 @@ def native_demand_fragment(builder, nodes, demand, *, context=None):
                   # Exact native access temporaries live across host_begin/end
                   # in the ordinary lexical emitter. Whole-call hooks can
                   # instead surround the unchanged source outside that block.
-                  span=span, preserve_original=not sections.available or not effects, proof_analysis=builder.analysis,
-                  demand_effects=proof, resource_demand=demand)
+                  span=span, preserve_original=not sections.available or not effects,
+                  proof_analysis=analysis if source_reads is not None else builder.analysis,
+                  demand_effects=proof, resource_demand=demand, source_reads=source_reads)
 
 
 class StructuredScope:
@@ -976,6 +992,10 @@ class StructuredScope:
                                    "host_only_native_reads": operation.host_only_proof or None,
                                    "native_environment": [proof.public() for proof in operation.native_environment],
                                    "native_local_state": [proof.public() for proof in operation.native_states.values()],
+                                   "source_read_requirements": ({"proof_identity": operation.source_reads.identity,
+                                       "validity": "well-defined original assignment at this reached source point",
+                                       "prefix_definitions_authorized": False}
+                                       if operation.source_reads is not None else None),
                                    "demand_relative_effects": (operation.demand_effects.public()
                                                                if operation.demand_effects is not None else None),
                                    "immutable_inputs": [proof.public() for proof in operation.immutable_inputs.values()],
@@ -1087,7 +1107,17 @@ class StructuredScope:
                     *(["end block"] if accesses is not None else [])]
 
         def native_plan(operation):
-            lines = ["fort_status = fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"]
+            lines = []
+            if operation.source_reads is not None:
+                if preflight_failure is None:
+                    raise CompilationError("native original read admission requires reached suffix fallback")
+                from compiler.scopes.source_reads import build_native_source_reads
+
+                read_code = build_native_source_reads(builder, operation, handles, parameters,
+                    "fort_native_source_read", on_error=preflight_failure,
+                    logical_lower_bounds=logical_lower_bounds)
+                lines += ["block", *read_code.specification, *read_code.prepare, "end block"]
+            lines += ["fort_status = fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"]
             accesses = refined(operation, query=True)
             if accesses is not None:
                 block = _name("fort_prepare_", str(self.native.index(operation)))

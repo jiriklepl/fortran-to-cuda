@@ -49,7 +49,43 @@ def build_source_reads(builder, proof, handles, values, prefix, *, call, on_erro
     """
     if validate_source_reads(builder, call, proof) is None:
         return RegistrationCode((), ())
-    accesses = build_native_accesses(proof.sections, handles, prefix, parameters=values,
+    return _build_read_sections(proof.sections, handles, values, prefix,
+                                on_error=on_error, logical_lower_bounds=logical_lower_bounds)
+
+
+def validate_native_source_reads(builder, operation):
+    if operation.source_reads is None:
+        return None
+    from dataclasses import replace
+
+    from compiler.frontend.reached_read_requirements import native_read_sections
+
+    analysis = operation.proof_analysis
+    if (analysis is None or analysis.session_identity != builder.analysis.session_identity
+            or analysis.routines[builder.entry.qualified] is not builder.entry):
+        raise CompilationError("native reached reads lost their original source session")
+    sections = native_read_sections(analysis, builder.entry.qualified,
+        tuple(builder.inline.original_selection(operation.nodes)), operation.source_reads)
+    return replace(sections, resources=tuple(item for item in sections.resources
+                                             if item.resource in operation.coherence_effects))
+
+
+def build_native_source_reads(builder, operation, handles, values, prefix, *, on_error,
+                              logical_lower_bounds=None):
+    sections = validate_native_source_reads(builder, operation)
+    if sections is None:
+        return RegistrationCode((), ())
+    parameters = dict(values)
+    for item in sections.resources:
+        for dependency in item.dependencies:
+            if dependency.kind == "scalar_read" and dependency.resource not in parameters:
+                parameters[dependency.resource] = builder.visible(builder.entry, dependency.resource)
+    return _build_read_sections(sections, handles, parameters, prefix,
+                                on_error=on_error, logical_lower_bounds=logical_lower_bounds)
+
+
+def _build_read_sections(sections, handles, values, prefix, *, on_error, logical_lower_bounds):
+    accesses = build_native_accesses(sections, handles, prefix, parameters=values,
         logical_lower_bounds=logical_lower_bounds, on_error=tuple(on_error))
     specification, prepare = [], []
     for access in accesses:
