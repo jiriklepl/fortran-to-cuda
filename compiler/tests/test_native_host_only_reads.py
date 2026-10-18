@@ -166,7 +166,10 @@ end subroutine
 end module""")
     path, outputs, report = emit(tmp_path, source)
     owner, = report["scopes"]
-    assert len(owner["gpu_leaves"]) == 2
+    # An unconditional close retains the remaining original sequence without
+    # admitting its later loop. A conditional close keeps that loop available
+    # on the still-active false path.
+    assert len(owner["gpu_leaves"]) == (2 if guarded else 1)
     boundary, = owner["boundaries"]
     assert "host-only native range cannot be forwarded to a managed child formal" in boundary["reason"]
     assert "local_owner::edge_data" in boundary["reason"]
@@ -174,6 +177,8 @@ end module""")
     assert any(operation["host_only_native_reads"] for operation in operations(owner))
     text = outputs[report["sources"][str(path)]["replacement"]].lower()
     assert len(re.findall(r"call\s+child\s*\(\s*edge_data\s*,\s*n\s*\)", text)) == 1
+    assert boundary["reopen"] is False
+    assert bool(boundary["conditional_close"]) is guarded
 
 
 def test_invalid_existing_capture_facts_cannot_be_replaced_by_host_authority(tmp_path):
@@ -193,10 +198,17 @@ def test_uncertain_native_storage_remains_a_boundary(tmp_path, attribute):
 
 
 def test_threadprivate_original_storage_cannot_be_reserved_as_one_shared_range(tmp_path):
-    _, _, report = emit(tmp_path, HOST_SOURCE.replace("real(8),allocatable::edge_data(:)",
+    path, outputs, report = emit(tmp_path, HOST_SOURCE.replace("real(8),allocatable::edge_data(:)",
         "real(8),allocatable::edge_data(:)\n!$omp threadprivate(edge_data)"))
-    owner, = report["scopes"]
-    assert owner["boundaries"]
+    attempt = report["lexical_owner_attempt"]
+    assert not attempt["admitted"]
+    assert any("threadprivate(edge_data)" in boundary["reason"] for boundary in attempt["boundaries"])
+    assert report["scopes"]
+    assert all(resource["resource"] != "local_owner::edge_data"
+               for scope in report["scopes"] for resource in scope["resources"])
+    text = outputs[report["sources"][str(path)]["replacement"]].lower()
+    assert "c_loc(edge_data)" not in text
+    assert text.count("sum(edge_data)") == 1
 
 
 def test_native_lifetime_projection_does_not_mutate_parent_authority(tmp_path):

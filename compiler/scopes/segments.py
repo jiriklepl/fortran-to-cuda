@@ -71,7 +71,7 @@ def _native_analysis(analysis):
     result = analysis.private_projection()
     for name in ("summaries", "_closures", "_native_sections", "_structures", "_segments",
                  "_descriptor_proofs", "_joined_completions", "_numerical_completions",
-                 "_worksharing_completions", "_worksharing_native_completions", "_reduction_proofs",
+                 "_reduction_proofs",
                  "_reduction_candidates", "_omp_reduction_proofs", "_source_scopes", "_associate_scopes",
                  "_source_provenance", "_allocation_authorizations"):
         if (getattr(analysis, "_source_session", None) is None
@@ -86,10 +86,12 @@ def _native_analysis(analysis):
     # reissue selected proofs; sharing their registries would either lend
     # foreign authority or mutate the original owner's proof state.
     for name in ("_descriptor_window_proofs", "_native_prefix_proofs", "_reached_window_proofs",
-                 "_native_definition_proofs", "_numerical_preparations", "_numerical_preparation_providers",
+                 "_native_definition_proofs", "_native_definition_state_proofs", "_numerical_preparations", "_numerical_preparation_providers",
                  "_numerical_effect_proofs", "_original_call_associations", "_native_effect_templates",
                  "_native_effect_graphs", "_resource_reachability_proofs", "_native_demand_effects",
-                 "_native_graph_completions"):
+                 "_native_graph_completions", "_worksharing_completions", "_worksharing_native_completions",
+                 "_ordered_worksharing_inventories",
+                 "_prepared_worksharing_inventories"):
         setattr(result, name, {})
     result._summary_cache = SummaryCache(max_entries=0)
     return result

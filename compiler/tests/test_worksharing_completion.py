@@ -2,15 +2,14 @@
 
 from dataclasses import replace
 
+import pytest
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import walk
-import pytest
 
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 from compiler.scopes.regions import extract_region
-from compiler.tests.test_native_completion_tokens import fixture, PROCEDURE
-
+from compiler.tests.test_native_completion_tokens import PROCEDURE, fixture
 
 BODY = '''!$omp do
 do i=1,n
@@ -74,8 +73,10 @@ def test_proven_subregion_lowers_through_existing_collective_backend(tmp_path):
     generated = generate_sources(function, plan, memory_model='scoped',
         offload_config=OffloadConfig(policy='sections', collective=True, host_threads=4))
     team = generated.scoped['team']
-    assert team['available'] and team['fortran_procedure'] == 'run_team'
-    assert team['host_threads'] == 4 and team['coordinator'] == 'master'
+    assert team['available']
+    assert team['fortran_procedure'] == 'run_team'
+    assert team['host_threads'] == 4
+    assert team['coordinator'] == 'master'
     assert not team['automatic_estimate_available']
 
 
@@ -86,7 +87,7 @@ def test_inner_serial_loop_cannot_impersonate_its_associated_worksharing_do(tmp_
         analysis.worksharing_completion(PROCEDURE, nodes, (loops[1],))
 
 
-@pytest.mark.parametrize('change,reason', [
+@pytest.mark.parametrize(('change', 'reason'), [
     (lambda body: body.replace('end do', 'end do nowait', 1), 'NOWAIT'),
     (lambda body: body.replace('if(flag)', 'if(i>0)'), 'condition is private'),
     (lambda body: body.replace('a(-2,i)=2*b(1,i)', 'call opaque(a)'), 'source-call proof'),
@@ -148,10 +149,46 @@ def test_one_requested_unit_does_not_revalidate_source_for_every_sibling(tmp_pat
         _, analysis, nodes, loops = example(directory, body * count)
         calls = []
         original = analysis._selected_source
-        def selected_source(procedure, selected):
+        def selected_source(procedure, selected, calls=calls, original=original):
             calls.append(1)
             return original(procedure, selected)
         monkeypatch.setattr(analysis, '_selected_source', selected_source)
         analysis.worksharing_completion(PROCEDURE, nodes, (loops[-1],))
         counts.append(len(calls))
     assert counts[0] == counts[1]
+
+
+def test_one_inventory_derives_all_numerical_and_native_cuts(tmp_path, monkeypatch):
+    from compiler.frontend import worksharing_completion
+
+    body = '!$omp do\ndo i=1,n\na(-2,i)=b(1,i)\nenddo\n!$omp end do\n'
+    _, analysis, nodes, loops = example(tmp_path, body * 12)
+    calls = []
+    original = worksharing_completion._joined_completion_facts
+
+    def prove(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(worksharing_completion, '_joined_completion_facts', prove)
+    numerical = [analysis.worksharing_completion(PROCEDURE, nodes, (loop,)) for loop in loops]
+    native = [analysis.worksharing_native_completion(PROCEDURE, nodes, loops[index:index + 3])
+              for index in range(0, len(loops), 3)]
+    assert len(calls) == 1
+    inventory = numerical[0].inventory
+    assert all(proof.inventory is inventory for proof in numerical + native)
+    assert inventory.public()['worksharing_units'] == 12
+    assert not inventory.public()['native_effects_authority']
+    assert not inventory.public()['execution_authorized']
+    with pytest.raises(CompilationError, match='registered original-team authority'):
+        replace(inventory).validate(analysis, PROCEDURE, nodes)
+
+
+def test_reused_team_inventory_retains_original_logical_limits(tmp_path):
+    from compiler.frontend.worksharing_completion import ordered_worksharing_inventory
+
+    _, analysis, nodes, _ = example(tmp_path)
+    inventory = ordered_worksharing_inventory(analysis, PROCEDURE, nodes)
+    analysis.operation_limit -= 1
+    with pytest.raises(CompilationError, match='(authority|changed)'):
+        inventory.validate(analysis, PROCEDURE, nodes)

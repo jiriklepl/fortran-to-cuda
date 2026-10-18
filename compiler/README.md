@@ -1478,6 +1478,15 @@ branches. Native exact-section bounds cannot depend on another thread's private
 state. Host begin precedes a team barrier; the unchanged original units finish
 before host end and its publication barrier.
 
+Worksharing proof schema 2 binds each cut to one registered ordered inventory
+of its original team. Discovery and admission reuse the complete candidate
+inventory under the same numerical policy, including declined candidates.
+Reusing it authenticates the source, completion tokens, policy and prepared
+payloads; it does not repeat whole-team completion analysis for every DO.
+Private native analysis contexts issue their own inventories because their
+lifetime assumptions may differ. The existing analysis limits and completion
+requirements remain in force.
+
 The reached mixed-team coordinator shares invocation-local control through
 always-present local mirrors. Native entries never reference absent borrowed
 control arguments, including in OpenMP SHARED clauses. Failed preflight closes
@@ -1853,6 +1862,18 @@ available only after the final join. May-write unions are never definitions.
 Original worksharing and synchronization remain unchanged. Invocation-entry
 facts and source-established selected-window-none coverage may justify these
 prefix reads; a selected-window-whole assertion cannot do so.
+
+`prove_native_definition_state` exposes a separate native-only logical transfer
+for exact requested output bindings. It shares the original access walker but
+does not require physical GPU layouts for native inputs such as explicit-shape
+coefficient arrays. It retains all array, scalar, index and descriptor reads;
+uncovered array reads withhold output-definition credit. An authenticated
+PARAMETER call association can establish coefficient value-definedness, while
+the validity of the original dynamic index remains a separate precondition.
+Joined units use the same entry snapshot, and branch joins retain only common
+definitions. This token grants no physical mapping, allocation lifetime,
+activation, or execution authority. Native coherence continues to require its
+existing physical-section proofs.
 
 Partial activation uses registered typed source geometry, distinct from external
 literal physical `sections` facts. First registration maps that geometry through
