@@ -105,6 +105,12 @@ policy, then retained pairs are revalidated before the pass returns. Failed
 passes roll back candidate artifacts and fence publication. Public resolution,
 proof validation and later publication remain fresh demands.
 
+Inline source selection uses exact per-procedure node membership recorded in
+the immutable compilation-session graph. It does not repeatedly format or walk
+the original procedure. Generated projections still require their registered
+identity, text and source span; copied or foreign nodes cannot borrow original
+authority. Final publication continues to check the live source files.
+
 Package entry points remain `compiler.frontend.lower_file`,
 `compiler.analysis.build_execution_plan`, and `compiler.emission.generate_sources`.
 `compiler.driver.pipeline.prepare_function(function, *, options=CompilerOptions())`

@@ -536,14 +536,15 @@ class InlineRegions:
         calls, their arguments or normalized numerical INTENT declarations.
         """
         analysis, routine = self.builder.analysis, self.builder.entry
-        analysis.verify_source()
-        role = analysis._source_roles.get(routine.qualified)
-        if (analysis.routines.get(routine.qualified) is not routine or role is None
-                or routine.execution is not role[0] or analysis._routine_signature(routine) != role[1]
-                or str(routine.execution) != role[2]):
-            raise CompilationError("inline selection requires unchanged original source authority")
+        session = getattr(analysis, "_source_session", None)
+        if session is None:
+            raise CompilationError("inline selection requires compilation-session source authority")
+        originals = session.execution_nodes(analysis, routine)
+        return self._original_selection(node, originals)
+
+    def _original_selection(self, node, originals):
         if isinstance(node, (tuple, list)):
-            return tuple(source for child in node for source in self.original_selection(child))
+            return tuple(source for child in node for source in self._original_selection(child, originals))
         registered = self.source_selections.get(id(node))
         if registered is not None:
             from compiler.scopes.segments import statement_span
@@ -556,7 +557,7 @@ class InlineRegions:
                         or self.regions.get(procedure) is not self.facade_proofs.get(procedure)):
                     raise CompilationError("inline numerical facade lacks its registered proof")
             return sources
-        if any(node is original for original in walk(routine.execution)):
+        if id(node) in originals and originals[id(node)] is node:
             return (node,)
         raise CompilationError("source selection is not an original node or approved inline projection")
 
