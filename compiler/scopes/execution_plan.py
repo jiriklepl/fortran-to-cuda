@@ -598,7 +598,8 @@ def build_execution_plan(owner):
         "gpu_leaves": sorted(leaves),
         "policy": {
             "order": "original source order within each procedure; original call sites and guards retained",
-            "lifetime": ("closed original numerical selection" if hasattr(owner, "closed_selection") else
+            "lifetime": ("original reached selection; fresh context per execution" if hasattr(owner, "interval_site") else
+                         "closed original numerical selection" if hasattr(owner, "closed_selection") else
                          "one-shot reached interval" if hasattr(owner, "window_proof") else "original invocation"),
             "guards": "original reached evaluation points; no hoisting across native effects",
             "fallback": "publish and continue the unexecuted suffix once; execution failure never authorizes replay",

@@ -460,6 +460,28 @@ class NumericalPreparationProvider:
         self.validate(analysis, consume=consume)
         return _prepare(analysis, procedure, exact_original_selection, self, consume=consume)
 
+    def prepare_worksharing(self, analysis, procedure, exact_original_loop, completion, *,
+                            preceding=(), following=(), consume=None):
+        """Prepare an exact original-team DO without capture or emission.
+
+        Participation and suffix liveness come from the registered completion
+        proof. Ordinary lowering retains reached guards that need not supply
+        source effect authority; consumers must check that authority separately.
+        """
+        from compiler.frontend.worksharing_completion import WorksharingCompletionProof
+        from compiler.scopes.regions import extract_region
+
+        self.validate(analysis, consume=consume)
+        selection = (exact_original_loop,)
+        if type(completion) is not WorksharingCompletionProof:
+            raise CompilationError("worksharing preparation requires a registered original-team proof")
+        completion.validate(analysis, procedure, selection)
+        extraction = extract_region(analysis, analysis.routines[procedure], exact_original_loop,
+            preceding=preceding, following=following, worksharing=completion,
+            immutable_inputs=self.immutable_inputs)
+        return _prepare(analysis, procedure, selection, self, consume=consume,
+                        extraction=extraction, require_effects=False)
+
 
 @dataclass(frozen=True)
 class PreparedOriginalRegion:

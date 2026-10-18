@@ -499,6 +499,9 @@ def test_cross_procedure_interval_uses_one_native_and_resident_cost_contract(tmp
         record = scope["exact_window"]
         contract = record["contract"]
         contracts.append(contract)
+        bundle = contract["selection_bundle"]
+        assert {group["selection_identity"] for group in bundle["groups"]} == {contract["selection_identity"]}
+        assert contract["selection_identity"] == digest(contract["selection"])
         assert record["capture_variant"] == variant
         assert len(contract["completion_manifest"]["operations"]) == 3
         assert {item["resource"] for item in contract["key"]} == {

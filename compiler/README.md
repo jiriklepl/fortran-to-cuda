@@ -2971,6 +2971,22 @@ interruptions are part of the measured alternative; a GPU prefix followed by a
 native suffix cannot qualify as complete resident evidence. Warm group timing
 alone cannot establish an application gain.
 
+Checked-interval discovery uses the same original-position block control as
+closed numerical groups. It considers contiguous serial source selections,
+keeps complete OpenMP groups indivisible, and opens a fresh context each time
+the selected site executes. The context publishes and closes before an excluded
+suffix or backedge. This path does not retry a declined selection through the
+older first-traversal or whole-entry owner. It currently requires proved local
+scalar preparation before the selection and, for repeated sites, a similarly
+restricted suffix. A fresh context does not prove allocation lifetime or restore
+definitions lost by native work; those cases remain native. Each admitted
+interval requires at least two numerical invocations and the complete existing
+native-effect, resource and completion checks.
+Line-based replacements also require distinct original statement lines in the
+selection and its borrowed procedures. Sharing a line with another executable
+statement declines the interval; punctuation inside comments or literals does
+not count as another statement.
+
 Entry keys use only the finalized plan's safely readable root descriptors and
 proved root controls. Original native branches, child-local tiling and private
 work remain at their original evaluation points and are included in measured
@@ -2986,6 +3002,14 @@ or assume equivalent scalar values.
 The draft's version 2 record represents this graph without expanding every call
 path. Existing analysis limits and independent native-effect, definition and
 completion checks still apply before a checked execution plan can be emitted.
+
+Mixed original teams share one source-only worksharing inventory between
+interval discovery and `JoinedTeam` admission. Each supported original DO
+retains its registered preparation and team-completion proof; emission consumes
+that same preparation. Unsupported corrections remain ordered native units.
+The complete team must satisfy every original DO barrier before a subregion
+can be prepared. Numerical preparation issues no capture, native-effect,
+definition or execution authority, and emits no artifacts.
 
 Workload documents bind arguments, relevant environment, input-file hashes and
 completion facts. The selector checks actual arguments, environment and bounded

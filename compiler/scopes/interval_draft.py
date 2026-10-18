@@ -352,11 +352,28 @@ def prepare_interval_draft(owner, originals):
                         prepared = provider.prepare(analysis, procedure, selected)
                     except CompilationError as error:
                         local_anchors.append(NumericalAnchor(procedure, selected, None, str(error)))
+                        # Use the same complete-team inventory as admission.
+                        # A failed flat extraction must not discard supported
+                        # DOs surrounding original native wall corrections.
+                        from compiler.scopes.worksharing_inventory import prepare_worksharing_inventory
+
+                        try:
+                            _parent, candidates = prepare_worksharing_inventory(
+                                builder, procedure, selected, provider=provider)
+                        except CompilationError:
+                            candidates = ()
+                        prepared_loops = set()
+                        for candidate in candidates:
+                            if candidate.prepared is not None:
+                                loop = candidate.unit[1]
+                                local_anchors.append(NumericalAnchor(procedure, (loop,), candidate.prepared, None))
+                                prepared_loops.update(id(node) for node in walk(loop))
                     else:
                         local_anchors.append(NumericalAnchor(procedure, selected, prepared, None))
                         continue  # Helpers belong to this exact numerical proof.
                     for original in selected:
-                        calls.extend(node for node in walk(original) if _kind(node) == "Call_Stmt")
+                        calls.extend(node for node in walk(original)
+                                     if _kind(node) == "Call_Stmt" and id(node) not in prepared_loops)
                 elif _kind(item) in {"If_Construct", "Associate_Construct"}:
                     sequence(_children(item))
                 elif _kind(item) == "Call_Stmt":
