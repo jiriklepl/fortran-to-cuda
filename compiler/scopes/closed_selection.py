@@ -501,8 +501,13 @@ def discover_closed_selections(builder):
     interval = request.get("coverage") == "checked_interval"
     if builder.config.scope_execution != ("reached" if interval else "bounded"):
         return ()
-    choices = (tuple((site.originals, site.prefix, site.controls) for site in interval_candidates(builder))
-               if interval else tuple(candidates(builder)))
+    if interval:
+        from compiler.scopes.interval_ordering import order_intervals
+
+        sites, builder.original_interval_discovery = order_intervals(builder, interval_candidates(builder))
+        choices = tuple((site.originals, site.prefix, site.controls) for site in sites)
+    else:
+        choices = tuple(candidates(builder))
     if not choices:
         return ()
     if len(choices) > 32:
@@ -525,6 +530,8 @@ def discover_closed_selections(builder):
                 admitted.append(owner)
                 if interval:
                     candidate = owner.builder
+                    candidate.original_interval_discovery["selected"] = {
+                        "first_line": statement_span(originals[0])[0], "last_line": statement_span(originals[-1])[1]}
                     break  # One nonoverlapping alternative per priced bundle.
             except CompilationError as error:
                 candidate.restore_scope_checkpoint(before)
@@ -532,6 +539,8 @@ def discover_closed_selections(builder):
                     "last_line": statement_span(originals[-1])[1], "reason": str(error),
                     "execution": "unchanged original selection" if interval else "unchanged original complete team",
                     "kind": "original_interval_decline" if interval else "closed_numerical_selection_decline"})
+                if interval:
+                    candidate.original_interval_discovery["attempts"].append(candidate.boundaries[-1])
         bundle = {"schema_version": 1, "entry": candidate.entry.qualified, "groups": []}
         for owner in admitted:
             # Pricing and build attestation bind the issued interval source
