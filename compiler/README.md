@@ -3164,7 +3164,7 @@ a resident/native decision or rejection. Neither command issues an execution
 plan or placement attachment; production generation revalidates the evidence
 against its own checked interval. The pipeline's `selection_campaign` collector
 uses these commands without importing compiler implementation modules. Compiler
-verification has a 180-second hard limit; application runs retain their separate,
+verification has a 240-second hard limit; application runs retain their separate,
 explicitly supplied runtime limit.
 
 `python -m compiler.offload.application_build preflight|attest` verifies the
