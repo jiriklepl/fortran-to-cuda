@@ -189,6 +189,8 @@ def test_source_analysis_runs_in_prepared_parser_python(tmp_path, monkeypatch, t
         "memory_headroom_bytes": {"host": 8 * 2**30}, "cpu_affinity": list(range(8)),
         "toolchain": {"nvcc": "/cuda/nvcc", "cuda_host_cxx": "/tools/g++", "architecture": "120"}})
     monkeypatch.setattr(workflow, "plot_experiment", lambda *a: None)
+    monkeypatch.setattr(workflow, "prepare_application_basis", lambda *args:
+                        pytest.fail("Explicit app-root must not be reconstructed"))
     def execute(command, **kwargs):
         calls.append(command)
         report = output / "experiment/report.json"
@@ -226,6 +228,11 @@ def test_existing_prepared_pipeline_cache_is_reused(tmp_path, monkeypatch, capsy
     def unexpected_prepare(args):
         pytest.fail("A prepared cache must not be downloaded or rebuilt")
     monkeypatch.setattr(workflow, "prepare", unexpected_prepare)
+    basis_calls = []
+    def application_basis(upstream, destination):
+        basis_calls.append((upstream, destination))
+        return destination
+    monkeypatch.setattr(workflow, "prepare_application_basis", application_basis)
     monkeypatch.setattr(workflow, "plot_experiment", lambda *a: None)
     calls = []
     def execute(command, **kwargs):
@@ -237,8 +244,25 @@ def test_existing_prepared_pipeline_cache_is_reused(tmp_path, monkeypatch, capsy
     monkeypatch.setattr(sys, "argv", ["workflow.py", "run-elmm", "--output-dir", str(output)])
     workflow.main()
     assert calls[0][0] == str(pipeline / ".cache/envs/local/bin/python")
-    assert calls[0][calls[0].index("--app-root") + 1] == str(pipeline / ".cache/repos")
+    assert calls[0][calls[0].index("--app-root") + 1] == str(output / "work/application-basis")
+    assert basis_calls == [(pipeline / ".cache/repos", output / "work/application-basis")]
     assert "Using prepared pipeline cache:" in capsys.readouterr().out
+
+
+def test_prepare_reconstructs_common_basis_after_upstream_setup(tmp_path, monkeypatch):
+    pipeline = tmp_path / "source-pipeline"
+    pipeline.mkdir()
+    (pipeline / "pipeline.py").write_text("# source only\n")
+    monkeypatch.setattr(workflow, "PIPELINE", pipeline)
+    monkeypatch.setattr(workflow, "source_identity", lambda root: {"files": {}})
+    calls = []
+    monkeypatch.setattr(workflow.subprocess, "run", lambda argv, **kw: calls.append(("setup", argv)))
+    monkeypatch.setattr(workflow, "prepare_application_basis", lambda upstream, destination:
+                        calls.append(("basis", upstream, destination)))
+    work = tmp_path / "work"
+    assert workflow.prepare(SimpleNamespace(work_dir=work)) == work / "pipeline"
+    assert calls[0][0] == "setup"
+    assert calls[1] == ("basis", work / "pipeline/.cache/repos", work / "application-basis")
 
 
 def test_plotting_falls_back_without_changing_compiler_python(monkeypatch):

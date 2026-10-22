@@ -163,6 +163,7 @@ class UnitEmission:
     """Results produced while emitting an already admitted immutable unit."""
     compute_identity: dict | None = None
     native_preflight: dict | None = None
+    fresh_native_prefix: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -1245,6 +1246,13 @@ class LexicalOwner:
         if self.control_guard:
             lines = [f"if ({self.control_guard}) then", *lines,
                      *([] if unit.publication_only else ["else", *self.original(unit.nodes).splitlines()]), "endif"]
+        if builder.config.scope_execution == "graph":
+            from compiler.scopes.native_prefix import fresh_native_prefix
+
+            result.fresh_native_prefix = fresh_native_prefix(self, unit)
+            if result.fresh_native_prefix is not None:
+                lines = [f"if ({self.context} == 0 .and. .not. {self.query_plan}) then",
+                         *self.original(unit.nodes).splitlines(), "else", *lines, "endif"]
         return [(first, first-1 if unit.publication_only else last, "\n".join(fortran_lines(lines)) + "\n")]
 
     def emit_control(self, nodes):
@@ -1545,6 +1553,7 @@ class LexicalOwner:
                                    "ordered_definitions": unit.definition_summary.public(),
                                    "compute_identity": self.unit_emission(unit).compute_identity,
                                    "native_preflight": self.unit_emission(unit).native_preflight,
+                                   "fresh_native_prefix": self.unit_emission(unit).fresh_native_prefix,
                                    "operations": plan.operations(self, index)} for index,unit in enumerate(plan.units(self))],
             "boundaries": self.boundaries, "native_continuation": "original lexical scope; no replay and no synthetic argument association",
             "registration": "first reached use after original allocation and descriptor guards",
@@ -1555,6 +1564,9 @@ class LexicalOwner:
             builder.scopes[-1]["estimate_available"] = exact_public["available"]
             builder.scopes[-1]["planning_reason"] = exact_public["reason"]
         builder.scopes[-1]["transfer_configuration"] = builder.numerical(sorted(self.leaves)[0]).scoped["transfer_configuration"]
+        if any(self.unit_emission(unit).fresh_native_prefix is not None for unit in plan.units(self)):
+            builder.scopes[-1]["estimate_available"] = False
+            builder.scopes[-1]["planning_reason"] = "original native prefix before context creation is unpriced"
         builder.boundaries.extend(boundary for member in self.members.values() for boundary in member.boundaries)
         from compiler.offload.scope_measurement import emit as emit_measurement
         emit_measurement(self, measurement)

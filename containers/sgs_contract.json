@@ -1,10 +1,12 @@
 {
   "schema_version": 1,
-  "purpose": "Reviewed explicit SGS capture contract; path rebinding only, no inferred initializedness or lifetime facts.",
+  "purpose": "Reviewed common ELMM comparison basis with approved deterministic TOP pressure reference; no inferred initializedness or lifetime facts.",
   "repositories": {
     "elmm": {
       "url": "https://bitbucket.org/LadaF/elmm.git",
-      "revision": "ddb426fca5b020216083f02a218292fea70c1df2"
+      "revision": "be38bbbec88756ef0f32d67b44dc412a71e0e6e8",
+      "upstream_revision": "ddb426fca5b020216083f02a218292fea70c1df2",
+      "local_derivative_reconstruction": "Run containers/application_basis.py against prepared upstream repositories; this deterministic local derivative is not promised by the upstream remote."
     },
     "PoisFFT": {
       "url": "https://github.com/LadaF/PoisFFT.git",
@@ -109,7 +111,7 @@
     "elmm/src/parameters.f90": "cb43ff8e48aa161282841d825c5223b22dcf8a2baec68e3a632cc1dfbd3076d3",
     "elmm/src/pointsources.f90": "3514b090aee81700d5cb6cd04d61201492c3e4334773ff478e6cac203475b890",
     "elmm/src/poisson.f90": "10cfb025f904b58f7e3a21d1858a9c4de3b74994a725e3826c0d4e9aebba94ba",
-    "elmm/src/pressure.f90": "0548a1a1b33284d5811335beff0051c60faf273f1f9535ef737b34be141bf9af",
+    "elmm/src/pressure.f90": "65d6ee76dc4b63b4545a1bfd481dbf875cb168f55a484bac7d0a39b78f21f7d0",
     "elmm/src/pthreads.f90": "86c9529347c52ce73d14efeb1cbd673ba786696030590633bdb2b87574bb6885",
     "elmm/src/puffs.f90": "fcbef9c72f3f3506145b6277b24a4836d5b77e7769588f3cac16480ad01a55e6",
     "elmm/src/radiation.f90": "8549d74277f9991c0ee821e45356c194d21c446d5171408d59c5879631d2a5bf",
@@ -160,7 +162,7 @@
     "PoisFFT/src/SConstruct": "2081ef8a39f561873727ef6529afcd0957a3c9c4346969133d79ff9a2e533e8d"
   },
   "reviewed_preconditions": [
-    "Serial SGS entry, reached through the pinned unmodified upstream ELMM execution; no collective participation facts are added.",
+    "Serial SGS entry in the common approved ELMM basis derived from pinned upstream; only the non-PAR TOP/BOTTOM plane-average reduction is serialized, identically for native and both generated modes. These configurations retain TOP referencing. No collective participation facts are added.",
     "U, V, W and tile extents retain the reviewed whole initialization and stable storage contracts.",
     "Viscosity starts with initialized=none; the compiler must prove definitions before any read.",
     "Every original analysis source and include is content pinned; a mismatch rejects this preset."
@@ -176,6 +178,16 @@
       "capture_facts_changed": false,
       "native_source_repair_applied": false,
       "measurement_authority": "Fresh native and current builds/runs required; superseded application measurements are not reused."
+    },
+    {
+      "source": "elmm/src/pressure.f90",
+      "superseded_sha256": "0548a1a1b33284d5811335beff0051c60faf273f1f9535ef737b34be141bf9af",
+      "current_sha256": "65d6ee76dc4b63b4545a1bfd481dbf875cb168f55a484bac7d0a39b78f21f7d0",
+      "current_authority": "User-approved deterministic TOP source basis, applied identically to all three modes; reproducible local derivative of ddb426fca5b020216083f02a218292fea70c1df2",
+      "superseded_difference": "Replace the non-PAR TOP/BOTTOM plane-average OpenMP reduction/single with MASTER fixed-order sum/division and the required barrier; all other statements unchanged. The primary configurations retain TOP referencing.",
+      "capture_facts_changed": false,
+      "native_source_repair_applied": true,
+      "measurement_authority": "Fresh common-basis source proofs, production/fullfield builds and measurements required. Historical private pressure-only links and failed original TOP controls remain separately labelled."
     }
   ]
 }

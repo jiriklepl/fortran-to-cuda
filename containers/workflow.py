@@ -21,6 +21,7 @@ COMPILER = Path(os.environ.get("COMPILER_ROOT", WORKSPACE)).resolve()
 sys.path.insert(0, str(PIPELINE))
 sys.path.insert(0, str(HERE))
 
+from application_basis import prepare_application_basis
 from sgs_experiment import CASE_NAMES, configuration_label
 
 
@@ -142,6 +143,7 @@ def prepare(args):
                "--local-compiler", str(COMPILER)]
     # Setup is explicit and repeatable; a prepared cache avoids worker-node downloads.
     subprocess.run(command, check=True, cwd=target)
+    prepare_application_basis(target / ".cache/repos", args.work_dir / "application-basis")
     return target
 
 
@@ -206,6 +208,7 @@ def run_elmm(args):
     args.output_dir.mkdir(parents=True, exist_ok=True)
     write(args.output_dir / "machine.json", machine)
     target = PIPELINE
+    application_root = args.app_root
     if args.app_root is None:
         cache = PIPELINE / ".cache"
         prepared = all((cache / path).exists() for path in (
@@ -215,13 +218,14 @@ def run_elmm(args):
             print("Using prepared pipeline cache:", cache, flush=True)
         else:
             target = prepare(args)
+        application_root = prepare_application_basis(target / ".cache/repos", args.work_dir / "application-basis")
     native = target / ".cache/native/lib"
     compiler_python = args.compiler_python or target / ".cache/envs/local/bin/python"
     # Source analysis needs the prepared parser environment, even when the
     # node's newer system Python has no third-party packages installed.
     command = [str(compiler_python), str(HERE / "sgs_experiment.py")]
     for flag, value in {
-        "app-root": args.app_root or target / ".cache/repos", "compiler-root": COMPILER,
+        "app-root": application_root, "compiler-root": COMPILER,
         "pipeline-root": PIPELINE, "python": compiler_python,
         "scons-python": args.scons_python or target / ".cache/envs/build/bin/python",
         "native-library-dir": args.native_library_dir or native,

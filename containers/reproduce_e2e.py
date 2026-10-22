@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fresh native ELMM / committed compiler / reworked compiler comparison.
 
-Every mode is built from pinned pristine application sources. Compiler snapshots,
+Every mode is built from the pinned approved common application sources. Compiler snapshots,
 build receipts, binaries, configuration, logs and validation outputs are hashed.
 Untraced complete-process timings and traced/full-storage diagnostics are separate.
 """
@@ -30,6 +30,7 @@ WORKSPACE = Path(os.environ.get("WORKSPACE_ROOT", HERE.parent)).resolve()
 PIPELINE = Path(os.environ.get("PIPELINE_ROOT", WORKSPACE / "elmm-pipeline")).resolve()
 COMPILER = Path(os.environ.get("COMPILER_ROOT", WORKSPACE)).resolve()
 sys.path.insert(0, str(HERE))
+from application_basis import prepare_application_basis
 from sgs_experiment import (
     CASE_NAMES,
     DEFAULT_CONTRACT,
@@ -1025,7 +1026,10 @@ def run_comparison(args):
     contract = read(DEFAULT_CONTRACT)
     if preprocessing_defines(args.build_arg) != contract["defines"]:
         raise ValueError("comparison requires the pinned DPREC preprocessing configuration")
-    originals, _source_hashes = verify_contract(args.app_root, contract)
+    application_root = (args.app_root if args.app_root is not None else
+                        prepare_application_basis(args.pipeline_root / ".cache/repos",
+                                                  output.with_name(output.name + "-application-basis")))
+    originals, _source_hashes = verify_contract(application_root, contract)
     if any(path == source or path.is_relative_to(source)
            for path in (output, work) for source in originals.values()):
         raise ValueError("comparison output/work must stay outside original application trees")
@@ -1372,7 +1376,8 @@ def run_comparison(args):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--app-root", type=Path, default=PIPELINE / ".cache/repos")
+    parser.add_argument("--app-root", type=Path,
+                        help="Explicit clean approved ELMM/PoisFFT siblings; default reconstructs the common basis from the pipeline cache")
     parser.add_argument("--pipeline-root", type=Path, default=PIPELINE)
     parser.add_argument("--committed-root", type=Path, default=COMPILER)
     parser.add_argument("--committed-ref", default="be58ab809296b97ea39d701828a2621adfc6b3dc",

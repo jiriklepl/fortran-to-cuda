@@ -1,0 +1,23 @@
+--- a/src/pressure.f90
++++ b/src/pressure.f90
+@@ -1187,17 +1187,15 @@
+         end if        
+         !$omp end single
+ #else
+-        !$omp do reduction(+:Phi_ref)
++        !$omp master
+         do j = 1, Prny
+           do i = 1, Prnx
+             Phi_ref = Phi_ref + Pr(i,j,k_ref)
+           end do
+         end do
+-        !$omp end do
+-
+-        !$omp single
+         Phi_ref = Phi_ref / (Prnx*Prny)
+-        !$omp end single
++        !$omp end master
++        !$omp barrier
+ #endif
+       end if
+       

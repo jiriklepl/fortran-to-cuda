@@ -23,6 +23,35 @@ def test_cli_defaults_to_pinned_sgs_control_and_preserves_explicit_override(tmp_
     assert calls[-1].committed_ref == "explicit-compatible-revision"
 
 
+def test_application_root_preparation_reaches_the_same_strict_source_guard(tmp_path, monkeypatch):
+    compare = runner.run_comparison
+    arguments, preparations, guarded_roots = [], [], []
+    monkeypatch.setattr(runner, "run_comparison", arguments.append)
+    explicit = tmp_path / "approved-checkouts"
+    runner.main(["--output-dir", str(tmp_path / "default")])
+    runner.main(["--app-root", str(explicit), "--output-dir", str(tmp_path / "explicit")])
+
+    def prepare(upstream, destination):
+        preparations.append((upstream, destination))
+        return destination
+
+    class SourceGuardReached(Exception):
+        pass
+
+    def verify(root, contract):
+        guarded_roots.append(root)
+        raise SourceGuardReached
+
+    monkeypatch.setattr(runner, "prepare_application_basis", prepare)
+    monkeypatch.setattr(runner, "verify_contract", verify)
+    for args in arguments:
+        with pytest.raises(SourceGuardReached):
+            compare(args)
+        assert not args.output_dir.exists()
+    assert preparations == [(runner.PIPELINE / ".cache/repos", tmp_path / "default-application-basis")]
+    assert guarded_roots == [tmp_path / "default-application-basis", explicit]
+
+
 def test_rounds_rotate_all_three_modes_fairly():
     orders = [runner.rotated_order(number) for number in range(3)]
     assert all(set(order) == set(runner.MODES) for order in orders)
