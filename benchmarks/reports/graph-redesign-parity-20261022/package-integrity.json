@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "scope": "All report files except this self-excluded integrity record; all archived member identities separately verified in archive-manifest.json",
+  "file_count": 13,
+  "payload_bytes": 5148727,
+  "files": {
+    "README.md": {
+      "bytes": 10595,
+      "sha256": "67cd1f29170555cc0dcb414d24eef5e62c69c561af0bfcd298c1dcf3cf1a67b1"
+    },
+    "all-samples.md": {
+      "bytes": 4072,
+      "sha256": "279cde7ac4738e552079bc29d95537927448b2466fa9ae670e27eb639d5084a1"
+    },
+    "all-timing-rows.csv": {
+      "bytes": 10940,
+      "sha256": "72fa2c79f7fcbaf4e8148be926688dfb23757090cabda74c94fd8cb86ce39973"
+    },
+    "archive-manifest.json": {
+      "bytes": 212641,
+      "sha256": "3fa58d1ed65fec236841e497a7cc036c499e6768c21f64f3dafa4d018e8fb501"
+    },
+    "companion-commit.json": {
+      "bytes": 823,
+      "sha256": "e43524cc42b72f7eb76d95ae9750cfeadddeede906aebd7cad15179447e9fec5"
+    },
+    "companion-followup.diff": {
+      "bytes": 8201,
+      "sha256": "b58a7b24c5d72b020d126fbb969cdc545a3522605a37fa0a5b0948905eb42d61"
+    },
+    "evidence.tar.gz": {
+      "bytes": 4379964,
+      "sha256": "1a45862b38a7a623aa6cbe755392ccb50aad51eca6a29fa9fefc72d9bcc5c528"
+    },
+    "external-evidence-references.json": {
+      "bytes": 436839,
+      "sha256": "d989411e83bc9eea2b2f6e723d4fe3d3a4f780fa89903cc789f3aa926959c8b0"
+    },
+    "independent-review.json": {
+      "bytes": 11888,
+      "sha256": "c48c33e4f2089ce10ec8dfd1cbcbb6b56beacde0376a9a954dee2f1052398505"
+    },
+    "performance.json": {
+      "bytes": 21014,
+      "sha256": "d2602179fb2938dc50e65c5fee1d853800bab25c82bd318580f4cf43b176cd77"
+    },
+    "report-peer-review.json": {
+      "bytes": 1716,
+      "sha256": "0ef8365612260c279bfb8e04130299a127d50758efca6dda8964a2f7ecd534e4"
+    },
+    "source-test-audit.json": {
+      "bytes": 22546,
+      "sha256": "9242ccc3378b44efcab51bdaadfbbcf412c77a442706cfed30a1b25e9c394ec8"
+    },
+    "targeted-test-evidence.json": {
+      "bytes": 27488,
+      "sha256": "d364f38c559efd297926ae35604cb789702bfdc30b1d9abceb61d3a8b538d641"
+    }
+  },
+  "archive_members_verified": 592,
+  "README_relative_links_checked": true,
+  "source_test_audit_clear": true,
+  "independent_performance_review_clear": true,
+  "median_parity_both_cases": true,
+  "comfortable_both_cases": false,
+  "new_full_suite_rerun_claim": false,
+  "whitespace_check": {
+    "command_local_whitespace": "blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol",
+    "scope": "All staged paths except the two byte-authenticated patch payloads; CSV CRLF preserved as original evidence.",
+    "excluded_exact_patch_sha256": {
+      "containers/patches/elmm-deterministic-top.patch": "707f87819df0841831f082a6a915e4d630b767fcaf1a8336cf006fe63a621805",
+      "benchmarks/reports/graph-redesign-parity-20261022/companion-followup.diff": "b58a7b24c5d72b020d126fbb969cdc545a3522605a37fa0a5b0948905eb42d61"
+    },
+    "original_unscoped_check_failed_only_on_raw_evidence_whitespace": true
+  }
+}

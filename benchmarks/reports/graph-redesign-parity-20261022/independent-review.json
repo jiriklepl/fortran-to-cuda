@@ -1,0 +1,253 @@
+{
+  "schema_version": 1,
+  "status": "INDEPENDENT_READ_ONLY_FINAL_CAMPAIGN_CLEAR",
+  "both_complete_case_median_parity_met": true,
+  "comfortable_both": false,
+  "cases": {
+    "channel-simple": {
+      "status": "CLEAR",
+      "complete_protocol": true,
+      "measured_rounds_per_mode": 7,
+      "excluded_warmups_per_mode": 1,
+      "statistics": {
+        "native": {
+          "samples_seconds": [
+            11.903427395000108,
+            11.653707363000649,
+            11.654671832000531,
+            11.703068206999887,
+            11.804233648999798,
+            11.553210576999845,
+            11.604794933999983
+          ],
+          "median_seconds": 11.654671832000531,
+          "q1_seconds": 11.629251148500316,
+          "q3_seconds": 11.753650927999843,
+          "iqr_seconds": 0.12439977949952663
+        },
+        "committed": {
+          "samples_seconds": [
+            9.49856095999985,
+            9.999518867000006,
+            9.69865586099968,
+            9.499471191000339,
+            9.799927899000068,
+            9.499782654000228,
+            9.65128498499962
+          ],
+          "median_seconds": 9.65128498499962,
+          "q1_seconds": 9.499626922500283,
+          "q3_seconds": 9.749291879999873,
+          "iqr_seconds": 0.24966495749958995
+        },
+        "reworked": {
+          "samples_seconds": [
+            9.498940579000191,
+            9.548801375999574,
+            9.999028129999715,
+            9.801991504999933,
+            9.448697582000023,
+            9.447622849999789,
+            9.449908651000442
+          ],
+          "median_seconds": 9.498940579000191,
+          "q1_seconds": 9.449303116500232,
+          "q3_seconds": 9.675396440499753,
+          "iqr_seconds": 0.2260933239995211
+        }
+      },
+      "median_candidate_to_be58_ratio": 0.9842151168226606,
+      "median_wall_change_percent": -1.5784883177339393,
+      "paired_candidate_to_be58_ratios_rounds1_to7": [
+        1.0000399659487305,
+        0.9549260822450297,
+        1.030970504913768,
+        1.0318460162589047,
+        0.9641599080503559,
+        0.9945093686981906,
+        0.9791347645093721
+      ],
+      "paired_candidate_le_be58": 4,
+      "inclusive_median_parity_met": true,
+      "comfortable": false,
+      "evaluator_projection_and_result_match_independent_recomputation": true,
+      "full20_storage_bounds_shapes_bytes_match_native": true,
+      "natural_completed_steps": 109,
+      "fresh_candidate_natural_fullstorage_pass": true,
+      "VTK_pass": true,
+      "actual_CUPTI_matches_runtime": {
+        "committed": {
+          "sqlite": {
+            "path": "/tmp/fortran-common-basis-comparison-23/final-campaign-01/channel-simple/runs/committed/cuda-profile/profile/gpu-profile-c66a9c63.sqlite",
+            "sha256": "db2e245a8013187b01e3f6d7b49930f9fcab7814320dd6a41b6b0932080acc4f"
+          },
+          "numerical_kernels": 328,
+          "carrier_kernels": 0,
+          "h2d_bytes": 4398579712,
+          "d2h_bytes": 1375731712,
+          "runtime_evidence": {
+            "schema_version": 1,
+            "kind": "complete-runtime-gpu-activity",
+            "path": "/tmp/fortran-common-basis-comparison-23/final-campaign-01/channel-simple/runs/committed/gpu-validation/gpu-activity.json",
+            "sha256": "e56d8fafaa5c784f6a6e65180348b4bd20cf0ea0c0024ef66403dea6821d5f2d"
+          }
+        },
+        "reworked": {
+          "sqlite": {
+            "path": "/tmp/fortran-common-basis-comparison-23/final-campaign-01/channel-simple/runs/reworked/cuda-profile/profile/gpu-profile-d9eb725d.sqlite",
+            "sha256": "5b08b81d10411e7820a6df98ee6b702d165ec959febb1734959dee273240bef7"
+          },
+          "numerical_kernels": 328,
+          "carrier_kernels": 0,
+          "h2d_bytes": 4398579712,
+          "d2h_bytes": 1375731712,
+          "runtime_evidence": {
+            "schema_version": 1,
+            "kind": "complete-runtime-gpu-activity",
+            "path": "/tmp/fortran-common-basis-comparison-23/final-campaign-01/channel-simple/runs/reworked/gpu-validation/gpu-activity.json",
+            "sha256": "ddd3368258525bba61aef23434e8ecc60f0afa6f7551333e85b7623b639114ff"
+          }
+        }
+      },
+      "actual_final_campaign_apps": 29,
+      "private_pre_post_guards_passed": true
+    },
+    "channel": {
+      "status": "CLEAR",
+      "complete_protocol": true,
+      "measured_rounds_per_mode": 7,
+      "excluded_warmups_per_mode": 1,
+      "statistics": {
+        "native": {
+          "samples_seconds": [
+            13.257568026000627,
+            13.357752902999891,
+            13.258414592000008,
+            13.208656556999813,
+            13.461978715999976,
+            13.20826025399947,
+            13.261237048000112
+          ],
+          "median_seconds": 13.258414592000008,
+          "q1_seconds": 13.23311229150022,
+          "q3_seconds": 13.309494975500002,
+          "iqr_seconds": 0.07638268399978188
+        },
+        "committed": {
+          "samples_seconds": [
+            11.654426829999466,
+            11.153878016999442,
+            11.202505084000222,
+            11.55524952900032,
+            11.453849782999896,
+            11.303747777999888,
+            11.554139118999956
+          ],
+          "median_seconds": 11.453849782999896,
+          "q1_seconds": 11.253126431000055,
+          "q3_seconds": 11.554694324000138,
+          "iqr_seconds": 0.30156789300008313
+        },
+        "reworked": {
+          "samples_seconds": [
+            11.40267164800025,
+            11.302984560000368,
+            11.253441390999797,
+            11.25518250300047,
+            11.354034332999618,
+            11.451939924999351,
+            11.354282717000387
+          ],
+          "median_seconds": 11.354034332999618,
+          "q1_seconds": 11.279083531500419,
+          "q3_seconds": 11.378477182500319,
+          "iqr_seconds": 0.09939365099990027
+        }
+      },
+      "median_candidate_to_be58_ratio": 0.9912854235133739,
+      "median_wall_change_percent": -0.8714576486626102,
+      "paired_candidate_to_be58_ratios_rounds1_to7": [
+        0.9783983214557428,
+        1.0133681346320693,
+        1.0045468675637848,
+        0.9740319734985583,
+        0.9912854235133739,
+        1.0131100012057845,
+        0.9827026141938244
+      ],
+      "paired_candidate_le_be58": 4,
+      "inclusive_median_parity_met": true,
+      "comfortable": false,
+      "evaluator_projection_and_result_match_independent_recomputation": true,
+      "full20_storage_bounds_shapes_bytes_match_native": true,
+      "natural_completed_steps": 2458,
+      "fresh_candidate_natural_fullstorage_pass": true,
+      "VTK_pass": true,
+      "actual_CUPTI_matches_runtime": {
+        "committed": {
+          "sqlite": {
+            "path": "/tmp/fortran-common-basis-comparison-23/final-campaign-01/channel/runs/committed/cuda-profile/profile/gpu-profile-342e58ef.sqlite",
+            "sha256": "25a36bd416abba1b90af45649b489415ab704e350ec07145d821a54cea975f36"
+          },
+          "numerical_kernels": 301,
+          "carrier_kernels": 0,
+          "h2d_bytes": 4036501504,
+          "d2h_bytes": 1262485504,
+          "runtime_evidence": {
+            "schema_version": 1,
+            "kind": "complete-runtime-gpu-activity",
+            "path": "/tmp/fortran-common-basis-comparison-23/final-campaign-01/channel/runs/committed/gpu-validation/gpu-activity.json",
+            "sha256": "717a11aa3b4f4ebbc48add16bd99052ddfc5d060fcb982d268a2564b02b419e4"
+          }
+        },
+        "reworked": {
+          "sqlite": {
+            "path": "/tmp/fortran-common-basis-comparison-23/final-campaign-01/channel/runs/reworked/cuda-profile/profile/gpu-profile-4dbfb7cd.sqlite",
+            "sha256": "068ebd4b8783a2690ffdf021c3b309fa55dc5a8eb3a8fed742aa998c72ff1cdc"
+          },
+          "numerical_kernels": 301,
+          "carrier_kernels": 0,
+          "h2d_bytes": 4036501504,
+          "d2h_bytes": 1262485504,
+          "runtime_evidence": {
+            "schema_version": 1,
+            "kind": "complete-runtime-gpu-activity",
+            "path": "/tmp/fortran-common-basis-comparison-23/final-campaign-01/channel/runs/reworked/gpu-validation/gpu-activity.json",
+            "sha256": "a9db85c932bcd88546e0a07c292eb43ca2b065dc25d24177fc496221995acce4"
+          }
+        }
+      },
+      "actual_final_campaign_apps": 30,
+      "private_pre_post_guards_passed": true
+    }
+  },
+  "source_bindings_sha256": {
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-analysis-01/closure.json": "d2602179fb2938dc50e65c5fee1d853800bab25c82bd318580f4cf43b176cd77",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-analysis-01/all-timing-rows.csv": "72fa2c79f7fcbaf4e8148be926688dfb23757090cabda74c94fd8cb86ce39973",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-plan.json": "18d81379e6e9280fdd4522e8ae4890fec557ddbc86a63a4b19040f27fb713b33",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-01/channel-simple/report.json": "6d5030f9f6b9caba013868fe8d246e5888d57f2fe54b5b481ef1905e44b7a72c",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-channel-simple-execution.json": "0d8f17237ca66c1f13d17e9d07dc7154573001cd2d1b7d276eb4638f2b9be667",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-01/channel-simple/controlled-transport.json": "e406b8c92b7b4c0b4ee488218e71259806aa72d58daee602f3f89698b74c4310",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-analysis-01/channel-simple-evaluator-projection.json": "efe88ba39d7dc3bf1b7ca1f37e5ddc690f4d35a3b9c98540f76974c42d5db6af",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-analysis-01/channel-simple-evaluator-result.json": "45ea0f3c4b8816a075d0633c409e58405dc3772800996dac0838d30499ca91d3",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-01/channel/report.json": "8442e9efbbf8ba9c30ff5aafd3cb47d6f2194fabeaf7b3011a3c5946f3939211",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-channel-execution.json": "9884063b895777a276e3964b025623fce8b4ebc4388cd9f7bdf617256d89847a",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-01/channel/controlled-transport.json": "aadc70fb691e2aaf22be80ce754b20ffce8f1cc7a2031e5e70ecbf6d150aaf5c",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-analysis-01/channel-evaluator-projection.json": "0fc625eb83da6b53515ab2b53096e940bfe80d639fa9937665960f9c3dd7ef77",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-analysis-01/channel-evaluator-result.json": "5e08318b2184c06876fb6110f2ecba383c7499fa45c90949b32ada6a22fe607c"
+  },
+  "method": "Stdlib independent computation from all original48rows, no filtering; statistics.median and inclusive quartiles; exact raw run JSON/log checks; read-only CUPTI SQLite count/bytes queries; actual20shape files and binary-size checks; no existing target evaluator imported/executed by reviewer. Transparent evaluator projection checked field-for-field against originals.",
+  "all_rows": 48,
+  "measured_rows": 42,
+  "excluded_warmup_rows": 6,
+  "actual_final_campaign_applications": 59,
+  "standalone_natural_prequalification_applications": 8,
+  "qualifications": [
+    "Predeclared inclusive median criterion met in BOTH cases in this one fixed campaign.",
+    "Only4of7 same-round wins per case; variation overlaps and comfortable is false. No large, robust or statistically significant speedup claim.",
+    "Channel wall timing is matched100steps; original2458 natural correctness independently passed. Simple uses natural109 for both.",
+    "Separate20percent wall reduction vs native objective is not met: simple18.496713455983315percent, channel14.363559427003247percent.",
+    "Controlled common be38 application basis/profile000a/FFTW4 campaign is not a retag of old20/private21/private22/old-driver evidence."
+  ],
+  "application_test_build_source_commit_index_mutations_by_reviewer": false
+}

@@ -94,33 +94,58 @@ def parse_measurements(text: str) -> list[dict]:
 def fit_transfer(records: list[dict]) -> dict:
     """Fit serialized transfer time = nonnegative latency + bytes/bandwidth.
 
-    Medians suppress individual scheduling outliers. If unconstrained least
-    squares yields negative latency, refit the slope through zero instead of
-    reporting an unphysical intercept. Raw samples and fit error remain in
-    the profile; this is a representative model, not a throughput guarantee.
+    Minimize squared relative residuals, matching the reported relative error
+    across transfer sizes. Medians suppress individual scheduling outliers.
+    A negative unconstrained latency is refitted at the zero-latency boundary;
+    a nonpositive slope cannot establish finite physical bandwidth. Raw samples
+    remain in the profile; this is not a throughput guarantee.
     """
     points = []
     for record in records:
         size = record.get("bytes")
         if type(size) is not int or size <= 0:
             raise CalibrationError("transfer bytes must be a positive integer")
-        points.append((float(size), _median(record)))
+        try:
+            size_value = float(size)
+        except OverflowError as error:
+            raise CalibrationError("transfer bytes exceed the finite fit range") from error
+        points.append((_positive(size_value, "transfer bytes"), _median(record)))
     if len(points) < 3 or len({point[0] for point in points}) != len(points):
         raise CalibrationError("transfer fit requires at least three distinct byte sizes")
-    mean_x = statistics.mean(point[0] for point in points)
-    mean_y = statistics.mean(point[1] for point in points)
-    denominator = math.fsum((x - mean_x) ** 2 for x, _ in points)
-    slope = math.fsum((x - mean_x) * (y - mean_y) for x, y in points) / denominator
-    latency = mean_y - slope * mean_x
-    if latency < 0:
-        latency = 0.0
-        slope = math.fsum(x * y for x, y in points) / math.fsum(x * x for x, _ in points)
+    size_scale = max(x for x, _ in points)
+    time_scale = min(y for _, y in points)
+    # x and reciprocal duration are bounded by one. This is weighted least
+    # squares with weights 1/y**2, without overflowing when time units change.
+    scaled = [(x / size_scale, time_scale / y) for x, y in points]
+    weight_sum = math.fsum(r * r for _, r in scaled)
+    mean_x = math.fsum(r * r * x for x, r in scaled) / weight_sum
+    mean_y = math.fsum(r for _, r in scaled) / weight_sum
+    denominator = math.fsum(r * r * (x - mean_x) ** 2 for x, r in scaled)
+    _positive(denominator, "transfer fit size spread")
+    scaled_slope = math.fsum((x - mean_x) * (r - mean_y * r * r)
+                            for x, r in scaled) / denominator
+    if not math.isfinite(scaled_slope):
+        raise CalibrationError("transfer seconds per byte must be finite and positive")
+    scaled_latency = mean_y - scaled_slope * mean_x
+    if scaled_latency < 0:
+        scaled_latency = 0.0
+        boundary_denominator = math.fsum((x * r) ** 2 for x, r in scaled)
+        _positive(boundary_denominator, "transfer fit size spread")
+        scaled_slope = math.fsum(x * r for x, r in scaled) / boundary_denominator
+    slope = scaled_slope * time_scale / size_scale
+    latency = scaled_latency * time_scale
     _positive(slope, "transfer seconds per byte")
-    bandwidth = 1.0 / slope
+    if not math.isfinite(latency) or latency < 0:
+        raise CalibrationError("transfer latency must be finite and nonnegative")
+    bandwidth = _positive(1.0 / slope, "transfer bandwidth")
+    relative_error = max(abs(latency + x * slope - y) / y for x, y in points)
+    if not math.isfinite(relative_error):
+        raise CalibrationError("transfer relative fit error must be finite")
     return {
         "latency_seconds": latency,
         "bandwidth_bytes_per_second": bandwidth,
-        "fit_max_relative_error": max(abs(latency + x * slope - y) / y for x, y in points),
+        "fit_max_relative_error": relative_error,
+        "fit_method": "nonnegative_relative_least_squares_v1",
     }
 
 
@@ -179,7 +204,7 @@ def profile_from_measurements(
         "rates": rates,
         "measurement_method": {
             "samples": "median of five warmed measurements",
-            "transfer": "wall time of serialized cudaMemcpyAsync plus stream synchronization; nonnegative linear fit",
+            "transfer": "wall time of serialized cudaMemcpyAsync plus stream synchronization; nonnegative relative least-squares linear fit",
             "launch": "wall time of empty launch plus stream synchronization",
             "pump": "host enqueue time of one pinned 4KiB H2D, empty kernel, and pinned 4KiB D2H; excludes final wait",
             "cpu_compute": "four independent multiply-add recurrences per element, 256 steps, FMA counts as two ops",

@@ -1,0 +1,543 @@
+{
+  "schema_version": 1,
+  "status": "completed_single_predeclared_campaign",
+  "both_case_complete_median_target_met": true,
+  "both_case_comfortable_met": false,
+  "goal_contract": {
+    "schema_version": 2,
+    "metric": "ratio_to_control",
+    "limit": 1,
+    "comparison": "le",
+    "control_mode": "committed",
+    "control_comparison": "le"
+  },
+  "cases": {
+    "channel-simple": {
+      "qualified_complete_protocol": true,
+      "evaluator_result": {
+        "schema_version": 4,
+        "baseline_mode": "native",
+        "baseline_seconds": 11.654671832000531,
+        "candidate_mode": "reworked",
+        "candidate_ratio": 0.8150328654401668,
+        "performance_target": {
+          "schema_version": 2,
+          "metric": "ratio_to_control",
+          "limit": 1,
+          "comparison": "le",
+          "control_mode": "committed",
+          "control_comparison": "le"
+        },
+        "target_seconds": 9.65128498499962,
+        "target_label": "\u2264 100% of committed",
+        "target_met": true,
+        "faster_than_control": true,
+        "accepted": true,
+        "comfortable": {
+          "required_measured_rounds": 7,
+          "paired_rounds_complete": true,
+          "required_excluded_warmups_per_mode": 1,
+          "warmups_complete": true,
+          "measured_rounds_by_mode": {
+            "native": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "reworked": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "committed": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          "excluded_warmups_by_mode": {
+            "native": 1,
+            "reworked": 1,
+            "committed": 1
+          },
+          "all_samples_meet_target": false,
+          "beats_control_each_round": false,
+          "met": false,
+          "meets_control_each_round": false
+        },
+        "control_comparison": "le",
+        "control_requirement_met": true
+      },
+      "median_candidate_to_be58_ratio": 0.9842151168226606,
+      "candidate_median_wall_difference_percent": -1.5784883177339393,
+      "candidate_median_wall_reduction_vs_native_percent": 18.496713455983315,
+      "same_round_candidate_le_be58": 4,
+      "measured_samples_per_mode": 7,
+      "excluded_warmups_per_mode": 1,
+      "modes": {
+        "native": {
+          "median": 11.654671832000531,
+          "min": 11.553210576999845,
+          "max": 11.903427395000108,
+          "samples": [
+            11.903427395000108,
+            11.653707363000649,
+            11.654671832000531,
+            11.703068206999887,
+            11.804233648999798,
+            11.553210576999845,
+            11.604794933999983
+          ],
+          "repetitions": 7,
+          "ratio_to_native": 1.0,
+          "q1_seconds": 11.629251148500316,
+          "q3_seconds": 11.753650927999843,
+          "iqr_seconds": 0.12439977949952663,
+          "excluded_warmup_seconds": 11.704723767999894
+        },
+        "committed": {
+          "median": 9.65128498499962,
+          "min": 9.49856095999985,
+          "max": 9.999518867000006,
+          "samples": [
+            9.49856095999985,
+            9.999518867000006,
+            9.69865586099968,
+            9.499471191000339,
+            9.799927899000068,
+            9.499782654000228,
+            9.65128498499962
+          ],
+          "repetitions": 7,
+          "ratio_to_native": 0.8281043965991252,
+          "q1_seconds": 9.499626922500283,
+          "q3_seconds": 9.749291879999873,
+          "iqr_seconds": 0.24966495749958995,
+          "excluded_warmup_seconds": 9.547189087999868
+        },
+        "reworked": {
+          "median": 9.498940579000191,
+          "min": 9.447622849999789,
+          "max": 9.999028129999715,
+          "samples": [
+            9.498940579000191,
+            9.548801375999574,
+            9.999028129999715,
+            9.801991504999933,
+            9.448697582000023,
+            9.447622849999789,
+            9.449908651000442
+          ],
+          "repetitions": 7,
+          "ratio_to_native": 0.8150328654401668,
+          "q1_seconds": 9.449303116500232,
+          "q3_seconds": 9.675396440499753,
+          "iqr_seconds": 0.2260933239995211,
+          "excluded_warmup_seconds": 9.653426099999706
+        }
+      },
+      "paired_rounds": [
+        {
+          "round": 1,
+          "seconds": {
+            "committed": 9.49856095999985,
+            "reworked": 9.498940579000191,
+            "native": 11.903427395000108
+          },
+          "candidate_to_be58_ratio": 1.0000399659487305,
+          "candidate_wall_difference_percent": 0.003996594873045822,
+          "candidate_le_be58": false
+        },
+        {
+          "round": 2,
+          "seconds": {
+            "reworked": 9.548801375999574,
+            "native": 11.653707363000649,
+            "committed": 9.999518867000006
+          },
+          "candidate_to_be58_ratio": 0.9549260822450297,
+          "candidate_wall_difference_percent": -4.507391775497027,
+          "candidate_le_be58": true
+        },
+        {
+          "round": 3,
+          "seconds": {
+            "native": 11.654671832000531,
+            "committed": 9.69865586099968,
+            "reworked": 9.999028129999715
+          },
+          "candidate_to_be58_ratio": 1.030970504913768,
+          "candidate_wall_difference_percent": 3.097050491376807,
+          "candidate_le_be58": false
+        },
+        {
+          "round": 4,
+          "seconds": {
+            "committed": 9.499471191000339,
+            "reworked": 9.801991504999933,
+            "native": 11.703068206999887
+          },
+          "candidate_to_be58_ratio": 1.0318460162589047,
+          "candidate_wall_difference_percent": 3.184601625890471,
+          "candidate_le_be58": false
+        },
+        {
+          "round": 5,
+          "seconds": {
+            "reworked": 9.448697582000023,
+            "native": 11.804233648999798,
+            "committed": 9.799927899000068
+          },
+          "candidate_to_be58_ratio": 0.9641599080503559,
+          "candidate_wall_difference_percent": -3.5840091949644104,
+          "candidate_le_be58": true
+        },
+        {
+          "round": 6,
+          "seconds": {
+            "native": 11.553210576999845,
+            "committed": 9.499782654000228,
+            "reworked": 9.447622849999789
+          },
+          "candidate_to_be58_ratio": 0.9945093686981906,
+          "candidate_wall_difference_percent": -0.5490631301809379,
+          "candidate_le_be58": true
+        },
+        {
+          "round": 7,
+          "seconds": {
+            "committed": 9.65128498499962,
+            "reworked": 9.449908651000442,
+            "native": 11.604794933999983
+          },
+          "candidate_to_be58_ratio": 0.9791347645093721,
+          "candidate_wall_difference_percent": -2.086523549062791,
+          "candidate_le_be58": true
+        }
+      ],
+      "actual_application_processes": 29,
+      "fresh_candidate_natural_correctness_reused": false,
+      "full_storage_rows": 4,
+      "all_four_full_storage_rows_have20_fields": true,
+      "CUPTI": {
+        "committed": {
+          "available": true,
+          "kernel_count": 328,
+          "h2d_bytes": 4398579712,
+          "d2h_bytes": 1375731712
+        },
+        "reworked": {
+          "available": true,
+          "kernel_count": 328,
+          "h2d_bytes": 4398579712,
+          "d2h_bytes": 1375731712
+        }
+      }
+    },
+    "channel": {
+      "qualified_complete_protocol": true,
+      "evaluator_result": {
+        "schema_version": 4,
+        "baseline_mode": "native",
+        "baseline_seconds": 13.258414592000008,
+        "candidate_mode": "reworked",
+        "candidate_ratio": 0.8563644057299675,
+        "performance_target": {
+          "schema_version": 2,
+          "metric": "ratio_to_control",
+          "limit": 1,
+          "comparison": "le",
+          "control_mode": "committed",
+          "control_comparison": "le"
+        },
+        "target_seconds": 11.453849782999896,
+        "target_label": "\u2264 100% of committed",
+        "target_met": true,
+        "faster_than_control": true,
+        "accepted": true,
+        "comfortable": {
+          "required_measured_rounds": 7,
+          "paired_rounds_complete": true,
+          "required_excluded_warmups_per_mode": 1,
+          "warmups_complete": true,
+          "measured_rounds_by_mode": {
+            "native": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "reworked": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "committed": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          "excluded_warmups_by_mode": {
+            "native": 1,
+            "reworked": 1,
+            "committed": 1
+          },
+          "all_samples_meet_target": true,
+          "beats_control_each_round": false,
+          "met": false,
+          "meets_control_each_round": false
+        },
+        "control_comparison": "le",
+        "control_requirement_met": true
+      },
+      "median_candidate_to_be58_ratio": 0.9912854235133739,
+      "candidate_median_wall_difference_percent": -0.8714576486626102,
+      "candidate_median_wall_reduction_vs_native_percent": 14.363559427003247,
+      "same_round_candidate_le_be58": 4,
+      "measured_samples_per_mode": 7,
+      "excluded_warmups_per_mode": 1,
+      "modes": {
+        "native": {
+          "median": 13.258414592000008,
+          "min": 13.20826025399947,
+          "max": 13.461978715999976,
+          "samples": [
+            13.257568026000627,
+            13.357752902999891,
+            13.258414592000008,
+            13.208656556999813,
+            13.461978715999976,
+            13.20826025399947,
+            13.261237048000112
+          ],
+          "repetitions": 7,
+          "ratio_to_native": 1.0,
+          "q1_seconds": 13.23311229150022,
+          "q3_seconds": 13.309494975500002,
+          "iqr_seconds": 0.07638268399978188,
+          "excluded_warmup_seconds": 13.308939344999999
+        },
+        "committed": {
+          "median": 11.453849782999896,
+          "min": 11.153878016999442,
+          "max": 11.654426829999466,
+          "samples": [
+            11.654426829999466,
+            11.153878016999442,
+            11.202505084000222,
+            11.55524952900032,
+            11.453849782999896,
+            11.303747777999888,
+            11.554139118999956
+          ],
+          "repetitions": 7,
+          "ratio_to_native": 0.8638928661886189,
+          "q1_seconds": 11.253126431000055,
+          "q3_seconds": 11.554694324000138,
+          "iqr_seconds": 0.30156789300008313,
+          "excluded_warmup_seconds": 11.404811400999279
+        },
+        "reworked": {
+          "median": 11.354034332999618,
+          "min": 11.253441390999797,
+          "max": 11.451939924999351,
+          "samples": [
+            11.40267164800025,
+            11.302984560000368,
+            11.253441390999797,
+            11.25518250300047,
+            11.354034332999618,
+            11.451939924999351,
+            11.354282717000387
+          ],
+          "repetitions": 7,
+          "ratio_to_native": 0.8563644057299675,
+          "q1_seconds": 11.279083531500419,
+          "q3_seconds": 11.378477182500319,
+          "iqr_seconds": 0.09939365099990027,
+          "excluded_warmup_seconds": 11.151707285000157
+        }
+      },
+      "paired_rounds": [
+        {
+          "round": 1,
+          "seconds": {
+            "committed": 11.654426829999466,
+            "reworked": 11.40267164800025,
+            "native": 13.257568026000627
+          },
+          "candidate_to_be58_ratio": 0.9783983214557428,
+          "candidate_wall_difference_percent": -2.160167854425721,
+          "candidate_le_be58": true
+        },
+        {
+          "round": 2,
+          "seconds": {
+            "reworked": 11.302984560000368,
+            "native": 13.357752902999891,
+            "committed": 11.153878016999442
+          },
+          "candidate_to_be58_ratio": 1.0133681346320693,
+          "candidate_wall_difference_percent": 1.3368134632069317,
+          "candidate_le_be58": false
+        },
+        {
+          "round": 3,
+          "seconds": {
+            "native": 13.258414592000008,
+            "committed": 11.202505084000222,
+            "reworked": 11.253441390999797
+          },
+          "candidate_to_be58_ratio": 1.0045468675637848,
+          "candidate_wall_difference_percent": 0.4546867563784751,
+          "candidate_le_be58": false
+        },
+        {
+          "round": 4,
+          "seconds": {
+            "committed": 11.55524952900032,
+            "reworked": 11.25518250300047,
+            "native": 13.208656556999813
+          },
+          "candidate_to_be58_ratio": 0.9740319734985583,
+          "candidate_wall_difference_percent": -2.59680265014417,
+          "candidate_le_be58": true
+        },
+        {
+          "round": 5,
+          "seconds": {
+            "reworked": 11.354034332999618,
+            "native": 13.461978715999976,
+            "committed": 11.453849782999896
+          },
+          "candidate_to_be58_ratio": 0.9912854235133739,
+          "candidate_wall_difference_percent": -0.8714576486626102,
+          "candidate_le_be58": true
+        },
+        {
+          "round": 6,
+          "seconds": {
+            "native": 13.20826025399947,
+            "committed": 11.303747777999888,
+            "reworked": 11.451939924999351
+          },
+          "candidate_to_be58_ratio": 1.0131100012057845,
+          "candidate_wall_difference_percent": 1.3110001205784538,
+          "candidate_le_be58": false
+        },
+        {
+          "round": 7,
+          "seconds": {
+            "committed": 11.554139118999956,
+            "reworked": 11.354282717000387,
+            "native": 13.261237048000112
+          },
+          "candidate_to_be58_ratio": 0.9827026141938244,
+          "candidate_wall_difference_percent": -1.729738580617557,
+          "candidate_le_be58": true
+        }
+      ],
+      "actual_application_processes": 30,
+      "fresh_candidate_natural_correctness_reused": false,
+      "full_storage_rows": 4,
+      "all_four_full_storage_rows_have20_fields": true,
+      "CUPTI": {
+        "committed": {
+          "available": true,
+          "kernel_count": 301,
+          "h2d_bytes": 4036501504,
+          "d2h_bytes": 1262485504
+        },
+        "reworked": {
+          "available": true,
+          "kernel_count": 301,
+          "h2d_bytes": 4036501504,
+          "d2h_bytes": 1262485504
+        }
+      }
+    }
+  },
+  "quartile_method": "statistics.quantiles(n=4, method=inclusive); descriptive only, no confidence/noninferiority criterion",
+  "all_timing_rows": 48,
+  "measured_rows": 42,
+  "excluded_warmup_rows": 6,
+  "actual_final_campaign_application_processes": 59,
+  "standalone_natural_prequalification_application_processes": 8,
+  "campaign_retries": 0,
+  "samples_filtered": 0,
+  "timing_samples_imported": 0,
+  "limitations": [
+    "Inclusive median parity is the predeclared criterion; each case wins only4/7 same-round comparisons, and comfortable is false in both.",
+    "The small median gains overlap observed variation; no robust/comfortable or statistical-significance claim.",
+    "The separate historical20percent reduction versus native target is not satisfied by these medians.",
+    "Historical snapshot20/private21/private22/old-driver outcomes remain unchanged and are not relabeled."
+  ],
+  "source_prepared_profile_identity": {
+    "application_revision": "be38bbbec88756ef0f32d67b44dc412a71e0e6e8",
+    "compiler_snapshot": {
+      "path": "/tmp/fortran-common-basis-comparison-23/compilers/reworked",
+      "base_commit": null,
+      "tree_sha256": "57a3073369769534c1a1d57b1ae6f2ed1bdeff5499a0ea7da6aa5c3389abb401",
+      "code_sha256": "c8d7e2f31cea5dc6625884e800ebf88759cd23da55d513d923ef786644785840"
+    },
+    "profile_sha256": "000a78e8ed362b62b0f6f85026210072cbf4f7dd3d706308854e0188cc826e6e",
+    "prepared_sha256": "7c36bb39a9c3711c05a9685337af6f6fd160f0f1ed39ef744c0ea180621a69e1",
+    "runtime_id": "9517e2476a8182d00f52d62574c9573549439091eaca7a3d6ffc343f7590a4aa"
+  },
+  "bindings_sha256": {
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-01/channel-simple/report.json": "6d5030f9f6b9caba013868fe8d246e5888d57f2fe54b5b481ef1905e44b7a72c",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-01/channel-simple/controlled-transport.json": "e406b8c92b7b4c0b4ee488218e71259806aa72d58daee602f3f89698b74c4310",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-channel-simple-execution.json": "0d8f17237ca66c1f13d17e9d07dc7154573001cd2d1b7d276eb4638f2b9be667",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-01/channel/report.json": "8442e9efbbf8ba9c30ff5aafd3cb47d6f2194fabeaf7b3011a3c5946f3939211",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-01/channel/controlled-transport.json": "aadc70fb691e2aaf22be80ce754b20ffce8f1cc7a2031e5e70ecbf6d150aaf5c",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-channel-execution.json": "9884063b895777a276e3964b025623fce8b4ebc4388cd9f7bdf617256d89847a",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-plan.json": "18d81379e6e9280fdd4522e8ae4890fec557ddbc86a63a4b19040f27fb713b33",
+    "/tmp/fortran-common-basis-comparison-23/final_campaign_guard.py": "84a8bb47ba5320c11bcb3cc51e2010dc64def6a21e3e17b1b9e1cb020c07de68",
+    "/tmp/fortran-common-basis-comparison-23/root-final-campaign-authorization.json": "3c010644dba3f48f1cfc8b07e458c3210171aa6b963dde34a10c5f72e7333166",
+    "/tmp/fortran-common-basis-comparison-23/root-final-campaign-text-review.json": "29a307a840246b59f846a83f4c6a034faa15c68ae755a89b2f4c9a30439e8514",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-independent-source-peer-review.json": "55034cae2e5f1623a067da158ecb94435af41ea12d1339d15f0727d920b3c953",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-natural-binding.json": "8b09fc6529337f923abbdff0b7cec4470e64e50d6afd3cc772d34e50f91323aa",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-natural-seal-receipt.json": "8612c3def282fa1c26925bccbf3e2cf8edd290732f35b9f2e4ea742bebc0e8f1",
+    "/tmp/fortran-common-basis-comparison-23/prepared-builds.json": "7c36bb39a9c3711c05a9685337af6f6fd160f0f1ed39ef744c0ea180621a69e1",
+    "/tmp/fortran-common-basis-comparison-23/state.json": "df097f37d42823282eb431d1ed1d68c9328a661f6495d11ca468632bef8aaa9d",
+    "/tmp/fortran-common-basis-comparison-23/short-gates-summary.json": "c98f2b57bc4a435265a71ce620e1b299227e84edf0019e00d10a55d09ff2b41f",
+    "/tmp/fortran-common-basis-comparison-23/preparation-and-short-gates-closure.json": "82cd3f164c93c1eb0d44de38a15fc1be468c4a11bc7b99b9b418fcac67815f46",
+    "/tmp/fortran-common-basis-comparison-23/natural-full-storage-plan.json": "929426838eae8a90139b15fb89e805fe9935153dd12e16cc3dd50fec3f0f8b9a",
+    "/tmp/fortran-common-basis-comparison-23/natural_full_storage.py": "4cadecb46dcf56f960758f334b759b4220aebf64638ec3dd61fc7c8331d345cd",
+    "/tmp/fortran-common-basis-comparison-23/natural-full-storage-01/closure.json": "dc3a333396ad86222bf0d756405d128ef815ef6042345b4b2647e37b0e439271",
+    "/tmp/fortran-common-basis-comparison-23/natural-execution-01/execution-summary.json": "1724330a3d97e7271fcefdeb0bc735ae8395656339fa0b94b9458588478d0b5a",
+    "/tmp/fortran-common-basis-comparison-23/summarize_final_campaign.py": "c6cc0da2ecce870703b956838e0924758045eb460ce5641bdc9731cc856a6f34",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/campaigns/targets.py": "8eb9d7327c9718d9c9e8bbfc012d05afe8a47081a3f31120f2f985eaae06f0cb"
+  },
+  "analysis_outputs_sha256": {
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-analysis-01/all-timing-rows.csv": "72fa2c79f7fcbaf4e8148be926688dfb23757090cabda74c94fd8cb86ce39973",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-analysis-01/channel-evaluator-projection.json": "0fc625eb83da6b53515ab2b53096e940bfe80d639fa9937665960f9c3dd7ef77",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-analysis-01/channel-simple-evaluator-result.json": "45ea0f3c4b8816a075d0633c409e58405dc3772800996dac0838d30499ca91d3",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-analysis-01/channel-simple-evaluator-projection.json": "efe88ba39d7dc3bf1b7ca1f37e5ddc690f4d35a3b9c98540f76974c42d5db6af",
+    "/tmp/fortran-common-basis-comparison-23/final-campaign-analysis-01/channel-evaluator-result.json": "5e08318b2184c06876fb6110f2ecba383c7499fa45c90949b32ada6a22fe607c"
+  }
+}

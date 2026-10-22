@@ -1,6 +1,7 @@
 """Offline calibration uses measured costs and fails closed on bad profiles."""
 import json
 from copy import deepcopy
+from fractions import Fraction
 from types import SimpleNamespace
 
 import pytest
@@ -73,6 +74,54 @@ def test_negative_fit_latency_is_refitted_through_zero():
     assert fit["latency_seconds"] == 0
     assert fit["bandwidth_bytes_per_second"] > 0
     assert fit["fit_max_relative_error"] >= 0
+
+
+def test_multiscale_transfer_fit_matches_exact_relative_error_minimizer():
+    points = [(1, 1), (10, 1), (100, 2), (1000, 12), (10000, 110)]
+    records = [{"bytes": size, "seconds": [duration] * 5} for size, duration in points]
+    before = deepcopy(records)
+    # Solve the independent two-column normal equations in exact arithmetic.
+    sw = sum(Fraction(1, y * y) for _, y in points)
+    sx = sum(Fraction(x, y * y) for x, y in points)
+    sy = sum(Fraction(1, y) for _, y in points)
+    sxx = sum(Fraction(x * x, y * y) for x, y in points)
+    sxy = sum(Fraction(x, y) for x, y in points)
+    determinant = sw * sxx - sx * sx
+    latency = (sy * sxx - sx * sxy) / determinant
+    slope = (sw * sxy - sx * sy) / determinant
+    fit = fit_transfer(records)
+    assert fit["latency_seconds"] == pytest.approx(float(latency))
+    assert fit["bandwidth_bytes_per_second"] == pytest.approx(float(1 / slope))
+    assert fit["fit_method"] == "nonnegative_relative_least_squares_v1"
+    assert fit["fit_max_relative_error"] == pytest.approx(
+        max(abs(float(latency + slope * x) - y) / y for x, y in points))
+    assert records == before
+
+
+def test_zero_latency_boundary_uses_relative_objective():
+    points = [(1, 1), (2, 3), (4, 7)]  # Unconstrained intercept is negative.
+    fit = fit_transfer([{"bytes": x, "seconds": [y] * 5} for x, y in points])
+    slope = sum(Fraction(x, y) for x, y in points) / sum(
+        Fraction(x * x, y * y) for x, y in points)
+    assert fit["latency_seconds"] == 0
+    assert fit["bandwidth_bytes_per_second"] == pytest.approx(float(1 / slope))
+
+
+@pytest.mark.parametrize("time_scale", [1e-200, 1e200])
+def test_relative_fit_is_invariant_to_duration_units(time_scale):
+    points = [(1, 1), (10, 1), (100, 2), (1000, 12), (10000, 110)]
+    reference = fit_transfer([{"bytes": x, "seconds": [y] * 5} for x, y in points])
+    scaled = fit_transfer([{"bytes": x, "seconds": [y * time_scale] * 5} for x, y in points])
+    assert scaled["latency_seconds"] / time_scale == pytest.approx(reference["latency_seconds"])
+    assert scaled["bandwidth_bytes_per_second"] * time_scale == pytest.approx(
+        reference["bandwidth_bytes_per_second"])
+    assert scaled["fit_max_relative_error"] == pytest.approx(reference["fit_max_relative_error"])
+
+
+def test_constant_transfer_duration_cannot_fabricate_finite_bandwidth():
+    records = [{"bytes": size, "seconds": [1.0] * 5} for size in (1, 10, 1000)]
+    with pytest.raises(CalibrationError, match="seconds per byte"):
+        fit_transfer(records)
 
 
 def test_single_thread_has_no_hybrid_cpu_worker_rate():

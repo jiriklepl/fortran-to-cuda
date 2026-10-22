@@ -1,0 +1,604 @@
+{
+  "schema_version": 1,
+  "status": "READ_ONLY_TARGETED_CLOSURE_AND_HISTORY_IDENTITIES_VERIFIED",
+  "groups_are_overlapping_not_additive": true,
+  "historical_full_suite_current_rerun_claim": false,
+  "historical_full_suite_snapshot": "main1a8ddc8/companion40bd784;8899PASS+2structuralSKIP applies to that prior snapshot",
+  "frozen_current_compiler_code_map": {
+    "path": "/tmp/fortran-goal-resume-23/current-frozen-compiler-code-map.json",
+    "sha256": "9bafd4b2200ee932230a3d4cf4686baaf8233d9b1c83264fbceec33f2731a841",
+    "bytes": 72868
+  },
+  "current_edited_sources_sha256": {
+    "/home/jirka/research/fortran-abomination/compiler/emission/cuda/offload.py": "87f6c42837c9125e86e06f5b89cb32428dbe764193be9ed34c830ae064064d25",
+    "/home/jirka/research/fortran-abomination/compiler/offload/calibrate.py": "04e1ddbc8204fdd2dc1a5c12f5dacf6b38402f12e8a4db9d47753a26fde755fd",
+    "/home/jirka/research/fortran-abomination/compiler/scopes/lexical.py": "d156c41a41a58aa11e08e04cbabd12aaa04d5331e39d9a0b431c328a9ecc33cc",
+    "/home/jirka/research/fortran-abomination/compiler/scopes/native_prefix.py": "28a00f2a3d2d8b5c5ab37fbe61d2387e0d5fbf700f0d4f4db4e363b68ff344bd",
+    "/home/jirka/research/fortran-abomination/compiler/tests/test_fresh_native_prefix.py": "7bfbb04332c7f367754754be292cb3979527303244da456dc105e00efa1d8005",
+    "/home/jirka/research/fortran-abomination/compiler/tests/test_offload_profile.py": "804e4aea0e7736f93e5f8c7862cc97b3d0c5e72be9df80edd16cd79bdf30549b",
+    "/home/jirka/research/fortran-abomination/containers/application_basis.py": "31c68b1be9831a15ce4e168e36100c92f40f68af1183d23d0570c59067e4f189",
+    "/home/jirka/research/fortran-abomination/containers/patches/elmm-deterministic-top.patch": "707f87819df0841831f082a6a915e4d630b767fcaf1a8336cf006fe63a621805",
+    "/home/jirka/research/fortran-abomination/containers/sgs_contract.json": "14779356c3b1991bbbe1a19c2ab33094957391c8435dd4436905ad32bd20c28f",
+    "/home/jirka/research/fortran-abomination/containers/workflow.py": "b2b9431874a6fb08dc1ec41f14fa32f0b1ab49707bf5643a3942b9c86a68e8ec",
+    "/home/jirka/research/fortran-abomination/containers/reproduce_e2e.py": "939b9522b6cbd6fc8400821fc96269e98e381b0da3e3b92142d9e6c9a9b2290a",
+    "/home/jirka/research/fortran-abomination/containers/README.md": "e5503ba1a8da35c227c31db11e374261f4e036e5c2ed30ea540c39ac53b842bc",
+    "/home/jirka/research/fortran-abomination/containers/tests/test_application_basis.py": "44e1215d024ba2f2affb89a07a22766b474611e2624c4c13a63b93f4f3d6a9ea",
+    "/home/jirka/research/fortran-abomination/containers/tests/test_workflow.py": "1c9713ccb95c2b5e547d358bfc0c46d321ff88ac325b33a1e17c063d4410d4c2",
+    "/home/jirka/research/fortran-abomination/containers/tests/test_reproduce_e2e.py": "eedb63cee67549c27ba14989c2fa981a543f36e09bc064bbe49e6f635ba57b6e",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/gpu_validation.py": "cc38c723e6c2eea86f6cc7bca8ec1f06b547197b9d37a293ec13d15d3707e086",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/tests/test_gpu_validation.py": "1e5b051cf1bce0dd2770dd7d7a6e785b18679274db02905c7ab3bfd6cb5e4b57",
+    "/home/jirka/research/fortran-abomination/elmm-pipeline/tests/test_campaigns.py": "39156539bc4da408c67fff619357a661118eaccf35a7c200bb773d3c48948d91"
+  },
+  "groups": [
+    {
+      "group": "host_identity",
+      "scope_and_count": "47 CPU +2 actual CUDA nodes, overlapping later merged tests.",
+      "phase_statuses": [
+        "CPU47PASS",
+        "actualCUDA2PASS/0skip",
+        "Original ptrace sandbox failure retained; subsequent independent CPU control passed"
+      ],
+      "artifacts": [
+        {
+          "path": "/tmp/fortran-goal-resume-23/host-identity-change-closure.json",
+          "sha256": "8e216587e0c863927db36cd5a391c7ee3f8b1727295b5df2a360bf55f8e3faa5",
+          "bytes": 1489,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-goal-resume-23/host-identity-control/original.build.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-goal-resume-23/host-identity-control/original.openat.trace",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-goal-resume-23/host-identity-control/original.stderr",
+          "sha256": "ab9c679a04167e064aeebfb39b47bba514aa65410ddf8a7828463e5d3dbc1c30",
+          "bytes": 147,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-goal-resume-23/host-identity-control/original.stdout",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-goal-resume-23/host-identity-control-v2/original.build.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-goal-resume-23/host-identity-control-v2/original.openat.trace",
+          "sha256": "0f1329a2f2a7a2cd1deb4d91f8ccde1de1e7cb32eaa75c2cf9346cd725f802f9",
+          "bytes": 2430,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-goal-resume-23/host-identity-control-v2/original.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-goal-resume-23/host-identity-control-v2/original.stdout",
+          "sha256": "cb50bb5e9da946bc88a26c617c68d3e429eca92721973e2283cf6f54d208f338",
+          "bytes": 60,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-goal-resume-23/host-identity-control-v2/report.json",
+          "sha256": "cc00ebe2bb29f0a3a7db19f5bacec5f55c3dd12126d09210ea1a935e0f187760",
+          "bytes": 2988,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-goal-resume-23/host-identity-control-v2/shared.build.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-goal-resume-23/host-identity-control-v2/shared.openat.trace",
+          "sha256": "83e0fb89a27506c4fe460a081ea14bd87e72f4d15a4555ae0614280dac8bcbcd",
+          "bytes": 1662,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-goal-resume-23/host-identity-control-v2/shared.stderr",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-goal-resume-23/host-identity-control-v2/shared.stdout",
+          "sha256": "6f8566ba340137c6c2a2bea13d7e958b2cb64d169ecf9ca05f118d4b2009a73c",
+          "bytes": 61,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-goal-resume-23/host-identity-cpu-tests.xml",
+          "sha256": "8115602a84c517d5fdebdcb09cd46c2da67a48844d503071d9d63d122aefa6f7",
+          "bytes": 7376,
+          "existing_bound_hash_verified": true,
+          "observed_xml": {
+            "testcase_records": 47,
+            "failed_or_error_records": 0,
+            "skipped_records": []
+          }
+        },
+        {
+          "path": "/tmp/fortran-goal-resume-23/host-identity-cuda-tests.xml",
+          "sha256": "150bdee6b5dc5f4468600fb9f4561ac1665d31c5e71a9645b1b3f0e708efe191",
+          "bytes": 574,
+          "existing_bound_hash_verified": true,
+          "observed_xml": {
+            "testcase_records": 2,
+            "failed_or_error_records": 0,
+            "skipped_records": []
+          }
+        }
+      ],
+      "limitations": [
+        "No standalone pytest command/log files are retained beside the host-identity XML; source-bound closure records tested identities and exact node counts.",
+        "Control timings are CPU microdiagnostics, not application wall budgets."
+      ]
+    },
+    {
+      "group": "native_prefix",
+      "scope_and_count": "76 effective current source nodes:66 unchanged regression nodes plus10 final-current prefix nodes; not a single76-node invocation.",
+      "phase_statuses": [
+        "attempt01:6PASS historical",
+        "attempt02:incomplete68dots, unknown exit/noJUnit NOTPASS",
+        "attempt03:74PASS including8superseded prefix nodes",
+        "cpu-final:9PASS+1FAIL configure-abort fixture",
+        "cpu-final-recovery:10PASS before equivalent lint split",
+        "cpu-final-lint-recovery:10PASS exact final file"
+      ],
+      "artifacts": [
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-attempt-01/junit.xml",
+          "sha256": "93757ef348bad743a1076c9560fd72cab89d080e48627911efddb1b97a776604",
+          "bytes": 1115,
+          "existing_bound_hash_verified": true,
+          "observed_xml": {
+            "testcase_records": 6,
+            "failed_or_error_records": 0,
+            "skipped_records": []
+          }
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-attempt-01/output.log",
+          "sha256": "884c771516d82afbf1c81181fcd1182306d04fb44615cf063da9336bd0322b22",
+          "bytes": 98,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-attempt-02/incomplete-closure.json",
+          "sha256": "1a3fc23c3324b35350d5a60dfd77d5905c68090d50c65f07d871b09456668070",
+          "bytes": 776,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-attempt-02/output.log",
+          "sha256": "3e5367b18fd9abed82f9c256e0522b2d9ac190cc337d1330e60b98a4fad9f4e6",
+          "bytes": 68,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-attempt-03/command.json",
+          "sha256": "3d846711424f79f56db9e883414597d9de7ce957c9aede45d37def3a040c9b79",
+          "bytes": 1302,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-attempt-03/completion.json",
+          "sha256": "5e48c797df6b5709e5ebc78a2d3258332b7bea1665719f52a4b7402d2c56f26e",
+          "bytes": 1361,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-attempt-03/junit.xml",
+          "sha256": "d3fb5bab0fcd3c91e691be424e8de8897c809c1cb9e926909032e453846e2ec3",
+          "bytes": 11682,
+          "existing_bound_hash_verified": true,
+          "observed_xml": {
+            "testcase_records": 74,
+            "failed_or_error_records": 0,
+            "skipped_records": []
+          }
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-attempt-03/output.log",
+          "sha256": "668171fd37a1ec3639fc2e96a35fc3757c71178192f0940c968ba977f1da3c38",
+          "bytes": 180,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-final/command.json",
+          "sha256": "b806d31ac76b33601405a6926d614c3202ad24200f9f6afd2030048a40a808d4",
+          "bytes": 672,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-final/completion.json",
+          "sha256": "bb9e0aed905ededa125b1a0a956f623e1c41e89fbf089301e2442f767e55219c",
+          "bytes": 731,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-final/junit.xml",
+          "sha256": "d2d235b6570a1ca9b93f3d23a464594eb31e0c7bc94370eec462a7cbab4fc4fb",
+          "bytes": 11622,
+          "existing_bound_hash_verified": false,
+          "observed_xml": {
+            "testcase_records": 10,
+            "failed_or_error_records": 1,
+            "skipped_records": []
+          }
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-final/output.log",
+          "sha256": "fe38f72196bbdb0eae496fd97226ca92f87b4114b9bc2eb97cd1f2dfd26fa539",
+          "bytes": 9093,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-final-lint-recovery/command.json",
+          "sha256": "0fd156750ca33d0bf06abc1ab078d5f136961612fa6eb792701f50967ef37016",
+          "bytes": 792,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-final-lint-recovery/completion.json",
+          "sha256": "d8952bffa4fc93a986ab31a16639f20ae7ebb448ef18ee94fe93cdbc636576ad",
+          "bytes": 850,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-final-lint-recovery/junit.xml",
+          "sha256": "5c7136c8910758ca8a77ef924b6701de9e7703469270208d2cd027bf94f173fd",
+          "bytes": 1724,
+          "existing_bound_hash_verified": true,
+          "observed_xml": {
+            "testcase_records": 10,
+            "failed_or_error_records": 0,
+            "skipped_records": []
+          }
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-final-lint-recovery/output.log",
+          "sha256": "8a07d9c371e2c71bf435dd33b7d502b36eca1bc16a346f985008242f479a559d",
+          "bytes": 100,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-final-recovery/command.json",
+          "sha256": "0635d32965ec6930e0b4353c3400ad43ffaa579121b84995a490fae280bff509",
+          "bytes": 772,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-final-recovery/completion.json",
+          "sha256": "dff3ebe9aaa15ccf235cbf5bbc339634d16c89fecc989c3f8e1d0424f956bb7c",
+          "bytes": 831,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-final-recovery/junit.xml",
+          "sha256": "e38f0e2b1876ac0022c69e578726be14e037da50d9a2a6a2504300b9f0e1eedf",
+          "bytes": 1722,
+          "existing_bound_hash_verified": false,
+          "observed_xml": {
+            "testcase_records": 10,
+            "failed_or_error_records": 0,
+            "skipped_records": []
+          }
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/cpu-final-recovery/output.log",
+          "sha256": "2bab43a35c12713a48dcb6fbdebbfe60164041d3a0bbea18f1a4156a08bee07e",
+          "bytes": 100,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/source-closure/closure.json",
+          "sha256": "f0760537de7c201aac7c12c09a17f2a6ec4855b0e32844fab8b34f4c056069fd",
+          "bytes": 6619,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/source-closure/root-authorized-promotion.json",
+          "sha256": "c7f91db43c03ea58ffa2f3a73d0f8227ccec697d243c98cd78c608fd11e56968",
+          "bytes": 1486,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/ruff-final-v2.log",
+          "sha256": "60806d98d22d035185c0e96785e030a0fcb47cd699ffcdb11dd90f389d2350b7",
+          "bytes": 676
+        },
+        {
+          "path": "/tmp/fortran-native-prefix-23/ruff-final-v3.log",
+          "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+          "bytes": 19
+        }
+      ],
+      "limitations": [
+        "All8 earlier prefix nodes are superseded by the full10-node final file, including one renamed node; do not count their union as77 current nodes.",
+        "Prior errors/incomplete process and PT018 lint evidence are preserved, not relabelled."
+      ]
+    },
+    {
+      "group": "merged_main",
+      "scope_and_count": "57 merged source/planning nodes, overlapping other groups.",
+      "phase_statuses": [
+        "57PASS/0skip"
+      ],
+      "artifacts": [
+        {
+          "path": "/tmp/fortran-goal-resume-23/merged-cpu-closure.json",
+          "sha256": "cf6bfe7e8b8097d865aff296d329a6161c40982f8b46b721666dca381d9c1767",
+          "bytes": 1314,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-goal-resume-23/merged-cpu-tests.xml",
+          "sha256": "56318ba86215930d3b7ae3e06ff1ff014e50157d79e641bf652be2a70a7d12a6",
+          "bytes": 8853,
+          "existing_bound_hash_verified": true,
+          "observed_xml": {
+            "testcase_records": 57,
+            "failed_or_error_records": 0,
+            "skipped_records": []
+          }
+        }
+      ],
+      "limitations": [
+        "No separate command log beside merged XML; closure retains test file list/exit0/source SHA map."
+      ]
+    },
+    {
+      "group": "relative_transfer_fit",
+      "scope_and_count": "209 profile/numerical/calibration nodes plus1 unchanged planner control, total210.",
+      "phase_statuses": [
+        "209PASS/0skip",
+        "planner1PASS/0skip",
+        "Existing e>=1/negative/NaN rejection and400 endpoint controls unchanged"
+      ],
+      "artifacts": [
+        {
+          "path": "/tmp/fortran-driver13050-calibration-23/relative-fit-v1/closure.json",
+          "sha256": "d38447cc6854cd53fd9df9739486780e16033fa1c82dee34426a0976133e9cf2",
+          "bytes": 9775,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-driver13050-calibration-23/relative-fit-v1/cpu-tests-01/command.json",
+          "sha256": "b4c8d21332ed73d764a370ee33dbf8c7f6d4e625830f695333eb002a93dd3485",
+          "bytes": 2247,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-driver13050-calibration-23/relative-fit-v1/cpu-tests-01/junit.xml",
+          "sha256": "933f97e439ad65b37bc1eb8820814d4b530499e96ded77729248434e7dc4f2c6",
+          "bytes": 31654,
+          "existing_bound_hash_verified": true,
+          "observed_xml": {
+            "testcase_records": 209,
+            "failed_or_error_records": 0,
+            "skipped_records": []
+          }
+        },
+        {
+          "path": "/tmp/fortran-driver13050-calibration-23/relative-fit-v1/cpu-tests-01/stderr.raw",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-driver13050-calibration-23/relative-fit-v1/cpu-tests-01/stdout.raw",
+          "sha256": "138124df3bffb77820223e0ed540ee3566f2169ff798431aba140afed3caf4f0",
+          "bytes": 260,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-driver13050-calibration-23/relative-fit-v1/lint.json",
+          "sha256": "ff2cba8d7d80abbdca17bd61cf12cb608f23d82f2970576d785869b67a10ed6b",
+          "bytes": 4538,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-driver13050-calibration-23/relative-fit-v1/planner-guard-01/command.json",
+          "sha256": "6dfa49fed9ea4e052be15fab655db64c486c2999562883b7652c472829376d4b",
+          "bytes": 1476,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-driver13050-calibration-23/relative-fit-v1/planner-guard-01/junit.xml",
+          "sha256": "88bb46028295b86d0097c81e128f95d08cea600c4a05a6ccd8cd9b63d44061ee",
+          "bytes": 389,
+          "existing_bound_hash_verified": true,
+          "observed_xml": {
+            "testcase_records": 1,
+            "failed_or_error_records": 0,
+            "skipped_records": []
+          }
+        },
+        {
+          "path": "/tmp/fortran-driver13050-calibration-23/relative-fit-v1/planner-guard-01/stderr.raw",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-driver13050-calibration-23/relative-fit-v1/planner-guard-01/stdout.raw",
+          "sha256": "a8c9805967032c1537f3c0e77c87aa3293b5d7891c88fa87919b13650a47341b",
+          "bytes": 98,
+          "existing_bound_hash_verified": true
+        }
+      ],
+      "limitations": [
+        "No hardware measurement rerun for relative fitting; derived profile preserves original independent raw campaign and scoped/nontransfer inputs."
+      ]
+    },
+    {
+      "group": "container_common_basis",
+      "scope_and_count": "201 full container tests plus4subtests at then-current tree; final affected reproducer59PASS; earlierfocused114 overlaps.",
+      "phase_statuses": [
+        "focused114PASS+4subtests",
+        "full201PASS+4subtests",
+        "final affected reproducer59PASS"
+      ],
+      "artifacts": [
+        {
+          "path": "/tmp/fortran-approved-common-basis-01/public-integration-closure.json",
+          "sha256": "68536acf7c5fa887888ee03ca302c9105c78c4403d471de84982a48958009774",
+          "bytes": 5911,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-approved-common-basis-01/public-integration-full-containers.log",
+          "sha256": "d7f4ef92a52fca4ec51073d41ad926cd74940ef295914ef36a030101d865540a",
+          "bytes": 276,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-approved-common-basis-01/public-integration-full-containers.xml",
+          "sha256": "257f70d98a42716ed5b5235ea73ad51633415136ddf6b5cf43eaa4d55ad05d25",
+          "bytes": 30194,
+          "existing_bound_hash_verified": true,
+          "observed_xml": {
+            "testcase_records": 201,
+            "failed_or_error_records": 0,
+            "skipped_records": []
+          }
+        },
+        {
+          "path": "/tmp/fortran-approved-common-basis-01/public-integration-tests.log",
+          "sha256": "162e779117eeba47315280bad79984c93ced1a93fb2b1b19687fd2aa59d7fb37",
+          "bytes": 196,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-approved-common-basis-01/public-integration-tests.xml",
+          "sha256": "fba28927b625e90a19e1c15d508b409ab7dadf1cd714c5ae19b7107ef0893178",
+          "bytes": 17267,
+          "existing_bound_hash_verified": true,
+          "observed_xml": {
+            "testcase_records": 114,
+            "failed_or_error_records": 0,
+            "skipped_records": []
+          }
+        },
+        {
+          "path": "/tmp/fortran-approved-common-basis-01/reproducer-final-tests.log",
+          "sha256": "88efd0d70655573412386150c9a06f56cb9c2e8d9f15f95ac26ef2f9a73e9aec",
+          "bytes": 99,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-approved-common-basis-01/reproducer-final-tests.xml",
+          "sha256": "b56fe68d2b66481c28220b291180463701cd1101a70dd76e222666e3990127b1",
+          "bytes": 9256,
+          "existing_bound_hash_verified": true,
+          "observed_xml": {
+            "testcase_records": 59,
+            "failed_or_error_records": 0,
+            "skipped_records": []
+          }
+        },
+        {
+          "path": "/tmp/fortran-approved-common-basis-01/runtime-independent-peer-review.json",
+          "sha256": "d1298e6517ed683645e1fddf7b90bb8b1cf3226d7264bfe7f0b54d178834be3a",
+          "bytes": 2959,
+          "existing_bound_hash_verified": false
+        }
+      ],
+      "limitations": [
+        "One trivial added reproducer test was replaced after full201; exact final affected59-file run passed.",
+        "Post-test README/contract explanatory text changes do not alter source hashes/options/helper behavior."
+      ]
+    },
+    {
+      "group": "companion_native_selection",
+      "scope_and_count": "130PASS+273subtests with1original capabilitySKIP; separate exact capability1PASS resolves it without relabeling old XML.",
+      "phase_statuses": [
+        "original130PASS+273subtests+1explicit-envSKIP",
+        "exact available capability1PASS/0skip"
+      ],
+      "artifacts": [
+        {
+          "path": "/tmp/fortran-goal-resume-23/explicit-native-policy-test.xml",
+          "sha256": "9df2de4b6a152d41c7fd76857f7fc386b6c0d1b55a02f2f8b4ca9309eca396a8",
+          "bytes": 405,
+          "existing_bound_hash_verified": true,
+          "observed_xml": {
+            "testcase_records": 1,
+            "failed_or_error_records": 0,
+            "skipped_records": []
+          }
+        },
+        {
+          "path": "/tmp/fortran-native-selection-validator-23/capability-addendum.json",
+          "sha256": "b1c3f2f2d4d877a8989291bba3b2fad4079dfa5bedc29a6af2c7abcfe1cac587",
+          "bytes": 1314,
+          "existing_bound_hash_verified": false
+        },
+        {
+          "path": "/tmp/fortran-native-selection-validator-23/closure.json",
+          "sha256": "06bd0b228e36712d9ffc5ea5a00cb04fe63850f73e4ac3d2b7b219ec15d7977d",
+          "bytes": 3132,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-native-selection-validator-23/lint.json",
+          "sha256": "f67f39ec1582087c4384cc4a2a3ac326d441f4a6e7e55d21ff09a0d49f22cefe",
+          "bytes": 6919,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-native-selection-validator-23/tests-command.json",
+          "sha256": "7a4415c685b7e0c49904c587583df0906a99b5d06ded79b04a9b16c59495252e",
+          "bytes": 1875,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-native-selection-validator-23/tests.log",
+          "sha256": "e1e272d00055494792e5519d42163e551f53f275e62c86c59ea414e3ecd6f2fe",
+          "bytes": 235,
+          "existing_bound_hash_verified": true
+        },
+        {
+          "path": "/tmp/fortran-native-selection-validator-23/tests.xml",
+          "sha256": "472ef1969f90f061a1f49d8646c4ed05feb6605e479f71d3eac3171c1e9e03df",
+          "bytes": 25446,
+          "existing_bound_hash_verified": true,
+          "observed_xml": {
+            "testcase_records": 131,
+            "failed_or_error_records": 0,
+            "skipped_records": [
+              {
+                "name": "test_isolated_checkouts_use_public_policy_and_native_query",
+                "reason": "requires explicit compiler/Python and GNU compilers"
+              }
+            ]
+          }
+        }
+      ],
+      "limitations": [
+        "Original skip remains in raw phase. Capability addendum binds separate actual GNU/native-query run.",
+        "Three unchanged baseline Ruff findings, zero new findings."
+      ]
+    }
+  ],
+  "new_test_app_build_calibration_executions": 0,
+  "recommendation": "No additional targeted check materially missing after these source-bound tests and fresh two-step/fullnatural/final campaign integration. Avoid redundant repeats."
+}

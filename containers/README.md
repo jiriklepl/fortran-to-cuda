@@ -2,7 +2,7 @@
 
 `./run_on_node.sh` remains the top-level Slurm command. It forwards to
 `containers/run_node.sh`; local, Docker/Podman and Apptainer entrypoints run the
-same experiment. The experiment builds **pristine upstream native ELMM and a
+same experiment. The experiment builds **native ELMM on the reviewed common source basis and a
 fresh compiler-generated SGS sections/direct variant**, checks final and available
 averaged VTK fields,
 verifies actual GPU launches separately, then measures complete process time.
@@ -83,6 +83,8 @@ the launcher does not install packages into a system Python on the headnode.
 An already prepared `elmm-pipeline/.cache` is reused, as in the original workflow;
 missing preparation uses writable work storage. Native execution also retains
 the original preference for `gfortran-15` when available, unless `FC` is supplied.
+After upstream setup or cache reuse, the workflow reconstructs clean comparison
+checkouts under `WORK_DIR/application-basis`. Upstream caches are never patched.
 
 `--runtime auto` uses Apptainer/Singularity when its image is available, otherwise
 the installed native toolchain on the **allocated worker**. Select
@@ -192,8 +194,32 @@ provisioning. The compiler and pipeline remain independent checkouts.
 The SGS preset is an explicit application experiment, not a generic compiler
 heuristic. Its portable contract pins reviewed caller capture facts and source
 hashes; source/contract drift fails before compilation. The channel-simple
-fixture records its cloud repository revision and parser conversions. Upstream
-ELMM files are not repaired or manually changed for the native baseline.
+fixture records its cloud repository revision and parser conversions. All modes
+use the same approved ELMM derivative of upstream
+`ddb426fca5b020216083f02a218292fea70c1df2`: only the TOP/BOTTOM plane-average
+reduction uses fixed-order `MASTER` accumulation followed by its required barrier.
+These configurations retain TOP referencing.
+The user-approved [patch](patches/elmm-deterministic-top.patch) produces pressure
+SHA256 `65d6ee76dc4b63b4545a1bfd481dbf875cb168f55a484bac7d0a39b78f21f7d0`
+and deterministic local commit `be38bbbec88756ef0f32d67b44dc412a71e0e6e8`.
+PoisFFT, capture facts, includes, build options and numerical tolerances remain
+unchanged. This derivative is reconstructed locally; it is not advertised as a
+revision available from the upstream remote. Historical pristine-upstream
+measurements and private pressure-only links retain their original provenance.
+
+The shared preparation utility can also run explicitly, using already prepared
+upstream repositories as read-only inputs:
+
+```bash
+.venv/bin/python containers/application_basis.py \
+    --upstream-root elmm-pipeline/.cache/repos --output out/approved-applications
+```
+
+It creates clean ELMM/PoisFFT Git siblings and records the patch, fixed commit
+metadata and every command beside them. Reusing a destination validates its
+pinned revisions and all tracked inputs; dirty or unexpected sources are
+rejected, never reset. An explicit `--app-root` bypasses preparation and still
+must pass the same strict source-contract and clean-checkout checks.
 
 Each run records tools, GPU UUID, CPU affinity, effective memory headroom,
 source/artifact/configuration hashes, separate correctness/GPU diagnostics,
@@ -268,7 +294,7 @@ available through either container launcher.
 
 ## Fresh three-way compiler comparison (`e2e`)
 
-`reproduce_e2e.py` builds pristine original native ELMM, the committed compiler's
+`reproduce_e2e.py` builds native ELMM on that common approved basis, the committed compiler's
 SGS/direct control, and a selected reworked compiler graph. It never executes
 historical binaries or reuses historical timings. The committed compiler comes
 from `git archive` of the selected revision, irrespective of dirty/staged files;
@@ -276,6 +302,9 @@ the candidate compiler is frozen in a separate snapshot before compilation.
 The default committed revision is `be58ab809296b97ea39d701828a2621adfc6b3dc`, the historical
 SGS/direct control. `--committed-ref` can explicitly select another compatible
 historical compiler revision.
+When `--app-root` is omitted, the same shared utility reconstructs the basis from
+the pipeline's upstream cache into a sibling of the new output directory named
+`OUTPUT-application-basis`. Existing explicit prepared roots remain supported.
 
 ```bash
 # Fresh full-duration comparison, one warmup and seven rotated samples per mode.

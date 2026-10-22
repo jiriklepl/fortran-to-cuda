@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "base_commit": "40bd7843fc07c0e7dae02d55c18aaff07bf75428",
+  "commit": "55ba91723749eb28269c471819e3045ee8ae507e",
+  "source_sha256": {
+    "elmm_pipeline/gpu_validation.py": "cc38c723e6c2eea86f6cc7bca8ec1f06b547197b9d37a293ec13d15d3707e086",
+    "tests/test_gpu_validation.py": "1e5b051cf1bce0dd2770dd7d7a6e785b18679274db02905c7ab3bfd6cb5e4b57",
+    "tests/test_campaigns.py": "39156539bc4da408c67fff619357a661118eaccf35a7c200bb773d3c48948d91"
+  },
+  "source_matches_tested_content": true,
+  "status_after_commit": "",
+  "patch": {
+    "path": "/tmp/fortran-goal-resume-23/companion-followup.diff",
+    "sha256": "b58a7b24c5d72b020d126fbb969cdc545a3522605a37fa0a5b0948905eb42d61"
+  },
+  "user_authorization": "also commit the stage pls; local commit only",
+  "created_unix": 1792673338.109691
+}

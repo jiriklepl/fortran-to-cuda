@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "status": "CLEAR",
+  "reviewed_readme": {
+    "path": "/home/jirka/research/fortran-abomination/benchmarks/reports/graph-redesign-parity-20261022/README.md",
+    "sha256": "67cd1f29170555cc0dcb414d24eef5e62c69c561af0bfcd298c1dcf3cf1a67b1"
+  },
+  "material_corrections": [],
+  "checks": [
+    "All reported medians/percentages and inclusive target versus separate comfortable/numeric-native target match immutable d260 analysis.",
+    "All eight standalone natural runs and both repeated fresh candidate natural checks,20 fields/bounds/halos/VTK/tolerances, exact maximum errors and byte-identity claims match run records/independent closure.",
+    "Separate actual CUPTI kernel counts/bytes agree for both compiler modes in both cases; zero carriers and short-gate waits14versus7 match public records.",
+    "Combined timing logs versus separately captured diagnostic streams are distinguished;59final+8standalone application counts and48timing rows are exact.",
+    "All README relative links resolve; local approved source reconstruction and driver/profile/frozen/prepared/companion identities are accurately scoped.",
+    "Overlapping targeted groups, incomplete attempts/capability skip resolution and historical8899+2 versus no fresh full-suite rerun are clearly distinguished.",
+    "Open cross-context residency/native-hint limitations,4/7paired wins and comfortablefalse prevent broad robustness/optimization overclaim."
+  ],
+  "review_scope": "Read-only README/numerical/provenance/link review; archive creation/member verification is performed by root packager, not repeated here.",
+  "actions": "No repository/source edits, applications, tests, builds or performance reruns."
+}
