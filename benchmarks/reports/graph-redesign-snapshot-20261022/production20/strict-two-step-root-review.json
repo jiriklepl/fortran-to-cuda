@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-10-22T05:21:57.073766+00:00",
+  "kind": "root-current20-smoke-review",
+  "summary": {
+    "path": "/tmp/fortran-candidate20-gates-01/summary.json",
+    "sha256": "b6eb8748f91a691ced94bce6e309ef51908a879d92df3e38a9f062b0903b3e6b"
+  },
+  "checks": [
+    {
+      "case": "channel-simple",
+      "report": {
+        "path": "/tmp/fortran-graph-20-smoke-channel-simple/report.json",
+        "sha256": "67d191394c9925d99c130f362a3fa2ffb2d337877fe024508fd2ac4c03d27300"
+      },
+      "all20_strict_and_VTK": true,
+      "current20_calibration_bound": true,
+      "CUPTI7numerical0carrier": true,
+      "payload_bytes": [
+        93872128,
+        29360128
+      ]
+    },
+    {
+      "case": "channel",
+      "report": {
+        "path": "/tmp/fortran-graph-20-smoke-channel/report.json",
+        "sha256": "27313eee66ef3fceb74de91ff65ccc2b9b4636300549d2f4f9643e16dd27d45b"
+      },
+      "all20_strict_and_VTK": true,
+      "current20_calibration_bound": true,
+      "CUPTI7numerical0carrier": true,
+      "payload_bytes": [
+        93872128,
+        29360128
+      ]
+    }
+  ],
+  "trajectory_deviations": [],
+  "ready_for_fresh_development_plan_review": true,
+  "timing_execution_authorized": false,
+  "full_natural_or_final_performance_qualification": false,
+  "original_TOP_basis_approval": "pending_no_substitution"
+}

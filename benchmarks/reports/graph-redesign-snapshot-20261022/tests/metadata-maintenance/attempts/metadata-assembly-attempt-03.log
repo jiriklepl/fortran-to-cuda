@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/tmp/fortran-committable-snapshot-20261022/assemble_test_evidence.py", line 218, in <module>
+    main()
+    ~~~~^^
+  File "/tmp/fortran-committable-snapshot-20261022/assemble_test_evidence.py", line 135, in main
+    assert isinstance(selected_count, int) and len(selected) == selected_count
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

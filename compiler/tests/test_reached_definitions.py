@@ -1,9 +1,14 @@
 """Entry obligations follow original definitions, branches and child mappings."""
 
+import json
+
 import pytest
 
+from compiler._legacy.config import LegacyCompilerOptions, LegacyOffloadConfig
+from compiler.ir import CompilationError
+from compiler.scopes.procedures import BorrowedCoordinator
+from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT, generate
-
 
 SOURCE = '''module ordered_storage
 implicit none
@@ -54,13 +59,39 @@ def child(manifest):
                 if item['procedure'] == 'ordered_storage::child')
 
 
+def legacy_child(original):
+    """Retain the bounded coordinator's independent branch-meet proof oracle."""
+    builder = ScopeBuilder([original], 'ordered_storage::step',
+        facts=json.loads((original.parent/'captures.json').read_text()),
+        options=LegacyCompilerOptions(),
+        config=LegacyOffloadConfig(policy='sections', scope_execution='reached'))
+    return BorrowedCoordinator(builder, 'ordered_storage::child', set())
+
+
+def module_child(manifest):
+    owner, = manifest['scopes']
+    module, = [item for item in owner['module_coordinators']
+               if item['procedure'] == 'ordered_storage::child']
+    assert module['interface'] == 'original_module_entry_v1'
+    assert module['resource_mappings'] == {'argument::b': 'argument::b', 'argument::indices': 'argument::n'}
+    checked, = [item for item in owner['checked_execution_plan']['procedures']
+                if item['procedure'] == module['procedure']]
+    call, = checked['calls']
+    assert call['caller'] == 'ordered_storage::step'
+    assert all(actual == module['resource_mappings'][formal] for item in checked['units']
+               for formal, actual in item['resources'].items())
+    return checked
+
+
 def test_full_child_definition_satisfies_later_conservative_access(tmp_path):
     original, output, manifest = build(tmp_path)
     assert not manifest['scopes'][0]['boundaries'], manifest['boundaries']
-    proof = child(manifest)['ordered_definitions']
+    proof = legacy_child(original).definition_summary.public()
     assert proof['required_whole'] == ['argument::indices']
     assert 'argument::b' in proof['whole_on_return']
     assert 'argument::b' in proof['possible_definition_changes']
+    touch, = module_child(manifest)['units']
+    assert touch['ordered_definitions']['required_whole'] == ['argument::b', 'argument::indices']
     generated = (output/manifest['sources'][str(original)]['replacement']).read_text()
     assert 'fort_scope_plan_validate(fort_context)' in generated
 
@@ -68,9 +99,11 @@ def test_full_child_definition_satisfies_later_conservative_access(tmp_path):
 def test_every_branch_can_restore_whole_storage(tmp_path):
     source = SOURCE.replace('call fill(b)\ncall touch',
                             'if(flag) then\ncall fill(b)\nelse\ncall fill(b)\nendif\ncall touch')
-    _, _, manifest = build(tmp_path, source)
+    original, _, manifest = build(tmp_path, source)
     assert not manifest['scopes'][0]['boundaries'], manifest['boundaries']
-    assert child(manifest)['ordered_definitions']['required_whole'] == ['argument::indices']
+    assert legacy_child(original).definition_summary.public()['required_whole'] == ['argument::indices']
+    touch, = module_child(manifest)['units']
+    assert touch['ordered_definitions']['required_whole'] == ['argument::b', 'argument::indices']
 
 
 @pytest.mark.parametrize('prefix', [
@@ -83,12 +116,18 @@ real(8),intent(out)::b(-3:)
 b(-3)=7
 end subroutine
 subroutine touch''', 1).replace('call fill(b)\ncall touch', prefix+'\ncall touch')
-    _, _, manifest = build(tmp_path, source)
+    original, _, manifest = build(tmp_path, source)
     assert not any(item['procedure'] == 'ordered_storage::child'
                    for item in manifest['borrowed_source_coordinators'])
-    assert any('incomplete definition' in item['reason']
-               for item in manifest['source_coordinator_boundaries']
-               if item['procedure'] == 'ordered_storage::child')
+    with pytest.raises(CompilationError, match='incomplete definition: argument::b'):
+        legacy_child(original)
+    units = module_child(manifest)['units']
+    assert units[-1]['ordered_definitions']['required_whole'] == ['argument::b', 'argument::indices']
+    if 'partial' in prefix:
+        invalidation, touch = units
+        assert invalidation['ordered_definitions']['possible_definition_changes'] == ['argument::b']
+        assert invalidation['ordered_definitions']['whole_on_return'] == []
+        assert invalidation['last_line'] < touch['first_line']
 
 
 def test_prior_lexical_initialization_uses_reached_coverage_not_entry_capture(tmp_path):

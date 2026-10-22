@@ -1,0 +1,7 @@
+{
+  "authorized_execution": "approved_fixedTOP_natural109_three_mode_only",
+  "stage_sha256": "4cba3dcf2f050160dd12854d22570a73a492dc94222b2992b8a2e3f53de198cd",
+  "created_utc": "2026-10-22T10:31:37.188666+00:00",
+  "user_pressure_reference_approval": "/tmp/fortran-deterministic-TOP-official-user-approval-20261022.json",
+  "schedule_amendment": "All actualGPU/test/build jobs closed. Only known pipeline traffic assertion draft remains; it already passed full fields. ExclusiveGPU109 now; finalpipeline18 afterrootrelease. Only lightweight read-onlymetadata allowed concurrently. No performance samples."
+}

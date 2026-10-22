@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-10-22T10:52:48.430558+00:00",
+  "status": "CLEAR_FINAL_COPIED_109_ARCHIVE_AUTHENTICITY_AND_QUALIFICATION_LIMITS",
+  "archive_index": {
+    "path": "/home/jirka/research/fortran-abomination/benchmarks/reports/graph-redesign-snapshot-20261022/correctness/simple109-approved-top/archive-index.json",
+    "sha256": "0d4477ba167080d31cb27e29c18ebb32b4ac3886c70d3b1cbc84d0e9c06f4f35",
+    "bytes": 48704
+  },
+  "actual_report_copy": {
+    "path": "/home/jirka/research/fortran-abomination/benchmarks/reports/graph-redesign-snapshot-20261022/correctness/simple109-approved-top/report.json",
+    "sha256": "21db79686d99d13a2b7267f6089771fcbdb4485bbadaf3aa76b86f1b6d3cd8aa",
+    "bytes": 157957
+  },
+  "prior_full_evidence_review": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/simple109-compact-evidence-independent-peer-review.json",
+    "sha256": "e6f9d714c27e627d011104d565b1c4eca79a50f6d5c57c1d5b3e42430172144a",
+    "bytes": 12437
+  },
+  "copied_small_payloads": {
+    "count": 36,
+    "unique_archive_paths": 36,
+    "archive_and_original_hashes_and_bytes_all_exact": true,
+    "composition": "26 reviewed plan payloads +10 exact original case configuration/provenance files"
+  },
+  "large_payload_references": {
+    "count": 135,
+    "unique": 135,
+    "exact_set_equals_actual_report": true,
+    "composition": "3*(40 float64binary/layout artifacts+5VTK artifacts); VTK paths resolve under each original run output directory",
+    "physical_large_payloads_rehashed_by_this_review": false
+  },
+  "qualification_review": {
+    "natural109_all3_modes_pass": true,
+    "all20_float64_shapes_bounds_halos_and_VTK": true,
+    "native_self_comparison_layout_finiteness_only": true,
+    "be58_candidate20_bit_identical": true,
+    "maximum_native_error": 4.243521476432477e-07,
+    "unchanged_atol": 1e-06,
+    "unchanged_rtol": 1e-05,
+    "user_approved_deterministic_TOP_pressure_only_private_links": true,
+    "no_public_prepared_retag": true,
+    "no_performance_claim": true,
+    "no_fresh_public_prepared_or_final_seven_round_qualification": true,
+    "original_preflight_failure_and_root_artifact_count_metadata_correction_preserved": true
+  },
+  "remaining_packaging_note": "Benchmark will update tracked README with newly completed private109 correctness paragraph and current finalauthority/teststatus; no material authenticity blocker. Keep distinction from publicqualification and original-pressure-source performance measurements.",
+  "executions": "Read-only file/JSON/hash inspection only; no imports, tests, validators, builds, apps, source/index writes. This newTMP receipt is the only write."
+}

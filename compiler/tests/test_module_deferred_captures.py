@@ -6,8 +6,8 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 
 FACT = {"storage": "stable", "initialized": "whole", "escapes": False, "allocation_changes": False}
@@ -153,13 +153,15 @@ def test_guarded_unused_input_keeps_original_association_and_later_owner(tmp_pat
     paths, outputs, report, builder = emit_module_deferred_fixture(tmp_path)
     owner, = report["scopes"]
     child = coordinator(owner, "saffron_gate::branch_inputs")
-    sweep, = report["borrowed_source_coordinators"]
-    assert sweep["procedure"] == "saffron_sweep::diffuse"
+    sweep = coordinator(owner, "saffron_sweep::diffuse")
+    assert not report["borrowed_source_coordinators"]
     assert not owner["boundaries"]
     assert len(owner["gpu_leaves"]) == 4
-    assert sweep["ownership"]["close_count"] == 0
-    assert len(sweep["gpu_leaves"]) == 2
-    point, = (operation for operation in sweep["native_operations"]
+    assert sweep["storage"] == "one original body and declarations; no persistent-state copy"
+    assert not sweep["boundaries"]
+    segments = [segment["operations"] for segment in sweep["planning_segments"]]
+    assert sum(len(plan["gpu_leaves"]) for segment in segments for plan in segment["planning_segments"]) == 2
+    point, = (operation for segment in segments for operation in segment["native_operations"]
               if operation["resource_effects"] == {"argument::result": ["read", "write"]})
     section, = point["sections"]["resources"]
     assert section["reads"][0]["axes"][0]["kind"] == "point"
@@ -207,8 +209,8 @@ def test_relay_uses_descendant_handles_and_original_renamed_actuals(tmp_path):
     assert "is_contiguous(other)" in text
     assert "call " + child["entry"] in text
     assert "c_loc(other)" not in text
-    sweep, = report["borrowed_source_coordinators"]
-    assert sweep["procedure"] == "saffron_sweep::diffuse"
+    sweep = coordinator(owner, "saffron_sweep::diffuse")
+    assert not sweep["boundaries"]
     assert relay["resource_mappings"]["argument::values"] == "argument::b"
     assert relay["resource_mappings"]["argument::result"] == "argument::c"
     handles = ["fort_buffer_" + str(item["registration_identity"])
@@ -301,7 +303,7 @@ def test_excluded_input_import_alias_cannot_be_shadowed_by_preflight_local(tmp_p
         assert not rejected.used
         assert not rejected.original_numerical_regions
     assert any(boundary["reason"].endswith(
-        "; original-body continuation: original module companion actual conflicts with descriptor guard name")
+        "original module companion actual conflicts with descriptor guard name")
                for boundary in owner["boundaries"])
     caller = replacement(paths, outputs, report, "saffron_owner.f90")
     assert caller.count("call gate(b,fort_actuals_contiguous,n,flag)") == 1

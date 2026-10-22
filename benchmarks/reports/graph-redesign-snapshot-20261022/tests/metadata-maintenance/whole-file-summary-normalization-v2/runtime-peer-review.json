@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "status": "CLEAR",
+  "reviewer": "runtime_acquisition",
+  "review_scope": "Independent read-only normalizer code review and raw JSON/XML enumeration; no normalizer/main/assembler/tested code/tests/apps execution.",
+  "normalizer": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/normalize_whole_file_summaries.py",
+    "sha256": "688da78e6354e22bc0041881188b6e99ab32e6de26d61e6be18dd7e0e9e487da"
+  },
+  "plan": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/plan.json",
+    "sha256": "7c4b91e8aa418fd0abb909a2d76b1ea1f831c9af0b4579c624523bd17103786b"
+  },
+  "author_review": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/review.json",
+    "sha256": "fa9c2ae25fa9d0914b2e181e3009135a48559ad2fce8d42c65b59852f67baf92"
+  },
+  "summary_count": 9,
+  "whole_file_rows": 22,
+  "selected_row_nodes": 516,
+  "historical_failed_rows_preserved": [
+    {
+      "file": "compiler/tests/test_scoped_pending_owner_report.py",
+      "suite": "main",
+      "nodes": 2,
+      "exit_code": 1,
+      "source_sha256": "a36812584e002059291cb5f8fb30cea65b613db987dab80d26cea02c0e50deaa",
+      "command": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/04-test_scoped_pending_owner_report/command.json",
+        "sha256": "13e9a4c16d3cb4ce1be1274f53f8173bf5526e8f7b87f647732e118017324935"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/04-test_scoped_pending_owner_report/junit.xml",
+        "sha256": "adda92e2a35b839ead07cebb5a3cb9161cdbe8b42dca289cdd9c2c32beb20950"
+      }
+    },
+    {
+      "file": "elmm-pipeline/tests/test_owner_measurement.py",
+      "suite": "pipeline",
+      "nodes": 36,
+      "exit_code": 1,
+      "source_sha256": "411159f72c9a230a282d95724f9fc04240328d2fb1a1d20acf9d98b77ab8b473",
+      "command": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-removed-measurement/00-test_owner_measurement/command.json",
+        "sha256": "401f3b2fadc331e476800c516abe68f9b8255e5f48d2a793c4487f03a81dcc43"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-removed-measurement/00-test_owner_measurement/junit.xml",
+        "sha256": "34c6324a0d021f3c2634c040158b1314f601a0ca796afcc0d722f479bdc5b903"
+      }
+    },
+    {
+      "file": "elmm-pipeline/tests/test_local_scopes.py",
+      "suite": "pipeline",
+      "nodes": 17,
+      "exit_code": 1,
+      "source_sha256": "20aa302b277d37462d2f1cfd87b543214c5e23fd3586098b32fd10a6218aad6c",
+      "command": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/01-test_local_scopes/command.json",
+        "sha256": "178f7ec504009bc0b1d5e365116569719c21603c29aeaa48fb179ac9c60906a4"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/01-test_local_scopes/junit.xml",
+        "sha256": "b3d48a02aff9cebb9416f601f8779be8947d42348c4884e3f3eedf328294ab87"
+      }
+    }
+  ],
+  "findings": [
+    "Whole-file identity is derived only after one-file/no-selection command checks and exact full JUnit name/class-chain coverage; no old node is renamed.",
+    "Rows are shallow-copied, preserving original argv/source_sha256/exit codes/outcomes; no current-source posthash is fabricated.",
+    "Suite correction derives from bound disjoint final inventory file membership.",
+    "Writes target only fresh versioned wrapper summaries; original recipe, raw summaries, commands, logs, XML, source authority and tested files remain unchanged.",
+    "Downstream current-source/process/outcome/uniqueness and legitimate-skip gates remain required; normalization is not a pass qualification."
+  ],
+  "blockers": []
+}

@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "kind": "historical production20 comparison identities; not a new prepared build manifest",
+  "frozen_compiler_record": {
+    "original_path": "/tmp/fortran-convection-graph-probe-01/compiler-snapshot-20-final.json",
+    "sha256": "06e0aacdf81d2f77db2566c2eeac7e51ced97216bb6daff0a6bddc64e4cda9ef",
+    "tree_sha256": "39a1e9170fbd665d4b5065a2b93cb3f8fd398d939510561f5410187441fe828d",
+    "code_equivalence_sha256": "d80bc91534012731c225aecb4d738ce0c1d51ea24a73d72f32c6c56e396be730"
+  },
+  "prepared_builds": {
+    "original_path": "/tmp/fortran-convection-graph-probe-01/prepared-builds-20.json",
+    "sha256": "a771b132b186763fc6c02ccd83751af03fb547c6d46d0d8790ad02d3e60b0bcf"
+  },
+  "runtime_id": "9517e2476a8182d00f52d62574c9573549439091eaca7a3d6ffc343f7590a4aa",
+  "profile_sha256": "a101362e5cbf9ee4e5c6ff59e62a13e7f2ff00045e7a0fc26b04a806db5f1969",
+  "committed_compiler_revision": "be58ab809296b97ea39d701828a2621adfc6b3dc",
+  "builds": {
+    "native": {
+      "binary": "/tmp/fortran-threeway-harness-smoke-02/work/native/build/ELMM",
+      "sha256": "fdf23e86be69b3bf6f88bd49b013d16e2912e5197fb287bf46e83a6925d2b311",
+      "build_receipt": "/tmp/fortran-threeway-harness-smoke-02/work/native/build/build-receipts.json",
+      "build_receipt_sha256": "3eb09f3b6b8f5ac45449f81fe4417e49785fedd8328ebb528c0dddb97d5afa47"
+    },
+    "committed": {
+      "binary": "/tmp/fortran-threeway-harness-smoke-02/work/committed/build/ELMM",
+      "sha256": "b2a317c38d3a23ac1043a5ae234830b3b06264ada5323a953479180fe4a5f592",
+      "build_receipt": "/tmp/fortran-threeway-harness-smoke-02/work/committed/build/build-receipts.json",
+      "build_receipt_sha256": "b07fd4d65e27ee3778034add498c72285436c6341b8b12e4df2b52d9b21a588e"
+    },
+    "reworked": {
+      "binary": "/tmp/fortran-convection-graph-probe-01/candidate-20/build/ELMM",
+      "sha256": "463eaa18dcf26e873b1eff7b41e987239e90ed69d656473d1730bb835c8e0471",
+      "build_receipt": "/tmp/fortran-convection-graph-probe-01/candidate-20/build/build-receipts.json",
+      "build_receipt_sha256": "391018e8b623f7d028fa77a874d300fe14c5be62d840145c0db8b018f2de77a9"
+    }
+  },
+  "diagnostic_builds": {
+    "native": {
+      "binary": "/tmp/fortran-threeway-harness-smoke-02/work/native/diagnostic/ELMM",
+      "sha256": "c2dcab71c17b2a993ca1715f2b132f5f0bc86dff0f61201e1c76a3760f4ff577",
+      "source": "/tmp/fortran-threeway-harness-smoke-02/work/native/diagnostic/main.f90",
+      "source_sha256": "8cd440cb6d75da2e81164f29d0b4845f1e3feff0efb2a7da492d714d9ada1bd2",
+      "original_build_receipt": "/tmp/fortran-threeway-harness-smoke-02/work/native/build/build-receipts.json",
+      "original_build_receipt_sha256": "3eb09f3b6b8f5ac45449f81fe4417e49785fedd8328ebb528c0dddb97d5afa47",
+      "production_binary_modified": false
+    },
+    "committed": {
+      "binary": "/tmp/fortran-threeway-harness-smoke-02/work/committed/diagnostic/ELMM",
+      "sha256": "e1d91e38330b455e0efcb618b46ec0f1b99fce5c37c80c60c59992a00905f900",
+      "source": "/tmp/fortran-threeway-harness-smoke-02/work/committed/diagnostic/main.f90",
+      "source_sha256": "8cd440cb6d75da2e81164f29d0b4845f1e3feff0efb2a7da492d714d9ada1bd2",
+      "original_build_receipt": "/tmp/fortran-threeway-harness-smoke-02/work/committed/build/build-receipts.json",
+      "original_build_receipt_sha256": "b07fd4d65e27ee3778034add498c72285436c6341b8b12e4df2b52d9b21a588e",
+      "production_binary_modified": false
+    },
+    "reworked": {
+      "binary": "/tmp/fortran-convection-graph-probe-01/candidate-20/diagnostic/ELMM",
+      "sha256": "35171f475c5c268220ff0708b15cae1467689c8e86a935493ec7ffd47429cc08",
+      "source": "/tmp/fortran-convection-graph-probe-01/candidate-20/diagnostic/main.f90",
+      "source_sha256": "8cd440cb6d75da2e81164f29d0b4845f1e3feff0efb2a7da492d714d9ada1bd2",
+      "original_build_receipt": "/tmp/fortran-convection-graph-probe-01/candidate-20/build/build-receipts.json",
+      "original_build_receipt_sha256": "391018e8b623f7d028fa77a874d300fe14c5be62d840145c0db8b018f2de77a9",
+      "production_binary_modified": false
+    }
+  },
+  "original_application": {
+    "elmm": {
+      "url": "https://bitbucket.org/LadaF/elmm.git",
+      "revision": "ddb426fca5b020216083f02a218292fea70c1df2",
+      "head": "ddb426fca5b020216083f02a218292fea70c1df2",
+      "tracked_clean": true,
+      "omitted_untracked_artifacts": []
+    },
+    "PoisFFT": {
+      "url": "https://github.com/LadaF/PoisFFT.git",
+      "revision": "256a2338254c08f611881b2df5e72bdfa73bc257",
+      "head": "256a2338254c08f611881b2df5e72bdfa73bc257",
+      "tracked_clean": true,
+      "omitted_untracked_artifacts": []
+    }
+  },
+  "source_contract_updated": false,
+  "production_pressure_source_sha256": "0548a1a1b33284d5811335beff0051c60faf273f1f9535ef737b34be141bf9af"
+}

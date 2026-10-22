@@ -9,9 +9,9 @@ from hashlib import sha256
 
 import pytest
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.numerical_contract import require_explicit_cuda_environment, require_numerical_build_contract
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_closed_selection import SOURCE
 from compiler.tests.test_source_scopes import FACT

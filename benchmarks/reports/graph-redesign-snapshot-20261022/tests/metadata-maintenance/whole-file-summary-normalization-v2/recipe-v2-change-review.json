@@ -1,0 +1,194 @@
+{
+  "schema_version": 1,
+  "recipe": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/final-test-evidence-recipe.v2.sealed.json",
+    "sha256": "767417451fe6daab830d5e85a3915b15891bea8cea44cbaf620d01e00f86bbfd",
+    "bytes": 56750
+  },
+  "original_unchanged": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/final-test-evidence-recipe.sealed.json",
+    "sha256": "192e36433dfe39401ba6f9ca5ab32e9af94d26c59b2fbc6e07d4f2eb232ad65f",
+    "bytes": 47705
+  },
+  "replacements": [
+    {
+      "position": 6,
+      "old": {
+        "suite": "main",
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/summary.json",
+        "sha256": "f69ba400242e44fba6e989af6442290b75e6ab8290122c40e031aaee69426988"
+      },
+      "new": {
+        "suite": "main",
+        "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-contract-batch.normalized.json",
+        "sha256": "675627163cb9ca3080c7407f3b89ecc10bd356d2f4b1518e44499f42e8a66ad0",
+        "bytes": 25206,
+        "instruction": "Reviewed metadatawrapper:actualwholefileargv/sourceSHA/exit/rawJUnit unchanged, exactfinalinventory/JUnitderived selected_nodeids; originalrawsummary retained in normalization_inputs.",
+        "raw_original_summary": {
+          "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/summary.json",
+          "sha256": "f69ba400242e44fba6e989af6442290b75e6ab8290122c40e031aaee69426988"
+        }
+      }
+    },
+    {
+      "position": 7,
+      "old": {
+        "suite": "main",
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-source-costs/summary.json",
+        "sha256": "f24cd2b3ea61fde169a4912e115ab56d9fd7d3b63530ebebf0a6b035de53ac98"
+      },
+      "new": {
+        "suite": "main",
+        "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-source-costs.normalized.json",
+        "sha256": "f2e8ec4949693f6bde0d4c48d252020346b4e8d2c5d5972f29027d1c173d092b",
+        "bytes": 23149,
+        "instruction": "Reviewed metadatawrapper:actualwholefileargv/sourceSHA/exit/rawJUnit unchanged, exactfinalinventory/JUnitderived selected_nodeids; originalrawsummary retained in normalization_inputs.",
+        "raw_original_summary": {
+          "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-source-costs/summary.json",
+          "sha256": "f24cd2b3ea61fde169a4912e115ab56d9fd7d3b63530ebebf0a6b035de53ac98"
+        }
+      }
+    },
+    {
+      "position": 8,
+      "old": {
+        "suite": "main",
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-pending-report-final/summary.json",
+        "sha256": "81043b201f401eb1cd3a83b8a48b1cce0325d50b0bd6e3f18b479a8b28756316"
+      },
+      "new": {
+        "suite": "main",
+        "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-pending-report-final.normalized.json",
+        "sha256": "528b3d4c457a13068ccd1ac1ac9b2ca7f49e4437c68615cb5c2fc8a334fc1be5",
+        "bytes": 4063,
+        "instruction": "Reviewed metadatawrapper:actualwholefileargv/sourceSHA/exit/rawJUnit unchanged, exactfinalinventory/JUnitderived selected_nodeids; originalrawsummary retained in normalization_inputs.",
+        "raw_original_summary": {
+          "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-pending-report-final/summary.json",
+          "sha256": "81043b201f401eb1cd3a83b8a48b1cce0325d50b0bd6e3f18b479a8b28756316"
+        }
+      }
+    },
+    {
+      "position": 9,
+      "old": {
+        "suite": "main",
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-object-final/summary.json",
+        "sha256": "127dc6f2b09be7e6c5cab1eb53e96d0ac3f775c09de0285ccdb1051a1f8132f9"
+      },
+      "new": {
+        "suite": "main",
+        "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-object-final.normalized.json",
+        "sha256": "41727be4e70d3232dccfefe6d36790b7b406e96f035712247d35d18eecf01521",
+        "bytes": 10272,
+        "instruction": "Reviewed metadatawrapper:actualwholefileargv/sourceSHA/exit/rawJUnit unchanged, exactfinalinventory/JUnitderived selected_nodeids; originalrawsummary retained in normalization_inputs.",
+        "raw_original_summary": {
+          "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-object-final/summary.json",
+          "sha256": "127dc6f2b09be7e6c5cab1eb53e96d0ac3f775c09de0285ccdb1051a1f8132f9"
+        }
+      }
+    },
+    {
+      "position": 10,
+      "old": {
+        "suite": "main",
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-structured-final/summary.json",
+        "sha256": "5c9e7a71cd5225085d58659689c7681236d3ed9b253f3f2a23b64806338a4b55"
+      },
+      "new": {
+        "suite": "main",
+        "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-structured-final.normalized.json",
+        "sha256": "5da417038c4f392dad10318f599c8992718a6189ce61acb609fc64cbea70f4fa",
+        "bytes": 7136,
+        "instruction": "Reviewed metadatawrapper:actualwholefileargv/sourceSHA/exit/rawJUnit unchanged, exactfinalinventory/JUnitderived selected_nodeids; originalrawsummary retained in normalization_inputs.",
+        "raw_original_summary": {
+          "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-structured-final/summary.json",
+          "sha256": "5c9e7a71cd5225085d58659689c7681236d3ed9b253f3f2a23b64806338a4b55"
+        }
+      }
+    },
+    {
+      "position": 11,
+      "old": {
+        "suite": "pipeline",
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-current-protocol/summary.json",
+        "sha256": "1bb0452b10ec1499429cb9df2099bf582608e8903d1f9929b2e03bd3a2d11428"
+      },
+      "new": {
+        "suite": "pipeline",
+        "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/pipeline-followups-current-protocol.normalized.json",
+        "sha256": "ca60716b1466d58f1dde73a5c15eea877dd37b86cf630533225d246ea62b0728",
+        "bytes": 22249,
+        "instruction": "Reviewed metadatawrapper:actualwholefileargv/sourceSHA/exit/rawJUnit unchanged, exactfinalinventory/JUnitderived selected_nodeids; originalrawsummary retained in normalization_inputs.",
+        "raw_original_summary": {
+          "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-current-protocol/summary.json",
+          "sha256": "1bb0452b10ec1499429cb9df2099bf582608e8903d1f9929b2e03bd3a2d11428"
+        }
+      }
+    },
+    {
+      "position": 12,
+      "old": {
+        "suite": "pipeline",
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-removed-measurement/summary.json",
+        "sha256": "c3529a7e0af195617c1219d487748ab2287cc82e0dcbaff3437263a87aba64fd"
+      },
+      "new": {
+        "suite": "pipeline",
+        "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/pipeline-followups-removed-measurement.normalized.json",
+        "sha256": "b560a0d0f23f38654b3fc30c4c58e8cc8ec45913216ab0a032f49b6d3f010fad",
+        "bytes": 8915,
+        "instruction": "Reviewed metadatawrapper:actualwholefileargv/sourceSHA/exit/rawJUnit unchanged, exactfinalinventory/JUnitderived selected_nodeids; originalrawsummary retained in normalization_inputs.",
+        "raw_original_summary": {
+          "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-removed-measurement/summary.json",
+          "sha256": "c3529a7e0af195617c1219d487748ab2287cc82e0dcbaff3437263a87aba64fd"
+        }
+      }
+    },
+    {
+      "position": 13,
+      "old": {
+        "suite": "pipeline",
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/summary.json",
+        "sha256": "bba934f88022ce30e95b7b7aad4c31fb12f78790dd42cd6013ea48951a2c6ab4"
+      },
+      "new": {
+        "suite": "pipeline",
+        "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/pipeline-followups-source-final.normalized.json",
+        "sha256": "9b475795206bd5bd747b0ebad747a6c2d4a449b13f32f5acafcf7a1a928f59c9",
+        "bytes": 15471,
+        "instruction": "Reviewed metadatawrapper:actualwholefileargv/sourceSHA/exit/rawJUnit unchanged, exactfinalinventory/JUnitderived selected_nodeids; originalrawsummary retained in normalization_inputs.",
+        "raw_original_summary": {
+          "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/summary.json",
+          "sha256": "bba934f88022ce30e95b7b7aad4c31fb12f78790dd42cd6013ea48951a2c6ab4"
+        }
+      }
+    },
+    {
+      "position": 14,
+      "old": {
+        "suite": "main",
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/summary.json",
+        "sha256": "dd5957b8c3f303b9a66f5822773f0278f6cc7624b5e6e9f723860267734f80a0"
+      },
+      "new": {
+        "suite": "mixed",
+        "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-final-reviewed-files.normalized.json",
+        "sha256": "a62c4d6e127ac5c6e175df7c8fb18b80ca4304a9b76521fbf2b0ec6ce4f274b5",
+        "bytes": 17274,
+        "instruction": "Reviewed metadatawrapper:actualwholefileargv/sourceSHA/exit/rawJUnit unchanged, exactfinalinventory/JUnitderived selected_nodeids; originalrawsummary retained in normalization_inputs.",
+        "raw_original_summary": {
+          "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/summary.json",
+          "sha256": "dd5957b8c3f303b9a66f5822773f0278f6cc7624b5e6e9f723860267734f80a0"
+        }
+      }
+    }
+  ],
+  "summary_count": 26,
+  "additional_receipts": 113,
+  "source_authority_unchanged": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/final-source-authority-addendum.json",
+    "sha256": "dcfd5076069ca556ad2f8e23d32a2541abe2bcc7c4cc3e67be806b026d52f347",
+    "bytes": 142387
+  },
+  "no_assembler_tests_apps_executed_by_packager": true
+}

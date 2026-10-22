@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-10-22T08:52:41.758930+00:00",
+  "status": "minimal_collective_compile_fix_promoted_pending_regression_tests",
+  "root_authorization": "Userrequestedcommittable snapshotpassingalltests; realundeclaredserialvariableinpubliccollectiveentrymustbefixed. Exact3linepatchindependentlyreviewedpeer24; scope-stateassertionssameexistingnode.",
+  "original103_firstpass_closed": true,
+  "original_firstpass_sha256": "390ed5e996e87c8c7fd0e6f799dc64f8d535acc1b56b584936f85de4ddf934b4",
+  "code_postimage": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/collective-host-scope-fix-proposal-v2/scoped.py.proposed",
+    "sha256": "14c748e3cebda4d1c4c21474e4cf5073906f6cab529d13a95035a8fe7ca5fa1b"
+  },
+  "code_preimage": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/collective-host-scope-fix-proposal-v2/scoped.py.preimage",
+    "sha256": "d063724ab47fbf32e3821dc073c9b1f6762a7cdd27b41cf7dfd79b20e353fe6c"
+  },
+  "test_postimage": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/collective-host-scope-fix-proposal-v2/test_scoped_team_sources.py.proposed",
+    "sha256": "76849dd4bd4f4640db3b83c4e410b99e30f2b72e3e45fb41fd82084eeb7855da"
+  },
+  "test_preimage": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/collective-host-scope-fix-proposal-v2/test_scoped_team_sources.py.preimage",
+    "sha256": "fbd367145f0726fa7cb14c26e54e2b8c046e97a568692c229fc9ed0465940fe4"
+  },
+  "code_patch": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/collective-host-scope-fix-proposal-v2/proposal.diff",
+    "sha256": "f3237273a7cb66080efa264dd6d15cc776f84562b6a07a39e89358542b098c6c"
+  },
+  "regression_patch": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/collective-host-scope-fix-proposal-v2/test-regression.diff",
+    "sha256": "2f690e4d317468e1f8783ba090b1c086a5ae3478afcc378e7fd4da7eebbf05d5"
+  },
+  "regression_plan": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/collective-host-scope-fix-proposal-v2/postpromotion-regression-plan.json",
+    "sha256": "1450cc73367de58540cb3cc7891e21afc774701d68ed13cef78cf6d1a48def75"
+  },
+  "historical20_ELMM_impact": "staticbranchauthority17sharedentries+1runtime;noaffectedcollectivehostcall;historicalbinary/sourceproof/timinglabelsNOTretagged",
+  "runtime_or_model_or_profile_changes": false,
+  "all_original_firstpass_implementation_bytes_were_frozen20": true,
+  "no_Git_indexes_modified": true
+}

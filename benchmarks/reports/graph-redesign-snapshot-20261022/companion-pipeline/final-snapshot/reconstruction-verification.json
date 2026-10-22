@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "status": "ALL16_PATCH_POSTIMAGES_BYTE_EXACT_METADATA_ONLY",
+  "executions": [
+    {
+      "argv": [
+        "git",
+        "apply",
+        "--check",
+        "/tmp/fortran-committable-snapshot-20261022/companion-final-reconstruction-draft-02/all-sixteen-files-from-base.patch"
+      ],
+      "cwd": "/tmp/fortran-committable-snapshot-20261022/companion-final-reconstruction-draft-02/reconstruction-verification",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "apply",
+        "/tmp/fortran-committable-snapshot-20261022/companion-final-reconstruction-draft-02/all-sixteen-files-from-base.patch"
+      ],
+      "cwd": "/tmp/fortran-committable-snapshot-20261022/companion-final-reconstruction-draft-02/reconstruction-verification",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  ],
+  "verified_files": 16,
+  "git_index_mutated": false,
+  "tests_builds_apps_generation": false
+}

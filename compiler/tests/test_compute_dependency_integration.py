@@ -1,12 +1,12 @@
 """Dependency diagnostics preserve existing numerical and cost contracts."""
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.analysis import build_execution_plan
 from compiler.driver.options import CompilerOptions
 from compiler.emission.common.resources import read_scoped_runtime
 from compiler.emission.cuda.scoped import generate_scoped
 from compiler.frontend import lower_source
 from compiler.offload import analyze_offload
-from compiler.offload.config import OffloadConfig
 from compiler.tests.test_source_compute_costs import profile_v2
 
 

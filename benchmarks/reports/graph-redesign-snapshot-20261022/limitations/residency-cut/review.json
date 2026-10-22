@@ -1,0 +1,69 @@
+{
+  "actual_activity": {
+    "bytes": 20629,
+    "path": "/tmp/fortran-committable-snapshot-20261022/cuda-observation-runs/001-test_scoped_adaptation/pytest-temp/test_real_normal_scopes_build_0/integration-activity.json",
+    "sha256": "c5a8a889e6f6855c3356af92b06f06b71166b7c4d4e56f53ed76c9b527356c0c"
+  },
+  "actual_integration": {
+    "bytes": 2380169,
+    "path": "/tmp/fortran-committable-snapshot-20261022/cuda-observation-runs/001-test_scoped_adaptation/pytest-temp/test_real_normal_scopes_build_0/integration.json",
+    "sha256": "3facca57e2f3e696ac5d6276fc6ff647b7392a4d6694ea67b89d4ee0f3560ea5"
+  },
+  "actual_runtime_log": {
+    "bytes": 55251,
+    "path": "/tmp/fortran-committable-snapshot-20261022/cuda-observation-runs/001-test_scoped_adaptation/pytest-temp/test_real_normal_scopes_build_0/integration-runtime.log",
+    "sha256": "ca7bc213850fa414291e1b17191f22d3a76e039f3b3612b0b86540d461b62158"
+  },
+  "diff": {
+    "bytes": 3394,
+    "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-residency-cut-observation-draft-v2/maintenance.diff",
+    "sha256": "dca9fedd5bd7f1623366a20e438766c7b7067b4ec0c0546c383ad7b24e96602a"
+  },
+  "draft": {
+    "bytes": 25439,
+    "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-residency-cut-observation-draft-v2/test_scoped_adaptation.py",
+    "sha256": "7cf7919891bff8b1392bcbf763933476980f916c493e3f8f79df767a6bb41d65"
+  },
+  "exact_source_ledger": {
+    "bytes": 11607,
+    "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-residency-cut-observation-draft-v2/exact-ledger.json",
+    "sha256": "68e781a36a92e54fbafba7c694572523498920f80c1d14432f207b5c52e92543"
+  },
+  "execution_by_this_draft": {
+    "GPU": false,
+    "apps": false,
+    "builds": false,
+    "existing_trace_source_AST_reads_only": true,
+    "generation": false,
+    "tests": false
+  },
+  "finding": "One lexical owning source invocation spans two context epochs per trial, because native_scale b=3*b lacks typed runtime-guard effect authority. Compiler conservatively closes/publishes before that exact original statement and reopens at consume. It does not retain a read-only A mirror across this cut.",
+  "measured_traffic": "For each n32/64: producer upA(n*8), kernel, downB(n*8), close; consumer newcontext upA+upB(2*n*8), kernel, downC(n*8), close. Actual contexts1/4 and8/11. Total2304H2D/1536D2H/4kernels. Exact fields FULL_FIELDS_OK and existing verification pass.",
+  "original_failure_log": {
+    "bytes": 9036,
+    "path": "/tmp/fortran-committable-snapshot-20261022/cuda-observation-runs/001-test_scoped_adaptation/output.log",
+    "sha256": "0bd99c5aa154d9d512ba6cf38fab07e9af617adcc07c22cf9e732fd108770710"
+  },
+  "performance_limitation": "Duplicate read-only A uploads768bytes are real. This is not an asserted speedup, shared owner-residency success, or same-context mirror invalidation bug. Private parent-epoch22 is excluded and no redesign is proposed.",
+  "preserved": "All source/facts/driver/toolchain/build/FP/currentproof/fields/halos/nativeAUTO/noGPU/4kernel assertions and all other17nodes unchanged; no nodes added/renamed/dropped. No compiler/runtime/model/parser changes.",
+  "previous_draft": {
+    "bytes": 4175,
+    "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-residency-cut-observation-draft/review.json",
+    "sha256": "ff0be483991911710d2bd3330726f058ec2b12d5088d7113ff768f2eae0e4124"
+  },
+  "repair": "Replace obsolete low-traffic assumption with exact manifest-justified native-frontier authority and complete ordered per-context/canonical-resource event ledger; no unbounded allowance or aggregate-only oracle increase.",
+  "required_followup": "After independent peer/root approval only runtime-owned full scoped_adaptation18 under existing actualhardware opt-in/env/240cap; preserve current17PASS/1FAIL byte-oracle outcome and initial parser failure separately.",
+  "revision": "V2 corrects the adjacent stale upload-event count4\u21926 implied by the exact ledger; explicitly asserts4create/4close epochs. D2H4, kernels4, fields and all other checks unchanged. V1 preserved; no tests run.",
+  "schema_version": 1,
+  "source_fixture": {
+    "bytes": 21086,
+    "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/tests/test_local_scopes.py",
+    "sha256": "fcd919b06064aa6e514dacf4fdda9f2fa1110fba2a4e78e63a0309e9f3b8685f"
+  },
+  "status": "TMP_TEST_ONLY_DRAFT_REQUIRES_PEER_AND_ROOT_REVIEW",
+  "workspace_before": {
+    "bytes": 23080,
+    "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/tests/test_scoped_adaptation.py",
+    "sha256": "6b34afd9944e5909d0b77a0723ce787f37c365ddb102c0d5acbed6e03e53965d"
+  }
+}

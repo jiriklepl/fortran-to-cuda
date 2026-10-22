@@ -1,0 +1,227 @@
+{
+  "schema_version": 1,
+  "status": "METADATA_ONLY_ASSEMBLY_FAILURES_AND_REPAIRS_PRESERVED",
+  "explanation": "These records concern joining existing test evidence, not new test/app failures or reruns. Immutable raw assembled evidence is unchanged. Originalsourceauthority and earlierrecipes remain as-ofsealing; laterusercommit authorization is separate.",
+  "copies": [
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/metadata-assembly-attempt-01-observation.json",
+      "archive_path": "attempts/metadata-assembly-attempt-01-observation.json",
+      "sha256": "fc23b6d2ba6d3a4bbfd664147da68237f12ab351e522864194fca731faba5d59",
+      "bytes": 919
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/metadata-assembly-attempt-02-execution.json",
+      "archive_path": "attempts/metadata-assembly-attempt-02-execution.json",
+      "sha256": "1c60720792add1fda56939714f13b48247fd9c200859a2e3685b7dd2d09c1b8a",
+      "bytes": 411
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/metadata-assembly-attempt-02.log",
+      "archive_path": "attempts/metadata-assembly-attempt-02.log",
+      "sha256": "ab986f3617f770be080ab66c9bda343f15878fa5cab198c1be9430031f2cb471",
+      "bytes": 390
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/metadata-assembly-attempt-03-execution.json",
+      "archive_path": "attempts/metadata-assembly-attempt-03-execution.json",
+      "sha256": "7567869e9a768a172efe1d403b2aedf61ba367af139d6b6616dfc238069a0943",
+      "bytes": 411
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/metadata-assembly-attempt-03.log",
+      "archive_path": "attempts/metadata-assembly-attempt-03.log",
+      "sha256": "db6b8fff7997140f87ddcd9402743718ccffce75cda130e80780bcc19e74d7c8",
+      "bytes": 428
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/metadata-assembly-attempt-04-execution.json",
+      "archive_path": "attempts/metadata-assembly-attempt-04-execution.json",
+      "sha256": "5b9955b9d73becf8af2a06ab795a120cbf3330b672a726dfd5dc57ab58a41852",
+      "bytes": 711
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/metadata-assembly-attempt-04.log",
+      "archive_path": "attempts/metadata-assembly-attempt-04.log",
+      "sha256": "dbbb8a376999d9544e3346763fa926669dafa7621db8c5a813c009b8970f3710",
+      "bytes": 591
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/metadata-assembly-attempt-05-execution.json",
+      "archive_path": "attempts/metadata-assembly-attempt-05-execution.json",
+      "sha256": "d4a47a83ad853b6061ea74758a4fa7de999eb22246a730a50434e32fa28ac274",
+      "bytes": 737
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/metadata-assembly-attempt-05.log",
+      "archive_path": "attempts/metadata-assembly-attempt-05.log",
+      "sha256": "669ba502810e783656d0318c291790f1ed686ccdb56772cca82d022148e744b5",
+      "bytes": 1920
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/metadata-all-row-schema-audit.json",
+      "archive_path": "metadata-all-row-schema-audit.json",
+      "sha256": "c1120979a922a7ed9ae775dda06ddfeaf41aef5ebf75d17953a6fce4001b38cd",
+      "bytes": 14952
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/root-final-test-assembly-review.json",
+      "archive_path": "root-final-test-assembly-review.json",
+      "sha256": "a8af71684cb4a4985d9fc46021cbf73e32c689f309fa63a70a0419d530176104",
+      "bytes": 2043
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/root-test-evidence-recipe-review.json",
+      "archive_path": "root-test-evidence-recipe-review.json",
+      "sha256": "6a771afd3b928767dd83afc06cb8020252070cef1a725742538dd350bf7a9509",
+      "bytes": 928
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/root-test-evidence-recipe-v2-review.json",
+      "archive_path": "root-test-evidence-recipe-v2-review.json",
+      "sha256": "028e0625ed6605ab2ac3af4107b2df33d11210877b78d7d0a98de6a11bdd34eb",
+      "bytes": 924
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/user-commit-authorization-addendum.json",
+      "archive_path": "user-commit-authorization-addendum.json",
+      "sha256": "e54632c371eacbf7e5bae4c1863fbfc8e37d9893a60f688b65a3998fa231ded4",
+      "bytes": 825
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/suite-independent-junit-module-adapter/change.diff",
+      "archive_path": "suite-independent-junit-module-adapter/change.diff",
+      "sha256": "261d1a5715457e8f770ed88d8ec07cf3a4471c261a1d67d025d6735dab53fcbf",
+      "bytes": 934
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/suite-independent-junit-module-adapter/review.json",
+      "archive_path": "suite-independent-junit-module-adapter/review.json",
+      "sha256": "1497fcbb0ac8cd4eec7a0998da2cb065bfbaf545ad29f576825d729201004860",
+      "bytes": 2254
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/suite-independent-junit-module-adapter/root-review.json",
+      "archive_path": "suite-independent-junit-module-adapter/root-review.json",
+      "sha256": "24c3c3c21a8a6f2177f13815165d10c1ae49bacbc9540b63adb184cd15ff144c",
+      "bytes": 823
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/suite-independent-junit-module-adapter/runtime-peer-review.json",
+      "archive_path": "suite-independent-junit-module-adapter/runtime-peer-review.json",
+      "sha256": "f46d0c5597d7b241fedaa0b4e939865feab1c3be905f0c5df1c42cc06aa9e69f",
+      "bytes": 1863
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-contract-batch.normalized.json",
+      "archive_path": "whole-file-summary-normalization-v2/cpu-followups-contract-batch.normalized.json",
+      "sha256": "675627163cb9ca3080c7407f3b89ecc10bd356d2f4b1518e44499f42e8a66ad0",
+      "bytes": 25206
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-final-reviewed-files.normalized.json",
+      "archive_path": "whole-file-summary-normalization-v2/cpu-followups-final-reviewed-files.normalized.json",
+      "sha256": "a62c4d6e127ac5c6e175df7c8fb18b80ca4304a9b76521fbf2b0ec6ce4f274b5",
+      "bytes": 17274
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-object-final.normalized.json",
+      "archive_path": "whole-file-summary-normalization-v2/cpu-followups-object-final.normalized.json",
+      "sha256": "41727be4e70d3232dccfefe6d36790b7b406e96f035712247d35d18eecf01521",
+      "bytes": 10272
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-pending-report-final.normalized.json",
+      "archive_path": "whole-file-summary-normalization-v2/cpu-followups-pending-report-final.normalized.json",
+      "sha256": "528b3d4c457a13068ccd1ac1ac9b2ca7f49e4437c68615cb5c2fc8a334fc1be5",
+      "bytes": 4063
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-source-costs.normalized.json",
+      "archive_path": "whole-file-summary-normalization-v2/cpu-followups-source-costs.normalized.json",
+      "sha256": "f2e8ec4949693f6bde0d4c48d252020346b4e8d2c5d5972f29027d1c173d092b",
+      "bytes": 23149
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-structured-final.normalized.json",
+      "archive_path": "whole-file-summary-normalization-v2/cpu-followups-structured-final.normalized.json",
+      "sha256": "5da417038c4f392dad10318f599c8992718a6189ce61acb609fc64cbea70f4fa",
+      "bytes": 7136
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/execution.log",
+      "archive_path": "whole-file-summary-normalization-v2/execution.log",
+      "sha256": "e012a3e244e8f01d17252da142c6338bd1bda3c9a37c576e8981024ec31329d6",
+      "bytes": 2039
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/normalize_whole_file_summaries.py",
+      "archive_path": "whole-file-summary-normalization-v2/normalize_whole_file_summaries.py.source",
+      "sha256": "688da78e6354e22bc0041881188b6e99ab32e6de26d61e6be18dd7e0e9e487da",
+      "bytes": 5182
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/pipeline-followups-current-protocol.normalized.json",
+      "archive_path": "whole-file-summary-normalization-v2/pipeline-followups-current-protocol.normalized.json",
+      "sha256": "ca60716b1466d58f1dde73a5c15eea877dd37b86cf630533225d246ea62b0728",
+      "bytes": 22249
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/pipeline-followups-removed-measurement.normalized.json",
+      "archive_path": "whole-file-summary-normalization-v2/pipeline-followups-removed-measurement.normalized.json",
+      "sha256": "b560a0d0f23f38654b3fc30c4c58e8cc8ec45913216ab0a032f49b6d3f010fad",
+      "bytes": 8915
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/pipeline-followups-source-final.normalized.json",
+      "archive_path": "whole-file-summary-normalization-v2/pipeline-followups-source-final.normalized.json",
+      "sha256": "9b475795206bd5bd747b0ebad747a6c2d4a449b13f32f5acafcf7a1a928f59c9",
+      "bytes": 15471
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/plan.json",
+      "archive_path": "whole-file-summary-normalization-v2/plan.json",
+      "sha256": "7c4b91e8aa418fd0abb909a2d76b1ea1f831c9af0b4579c624523bd17103786b",
+      "bytes": 5866
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/recipe-v2-change-review.json",
+      "archive_path": "whole-file-summary-normalization-v2/recipe-v2-change-review.json",
+      "sha256": "b7282b39a4b2d6c9c682d12937763040e47f9eaebc94b157ff24020d11ecbd9f",
+      "bytes": 10141
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/review.json",
+      "archive_path": "whole-file-summary-normalization-v2/review.json",
+      "sha256": "fa9c2ae25fa9d0914b2e181e3009135a48559ad2fce8d42c65b59852f67baf92",
+      "bytes": 21958
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/root-review.json",
+      "archive_path": "whole-file-summary-normalization-v2/root-review.json",
+      "sha256": "a7b02914b41f35fb770ea190b3a4da98a3701443c6f606c5be4d70dc0243a363",
+      "bytes": 1369
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/runtime-peer-review.json",
+      "archive_path": "whole-file-summary-normalization-v2/runtime-peer-review.json",
+      "sha256": "66873382cd3498ae065950795403afcd3f3061b7df0ccf40395ca006a65f2195",
+      "bytes": 3913
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/archive_test_evidence.py",
+      "archive_path": "archive_test_evidence.py.source",
+      "sha256": "7642e5f7f85ddb994071f1a0cea4ff99300b0b3fe367fb3d1a76a01f477937a1",
+      "bytes": 5279
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/final-test-evidence-recipe.v4.sealed.json",
+      "archive_path": "final-recipe-v4.json",
+      "sha256": "8503b7caf018be375b75dc46bd5ee23c020894661b6db936bbeae2ceb146dccd",
+      "bytes": 59155
+    }
+  ],
+  "archive_execution": {
+    "path": "archive-execution.json",
+    "sha256": "e93f92bf81ad46e27446c367cc5e4f7120c9f02e16f5f77a0d0ef43860ebdc7d"
+  }
+}

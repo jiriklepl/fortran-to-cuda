@@ -26,7 +26,7 @@ def generate(directory, *, structured=False, policy="sections"):
     facts.write_text(json.dumps(_facts(source, False)))
     package.write_text(json.dumps(_package(source, normalized, 1)))
     output = directory / "generated"
-    response = _run([sys.executable, "-m", "compiler", "--form-scopes", "--scope-facts", str(facts),
+    response = _run([sys.executable, "-m", "compiler.tests.support.reference_scopes", "--form-scopes", "--scope-facts", str(facts),
                      "--numerical-sources", str(package), "--input", str(source), "--kernel", "step",
                      "--memory-model", "scoped", "--gpu-policy", policy, "--host-threads", "4",
                      "--json", "--output-dir", str(output)], ROOT)

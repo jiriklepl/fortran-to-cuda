@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/tmp/fortran-committable-snapshot-20261022/assemble_test_evidence.py", line 218, in <module>
+    main()
+    ~~~~^^
+  File "/tmp/fortran-committable-snapshot-20261022/assemble_test_evidence.py", line 179, in main
+    assert approval and approval['reason'] and approval['evidence'], ('Unclassified skip', key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ('Unclassified skip', 'pipeline::elmm-pipeline/tests/test_collective_scopes.py::test_independent_real_public_cli_preserves_configured_original_provenance')

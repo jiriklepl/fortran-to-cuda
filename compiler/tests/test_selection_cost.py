@@ -314,8 +314,8 @@ def test_partial_resident_outcomes_cannot_authorize_an_unmeasured_subset(build_v
 
 @pytest.mark.parametrize("variant", ["native", "resident"])
 def test_checked_tiled_group_capture_keeps_reached_prefix_and_complete_key(tmp_path, build_validation, variant):
-    from compiler.driver.options import CompilerOptions
-    from compiler.offload.config import OffloadConfig
+    from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+    from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
     from compiler.tests.test_closed_selection import builder
 
     selected = builder(tmp_path / "original.f90", options=CompilerOptions(gpu_policy="auto"),
@@ -345,7 +345,9 @@ def test_checked_tiled_group_capture_keeps_reached_prefix_and_complete_key(tmp_p
     else:
         assert source.index("fort_interval_key(1)") < source.index("fort_scope_plan_validate")
         assert source.index("fort_scope_plan_validate") < source.index("_choose() == 0")
-        assert "fort_team_run = .true." in source
+        activation = "fort_team_run = .not. fort_team_native"
+        assert activation in source
+        assert source.index("fort_scope_plan_validate") < source.index(activation)
 
 
 @pytest.fixture(scope="module")
@@ -482,8 +484,8 @@ int main() {
 
 @pytest.mark.parametrize("variant", ["native", "resident"])
 def test_generated_selection_observers_and_original_team_wrappers_compile(tmp_path, build_validation, variant):
-    from compiler.driver.options import CompilerOptions
-    from compiler.offload.config import OffloadConfig
+    from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+    from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
     from compiler.tests.test_closed_selection import builder
 
     nvcc = shutil.which("nvcc")
@@ -529,8 +531,8 @@ def test_generated_selection_observers_and_original_team_wrappers_compile(tmp_pa
 
 
 def test_native_and_resident_capture_bind_the_same_checked_semantics(tmp_path, build_validation):
-    from compiler.driver.options import CompilerOptions
-    from compiler.offload.config import OffloadConfig
+    from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+    from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
     from compiler.tests.test_closed_selection import builder
 
     contracts = []
@@ -548,7 +550,7 @@ def test_native_and_resident_capture_bind_the_same_checked_semantics(tmp_path, b
 
 @pytest.mark.parametrize("criterion", [None, "paired_non_regression"])
 def test_cross_procedure_interval_uses_one_native_and_resident_cost_contract(tmp_path, build_validation, criterion):
-    from compiler.offload.config import OffloadConfig
+    from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
     from compiler.tests.test_interval_draft import generate
 
     contracts = []
@@ -594,8 +596,8 @@ def test_cross_procedure_interval_uses_one_native_and_resident_cost_contract(tmp
 
 
 def test_original_private_work_remains_in_checked_empirical_alternative(tmp_path, build_validation):
-    from compiler.driver.options import CompilerOptions
-    from compiler.offload.config import OffloadConfig
+    from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+    from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
     from compiler.tests.test_closed_selection import SOURCE, builder
 
     source = SOURCE.replace("subroutine advance(a,b)", "subroutine advance(a,b,n)\ninteger,intent(in)::n")
@@ -617,8 +619,8 @@ def test_original_private_work_remains_in_checked_empirical_alternative(tmp_path
 
 
 def test_internal_payload_branch_is_measured_without_entry_re_evaluation(tmp_path, build_validation):
-    from compiler.driver.options import CompilerOptions
-    from compiler.offload.config import OffloadConfig
+    from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+    from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
     from compiler.tests.test_closed_selection import SOURCE, builder
 
     source = SOURCE.replace("coefficient*a(i,j,k)", "cell(a(i,j,k),coefficient)").replace("end module", """pure real(8) function cell(x,c) result(y)

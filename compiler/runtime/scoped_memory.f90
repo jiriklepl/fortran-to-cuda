@@ -6,6 +6,7 @@ module fort_scoped_memory
   integer(c_int), parameter, public :: FORT_SCOPE_OK=0, FORT_SCOPE_ARGUMENT=1, FORT_SCOPE_STALE=2
   integer(c_int), parameter, public :: FORT_SCOPE_ALIAS=3, FORT_SCOPE_RESOURCE=4, FORT_SCOPE_BOUNDARY=5
   integer(c_int), parameter, public :: FORT_SCOPE_EXECUTION=6, FORT_SCOPE_UNINITIALIZED=7, FORT_SCOPE_STATE=8
+  integer(c_int), parameter, public :: FORT_SCOPE_PLAN_MISMATCH=9
   integer(c_int32_t), parameter, public :: FORT_SCOPE_READ_ALL=1, FORT_SCOPE_WRITE_ALL=2, FORT_SCOPE_OVERWRITE_ALL=4
   integer(c_int32_t), parameter, public :: FORT_SCOPE_BYTES=0, FORT_SCOPE_REAL32=1, FORT_SCOPE_REAL64=2
   integer(c_int32_t), parameter, public :: FORT_SCOPE_INTEGER32=3, FORT_SCOPE_LOGICAL=4
@@ -25,7 +26,9 @@ module fort_scoped_memory
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_ALLOCATION=4
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TRANSFER_COALESCED_INELIGIBLE=5
 
-  integer(c_int32_t), parameter, public :: FORT_SCOPE_PLANNING_ABI_VERSION=1
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_PLANNING_ABI_VERSION=2
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_NATIVE_HINT_ABI_VERSION=1
+  integer, parameter, public :: FORT_SCOPE_NATIVE_HINT_WORD_LIMIT=512
   integer(c_int32_t), parameter, public :: FORT_SCOPE_PLAN_NATIVE=0, FORT_SCOPE_PLAN_WORKER=1, FORT_SCOPE_PLAN_FORGET=2
   integer(c_int32_t), parameter, public :: FORT_SCOPE_PLAN_DISCARD=3, FORT_SCOPE_VIEW_ABI_VERSION=1
   integer(c_int32_t), parameter, public :: FORT_SCOPE_COMPUTE_ABI_VERSION=2
@@ -36,6 +39,12 @@ module fort_scoped_memory
   type, bind(C), public :: fort_scope_trace_state_v1
     integer(c_int32_t) :: version=0, reserved=0
     character(kind=c_char) :: owner(65), procedure(65), segment(65), operation(65), implementation(65), boundary(65)
+  end type
+  type, bind(C), public :: fort_scope_native_hint_observation_v1
+    integer(c_int32_t) :: version=0, eligible=0
+    integer(c_size_t) :: word_count=0
+    integer(c_int64_t) :: gpu_generation=0, error_generation=0
+    integer(c_int64_t) :: words(FORT_SCOPE_NATIVE_HINT_WORD_LIMIT)=0
   end type
   type, bind(C), public :: fort_scope_section
     type(c_ptr) :: lower=c_null_ptr, upper=c_null_ptr
@@ -107,6 +116,11 @@ module fort_scoped_memory
     integer(c_int64_t) :: buffer=0
     type(fort_scope_access) :: access
   end type
+  type, bind(C), public :: fort_scope_native_worker_v1
+    integer(c_int64_t) :: unit=0
+    type(c_ptr) :: bindings=c_null_ptr
+    integer(c_size_t) :: binding_count=0
+  end type
   type, bind(C), public :: fort_scope_compute_costs_v1
     integer(c_int32_t) :: version=1, known_backends=0
     real(c_double) :: native_fortran_seconds=0, generated_cpu_seconds=0, gpu_seconds=0
@@ -119,6 +133,7 @@ module fort_scoped_memory
     real(c_double) :: create_seconds=0, register_seconds=0, host_access_seconds=0, device_access_seconds=0
     real(c_double) :: gpu_setup_seconds=0, cold_driver_startup_seconds=0, allocation_seconds=0, release_seconds=0
     real(c_double) :: wait_seconds=0, launch_enqueue_seconds=0, planning_operation_seconds=0
+    real(c_double) :: h2d_fit_relative_error=0, d2h_fit_relative_error=0
   end type
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TEAM_ABI_VERSION=1, FORT_SCOPE_PLAN_TEAM_ENTRY=4
   integer(c_int32_t), parameter, public :: FORT_SCOPE_PLAN_TEAM_NATIVE_CALL=5
@@ -210,6 +225,7 @@ module fort_scoped_memory
 
   public :: fort_scope_abi_version, fort_scope_error, fort_scope_create, fort_scope_register
   public :: fort_scope_trace_set_v1, fort_scope_trace_restore_v1
+  public :: fort_scope_native_hint_begin_v1, fort_scope_native_hint_finish_v1
   public :: fort_scope_register_sections, fort_scope_forget_definition
   public :: fort_scope_view_get_v1, fort_scope_view_get_v2
   public :: fort_scope_forget_sections_v1, fort_scope_plan_forget_sections_v1
@@ -222,6 +238,8 @@ module fort_scoped_memory
   public :: fort_scope_serial_caller
   public :: fort_scope_numerical_environment_supported
   public :: fort_scope_layout_get, fort_scope_host_begin, fort_scope_host_end
+  public :: fort_scope_access_begin_v1
+  public :: fort_scope_buffer_valid_v1
   public :: fort_scope_device_begin, fort_scope_device_end, fort_scope_cancel_access
   public :: fort_scope_gpu_enter, fort_scope_gpu_leave, fort_scope_note_launch, fort_scope_wait
   public :: fort_scope_execution_error, fort_scope_report_error
@@ -232,10 +250,26 @@ module fort_scoped_memory
   public :: fort_scope_plan_add_compute_costs_v3
   public :: fort_scope_plan_validate
   public :: fort_scope_plan_reset_mode, fort_scope_plan_report_v2
+  public :: fort_scope_plan_cancel_native_v1
+  public :: fort_scope_plan_native_begin_v1
+  public :: fort_scope_plan_abandon_remaining_v1
   public :: fort_scope_set_team_costs_v1, fort_scope_team_costs_ready_v1, fort_scope_plan_team_entry_v1
   public :: fort_scope_plan_team_native_call_v1
 
   interface
+    function fort_scope_native_hint_begin_v1(words, count, observation, hit) bind(C) result(status)
+      import
+      integer(c_int64_t), intent(in) :: words(*)
+      integer(c_size_t), value :: count
+      type(fort_scope_native_hint_observation_v1), intent(out) :: observation
+      integer(c_int), intent(out) :: hit
+      integer(c_int) :: status
+    end function
+    function fort_scope_native_hint_finish_v1(observation) bind(C) result(status)
+      import
+      type(fort_scope_native_hint_observation_v1), intent(inout) :: observation
+      integer(c_int) :: status
+    end function
     subroutine fort_scope_trace_set_v1(context, update_mask, owner, procedure, segment, operation, implementation, boundary, &
         previous) &
         bind(C)
@@ -390,6 +424,25 @@ module fort_scoped_memory
       type(fort_scope_plan_report), intent(out) :: report
       integer(c_int) :: status
     end function
+    function fort_scope_plan_cancel_native_v1(context) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: context
+      integer(c_int) :: status
+    end function
+    function fort_scope_plan_native_begin_v1(context, workers, worker_count, bindings, count, applied) &
+        bind(C) result(status)
+      import c_int, c_int64_t, c_ptr, c_size_t
+      integer(c_int64_t), value :: context
+      type(c_ptr), value :: workers, bindings
+      integer(c_size_t), value :: worker_count, count
+      integer(c_int), intent(out) :: applied
+      integer(c_int) :: status
+    end function
+    function fort_scope_plan_abandon_remaining_v1(context) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: context
+      integer(c_int) :: status
+    end function
     function fort_scope_plan_add(context, kind, unit, bindings, count, flops, memory_bytes, gpu_available) &
         bind(C) result(status)
       import c_int, c_int32_t, c_int64_t, c_size_t, c_double, c_ptr
@@ -497,10 +550,24 @@ module fort_scoped_memory
       type(fort_scope_layout), intent(out) :: layout
       integer(c_int) :: status
     end function
+    function fort_scope_buffer_valid_v1(context, buffer, valid) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: context, buffer
+      integer(c_int), intent(out) :: valid
+      integer(c_int) :: status
+    end function
     function fort_scope_host_begin(context, buffer, access) bind(C) result(status)
       import c_int, c_int64_t, fort_scope_access
       integer(c_int64_t), value :: context, buffer
       type(fort_scope_access), intent(in) :: access
+      integer(c_int) :: status
+    end function
+    function fort_scope_access_begin_v1(context, bindings, count, device, devices) bind(C) result(status)
+      import c_int, c_int64_t, c_ptr, c_size_t
+      integer(c_int64_t), value :: context
+      type(c_ptr), value :: bindings, devices
+      integer(c_size_t), value :: count
+      integer(c_int), value :: device
       integer(c_int) :: status
     end function
     function fort_scope_host_end(context, buffer) bind(C) result(status)

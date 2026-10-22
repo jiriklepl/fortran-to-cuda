@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "kind": "read-only cold-wide first correctness fixture order with preserved optimizer limitation",
+  "status": "CLEAR_FOR_AUTHORED_FULL_FINAL_FIVE_NODE_SERIAL_HARDWARE_FOLLOWUP",
+  "file": {
+    "path": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_query_regions_cuda.py",
+    "sha256": "4c31f866e68497dfaa8ca731229bc5f65fb0611a67dabcf058fd26fd20dee333"
+  },
+  "before": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/test-repairs/query-cold-wide-order-review/before.py",
+    "sha256": "c295d2994a979d6f196feefaa002d5b95a2ba0216ed62fe7bb14764cb7bfcfa4"
+  },
+  "diff": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/test-repairs/query-cold-wide-order-review/change.patch",
+    "sha256": "54455174a32534528156d1fefd0d9e48a66df4b174b4ee7ee6e793a2574673a5"
+  },
+  "known_limitation": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/test-repairs/query-cold-wide-order-review/original-native-hint-limitation.json",
+    "sha256": "61a92d6c8c90b9af31a51071744b6d21bcea43c12f29339b16320c515481419b"
+  },
+  "assessment": [
+    "Independent byte reconstruction: exactly one DRIVER loop changes ascending1,2 to descending2,1, so the specified cold wide path executes before narrow-path learning. Both arms/repeats/geometries and all source/kernel/proof/rate/hint-policy/function/assertion bytes unchanged.",
+    "Preserved original narrow-first trace shows twelve lookups/nine hits/three learns and CPU-only decisions although full native fields passed. Coarse conservative owner hint can suppress a later wider profitable arm. Reordering does not repair that limitation and is not performance evidence or a claim of optimizer equivalence.",
+    "Existing all-field/halo, wide/local/cpu/disabled, prework mismatch and postwork fatal/no-replay checks remain. Fresh full5 run required; original two GPU-positive assertion failures/raw trace evidence remain in final archive and final snapshot limitations."
+  ],
+  "new_nodeids": 0,
+  "compiler_runtime_or_cost_model_changed": false,
+  "reviewer_imports_generation_tests_builds_apps_profiles_executed": false
+}

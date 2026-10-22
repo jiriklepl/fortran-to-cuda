@@ -22,6 +22,8 @@ struct Resource {
     std::vector<size_t> extents;
     Region initialized, host_current, device_current;
     bool allocated = false;
+    Region pending_host_reads = {};
+    uint64_t last_device_use = 0;
 };
 struct Binding { fort_buffer_t buffer; Effects effects; };
 struct Operation {
@@ -40,6 +42,10 @@ struct Inputs {
     std::vector<Operation> operations;
     size_t device_budget = std::numeric_limits<size_t>::max();
     bool device_ready = false, driver_initialized = false, pending = false;
+    // Graph admission is independent of the legacy source-window budgets.
+    // Search width remains bounded; task and resource counts follow the input.
+    bool graph_mode = false;
+    double graph_minimum_relative_saving = 0.05;
     uint64_t query_construction_operations = 0;
     // The CUDA pool backend queues frees on its stream. A synchronous backend
     // may set this false; it has no final free-completion wait.
@@ -50,6 +56,9 @@ struct Inputs {
     bool continuation = false, charge_create = true;
     size_t registrations_incurred = std::numeric_limits<size_t>::max();
     uint32_t transfer_mode = FORT_SCOPE_TRANSFERS_DIRECT;
+    // The existing nominal planner maps some requested transfer strategies
+    // to DIRECT. Residual evidence applies only to an actual direct request.
+    bool direct_transfer_fit_applicable = true;
     std::optional<fort_scope_batch_costs> transfer_costs;
     std::optional<fort_scope_team_costs> team_costs;
 };
@@ -65,11 +74,25 @@ struct Result {
     bool driver_initialized = false;
     // A fresh host-only native choice needs no coherence-state simulation.
     bool native_startup_shortcut = false;
+    // A sole native candidate with stationary single-box host coverage needs
+    // no physical snapshots. Its new guard work is not calibrated yet.
+    bool native_analytic_shortcut = false;
+    bool unpriced_native_analytic_overhead = false;
     // A fresh all-native source plan executes the original Fortran body. Its
     // alternative generated CPU workers need not have a validated estimate.
     bool original_native_fallback = false;
     // Fresh collective owners can close metadata and execute original calls.
     bool collective_whole_owner_margin = false;
+    // Graph AUTO ranks recurring work after one-time CUDA driver startup.
+    // Cold totals still include this debt; a local speedup is not guaranteed.
+    double cold_driver_startup_debt_seconds = 0;
+    bool unpriced_team_overhead = false;
+    double graph_ranking_seconds = 0, graph_counterfactual_seconds = 0, graph_required_saving_seconds = 0;
+    double graph_transfer_dispersion_seconds = 0;
+    // A memo retains only candidate choices. Current simulation/gates are
+    // repriced, while new key/lookup work remains explicitly unpriced.
+    bool unpriced_memo_overhead = false, memo_hit = false;
+    double memo_key_seconds = 0;
     fort_scope_plan_report report{};
 };
 struct DefinitionValidation {
@@ -208,8 +231,10 @@ inline void validate_region(const Region &region, const Resource &b) {
     }
 }
 inline void validate_metadata(const Inputs &input, bool check_work, bool check_coherence) {
-    require(input.operations.size() <= operation_limit && input.resources.size() <= operation_limit,
+    require(input.graph_mode || (input.operations.size() <= operation_limit && input.resources.size() <= operation_limit),
             "planning_record_budget_exceeded");
+    require(std::isfinite(input.graph_minimum_relative_saving) && input.graph_minimum_relative_saving >= 0 &&
+            input.graph_minimum_relative_saving < 1, "invalid_graph_profit_margin");
     std::unordered_map<fort_buffer_t, const Resource *> resources;
     for (const auto &b : input.resources) {
         require(b.handle && b.element_bytes && !b.extents.empty(), "invalid_resource_layout");
@@ -221,11 +246,10 @@ inline void validate_metadata(const Inputs &input, bool check_work, bool check_c
         if (check_coherence)
             require(b.device_current.empty() || b.allocated, "invalid_resource_coherence");
         validate_region(b.initialized, b);
+        validate_region(b.pending_host_reads,b);
         if (check_coherence) {
             validate_region(b.host_current, b); validate_region(b.device_current, b);
             coherence::Budget budget;
-            require(coherence::difference(b.host_current, b.initialized, budget).empty() &&
-                    coherence::difference(b.device_current, b.initialized, budget).empty(), "invalid_resource_coherence");
             auto current = coherence::unite(b.host_current, b.device_current, budget);
             require(coherence::difference(b.initialized, current, budget).empty(), "invalid_resource_coherence");
         }
@@ -237,7 +261,8 @@ inline void validate_metadata(const Inputs &input, bool check_work, bool check_c
             require(op.bindings.empty() && !op.unit && !op.gpu_available && !op.flops && !op.memory_bytes,
                     op.kind == FORT_SCOPE_PLAN_TEAM_ENTRY ? "invalid_collective_entry_marker" :
                     "invalid_collective_native_call_marker");
-            if (check_work) require(input.team_costs.has_value(), "collective_synchronization_calibration_unavailable");
+            if (check_work && !input.graph_mode)
+                require(input.team_costs.has_value(), "collective_synchronization_calibration_unavailable");
         }
         if (check_work) {
             require(std::isfinite(op.flops) && std::isfinite(op.memory_bytes) && op.flops >= 0 && op.memory_bytes >= 0 &&
@@ -258,7 +283,8 @@ inline void validate_metadata(const Inputs &input, bool check_work, bool check_c
         }
         if (op.kind == FORT_SCOPE_PLAN_WORKER) {
             require(op.unit && (!check_work || op.flops > 0 || op.memory_bytes > 0), "unknown_worker_work");
-            require(++workers <= worker_limit, "planning_worker_budget_exceeded");
+            ++workers;
+            require(input.graph_mode || workers <= worker_limit, "planning_worker_budget_exceeded");
         }
         std::vector<fort_buffer_t> bound;
         for (const auto &binding : op.bindings) {
@@ -293,6 +319,8 @@ inline void validate(const Inputs &input, const fort_scope_plan_costs &costs) {
     // measured lifecycle costs still require strictly positive values.
     for (double latency : {costs.h2d_latency, costs.d2h_latency})
         require(std::isfinite(latency) && latency >= 0, "invalid_calibration_cost");
+    for (double error : {costs.h2d_fit_relative_error, costs.d2h_fit_relative_error})
+        require(std::isfinite(error) && error >= 0 && error < 1, "invalid_transfer_fit_dispersion");
     if (input.transfer_mode == FORT_SCOPE_TRANSFERS_PINNED)
         require(input.transfer_costs && valid_transfer_costs(*input.transfer_costs), "transfer_estimates_unavailable");
     if (input.team_costs) {
@@ -312,7 +340,17 @@ struct State {
     // operations. First use is conservative; native calls can replace it.
     size_t staging_capacity = 0;
     bool ready = false, driver_initialized = false, pending = false;
+    bool warm_ranking = false;
+    double cold_driver_startup_debt_seconds = 0;
+    struct UploadReader { fort_buffer_t buffer; Region sections; uint64_t batch; };
+    std::vector<UploadReader> upload_readers;
+    uint64_t upload_batch = 0, active_upload_batch = 0;
+    std::vector<fort_buffer_t> pinned;
+    uint64_t residency_clock = 0;
     double time = 0;
+    // DMA alone, including projected publication. Keep the representative
+    // execution estimate separate from the calibration-dispersion scenario.
+    double h2d_seconds = 0, d2h_seconds = 0;
     double execution_time = 0;
     fort_scope_terminal_cost terminal{};
 };
@@ -321,13 +359,20 @@ inline void discard_coherence(State &state) {
     // retain a full physical snapshot for every candidate.
     std::vector<Resource>{}.swap(state.resources);
     std::unordered_map<fort_buffer_t, size_t>{}.swap(state.index);
+    std::vector<State::UploadReader>{}.swap(state.upload_readers);
 }
 inline State initial(const Inputs &input, const fort_scope_plan_costs &costs) {
     State s; s.resources = input.resources; s.ready = input.device_ready;
     s.driver_initialized = input.driver_initialized; s.pending = input.pending;
+    s.warm_ranking = input.graph_mode;
     for (size_t k=0; k<s.resources.size(); ++k) {
         s.index.emplace(s.resources[k].handle, k);
+        s.residency_clock=std::max(s.residency_clock,s.resources[k].last_device_use);
         if (s.resources[k].allocated) s.allocated = add(s.allocated, s.resources[k].bytes);
+        if (!s.resources[k].pending_host_reads.empty()) {
+            s.upload_batch = 1;
+            s.upload_readers.push_back({s.resources[k].handle,s.resources[k].pending_host_reads,1});
+        }
     }
     require(s.allocated <= input.device_budget, "device_budget_exceeded");
     s.count.peak_device_bytes = s.allocated;
@@ -341,15 +386,45 @@ inline State initial(const Inputs &input, const fort_scope_plan_costs &costs) {
 inline void wait(State &s, const fort_scope_plan_costs &costs) {
     if (!s.pending) return;
     seconds(s.time, costs.wait_seconds); s.count.waits = add(s.count.waits, 1); s.pending = false;
+    s.upload_readers.clear();
 }
 inline void initialize(State &s, const fort_scope_plan_costs &costs) {
     if (s.ready) return;
-    if (!s.driver_initialized) seconds(s.time, costs.cold_driver_startup_seconds);
+    if (!s.driver_initialized) {
+        if (s.warm_ranking) s.cold_driver_startup_debt_seconds = costs.cold_driver_startup_seconds;
+        else seconds(s.time, costs.cold_driver_startup_seconds);
+    }
     seconds(s.time, costs.gpu_setup_seconds); s.ready = s.driver_initialized = true;
 }
+inline void copy(State &s, Resource &b, const Box &box, bool upload,
+                 const Inputs &input, const fort_scope_plan_costs &costs,
+                 const EvidenceSink *sink, uint64_t unit, const char *phase);
 inline void allocate(State &s, Resource &b, const Inputs &input, const fort_scope_plan_costs &costs) {
+    if (input.graph_mode) {
+        require(s.residency_clock<std::numeric_limits<uint64_t>::max(),"residency_clock_overflow");
+        b.last_device_use=++s.residency_clock;
+    }
     if (b.allocated || !b.bytes) return;
     require(b.bytes <= costs.max_allocation_bytes, "allocation_outside_calibrated_range");
+    while (input.graph_mode && s.allocated<=input.device_budget && b.bytes>input.device_budget-s.allocated) {
+        Resource *victim=nullptr;
+        for (auto &candidate:s.resources) {
+            if (!candidate.allocated || &candidate==&b ||
+                std::find(s.pinned.begin(),s.pinned.end(),candidate.handle)!=s.pinned.end()) continue;
+            if (!victim || std::pair(candidate.last_device_use,candidate.handle)<
+                           std::pair(victim->last_device_use,victim->handle)) victim=&candidate;
+        }
+        require(victim,"device_budget_exceeded");
+        coherence::Budget budget;
+        const auto dirty=coherence::difference(victim->device_current,victim->host_current,budget);
+        auto host=coherence::unite(victim->host_current,dirty,budget);
+        for (const auto &box:dirty) copy(s,*victim,box,false,input,costs,nullptr,0,"eviction");
+        if (!dirty.empty()) wait(s,costs);
+        victim->host_current=std::move(host); victim->device_current.clear();
+        seconds(s.time,costs.release_seconds); victim->allocated=false;
+        s.allocated-=victim->bytes;
+        if (input.asynchronous_release) s.pending=true;
+    }
     require(s.allocated <= input.device_budget && b.bytes <= input.device_budget-s.allocated, "device_budget_exceeded");
     initialize(s, costs); seconds(s.time, costs.allocation_seconds); b.allocated = true; s.pending = true;
     s.allocated = add(s.allocated, b.bytes); s.count.allocations = add(s.count.allocations, 1);
@@ -384,8 +459,10 @@ inline void copy(State &s, Resource &b, const Box &box, bool upload,
                         double(plan.bytes)/(upload ? transfer.pinned_h2d_bandwidth : transfer.pinned_d2h_bandwidth));
         seconds(s.time, double(calls)*(transfer.event_record_seconds+transfer.event_wait_seconds));
     } else {
-        seconds(s.time, double(plan.copies)*(upload ? costs.h2d_latency : costs.d2h_latency) +
-                        double(plan.bytes)/(upload ? costs.h2d_bandwidth : costs.d2h_bandwidth));
+        const double dma = double(plan.copies)*(upload ? costs.h2d_latency : costs.d2h_latency) +
+                           double(plan.bytes)/(upload ? costs.h2d_bandwidth : costs.d2h_bandwidth);
+        seconds(s.time, dma);
+        seconds(upload ? s.h2d_seconds : s.d2h_seconds, dma);
     }
     if (sink) {
         EvidenceEvent event; event.event = "copy"; event.phase = phase; event.resource = &b;
@@ -396,6 +473,10 @@ inline void copy(State &s, Resource &b, const Box &box, bool upload,
     auto &copies = upload ? s.count.uploads : s.count.downloads;
     bytes = add(bytes, plan.bytes); copies = add(copies, calls);
     s.pending = input.transfer_mode != FORT_SCOPE_TRANSFERS_PINNED;
+    if (upload && s.pending) {
+        if (!s.active_upload_batch) s.active_upload_batch = ++s.upload_batch;
+        s.upload_readers.push_back({b.handle,{box},s.active_upload_batch});
+    }
 }
 inline void ensure(State &s, Resource &b, const Region &requested, bool device,
                    const Inputs &input, const fort_scope_plan_costs &costs,
@@ -413,6 +494,16 @@ inline void execute(State &s, const Operation &op, bool gpu,
                     const Inputs &input, const fort_scope_plan_costs &costs, uint64_t &work,
                     const EvidenceSink *sink = nullptr) {
     work = add(work, 1);
+    s.active_upload_batch = 0;
+    s.pinned.clear();
+    if (gpu && input.graph_mode) {
+        size_t bytes=0;
+        for (const auto &binding:op.bindings) {
+            const auto &resource=s.resources[s.index.at(binding.buffer)];
+            bytes=add(bytes,resource.bytes); s.pinned.push_back(binding.buffer);
+        }
+        require(bytes<=input.device_budget,"device_budget_exceeded");
+    }
     if (op.kind == FORT_SCOPE_PLAN_TEAM_ENTRY || op.kind == FORT_SCOPE_PLAN_TEAM_NATIVE_CALL) {
         if (input.team_costs) seconds(s.time, op.kind == FORT_SCOPE_PLAN_TEAM_ENTRY ?
                 input.team_costs->entry_seconds : input.team_costs->native_call_seconds);
@@ -427,20 +518,19 @@ inline void execute(State &s, const Operation &op, bool gpu,
     }
     if ((op.kind == FORT_SCOPE_PLAN_FORGET || op.kind == FORT_SCOPE_PLAN_DISCARD)) {
         for (const auto &binding : op.bindings) {
-            auto &b = s.resources[s.index.at(binding.buffer)]; wait(s, costs);
+            auto &b = s.resources[s.index.at(binding.buffer)];
             if (op.kind == FORT_SCOPE_PLAN_FORGET) {
-                b.initialized.clear(); b.host_current.clear(); b.device_current.clear();
+                b.initialized.clear();
             } else {
                 coherence::Budget budget;
                 b.initialized = coherence::difference(b.initialized, binding.effects.writes, budget);
-                b.host_current = coherence::difference(b.host_current, binding.effects.writes, budget);
-                b.device_current = coherence::difference(b.device_current, binding.effects.writes, budget);
             }
         }
         return; // Definition changes retain full-layout allocations.
     }
     if (gpu) { require(op.kind == FORT_SCOPE_PLAN_WORKER && op.gpu_available, "unsupported_gpu_worker"); initialize(s, costs); }
     std::vector<coherence::Prepared> prepared;
+    const auto previous_downloads = s.count.downloads;
     for (const auto &binding : op.bindings) {
         auto &b = s.resources[s.index.at(binding.buffer)];
         seconds(s.time, gpu ? costs.device_access_seconds : costs.host_access_seconds);
@@ -454,7 +544,26 @@ inline void execute(State &s, const Operation &op, bool gpu,
         ensure(s, b, binding.effects.reads, gpu, input, costs, sink, op.unit, "read");
         ensure(s, b, preserve, gpu, input, costs, sink, op.unit, "preserve");
         prepared.push_back(coherence::prepare(b, binding.effects, gpu));
-        if (!gpu) wait(s, costs); // Actual host_begin waits after each buffer.
+    }
+    if (!gpu && s.count.downloads != previous_downloads) wait(s,costs);
+    else if (!gpu) {
+        uint64_t required_batch = 0;
+        for (const auto &binding : op.bindings) for (const auto &reader : s.upload_readers) {
+            if (reader.buffer != binding.buffer) continue;
+            for (const auto &write : binding.effects.writes) for (const auto &read : reader.sections) {
+                bool common = true;
+                for (size_t axis=0; axis<write.lo.size(); ++axis)
+                    if (write.lo[axis] >= read.hi[axis] || read.lo[axis] >= write.hi[axis]) { common=false; break; }
+                if (common) required_batch = std::max(required_batch,reader.batch);
+            }
+        }
+        if (required_batch) {
+            seconds(s.time,costs.wait_seconds); s.count.waits=add(s.count.waits,1);
+            s.upload_readers.erase(std::remove_if(s.upload_readers.begin(),s.upload_readers.end(),
+                [&](const auto &reader) { return reader.batch<=required_batch; }),s.upload_readers.end());
+            // Upload events precede their kernels. Their completion does not
+            // wait for, or mark complete, the later device computation.
+        }
     }
     seconds(s.time, !op.compute_costs && input.team_costs && op.kind == FORT_SCOPE_PLAN_NATIVE
             ? native_compute(op, input, costs) : compute(op, costs, gpu));
@@ -481,7 +590,13 @@ inline void close(State &s, const Inputs &input, const fort_scope_plan_costs &co
         if (sink) {
             EvidenceEvent event; event.event = "export"; event.phase = "scope_close"; event.resource = &b; (*sink)(event);
         }
-        work = add(work, 1); ensure(s, b, b.initialized, false, input, costs, sink, 0, "scope_close");
+        work = add(work, 1);
+        coherence::Budget budget;
+        const auto physical=coherence::unite(b.host_current,b.device_current,budget);
+        const auto missing=coherence::difference(physical,b.host_current,budget);
+        auto updated=coherence::unite(b.host_current,missing,budget);
+        for(const auto &box:missing) copy(s,b,box,false,input,costs,sink,0,"scope_close");
+        b.host_current=std::move(updated);
         if (!input.asynchronous_release) wait(s, costs);
     }
     for (auto &b : s.resources) if (b.allocated) {
@@ -493,7 +608,7 @@ inline void close(State &s, const Inputs &input, const fort_scope_plan_costs &co
 }
 inline void finish(State &s, const Inputs &input, const fort_scope_plan_costs &costs, uint64_t &work,
                    const EvidenceSink *sink = nullptr) {
-    if (input.continuation) wait(s, costs); // Actual synchronous segment boundary.
+    if (input.continuation && !input.graph_mode) wait(s, costs);
     s.execution_time = s.time;
     const auto count = s.count;
     for (const auto &resource : s.resources) if (resource.allocated) ++s.terminal.releases;
@@ -523,10 +638,80 @@ inline State simulate(const Inputs &input, const fort_scope_plan_costs &costs,
 }
 struct Gate { double counterfactual, native_compute; bool other_gpu; };
 struct Candidate { State state; std::vector<Gate> gates; };
+inline double transfer_dispersion_debit(const State &candidate, const State &native,
+                                       const fort_scope_plan_costs &costs, bool native_transfers = true) {
+    // The fit stores max |prediction-observation|/observation. A correlated
+    // coefficient per direction therefore spans [1/(1+e), 1/(1-e)]. Apply
+    // the adverse endpoint to the *difference*, cancelling common copies.
+    // This is an observed calibration scenario, not a statistical confidence
+    // interval or a bound on unmeasured transfer geometry/application work.
+    double debit = 0;
+    // COMPLETE compares to bare original-native compute; its counterfactual
+    // contains no managed DMA. CONTINUE compares the simulated native path.
+    for (const auto &item : {std::pair(candidate.h2d_seconds-(native_transfers ? native.h2d_seconds : 0),
+                                     costs.h2d_fit_relative_error),
+                            std::pair(candidate.d2h_seconds-(native_transfers ? native.d2h_seconds : 0),
+                                     costs.d2h_fit_relative_error)}) {
+        const double delta=item.first, error=item.second;
+        seconds(debit, delta >= 0 ? delta*error/(1-error) : -delta*error/(1+error));
+    }
+    return debit;
+}
 inline void retain(std::vector<State> &front, State state) {
     front.push_back(std::move(state));
     std::stable_sort(front.begin(), front.end(), [](const State &a, const State &b) { return a.time < b.time; });
     if (front.size() > frontier_limit) front.resize(frontier_limit);
+}
+inline bool stationary_native(const Inputs &input, uint64_t &work) {
+    if (!input.graph_mode || input.device_ready || input.pending || input.team_costs) return false;
+    for (const auto &op : input.operations) {
+        work = add(work, 1);
+        if (op.compute_costs || op.kind == FORT_SCOPE_PLAN_FORGET || op.kind == FORT_SCOPE_PLAN_DISCARD)
+            return false;
+    }
+    // Borrow at most one immutable box per resource. After the first write to
+    // an empty resource, every write must stay within that same box. Logical
+    // preflight proves its reads and preservation; both physical sets then
+    // remain unchanged, without extra region splits or intersection budget.
+    struct Cover { const Resource *resource; const Box *box = nullptr; bool checked = false; };
+    std::vector<Cover> covers;
+    covers.reserve(input.resources.size());
+    for (const auto &resource : input.resources) {
+        work = add(work, 1);
+        if (resource.allocated || !resource.device_current.empty() || !resource.pending_host_reads.empty())
+            return false;
+        covers.push_back({&resource});
+    }
+    std::sort(covers.begin(), covers.end(), [](const auto &a, const auto &b) {
+        return a.resource->handle < b.resource->handle;
+    });
+    for (const auto &op : input.operations) for (const auto &binding : op.bindings) {
+        work = add(work, 1);
+        auto found = std::lower_bound(covers.begin(), covers.end(), binding.buffer,
+            [](const auto &cover, fort_buffer_t handle) { return cover.resource->handle < handle; });
+        require(found != covers.end() && found->resource->handle == binding.buffer, "unknown_resource_handle");
+        if (!found->checked) {
+            const auto &resource = *found->resource;
+            if (resource.initialized.size() != resource.host_current.size() || resource.host_current.size() > 1)
+                return false;
+            if (!resource.host_current.empty()) {
+                const auto &box = resource.host_current.front();
+                if (resource.initialized.front().lo != box.lo || resource.initialized.front().hi != box.hi)
+                    return false;
+                found->box = &box;
+            }
+            found->checked = true;
+        }
+        if (!found->box && !binding.effects.writes.empty()) {
+            if (binding.effects.writes.size() != 1) return false;
+            found->box = &binding.effects.writes.front();
+        }
+        for (const auto &write : binding.effects.writes) {
+            work = add(work, 1);
+            if (!coherence::empty(write) && (!found->box || !coherence::contains(*found->box, write))) return false;
+        }
+    }
+    return true;
 }
 } // namespace detail
 
@@ -537,12 +722,11 @@ inline DefinitionValidation validate_definitions(const Inputs &input) noexcept {
     DefinitionValidation result;
     try {
         detail::validate_metadata(input, false, false);
-        struct DefinitionState { Region initialized, host_current, device_current; };
-        std::vector<DefinitionState> states;
+        std::vector<Region> states;
         std::unordered_map<fort_buffer_t, size_t> index;
         for (const auto &resource : input.resources) {
             index.emplace(resource.handle, states.size());
-            states.push_back({resource.initialized, {}, {}});
+            states.push_back(resource.initialized);
         }
         for (size_t k=0; k<input.operations.size(); ++k) {
             result.operation = k; result.buffer = 0;
@@ -550,7 +734,7 @@ inline DefinitionValidation validate_definitions(const Inputs &input) noexcept {
             if (op.kind == FORT_SCOPE_PLAN_TEAM_ENTRY || op.kind == FORT_SCOPE_PLAN_TEAM_NATIVE_CALL) continue;
             if ((op.kind == FORT_SCOPE_PLAN_FORGET || op.kind == FORT_SCOPE_PLAN_DISCARD)) {
                 for (const auto &binding : op.bindings) {
-                    auto &defined = states[index.at(binding.buffer)].initialized;
+                    auto &defined = states[index.at(binding.buffer)];
                     if (op.kind == FORT_SCOPE_PLAN_FORGET) defined.clear();
                     else {
                         coherence::Budget budget;
@@ -559,24 +743,27 @@ inline DefinitionValidation validate_definitions(const Inputs &input) noexcept {
                 }
                 continue;
             }
-            std::vector<coherence::Prepared> prepared;
+            std::vector<Region> prepared;
+            prepared.reserve(op.bindings.size());
             for (const auto &binding : op.bindings) {
                 result.buffer = binding.buffer;
                 auto &state = states[index.at(binding.buffer)];
                 coherence::Budget budget;
                 const auto preservation = coherence::difference(binding.effects.writes, binding.effects.overwrites, budget);
                 const auto required = coherence::unite(binding.effects.reads, preservation, budget);
-                if (!coherence::difference(required, state.initialized, budget).empty()) {
+                if (!coherence::difference(required, state, budget).empty()) {
                     result.status = FORT_SCOPE_UNINITIALIZED;
                     result.reason = "uninitialized_read";
                     return result;
                 }
-                // The existing execution transition can now define may-writes:
-                // preservation proved every potentially unwritten hole defined.
-                prepared.push_back(coherence::prepare(state, binding.effects, false));
+                // Preservation proved potentially unwritten holes defined.
+                // This proof needs only logical definitions; copy locations
+                // remain the responsibility of placement and acquisition.
+                coherence::Budget definition_budget;
+                prepared.push_back(coherence::unite(state, binding.effects.writes, definition_budget));
             }
             for (size_t j=0; j<op.bindings.size(); ++j)
-                states[index.at(op.bindings[j].buffer)].initialized = std::move(prepared[j].initialized);
+                states[index.at(op.bindings[j].buffer)] = std::move(prepared[j]);
         }
         result.status = FORT_SCOPE_OK; result.reason = "definition_plan_valid";
         result.operation = std::numeric_limits<size_t>::max(); result.buffer = 0;
@@ -587,11 +774,16 @@ inline DefinitionValidation validate_definitions(const Inputs &input) noexcept {
     return result;
 }
 
-inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
+inline Result select(const Inputs &input, const fort_scope_plan_costs &costs,
+                     const std::vector<bool> *candidate_choices = nullptr) {
     Result result;
     result.report.version = FORT_SCOPE_PLANNING_REPORT_VERSION;
     result.report.endpoint_mode = input.continuation ? FORT_SCOPE_PLAN_CONTINUE : FORT_SCOPE_PLAN_COMPLETE;
     result.driver_initialized = input.driver_initialized;
+    result.unpriced_team_overhead = input.graph_mode && !input.team_costs &&
+        std::any_of(input.operations.begin(), input.operations.end(), [](const Operation &op) {
+            return op.kind == FORT_SCOPE_PLAN_TEAM_ENTRY || op.kind == FORT_SCOPE_PLAN_TEAM_NATIVE_CALL;
+        });
     size_t workers = 0;
     for (const auto &op : input.operations) if (op.kind == FORT_SCOPE_PLAN_WORKER) ++workers;
     result.gpu_workers.assign(workers, false);
@@ -599,6 +791,8 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
     uint64_t work = 0;
     try {
         detail::validate(input, costs);
+        detail::require(!candidate_choices || (input.graph_mode && candidate_choices->size()==workers),
+                        "invalid_memo_candidate");
         double native = 0;
         for (const auto &op : input.operations) if (!detail::definition_only(op)) {
             detail::seconds(native, detail::native_compute(op, input, costs));
@@ -613,19 +807,69 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
         };
         auto save = [&](detail::State state) {
             if (std::none_of(complete.begin(), complete.end(), [&](const detail::State &old) { return old.choices == state.choices; })) {
-                detail::require(complete.size() < detail::candidate_limit, "planning_candidate_budget_exceeded");
                 detail::discard_coherence(state);
+                if (complete.size() == detail::candidate_limit && input.graph_mode) {
+                    auto worst=std::max_element(complete.begin(),complete.end(),[](const auto &a,const auto &b) {
+                        return a.time<b.time;
+                    });
+                    if (state.time<worst->time) *worst=std::move(state);
+                    return;
+                }
+                detail::require(complete.size() < detail::candidate_limit, "planning_candidate_budget_exceeded");
                 complete.push_back(std::move(state));
             }
         };
         const bool gpu_supported = std::any_of(input.operations.begin(), input.operations.end(), [](const Operation &op) {
             return detail::gpu_estimate_available(op);
         });
+        const bool sole_native = !gpu_supported || (candidate_choices &&
+            std::none_of(candidate_choices->begin(), candidate_choices->end(), [](bool gpu) { return gpu; }));
+        const bool try_native_analytic = sole_native && input.graph_mode && !input.team_costs &&
+            std::none_of(input.operations.begin(), input.operations.end(), [](const Operation &op) {
+                return op.compute_costs.has_value();
+            });
+        result.unpriced_native_analytic_overhead = try_native_analytic;
+        bool stationary = false;
+        if (try_native_analytic) try { stationary = detail::stationary_native(input, work); }
+            catch (const std::bad_alloc &) { } // Optional guard storage may fall back to normal planning.
+        if (stationary) {
+            if (!input.definitions_validated) {
+                const auto proof = validate_definitions(input);
+                detail::require(proof.status == FORT_SCOPE_OK, proof.reason);
+            }
+            double estimate = 0;
+            const size_t registrations = input.registrations_incurred == std::numeric_limits<size_t>::max()
+                ? input.resources.size() : input.registrations_incurred;
+            detail::seconds(estimate, (input.charge_create ? costs.create_seconds : 0) +
+                double(registrations)*costs.register_seconds);
+            for (const auto &op : input.operations) if (!detail::definition_only(op)) {
+                for (const auto &binding : op.bindings) {
+                    (void)binding;
+                    detail::seconds(estimate, costs.host_access_seconds);
+                }
+                detail::seconds(estimate, detail::compute(op, costs, false));
+            }
+            work = detail::add(work, input.query_construction_operations);
+            result.decision.available = 1; result.decision.candidates = 1;
+            result.decision.simulated_operations = work;
+            result.decision.estimated_seconds = estimate;
+            detail::seconds(result.decision.estimated_seconds, double(work)*costs.planning_operation_seconds);
+            result.native_analytic_shortcut = true;
+            result.reason = "native_stationary_single_candidate";
+            result.report.execution_seconds = result.report.native_execution_seconds = result.decision.estimated_seconds;
+            result.report.ranking_seconds = result.report.native_ranking_seconds = result.decision.estimated_seconds;
+            result.report.native_common_compute_excluded = result.native_common_compute_excluded;
+            // Execution accounting is exact for this guarded model, but the
+            // new metadata guard is unpriced. Installation authority remains
+            // available; complete/owner cost qualification does not.
+            if (input.continuation) result.decision.native_seconds = result.report.native_execution_seconds;
+            return result;
+        }
         const bool fresh = !input.device_ready && !input.pending &&
             std::none_of(input.resources.begin(), input.resources.end(), [](const Resource &b) {
                 return b.allocated || !b.device_current.empty();
             });
-        result.collective_whole_owner_margin = input.team_costs && fresh && !input.continuation;
+        result.collective_whole_owner_margin = !input.graph_mode && input.team_costs && fresh && !input.continuation;
         // A fresh complete owner returns to its original Fortran body when no
         // GPU work is selected. Continuations instead execute coordinated CPU
         // operations and must preserve prior device results. Legacy callers
@@ -635,7 +879,8 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
                 [](const Operation &op) { return op.compute_costs.has_value(); }));
         result.original_native_fallback = original_native_fallback;
         // A fresh scope with any GPU work must pay at least setup and one
-        // enqueue, plus cold driver startup if it is not already initialized.
+        // enqueue. Legacy local ROI also includes cold driver startup; graph
+        // AUTO ranks recurring work warm and reports startup debt separately.
         // Even zero GPU compute/transfers cannot beat this lower bound. Prove
         // the native result before constructing expensive candidate states.
         // A launch-inclusive worker does not owe the separate enqueue price.
@@ -644,7 +889,7 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
             return detail::gpu_estimate_available(op) && detail::gpu_launch_included(op);
         });
         const double gpu_lower_bound = costs.gpu_setup_seconds + (inclusive_launch ? 0 : costs.launch_enqueue_seconds) +
-            (input.driver_initialized ? 0 : costs.cold_driver_startup_seconds);
+            (input.driver_initialized || input.graph_mode ? 0 : costs.cold_driver_startup_seconds);
         double native_startup_comparison = 0;
         for (const auto &op : input.operations) if (!detail::definition_only(op))
             detail::seconds(native_startup_comparison, input.continuation && op.compute_costs
@@ -678,7 +923,8 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
             }
             // Retain the existing logical accounting for native operations and
             // final publication checks, without allocating their snapshots.
-            work = detail::add(input.operations.size(), input.resources.size());
+            work = detail::add(work, input.operations.size());
+            work = detail::add(work, input.resources.size());
             work = detail::add(work, input.query_construction_operations);
             result.decision.cpu_units = uint32_t(workers); result.decision.available = 1;
             result.decision.candidates = 1; result.decision.simulated_operations = work;
@@ -686,7 +932,7 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
             detail::seconds(result.decision.estimated_seconds, double(work)*costs.planning_operation_seconds);
             result.native_startup_shortcut = true;
             result.reason = "native_gpu_startup_lower_bound";
-            result.report.available = 1;
+            result.report.available = !result.unpriced_native_analytic_overhead;
             result.report.execution_seconds = result.report.native_execution_seconds = result.decision.estimated_seconds;
             result.report.ranking_seconds = result.report.native_ranking_seconds = result.decision.estimated_seconds;
             result.report.native_common_compute_excluded = result.native_common_compute_excluded;
@@ -713,9 +959,11 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
             work = detail::add(work, input.resources.size());
         } else all_native = detail::simulate(input, costs, result.gpu_workers, work);
         auto report = [&](const detail::State &state, double planning) {
-            result.report.available = 1;
+            result.report.available = !result.unpriced_native_analytic_overhead;
             result.report.execution_seconds = state.execution_time + planning;
+            detail::seconds(result.report.execution_seconds, state.cold_driver_startup_debt_seconds);
             result.report.native_execution_seconds = all_native.execution_time + planning;
+            detail::seconds(result.report.native_execution_seconds, all_native.cold_driver_startup_debt_seconds);
             result.report.entry_terminal = initial_terminal;
             result.report.terminal = state.terminal;
             result.report.native_terminal = all_native.terminal;
@@ -724,10 +972,11 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
             detail::require(std::isfinite(result.report.ranking_seconds) &&
                             std::isfinite(result.report.native_ranking_seconds), "arithmetic_overflow");
             result.report.native_common_compute_excluded = result.native_common_compute_excluded;
+            result.cold_driver_startup_debt_seconds = state.cold_driver_startup_debt_seconds;
             if (input.continuation) {
                 result.decision.estimated_seconds = result.report.execution_seconds;
                 result.decision.native_seconds = result.report.native_execution_seconds;
-            }
+            } else detail::seconds(result.decision.estimated_seconds, state.cold_driver_startup_debt_seconds);
         };
         if (!gpu_supported) {
             work = detail::add(work, input.query_construction_operations);
@@ -744,10 +993,37 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
         }
         detail::discard_coherence(all_native);
         save(all_native);
+        if (candidate_choices) {
+            if (std::any_of(candidate_choices->begin(),candidate_choices->end(),[](bool gpu) { return gpu; }))
+                try { save(detail::simulate(input,costs,*candidate_choices,work)); }
+                catch (const detail::Unavailable &error) { unavailable(error.reason); }
+                catch (const coherence::Fragmented &) { unavailable("region_fragmentation_unavailable"); }
+        } else {
+        if (input.graph_mode) try {
+            // Preserve the complete device-capable alternative even when its
+            // upload prefix temporarily costs more than the native prefix.
+            // One whole-graph traversal replaces quadratic block enumeration.
+            auto state=detail::initial(input,costs);
+            size_t worker=0;
+            for (size_t k=0;k<input.operations.size();++k) {
+                const auto &op=input.operations[k];
+                const bool gpu=detail::gpu_estimate_available(op);
+                detail::execute(state,op,gpu,input,costs,work);
+                if (op.kind==FORT_SCOPE_PLAN_WORKER) {
+                    if (gpu) {
+                        if (k && detail::gpu_estimate_available(input.operations[k-1])) state.intervals.back().second=worker+1;
+                        else state.intervals.push_back({worker,worker+1});
+                    }
+                    ++worker;
+                }
+            }
+            detail::finish(state,input,costs,work); save(std::move(state));
+        } catch (const detail::Unavailable &error) { unavailable(error.reason); }
+          catch (const coherence::Fragmented &) { unavailable("region_fragmentation_unavailable"); }
         // Guaranteed complete-block alternatives survive prefix pruning. Fixed
         // native/definition operations and ineligible workers split blocks.
         size_t worker = 0;
-        for (size_t k=0; k<input.operations.size();) {
+        for (size_t k=0; !input.graph_mode && k<input.operations.size();) {
             if (input.operations[k].kind != FORT_SCOPE_PLAN_WORKER) { ++k; continue; }
             if (!detail::gpu_estimate_available(input.operations[k])) { ++worker; ++k; continue; }
             const size_t first = worker;
@@ -771,6 +1047,18 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
                 } catch (const detail::Unavailable &error) { unavailable(error.reason); }
                   catch (const coherence::Fragmented &) { unavailable("region_fragmentation_unavailable"); }
                 if (!detail::gpu_estimate_available(op)) continue;
+                if (input.graph_mode) {
+                    try {
+                        auto s=prefix; const size_t first=s.choices.size();
+                        detail::execute(s,op,true,input,costs,work);
+                        if (k && detail::gpu_estimate_available(input.operations[k-1]) &&
+                            !prefix.choices.empty() && prefix.choices.back()) s.intervals.back().second=first+1;
+                        else s.intervals.push_back({first,first+1});
+                        detail::retain(fronts[k+1],std::move(s));
+                    } catch (const detail::Unavailable &error) { unavailable(error.reason); }
+                      catch (const coherence::Fragmented &) { unavailable("region_fragmentation_unavailable"); }
+                    continue;
+                }
                 // Adjacent GPU transitions would silently create an interval
                 // longer than four. Admit the complete block explicitly.
                 if (k && input.operations[k-1].kind == FORT_SCOPE_PLAN_WORKER && !prefix.choices.empty() && prefix.choices.back()) continue;
@@ -795,12 +1083,18 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
         for (auto &s : fronts.back()) try { detail::finish(s, input, costs, work); save(std::move(s)); }
             catch (const detail::Unavailable &error) { unavailable(error.reason); }
             catch (const coherence::Fragmented &) { unavailable("region_fragmentation_unavailable"); }
+        }
         std::vector<detail::Candidate> candidates;
         std::vector<const Operation *> worker_ops;
         for (const auto &op : input.operations) if (op.kind == FORT_SCOPE_PLAN_WORKER) worker_ops.push_back(&op);
         for (auto &s : complete) {
             if (std::none_of(s.choices.begin(), s.choices.end(), [](bool gpu) { return gpu; })) continue;
             detail::Candidate c{std::move(s), {}}; bool valid = true;
+            if (input.graph_mode) {
+                c.gates.push_back({input.continuation ? all_native.time : native,native,false});
+                candidates.push_back(std::move(c));
+                continue;
+            }
             for (const auto &interval : c.state.intervals) {
                 auto choices = c.state.choices; double cpu = 0;
                 for (size_t j=interval.first; j<interval.second; ++j) choices[j] = false;
@@ -837,10 +1131,18 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
         report(all_native, planning);
         if (candidates.empty() && !unavailable_alternative.empty()) result.reason = "native_" + unavailable_alternative;
         double best = input.continuation ? all_native.time + planning : native;
-        bool margin_rejected = false;
+        bool margin_rejected = false, dispersion_rejected = false;
         for (auto &candidate : candidates) {
             const double time = candidate.state.time + planning;
-            if (!(time < best)) continue;
+            const double dispersion = input.graph_mode && input.direct_transfer_fit_applicable &&
+                input.transfer_mode == FORT_SCOPE_TRANSFERS_DIRECT
+                ? detail::transfer_dispersion_debit(candidate.state, all_native, costs, input.continuation) : 0;
+            double ranking = time;
+            detail::seconds(ranking, dispersion);
+            if (!(ranking < best)) {
+                dispersion_rejected |= dispersion > 0 && time < best;
+                continue;
+            }
             // Local interval counterfactuals may retain other GPU workers and
             // substitute slower generated CPU workers. The complete collective
             // schedule must also beat the untouched original whole-native
@@ -853,10 +1155,14 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
             bool accepted = true;
             for (const auto &gate : candidate.gates) {
                 const double alternative = gate.counterfactual + (input.continuation || gate.other_gpu ? planning : 0);
-                if (!(time <= alternative - 0.20*gate.native_compute)) { accepted = false; break; }
+                const double margin=input.graph_mode ? input.graph_minimum_relative_saving : .20;
+                if (!(ranking <= alternative - margin*gate.native_compute)) {
+                    dispersion_rejected |= dispersion > 0 && time <= alternative - margin*gate.native_compute;
+                    accepted = false; break;
+                }
             }
             if (!accepted) { margin_rejected = true; continue; }
-            best = time; result.gpu_workers = candidate.state.choices;
+            best = ranking; result.gpu_workers = candidate.state.choices;
             result.decision = candidate.state.count;
             result.decision.available = 1; result.decision.candidates = uint32_t(complete.size());
             result.decision.simulated_operations = work; result.decision.native_seconds = native;
@@ -864,9 +1170,19 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs) {
             result.decision.gpu_units = uint32_t(std::count(result.gpu_workers.begin(), result.gpu_workers.end(), true));
             result.decision.cpu_units = uint32_t(workers)-result.decision.gpu_units;
             result.reason = "coherent_gpu_schedule_selected";
+            if (input.graph_mode) {
+                const auto &gate = candidate.gates.front();
+                result.graph_ranking_seconds = time;
+                result.graph_counterfactual_seconds = gate.counterfactual + (input.continuation ? planning : 0);
+                result.graph_required_saving_seconds = input.graph_minimum_relative_saving*gate.native_compute;
+                result.graph_transfer_dispersion_seconds = dispersion;
+            }
             report(candidate.state, planning);
         }
-        if (!result.decision.gpu_units && margin_rejected) result.reason = "native_20_percent_margin_not_met";
+        if (!result.decision.gpu_units && margin_rejected)
+            result.reason = input.graph_mode ? "native_graph_profit_margin_not_met" : "native_20_percent_margin_not_met";
+        if (!result.decision.gpu_units && dispersion_rejected)
+            result.reason = "native_graph_transfer_fit_dispersion_not_met";
         return result;
     } catch (const detail::Unavailable &error) { result.reason = error.reason; }
       catch (const coherence::Fragmented &) { result.reason = "region_fragmentation_unavailable"; }
@@ -884,7 +1200,7 @@ inline void evidence(const Inputs &input, const fort_scope_plan_costs &costs,
     for (const auto &resource : input.resources) {
         EvidenceEvent event; event.event = "snapshot"; event.phase = "initial"; event.resource = &resource; sink(event);
     }
-    if (!result.decision.available || result.native_startup_shortcut) return;
+    if (!result.decision.available || result.native_startup_shortcut || result.native_analytic_shortcut) return;
     if (result.original_native_fallback && !result.decision.gpu_units) {
         EvidenceEvent event; event.event = "native_fallback"; event.phase = "original_fortran";
         event.seconds = result.report.execution_seconds; sink(event);
@@ -897,6 +1213,18 @@ inline void evidence(const Inputs &input, const fort_scope_plan_costs &costs,
         detail::execute(state, op, gpu, input, costs, ignored_work, &sink);
     }
     detail::finish(state, input, costs, ignored_work, &sink);
+    if (input.graph_mode) {
+        if (result.decision.gpu_units) {
+            EvidenceEvent event; event.event="gate"; event.phase="task_graph";
+            event.first=0; event.last=result.gpu_workers.size();
+            event.seconds=result.graph_ranking_seconds;
+            event.counterfactual_seconds=result.graph_counterfactual_seconds;
+            event.required_saving=result.graph_required_saving_seconds + result.graph_transfer_dispersion_seconds;
+            event.accepted=event.seconds<=event.counterfactual_seconds-event.required_saving;
+            sink(event);
+        }
+        return;
+    }
     if (result.collective_whole_owner_margin && result.decision.gpu_units) {
         EvidenceEvent event; event.event = "gate"; event.phase = "whole_owner";
         event.first = 0; event.last = result.gpu_workers.size();

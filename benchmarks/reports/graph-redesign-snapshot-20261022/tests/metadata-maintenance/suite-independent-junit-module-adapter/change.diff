@@ -1,0 +1,20 @@
+--- assemble_test_evidence.before.py
++++ assemble_test_evidence.py
+@@ -20,7 +20,7 @@
+ 
+ 
+ def omitted_junit_module_allowed(suite, files, argv):
+-    if suite != 'pipeline' or len(files) != 1:
++    if suite not in {'main', 'pipeline'} or len(files) != 1:
+         return False
+     called_files = {str(Path(arg.split('::', 1)[0]).resolve().relative_to(ROOT)) for arg in argv
+                     if not arg.startswith('-') and Path(arg.split('::', 1)[0]).suffix == '.py'}
+@@ -34,7 +34,7 @@
+     expected = node['class_suffix']
+     if reported == expected or reported.endswith('.' + expected):
+         return True
+-    # Pytest's external-config pipeline runs omit only the file module prefix:
++    # Pytest's external-config runs may omit only the file module prefix:
+     # preserve actual XML and require the exact collected class chain (or '').
+     return module_omitted and reported == expected[len(Path(node['file']).stem):]
+ 

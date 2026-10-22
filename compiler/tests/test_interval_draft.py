@@ -8,9 +8,9 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.generation_transaction import GenerationTransaction
 from compiler.scopes.interval_draft import prepare_interval_draft
 from compiler.scopes.lexical import LexicalOwner
@@ -104,7 +104,7 @@ def test_cross_procedure_interval_keeps_one_inventory_and_original_correction(tm
         "interval_fields::old", "interval_fields::viscosity", "interval_fields::star", "interval_fields::out"}
     text = outputs[report["sources"][str(path)]["replacement"]]
     assert "v(0)=v(0)+a(0)" in text
-    assert "fort_scope_host_begin" in text
+    assert "fort_scope_access_begin_v1" in text
     assert "fort_scope_host_end" in text
     assert text.count("visits=visits+1") == 1
     drafts = tuple(builder._interval_drafts.values())

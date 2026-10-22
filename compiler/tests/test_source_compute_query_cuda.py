@@ -7,8 +7,8 @@ import subprocess
 
 import pytest
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.emission import generate_sources, read_common_header
-from compiler.offload.config import OffloadConfig
 from compiler.tests.test_scoped_planning_runtime import TOKEN, Costs, Decision, Scope, costs
 from compiler.tests.test_scoped_runtime import Layout, Stats
 from compiler.tests.test_source_compute_costs import profile_v2, source_analysis

@@ -1,0 +1,2645 @@
+{
+  "schema_version": 1,
+  "kind": "prepared-threeway-development-timing-probe",
+  "status": "completed_development_probe",
+  "started_utc": "2026-10-22T05:25:56.700103+00:00",
+  "protocol": {
+    "threads": 4,
+    "warmups": 1,
+    "repetitions": 3,
+    "rotate": true,
+    "timeout_seconds": 240,
+    "cases": {
+      "channel-simple": "natural109steps",
+      "channel": "matched100-step timing cap"
+    }
+  },
+  "timings_reused": false,
+  "full_natural_correctness_qualified": false,
+  "final_performance_qualified": false,
+  "limitation": "Matched production VTK and step checks only; no float64 full-storage gate, CUDA counters or naturalchannel qualification. Final acceptance requires fresh reproduce_e2e.py evidence.",
+  "prepared_builds": {
+    "path": "/tmp/fortran-convection-graph-probe-01/prepared-builds-20.json",
+    "sha256": "a771b132b186763fc6c02ccd83751af03fb547c6d46d0d8790ad02d3e60b0bcf"
+  },
+  "builds": {
+    "native": {
+      "binary": "/tmp/fortran-threeway-harness-smoke-02/work/native/build/ELMM",
+      "sha256": "fdf23e86be69b3bf6f88bd49b013d16e2912e5197fb287bf46e83a6925d2b311",
+      "build_receipt": "/tmp/fortran-threeway-harness-smoke-02/work/native/build/build-receipts.json",
+      "build_receipt_sha256": "3eb09f3b6b8f5ac45449f81fe4417e49785fedd8328ebb528c0dddb97d5afa47"
+    },
+    "committed": {
+      "binary": "/tmp/fortran-threeway-harness-smoke-02/work/committed/build/ELMM",
+      "sha256": "b2a317c38d3a23ac1043a5ae234830b3b06264ada5323a953479180fe4a5f592",
+      "build_receipt": "/tmp/fortran-threeway-harness-smoke-02/work/committed/build/build-receipts.json",
+      "build_receipt_sha256": "b07fd4d65e27ee3778034add498c72285436c6341b8b12e4df2b52d9b21a588e"
+    },
+    "reworked": {
+      "binary": "/tmp/fortran-convection-graph-probe-01/candidate-20/build/ELMM",
+      "sha256": "463eaa18dcf26e873b1eff7b41e987239e90ed69d656473d1730bb835c8e0471",
+      "build_receipt": "/tmp/fortran-convection-graph-probe-01/candidate-20/build/build-receipts.json",
+      "build_receipt_sha256": "391018e8b623f7d028fa77a874d300fe14c5be62d840145c0db8b018f2de77a9"
+    }
+  },
+  "compilers": {
+    "committed": {
+      "root": "/tmp/fortran-threeway-harness-smoke-02/work/compilers/committed",
+      "source_root": "/home/jirka/research/fortran-abomination",
+      "base_commit": "be58ab809296b97ea39d701828a2621adfc6b3dc",
+      "exact_committed_snapshot": true,
+      "compiler_tree_sha256": "92397e58d8131c979d0ff6acd48a71ab9222aacec00498af6e4a1ac8aba92314"
+    },
+    "reworked": {
+      "root": "/tmp/fortran-convection-graph-probe-01/compiler-snapshot-20-final",
+      "source_root": "/tmp/fortran-convection-graph-probe-01/compiler-snapshot-20-final",
+      "base_commit": null,
+      "exact_committed_snapshot": false,
+      "compiler_tree_sha256": "39a1e9170fbd665d4b5065a2b93cb3f8fd398d939510561f5410187441fe828d",
+      "code_equivalence": {
+        "schema_version": 1,
+        "excluded": [
+          "_local/**",
+          "**/.git/**",
+          "**/__pycache__/**",
+          "**/*.pyc",
+          "**/.pytest_cache/**",
+          "**/.ruff_cache/**"
+        ],
+        "sha256": "d80bc91534012731c225aecb4d738ce0c1d51ea24a73d72f32c6c56e396be730",
+        "files_sha256": {
+          "README.md": "3d04d167cd428cacff094cc3cf9020c1384bb39dd6929b82a1d0973796b7aa2d",
+          "__init__.py": "438e2297b8104a89f13062c1a21d2eddf450abb003bdbb41b110667d458d3efc",
+          "__main__.py": "b52331a1c1201f1c975ca3f84ddcf65d431f8a447a335231aee0002070ef0ab6",
+          "_legacy/__init__.py": "165b6c852bea9d546901632c1032ae735400b6ac0bb06b8c4ed1c1a2319bbdc8",
+          "_legacy/config.py": "51b8d0a35bd91737384fcf9dc17b61713681441f3e88abc4f3aecee4e1bb6048",
+          "addressing/__init__.py": "dc617743c3b9d5032abe2aa868af83188dfd4e3a92e2757ab41f627d9eda4cd1",
+          "addressing/planner.py": "32aac073db4a3d27304f78622e4050ec6953f8b6a9de825daddff528cfcc1892",
+          "addressing/ranges.py": "ca7d6ec947b342321ebf2136c76eff82c5091cd81e342262e9c64f40e853d441",
+          "analysis/__init__.py": "32a6fe503a91a187769c757c84909e5dc0a65a4d9528a91a8cb708ed0a968579",
+          "analysis/dependence.py": "e10506808957e152026661a9c97ab93f1ec6110a18f545cb9fe21b5cd1a61403",
+          "analysis/effects.py": "f1ea1889d871cc0c2fd10b90f0cc3df4587d40cee0722ac816fdf93b523986b0",
+          "analysis/planning.py": "a4fd06ac85e6d3beaae6df986c07b9667e54b871d9e3a6583de146522f245945",
+          "analysis/proof.py": "a1ba0fac3d67a3c57a94088157daefd68b0766a08f3a292bf02145ef6774498d",
+          "analysis/semantics.py": "f569ef2ea8bea1af257ed43f05c9592841912b4281d5f882ee8614912160e2c1",
+          "analysis/task_dependencies.py": "7751bfc6cb4d216847291a1d762663f52bec082a72f5af3538486146ee14d282",
+          "debugging/ast_output.json": "38c6d4ca01c001dbe54d0c85b3bbc4a5415f69fe222c2cd1f783d0e5f819bda4",
+          "debugging/ast_visualization.py": "fa6cbd0782e0a544e414409f2bcc73e9fc4760317b45f12507471addbed9ce63",
+          "debugging/report.html": "9a26996061b9102b5d538aaa2114a303ffaee00eec13667f705eec60a3cb17ed",
+          "driver/__init__.py": "8fd35f03420252cee777ae82e8e640c2cb634ab4a00e381d942836a507895193",
+          "driver/cli.py": "3a677ae91aa8e85972cdbcdfe15b32ee0457021cd06aa58f0d53c433beb8a6a5",
+          "driver/options.py": "fb1a2e0583c1a19793e32ebe6fc1eb0b82a3fbeda7e445dbb5f94c4ec0e64f24",
+          "driver/pipeline.py": "217e0ae8a604a063db6c15e3b0237e8e79c86c599673bbf3ab1810cbd572f39e",
+          "emission/__init__.py": "b927fa0208e3991b2d363b1c063f0afc3ab818965cde46f04f16412f6976dcc9",
+          "emission/c/__init__.py": "7cc287537276f95b4acced3d299817a60f0173cc8fbbc60d1eeb714ab21e560c",
+          "emission/c/declarations.py": "ef94d8d1ab656be78ed6edc4bcd2f6dcaf2cc12e37f33850823393be131e752f",
+          "emission/c/generator.py": "f2d6f694ca50e874e896787c1e2bc29fc78aace183c321ae222be0c9c2d36ed7",
+          "emission/c/sessions.py": "be1d81c700134c1cdd4f61484ac47d2f62766956034fcfa255091edef1a96897",
+          "emission/common/__init__.py": "830f52858053e2fcea6c1ec98998f068641b0c0f05222bd3a82bccf87384e50d",
+          "emission/common/abi.py": "6de146a3ab5f399397af01bc8028705c2765a84534bbcd9b673d7cb52292ccdd",
+          "emission/common/c_family.py": "40bce7a70ddad77fe0242ab319b599f2c8cfa46429ac4152877adced6e272195",
+          "emission/common/loops.py": "02660789d3a82f86ac948ec3ad2b2441e7aff8cfa2d97903600e21dc011f9400",
+          "emission/common/memory.py": "1f82d0a3bd699759fbb71e48128ed57e366190c10f30061a1aa260a62972d7cf",
+          "emission/common/resources.py": "ee028e06c6df54981ab58431e190daf6d6d4334895cfdf93587d7c583b29aa36",
+          "emission/common/schedules.py": "147a08363861b1e1e799f04ee249dccc7aa312db79b2b0f949842d02279f2100",
+          "emission/common/sessions.py": "f7d957abdc93721ba709fee005bff5a9b836dd4fd784e76c717f88cdd4e3b00a",
+          "emission/common/symbols.py": "c0200756cf3f80ed91dd83a4921d638372b4d57efbb418e967b9496eb94fb87b",
+          "emission/common/templates/common_functions.cuh": "c54cbd38ade172294d785b57c715e45f2f9310eac332ee9d3c2b61bd84f401b2",
+          "emission/cuda/__init__.py": "8d76c03424d90806d71356e011e935487e4856f65be52cb74a355890b30c8507",
+          "emission/cuda/batch.py": "4c006c35403784d763e27e736c074915f28fdca5f3c1d97d5a16c7bdaad2a1d3",
+          "emission/cuda/compute_memory.py": "30e94fea34f8b89f5087fccc9489a79f99bee6a1e922dedfb07860fd8db13924",
+          "emission/cuda/generator.py": "667e84c90b81f6bffae3bdcaecc92cb3bdc5cf11220ae4fd33feae1d9ed2f3de",
+          "emission/cuda/graphs.py": "cfde27fb9867f992b62489dfe3acc04864ef10a5543a1c6396da3241e97dbd27",
+          "emission/cuda/hybrid.py": "e8f92085714b51bdd2b17822ae76b877f1e2273a02b2a070c79a5ceceea9b13c",
+          "emission/cuda/kernels.py": "299afba4a70cac556aafe41300f1b800086c60e00bfcb47424fb9d6fe5c48031",
+          "emission/cuda/native_preflight.py": "4c4f36f4c7be99ebc12a9ab5cc311e756d9ad5d3bbfca45a41598396902b504a",
+          "emission/cuda/offload.py": "b2a0df0149ee01575637d09533e90bfc7fe8ada8da2fcf57a031c259a3a85618",
+          "emission/cuda/scoped.py": "d063724ab47fbf32e3821dc073c9b1f6762a7cdd27b41cf7dfd79b20e353fe6c",
+          "emission/cuda/structured.py": "6e8b4435c5b6ec21664154d415bae25c12aa032c6ab88a0da3ecfd08b8a3da69",
+          "emission/cuda/working_set.py": "30830f72e32e764948107493d5360450ae75a58d0a4d0e0551893f9a3a1c4174",
+          "emission/driver.py": "688f49bc320e6a98ffe7db89748f488239e8e26e1c48c050f33e4dffb9e1217d",
+          "emission/fortran/__init__.py": "ddefeb2e0286bb25f68e764ae4996fadd1c44d1310a294a8d1e95463b4112d47",
+          "emission/fortran/declarations.py": "914cc659a7dc857a7c6c6be25a0606060a27876225eb38afbb976605a4328dae",
+          "emission/fortran/formatting.py": "fc55d71ae7673a2e6a6e93908ab6848be5487667c141e64f11be1620b8095059",
+          "emission/fortran/generator.py": "f59ec5a7e43fc513827aff52dff80b2b1812ce0e8f36c8b7c66ea0269987afd3",
+          "emission/fortran/sessions.py": "8e17ddda0de6cd6bb6799f50bc22e974a9c72e2a3381aba9fb952a9c5e5b623d",
+          "frontend/__init__.py": "1e20ce4994bc91b3f0c9724bfefa8c007294a1276e95f49c6ead83097b5cf24a",
+          "frontend/call_bindings.py": "51e084413fd25e5dbb0bd6cca8e4de0d9a091a992ec41c7e949267925079ada1",
+          "frontend/capture_coverage.py": "65a4c1d9e35cee3eac14efb5a1672d95675cc9b873f0b08ec812cfac279d352b",
+          "frontend/component_bindings.py": "68e7e30033571a68fefc7bb53747084ac210271cb25bc3f35501127261369916",
+          "frontend/descriptor_windows.py": "450ee29b84e0d48447baa69d34d52cd8cdd32b8765432fce7a3c37530757d2b1",
+          "frontend/immutable_graph.py": "e0adfed1cc59cbaf1c93992e244037ec2d43a96c50dc12cd530b8b53cec7db38",
+          "frontend/indirect_sections.py": "e1b97b530902d50517f0c700a731e8bbcd7b068b17fceab04e986eebdbb1b398",
+          "frontend/inline_source.py": "a7100c038f86892f72853139070fe4bcaaeaacae1711e4d0c81c17e5a46db091",
+          "frontend/lowering.py": "ea943c68b8c6d90d78b0452c2ca5b440ffc50a6e6dd481968785020339b5f346",
+          "frontend/native_call_coordinates.py": "98a47b9fb3676bb4276d9baabf17aeb1e591469821c332ae8b31fcb7c26e8134",
+          "frontend/native_completion.py": "fb710d1eae058fd81997f7cb4c9d2f08c792c377d8ce08009819633ce4c48e89",
+          "frontend/native_definitions.py": "6722c76405a2b36bd5bf1db8a7252455ae9b89061bc59dddec370d4c8ac16193",
+          "frontend/native_demand.py": "924f312d74fe00f875c42cc55cc4d531e6a0184bdb446891059b38022a92b1a7",
+          "frontend/native_environment.py": "12ebbfc20a366e0a2ac33df4ab76450bfda86721de9b9d76f1f2ba08a8837c2c",
+          "frontend/native_group_structure.py": "d6f74c8532a3d01f0353b3c1e1507e403856a7f8e736011628c550a8179e3f92",
+          "frontend/native_intrinsics.py": "5dee034d936f5b509f82790cf9e0773285eb61bd6baf4f46fca1284659f86296",
+          "frontend/native_metadata.py": "10187c3f5715f933755a27b0d0d966e2d513d9578297aadc810274619108f220",
+          "frontend/native_prefix.py": "88002ca87138898e108664afdeaa97fd9e5eb04672ede7a0de9a676d12c47837",
+          "frontend/native_preservation.py": "88b54833055cd453ca94c5dfd59a55c1b0127d4c43abafce0c60f42c71ec8c85",
+          "frontend/native_private.py": "5d1a338d270c0ba126b510e5facdd4ba2f9a6d466ab7030d46aee36ee8d94c31",
+          "frontend/native_sections.py": "56cd292c2210e77aef48167cbf9f9834f6a668ae48ce64c405d9edd87872cd98",
+          "frontend/numerical_completion.py": "be3146231b5663c9905554212374af7a7fb7695553e9fbc0ad80dba1ac8f1b8f",
+          "frontend/numerical_effects.py": "50365663d8d41d22f6308071ce10484b6ee5231f7205fcbc0b4f102091b66453",
+          "frontend/numerical_preparation.py": "587dd2a9e5623d5cb9b4f117cd60d374b4cef651fbcdd489ed7f6ef4061071b3",
+          "frontend/omp_reductions.py": "4c57f1a57eeb1f024b4850a264c9a38ce4200ab8724987d0b26997ff5759cc56",
+          "frontend/preowner_transfers.py": "de8c79ec6d57306070b63f9a9020eaadb4b756b5cc7d2d592d7ce8cbf59c20eb",
+          "frontend/reached_read_requirements.py": "a254d370059db664bad5384ead80c6ffd55d5724c0cd91f95bb7870261d70a53",
+          "frontend/reached_windows.py": "5d619c0ec259eb341aff4d479c16ee6a797a11b66a3af8fda8ea92dc108c872a",
+          "frontend/reductions.py": "fa4c4f2abb4229848dcc2f279eadc4ec9ad8c3548a9bb7817e99fe096266f703",
+          "frontend/resource_reachability.py": "59dc8816d66f3b582fd32fdbcea88ac2d65bd838a7b33f6842d4e25ff31b375d",
+          "frontend/scalar_elements.py": "62c98e9d2d1aa1f500613c65b213cb5ae3c3d543e401b938701d3159965ee8c3",
+          "frontend/sealed_syntax.py": "17acdf640c7774d31b13cbed6bfb3b5c1a0f4325b8c55b000bca88906cfda235",
+          "frontend/selection_activation.py": "676f3672561dce7467e62452d725c467c4d309602fff5e3b6598d6de21308793",
+          "frontend/source_effects.py": "4a04ceb44194476b5b69db7262891181830635ddd7872e751653162ae855eae5",
+          "frontend/source_functions.py": "63d83392ba7cd4317ab57e2c3131e224d0f3f341a784a9f56ea861c4364fa3b6",
+          "frontend/source_inputs.py": "33a91ecf38b2514ae2ac12adcb03d062ac8b2e4227298773a86a093d75408526",
+          "frontend/source_objects.py": "dfe36a6644baf2c7af184eaa5ee12a1364173d005284f92cf5bf9631e292ca11",
+          "frontend/source_session.py": "a9f7ad23d857b32707bb8c4514aa53d913a8d6f1dff3fd00f68ae1e529f4ac51",
+          "frontend/source_syntax.py": "d199c02d491084765a36e6e40fc7def87e6e120c14e8297e7940c6e0df04f552",
+          "frontend/structured_effects.py": "7d6656dd75efd618e72b57ab0fa13aa39e8b71acaacd1648caec2bdc8c93e437",
+          "frontend/summary_cache.py": "899804fffd812fb366a8900ea5203aae10d79a65239fdacf8411580ef38bb752",
+          "frontend/worksharing_completion.py": "cb4148c831f186443c60f8f7b85a531e60b599e8687ca710a055c5ef98531a45",
+          "ir/__init__.py": "305e67aad93b1b3302e6ef8149262dd2e13c9e2b705a735efc05795b7261cd34",
+          "ir/integers.py": "73c99b60f4d50e21c12aa320f117109c41681e8def2a2e712118bc12a1719bcc",
+          "ir/intrinsics.py": "440c4a228f70d6b2f368e7fe492273fb8e2b8112608312e5e7428bf809584792",
+          "ir/nodes.py": "4b7fb077cfd8fe05c22c6149208c9fa4c2b914b0b8159b4885033825df5be538",
+          "ir/plan.py": "b760b315c835910d7c064db70d1cd831c8d31c74fdfaeb0784a9308ba28ec5c3",
+          "ir/task_graph.py": "aa1344ab389189e9b253dafbae493e679c5d39282de1aa975f48d12b600562f0",
+          "memory/__init__.py": "6d339442c973b7a410e6bfd32cbf85b668a32bed392c44d89a689718641028a4",
+          "memory/planning.py": "db686dc0e4c6480394b7c19020efdf11c586c33554aaaa7544a291dc30a57e36",
+          "numerical_contract.py": "877672fec46a46eacfb567a9239129a53af76679a5a99fcfe0fc41c3ec65c1ba",
+          "offload/__init__.py": "9ab80a7294c60c2cf4d8dd4211fa5086e7f2490fd5ca19e777037ed125e473bb",
+          "offload/analysis.py": "314759f936450d06885536d99407205016615f38598f92a8b6ea211490cdec86",
+          "offload/application_build.py": "db4e2dfb0c7b638101765cbb81d4a879e625d5f95f380f38564c2ef850615ab5",
+          "offload/calibrate.py": "837d9f750095ae3b352d5bc1985c137e7082fc0fa1c7a708854a26eacef7310e",
+          "offload/calibration.cu": "50c9aceaffdac7419249dd830d07f8cee88ab30741ce648d2986de3346e173ef",
+          "offload/codegen.py": "a298d34c447f020b12c8a3fef74950f7c5ca142993a4b4246f0152d008a225ab",
+          "offload/collective_calibration.py": "18f500c2a55cc3a10867c138d1ac40d3aa261eedbffbe1fd5d0d53fe96d31127",
+          "offload/compute_dependencies.py": "6d8c78538e3b1f4885efdd2c03595cbdb33ed52154a06edc160c1744e166ddcc",
+          "offload/config.py": "26658664bc5e954dd78f25762455c0489a14ccd27348776a3fba808c7bf5e314",
+          "offload/cost_projection.py": "6017c3863980d91bd7800014c967ad5339129b13a28abc000eca33bfc7e4fc20",
+          "offload/cpu_dependency_calibration.py": "eac8d95822c00b8952c3d6a46ed972d0b0dc81d314c4c8d661036ce0a787f3cc",
+          "offload/cpu_dependency_driver.cpp": "4d5c0a095c692cbbdabab5be419d6b893510907b72ee7dc72fd55b33d941399e",
+          "offload/cpu_dependency_model.py": "a5a3d27704bb191b751af3d0930551396edcab7279a40496616e12a99f322203",
+          "offload/cpu_dependency_workloads.py": "020489f9efb85423bc82bd2a4f85bf03b69394783de6345b73bc28de9c0cc7e0",
+          "offload/cpu_protocol_calibration.cpp": "370f5800af0d6c294111ec38e0f472aa8bab6d7e8a4834ba713d8c8a1635e38c",
+          "offload/cpu_protocol_calibration.py": "a57423c57699f5f414e42a867aad2d397960ac41284b89247b85090682985b74",
+          "offload/dependency_source.py": "90dbbe4444a827fb8da8c7a986b2979c734dc8989d69d9ca1938dc35b250a236",
+          "offload/exact_window.py": "fb04f44f28b8aa188bcfc61f152e8b565b4770d7f90a3c0714d606ec9f94e632",
+          "offload/exact_window_calibration.py": "ef5014ef9d9774b2308c2774f69261ef0298c19af05d49aee31c09215854c8fd",
+          "offload/graph_costs.py": "21f18dd992dce02730ac0834fb7254454ff4c9f4edf8ab026c856b4a0b509621",
+          "offload/interval_applicability.py": "cc22c3927b0acc118748125dfa284346fb8f8fd021904d3c1dd0c88d3d3a44f2",
+          "offload/memory_applicability.py": "4b23bfc2391352fb0fa7d0fc5194b467b726610fafeac901c14b90dbe981ba81",
+          "offload/numerical_calibration.cu": "31c34762701c04cd5bae4dee4ad653a805edffc7c0f9ff3f7969f05745a43438",
+          "offload/numerical_calibration.f90": "daa2630a17465352b4fe488a310e2a4f320b23f4db8340f7c4241209e2aa82d1",
+          "offload/numerical_calibration.py": "c99fbd788d5448d152049fe7a19ae326aefc1bb65f6c861417a979f4ef51ebc9",
+          "offload/numerical_execution.py": "29e5b9f184df22817aa94db1ab0b1be4e7adf31d43243fe54cbedd9fa114bf67",
+          "offload/numerical_execution_calibration.py": "46649dc81e4ed24f1546e97ffce67305c79d44ddea161972450576ce92b019fe",
+          "offload/numerical_execution_driver.cpp": "76465174b125d09c53897ecbf6696ad982aed3d3475fb462f81bd614035e3fcb",
+          "offload/numerical_execution_workloads.py": "a6bbfabf8582ed7683c10a64538de0e6d57523303790d728fd2ee78e1de79896",
+          "offload/numerical_gpu_execution.py": "4e02e64f3140a03d070e65d959d7df02ebcbfa9c8397596267f479a7ff404c53",
+          "offload/numerical_gpu_execution_calibration.py": "918611b4a269522127f947a4891e71a8470d59b764aa974e3683abaf87a96023",
+          "offload/numerical_gpu_execution_costs.py": "dffedc098e6d5dc9d9627c7dcf6b95588f27592c16138f79bba46fcfc05133b6",
+          "offload/numerical_gpu_execution_driver.cu": "1a1c3ed4f1176839bf5b49bd093e89ff8e5aeac4a56e5ac1ca373933e2486ca7",
+          "offload/numerical_gpu_launch_calibration.py": "970f8db1b9387b3d12c20c36f04d10e15d66c055211acea6cdbdb0a36b728e71",
+          "offload/numerical_gpu_launch_driver.cu": "b82663b32e4605dd51bccb19668dcab3b5359aee9b2b53e69ec40602a958248b",
+          "offload/preparation.py": "7cebfa44cf69b87d6db7f0d6570a6c81515900033b6baaca72e49bf2bc7c4644",
+          "offload/profile.py": "cdc1aa5209f788ef7a20a35c6d05aa0d476c738f5768a495b4033db2f6e3d418",
+          "offload/schedule_calibrate.cpp": "73467071c4b1e9e12d3fef0e2e26d8e44e53fe730d7100e063cb24ffa1644d16",
+          "offload/schedule_calibrate.py": "735e72c4caefc1629a75aa9157bd49d15ffdc70f353d4ce77a30ec54597308d6",
+          "offload/schedule_calibration.py": "640a88bda3e2280ea298f0c63aa6be72a32b388bc37e616fe3bc43f359fe9c91",
+          "offload/scope_measurement.py": "76e7f7a077b4dbba80dcb12a8ec17467632b629b38a6f7a11efd432f6d544aae",
+          "offload/scoped_calibration.cu": "0d4c378b0f6c86ae35504b399190c1c0f489f8b2bae8839c8119645fa6a85626",
+          "offload/selection_cost.py": "60ed01a32a399965275317436bfdf622f8ceeefbcd946cea14af495a6519ea90",
+          "offload/selection_validation.py": "4e55ef69812ea339d7d6fbf666b4fc65d5df2124b7effb5ff6f267a4d857db96",
+          "offload/selection_workload.py": "0f5b2a7c45c4d9a746cc4ea123d8f3117d10f4d24973b1843e6d73c138f71134",
+          "offload/source_applicability.py": "e6228d3c139d13d8900e28450cd7820fb6107cd63f31f6e865da51e183f57991",
+          "offload/source_compute.py": "2e7c837baf6456e5cf8122d79c52848b7d4d5bfb2286cc9cfd0ab4c6864d7b96",
+          "pyproject.toml": "dc68d0e41a7032f0ec2cf3b648d6315412b54ca0139115589540bfc82ddd9bb9",
+          "runtime/SCOPED_SCRATCH_ABI.md": "682ceb50aa0629d0d75f7e33240bb29531a669b0849c73fc0c7d76f5b1d1a719",
+          "runtime/__init__.py": "63fae21d7e493cba94e6fd1126976bc2e57afdacb46a558c76c8bf6c717e0588",
+          "runtime/allocation.hpp": "536cb8b8ccf140f8aa731103fac5fbd0227f7f4d823611e4ffdd699dc7471e79",
+          "runtime/floating_environment.hpp": "e6a13295c9e90476185e576e813aa2300eace4324afecf821ba4d8a044456cd0",
+          "runtime/hybrid.hpp": "d2a53dacf1c522f26e78d0eae26de38adfcec9acd4f369d7a7bc14f2abad8f15",
+          "runtime/numeric.hpp": "1997eff3ed926100013d6e507b411463f22131d3c5d0d456aaac384236cb5c78",
+          "runtime/offload.hpp": "92956d38109cc20496986c8a1cf5210c739160c786adfc7a5a94b61a94459ae8",
+          "runtime/scoped_cuda_resources.hpp": "134b233537d62611f27d7fcf54f8b16ba411f0284d0447cc902fe7e3fc99d289",
+          "runtime/scoped_entry.hpp": "92421c21e4c3dc352bb239a40be959ae96db2b3bda8871990c56c058628734e0",
+          "runtime/scoped_graphs.hpp": "2a66e85dadac4d10f123e1dd76e2fc4d89437af617692e16783edcc3421b67e0",
+          "runtime/scoped_host_metadata.hpp": "73c4bd4fc5658091381b0c56fb79a16b38867567d357985eded58894940b0b4b",
+          "runtime/scoped_memo.hpp": "4f6939df83d4f725a97306e50abf277ece8ca83856b42d92d40e217a5c05f1a6",
+          "runtime/scoped_memory.f90": "a9f09e6a6b403b86ef129295d293332e0c215e0d946b1fe8ffaaabe74c837a2f",
+          "runtime/scoped_planning.hpp": "17b9f3c18427008d7774ace1acf443b6e2429859442e53aedf1b8a15e3e43434",
+          "runtime/scoped_regions.hpp": "a748167bf8014f983d988e0d61049b3b95bb63bafeced7bf3274de01572d70c7",
+          "runtime/scoped_runtime.cu": "7ce0061dd1e5c575fc10b5aff17e7f4bafbd57952e5d2cfbb65df75e2be4c62a",
+          "runtime/scoped_runtime.h": "c85fab9dcc68c5e162da5d83c942bc8f76cbabc4fb2e20921fbe9c6362f0c3c7",
+          "runtime/scoped_team_observer.f90": "e80d7abaef437f568d285d16a5da65bd89643ab2eef768d1bc66fb7981f0036a",
+          "runtime/scoped_team_observer.hpp": "374dcb2874c2e6395f259392e6aa814efe03fbe5b0861184b6e3fce9ab1dd223",
+          "runtime/section_copy.hpp": "6c5a24d97431cb08ea8aad06a82e07ba7978d317dffc72a7623f860d369ecc3f",
+          "runtime/staging.hpp": "96125904c5f37adca1f126d88777604693e76535253dbe0d385da848b239236b",
+          "runtime/storage.hpp": "582887396695f8505680ca5c9463322458180c70771a6f93007cbb41d4888020",
+          "runtime/timing.hpp": "b8f75f802e9b2527ddb791c8b3cad81b70c8f9c258a044e568bb0a0ee49c94d1",
+          "runtime/view_entry.hpp": "8ca1648ff7e4743a2b784a9d2710f4c72a429c7c20a4f39a49f96632bf3415f2",
+          "scheduling/__init__.py": "ab97a511178589bdfccaf1093c9cfd46f2bdeb105932ba3774b364a6d58a2c7c",
+          "scheduling/planner.py": "f5b8d14a7407444f36bf5d4b8294c1fb5ae24a402a9ec1fc48a0d9558bdeb032",
+          "scheduling/task_graph.py": "b3a2874f1e2a3ff31d22cc561a87bc2d64bdb7b2d2bcde24a06daf53cf52254a",
+          "scopes/__init__.py": "6c9e074bee31ea9173a572b957848c2a58d388b90f2b28afdb150c00eeebea1d",
+          "scopes/access.py": "2602e96ecc8f8a70feb607f74cdf40e52ab7fa671994c0fab38b02751fd87473",
+          "scopes/array_operations.py": "59d67b37023b947a8d04698149bfc2fa4d7f12b1d6a27b35403a4153ff37a903",
+          "scopes/batch.py": "60f5c7c16d981921f5f9e14e5d0022fe22d83b8a85256fea8fc2b90fcfc752b6",
+          "scopes/call_registration.py": "c7e1887176f0f61bab43707a3d5701abbcf5e45549f3c4c6089553d4c89be4f6",
+          "scopes/closed_selection.py": "37175f5d617fc1da37a9b322ab0769e6514b315450b5b06e8db34129f3a73b51",
+          "scopes/collective.py": "dda55f68a11a77f304d19b1e51ea818209089312fbebe4fdc59cb05034b7eaff",
+          "scopes/collective_roles.py": "b9008180ece9188402f3c683ef1eeb447e9af1212ab1fd9f1a3dc551de2a4272",
+          "scopes/combined_team.py": "2cf3fd3130494850a57144ed95b1c914930d5954f6cabdf408b72903848badec",
+          "scopes/compose.py": "55b984a2cac047d1d8ef1ef3286d81a93995cbdfb1db2e1fbd6aebb4b01b7149",
+          "scopes/compute_identity.py": "b1d7c698acfd0619c6eed52c19cec2e28ef7295568090e5fe2cd61d78b1f999a",
+          "scopes/constant_parameters.py": "54ad6ec3d2baf393a62c34b3645f023c62454d1194dc73d237bc632e291b0b25",
+          "scopes/counted_loops.py": "b2b972482aab8a41d44f8bc22b823ff5382343c123a04a82b5041d3ab7811b44",
+          "scopes/definitions.py": "ab08c7de7d68d4692371691e3ab7bef727f7162e45d9473912e157b250c4ba90",
+          "scopes/execution_plan.py": "7fe7e05cadc7888595b56e1121f46214986bb4464afb9f1fb5907f4652e6e534",
+          "scopes/generation_transaction.py": "ef75da507aa915ed7e9b889cc679d042ecfefdad426278de626a54780ad2456f",
+          "scopes/graph.py": "ebf52da9494dde30c772a55e75104f34b286d33881f4842981ca0245452a075f",
+          "scopes/immutable_inputs.py": "1f9f2950386b3aa95ae188dade17af6ae910412846fd40fd8c8d3493b37d0be1",
+          "scopes/indirect_access.py": "8625d2f184f27b08858ae9e00851867fa21016d06eaf2cc5e057c3e1152913e3",
+          "scopes/interval_draft.py": "6acb595aef948160083059b46cf02ffc7c037022bbc9b46d82160d2f6415bf70",
+          "scopes/interval_ordering.py": "f2d9af97a268325583f16b8f96c8bc6f78bc51cb3c8e9f68d584f32c7889c8d7",
+          "scopes/joined_team.py": "7e663ab0b4938e026072edf6064ef6d5a790b6b7523456be286857e0b841ff43",
+          "scopes/lexical.py": "117869e970e8d0b3fc76c292b3abc2c6c8f2b3e525c0999a2010070f5c57bb88",
+          "scopes/module_owner.py": "f49c3b5444d9ca90e00e0c4271a5a629c7498fcacec9899b36d6ec7064301ee9",
+          "scopes/native_atomic.py": "80f77966a4142cb1d9b5970e9416feb288a274a9d589778103a46d33c6430415",
+          "scopes/native_guard.py": "c068f8299e9bb220f901bbbac163cbd84eb7bb2f458822968c1b6c0503df03cf",
+          "scopes/native_owner_hint.py": "3989ce671caee9e70eb8160edc8601baaee325fe0ec64e05b1010bedd17a528b",
+          "scopes/native_preflight.py": "dec6aa64828090716e6035da1e391171da42e361a5693dca39a1f48d47ce9ed4",
+          "scopes/numerical.py": "b18c848ee4812a6f7b43daae4c8b8cf063007513fb880903e2455377601f3b0b",
+          "scopes/numerical_preflight.py": "235e896d6e9b5697b437abd1b59964324332dc16cf82ef13966879e2a13d5896",
+          "scopes/numerical_roots.py": "75454c7967c8f1722e7feb3254ec9ac3a6b9fe53f82505c29eac245de8323f2c",
+          "scopes/ordinary_consumption.py": "64f2c878c5b35d3592edb5f83481c1c9723c7d48bdf1d64e96912e36cd179549",
+          "scopes/participation.py": "157e73547cbcf00503e8c9af4c5d5334f2fd3d4ab8045514c8f02aa7b7173467",
+          "scopes/preflight.py": "25c322618db5757bdda06ae51b4e160c9540422cfa55c417ca89d7ebd9a523c7",
+          "scopes/procedures.py": "bf7d6d769894f68e5cb5c08d0a9b3c417a01b3e860dd7588f530a5f0b37a3440",
+          "scopes/provenance.py": "3e571c5eac791649a05616e3e96ce7eac46e48282b549a8145532466d15bc24a",
+          "scopes/query_regions.py": "1e311fd9e38d83f73a00d242c71e9c2be43a7fdd9fa3f976ab0b3876044f2660",
+          "scopes/reached_consumption.py": "d756c568583377bf0292ba9944b5f1461fbb1eb4c8f50935e3836453500508dd",
+          "scopes/reached_owner.py": "6e7bc50580d8e74ce1bbd0b1158b876cacdeca9d6e20c324ab676941e8283197",
+          "scopes/region_context.py": "aa15f19a7196a6962fd39daff7e4e8bdb04aa9f459f8c24d4a919bcfbc810465",
+          "scopes/region_dispatch.py": "ac91b3082603137651c9e66b3de826cdbb29df32a8b17825f31724eaabd7d3d1",
+          "scopes/regions.py": "6e53c3c1cee91ff0f8f5d5acfc5e605b288ae66c57ab3ed45dad102d6181b8a3",
+          "scopes/registration.py": "bb2d909484429f5b18ab3ef402ca5830c0d021a41df83880a38a55ea5dccae63",
+          "scopes/resource_demand.py": "08445672d6333648ee64b6feb707004c38e62706ffce9b9fb3843287d33b97a1",
+          "scopes/section_operations.py": "c2e09fa1a1bcb11927faef4bcbc5add2bf0cc215a7b9b34576c9988870ec7ce5",
+          "scopes/segments.py": "cbee2bc99b41f319181f5911552920aadb52a95baaec28bf446208ee87fab3d9",
+          "scopes/source.py": "a926e542ebc8d986133208cb7467a42ed5da370069e9b809281b2344d531abc7",
+          "scopes/source_reads.py": "a57e96093479d6f7147883f7bfad274b0b9866d16063707d33100e49bd89df51",
+          "scopes/variants.py": "02dd2882ff5fc428f677af69e902f9a77ae890e647dbd24691bf20356f62a9de",
+          "scopes/views.py": "d3ab048c72090e666b198bff1a0cbba11111adab8873f8a408b434df2c3e2ac6",
+          "scopes/window_discovery.py": "107e24a9918c55bbc8487f3ee31c4cfcf6674c371547c7e8d88224956992eefa",
+          "scopes/worksharing_inventory.py": "6f0c25a355f9a5f40199af21636ab9682fcc73446521c15f3fa4f90a82ff83cf",
+          "tests/fixtures/fill_array.f90": "af6a538bf94efee8fd54f18514c0dbba760087c256448453397ec2c8f27c1a3f",
+          "tests/fixtures/native_device_bounds.f90": "84f93e93ec8c4d218d7de10ac06c4edc8116a9d29dd05c91cf7dd737c2a839e1",
+          "tests/fixtures/native_device_bounds_driver.f90": "fa9d147a1c136f22af075ae13c43919fe750224d78cea13becfb27719503695d",
+          "tests/fixtures/native_half_bound.f90": "2fff3327c9861b98b2bcd9cb1014b5b6ac2207e5b0fecfc6395554d54c3f9072",
+          "tests/fixtures/native_halo.f90": "a04b2e454792bc864a929a8ad66d7fc68babd0e47541498f7a26f5ac491be6e6",
+          "tests/fixtures/native_host_coherence.f90": "849a3de6a3eecb3cd4a5d3330e8ef2f43118d0d984c74c27dbde6471af3b6593",
+          "tests/fixtures/native_imperfect.f90": "786d7e4fdb4bb6e9e90547999e020ecfc84fab5326132c95669d71a41b7113e7",
+          "tests/fixtures/native_indirect_conflict.f90": "7bfe84f12b4a90f528456fb4a261fe68e302b9a3f0fd9c84636efaf01dc1c383",
+          "tests/fixtures/native_integer_rank5.f90": "7965cefc82a6a3304826c028871a6da1bc44d88905021fdd8f3f49056aa7a04c",
+          "tests/fixtures/native_integer_rank5_driver.f90": "a3086729b5d277a5a718fbeba66e884bb62f981bcc35983a0c9eb39c5cd889c2",
+          "tests/fixtures/native_literals.f90": "42ceff6adf1f7a8ac7628c1cf736fad33ebdca992a938efedcae41b23e28744c",
+          "tests/fixtures/native_long_names.f90": "627e68a2f9e6d93821733f83df1cd8a23fde2d00d427cf5ac09773ee4b80e2eb",
+          "tests/fixtures/native_nonaffine.f90": "b38d4cab4dc53221fa30f5d19c0a6385da8e396efb8e1b5a43f3a4ccd0fc9d38",
+          "tests/fixtures/native_nonaffine_driver.f90": "07b8819be82a6dd8ed5fccbdc95e70f358796bc3fd6b96276c6f38d76aeeebe7",
+          "tests/fixtures/native_order.f90": "e5f273119d4af290524553bd2c72766272aac660f5815b03d39efc159f9df876",
+          "tests/fixtures/native_recurrence.f90": "2361af8552e1a7bece5f8d2676d48e47c25c50fe1dd107473eb66450848b3483",
+          "tests/fixtures/native_shadow.f90": "1eea07164a8eb5f6b312fda9690e55558537f2a03624d1ad65dc338f22702158",
+          "tests/fixtures/native_single_precision.f90": "4c11e97ebe6a4739fb3dc86c01c13c975269b2d2358f7c734593b0842e3bf925",
+          "tests/fixtures/native_single_precision_driver.f90": "13b1e3069759bac2c730ef3d5a703e7053225919f87edcbc2825907b2c4adc5e",
+          "tests/fixtures/native_square.f90": "8cf674ac6ba9d72e9968898759bb048657e5296d1df459dddd0f90d830aff1ad",
+          "tests/fixtures/native_square_collision.f90": "fceae509e6945008434869d21b8b68cd26f005faf2763a838fce3be7340f4107",
+          "tests/fixtures/native_square_driver.f90": "b20b4e5bc426985bf73d2ae31e944e772433a5031e8a7678b79307d118fd631d",
+          "tests/fixtures/native_strides.f90": "1e4d32a4f1a8a5c4c586ff46c4e7b774c948a65e28942f7166401bbc8339f797",
+          "tests/fixtures/native_strides_driver.f90": "03650a84d212aaebde173a27c32af8e9dc2c8b5c2171f955e8c15152c0aa7cb8",
+          "tests/fixtures/scale_array.f90": "7852c64ae152b8357f4380eb2c66044c4bc156ac950840c9d3465d89ee590123",
+          "tests/support/__init__.py": "24de7ac2febcf7215972d3bf0c101eab0fabc686293be3e57721eb6e4dab6c9c",
+          "tests/support/borrowed_numerical_team.py": "347c132b679beb9c3a48cebfd416615fb57deac2b6c17359c2e259cce9feba2f",
+          "tests/support/numerical_cuda.py": "ae719b1637105b9bd496226291c487a1bb78403073bed14e80a640d7067cf8aa",
+          "tests/support/numerical_regions.py": "cd8c4c8c4097870b6a61530f76eebe1c24427ddb7a23e15d8307808c4c81b252",
+          "tests/support/reference_scopes.py": "889c640fcc9398ad3757e45d02c7408935a274a4ef61828fc8b7d26dca731736",
+          "tests/test_active_owner_single_if.py": "0ae59e9b841969b8b8207278149231d58fd3f9a0e57132ef5b4043c1c339f880",
+          "tests/test_addressing.py": "a738ddb976d217784b546ecb2589909f9afca14f54a78cc1b3eed1a6f61e05a8",
+          "tests/test_addressing_emission.py": "cfe69a78f0b56b9ca4bf373065b0568b0da1b2fcfe18fc6290d4eac60a5792fc",
+          "tests/test_addressing_execution.py": "9f814dbd66828204d9a3daad03158b940a56dea0067287f9e267cfe4337e75de",
+          "tests/test_analysis.py": "5966f42d95b7cb5e5f73e4da3309bc9a900c56a8808e8199d8f8e043fd1688b4",
+          "tests/test_application_build.py": "72a526a72e5a8c090973e23a5a827d8afd096c371db0d06c903e08ce00ca208b",
+          "tests/test_automatic_cost_gate.py": "9f4f4032c29a7b096cae8e28415df5ff437d350c099e269f70ad5f8a2c8a9386",
+          "tests/test_borrowed_numerical_team.py": "5e208a66758c4f8bc1ee98a5800d8c4f87cdac9b223d8f02923f83cc8dfba56e",
+          "tests/test_borrowed_numerical_team_cuda.py": "2680bc962850098b1059d5f2439ffc8b3722a2516e7047328b546df76fc273ee",
+          "tests/test_borrowed_source_coordinators.py": "e434d6dbdec9b5aebb7ba2a0c8c680943e1445c37e374382850c3b63d3085673",
+          "tests/test_borrowed_source_coordinators_cuda.py": "f884b7b4fd87fbfc53f506e7d59f2dc5d4c96296e7cc5065fd1fcb0a2f201cb2",
+          "tests/test_borrowed_team_checkpoint.py": "581970d086876714bdfbfe5ca9ddc2d1fb169acb803b3e01704ffc3331b56c19",
+          "tests/test_call_ownership.py": "33605ace3be3bf35ab781d687071471b8c3aec91bed42468f20f463db9d83034",
+          "tests/test_capture_descriptor_expectations.py": "a0873e9fa44249d9f13c50a0410dcdaa3ccb1c377ba5556617eba6fe45a4faef",
+          "tests/test_capture_descriptor_expectations_cuda.py": "f0912da2399f61945518e7cdb225aea44b6f5b0832b0f73e3cfc1a3051580e95",
+          "tests/test_checked_execution_plan.py": "0fe5608d44095de65efcdb1b4e1fe815fdfe7cbefe5c12d7c9cbc6be132bf7c0",
+          "tests/test_child_region_authority.py": "29c9f2798e439522a2a67f18b89cdb8a7361de18a643755e29bba519feb1c063",
+          "tests/test_cli_json.py": "662fcfe88ae4bb03f47fd4527d9f11c93ffe6cfdac17ba26c20506d10099becb",
+          "tests/test_closed_selection.py": "d19d5d003ff5784d840aa3e2049cf693ca5e2945e3270697bdf0290922b45af4",
+          "tests/test_closed_selection_cuda.py": "032ab41218cda4d0b0af1da805f0a74c616c4307e123dbfddd01b887cf8bda87",
+          "tests/test_collective_calibration.py": "6d9dc47241cd5b4f48375f25726771abbb91050f220d10d883b574020a7a921a",
+          "tests/test_collective_graph_acquisition_cuda.py": "9a6c3b0da3526b6bd3559aa79373b8a372167d6eed3b00d2e46ac7c1b678a681",
+          "tests/test_collective_roles.py": "a432fc650fb73db7eaf93d226fa79af7e2e75e5d1ecb8859a6d2d4a238c9b206",
+          "tests/test_collective_source_runtime.py": "229d52d6fc8a1d3ddc02ee2fed632dee6b1a043ff9cac5f28224910e3b51682c",
+          "tests/test_collective_source_scopes.py": "8615c1bc77f3c74eb3226bb3df5ba526168b78b3fea512f4f3f57d1b0d27dab4",
+          "tests/test_combined_numerical_team.py": "c1c4f087153e85ca6182e3e292fb2dd35ce22fd3ece35feb20c3ab6b4e43ed2d",
+          "tests/test_combined_numerical_team_cuda.py": "48ccd61b7dafec7ae48281619fbcfdb76edd83826421f50875aa320fa93b1cc1",
+          "tests/test_component_bindings.py": "1195df490dca84782ec46a3c0292715584e48873853506258faeedd6fc266f02",
+          "tests/test_compute_arithmetic_operations.py": "42d54c30015bfa7bd83064ceb947b60612b80f7b83c82846b4a05938244598ee",
+          "tests/test_compute_dependencies.py": "d2052520e7082e956f581905636d7a9f25684a79c828738269a0474846c21195",
+          "tests/test_compute_dependency_integration.py": "cbf04def6498e6f8ab72ef320271155c4ce7c301812de563afe708749dd7316f",
+          "tests/test_compute_identity.py": "113e8a78a3fdc60b7b834246da916a5032c4ddb05ab2ca7a749bd0edd13285e4",
+          "tests/test_compute_memory_emission.py": "3f0cea340dd197139d46f6d85ac207c971345a955997f5463f6b84c510a9b333",
+          "tests/test_configured_sources.py": "8c341a15dacc3ffa8923ff21281f2e32e1993c9ec725f6a74479062d063b35e9",
+          "tests/test_cpu_dependency_calibration.py": "b7101c7cb16b73eb51d03fcf3d5f0a2b16341d3da3c898ea65b71593ad049306",
+          "tests/test_cpu_dependency_current.py": "10f681abf853d6fcd76512185678089fa9c6f4ad54ab1ba55ba2cd2f3aa180ec",
+          "tests/test_cpu_dependency_driver.py": "2e24edf8bad0ba63b4004e37ab088db455cc10c0f34d13555a4adc77c6f8281b",
+          "tests/test_cpu_dependency_model.py": "d0ac37e9bcb1482100e76bedaffa3f1434aa0a8a1bb225cf64c84cd2909ee7ec",
+          "tests/test_cpu_dependency_producer.py": "25d860af66bb6509054220700d547692d681ae00423b1864329998b7f4af73b6",
+          "tests/test_cpu_dependency_selector.py": "c24d0043e7d51247204dd7fd4febf936a23028b1c4db96f1ba4ad77db224c216",
+          "tests/test_cpu_dependency_workloads.py": "2809ff257befdc47590ba952de175cb7ba36ed8ed18a714b8af3501d13597c55",
+          "tests/test_cpu_protocol_calibration.py": "e1fe4598fee8a17fe4d2823fe79cb4d3747b866d9e306e76a16af93c6c3bb86f",
+          "tests/test_cuda_coordinate_quotient.py": "6e80f1af015b04b9824b36b51d0d1ae6523a5d253c3b15ffeba761c5b98e3e18",
+          "tests/test_current_source_compute.py": "6d731b98bcca5af77f1b28b5f9b8e8f3caddd3cd5bf9045c2560d48bcd2fe334",
+          "tests/test_deferred_group_selection.py": "662e98386be2d5cbba0b35a8f8efb9ade8c074da3bedeb66a1782438ecdf5b6e",
+          "tests/test_deferred_native_group_effects.py": "b5a314291d13f4adc97e7acc980f4cad868af2de45ebea651526a87f0a283ae9",
+          "tests/test_deferred_native_groups_cuda.py": "6f805fa51fc354ef60e3f05b6c80c2c6fd2e4becccdcd91bc0b9a97f50694559",
+          "tests/test_definition_preflight_sources.py": "d64e8bf997aadd3f6d298fabbf34aad50f9ea329f7239a3d2c7c4ee1a0517acb",
+          "tests/test_dependency_source.py": "faa92ded5c37bad598d15b154c66ad642f42554f1bfb7da404e720404cd914b6",
+          "tests/test_descriptor_joined_closures.py": "c49cd50d5d7433ad9bc7a89758316ed28121467ba84d722aa679369c9a271d7f",
+          "tests/test_descriptor_native_tasks.py": "3df00e21cd14997b7c90203f51e7e6fd6b9acfc6e18a378f1d4c00148b7e0f6b",
+          "tests/test_descriptor_native_tasks_cuda.py": "a41b3417c2473bd3eca1e61d21503b1884b518f9832f9289c1c7705bb54b2f7f",
+          "tests/test_descriptor_resolution_demand.py": "707944640042c7f18cb4a19adf3cb7c3c016ee5978652837368e1880ca1ffcea",
+          "tests/test_descriptor_structure_demand.py": "a71ae91d3e00217c8f6d0a4f70490d034fcd0ca57ffb112cc69aa1a5536ddee5",
+          "tests/test_descriptor_unit_resolution.py": "c582d6a8efaa63728a692c12e3b9431f8395f79831b9ab9724027313f077db04",
+          "tests/test_descriptor_window_proofs.py": "91bf82870db3ba59423b1caab821112180fa261e127764bca00454402ccce99a",
+          "tests/test_device_pool_runtime.py": "a51f926826df8e0b15f9110e59f0d21764d22e85f5ae8d5f7a68bc8bc8649986",
+          "tests/test_diagnostics.py": "8379334f5b71fb0dd470ccfad845030edeaa783603e54b8469b984b2db643a6e",
+          "tests/test_discovery.py": "ad4f4052c7414de99b6a2bd6d7b20d33544db90eb335258351738f3d02614c76",
+          "tests/test_emission.py": "b7a07d06d6b2eff647930ef4e8bb71ef4cf5469c37d3fd99b3bd072013176759",
+          "tests/test_entry_symbol_isolation.py": "76c36db4029269ad8f2362882a17516745e59e612d2032e133b48febc577680c",
+          "tests/test_exact_window.py": "01e6612f0eaae6907db233da5313ccddf7521737b638934a3f5ecf352228dfb1",
+          "tests/test_exact_window_placement.py": "fa352ec62d8cfc3f4f9833296b3017aca4214cadb3356dab813d32f8a08eea3d",
+          "tests/test_exact_window_teams_cuda.py": "7a1abb0c5253abbb4193ead9c1c42fbed3d91b34a21a27780042d4836e12279b",
+          "tests/test_fallback.py": "e5ac76658054c9a487f7caa489801707be68dc788afaaceb5e712f1d1a22b59e",
+          "tests/test_fixed_vectors.py": "90307a553c9c059c732d7853d5cf1e1de3fba0a5c6f0a36dcba538493ea6a728",
+          "tests/test_floating_environment.py": "4258cbc722dc70c496bb2ee27962bcf8cd280773473d9d7b24a088e57815bb7d",
+          "tests/test_fresh_definition_preflight.py": "6870adb62f9ffaeae61b2922df4f851e42d1c15082cb8fed77fa268c4d4f845f",
+          "tests/test_fresh_definition_preflight_cuda.py": "ed989b76750b4c1ab7a000f66c784ce295772e6d54f51cf6336a77f8f19c1e5a",
+          "tests/test_frontend.py": "b1f51e235f2c735b5ac010205ad900d33d3d2b8254e4cdc7acd29715a9a528c3",
+          "tests/test_generated_task_graph_cuda.py": "d1d70ed88f984d14aec61f792b30364e6b9df51317328d82aea2b3590a165bee",
+          "tests/test_generation_transaction.py": "9ffdfb7e94df39117c763429574ecf50743619dc41d16a58b56f46f41b327142",
+          "tests/test_gpu_cost_sections.py": "d7aa280589c9ef8428f71486decb0e5e5c5b830f8fe38641943e26e8369c1a6b",
+          "tests/test_gpu_total_memory_costs.py": "60812b6b3d533e8de364afeb49c7f9131ff70911fed329d0b09a1f7bb595c16c",
+          "tests/test_graph_auto_costs.py": "7aaefbd3301c150550bf97c496a0289a4fe70543c03ba09c80b89452697f9fdd",
+          "tests/test_graph_auto_sources_cuda.py": "22a8c983b9582bec198ac8be735c61f7e91068a17f4041496ff313c165ab08a5",
+          "tests/test_graph_native_choice.py": "3c8f2f4ac12d5096e5abf528acf8b1982bdbc2c62f2adfc8c11ee2c5f90274a4",
+          "tests/test_graph_native_choice_cuda.py": "8aa92da7ea20679842556a79c747dc67c82d47d22fd1a928e0c2df52d7c9dd9b",
+          "tests/test_graph_numerical_roots.py": "9acc9795f3d16d350eaa58d56c5a6ba9018edc14ae89b51ad38ea3582dc84fff",
+          "tests/test_graph_real_work_proxy.py": "1069b016fbbff9897f63e2b0b9ed7e00af5b726f008fac5e42dd1e764e5b9665",
+          "tests/test_graph_scope_composition.py": "8d297f6c91d9e09c11cccd7d7550761931d27e6a09a3bdb14d7439cfe43dd83d",
+          "tests/test_graph_source_owner.py": "74de2bc22ca7ac7bfec0c8874a8dab3efede5c4c6532b39f5a72b2a303c4e2ee",
+          "tests/test_graph_source_owner_cuda.py": "784f3739863984dfa2fe523058c9dd09ffba804b8187565c4f39b6993ce00e66",
+          "tests/test_hybrid_emission.py": "cd63acdfd223ecef5ee2ee8f3b7770a20b529f63d46f8a88ea23fc2b77c28d3d",
+          "tests/test_hybrid_query_overflow.py": "859cbedf9f349c9745ac4a62e25b812ce6f1794356f60b168c5f2f41f71d1e7b",
+          "tests/test_ieee_numerical.py": "2cc19b180adfadc54a6ca679cb913e30972f3036cea0fa85f85999fd67750a06",
+          "tests/test_immutable_graph.py": "80996beddb2efd9badf6dce447100c5dfbe56872ceefe67e0f6177c1420d5960",
+          "tests/test_immutable_inputs.py": "1cde283c42fc68c379128d95d04174859909e8c0fd4296b55d59e1154df8b3f1",
+          "tests/test_indexing_pipeline.py": "e70bf6d8c657318d8d5da177d47fd6d680403c1c76c2635358382a0ebc671494",
+          "tests/test_indirect_access_reuse.py": "63c2a23d1c8cb92117790d872776c66dcc5afa1dfadbcd6cd1ca8e4497014cfa",
+          "tests/test_indirect_native_sections.py": "717e71daa57ae2c8dc23586fa8b74ee955570f0c86bf6e0c4f79da848d6c896a",
+          "tests/test_inline_environment_traversal.py": "38a93b64395987f246c1c9c06d5a1dc52ffa2d4bc12a900f6cdc7169db2515df",
+          "tests/test_inline_source_authority.py": "4b66d5115896ce94025d0fc343b4796e3365a1d8de2bcfbeb5745cc0411985ba",
+          "tests/test_inline_source_regions.py": "1bf7fc7f990f1cadb00a574b521e7150c5ab0d5bd3b574c3be72036f8f733e54",
+          "tests/test_integer_semantics.py": "aca99dcfeaf7e8f66c4cb0dc6c181f9afa99dafcff159c21ee9aa7c4573ec192",
+          "tests/test_interval_applicability.py": "1919c730abe77c744c2a7208a0a4da517f567b956587c8501c0bd1f91287ca3b",
+          "tests/test_interval_discovery.py": "dadbdcd12ea93d02479faa15028e5c91463ffd021884a706e420698ed740b486",
+          "tests/test_interval_draft.py": "8db7b46906ca3b6af103d9fe574f0ac4c4c414b3de1cd9b2c70937d644952b50",
+          "tests/test_interval_draft_cuda.py": "0a34337a714bca03346a9929f3d11cfd3135c19f1947fd35c867f4cbea6bc84d",
+          "tests/test_interval_native_artifacts.py": "2355ffeaab6d3b0aeeec01966f7c8863a74cb06cbbea2497670c0f52b5ebe82d",
+          "tests/test_interval_ordering.py": "0d33e33cbeb6b3a8a1f3557808b36cf447ac2f40d80f1081302b056bc63f3840",
+          "tests/test_intrinsics.py": "9445cf920c767c4b5d526066fda521c57d63f9f0e226d21f419adbaaa065d253",
+          "tests/test_joined_deferred_definitions.py": "874cd2cb6168502b79dc64002503df063ac7750d86fceff486fd0fc41ce17d96",
+          "tests/test_joined_deferred_definitions_cuda.py": "a8e84348ed6bfdddde621fef157bdc5239126d69408f9b7fa636918e94974b7a",
+          "tests/test_joined_native_private_storage.py": "3b40f168818e202a00294670f4c5b8d23dc936d3a6ac29505a8fc6d3b9827d1b",
+          "tests/test_joined_prefix_definitions.py": "75e4a8b35296211c171252d60b2cb3b98fc88f7200377be48506c173f0cecee9",
+          "tests/test_joined_prefix_definitions_cuda.py": "e75f6d5e9715b8df404b1b02052d7fc0f1ec7083f80c3c298e97fe2cc6c2afeb",
+          "tests/test_joined_team_cuda.py": "214094a9270e406c174a5b98dbde893625b5baf373bf9ad11425d534170bfcc0",
+          "tests/test_joined_team_source.py": "1dbb5a3437f3ded292c97d281df66a1c11193853d3bd01147aeca46fc0d8156c",
+          "tests/test_joined_uniform_branches.py": "794c12502c17624653e191c1afa0fbbb0a3f0528603b060e6823690af1793486",
+          "tests/test_language.py": "e194c27c5c0f1c7adc342593068af427b548497a4800677499fbb16ec6104832",
+          "tests/test_language_cuda.py": "3d6934019a895285a6ff3f36f4c43d36d259085447d2f1a03b143a19d5939bfb",
+          "tests/test_lazy_source_effect_report.py": "5c6f0a7ad305c53dc3c4af41407a78402a713e005da46bd2723292ce80ec4b6f",
+          "tests/test_lexical_owner_diagnostics.py": "30ebf9fe01148bbf396f192e0f4c4a53856fe73e6b5c03be407c1b9144aafcf9",
+          "tests/test_lexical_source_owner.py": "d6be39d7f2bba909babd8287e3350e3307ab8d27fa9eecfc78d1b4a013edc1cf",
+          "tests/test_lexical_source_owner_cuda.py": "6c4af58d3e7fa0a422732df3ea272a7cd3a81ac0a06b69ec54bb67b96610adc9",
+          "tests/test_mapped_child_reached_plans.py": "da48808713c80e932b883e8a61abeb2c3c65fe7499ab86020ebbcabe8e55e63c",
+          "tests/test_mapped_lifetime_obligations.py": "7cc9ce8b7c939528f4df22bc3fd3ce4fe228bf2fbae494ce55455acbe258db2f",
+          "tests/test_memory_applicability.py": "f584388b0a7e952b68344bd5acc56d7b193a6ada8906b83bb7608f8d7faab5f3",
+          "tests/test_memory_emission.py": "13bb25133f00778d15223f74ef63294a5de45379db84570415c07f1a4601d11e",
+          "tests/test_memory_footprint_union.py": "3201dbacce06ffce5014044e5f2f776d8c110df7c280a97b7cc2943af043cbef",
+          "tests/test_memory_plan_validation.py": "2dc8c675c3ced31e8dd5fc76fbb8b12fa1242eea0ee4be4d491636f216df92f3",
+          "tests/test_memory_runtime.py": "49404e490fa76ad8c8218f35b73f216b9944b3dbec45ff46f0c5575df03edf73",
+          "tests/test_module_allocatable_scopes_runtime.py": "1dafaacaa387d50e825014a8e0bf2053128a468d113024cecdb73397edbc3ec0",
+          "tests/test_module_deferred_captures.py": "c6e785db6de2ffa4ec9019280dd0dd61ad9197e7ecb2a6a328b1aa5acd701112",
+          "tests/test_module_deferred_captures_cuda.py": "f139ec8e04bc75c0a575c912ad86d7d49676dffb162e3e8f971e6dd9e7390996",
+          "tests/test_module_descriptor_window_proofs.py": "e427d1690ef1b34e5abae7ad085d9d8c5273aec40b933354b2e3be438f48fbf5",
+          "tests/test_module_optional_scalar_companions.py": "4629a6f7e79dca44230082c3d9334143b0df3206ee3c510b208e468c2a7f3df7",
+          "tests/test_module_optional_scalar_companions_cuda.py": "3b9c48e96830811e27e86e4231e791e6f42f46aab7bec9223e9af7676292895e",
+          "tests/test_module_reached_windows.py": "8eca88ec253d98e89bdeebe797847e23383d05ac1505eb66d28e036b1b273605",
+          "tests/test_native.py": "86c3aa787046931b38d0f7492434c753e6bc50d425052786fd1b7ce42d993f7d",
+          "tests/test_native_access.py": "50c3c4b02444204fad25c99b5fab9d405fa8bdf2048781e2c4aaeea55c68dd3c",
+          "tests/test_native_affine_sections.py": "0575b838bc83fd08756ca8b6454a5da609225e29d433926c3998edb2c6e35f97",
+          "tests/test_native_array_conditions_cuda.py": "82f458aa62567e8ba4ac470e7b98878d655af88fe49b8d333524c64fc0ddc5a4",
+          "tests/test_native_automatic_private.py": "4c77231027acdc74213ba67d7e4b51665f27af63a368a8eafdbacc9d75d951a5",
+          "tests/test_native_call_definition_proofs.py": "e165f902d9d186401f904658d9f58aad274aacb4fe2c05238e9d3308c8c56ea6",
+          "tests/test_native_coefficient_cuda.py": "a837fd021cafd56614f59a51fac351658ef63dfdf3dbae867b6a4448623cfbdf",
+          "tests/test_native_coefficient_sections.py": "61a8515ac824254f97cd28373faa85e4da9ed7422dfa72fb2c02fcf62291df60",
+          "tests/test_native_completion.py": "c7148d24bc2fb2ccffeb91e19242701efacb4bf142b20a45edfd069d6afeae25",
+          "tests/test_native_completion_tokens.py": "cde9bb6c700985c7b20216d88a189c342d6ac432fd26e8a30a7c31a10dd2e44b",
+          "tests/test_native_definition_proofs.py": "95cdfe3433c34467f4466c607daa6a88cdbadc19a68661960769e776b3714184",
+          "tests/test_native_definition_state.py": "f85a55e5c37427b99c1d28c69ee811ae0945a4f06af72273b5be194fd534496e",
+          "tests/test_native_demand.py": "8aff11e6dd20daea8b8be245f6bdb180168c1bbd9fa3cb80084f10024da153d6",
+          "tests/test_native_demand_cuda.py": "1ed58d25a5bd0a55c000d8ffcb4425e61b231a270e3274ba8d74f09b52f471d3",
+          "tests/test_native_demand_owner.py": "b9567003333b6321454ef8d5ca493246377c4d209f8d0e17c3b8360c9fddc714",
+          "tests/test_native_effect_graph.py": "8218e9a5718f936148c335d398754e4bac063509444ebbfca9dec1efcc510a97",
+          "tests/test_native_environment.py": "08593be9eea98a86c4302239dff4760ac690db4ec3467c9db9112912f50d162f",
+          "tests/test_native_graph_associations.py": "036268a23339e9884735d95e0002988bfad1fe49fc3136c0190f0d4aa0873c50",
+          "tests/test_native_group_structure.py": "0b3da645a54523f99042466badd52a1f08f87d0509e71b9a78717a6c9732b2a9",
+          "tests/test_native_host_boundaries_cuda.py": "c9a6cec233d6cae90036bc7df30ef92796e0f7458858a26f0823ee103d9d2537",
+          "tests/test_native_host_only_reads.py": "83a4de643bf50e546f2e590562178a9dad12ff245e35094f9794ab9c630ce025",
+          "tests/test_native_ieee_predicates.py": "65d40c5cabddd5f5186678b5e650661cc20916f1f2d13528aaf0d1b0f173ed13",
+          "tests/test_native_interval_effects.py": "e59fed3f5229f162267574b8f076e54e44bd23ef0966fe685feac15ca3567608",
+          "tests/test_native_owner_hint.py": "8abb3fcd8d3757c1e346fb15610a08d0af66bcdba006775238cf0a04461be507",
+          "tests/test_native_owner_hint_cuda.py": "13f9c694fba7c50752245a5aa2b1b58090c9afc2ed17b146fc68e169b5bf12bc",
+          "tests/test_native_pools.py": "bd467ae16b5624e045f7b938ba249ddba3fb35c650a356344e6cc4e7dac72606",
+          "tests/test_native_prefix_proofs.py": "bf29a22349e799acc04c62ae35ba36b9fee7c229fe82fcdf82d0f35fad3a27c7",
+          "tests/test_native_preflight.py": "aeca42231b32fb437ea22570ae0e95f692ebe5393df308553481d0e1dee8b07d",
+          "tests/test_native_preservation.py": "1fe53eaa10940046fe0ec40e10b58b86b9c44aeefe5bb07472fa1fd24834c320",
+          "tests/test_native_section_scope_runtime.py": "8706ced7dc6c7c48342f77221768afb7817983a2b5fa6096db29cc1564b95290",
+          "tests/test_native_section_scopes.py": "4ef775e11c141c261ff496c21c120c9cbdee26edc1b4c5b643f494643c4a9463",
+          "tests/test_native_sections.py": "bc0af8a64509046ae3d1e3ceefa46eb283143d5612c8ae23ef2a9d9de25701a4",
+          "tests/test_native_sections_completion.py": "5df61d937f32395995ab94c6fe9c4d98863edcd14612e9a23a236123f90e4224",
+          "tests/test_native_source_reads.py": "fed211d106ac9182aafe9779362388fb98406f0545ba6000a3af9b4029fa8c12",
+          "tests/test_native_team_source_reads.py": "fb11298a8ec921e98deac4d591b9dc16f8ebc95d9540ae614946c6f84c58f02a",
+          "tests/test_native_team_source_reads_cuda.py": "4ad262bd1d06b8e5730a3a0009ec1ffb9cca94dc66e441a2aae01246007bf5e3",
+          "tests/test_native_uniform_arrays.py": "45776e4a861e8bdfbbd2f4ad7a318eb7bd2d47168feb0052688b6072f0b1949a",
+          "tests/test_native_view_access.py": "5970418f641f27790fb9afaee4b33367a7d4f37381f0cbc5f22096618aaeda88",
+          "tests/test_native_view_access_v2.py": "c9581a325787df774f21f2b2187bef036f115e5fce43a27baeade6ca124b981f",
+          "tests/test_nested_array_operations.py": "7c3c455d6733d649dd893418c9e55664c0cd4e10f7a61bbb9fb3821cc2fdfbf3",
+          "tests/test_nested_array_operations_cuda.py": "ad5adb080491f9df74066ffc0d47bd814861b831a29d04128208cacbcf87714a",
+          "tests/test_numerical_build_contract.py": "75801478fe97518384aceab4b84e989be91bb7eeab03f309e996a4a3117ee5b9",
+          "tests/test_numerical_build_contract_cuda.py": "51ecaa39bf5d09fa488af83f79a986191d17c822b954ec9e57f2a0fb7b0dc482",
+          "tests/test_numerical_calibration.py": "2cdd48c84e099da75603a176c7de04e1cd1d1bcdaf738bb7d651e5bb6e663128",
+          "tests/test_numerical_calibration_v2.py": "230ac8f22e1860c95edca5c0cce36d08c7a47ae7a738730ac1080a6466afe85d",
+          "tests/test_numerical_classification.py": "f80999e9b9b14a80a864ba2cab192b6c828e703b535d5ee957ae56580f88b5ed",
+          "tests/test_numerical_closures.py": "7aca63b8f5e4c386ae765f6144d4012cdbb07b8ff7e8f2838e8e45fd1e57403c",
+          "tests/test_numerical_completion.py": "2bf320d60fa9604a940456f61abf197adea9a1e729bd909d53e4b1bd54f1c5d5",
+          "tests/test_numerical_component_support.py": "7006dcd35c1448fd02c5eee3db1e39451911f11ebce7845277a9b2c5afda5917",
+          "tests/test_numerical_effects.py": "832bed715cf3a006754807b09b4b85a606aad20657dd595f424be2873ad81b61",
+          "tests/test_numerical_environment_calls.py": "330e3b4786e4c8dff57f064e78f96caf7bf0fa75100619073b0937a978b03e2e",
+          "tests/test_numerical_environment_emission.py": "ca34a5f13d76e0c9881c71d1b46e23d1e1a16cca9929f2fc0f85b1fa4542f080",
+          "tests/test_numerical_execution.py": "04bc2c94650cea8a9198a030fc61791485f4602d06cf5bc78ea48770560b6dbd",
+          "tests/test_numerical_execution_integration.py": "639ee170d40d9ef5f0dc990b916eefe7ba03e9c25e7158f88e733bae2e6a00a5",
+          "tests/test_numerical_execution_workloads.py": "2c6b1bed34183da91a1d0932de9199192df6472b708bd8a81426802fb7e16917",
+          "tests/test_numerical_gpu_execution.py": "adaaf5e4849de134368bf8d36461fd7b47f539db41233e6b6b1d4f91ea876b29",
+          "tests/test_numerical_gpu_execution_calibration.py": "799a6055b197b480832697dc7fcda2274109712b34278e472f76ab66927439c1",
+          "tests/test_numerical_gpu_execution_costs.py": "d72fcedbe4ac18d49b3e89c749c34ef3022bcdbeb6a1a1b1c0f6b05b3d7f6ac2",
+          "tests/test_numerical_gpu_launch_calibration.py": "9da84bfa07c74214d7e447eb1077577de9b2c1b75e4ae0efda8d066edf4a85b2",
+          "tests/test_numerical_selection_authority.py": "ab96b4ca377cdbcaed20c045a3a5429b56ba82c698690de7573b4b9d0a80a0a4",
+          "tests/test_numerical_snapshot_inputs.py": "9114352255719afafdab3eec672d4c421805a6d993fa6c31b9f5d2c686206c35",
+          "tests/test_numerical_sources.py": "4ea1ecf3f18d2f51bad38d01f4530a3087d769a72e6125f72fce33ff18ba2242",
+          "tests/test_offload_analysis.py": "0c693323032ee153270c83302da0938467669ef99b935d8081cf9ff480cbb0e4",
+          "tests/test_offload_device_context.py": "d8aad7fd1ecd58ec1c9ac2149b89b7a8898e51f32dabaa64c4143ccd4bcebc8d",
+          "tests/test_offload_emission.py": "d706bb6f94e47d5cbd336070d3f6e944b14ba9cb6e1b127a7158e2c776e6670b",
+          "tests/test_offload_guarded_inputs.py": "e8ba9faeff6fbe2874121aa5779f800e35841779d28aa8b59506aab7b1f905e0",
+          "tests/test_offload_interface.py": "8f0fa398d961b948cb58480743da82569db709870d761424c629bd2b030ad5fb",
+          "tests/test_offload_profile.py": "c07f01e5b48c87fefc0ab5ee08f15d06a8532947cca488aebc26dcece4d0c95c",
+          "tests/test_offload_query_safety.py": "8939b947a3e38ed3409972d37490a4924c7b1aab832c47eb1df73bf5efd6e5bc",
+          "tests/test_ordinary_numerical_regions.py": "b164ecd3403bf81aecbea53443964f50471dac01094211a3f13432fd2ab88b14",
+          "tests/test_ordinary_numerical_regions_cuda.py": "5e39dfa8d88d7a37d8d9ea413f4d95559e9c633381cda8af125ed6188c29f8a2",
+          "tests/test_ordinary_pair_consumption.py": "8ab8d9003e10708ea46874c4371fd75c2a1b3ef2dd203086ebc1ee658fae156d",
+          "tests/test_original_call_associations.py": "40da375f297c63d187b5ad8ae0d1d230949bc67f8ecddd4fe3b35022ceb028fd",
+          "tests/test_original_interval_owner.py": "5f5301206f4f186d473e736c31a0a4fd1b97832ad53d6682291163af9626a305",
+          "tests/test_original_interval_owner_cuda.py": "c50bb664b95c873d8181a11d250ddbb001b97763064bafb8bbaa34aa536d146f",
+          "tests/test_original_region_context.py": "11b27649461753264052d5bdc46fb62525db13d5d509bafc9cde6b0ea337efa9",
+          "tests/test_owner_placement.py": "fe3a1b469519e406a263c47187864f4839e134de4ad2f8a5307cb0f4f123752b",
+          "tests/test_partial_managed_child_plans.py": "547ad3d489c29212b35bd06c0e53a7747e36352bf005acba82801ad29356ac59",
+          "tests/test_partial_managed_child_plans_cuda.py": "7ca09f5c22caa2864d804e3b4852ff2eddfb2184c5e500fa8fb50c735aa6ea1a",
+          "tests/test_pipeline.py": "d7e12edce0db27d19ee24c7ead1bd975c2d14a0e8fb9c15dc63ec6ac94731af8",
+          "tests/test_planned_reached_closures.py": "533947ab7c5d1d60d074bd695128c4042c26e13e009670ae51f62decf92b2e74",
+          "tests/test_pool_emission.py": "a4797483e187a38b056a7bb9485939b56dc7a4c0a9378777c858d803564eed9f",
+          "tests/test_pooled_execution.py": "5acd98eb2888e8bcb0ddffab8701d73622b89483bf1153153a35b335d1a6de73",
+          "tests/test_preowner_activation.py": "88e7b69ce3fc24c62abecbc6cddec49b4cddaabdeff060a1e2981d7ddcd51fbe",
+          "tests/test_preowner_activation_cuda.py": "393fccbdb45ee3617ac93906e53e367cde6dc91a3c5ff123e0b5ccfdaf3a31db",
+          "tests/test_preowner_call_support.py": "4722689ac66acdcec17d877c670099bdb0824b68e33e900cc94250a6c154a4f4",
+          "tests/test_preowner_conditions.py": "dec32b66df3da2379280c41303756c2701cef4451bfcde44c201947e2e81ebe3",
+          "tests/test_preowner_single_if.py": "2a32072cd6248af3376784d469c0487af07bc945bedc5ff195b3ac67dc779e35",
+          "tests/test_prepared_original_regions.py": "70b8fa8f322c121f2909cf0ff4654c1d8bb55e179d23d2edbc6b0f0e8b9e3cf6",
+          "tests/test_pristine_inherited_team.py": "92ba9a40ab97d5dee4992920145a3184c4a8e6355d228241d7723f9fe418c51c",
+          "tests/test_pristine_inherited_team_cuda.py": "37e64d1c2be974aa46d669fcdecff825419590f6eec00750132dd41db855b353",
+          "tests/test_pristine_original_entry.py": "b5436a5f71c2e45d3096c91e45373c8075be524c83306bdff7c7592276452c3a",
+          "tests/test_private_array_provenance.py": "7f7e929a94782bc89dc0df8ea102b2ba854aa3ac6fea60453413b6521450a17a",
+          "tests/test_proof.py": "af2353d7025195bc7a037630d3292268d5b7847c0f81efc857c73e1dee710fc6",
+          "tests/test_reached_consumption.py": "b253f3f64fe21e9d44e972b3d78957f0b39a329f91931d3b09f80577446b951b",
+          "tests/test_reached_counted_loops.py": "aab7e382cd671d58d8e6360faabf80ca546f9e6e7fefa72a9a77a3aaf574743b",
+          "tests/test_reached_definitions.py": "df62bd631e03646f713417665dc78356ddb0e74a0a03a9372c7776d6da7406a9",
+          "tests/test_reached_definitions_cuda.py": "44ffd76bbe14b5dfce45f6ba47d252c72a949f7e8cf548e03fb5e388efd99321",
+          "tests/test_reached_entry_sections.py": "cae65ca1e4b743d02fcd23b576976cbe94902c5dae3a5b2d9dd1bb2de0de1b47",
+          "tests/test_reached_entry_sections_cuda.py": "c0aaf179d7d976470a21bead76e59116d9975501e5134b765ddb6b3bdf2435ad",
+          "tests/test_reached_ieee_numerical_guards.py": "0735c78c3c0431f572eb85227c140143372197c2be201c0720c27756e6ca802e",
+          "tests/test_reached_native_environment.py": "8d36bf06da9f825df0df8cd07bfb9d7f2d89ea216094ff61b77eff6fd1392864",
+          "tests/test_reached_numerical_effects.py": "3abfdc1e86e29b73aa40708243fcc106ccd992b9d59afaf0b126c7405ae69df0",
+          "tests/test_reached_numerical_effects_cuda.py": "688c819070ce3dd1deada20da503eb953d90495b8124e1f3e85cb8d4a9f8bf3a",
+          "tests/test_reached_partial_definitions.py": "3d54bbab78d53efb395b2ae7363a46bb8f4ebcb78fe4fa99e62cdb0b1a4e2e77",
+          "tests/test_reached_plain_numerical_effects.py": "28d064b60ebdb2c5f34e1bf727c2e8a1ecdff986bc5d9130256187b450b4d5ef",
+          "tests/test_reached_read_requirements.py": "d1b4e240610dbaab0f6767fd9077d942d52238d976be3b3d6c6a7478cdae3919",
+          "tests/test_reached_stage_prerequisites_cuda.py": "797e23a5ceddd482ca9ca6c87489ec80628b99c541a33836cd6cfef727d9b66c",
+          "tests/test_reached_window_binding.py": "46a3644ece8d6064ccd943bff386d5ad434a5138c980d43e60220e7aece17649",
+          "tests/test_reached_window_discovery.py": "a542861c1ec1f4a5a8411e0a3365da538c59a669fe9b1878094f1b891c14650a",
+          "tests/test_reached_window_owner.py": "01c9cfb1dcd5909dd04630c1fe8b242095f9edda867635afb12178b90aab1abe",
+          "tests/test_reached_window_owner_cuda.py": "032ecd5b59789f34764c93b3b3c523f68c7a19eb0cafaae21e0443cbc3db2b5c",
+          "tests/test_reached_window_proofs.py": "7d29211126c90d5be1a58f1fbeb4db07749424ccbd051a9daca68c0151965028",
+          "tests/test_resource_demand.py": "366102b488d3e309038f07fdd29fe41d6122a5c2f4b3649be75129b5283ef67a",
+          "tests/test_resource_reachability.py": "ae6d2912afe49916c73bc71e117fab878b731ada24312b805ff8e25a87df6bbc",
+          "tests/test_runtime_allocation_bounds.py": "fc431804c0c81dd6342941027bc539fcf3dee593911c8210e0e403b3fff64b48",
+          "tests/test_runtime_allocation_bounds_cuda.py": "aee612dd3c9f02f52be4e21717a1ec7d8fd780e720e3e44d20cf88f2be359766",
+          "tests/test_runtime_trace.py": "96c02f0ba690682c886001399abf821927cac0e483c2cedd97e06a1013061013",
+          "tests/test_scalar_element_inputs.py": "3fabfd483391462ccdd24590cbc2bf71ccdf19a5e750d16b588d7c52ba01765e",
+          "tests/test_scalar_element_inputs_cuda.py": "f443cf6193bbeb7243609cf21e8cd56c8f7ad79be13a9120583f25c9c481e567",
+          "tests/test_schedule_calibrate.py": "68ea495af07c8be944b3fb329f012d464a74d4940f125ca9908d46589acbc0a7",
+          "tests/test_schedule_calibration.py": "66c1a29e598571f6f1b091f128a8978e78082a55b909bd779558ed81e1e32cfd",
+          "tests/test_scheduling.py": "bec521eb4d31920c089862096347a5caf183fb696a681201f8c22bbd6764fa1f",
+          "tests/test_scope_cost_options.py": "8536877086da50314823f16cbc7adf83990750ed29aa4824242f0be79a28ef0b",
+          "tests/test_scope_measurement.py": "946f8132ceb7938cc82307202496435c789b8286de871a11f3f302e7d2c1b9c6",
+          "tests/test_scope_measurement_options.py": "2da87f22a5cec436fec77576b2ac50833b85be8a5c3c99c13a5248b65c6b628c",
+          "tests/test_scope_participation.py": "a5fdc0f689c8bfae9132f2086c89496f441546cf7e0dc17a81c91218c614f7d4",
+          "tests/test_scope_preflight.py": "8adff862b4ea2b628a99395b54c9e1b284224b84290aa73cacc1f00c26ec0e2a",
+          "tests/test_scope_query_cache.py": "f7dcaba954200fbd70f0dfe9efdb38c9e0b7d8bf9ac321595ffa2a3ef4f634c4",
+          "tests/test_scoped_access_batch.py": "3e9f85118c65839fed89711b49b1600b6287dd3d57799e9d6d893e8dd3d7e7bb",
+          "tests/test_scoped_batch_runtime.py": "c4e5c671d2f85ef7c623acd5455fb7df9d5171b4f26c936cc83394fcda4b748a",
+          "tests/test_scoped_batch_runtime_cuda.py": "3f745351b719ffca8f1b9e0020a18792098414b673da8314efe849b48faae1ec",
+          "tests/test_scoped_batch_sources.py": "a70dace919c6449a58f81f9d5478859d7547444ba538e4e397482f83cab2844e",
+          "tests/test_scoped_batch_sources_cuda.py": "5bd68e22b70c6032e064dc5523d94066411138d820ed4b4972fa61604001f879",
+          "tests/test_scoped_coalesced_runtime.py": "76ae76bf0431273589a8a1c8e82ffd7d34a671e4c2ab35b5b996a055df2edb74",
+          "tests/test_scoped_collective_costs.py": "60179f6517588b8c2d82352df63d7e6ea48fc11907fdab2911c5e4299ee640e3",
+          "tests/test_scoped_compute_costs.py": "abd75c7edddcbd7c149ace140a3b65c2048afd1800c000ff20af805bc17b8acf",
+          "tests/test_scoped_continuation_model.py": "b6d55dce0eded106ebd03e016075dd3b5c9ab9182927b9ad2daf4622614cfa32",
+          "tests/test_scoped_continuation_runtime.py": "f1183d25f9e30f65130332875d37a3a080b27869d3e608723dabc4d9e8d0d926",
+          "tests/test_scoped_cuda_resources.py": "2ffe2a6820f8e5e2aab17092d04c4c9f79db02d130091d27fba62317c80f8a5a",
+          "tests/test_scoped_definition_model.py": "b2325874e6f662402f1d43f302ea437b3671ed6441c31fde7c46f7677185847b",
+          "tests/test_scoped_definition_validation.py": "d105bc07827cd7816076ab729dc6c9d682ed6052160669ef1407ff4634feedfa",
+          "tests/test_scoped_direct_copy_cuda.py": "84ef5b8f120a35dd0e6538a1dfc207bcfeed54ff7cac384778f8e61c25522294",
+          "tests/test_scoped_direct_transport.py": "34e82016ac72a5bf199933f551b3d508e998eaf8a3b175ed645a746592d9ff45",
+          "tests/test_scoped_entries.py": "d05995e90c536b5022d4b9dbbf079de7adab4948c95e29a54ac5e3cf7f9fd52d",
+          "tests/test_scoped_graph_queue.py": "901c9b756ff11720c1a12bc8d3d202cd3784fee9239453c19a309fe9359070eb",
+          "tests/test_scoped_graph_queue_cuda.py": "1ecf170fcc67105cb64dfacc1b9c004c8793070224cb1d383b56daa669d243c0",
+          "tests/test_scoped_graph_replay.py": "5ee0f5eb25b936f45cde53a69e575606b10c019ab021a858b211edf9cbd1504d",
+          "tests/test_scoped_graph_replay_cuda.py": "943e7b5a918f04807b093dc05705e9084d4b71255be3235426b69df64ee91fe7",
+          "tests/test_scoped_graph_warm_ranking.py": "eea8455de1a8f8aba00690c50e51b68c8daf41e302ac4d2f01a57f147f819fdd",
+          "tests/test_scoped_host_completion.py": "03acda0ed2456eeb7f46d4f27b2ef3de512affef9eca1fafcc11efc0879d937a",
+          "tests/test_scoped_host_completion_cuda.py": "94d7c4a0eeccb8080f7468635b83f9ab2a703ea8c85426f00d5177d161648ff7",
+          "tests/test_scoped_native_analytic.py": "530ba141fffe04207926ee7549fba8250acc85eae4e4ed9a18c24a7d26990005",
+          "tests/test_scoped_native_hint.py": "17c668bad23c8e0120e79121f869812f49511cb9c9f1926f5cfd50dc6621c974",
+          "tests/test_scoped_native_plan_handoff.py": "1a4fee2f3f76c5562189f79898d5d50ee604a1c09e611726726a03b518381a85",
+          "tests/test_scoped_native_prepare_reuse.py": "50cc1600c6e13b433b7b66c28272e1e14145fd62560513562c2cd1c35797a154",
+          "tests/test_scoped_native_unit_handoff.py": "d4090a9649253b9ae3eeaeb3641204a9107e9e3a3cff7001e4c5e21446dc1566",
+          "tests/test_scoped_native_unit_handoff_cuda.py": "523a20105b64c671558719949a69e55e0656b2b3df4223816b943d020313200c",
+          "tests/test_scoped_numerical_costs.py": "9610c11d4802e8b912423cc5cfc57f34586b065bb5ca7d93303ee9055339f6fc",
+          "tests/test_scoped_pending_owner_report.py": "9efd9c5571c3b8a8a8110723728eae5ce53cde7a81f519b12b885d282af861a3",
+          "tests/test_scoped_pinned_runtime.py": "3ada9525151561f913e18571c52b9147634f827b1c6e97465b97b8e1af387809",
+          "tests/test_scoped_placement_memo.py": "6f751cd37ba95183907eb5f796354c16f602ff60e4c45adc03df3782915294e5",
+          "tests/test_scoped_plan_suffix_handoff.py": "1640ab51bb0ea5f6b0746c77402b33292f2b0ad3e3a5140ceae6f85d874ec84e",
+          "tests/test_scoped_planning_entries.py": "40d35bfd1f79b579b667ac730942933ff2f8079bd70ea0be4a65eacc223d911e",
+          "tests/test_scoped_planning_evidence.py": "d7f3ce1aa05d5c182ca824fee14191ee4190097aabfd4c2edba3d172caacc672",
+          "tests/test_scoped_planning_model.py": "a9eae03b672d8dbbae0dd23e471ef0642ab82ca7693e07e0ad5b9d531234bb1d",
+          "tests/test_scoped_planning_runtime.py": "62d648465b4234202c219e5ba58f3cbfcbc803ba28028ece089e6af4a94a9281",
+          "tests/test_scoped_planning_sources.py": "a8992c603529422db33d94ac422a308cf355c481604bda2c4572fa5ccc3e6ada",
+          "tests/test_scoped_provenance.py": "b21e8ea96c8102f7f000028ea00a79b77ba87a24e4d9ac475094c3d0a8c5e931",
+          "tests/test_scoped_provenance_cuda.py": "19e60f7b5fe4a20f329db273b570207cb03ef70c14bdf87ce0bed8dae8de2d1a",
+          "tests/test_scoped_rank_reduced_views.py": "c47cf2229fd8808a0780597c4b1060745bc379fd90d853c47b4b932c1ca2a0af",
+          "tests/test_scoped_regions.py": "c246a63ec8df23331e4fb9e2ab89b2142eef9a3a9045bc6c2f5398fa7bdfadf3",
+          "tests/test_scoped_residency.py": "5db577564f97fd3f45d8d158dc66d0e1ebfc084e4acc2fc313efca286281dfd1",
+          "tests/test_scoped_runtime.py": "f9717f70c609a7d41d99b8f220f59591af81b37f0b8060d10b828d698a295d70",
+          "tests/test_scoped_runtime_cli.py": "b51161cbe08e7c2da414d07f6d1452f9bbc9097429f274881bbfb83de98bdb97",
+          "tests/test_scoped_runtime_cuda.py": "c07978af97597c4302d238bc9c6bfe8877990f0afcc83ed9a3e5c276d1e63191",
+          "tests/test_scoped_scratch.py": "6ba2eeeca61b32b30e43a6aa63a16e8a19d971b9e99e55886761952e12b6e177",
+          "tests/test_scoped_team_native_calls.py": "a3cd6ec343488a267d8435e2530088b540a074869fda32704a61ae6bc4be1043",
+          "tests/test_scoped_team_observer.py": "507c072581b9f9f37d7cd154f07342960edfcbaf49b066b796a8b23ec31847b4",
+          "tests/test_scoped_team_planning_model.py": "375c32f380d0efbdebc7b7bce9039a368048108c7e15ad2563914367e81e56fa",
+          "tests/test_scoped_team_runtime.py": "553e710be0b96176ff057190b27d22a4df8b097be29c2a48c852838bae9a8ffd",
+          "tests/test_scoped_team_sources.py": "fbd367145f0726fa7cb14c26e54e2b8c046e97a568692c229fc9ed0465940fe4",
+          "tests/test_scoped_transfer_dispersion.py": "d7675925d905124522036929bf57f3f94f3306e63e47a1a56e82d45ca8b1f727",
+          "tests/test_scoped_transfers_sources.py": "4935eb813911c67248b0a95ad369adf55c8decbd2564a54874270e48335dcfb1",
+          "tests/test_scoped_transfers_sources_cuda.py": "2e326f17901c3e3863e28b47a4690e325c8667e2d9da4f44fad0188eb06d88f2",
+          "tests/test_scoped_view_sources.py": "529921f1142d93ee6c8a0d23c0ac8e158d822ced0ebbfe900fd80a1676e71467",
+          "tests/test_scoped_views.py": "0be09c4c6ab48c17bfbe66c6932da0d52cf5578a7011c9cc2690dc59412d96d6",
+          "tests/test_sealed_syntax.py": "f9f024de119dc247a692634d4a0eafc31d6f1dc356b47bf05d2806daf08a30fd",
+          "tests/test_section_union.py": "29a752b1197b8b63cd4cd35480189fb2798e6b246727d5f539d9c2626c689c9a",
+          "tests/test_selection_activation.py": "e8090ff80bf5db1157c2f027a9406fa7400d9cb596febd22d1ecd49c062bcb83",
+          "tests/test_selection_activation_cuda.py": "98fd893146a81e25e1e2ad1809d35d1e6a8ae8697b7c094ab2f628e283904995",
+          "tests/test_selection_activation_teams.py": "6f552ff70ff41f3fee048c157f06f99c1e17f5ea2a1fe3c77eb488e640801579",
+          "tests/test_selection_campaign_cli.py": "8cbaa80ed522226d88ff11807bb2c84b0adb5af128ec47b9f2887d8b76782360",
+          "tests/test_selection_cost.py": "8b6290c3624f06fc719cc0efab6fd51746c017d1ef86c81e9ca6d216d7204c31",
+          "tests/test_selection_validation.py": "b58c6838a9b8a7c91cd236c7b3522ec71d22a46668430069c84cb434866ec9b7",
+          "tests/test_separate_numerical_team.py": "42a9357637514426a066bf64c0ad546985dd3750a58aec24aafc09b0f736f0db",
+          "tests/test_sessions.py": "c50bb3796d3ccc60d2f1610c1ec36fac17d511e8fcf7a9c75a7374bdd9243dfb",
+          "tests/test_smoke.py": "f500e79eccc6396eee133b45d54d9c51cff83dd2fc0709d5b1a3ad53e57da728",
+          "tests/test_source_applicability_emission.py": "627f4cb12511e5e2a6205e83b84a74ce90bf1e7a93dd1e99dccc4821d0655fd3",
+          "tests/test_source_array_function_effects.py": "b818b040e2bedf5ac7188f534c2e10679b196164ff9e771fd56870883668fb04",
+          "tests/test_source_array_operations.py": "51c51f5c616f2cf51aaf48a5181f2d6e755e57399d2ef79ad3af3c8f02c01d67",
+          "tests/test_source_array_operations_runtime.py": "71ff582ff083561cff61217f69a4282ce8b39afb29444a0ec598581e96ea5256",
+          "tests/test_source_call_bindings.py": "3303255c56afcd9c549fa31af04c885b5f7194365eaa5f0c1aa2419604e2d3c8",
+          "tests/test_source_call_bindings_fortran.py": "360129dde14599e7e9046f08077284bc8b22e75270473e3908821537130781d2",
+          "tests/test_source_component_regions.py": "8e78c2976f88f82c42c212dee6f405a437332dba82333cecae7a86426a114e54",
+          "tests/test_source_compute_costs.py": "5883d88a277525df4a707935bc742dd97cdcb61639f523baa4492b959d4ab995",
+          "tests/test_source_compute_dispatch.py": "015f79be0c3a3762ddcf09b34762cbb69fde866c80b8a9cd48f352e59aec08db",
+          "tests/test_source_compute_memory.py": "8aa1cc8efea95a1c64bfa6edda87004549c9db1784812024f4914b9cad92c41d",
+          "tests/test_source_compute_query_cuda.py": "06c73d923ff69c76a6485657db64d8d211194c299fd815fc569e7f246f09aece",
+          "tests/test_source_continuation.py": "5609636c216c8d7f1a64006ad7faa68ffd4c098d29ac80c0ea2e82fc389ae028",
+          "tests/test_source_continuation_cuda.py": "864e1d44d39514165fbd6ffa68ecfcf1d4645644440c36cee8bae0e199adf310",
+          "tests/test_source_cost_projection.py": "0dcb55cc8d1c4d9ea6308d38098355e218ecb6bd7bd3ede76f11ece585b0a6a2",
+          "tests/test_source_descriptor_forwarding.py": "e9a115466ae16ddc9a91b264bdc5aabf1d60c036157284361ef69324d0c967ea",
+          "tests/test_source_descriptor_forwarding_cuda.py": "fa4bff4e77f7617ab0ccecd694a154f4ccaf4c830ba11ac3857a98f8e35764f7",
+          "tests/test_source_effect_composition.py": "acb97034b421f748bbe146d9e3942393d6fa4ba74e68f1b86288366ebc838c96",
+          "tests/test_source_effects.py": "673aed9207fa7b1e166d48225cf959bb63e586a0d8ee3fdaf09c0328c2607f3c",
+          "tests/test_source_external_effects.py": "5067041e73b37dc7897aa0905ad73bb29207ecc8dd9d1bec37ebedfbfb21e042",
+          "tests/test_source_function_effects.py": "53a9a921e6796645c138c8c7199f4ec0bc8138d2bee62225c7df2c7faf686570",
+          "tests/test_source_header_closure.py": "15c03cfaf1771113e0c21cfbc86f4478b1f9d8df029ed7683ef2b28d2d0cc1ed",
+          "tests/test_source_inline_dispatch.py": "9e8897c4d8ce6d764fbde29e08b13e31156fa88ce563f19c3547eba573ebbf6f",
+          "tests/test_source_inline_dispatch_cuda.py": "5f2775f4ca6ad8cb70671554583fcfdac777ba1c438ae2609a61a9ec036107cf",
+          "tests/test_source_native_fallback.py": "4f2650a2c3cf9f5bec513c41b04d172bec86cd6ae5f7d75dade38cb7f2ac9fef",
+          "tests/test_source_native_predicates.py": "1f9609a78a3a699aa1a5873d285768eba6561203e25b01ec9865d59fc62fe865",
+          "tests/test_source_native_preflight.py": "2de18c04ec191a7987e6396da230e0f1b1d9ffd693f09a3b4bcd8d3500ef4c35",
+          "tests/test_source_numerical_closures.py": "fdbd8b981284c7536cb68539ee4e6ff34100ad4070313ca360d55b93216e14ca",
+          "tests/test_source_numerical_closures_cuda.py": "04c30b0658ab4c3059ca3966bfac5224c8b6dafe493d4220e3f9017813f1985d",
+          "tests/test_source_object_calls.py": "3de525d89b4d58291c56cc36ace6021faa575ca4a65de1fe293e49375f1d8afc",
+          "tests/test_source_openmp_reductions.py": "06519a6703c26b15a8149439be4287471da195dfd2fe8a4bb528a2b9d14353c4",
+          "tests/test_source_ordered_admission.py": "846051d0f73f1e61d3688edb72998802726ab6fb018baeb3a3576a30cf5cf3fb",
+          "tests/test_source_ordered_admission_cuda.py": "bc146935e2e35b588b785f3b01264e9cbde7a8da95bfef00266f486506f26cdd",
+          "tests/test_source_proof_reuse.py": "bf77825621e26a7f6c30f6270756a646ea6a71f09aee4e984b84aa4394c42d2c",
+          "tests/test_source_query_regions.py": "551f0eaabed85f6961d9fbef0088fac260fb98f7ec988641fc1f3828f7691596",
+          "tests/test_source_query_regions_cuda.py": "c295d2994a979d6f196feefaa002d5b95a2ba0216ed62fe7bb14764cb7bfcfa4",
+          "tests/test_source_rank_reduced_views.py": "ab22596ede44079109670c7098f66038cb1e18fbe184964c8143eb5e5b1f8755",
+          "tests/test_source_rank_reduced_views_cuda.py": "1d2bc2da4a78db320603191e2d4cfc7b113f809ede8908b383c21fbe6f6b14ab",
+          "tests/test_source_read_runtime.py": "39c77762dc7c664894ef0017215466f9a6590187dc91e3dc6b88e6ebfb829553",
+          "tests/test_source_rectangular_views.py": "23572270697d3f004009f78eef6dac8e43d521481447a2c454863f7d18b150bc",
+          "tests/test_source_rectangular_views_cuda.py": "832a4efa6609d79c44b27f708cad3926cf7c8fc12403e78738ae9e87d1a8452c",
+          "tests/test_source_reductions.py": "4d2bf420b58e26e77b180b6a99e4094c5adee7144c41dd24415d95560c5ddda0",
+          "tests/test_source_scalar_actuals.py": "00f6250301ccd69c6a6a204b4c1275345e6bd5c4376f89fe37c35fccb55dc882",
+          "tests/test_source_scalar_parameters.py": "a50b8cd6248e125d79388afbd03ddc1e741a19a1a93e0199744edbbe1b75b8ac",
+          "tests/test_source_scalar_parameters_cuda.py": "6d098f154293c5ae1c4f0f3e12b855a7ba8d65cd4c2ef08c062922be08fb7f60",
+          "tests/test_source_scopes.py": "c1cf303eb2ef8358c6126453a3318aa0c56ea3350af27eee3d5f0d023cf29f30",
+          "tests/test_source_segment_graph_reuse.py": "bcc31335522966f186b13923603a4932ad246cefb61f998d634acf32cb6e8460",
+          "tests/test_source_session.py": "1925c235146e4e59c1533eb362667f09c5af97f80d89b5369b9f10b50a083ca7",
+          "tests/test_source_summary_admission.py": "4486cdc453c0c5db5dd17aa1a20a67cfaa4c54e4aee48ef4f8bfe98c662d41ed",
+          "tests/test_source_summary_cache.py": "868d760ac7eb482cb223237807f212fbaab4fd99dfbd4529209293103cfb8883",
+          "tests/test_source_summary_demands.py": "23918e222a8b16b6ecdaa2c8e449a6f9b3a18317189252afdee28831ef2e4413",
+          "tests/test_source_summary_reuse.py": "641dfc4d934056e33e72a73100185e0e18a5b7dd80dc1c48ceb1a9b123abaa13",
+          "tests/test_source_syntax_authority.py": "d545e04d0e9f31ba55825d318551bb79cf5c387179e47bb281ee545096cf830b",
+          "tests/test_source_use_renames.py": "eaafcce9a1889d83d375967a205d1f3202553ee95062f5be823c078717ad084b",
+          "tests/test_source_variants.py": "7df19a3e46dd7529cc03fe2b89989b9f13669fb180a3042448d8d45fd3dbf7fe",
+          "tests/test_source_vector_sections.py": "3e99ad61cebb4b9c760e98889ad5cb464cda1df1223efa798ea76507b7e4126b",
+          "tests/test_source_vector_sections_cuda.py": "28052a4b009b80bb7e027bd4977b2ec49ef6dbca5e12099684c67377dd9e750f",
+          "tests/test_source_view_admission_fast.py": "95fccc3393f6a377a2bdddcbccbcbb3d754010d3e70d0f4e8610c02cfcacc914",
+          "tests/test_staging_pool.py": "bfeeede834a12d1c0d5fe8832217a7f580b7e317c20f91ad960e39fb861b110e",
+          "tests/test_structured_effects.py": "035f49c72ffe4eade6f94bba864b7ac8a5793d4599fb6e8c9fb32a6ecd1a6411",
+          "tests/test_structured_offload.py": "696f95a51a293baeea456777d353660101ee572dbbc817de2bc326d38357db6b",
+          "tests/test_task_graph.py": "a057e8493d00674a37eaf4a6cd231ff16551c5f8cbef3fa3b802a5a15985c3b4",
+          "tests/test_task_motion.py": "2f236e3bf8bf8ef354f9a47b126e33ecd35e5bad86999400cbe3bbc410b6f035",
+          "tests/test_timing.py": "9d6e84fb7c33037bd082f01f235f5ea6fa04d8d73572c3ae89d20119ac40b088",
+          "tests/test_timing_emission.py": "939ae3ab30aa4594f7fcf376cffb23784d0609ac5c488ab26c9c14b291da9bd2",
+          "tests/test_transfer_efficiency.py": "a6cf8a264a814c20200f62ae94929c15eec6d41a7437d3e7633441a0a2929160",
+          "tests/test_transforms.py": "01e88c20a71b10803612ca9980e52b7dfc8606910a7c3871d63448628cc41007",
+          "tests/test_working_set.py": "74bfc195908a22ac70e1f4816de2e66cf49f1835e113b25cccd213786e655b01",
+          "tests/test_worksharing_completion.py": "a509a0494c5ac809f00c61d2ad0ea4f9b52e92f7d65bee0408bbcb8dbf8561a7",
+          "tests/test_worksharing_inventory.py": "b4e9bb135be1bdc257b920ec6aa106b6f8a5b6e3bd2aab778958f927ae47f63a",
+          "tests/test_worksharing_native_completion.py": "84c522904a37bdfbd9fd2c425aa2b4cac828fb2653ae7a8d540c9209f0b82238",
+          "tests/test_worksharing_preparation.py": "7fd038e829d2e0a44a789799bf64e772bea5902983f00e2bd30b5da8fd603286",
+          "tests/test_worksharing_region_dispatch.py": "1eea17b4e0cc4a4c503276c7314d0cdd0b3c8a986b990d44571b34f412c88938",
+          "transforms/__init__.py": "cc054bb3cecf5521caf892c9805d3b75ad1296c9c792da0d4d3d56f25f95f020",
+          "transforms/fusion.py": "5041d2007f1946d90c1cc757be5097b135c5687975a51dbb62d73c833b4b5829",
+          "transforms/task_motion.py": "546df225c9417a8005acccb7cf56c68217a73c521a4754994361fd0af215c3e1"
+        }
+      },
+      "runtime_closure": {
+        "actual_cuda_fixture": {
+          "binary": {
+            "path": "/tmp/pytest-of-jirka/pytest-2450/scoped_direct_copy0/run",
+            "sha256": "45160c285fa352d8d39d163d7429c40b19f2765408be35d148c9ee1182f4f19d"
+          },
+          "client": {
+            "path": "/tmp/pytest-of-jirka/pytest-2450/scoped_direct_copy0/client.cu",
+            "sha256": "ef393edebc47ad555584497effd025f8ff0ec293db2655b2f16637a16b600ab5"
+          },
+          "client_matches_bound_test_source": true,
+          "compiler": {
+            "path": "/usr/local/cuda-13.4/bin/nvcc",
+            "sha256": "b6c72825585cb3d64d8cead9b43c165afed0f0f672319416261a0df76e6d600c"
+          },
+          "defined_fixture_recipe": "See exact subprocess argv/timeouts and CLIENT in bound test_scoped_direct_copy_cuda.py; runtime from this isolated directory. Run phase escalated for actual GPU access.",
+          "host_compiler": {
+            "path": "/usr/bin/x86_64-linux-gnu-g++-14",
+            "sha256": "386920d31d1dfdbb5558a7c3bcde73952b10c8b774bc760479021bd097908bf6"
+          }
+        },
+        "application_runs": 0,
+        "calibration_runs": 0,
+        "changed_files": [
+          {
+            "action": "modify",
+            "base_sha256": "ed93dd25e0927037464b45fba0f8b7d29af4f174e7e4b8b5f21c0df5eb5e9961",
+            "new_sha256": "3d04d167cd428cacff094cc3cf9020c1384bb39dd6929b82a1d0973796b7aa2d",
+            "path": "compiler/README.md",
+            "production_base_matches": true
+          },
+          {
+            "action": "modify",
+            "base_sha256": "637dd13a460cfaaa1f853cfc5b71cc12eef2067250b3de46b4f9f703ff7ca2c9",
+            "new_sha256": "ee028e06c6df54981ab58431e190daf6d6d4334895cfdf93587d7c583b29aa36",
+            "path": "compiler/emission/common/resources.py",
+            "production_base_matches": true
+          },
+          {
+            "action": "delete",
+            "base_sha256": "193222d568147ab0e73070c2b5e04f498782b94f2b7e8af66a75927ced303b12",
+            "new_sha256": null,
+            "path": "compiler/runtime/scoped_copy.hpp",
+            "production_base_matches": true
+          },
+          {
+            "action": "modify",
+            "base_sha256": "b295ae972025c7155cdb0d6702337b4f9d376966ad72003c26a092de200ebcff",
+            "new_sha256": "7ce0061dd1e5c575fc10b5aff17e7f4bafbd57952e5d2cfbb65df75e2be4c62a",
+            "path": "compiler/runtime/scoped_runtime.cu",
+            "production_base_matches": true
+          },
+          {
+            "action": "add",
+            "base_sha256": null,
+            "new_sha256": "84ef5b8f120a35dd0e6538a1dfc207bcfeed54ff7cac384778f8e61c25522294",
+            "path": "compiler/tests/test_scoped_direct_copy_cuda.py",
+            "production_base_matches": true
+          },
+          {
+            "action": "add",
+            "base_sha256": null,
+            "new_sha256": "34e82016ac72a5bf199933f551b3d508e998eaf8a3b175ed645a746592d9ff45",
+            "path": "compiler/tests/test_scoped_direct_transport.py",
+            "production_base_matches": true
+          },
+          {
+            "action": "delete",
+            "base_sha256": "014b1e91467e217ac80efe677e2fcab80f3bdc9bafb62e19c8cb5caf6c9997e4",
+            "new_sha256": null,
+            "path": "compiler/tests/test_scoped_packed_copy_cuda.py",
+            "production_base_matches": true
+          },
+          {
+            "action": "modify",
+            "base_sha256": "bc38aa5e0fabe719e6da9ffc1c1327661976858b05addf43bf859b11c9925d77",
+            "new_sha256": "40d35bfd1f79b579b667ac730942933ff2f8079bd70ea0be4a65eacc223d911e",
+            "path": "compiler/tests/test_scoped_planning_entries.py",
+            "production_base_matches": true
+          }
+        ],
+        "closure_source": {
+          "path": "/tmp/fortran-direct-transport-retirement-20/seal-closure.py",
+          "sha256": "e2827076a33a076a2213595a638325aaaf35b137def343532e0863a0b6175aec"
+        },
+        "kind": "isolated-direct-transport-retirement",
+        "patch": {
+          "path": "/tmp/fortran-direct-transport-retirement-20/retirement.patch",
+          "sha256": "cd99fe9fe324aeaef566ebb3dda89ff7313520a1cc1697ae76a601bde47f45d5"
+        },
+        "performance_samples": 0,
+        "production_modified": false,
+        "qualifications": [
+          "This is a runtime retirement correctness closure, not application performance evidence.",
+          "Held-model B ablation is a separate diagnostic runtime identity; its receipts/measurements are not overwritten.",
+          "New rendered runtime identity requires a fresh exact matching runtime calibration profile before normal AUTO application qualification.",
+          "C ABI structs/versions and public transfer configuration are unchanged; no new policy knob or cost tuning.",
+          "Only literalDIRECT transfer behavior changes; other supported transport paths retain their existing implementation."
+        ],
+        "raw_runtime_sha256": "7ce0061dd1e5c575fc10b5aff17e7f4bafbd57952e5d2cfbb65df75e2be4c62a",
+        "rendered_runtime_metadata": {
+          "abi_version": 1,
+          "borrowed_views": {
+            "abi_version": 1,
+            "aliases": "bounded exact read unions; writable formal views must be disjoint",
+            "allocation": "borrow existing full-layout root; no independent registration or device buffer",
+            "bounds": "checked original descriptor generation and existing INTEGER ABI",
+            "coordinates": "canonical root physical origins and pitches; child logical bounds and extents",
+            "partial_definition": "fort_scope_forget_sections_v1",
+            "planning_definition": "fort_scope_plan_forget_sections_v1",
+            "rank_reduced": {
+              "abi_version": 2,
+              "compatibility": "version 1 interfaces retained",
+              "coordinates": "root-rank origins; logical-rank extents and distinct retained-axis mapping",
+              "footprints": "exact rectangular planes; omitted axes select one original coordinate",
+              "strides": "original root pitches; initial actual views retain unit logical strides",
+              "validate": "fort_scope_view_get_v2"
+            },
+            "validate": "fort_scope_view_get_v1"
+          },
+          "capabilities": [
+            "section_coherence",
+            "partial_host_initialization",
+            "source_definition_changes",
+            "device_memory_budget",
+            "coherent_runtime_placement",
+            "ordered_definition_validation",
+            "context_query_reuse",
+            "segment_continuation",
+            "pinned_section_transfers",
+            "pipelined_subchain_transfers",
+            "context_scratch_leases"
+          ],
+          "collective_automatic_calibration": {
+            "abi_version": 1,
+            "configure": "fort_scope_set_team_costs_v1",
+            "entry_marker": "fort_scope_plan_team_entry_v1",
+            "missing_or_incompatible": "uniform unchanged native execution before numerical work",
+            "native_call_marker": "fort_scope_plan_team_native_call_v1",
+            "protocol_id": "0x4654434f4c4c0001",
+            "ready": "fort_scope_team_costs_ready_v1",
+            "requirement": "offline persistent-team rates and exact emitted coordination, fixed team and toolchain"
+          },
+          "concurrent_access": "separate contexts with nonconflicting host storage",
+          "devices_per_context": 1,
+          "graph_execution": {
+            "abi_version": 1,
+            "ablation": {
+              "cuda_graphs": "FORT_SCOPE_CUDA_GRAPHS=0",
+              "queue": "FORT_SCOPE_GRAPH_QUEUE=0"
+            },
+            "budget_eviction": "whole-task reservation pins its footprint; pressure flushes queued arguments before exact dirty publication and LRU retirement",
+            "buffer_valid": "fort_scope_buffer_valid_v1",
+            "definition_kill": "semantic coverage changes retain physical freshness; explicit discard retires dead values",
+            "discard": "fort_scope_discard_v1",
+            "effects": "ordered original task effects with one atomic coherence commit",
+            "enqueue": "fort_scope_graph_enqueue_v1",
+            "execute": "fort_scope_graph_execute_v1",
+            "fallback": "before numerical submission only; graph resource failure uses ordered direct launches",
+            "flush": "fort_scope_graph_flush_v1",
+            "host_boundaries": "drain conflicting tasks and their dependencies; retain independent queued work",
+            "observation": "fort_scope_observe_v1",
+            "planning": "pending task writes contribute virtual definitions without premature physical commits",
+            "queue_lifetime": "owned kernel argument bytes and effects span generated helper calls",
+            "queue_statistics": "fort_scope_graph_queue_stats_get_v1",
+            "replay": "context-owned CUDA executable graph; current kernel parameters updated before launch",
+            "reserve": "fort_scope_device_reserve_v1",
+            "reserve_many": "fort_scope_device_reserve_many_v1",
+            "residency": "canonical context buffers shared across submissions and iterations",
+            "residency_statistics": "fort_scope_residency_stats_get_v1",
+            "retire": "fort_scope_retire_v1",
+            "statistics": "fort_scope_graph_stats_get_v1",
+            "submission_policy": "first matching topology uses direct launches; second builds a graph; later reaches replay; topology changes restart warmup",
+            "warmup_evidence": "graph_warmup_direct plus actual direct_submissions/direct_kernels; never graph_resource_fallbacks"
+          },
+          "headers": [
+            "floating_environment.hpp",
+            "scoped_cuda_resources.hpp",
+            "scoped_entry.hpp",
+            "scoped_graphs.hpp",
+            "scoped_host_metadata.hpp",
+            "scoped_memo.hpp",
+            "scoped_planning.hpp",
+            "scoped_regions.hpp",
+            "scoped_runtime.h",
+            "scoped_team_observer.hpp",
+            "section_copy.hpp",
+            "staging.hpp",
+            "view_entry.hpp"
+          ],
+          "host_storage": "borrowed stable contiguous whole arrays",
+          "idle_execution_resources": {
+            "close_completion": "stream-ordered publication and field/scratch retirement share one wait",
+            "contents": "completed stream and allocation-free CUDA memory pool only",
+            "failure": "poisoned or incomplete resources are never cached",
+            "freshness": "all identities, definitions and coherence are invocation-local",
+            "legacy_allocations": "logical field allocations, including reused physical pages",
+            "limit_per_device": 1,
+            "retained_device_bytes_limit": 67108864,
+            "schema_version": 1,
+            "trace_reuse": "FORT_SCOPED initialize_reuse; bytes is retained pool capacity"
+          },
+          "intersection_limit": 1024,
+          "link_once": true,
+          "native_owner_hint": {
+            "abi_version": 1,
+            "authority": "conservative original-native scheduling hint; no plan, definition or data authority",
+            "begin": "fort_scope_native_hint_begin_v1",
+            "entry_environment": "shared exact collector with placement memo; no CUDA initialization or payload reads",
+            "entry_limit": 64,
+            "estimates_available": false,
+            "evidence_prefix": "FORT_SCOPED native_hint",
+            "expected_prework_status": 7,
+            "finish": "fort_scope_native_hint_finish_v1",
+            "hits_before_reprobe": 64,
+            "key": "copied source/profile/policy/descriptor metadata plus original entry CPU/OpenMP/FP/environment",
+            "observation": "fort_scope_native_hint_observation_v1",
+            "observation_bracket": "normal successful root completion with no live contexts, GPU choice/attempt/acceptance or unexpected runtime error",
+            "quality_limit": "native hits can suppress newly profitable work until the forced ordinary reprobe",
+            "word_limit": 512
+          },
+          "numerical_contract": {
+            "id": "separate-arithmetic-v1",
+            "identity": "552311d688f9bf1e9744a3143d4ca17c30e162bc35c0035dad77b6d769f6ce19",
+            "required_cuda_options": [
+              "--fmad=false",
+              "--ftz=false",
+              "--prec-div=true",
+              "--prec-sqrt=true"
+            ],
+            "required_host_options": [
+              "-ffp-contract=off"
+            ],
+            "schema_version": 1
+          },
+          "numerical_environment": {
+            "check": "fort_scope_numerical_environment_supported",
+            "requires": "original nontrapping round-to-nearest thread; native IEEE guards stay in place",
+            "runtime_setup": "preserve caller flags, rounding and trap mask"
+          },
+          "planning_abi_version": 2,
+          "planning_candidate_memo": {
+            "authority": "current definition proof, hardware/profile, floating-point and worker binding guards remain required",
+            "eligibility": "validated fresh host-only graph query; no pending work, device allocation or scratch",
+            "failure": "unknown metadata or optional allocation failure uses ordinary planning",
+            "key": "full numeric model, canonical alias incidence, geometry, effects and observed placement environment",
+            "limitation": "conservative candidate reuse; cached native choices do not search for newly profitable alternatives",
+            "reporting": "actual key/lookup duration traced; unpriced memo work invalidates complete and owner estimates",
+            "reuse": "reprice all-native and cached candidate with current simulator, work and profitability gates",
+            "storage": "bounded metadata LRU; owned exact keys and worker choice vectors only"
+          },
+          "planning_compute_costs": {
+            "abi_version": 1,
+            "applicability": "original compiler semantics, fixed CPU placement, workload class and runtime item range",
+            "backends": {
+              "generated_cpu": 2,
+              "gpu": 4,
+              "native_fortran": 1
+            },
+            "basis": "complete compute seconds; original Fortran and generated workers calibrated independently",
+            "compatibility": "v1/v2 planning interfaces retain their original meaning",
+            "continuation": "coherent host counterfactual; no replay of earlier numerical work",
+            "missing_or_incompatible": "definition validation retained; automatic estimate unavailable",
+            "native_operation_cpu": "actual coordinated host execution including candidate-only preparation",
+            "payload": "fort_scope_compute_costs_v1",
+            "record": "fort_scope_plan_add_compute_costs_v3",
+            "separate_costs": "transfers, allocation, launches, synchronization and coordination"
+          },
+          "planning_continuation": {
+            "abi_version": 2,
+            "costs": "incremental execution plus change in eventual publication/teardown liability",
+            "endpoints": {
+              "complete": 0,
+              "continue": 1
+            },
+            "native_handoff": "fort_scope_plan_cancel_native_v1",
+            "native_selection": "execute reached segment with coherence hooks; retain owning context",
+            "native_unit_begin": "fort_scope_plan_native_begin_v1",
+            "native_unit_costs": "uncalibrated original-native substitution invalidates pending and owner estimates",
+            "native_unit_effects": "independent original-native proof; exact current all-CPU worker range only",
+            "native_unit_worker": "fort_scope_native_worker_v1",
+            "owner_estimate": "unavailable if a pending segment report is superseded or an original-source suffix is used",
+            "postwork_error": "execution failure; no source replay",
+            "prework_mismatch_status": 9,
+            "report": "fort_scope_plan_report_v2",
+            "reset": "fort_scope_plan_reset_mode",
+            "suffix_boundary": "compiler-proved prework boundary only; accepted prefix commands and versions retained",
+            "suffix_handoff": "fort_scope_plan_abandon_remaining_v1",
+            "terminal_operations": "hypothetical until owner close; excluded from executed segment counters"
+          },
+          "planning_numerical_costs": {
+            "abi_version": 2,
+            "basis": "static scalar intrinsic counts and compatible independent offline holdouts",
+            "missing_or_incompatible": "unknown estimate; automatic placement remains native",
+            "record": "fort_scope_plan_add_costs_v2"
+          },
+          "rectangle_limit": 32,
+          "runtime_id": "9517e2476a8182d00f52d62574c9573549439091eaca7a3d6ffc343f7590a4aa",
+          "runtime_provenance": {
+            "activation": "FORT_RUNTIME_TRACE=1",
+            "batch_worker_attribution": "unavailable; batch callbacks cannot call context APIs",
+            "disabled": "no context lookup, allocations, coherence changes or numerical errors",
+            "events": "actual API submissions and coherence commits; no physical execution timestamps",
+            "execution_error_attribution": "unavailable; existing numerical errors are unchanged",
+            "identity": "full compiler manifest SHA256; unknown fields are explicit",
+            "initial_context_creation": "unknown until the source coordinator binds its owner",
+            "restore": "fort_scope_trace_restore_v1",
+            "schema_version": 1,
+            "set": "fort_scope_trace_set_v1"
+          },
+          "schema_version": 1,
+          "scope_transfers": {
+            "abi_version": 1,
+            "automatic_placement": "calibrated pinned synchronous pricing; pipelined/auto retain direct placement baseline and select transfers for approved GPU subchains",
+            "batch": {
+              "abi_version": 1,
+              "batch_payload_bytes": [
+                262144,
+                1048576,
+                4194304,
+                16777216
+              ],
+              "callback": "complete source-proven GPU subchain; full-layout views and original coordinates; no reentrant context calls",
+              "completed_statistics_event": "batch_statistics",
+              "completion": "both slots complete before return or native boundary",
+              "concurrency": "one active batch per context; two non-default staging streams",
+              "configure_costs": "fort_scope_set_transfer_costs_v1",
+              "cost_reporting": "execution and terminal delta separate; unrepriced complete-owner estimate is unavailable",
+              "costs": "offline staging/row packing/events/preparation plus compute, launch and pinned transfer rates; fill/drain included",
+              "execute": "fort_scope_batch_execute_v1",
+              "failure": "unapplied fallback preserves schedule; started execution errors poison the context and prohibit replay",
+              "preview": "compatible=-1; metadata only; no callback, CUDA, schedule consumption or coherence changes",
+              "report": "fort_scope_batch_report_get_v1",
+              "statistics_version": 1
+            },
+            "budget_scope": "active, allocating and cached staging for scoped and chunked/hybrid calls",
+            "coalesced_execution": {
+              "actual_bytes": "normal upload statistics; upload_coalesced trace records actual span bytes",
+              "coordinates": "original full-layout pitches and logical coordinates",
+              "direction": "upload only; output sections remain exact",
+              "experimental": true,
+              "fallback": "exact direct transfers with coalesced_upload_ineligible",
+              "maximum_extra_bytes_fraction": 0.125,
+              "minimum_physical_copies": 2,
+              "pinning": false,
+              "placement": "cost-selected plans use exact direct transfers until coalesced costs are calibrated",
+              "required_bytes": "upload_requested trace event",
+              "source_requirement": "whole canonical source resource is defined and host current"
+            },
+            "completed_statistics_event": "transfer_statistics",
+            "configure": "fort_scope_set_transfers",
+            "default": "direct",
+            "fallback_reasons": {
+              "coalesced_upload": "coalesced_upload_ineligible",
+              "missing_calibration": "transfer_estimates_unavailable",
+              "resource_failure": "pre_execution_resource_failure",
+              "unproved_partition": "unsupported_chain"
+            },
+            "modes": {
+              "auto": 3,
+              "coalesced": 4,
+              "direct": 0,
+              "pinned": 1,
+              "pipelined": 2
+            },
+            "pinned_budget_bytes": 67108864,
+            "pinned_execution": "synchronous exact-section packing, copy, completion and unpack",
+            "staging_slots": 2,
+            "staging_streams": "two reusable non-default streams in the process-wide pool",
+            "statistics": "fort_scope_transfer_stats_get_v1",
+            "supported": [
+              "direct",
+              "pinned",
+              "pipelined",
+              "auto",
+              "coalesced"
+            ]
+          },
+          "scratch": {
+            "abi_version": 1,
+            "acquire": "fort_scope_scratch_acquire_v1",
+            "automatic_costs": "unavailable until numerical integration prices scratch lifetime costs",
+            "budget": "cached capacity and registered field payload share the context device budget",
+            "compatibility": "existing field statistics and runtime interfaces remain unchanged",
+            "leases_per_context": 1,
+            "ordering": "existing context stream; growth waits for earlier use before replacement",
+            "release": "fort_scope_scratch_release_v1",
+            "statistics": "fort_scope_scratch_stats_get_v1",
+            "storage": "cached context-owned device arena; no host binding or publication",
+            "zero_bytes": "null pointer with a release-required token; no CUDA initialization"
+          },
+          "section_coordinates": "zero-based physical offsets, exclusive upper bounds",
+          "source_sha256": {
+            "floating_environment.hpp": "e6a13295c9e90476185e576e813aa2300eace4324afecf821ba4d8a044456cd0",
+            "fort_scoped_memory.f90": "a9f09e6a6b403b86ef129295d293332e0c215e0d946b1fe8ffaaabe74c837a2f",
+            "fort_scoped_team_observer.f90": "e80d7abaef437f568d285d16a5da65bd89643ab2eef768d1bc66fb7981f0036a",
+            "scoped_cuda_resources.hpp": "134b233537d62611f27d7fcf54f8b16ba411f0284d0447cc902fe7e3fc99d289",
+            "scoped_entry.hpp": "92421c21e4c3dc352bb239a40be959ae96db2b3bda8871990c56c058628734e0",
+            "scoped_graphs.hpp": "2a66e85dadac4d10f123e1dd76e2fc4d89437af617692e16783edcc3421b67e0",
+            "scoped_host_metadata.hpp": "73c4bd4fc5658091381b0c56fb79a16b38867567d357985eded58894940b0b4b",
+            "scoped_memo.hpp": "4f6939df83d4f725a97306e50abf277ece8ca83856b42d92d40e217a5c05f1a6",
+            "scoped_planning.hpp": "17b9f3c18427008d7774ace1acf443b6e2429859442e53aedf1b8a15e3e43434",
+            "scoped_regions.hpp": "a748167bf8014f983d988e0d61049b3b95bb63bafeced7bf3274de01572d70c7",
+            "scoped_runtime.cu": "a806fc0bf3dc764a3dbf244ff8aa4f40dc0f64e8b86050672461eccbb5ab7cae",
+            "scoped_runtime.h": "c85fab9dcc68c5e162da5d83c942bc8f76cbabc4fb2e20921fbe9c6362f0c3c7",
+            "scoped_team_observer.hpp": "374dcb2874c2e6395f259392e6aa814efe03fbe5b0861184b6e3fce9ab1dd223",
+            "section_copy.hpp": "6c5a24d97431cb08ea8aad06a82e07ba7978d317dffc72a7623f860d369ecc3f",
+            "staging.hpp": "96125904c5f37adca1f126d88777604693e76535253dbe0d385da848b239236b",
+            "view_entry.hpp": "8ca1648ff7e4743a2b784a9d2710f4c72a429c7c20a4f39a49f96632bf3415f2"
+          },
+          "sources": [
+            {
+              "host_openmp": true,
+              "language": "cuda",
+              "numerical_contract": {
+                "id": "separate-arithmetic-v1",
+                "identity": "552311d688f9bf1e9744a3143d4ca17c30e162bc35c0035dad77b6d769f6ce19",
+                "required_cuda_options": [
+                  "--fmad=false",
+                  "--ftz=false",
+                  "--prec-div=true",
+                  "--prec-sqrt=true"
+                ],
+                "required_host_options": [
+                  "-ffp-contract=off"
+                ],
+                "schema_version": 1
+              },
+              "path": "scoped_runtime.cu",
+              "standard": "c++17"
+            },
+            {
+              "language": "fortran",
+              "module": "fort_scoped_memory",
+              "path": "fort_scoped_memory.f90"
+            },
+            {
+              "language": "fortran",
+              "module": "fort_scoped_team_observer",
+              "path": "fort_scoped_team_observer.f90"
+            }
+          ],
+          "stream_ordered": true,
+          "streams_per_context": 1,
+          "task_acquisition": {
+            "abi_version": 1,
+            "begin": "fort_scope_access_begin_v1",
+            "completion_statistics": "fort_scope_completion_stats_get_v1",
+            "host_completion": "one completion for task downloads; independent and disjoint accesses do not wait",
+            "upload_lifetime": "exact pending DMA read sections; completion events precede unrelated numerical work",
+            "validation": "all resource effects before transfers or numerical execution"
+          }
+        },
+        "retained": [
+          "exact DIRECT CopyPlan DMA",
+          "read-only mirror retention and section coherence",
+          "explicit PINNED/coalesced/batch transport",
+          "shared pack_tile and packing/unpacking statistics",
+          "staging Role::Compact used by hybrid and staging tests",
+          "budgeted numerical scratch APIs",
+          "context command queue and CUDA Graph replay",
+          "historical compact_transfer parser/tests and frozen18 positive/negative evidence"
+        ],
+        "retired": [
+          "automatic DIRECT compact selection and sparse heuristic",
+          "private compact carrier CUDA kernel/header/packet structs",
+          "carrier trace producer and completion fault hook",
+          "compact-only resource metadata and active feature test expectations"
+        ],
+        "runtime_closure_sha256": "ca3c34b206751ef7d58c9d4a098dcfbe41f04cb0e249a2067595bb864bef41c6",
+        "runtime_files_sha256": {
+          "floating_environment.hpp": "e6a13295c9e90476185e576e813aa2300eace4324afecf821ba4d8a044456cd0",
+          "fort_scoped_memory.f90": "a9f09e6a6b403b86ef129295d293332e0c215e0d946b1fe8ffaaabe74c837a2f",
+          "fort_scoped_team_observer.f90": "e80d7abaef437f568d285d16a5da65bd89643ab2eef768d1bc66fb7981f0036a",
+          "scoped_cuda_resources.hpp": "134b233537d62611f27d7fcf54f8b16ba411f0284d0447cc902fe7e3fc99d289",
+          "scoped_entry.hpp": "92421c21e4c3dc352bb239a40be959ae96db2b3bda8871990c56c058628734e0",
+          "scoped_graphs.hpp": "2a66e85dadac4d10f123e1dd76e2fc4d89437af617692e16783edcc3421b67e0",
+          "scoped_host_metadata.hpp": "73c4bd4fc5658091381b0c56fb79a16b38867567d357985eded58894940b0b4b",
+          "scoped_memo.hpp": "4f6939df83d4f725a97306e50abf277ece8ca83856b42d92d40e217a5c05f1a6",
+          "scoped_planning.hpp": "17b9f3c18427008d7774ace1acf443b6e2429859442e53aedf1b8a15e3e43434",
+          "scoped_regions.hpp": "a748167bf8014f983d988e0d61049b3b95bb63bafeced7bf3274de01572d70c7",
+          "scoped_runtime.cu": "a806fc0bf3dc764a3dbf244ff8aa4f40dc0f64e8b86050672461eccbb5ab7cae",
+          "scoped_runtime.h": "c85fab9dcc68c5e162da5d83c942bc8f76cbabc4fb2e20921fbe9c6362f0c3c7",
+          "scoped_team_observer.hpp": "374dcb2874c2e6395f259392e6aa814efe03fbe5b0861184b6e3fce9ab1dd223",
+          "section_copy.hpp": "6c5a24d97431cb08ea8aad06a82e07ba7978d317dffc72a7623f860d369ecc3f",
+          "staging.hpp": "96125904c5f37adca1f126d88777604693e76535253dbe0d385da848b239236b",
+          "view_entry.hpp": "8ca1648ff7e4743a2b784a9d2710f4c72a429c7c20a4f39a49f96632bf3415f2"
+        },
+        "runtime_id": "9517e2476a8182d00f52d62574c9573549439091eaca7a3d6ffc343f7590a4aa",
+        "schema_version": 1,
+        "status": "review_ready_not_promoted",
+        "test_maintenance": "Old box_bytes assertion replaced by both current exact union footprint_bytes upload/download assertions; append_box, array slots and footprint preparation assertions retained. Original18 failure and intermediate failed migration receipt are preserved.",
+        "validation": {
+          "failed_evidence_preserved": true,
+          "final_unique_test_cases_passed": 86,
+          "phases": [
+            {
+              "counts": {
+                "failed": 0,
+                "passed": 49,
+                "skipped": 0
+              },
+              "elapsed_seconds": 17.303,
+              "junit": {
+                "path": "/tmp/fortran-direct-transport-retirement-20/cpu-01.xml",
+                "sha256": "7cb3627ad5e92ffb4c8b4fc5059858fc2a8796a33625b46594e1a7cf6db9d6a4"
+              },
+              "log": {
+                "path": "/tmp/fortran-direct-transport-retirement-20/cpu-01.log",
+                "sha256": "6851b25743ffa08641201bfeba16def0881a9c99f32cabff2f242f3e5d0393d1"
+              },
+              "name": "cpu-01",
+              "note": null
+            },
+            {
+              "counts": {
+                "failed": 0,
+                "passed": 3,
+                "skipped": 0
+              },
+              "elapsed_seconds": 20.605,
+              "junit": {
+                "path": "/tmp/fortran-direct-transport-retirement-20/cuda-01.xml",
+                "sha256": "a8afe5490085d16a34ecb98eca15e11c812c3b9b159dc95b0886e3a0c979a5ee"
+              },
+              "log": {
+                "path": "/tmp/fortran-direct-transport-retirement-20/cuda-01.log",
+                "sha256": "64aed657916df6e78ac79f437fb5ab390d42a7edebd82c791af89b76baf4c4a9"
+              },
+              "name": "cuda-01",
+              "note": null
+            },
+            {
+              "counts": {
+                "failed": 1,
+                "passed": 33,
+                "skipped": 0
+              },
+              "elapsed_seconds": 42.221,
+              "junit": {
+                "path": "/tmp/fortran-direct-transport-retirement-20/packaging-01.xml",
+                "sha256": "3eb9f8bd1718c0e31c946481c433a8d43262cf35b167318976ef3d86676a6a72"
+              },
+              "log": {
+                "path": "/tmp/fortran-direct-transport-retirement-20/packaging-01.log",
+                "sha256": "5b64d0eccd9d12b290bfef1f5f81086e347d8907a3299b5394bc751189bdbb4e"
+              },
+              "name": "packaging-01",
+              "note": "Preserved failed intermediate helper-name migration; code already uses footprint_bytes."
+            },
+            {
+              "counts": {
+                "failed": 0,
+                "passed": 23,
+                "skipped": 0
+              },
+              "elapsed_seconds": 42.546,
+              "junit": {
+                "path": "/tmp/fortran-direct-transport-retirement-20/packaging-recovery-01.xml",
+                "sha256": "e15a1ceeed145657bf1694e1f4eaec742d728b31db63b983b0c19192cc883226"
+              },
+              "log": {
+                "path": "/tmp/fortran-direct-transport-retirement-20/packaging-recovery-01.log",
+                "sha256": "be5db80d12b449d3154fb32c96cd711a376d654cdfc279f620e3ea80e382aa54"
+              },
+              "name": "packaging-recovery-01",
+              "note": null
+            }
+          ],
+          "ruff": {
+            "command": [
+              "/home/jirka/research/fortran-abomination/.venv/bin/ruff",
+              "check",
+              "compiler/emission/common/resources.py",
+              "compiler/tests/test_scoped_direct_transport.py",
+              "compiler/tests/test_scoped_direct_copy_cuda.py",
+              "compiler/tests/test_scoped_planning_entries.py"
+            ],
+            "files": [
+              "compiler/emission/common/resources.py",
+              "compiler/tests/test_scoped_direct_transport.py",
+              "compiler/tests/test_scoped_direct_copy_cuda.py",
+              "compiler/tests/test_scoped_planning_entries.py"
+            ],
+            "result": "passed"
+          },
+          "whitespace_check": "all changed text lines checked; passed"
+        }
+      },
+      "promotion_receipt": {
+        "path": "/tmp/fortran20-root-promotion-receipt.json",
+        "sha256": "0e58024b23c55d99ad769d4a16ca276944adce5bc3ba13a8d2642bc8f934c104"
+      }
+    }
+  },
+  "original_application": {
+    "schema_version": 1,
+    "repositories": {
+      "elmm": {
+        "url": "https://bitbucket.org/LadaF/elmm.git",
+        "revision": "ddb426fca5b020216083f02a218292fea70c1df2",
+        "head": "ddb426fca5b020216083f02a218292fea70c1df2",
+        "tracked_clean": true,
+        "tracked_sha256": {
+          ".gitignore": "ca6d15046c2ddc963d5aed798b92813da7b9e133c50a9e826464a7cb2e7a67a1",
+          "COPYRIGHT": "bddc1991417698bc0e12df86383821f2ba57efe85ce97cf136edbb9c298b3038",
+          "LICENCE.GPL": "f46409d4822b2457b39bbd0e7881eecb396130eb8320b7748fa7e9488970aa6d",
+          "README.md": "15381837ab935587cba96b9096a6d39a667636f6968e39dc85b336bb476626f4",
+          "custom/emptyPB.f90": "ad86133982b9ed10980acff1b8fc0f087ea27c5e19b65432d47622875edd2454",
+          "custom/emptySB.f90": "1fa95fa58c296607e2d317746e1e67fcdb02fa8d197960a4141e626f596c87fb",
+          "custom/gabls.f90": "0898e158261c461717d7c18a119a90f874fd7fc6ea2717aae8278717dec72b07",
+          "custom/gabls4-lowerz0.f90": "62439f5f76ca15984c6bddbfb295ea955af9124a3cfa25ea350f5a5376eece02",
+          "custom/gabls4.f90": "685af4b6ddf1ef99910fc1f3b1ac8f603dfbbfb2f5c1f02890b39dcad4e942b0",
+          "examples/DIPLOS/DIPLOS121-tall.f90": "82b279ea11a1ab02193003a6f9e47417146aee8e91d56d443867c6a57bb62f54",
+          "examples/DIPLOS/DIPLOS121.f90": "ad0eff5a4ab3c1843c051bd09cdb704681ce6cdfc34f8d5c535b3f1fbbd1be45",
+          "examples/DIPLOS/DIPLOS121_turned.f90": "44db0833a42944e0722c65ee05d0c2bb400790881c4278b46f67d4650955202e",
+          "examples/DIPLOS/area_sources.conf": "3545f586c8db79228394ffa8287cf87a6d5afd22318cbda4da1060dc045f3646",
+          "examples/DIPLOS/boundconds.conf": "1b0feb8a787f034b6496646299ee85d2207ec14dffc090c7be39b9db9f8c9137",
+          "examples/DIPLOS/frames.conf": "a2051ef573b68697bf9bed36b2ce13547ee7777fdad909dc09c8b445d3e080a3",
+          "examples/DIPLOS/grid.conf": "268e52a3de1dd3ed1c08b88c57fbc968e73a32cb51c9fe73c5314ac87584cc31",
+          "examples/DIPLOS/inlet.conf": "91633a5b44897cf34f70e1d31bb4e089dc58b32ca496fb1f81e4d8c5ded06ac8",
+          "examples/DIPLOS/large_scale.conf": "641083037daa35f015072d67de06ecac13527a3b6d50f6dd1d51d5f68fcec535",
+          "examples/DIPLOS/les.conf": "dcef90bf5e10386528f6cece052a0df13e144cf89de32ecb0718a6f690cc4977",
+          "examples/DIPLOS/main.conf": "0feb96979e11c769a859b8517ad4671808e1a8c5eab87f7cea9fbbb3facd1658",
+          "examples/DIPLOS/output.conf": "2a4c1cd6b1149367dad18540fa48c29aeb3a8697a6f8b395ad67473ccece712f",
+          "examples/DIPLOS/scalars.conf": "aceaa47ddb2e7155d631a345ff50eeabe65be5a642fbf9db41f6081d619ed366",
+          "examples/DIPLOS/time_stepping.conf": "43b39773d0e63ae70a6b3a3182cfb42581f0957e163656313ed40afb4a1731aa",
+          "examples/cbl/boundconds.conf": "a63e751f258729c371a02cdcdf3e94478cd3e2ea4a891e4934e165e501395953",
+          "examples/cbl/cmd.conf": "33bcede52ca9345319d79423b6ac51d687b5f362d08b0855e41c57ec38e1327d",
+          "examples/cbl/frames.conf": "63fe23458e5286300a09bb55c23a5bc87cab3b123b35cbd63d596c75421b54b7",
+          "examples/cbl/geostrophic_wind_profile.conf": "846566cb6cc933f4499049b96c5722753806a10b0897aec4f4e69ef175ea0504",
+          "examples/cbl/grid.conf": "9a89f43825fde4c467f29b3129a34e6b3618e0048b2852b1e5e4db7e63827c8f",
+          "examples/cbl/large_scale.conf": "a4848ea472cd405b4f48c27c8631515ed1349fd75d982d07c948890f354c8f7a",
+          "examples/cbl/les.conf": "c821994a610e7ebc1a9b09d842f297044335476aa85b96dbdcce130bf2488860",
+          "examples/cbl/main.conf": "b3ef522e5927e19678c72864c73c2bf17df375d9df80265490dac5ce620fad16",
+          "examples/cbl/moist_profile.conf": "b507748cd93e319b1c48c629f20577624f0fd8967dd1a76a8b6dc3a31298124b",
+          "examples/cbl/moisture.conf": "55c8c9a33b72fdf96cd5547cd952b498d59c1ded32f3c9723f263edc4374e15f",
+          "examples/cbl/output.conf": "3426b50ce672d7601529d067429661e6c1a8c2946d773d14bda06142d942c971",
+          "examples/cbl/pressure_solution.conf": "8ef9bccf3a031bddf07bd406851ff3a22cf487d08f2b90d01b8ae358e9190289",
+          "examples/cbl/profiles.conf": "a99dda9af642c8effbd4dd006c85e8a03a1276a775b8051ac3ef9a66d52259b6",
+          "examples/cbl/temp_profile.conf": "86c0dc0bb04c6d3fdf74ab5f3166a3e990e010dc35f89f49753df9329c7a3d83",
+          "examples/cbl/thermal.conf": "9c149920f97bb29fcc28aaaff0aefcb32b13196c40918eb236f4925833e1a344",
+          "examples/cbl/time_stepping.conf": "e3654e8735bb734c070c8e5dadabf085842436ace56d76b00239f540b89c4a5b",
+          "examples/channel/boundconds.conf": "b6b64e153212affdfae650767de910113c008a77a350ef5fddd4f22bbf04e619",
+          "examples/channel/frames.conf": "866cc5cb4d15b35079c2eeb1027613ee9dbaf0a28e0f47423512d3ab226d05bb",
+          "examples/channel/grid.conf": "f44970b7a9e636d1bf78bd2b48820f1bd50ec2adec1c163825ed0d435f8cd7ef",
+          "examples/channel/large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+          "examples/channel/les.conf": "1cee53a844bb557673849df1942cb749db067b01f2b19356c9018a53f9b3385d",
+          "examples/channel/main.conf": "3bbb39e3312dcfbc846e78d83bd7eb3bc071907c028e8db79569bd707af43e9b",
+          "examples/channel/output.conf": "b894e8a4500102f04733544b8c85a648684d63cd3eb8dba12518f41e79f65f51",
+          "examples/channel/time_stepping.conf": "87e5abd4c4b57cc5dffdf8a166480207cc54b3f210ba47d9d81ccdcf0ef94483",
+          "examples/horseshoe/boundconds.conf": "0f54f223d64530162a5fed4cdeed7b3248b05c5de7e4d7f6c6d1a9190f2df79c",
+          "examples/horseshoe/frames.conf": "2dd720b456d455cb5b7a112f1615fd06a4b8e3269e45d38ab79b688906a7f67b",
+          "examples/horseshoe/grid.conf": "d46c1b2e066fd7d6cbfbbfc0ea4050492f7150f68334820cc08c3b23dfd3b80c",
+          "examples/horseshoe/inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+          "examples/horseshoe/input/horseshoe.off": "091853feacb643341cd46c1aa6bfbae3c298330fa7d2bc7ad1a5006f95ad74ed",
+          "examples/horseshoe/large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+          "examples/horseshoe/les.conf": "8da8396a3d4abd601f685d876017a71140b2b513957decd10fcef574b9a90211",
+          "examples/horseshoe/main.conf": "3bbb39e3312dcfbc846e78d83bd7eb3bc071907c028e8db79569bd707af43e9b",
+          "examples/horseshoe/obstacles.conf": "033fc641f969898957c679ca95b0c5965691c2b37338cea09d4c7acd7dadae60",
+          "examples/horseshoe/output.conf": "55a65d80fb8ff6ff601225e3339c30b4d2842681388b9604848cc81fbe100a5c",
+          "examples/horseshoe/time_stepping.conf": "a4c115c1179089902344a0c8968440aba03a82e26d49b5856d5a13dbadb9f19a",
+          "src/SConstruct": "ead490102759b7535800d9b30ee566ebee049f42f7db2e835de0bd449bc70a53",
+          "src/advection.f90": "6437b7e3a1e748eb39f4fcb8c865f23aafccfbfa0842838bd16c0c54b95c10ca",
+          "src/advection_variable_z.f90": "1f7a5450a295d9a2f309e2c9a59fb7dd9e847364a6c8eaac46dfb21ebe622bb5",
+          "src/alternate_ieee_isnan.f90": "680453fa520cb2c9cc47bdf7deed785e946994184692b63753026c1cc4b81780",
+          "src/areasources.f90": "eaca6b9e4ba881c791defdaf5a8e4845ed044010ab70f3e2e7447504c338c9ad",
+          "src/arrayutilities.f90": "42bf14bbfeaf13a451fb437ae7233fae75ecf1d83ed6cf4534c73bd2fbf8560f",
+          "src/boundaries.f90": "71eb430da9fae8350f7e09a698eb9604750e77320efa5edc590507ed1cbea8fa",
+          "src/buoyant_gases.f90": "87b5cb6794581f90e89614333b09b37401e9071e3a9f0001db1ed2efa691f20e",
+          "src/cgal_polyhedra.cc": "46301433acabd08f6f4b5e81bdc3e749e1e35cdce2cd9f00ad9bc8b85acce42c",
+          "src/cgal_polyhedra.f90": "69c1360f1e3b2aa598293ac899f788601e50434a84af7fd9d568237c3566a847",
+          "src/custom_ieee_isnan.f90": "a211b859e5ba1b49d746c7a9784f79ef63d7c6bdef2a20405e452752f8470d4e",
+          "src/custom_mpi.f90": "910106a487784e72d060bf476593e2737482c5a5fe5b218611867317b850da10",
+          "src/customvolscalsource.f90": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "src/diabatic_processes.f90": "dcec151dc52b97b5b4d566030a5c4c1e592ce1386596edda3a900c0d4cc35cf8",
+          "src/domains_bc_init_mpi.f90": "fd5c62e49070f11fded0fa2bd678cf51d781842f03f56de9730ed304f67920d5",
+          "src/domains_bc_mpi.f90": "cdb77df4169788a9e90caf7e9103897b3479d2f956d4252a28aadfe370622e0f",
+          "src/domains_bc_types_mpi.f90": "49b4fc4fe798b20e4185263141407ef7e8eb1537a21064e71cddcd449114e2f4",
+          "src/dummy_cgal_polyhedra.f90": "65147c82f8ccfb908dbc970b6e0e9ca34a2ecec7c74d5c7ef1f5b0f6d8a4d6eb",
+          "src/dummy_par.f90": "d7b2f9379cf1621f95feadcff28d5f96c7342f2ef9ca7403dd3de11b0c8dc1c9",
+          "src/dynamics.f90": "16c525bf352d92e7ba62b55c3ec17028ffb86ea7db8a79037f0a637f07019618",
+          "src/elevationmodels.f90": "4d693387eaa49b3c6843883ce6f538170bede53f35149a018c9ba5d8dfbbe17f",
+          "src/endianness.f90": "c5667a9b81d5ec1c06018f353a1b24bff876d609d536d37a492626dad4aa460e",
+          "src/exchange_mpi.f90": "18ef7ad986d10027301148fecaf32333342796d363f1525839867645ef1ea43b",
+          "src/exchange_mpi_derived_types.f90": "d266fb54869e7db99250326a3326e222f7a5b7ebc7b381c9a907bcaaa0d178a0",
+          "src/filters.f90": "3f3b0cbc59eaf672830104fe0f1e34cd14bacc87242dda5e26466de4e7340305",
+          "src/frames.f90": "5102281df453ea5f7eb223e4aff896b9281d05328429f20f0bb5be81108f54ff",
+          "src/frames_common.f90": "c129c2e02ad1b5d8301a29d546bb25af40cf16daf97f8a6d75a9b15792d1d940",
+          "src/frames_parallelIO.f90": "fdd7ed8921cc7f8b3fdfb12f33275c206a8a91c23b18afdc5db6a26041169474",
+          "src/freeunit.f90": "fe562898c3203a36d5396a48f784683cdaba894cd7eb53c9909c915fb5a94866",
+          "src/geometricshapes.f90": "b423a132102d3436b110c33c9f0d5738fb36a474b09d4d384c5b3ab97bc1e0f3",
+          "src/geometricshapes2d.f90": "617c00d8be94809c6b3403c26cfaf41bed52fa1c8734054010b43ef3646c4244",
+          "src/immersedboundary.f90": "d9c0d0979ddbaffbac402c78076c2f0d9d5ebd736056c2ef0dc334c938f49f17",
+          "src/initial.f90": "ebb0cc26093503aa594ebb1c4a346488961d7749b037b53cf853e438b0a02c76",
+          "src/interpolation.f90": "98a99f9e23aa2658f47bd828d16228b0e842ec56ae7ad04e5f1541ce303bd36a",
+          "src/lapack.f": "a8abe5d3d29b689b76024d86ffd5bfc96cd0ad03ae77bfaebc2b79fb1601ce88",
+          "src/large_scale_processes.f90": "1c707c5987eababc5c66d31bb8cb8cee0b39a09a11cdd0c1b162470b50768299",
+          "src/limiters.f90": "6eac2b6b26f44750afa26e0ad8f41ad0afed5a89f5c24805fb9b12465ba69edb",
+          "src/linearforcing.f90": "38999167b0c9b9627a7f5481887ee20ce722bca561c349fbbb9b8c74d38877fe",
+          "src/linesources.f90": "83bca2c3ea7cdbb875d6ad2f90406e3e7edd92510242bed856beacf9b3be0b4c",
+          "src/list-inc-def.f90": "5e17b716c2bbe0ee6fdd9d081d7b34cd04d6e2afe168d277cd163a78eca521cc",
+          "src/list-inc-proc.f90": "57baee9102d6c03969a77a2b6bce193b26c005b0aeb907dbf8045fe210e58be5",
+          "src/lists.f90": "ae849de9d91011629c2d2b02c3fad27182014655959ad99c7b6888546fb6babe",
+          "src/main.f90": "fd7cec94940953166a913cb49b6ef0d5d95d9c2b9e1bb74e78b78f4d3dca7c17",
+          "src/make_cray_debug": "822bcc7abc7630fcf2c0f50c53ccdd30f3dfeb4050fd4f16f6a5a60445a75415",
+          "src/make_cray_release": "818a993337c7c897e456675baccbe8cce66067ba74ea41f01a5c60e8a035ee9e",
+          "src/make_debug": "fabe74d79d479a06afa930bff3b28e5876f4ebfa4c203ea130dcc7218908f3c4",
+          "src/make_intel_debug": "58143f02f2bc8a4c3e54801f35be98352307a1f68d11385975398c3de615d557",
+          "src/make_intel_release": "abe367128c0d35a21ca00715f999b46eb4c88c81ac8be164b2e76f1efbfd5b31",
+          "src/make_mpi_cray_debug": "fc2b31b76e39e86482708e6635d3c0d26adb5d52a9375da0c0e537462ee17150",
+          "src/make_mpi_cray_release": "6aa6bf4786b28c0c2726df888ccd7ba08c9b3b4740f704afe007a353c19c49bf",
+          "src/make_mpi_debug": "d99a7f5dfb742750d97aa53a070982854c3d8642bb6707ca82cb5111bcb9de93",
+          "src/make_mpi_intel_debug": "41e1fe9b57a99af6451b6e0be7a2dda35e67cb77510ab18bf8a381bfcae6dffa",
+          "src/make_mpi_intel_release": "efbf4cb9dbbd0c39c26e6560e79564891ff50012784fd6881f98ca233537715e",
+          "src/make_mpi_release": "1d51598aced626c2f605b437067b628e09d4f385e204b4d109742ba56659650f",
+          "src/make_release": "6a0df777f2316e4e71c08a47bbeac38879042fb363265a23633b32080dd01a55",
+          "src/make_serial": "3ff4a090bb188062e9fc4c19d2db599b672b4ecd9386fad7d4f2ac81be6d78b8",
+          "src/momentum_diffusion.f90": "c282486c02fc0cde8c6298b4cd9248a5e1f49f31297422d94b2572be66836e44",
+          "src/multigrid.f90": "275ecbbe799638721bc70e6bc462cd213fb7d9079db0e2e1f6412d558a2a9901",
+          "src/multigrid2d.f90": "8083ae0ea0d12d1d7ae6164b3e4f42ad6314af8a4fa47c018d3f277a9abaddf5",
+          "src/numerical_operators.f90": "033b719a770097d376c16f768caf7796d92c7ff523aa5180cd553ca1e5380309",
+          "src/output_helpers.f90": "2908925d566e66757727f2e7c6af9c0f50182e9950c4743a40733db222686268",
+          "src/outputs.f90": "8181c69b82d976334da79e376336574b356bb8133b48bb991de328d7f0d2a0b8",
+          "src/parameters.f90": "cb43ff8e48aa161282841d825c5223b22dcf8a2baec68e3a632cc1dfbd3076d3",
+          "src/pointsources.f90": "3514b090aee81700d5cb6cd04d61201492c3e4334773ff478e6cac203475b890",
+          "src/poisson.f90": "10cfb025f904b58f7e3a21d1858a9c4de3b74994a725e3826c0d4e9aebba94ba",
+          "src/pressure.f90": "0548a1a1b33284d5811335beff0051c60faf273f1f9535ef737b34be141bf9af",
+          "src/pthreads.c": "c5d29d580bfa7f48487eb9f599a0d61d8e77dca300eced81a0ebd623df175ff3",
+          "src/pthreads.f90": "86c9529347c52ce73d14efeb1cbd673ba786696030590633bdb2b87574bb6885",
+          "src/puffs.f90": "fcbef9c72f3f3506145b6277b24a4836d5b77e7769588f3cac16480ad01a55e6",
+          "src/radiation.f90": "8549d74277f9991c0ee821e45356c194d21c446d5171408d59c5879631d2a5bf",
+          "src/rng_par_zig.f90": "ddb083624b41af5078233511718b4ed4e3df36d135ed3fcbe7201597a80fa426",
+          "src/rng_par_zig_c.c": "815f60d5cb11df94705f87f29ebb70ae0d087539eff2a8146746d7bc92ceb185",
+          "src/scalar_advection.f90": "38788fca947fc1dd3e3ce1e6511032ea3985870104af21b84b5f3bba1bce992f",
+          "src/scalar_diffusion.f90": "837c60526933057bbfe02ce2464e0fee5841fda759214273ff945e3c5c16d925",
+          "src/scalarboundaries.f90": "972586d7d022f4d222fac3d7a566c2f88f40f8655704507c429608dbd4c271ef",
+          "src/scalars.f90": "34926de6c12683ff1c093e6375b0c071bffd63e17e45f2801522652b40f8a0b2",
+          "src/simplevtk.f90": "8f8c79c771dab06818cb38cddb87ba2306fbf963cdfb23bb70217d81e0a5059d",
+          "src/solarradiation.f90": "252ac8721fb011575bffc109f1251a8b4163fa7f4e8dc2ad76da95a74d562e29",
+          "src/solidbodies.f90": "9a158ff5991a6add47111bfb79ff29ad9aa1f9c6ff05a80c63ad5f9a235fd4bd",
+          "src/sponge.f90": "98b8de61de748df759f90f80a25352c263a7bdca4c84d7285edaadd0e96027fa",
+          "src/stop.f90": "3e3842bf590a35b9baafaa7db84cfb2fc939f07e9033ce0dc3076e6e5c928f4d",
+          "src/strings.f90": "b25f6ed3bea2a62b6c611cfeb000badb6b20a990c997973bb123672c297ca39e",
+          "src/subgrid.f90": "f89691ebf9bbf2033607f60a1870aada38056215c846ae46a9b521de046247bf",
+          "src/subgrid_mixedtimescale.f90": "635c19c76fa3f278f5e0de6d4e6e33f16c769568c9031219ef053541cc8f80dc",
+          "src/surfacemapframes.f90": "289c9755d32dec647e572fe1dd1b16b9e93e50921b9b48b95dc1a96cacc36221",
+          "src/tiling.f90": "b009e83107e19ca338796dd149c3b44dbff151a3aa3e68b4c647c5f4d9d1830b",
+          "src/tsteps.f90": "d78e1c714c2b301dbe8e3cad55d764f546872fcfc1e2b4da0c4838fd68ed83d4",
+          "src/turbinlet.f90": "8bb5c64c7c80a8bc99e8a1b01b3fde0ff38d04056cd5cd07745e8a7122dedc28",
+          "src/vertical_profiles.f90": "b607ad9df0051ac92dec776721c044e42d0996e3bc5e3613413f8bd3a4e6f55a",
+          "src/volumesources.f90": "3846c18a69133092a5d42141b2691035075f80b3d9197f85bfce3d50bf9451a2",
+          "src/vtkframes.f90": "157fc125b529b5812c0ab2369bdfa63fa8cfefb7e47ce61b74eedd85bb1b2678",
+          "src/wallmodels.f90": "5e31e5296cc0ae4ab72f0a86477fd41798f72b3cd8ae156f09cf8ecd97d404f4",
+          "src/water_thermodynamics.f90": "8f23b33f53a749c1fd429acc0a7e19fc07304926ac0b99f87f2cb2e7125d7eee",
+          "src/wmfluxes-inc.f90": "f5a8e7c91318b8d16e1743dc1889facff37a326cb1399ddabf095aeac6fe1df2",
+          "src/wmfluxes-nobranch-U-inc.f90": "89d068a09c2fc5407fbf0d487f8de8eb08747e75d91dbd99f86b9ff45b674f76",
+          "src/wmfluxes-nobranch-V-inc.f90": "3c7ede991e924dd59614b60282ee85298ae7cae160f728fd4282bc6c5a61f4e7",
+          "src/wmfluxes-nobranch-W-inc.f90": "271eefba80e56e35a51f3992e93973216bf756cf389c465d03377e3dada14017",
+          "src/wmfluxes-nobranch-inc-4ord-5point.f90": "ce526a40e0f5061e73e2409e1ae5ab05a6826d918570281c5368ab276eab0315",
+          "src/wmfluxes-nobranch-inc-4ord.f90": "d2c95fb21162a0dfcfaf96c21a5c7e035360014d5aca2980c5f0e1df263c2938",
+          "src/wmfluxes-nobranch-inc.f90": "5a4f2be8007545d4f2afa20c73934f1578e5c1927cd08ca7b56c439405a4cc45",
+          "src/wmfluxes-variable_z-nobranch-U-inc.f90": "2b2845a1dc25318c8549b65c46fb2de8ce235f45de57a549dc8e8af0f750f2f8",
+          "src/wmfluxes-variable_z-nobranch-V-inc.f90": "43591ea9996842ff852ea084637e49a45553f20cd6cce46c7206d15f0f79d4c7",
+          "src/wmfluxes-variable_z-nobranch-W-inc.f90": "fc5ebdbac73cddfb6d74618afdfc568d341f3bccf637a62488c4a78d14268915",
+          "src/wmfluxes-variable_z-nobranch-inc.f90": "7980a721a6b2dabf7751d80b33e113024754a6a8c115a379efa915ff75cd1b98",
+          "unit_tests/Makefile": "8225fc781d69276d6f23991c309b39bfa5e7e108e47080f425b1861fa6f29b0f",
+          "unit_tests/README.md": "77fcfa033d4403e660e49eaa87d9d7d8f172e9dbe077329dcc3ec0551ba5c1ea",
+          "unit_tests/build/test_numerical_operators": "7eee91708575eab78f29b835d23d315642264cb3c9f758ae00debbb260797643",
+          "unit_tests/test_numerical_operators.f90": "f4b4b1cc6fe2a75018d62720e73d04aa9b7acbfab70c54ea60dd7a0cceb2eaa7",
+          "utils/1D_spectrum.f90": "0afb79452482bd338efa9245ed85633742da3491de01a894e07b026bb5adce60",
+          "utils/3D_spectrum.f90": "3d1cb6256846feb2d8fa231219df51848fe49f812b340a531348cea7a073cede",
+          "utils/block_grid.f90": "be65ad1ec176cc2660a2fb8449b2ca2f13cbd498e0766e48a0cb22de3350dc05",
+          "utils/compile-interpolate_new_grid.sh": "f14242136b1af9be8f98e4c1229a9e7a250bf3a5508acb5fb9bb988727810697",
+          "utils/compile-interpolate_new_grid_variable_z.sh": "a958389659c39de75e6df5629d6420b08b49d88207960d20ec465acd72275365",
+          "utils/compile_decompose-simple.sh": "41b27fe9859e793db423a5868c6c6dfcf86e44426041d6a33bf5a6e24d6515ca",
+          "utils/compile_decompose.sh": "a255bd568336c07a859d775a538d5eb38238adba06f99bfbd5757b46792024a2",
+          "utils/decomposevtk-simple.f90": "94634859694bedf730e86d8812eab4887030afb1305ea2109eea9bbd35f458e2",
+          "utils/decomposevtk.f90": "9e5930b71c417adf5ea164ba3d12c7933dbed7a6a5dbcb68381164630781d43b",
+          "utils/eaf2vtk.f90": "2095d1a9b827c795a3b78ebb70bdccbcf53f2224ab4ee6a2fe8af0cff9b78a23",
+          "utils/eaf_subset.f90": "7424d0e934e434f0c172968e48edf103158971c817f98b055237cc89fd9ea203",
+          "utils/extend_periodic_x.f90": "d1107003a5a70c5afcdbc3f6636c3ee580edc51718a147e0931579222b9fe27a",
+          "utils/extend_periodic_xy.f90": "ca815b38dad8c33d61c35d14a97ec1128b3bce13c2a1e87d6c5be6fc1f09b162",
+          "utils/file_info.c": "0221ed13cc50d4ebd2a61c850c62131bc129d703ad626c35e320469a1f932341",
+          "utils/file_names.c": "d0cc0870c1e41826d954f0026807a1a9c1bfa26cac16148440352b8ce6503662",
+          "utils/horizontal_mean.f90": "c7ec445ca438e8dcc9e5769e6b84814b48d7add0e0b122136643af034f8eaa49",
+          "utils/horizontal_mean_y.f90": "b24b28029d232d3cd40bd188f182d7db54b500ef4b3c2c00fe7b5ebe1f8c396f",
+          "utils/interpolate_new_grid.f90": "1ed9ad334f605d7053519a1a0f011e76a6468efdebc143ce254fc1e416d6496a",
+          "utils/interpolate_new_grid_variable_z.f90": "51caaeba7120a68cab184b1083c0376ae1413dd1a31f4d5a426faf7a14112265",
+          "utils/joinaverageprofiles": "8889f761abb9ac90edd9ebbb5d5e287df85d4163b798d2a6b5adf46404782182",
+          "utils/joinframes.f90": "e1c1ca0649ac1a7e95673fbfb4f5a7fd8e13a3cf054b45d4e447088dd95e5b4c",
+          "utils/joininstantprofiles": "2b86dc91cbb3c5a5a10c781bb206a49b7756235feab1326ca0886ec2fb9a4a32",
+          "utils/joinprofiles": "5fb1c1351daf46640f2eb9b611d3f2adb21fbd01fa5d44169ebbc05451b1f6b1",
+          "utils/joinstagframes.f90": "ff48e85f6e45f9681589ec74df8cf27a3026c7322ca93ac9d48130f6186fd9d9",
+          "utils/joinvtk.f90": "2a83715d59d16c336ab34d5c61cfae1ba2b1367ab966c4f11da0e413e8972956",
+          "utils/read_eaf.py": "1c42c88a2cb7a744ac8f6734da35e8afc9441f3e584d99dc5410de3d43f7b676",
+          "utils/series2txt.f90": "0500a72b6213d12c25cc55ea466bb8a4895be7d44c975bd0a053dbab99b10442",
+          "utils/vtk_periodic_mean.f90": "59b760fc4247cbf614952d8b5d5d0a542aea7b375283069307a7345a5dce0215",
+          "utils/vtk_subset.f90": "a595b8caaf9460b409b40143b2ecd48e9e20886a451b48a2e727e15d0d134292"
+        },
+        "omitted_untracked_artifacts": []
+      },
+      "PoisFFT": {
+        "url": "https://github.com/LadaF/PoisFFT.git",
+        "revision": "256a2338254c08f611881b2df5e72bdfa73bc257",
+        "head": "256a2338254c08f611881b2df5e72bdfa73bc257",
+        "tracked_clean": true,
+        "tracked_sha256": {
+          ".gitignore": "b4367566430726b5e3de8c439d5cbaf147081737be0064d9d24cb1400d9be7c9",
+          "COPYRIGHT": "bddc1991417698bc0e12df86383821f2ba57efe85ce97cf136edbb9c298b3038",
+          "LICENCE.GPL": "f46409d4822b2457b39bbd0e7881eecb396130eb8320b7748fa7e9488970aa6d",
+          "README": "e0bcbc1dea7191a9734b08e64c7b7ca42329a45fcffdefb88c8ae3ff8f88ccbe",
+          "src/SConstruct": "2081ef8a39f561873727ef6529afcd0957a3c9c4346969133d79ff9a2e533e8d",
+          "src/allocate_fftw-inc.f90": "eb8c17a757a0fb706a98ca594427026650035eb6aa1487e4ba10d159c41db1b9",
+          "src/c_binding.c": "192f1cf375ec886f44f0e8f5704a1539ba501ac783f88b55e06d68da5aebd1f6",
+          "src/c_binding.f90": "88c9d0e79c981cfa6f78fbad6c88de5ac070495004b4c42fabc16c58780347fd",
+          "src/c_execute-inc.f90": "d5c2b669adda357f5338b010fb9c0b68a71daa00f5dc1c5c9640403c4891aaa1",
+          "src/c_finalize-inc.f90": "45c67d5db36c8dd3ba35a58a3a05211e2d8ad3cb898873c4a2cd6498afcf4a7b",
+          "src/c_new-inc.f90": "bb2c5f538aa53dd64a8ce5c3daf6f35f77604be1ad6efbf50b4b1bacbd45ebe1",
+          "src/customfftw3.f90": "4089a4d6bbcd1627549abb6f7873b499cacadbed0d996b0d0678e6f1559a5de3",
+          "src/custompfft.f90": "9cacb53b14b6f4a19b9e1a4001dc71897fc6a2030895a878fe9ba2f2b798adc8",
+          "src/f_mpi_comm_c2f.c": "5d807a44f7707afe6af4d0ccc8a0cfa8b44a4e85e068d672487415dfee56e1dd",
+          "src/fft-inc.f90": "4a62226ed04ede9223d6d994583a5ab94463f09a079379516f84c7f9d5c716d7",
+          "src/fft.f90": "05cf72789600acf66a269cda9f5450aa9437aae1abd19457c39b7980059fb725",
+          "src/loop_nest_3d.f90": "1cb53fd93c56e94cd3014a79278526b41be4dcd7dc4fd60ab36f15f8f9918ad4",
+          "src/main.f90": "c74000f476790177d3c3ab362ff5cd71faa107407c2c0a05eb1ef00fbdbb7a64",
+          "src/missing_pfft.c": "ddde71b7e32bd5166df5b66c5d62f694c4fcc1422a56c41d57916f39b55142ca",
+          "src/parameters.f90": "91b31e677244889f71288ebc47b9c820fd394c1ee5089e20f690564e898f84da",
+          "src/plan_new-inc.f90": "ffda1681ba3b44f2bc70bbe87bf32fe0ae00b4846a5318fe4a75ffedf3baa68c",
+          "src/poisfft-inc.f90": "d3238fd22d48d378e6e9a1aeb45dad79493a75e8fc9296c29c3a06ae2f96026e",
+          "src/poisfft-solvers-inc.f90": "2ecc7e1d79996d82f5132ddcc74a8452dfc95d8a2fe1ab2d7f005254640d13d2",
+          "src/poisfft-solvers-nonuniform_z-inc.f90": "5d526acf499d980143ca7737d06ba8f0e576a7d64d26769c2c592a5a7b6cbaa4",
+          "src/poisfft.f90": "a32086eaac4091c179806d0931151f357feb6d00bbad6f2d3c2acb1a176c3ce4",
+          "src/poisfft.h": "e12585a6432350e9841bd215b49bfac4864e1854bf1c2ba796a880b699c5814b",
+          "src/precisions.f90": "074b72fd8868551e41f5d6bedfe810824870e9de762a8c06a4d120ed60501713",
+          "src/testmpi.f90": "9f7f37e64341a5926f38f2fe99f07b58cd9a3bdc6ec1951b35e53116f0426351",
+          "src/testmpi_nonuniform_z.f90": "2f3cfc0bcce0bd87087b008c4f4ce250e5d6eceb705424e53db002753f08cbcf",
+          "src/testpoisson.c": "2d467785ca9d1766fde8de8879be6e5bf0f27d502d8d593b77f1a3c3bb2048b2",
+          "src/testpoisson.cc": "e6f58998c400a8eed3e964a3c9587fa12c1f62529bcbefc383a1b32a6acc59ac",
+          "src/testpoisson.f90": "23e42cc2130f1dc249c801130a9c0fe68e5e94ceb2c16835a41cb4dfbd89c849",
+          "src/testpoisson_nonuniform_z.f90": "2a6248677b6e3887901a4451426be4b4cf2b3ba4116b589e5d8394d0f88e1154",
+          "src/vtkarray.f90": "5a831d86f6e08c37310277ef68f6166b129aefa05423e11c5ca42073309567f2",
+          "usage_C++.txt": "eff2a2ad6cb10af1f2bdb42d9ba4f1f963128215cff2a01e402ff72bb7014bbc",
+          "usage_C.txt": "309d9a1fc0a9196421b9270fdbb1040f37e50713f7e3174d2f5423ead39c0281",
+          "usage_Fortran.txt": "008e95b4e6e1c62a1e4ced297657a805ae6dd5b54b8a1234a323373489d3fce7"
+        },
+        "omitted_untracked_artifacts": []
+      }
+    }
+  },
+  "calibration_profile": {
+    "path": "/tmp/fortran-graph-final-calibration-20-scoped/hardware.json",
+    "sha256": "a101362e5cbf9ee4e5c6ff59e62a13e7f2ff00045e7a0fc26b04a806db5f1969",
+    "candidate_only": true,
+    "hardware": {
+      "gpu_uuid": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+      "gpu_name": "NVIDIA GeForce RTX 3060 Ti",
+      "compute_capability": "8.6",
+      "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+      "machine": "x86_64",
+      "device_ordinal": 0,
+      "async_engine_count": 1
+    },
+    "toolchain": {
+      "nvcc_version": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2026 NVIDIA Corporation\nBuilt on Tue_Sep_01_08:45:21_PDT_2026\nCuda compilation tools, release 13.4, V13.4.92\nBuild cuda_13.4.r13.4/compiler.38855100_0",
+      "host_cxx_version": "x86_64-linux-gnu-g++-14 (Debian 14.4.0-3) 14.4.0\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+      "cuda_runtime_version": 13040,
+      "driver_version": 13040
+    },
+    "precision_bits": 64,
+    "cpu_threads": 4,
+    "numerical_contract": {
+      "schema_version": 1,
+      "id": "separate-arithmetic-v1",
+      "required_cuda_options": [
+        "--fmad=false",
+        "--ftz=false",
+        "--prec-div=true",
+        "--prec-sqrt=true"
+      ],
+      "required_host_options": [
+        "-ffp-contract=off"
+      ],
+      "identity": "552311d688f9bf1e9744a3143d4ca17c30e162bc35c0035dad77b6d769f6ce19"
+    },
+    "scoped_runtime_id": "9517e2476a8182d00f52d62574c9573549439091eaca7a3d6ffc343f7590a4aa",
+    "scoped_schema_version": 1
+  },
+  "authentication": {
+    "files": 2931,
+    "before_and_after_all_runs": true
+  },
+  "script_sha256": "bcc002b038e8ddb0407c8f795c1e23c55ad5aba87b60825d04f8ac5e76f4066f",
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+  ],
+  "script_source": {
+    "path": "/tmp/fortran-quick-20-channel-01/probe-source.py",
+    "sha256": "bcc002b038e8ddb0407c8f795c1e23c55ad5aba87b60825d04f8ac5e76f4066f"
+  },
+  "cases": {
+    "channel": {
+      "configuration": {
+        "source": "/home/jirka/research/fortran-abomination/elmm-pipeline/.cache/repos/elmm/examples/channel",
+        "overrides": {
+          "max_number_of_time_steps": 100
+        },
+        "advection_method": 4,
+        "expected_max_steps": 100,
+        "runtime_arguments": [
+          "output_dir='output/'"
+        ]
+      },
+      "configuration_dir": "/tmp/fortran-quick-20-channel-01/channel/config",
+      "configuration_sha256": {
+        "output.conf": "b894e8a4500102f04733544b8c85a648684d63cd3eb8dba12518f41e79f65f51",
+        "grid.conf": "f44970b7a9e636d1bf78bd2b48820f1bd50ec2adec1c163825ed0d435f8cd7ef",
+        "time_stepping.conf": "478f80223e1832996960ff1e4838a1c2b08c127d27c76f1609fc5d7c2c79e9d5",
+        "les.conf": "1cee53a844bb557673849df1942cb749db067b01f2b19356c9018a53f9b3385d",
+        "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+        "boundconds.conf": "b6b64e153212affdfae650767de910113c008a77a350ef5fddd4f22bbf04e619",
+        "main.conf": "3bbb39e3312dcfbc846e78d83bd7eb3bc071907c028e8db79569bd707af43e9b",
+        "frames.conf": "866cc5cb4d15b35079c2eeb1027613ee9dbaf0a28e0f47423512d3ab226d05bb"
+      },
+      "runs": [
+        {
+          "mode": "native",
+          "round": 0,
+          "warmup": true,
+          "traced": false,
+          "full_storage": false,
+          "wall_seconds": 14.162834931994439,
+          "argv": [
+            "/tmp/fortran-threeway-harness-smoke-02/work/native/build/ELMM",
+            "output_dir='output/'"
+          ],
+          "cwd": "/tmp/fortran-quick-20-channel-01/channel/runs/native/round-00",
+          "log": "/tmp/fortran-quick-20-channel-01/channel/runs/native/round-00/run.log",
+          "log_sha256": "e2b8b7cbe203d6cb8e3542eb4599c21397617446404a56f3fa6352068c585e69",
+          "timing": {
+            "completed_steps": 100,
+            "natural_end": false,
+            "time_steps_seconds": 13.8,
+            "poisson_seconds": 0.86
+          },
+          "vtk_validation": {
+            "schema_version": 2,
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "files": {
+              "out.vtk": {
+                "passed": true,
+                "atol": 1e-06,
+                "rtol": 1e-05,
+                "fields": {
+                  "X_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 128
+                  },
+                  "Y_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "Z_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "p": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "ptype": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "u": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 1572864
+                  }
+                },
+                "note": "ELMM final VTK values are float32, including double-precision builds."
+              }
+            },
+            "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."
+          },
+          "passed": true
+        },
+        {
+          "mode": "committed",
+          "round": 0,
+          "warmup": true,
+          "traced": false,
+          "full_storage": false,
+          "wall_seconds": 11.904723743995419,
+          "argv": [
+            "/tmp/fortran-threeway-harness-smoke-02/work/committed/build/ELMM",
+            "output_dir='output/'"
+          ],
+          "cwd": "/tmp/fortran-quick-20-channel-01/channel/runs/committed/round-00",
+          "log": "/tmp/fortran-quick-20-channel-01/channel/runs/committed/round-00/run.log",
+          "log_sha256": "a995b9f8aeb299c1a5f5cf914b473e3a95ca74066de0be57053a6eaa2d9ee732",
+          "timing": {
+            "completed_steps": 100,
+            "natural_end": false,
+            "time_steps_seconds": 11.23,
+            "poisson_seconds": 0.86
+          },
+          "vtk_validation": {
+            "schema_version": 2,
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "files": {
+              "out.vtk": {
+                "passed": true,
+                "atol": 1e-06,
+                "rtol": 1e-05,
+                "fields": {
+                  "X_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 128
+                  },
+                  "Y_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "Z_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "p": {
+                    "max_absolute_error": 1.4901161193847656e-08,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "ptype": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "u": {
+                    "max_absolute_error": 1.1920928955078125e-07,
+                    "failed_values": 0,
+                    "values": 1572864
+                  }
+                },
+                "note": "ELMM final VTK values are float32, including double-precision builds."
+              }
+            },
+            "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."
+          },
+          "passed": true
+        },
+        {
+          "mode": "reworked",
+          "round": 0,
+          "warmup": true,
+          "traced": false,
+          "full_storage": false,
+          "wall_seconds": 12.206735393003328,
+          "argv": [
+            "/tmp/fortran-convection-graph-probe-01/candidate-20/build/ELMM",
+            "output_dir='output/'"
+          ],
+          "cwd": "/tmp/fortran-quick-20-channel-01/channel/runs/reworked/round-00",
+          "log": "/tmp/fortran-quick-20-channel-01/channel/runs/reworked/round-00/run.log",
+          "log_sha256": "a2d92ca65fdf07989f34a47c00eabed4b9265b9f5049cc3894358d015824b4b8",
+          "timing": {
+            "completed_steps": 100,
+            "natural_end": false,
+            "time_steps_seconds": 11.56,
+            "poisson_seconds": 0.85
+          },
+          "vtk_validation": {
+            "schema_version": 2,
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "files": {
+              "out.vtk": {
+                "passed": true,
+                "atol": 1e-06,
+                "rtol": 1e-05,
+                "fields": {
+                  "X_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 128
+                  },
+                  "Y_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "Z_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "p": {
+                    "max_absolute_error": 1.4901161193847656e-08,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "ptype": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "u": {
+                    "max_absolute_error": 1.1920928955078125e-07,
+                    "failed_values": 0,
+                    "values": 1572864
+                  }
+                },
+                "note": "ELMM final VTK values are float32, including double-precision builds."
+              }
+            },
+            "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."
+          },
+          "passed": true
+        },
+        {
+          "mode": "committed",
+          "round": 1,
+          "warmup": false,
+          "traced": false,
+          "full_storage": false,
+          "wall_seconds": 11.905495612008963,
+          "argv": [
+            "/tmp/fortran-threeway-harness-smoke-02/work/committed/build/ELMM",
+            "output_dir='output/'"
+          ],
+          "cwd": "/tmp/fortran-quick-20-channel-01/channel/runs/committed/round-01",
+          "log": "/tmp/fortran-quick-20-channel-01/channel/runs/committed/round-01/run.log",
+          "log_sha256": "ad9a572d0bc2992b9af9ef91c13daf7729449df951d08088383f1405287531cc",
+          "timing": {
+            "completed_steps": 100,
+            "natural_end": false,
+            "time_steps_seconds": 11.23,
+            "poisson_seconds": 0.85
+          },
+          "vtk_validation": {
+            "schema_version": 2,
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "files": {
+              "out.vtk": {
+                "passed": true,
+                "atol": 1e-06,
+                "rtol": 1e-05,
+                "fields": {
+                  "X_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 128
+                  },
+                  "Y_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "Z_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "p": {
+                    "max_absolute_error": 1.4901161193847656e-08,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "ptype": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "u": {
+                    "max_absolute_error": 1.1920928955078125e-07,
+                    "failed_values": 0,
+                    "values": 1572864
+                  }
+                },
+                "note": "ELMM final VTK values are float32, including double-precision builds."
+              }
+            },
+            "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."
+          },
+          "passed": true
+        },
+        {
+          "mode": "reworked",
+          "round": 1,
+          "warmup": false,
+          "traced": false,
+          "full_storage": false,
+          "wall_seconds": 11.9536631689989,
+          "argv": [
+            "/tmp/fortran-convection-graph-probe-01/candidate-20/build/ELMM",
+            "output_dir='output/'"
+          ],
+          "cwd": "/tmp/fortran-quick-20-channel-01/channel/runs/reworked/round-01",
+          "log": "/tmp/fortran-quick-20-channel-01/channel/runs/reworked/round-01/run.log",
+          "log_sha256": "e9339af1a8b976975b87ca54092e5280850d56a0158a07851055a41db8d13b29",
+          "timing": {
+            "completed_steps": 100,
+            "natural_end": false,
+            "time_steps_seconds": 11.26,
+            "poisson_seconds": 0.85
+          },
+          "vtk_validation": {
+            "schema_version": 2,
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "files": {
+              "out.vtk": {
+                "passed": true,
+                "atol": 1e-06,
+                "rtol": 1e-05,
+                "fields": {
+                  "X_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 128
+                  },
+                  "Y_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "Z_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "p": {
+                    "max_absolute_error": 1.4901161193847656e-08,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "ptype": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "u": {
+                    "max_absolute_error": 1.1920928955078125e-07,
+                    "failed_values": 0,
+                    "values": 1572864
+                  }
+                },
+                "note": "ELMM final VTK values are float32, including double-precision builds."
+              }
+            },
+            "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."
+          },
+          "passed": true
+        },
+        {
+          "mode": "native",
+          "round": 1,
+          "warmup": false,
+          "traced": false,
+          "full_storage": false,
+          "wall_seconds": 13.714079112003674,
+          "argv": [
+            "/tmp/fortran-threeway-harness-smoke-02/work/native/build/ELMM",
+            "output_dir='output/'"
+          ],
+          "cwd": "/tmp/fortran-quick-20-channel-01/channel/runs/native/round-01",
+          "log": "/tmp/fortran-quick-20-channel-01/channel/runs/native/round-01/run.log",
+          "log_sha256": "8857de638d2f1ea50fc15b5d103a4ae7a916e855bfe868b9724dae412359ea42",
+          "timing": {
+            "completed_steps": 100,
+            "natural_end": false,
+            "time_steps_seconds": 13.38,
+            "poisson_seconds": 0.82
+          },
+          "vtk_validation": {
+            "schema_version": 2,
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "files": {
+              "out.vtk": {
+                "passed": true,
+                "atol": 1e-06,
+                "rtol": 1e-05,
+                "fields": {
+                  "X_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 128
+                  },
+                  "Y_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "Z_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "p": {
+                    "max_absolute_error": 1.4901161193847656e-08,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "ptype": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "u": {
+                    "max_absolute_error": 1.1920928955078125e-07,
+                    "failed_values": 0,
+                    "values": 1572864
+                  }
+                },
+                "note": "ELMM final VTK values are float32, including double-precision builds."
+              }
+            },
+            "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."
+          },
+          "passed": true
+        },
+        {
+          "mode": "reworked",
+          "round": 2,
+          "warmup": false,
+          "traced": false,
+          "full_storage": false,
+          "wall_seconds": 12.455511078005657,
+          "argv": [
+            "/tmp/fortran-convection-graph-probe-01/candidate-20/build/ELMM",
+            "output_dir='output/'"
+          ],
+          "cwd": "/tmp/fortran-quick-20-channel-01/channel/runs/reworked/round-02",
+          "log": "/tmp/fortran-quick-20-channel-01/channel/runs/reworked/round-02/run.log",
+          "log_sha256": "a911da4acee18d92456f9286b75956d5cceecd238285649e121668c997da498f",
+          "timing": {
+            "completed_steps": 100,
+            "natural_end": false,
+            "time_steps_seconds": 11.82,
+            "poisson_seconds": 0.87
+          },
+          "vtk_validation": {
+            "schema_version": 2,
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "files": {
+              "out.vtk": {
+                "passed": true,
+                "atol": 1e-06,
+                "rtol": 1e-05,
+                "fields": {
+                  "X_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 128
+                  },
+                  "Y_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "Z_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "p": {
+                    "max_absolute_error": 1.4901161193847656e-08,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "ptype": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "u": {
+                    "max_absolute_error": 1.1920928955078125e-07,
+                    "failed_values": 0,
+                    "values": 1572864
+                  }
+                },
+                "note": "ELMM final VTK values are float32, including double-precision builds."
+              }
+            },
+            "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."
+          },
+          "passed": true
+        },
+        {
+          "mode": "native",
+          "round": 2,
+          "warmup": false,
+          "traced": false,
+          "full_storage": false,
+          "wall_seconds": 13.808077605994185,
+          "argv": [
+            "/tmp/fortran-threeway-harness-smoke-02/work/native/build/ELMM",
+            "output_dir='output/'"
+          ],
+          "cwd": "/tmp/fortran-quick-20-channel-01/channel/runs/native/round-02",
+          "log": "/tmp/fortran-quick-20-channel-01/channel/runs/native/round-02/run.log",
+          "log_sha256": "c49db8da4c8a16fff560a813d9368aa70ddac1ae7f4a97989ff654ac23ed19f3",
+          "timing": {
+            "completed_steps": 100,
+            "natural_end": false,
+            "time_steps_seconds": 13.43,
+            "poisson_seconds": 0.84
+          },
+          "vtk_validation": {
+            "schema_version": 2,
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "files": {
+              "out.vtk": {
+                "passed": true,
+                "atol": 1e-06,
+                "rtol": 1e-05,
+                "fields": {
+                  "X_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 128
+                  },
+                  "Y_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "Z_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "p": {
+                    "max_absolute_error": 1.4901161193847656e-08,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "ptype": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "u": {
+                    "max_absolute_error": 1.1920928955078125e-07,
+                    "failed_values": 0,
+                    "values": 1572864
+                  }
+                },
+                "note": "ELMM final VTK values are float32, including double-precision builds."
+              }
+            },
+            "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."
+          },
+          "passed": true
+        },
+        {
+          "mode": "committed",
+          "round": 2,
+          "warmup": false,
+          "traced": false,
+          "full_storage": false,
+          "wall_seconds": 11.80395257899363,
+          "argv": [
+            "/tmp/fortran-threeway-harness-smoke-02/work/committed/build/ELMM",
+            "output_dir='output/'"
+          ],
+          "cwd": "/tmp/fortran-quick-20-channel-01/channel/runs/committed/round-02",
+          "log": "/tmp/fortran-quick-20-channel-01/channel/runs/committed/round-02/run.log",
+          "log_sha256": "03bccf95f44f9df9985ff13f61355e2cc0289319f93cdc8515e123933020b2eb",
+          "timing": {
+            "completed_steps": 100,
+            "natural_end": false,
+            "time_steps_seconds": 11.15,
+            "poisson_seconds": 0.86
+          },
+          "vtk_validation": {
+            "schema_version": 2,
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "files": {
+              "out.vtk": {
+                "passed": true,
+                "atol": 1e-06,
+                "rtol": 1e-05,
+                "fields": {
+                  "X_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 128
+                  },
+                  "Y_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "Z_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "p": {
+                    "max_absolute_error": 1.4901161193847656e-08,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "ptype": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "u": {
+                    "max_absolute_error": 1.1920928955078125e-07,
+                    "failed_values": 0,
+                    "values": 1572864
+                  }
+                },
+                "note": "ELMM final VTK values are float32, including double-precision builds."
+              }
+            },
+            "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."
+          },
+          "passed": true
+        },
+        {
+          "mode": "native",
+          "round": 3,
+          "warmup": false,
+          "traced": false,
+          "full_storage": false,
+          "wall_seconds": 14.059395352000138,
+          "argv": [
+            "/tmp/fortran-threeway-harness-smoke-02/work/native/build/ELMM",
+            "output_dir='output/'"
+          ],
+          "cwd": "/tmp/fortran-quick-20-channel-01/channel/runs/native/round-03",
+          "log": "/tmp/fortran-quick-20-channel-01/channel/runs/native/round-03/run.log",
+          "log_sha256": "4c9e88e1e78660c501aecc3bfc5b49891ad2eebccb32833cbda89d51b8ff318d",
+          "timing": {
+            "completed_steps": 100,
+            "natural_end": false,
+            "time_steps_seconds": 13.7,
+            "poisson_seconds": 0.84
+          },
+          "vtk_validation": {
+            "schema_version": 2,
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "files": {
+              "out.vtk": {
+                "passed": true,
+                "atol": 1e-06,
+                "rtol": 1e-05,
+                "fields": {
+                  "X_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 128
+                  },
+                  "Y_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "Z_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "p": {
+                    "max_absolute_error": 1.4901161193847656e-08,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "ptype": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "u": {
+                    "max_absolute_error": 1.1920928955078125e-07,
+                    "failed_values": 0,
+                    "values": 1572864
+                  }
+                },
+                "note": "ELMM final VTK values are float32, including double-precision builds."
+              }
+            },
+            "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."
+          },
+          "passed": true
+        },
+        {
+          "mode": "committed",
+          "round": 3,
+          "warmup": false,
+          "traced": false,
+          "full_storage": false,
+          "wall_seconds": 11.701680229991325,
+          "argv": [
+            "/tmp/fortran-threeway-harness-smoke-02/work/committed/build/ELMM",
+            "output_dir='output/'"
+          ],
+          "cwd": "/tmp/fortran-quick-20-channel-01/channel/runs/committed/round-03",
+          "log": "/tmp/fortran-quick-20-channel-01/channel/runs/committed/round-03/run.log",
+          "log_sha256": "ca71eecc7bafdd9509dcdfd9c26a64e6f79b1470f7dd0e70cafea4f7dd507c10",
+          "timing": {
+            "completed_steps": 100,
+            "natural_end": false,
+            "time_steps_seconds": 11.03,
+            "poisson_seconds": 0.82
+          },
+          "vtk_validation": {
+            "schema_version": 2,
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "files": {
+              "out.vtk": {
+                "passed": true,
+                "atol": 1e-06,
+                "rtol": 1e-05,
+                "fields": {
+                  "X_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 128
+                  },
+                  "Y_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "Z_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "p": {
+                    "max_absolute_error": 1.4901161193847656e-08,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "ptype": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "u": {
+                    "max_absolute_error": 1.1920928955078125e-07,
+                    "failed_values": 0,
+                    "values": 1572864
+                  }
+                },
+                "note": "ELMM final VTK values are float32, including double-precision builds."
+              }
+            },
+            "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."
+          },
+          "passed": true
+        },
+        {
+          "mode": "reworked",
+          "round": 3,
+          "warmup": false,
+          "traced": false,
+          "full_storage": false,
+          "wall_seconds": 11.754238303008606,
+          "argv": [
+            "/tmp/fortran-convection-graph-probe-01/candidate-20/build/ELMM",
+            "output_dir='output/'"
+          ],
+          "cwd": "/tmp/fortran-quick-20-channel-01/channel/runs/reworked/round-03",
+          "log": "/tmp/fortran-quick-20-channel-01/channel/runs/reworked/round-03/run.log",
+          "log_sha256": "b6c509a15a6c630f6570519b3693cca6e2b8b88034b33985c0ae408544309e06",
+          "timing": {
+            "completed_steps": 100,
+            "natural_end": false,
+            "time_steps_seconds": 11.06,
+            "poisson_seconds": 0.82
+          },
+          "vtk_validation": {
+            "schema_version": 2,
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "files": {
+              "out.vtk": {
+                "passed": true,
+                "atol": 1e-06,
+                "rtol": 1e-05,
+                "fields": {
+                  "X_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 128
+                  },
+                  "Y_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "Z_COORDINATES": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 64
+                  },
+                  "p": {
+                    "max_absolute_error": 1.4901161193847656e-08,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "ptype": {
+                    "max_absolute_error": 0.0,
+                    "failed_values": 0,
+                    "values": 524288
+                  },
+                  "u": {
+                    "max_absolute_error": 1.1920928955078125e-07,
+                    "failed_values": 0,
+                    "values": 1572864
+                  }
+                },
+                "note": "ELMM final VTK values are float32, including double-precision builds."
+              }
+            },
+            "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."
+          },
+          "passed": true
+        }
+      ],
+      "summary": {
+        "native": {
+          "median_seconds": 13.808077605994185,
+          "minimum_seconds": 13.714079112003674,
+          "maximum_seconds": 14.059395352000138,
+          "samples_seconds": [
+            13.714079112003674,
+            13.808077605994185,
+            14.059395352000138
+          ],
+          "repetitions": 3,
+          "median_loop_seconds": 13.43,
+          "median_poisson_seconds": 0.84,
+          "ratio_to_native": 1.0,
+          "speedup_over_native": 1.0,
+          "wall_reduction_percent": 0.0,
+          "speedup_over_committed": 0.854858504986201,
+          "quartile_1_seconds": 13.76107835899893,
+          "quartile_3_seconds": 13.933736478997162,
+          "iqr_seconds": 0.172658119998232
+        },
+        "committed": {
+          "median_seconds": 11.80395257899363,
+          "minimum_seconds": 11.701680229991325,
+          "maximum_seconds": 11.905495612008963,
+          "samples_seconds": [
+            11.905495612008963,
+            11.80395257899363,
+            11.701680229991325
+          ],
+          "repetitions": 3,
+          "median_loop_seconds": 11.15,
+          "median_poisson_seconds": 0.85,
+          "ratio_to_native": 0.854858504986201,
+          "speedup_over_native": 1.1697842323229175,
+          "wall_reduction_percent": 14.514149501379903,
+          "speedup_over_committed": 1.0,
+          "quartile_1_seconds": 11.752816404492478,
+          "quartile_3_seconds": 11.854724095501297,
+          "iqr_seconds": 0.1019076910088188
+        },
+        "reworked": {
+          "median_seconds": 11.9536631689989,
+          "minimum_seconds": 11.754238303008606,
+          "maximum_seconds": 12.455511078005657,
+          "samples_seconds": [
+            11.9536631689989,
+            12.455511078005657,
+            11.754238303008606
+          ],
+          "repetitions": 3,
+          "median_loop_seconds": 11.26,
+          "median_poisson_seconds": 0.85,
+          "ratio_to_native": 0.8657007521314719,
+          "speedup_over_native": 1.1551335695826361,
+          "wall_reduction_percent": 13.429924786852808,
+          "speedup_over_committed": 0.9874757563527861,
+          "quartile_1_seconds": 11.853950736003753,
+          "quartile_3_seconds": 12.204587123502279,
+          "iqr_seconds": 0.35063638749852544
+        }
+      },
+      "completed_steps": 100
+    }
+  },
+  "gpu_toolchain": {
+    "architecture": "86",
+    "device": {
+      "available": true,
+      "devices": [
+        {
+          "name": "NVIDIA GeForce RTX 3060 Ti",
+          "driver_version": "617.42",
+          "compute_capability": "8.6"
+        }
+      ],
+      "argv": [
+        "/usr/lib/wsl/lib/nvidia-smi",
+        "--query-gpu=name,driver_version,compute_cap",
+        "--format=csv,noheader,nounits"
+      ],
+      "error": null
+    },
+    "versions": {
+      "nvcc": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2026 NVIDIA Corporation\nBuilt on Tue_Sep_01_08:45:21_PDT_2026\nCuda compilation tools, release 13.4, V13.4.92\nBuild cuda_13.4.r13.4/compiler.38855100_0",
+      "cuda_host_cxx": "x86_64-linux-gnu-g++-14 (Debian 14.4.0-3) 14.4.0\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE."
+    },
+    "nvcc": "/usr/local/cuda-13.4/bin/nvcc",
+    "cuda_host_cxx": "/usr/bin/x86_64-linux-gnu-g++-14",
+    "cuda_library_dir": "/usr/local/cuda-13.4/targets/x86_64-linux/lib",
+    "cuda_runtime_discovery": {
+      "method": "host_target",
+      "target": "x86_64-linux-gnu",
+      "argv": [
+        "/usr/bin/x86_64-linux-gnu-g++-14",
+        "-dumpmachine"
+      ]
+    }
+  },
+  "calibration_hardware_binding": {
+    "argv": [
+      "/usr/lib/wsl/lib/nvidia-smi",
+      "--query-gpu=uuid,name,compute_cap",
+      "--format=csv,noheader,nounits"
+    ],
+    "devices": [
+      {
+        "gpu_uuid": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "gpu_name": "NVIDIA GeForce RTX 3060 Ti",
+        "compute_capability": "8.6"
+      }
+    ],
+    "matched_profile_hardware": {
+      "gpu_uuid": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+      "gpu_name": "NVIDIA GeForce RTX 3060 Ti",
+      "compute_capability": "8.6",
+      "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+      "machine": "x86_64",
+      "device_ordinal": 0,
+      "async_engine_count": 1
+    },
+    "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+    "machine": "x86_64",
+    "profile_sha256": "a101362e5cbf9ee4e5c6ff59e62a13e7f2ff00045e7a0fc26b04a806db5f1969",
+    "scoped_runtime_id": "9517e2476a8182d00f52d62574c9573549439091eaca7a3d6ffc343f7590a4aa"
+  },
+  "environment": {
+    "OMP_NUM_THREADS": "4",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_SCHEDULE": "static",
+    "OMP_PROC_BIND": "false",
+    "OMP_PLACES": null,
+    "GOMP_CPU_AFFINITY": null,
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "LD_LIBRARY_PATH": "/usr/local/cuda/lib64:/opt/nvidia/hpc_sdk/Linux_x86_64/2025/compilers/lib",
+    "CUDA_VISIBLE_DEVICES": null,
+    "FORT_RUNTIME_TRACE": null,
+    "FORT_OFFLOAD_TRACE": null
+  },
+  "finished_utc": "2026-10-22T05:28:34.209013+00:00"
+}

@@ -1,0 +1,29 @@
+--- a/compiler/emission/cuda/scoped.py
++++ b/compiler/emission/cuda/scoped.py
+@@ -493,7 +493,7 @@
+             result += [f"FORT_SHARED_CHECK(fort_access.add({array_argument(s)}, {prefix}));"]
+         return result
+ 
+-    def host(step, executable):
++    def host(step, executable, *, serial_work_tracking=True):
+         touched = set(step.read_symbols) | set(step.write_symbols)
+         result = ["{", f"    fort_scoped::{batch_type}<{capacity}> fort_host(fort_context);"]
+         for s in arrays:
+@@ -502,7 +502,7 @@
+                 result += [f"    fort_scope_access fort_effect_{s.id}{{}}; fort_effect_{s.id}.flags = {flags};",
+                            f"    FORT_SHARED_CHECK(fort_host.add({array_argument(s)}, fort_effect_{s.id}));"]
+         return [*result, "    FORT_SHARED_CHECK(fort_host.begin(false));", "    fort_host.executing();",
+-                *(["    fort_entry_work_started=true;"] if guarded_entry else []),
++                *(["    fort_entry_work_started=true;"] if guarded_entry and serial_work_tracking else []),
+                 *indent(executable), "    FORT_SHARED_CHECK(fort_host.finish());", "}"]
+ 
+     graph_launch_groups = {}
+@@ -704,7 +704,7 @@
+                                   if isinstance(step, HostBlock) else sequential_block(step.body, 0, [0]))
+                     if set(step.write_symbols) & set(arrays):
+                         executable = ["shared->work_started = true;", *executable]
+-                    result += indent(coordinate(host(step, executable)))
++                    result += indent(coordinate(host(step, executable, serial_work_tracking=False)))
+                 elif isinstance(step, ParallelRegion):
+                     # Only master's batch is populated. Its lifetime spans
+                     # the CPU worker barrier; begin owns the materialized

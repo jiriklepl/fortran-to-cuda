@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -296,19 +297,31 @@ void close_publication(bool host_boundary) {
     fort_scope_scratch_lease_v1 scratch{};
     check(fort_scope_scratch_acquire_v1(context,256,&scratch));
     check(fort_scope_scratch_release_v1(context,scratch.token));
+    uint64_t boundary_waits=0;
     if (host_boundary) {
+        fort_scope_completion_stats_v1 before{},after{};
+        check(fort_scope_completion_stats_get_v1(context,&before));
         fort_scope_access read{}; read.flags=FORT_SCOPE_READ_ALL;
         check(fort_scope_host_begin(context,hb,&read));
         for (int i=0;i<8;++i) assert(b[i]==2*a[i]);
         check(fort_scope_host_end(context,hb));
+        check(fort_scope_completion_stats_get_v1(context,&after));
         fort_scope_stats stats{}; check(fort_scope_stats_get(context,&stats));
-        assert(stats.waits==1 && stats.downloads==1);
+        // A ready event completes the host boundary without a blocking wait.
+        assert(after.event_records==before.event_records+1);
+        assert(after.event_queries==before.event_queries+1);
+        assert(after.stream_waits==before.stream_waits);
+        assert(after.event_waits==before.event_waits || after.event_waits==before.event_waits+1);
+        assert(stats.waits==after.event_waits && stats.waits<=1 && stats.downloads==1);
+        boundary_waits=stats.waits;
     }
     check(fort_scope_close(context));
     for (int i=0;i<8;++i) assert(b[i]==2*a[i] && out[i]==3*a[i]);
     int supported=0;
     assert(cudaDeviceGetAttribute(&supported,cudaDevAttrMemoryPoolsSupported,0)==cudaSuccess);
-    std::printf("expected waits: %d\n",host_boundary || !supported ? 2 : 1);
+    std::printf("observed boundary waits: %llu\n",static_cast<unsigned long long>(boundary_waits));
+    std::printf("expected waits: %llu\n",static_cast<unsigned long long>(
+        host_boundary ? boundary_waits+1 : (!supported ? 2 : 1)));
 }
 void sections() {
     double host[256];
@@ -537,10 +550,19 @@ def test_close_combines_stream_ordered_retirement_without_delaying_host_boundary
 
     result = subprocess.run([str(cuda_runtime_executable), mode], capture_output=True, text=True,
                             env={**os.environ, "FORT_RUNTIME_TRACE": "1"}, timeout=30)
+    (cuda_runtime_executable.parent / (mode+".stdout")).write_text(result.stdout)
+    (cuda_runtime_executable.parent / (mode+".stderr")).write_text(result.stderr)
     if result.returncode == 77:
         pytest.skip(result.stderr.strip())
     assert result.returncode == 0, result.stdout + result.stderr
     expected = int(re.search(r"expected waits: (\d+)", result.stdout)[1])
+    boundary_waits = int(re.search(r"observed boundary waits: (\d+)", result.stdout)[1])
+    completions = [json.loads(line.removeprefix("FORT_SCOPED evidence "))
+                   for line in result.stderr.splitlines() if line.startswith("FORT_SCOPED evidence ")]
+    completion, = [event for event in completions if event["event"] == "completion_statistics"]
+    assert completion["complete"]
+    assert completion["event_waits"] == boundary_waits
+    assert completion["stream_waits"] == expected-boundary_waits
     assert len(re.findall(r"^FORT_SCOPED wait ", result.stderr, re.MULTILINE)) == expected
     assert len(re.findall(r"^FORT_SCOPED download ", result.stderr, re.MULTILINE)) == 2
 

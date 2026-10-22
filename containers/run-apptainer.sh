@@ -50,7 +50,7 @@ elif [[ ${CUDA_VISIBLE_DEVICES+x} ]]; then
     requested=true
 else
     case "${1:-doctor}" in
-        run-elmm|elmm|run-benchmarks|benchmark) selection=all; requested=true ;;
+        run-elmm|elmm|run-benchmarks|benchmark|e2e|benchmark-e2e|run-e2e) selection=all; requested=true ;;
     esac
 fi
 if [[ "$requested" == true ]]; then

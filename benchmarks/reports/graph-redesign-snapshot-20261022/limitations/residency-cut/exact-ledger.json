@@ -1,0 +1,345 @@
+{
+  "actual_contexts": [
+    {
+      "context": 1,
+      "events": [
+        {
+          "boundary": "unknown",
+          "buffer_handle": null,
+          "bytes": 0,
+          "canonical_registration_identity": null,
+          "event": "create",
+          "line": 2,
+          "procedure": "unknown"
+        },
+        {
+          "boundary": "numerical effect requires typed authority for every original runtime guard",
+          "buffer_handle": 2,
+          "bytes": 256,
+          "canonical_registration_identity": 2,
+          "event": "upload",
+          "line": 22,
+          "procedure": "source_application::native_scale",
+          "resource": "argument::a"
+        },
+        {
+          "boundary": "numerical effect requires typed authority for every original runtime guard",
+          "buffer_handle": null,
+          "bytes": 0,
+          "canonical_registration_identity": null,
+          "event": "launch",
+          "line": 24,
+          "procedure": "source_application::native_scale"
+        },
+        {
+          "boundary": "numerical effect requires typed authority for every original runtime guard",
+          "buffer_handle": 3,
+          "bytes": 256,
+          "canonical_registration_identity": 1,
+          "event": "download",
+          "line": 28,
+          "procedure": "source_application::native_scale",
+          "resource": "argument::b"
+        },
+        {
+          "boundary": "numerical effect requires typed authority for every original runtime guard",
+          "buffer_handle": null,
+          "bytes": 0,
+          "canonical_registration_identity": null,
+          "event": "close",
+          "line": 32,
+          "procedure": "source_application::native_scale"
+        }
+      ]
+    },
+    {
+      "context": 4,
+      "events": [
+        {
+          "boundary": "unknown",
+          "buffer_handle": null,
+          "bytes": 0,
+          "canonical_registration_identity": null,
+          "event": "create",
+          "line": 36,
+          "procedure": "unknown"
+        },
+        {
+          "boundary": "original owning invocation end",
+          "buffer_handle": 5,
+          "bytes": 256,
+          "canonical_registration_identity": 2,
+          "event": "upload",
+          "line": 59,
+          "procedure": "source_application::step",
+          "resource": "argument::a"
+        },
+        {
+          "boundary": "original owning invocation end",
+          "buffer_handle": 6,
+          "bytes": 256,
+          "canonical_registration_identity": 1,
+          "event": "upload",
+          "line": 60,
+          "procedure": "source_application::step",
+          "resource": "argument::b"
+        },
+        {
+          "boundary": "original owning invocation end",
+          "buffer_handle": null,
+          "bytes": 0,
+          "canonical_registration_identity": null,
+          "event": "launch",
+          "line": 62,
+          "procedure": "source_application::step"
+        },
+        {
+          "boundary": "original owning invocation end",
+          "buffer_handle": 7,
+          "bytes": 256,
+          "canonical_registration_identity": 3,
+          "event": "download",
+          "line": 67,
+          "procedure": "source_application::step",
+          "resource": "argument::c"
+        },
+        {
+          "boundary": "original owning invocation end",
+          "buffer_handle": null,
+          "bytes": 0,
+          "canonical_registration_identity": null,
+          "event": "close",
+          "line": 72,
+          "procedure": "source_application::step"
+        }
+      ]
+    },
+    {
+      "context": 8,
+      "events": [
+        {
+          "boundary": "unknown",
+          "buffer_handle": null,
+          "bytes": 0,
+          "canonical_registration_identity": null,
+          "event": "create",
+          "line": 76,
+          "procedure": "unknown"
+        },
+        {
+          "boundary": "numerical effect requires typed authority for every original runtime guard",
+          "buffer_handle": 9,
+          "bytes": 512,
+          "canonical_registration_identity": 2,
+          "event": "upload",
+          "line": 97,
+          "procedure": "source_application::native_scale",
+          "resource": "argument::a"
+        },
+        {
+          "boundary": "numerical effect requires typed authority for every original runtime guard",
+          "buffer_handle": null,
+          "bytes": 0,
+          "canonical_registration_identity": null,
+          "event": "launch",
+          "line": 99,
+          "procedure": "source_application::native_scale"
+        },
+        {
+          "boundary": "numerical effect requires typed authority for every original runtime guard",
+          "buffer_handle": 10,
+          "bytes": 512,
+          "canonical_registration_identity": 1,
+          "event": "download",
+          "line": 103,
+          "procedure": "source_application::native_scale",
+          "resource": "argument::b"
+        },
+        {
+          "boundary": "numerical effect requires typed authority for every original runtime guard",
+          "buffer_handle": null,
+          "bytes": 0,
+          "canonical_registration_identity": null,
+          "event": "close",
+          "line": 107,
+          "procedure": "source_application::native_scale"
+        }
+      ]
+    },
+    {
+      "context": 11,
+      "events": [
+        {
+          "boundary": "unknown",
+          "buffer_handle": null,
+          "bytes": 0,
+          "canonical_registration_identity": null,
+          "event": "create",
+          "line": 111,
+          "procedure": "unknown"
+        },
+        {
+          "boundary": "original owning invocation end",
+          "buffer_handle": 12,
+          "bytes": 512,
+          "canonical_registration_identity": 2,
+          "event": "upload",
+          "line": 134,
+          "procedure": "source_application::step",
+          "resource": "argument::a"
+        },
+        {
+          "boundary": "original owning invocation end",
+          "buffer_handle": 13,
+          "bytes": 512,
+          "canonical_registration_identity": 1,
+          "event": "upload",
+          "line": 135,
+          "procedure": "source_application::step",
+          "resource": "argument::b"
+        },
+        {
+          "boundary": "original owning invocation end",
+          "buffer_handle": null,
+          "bytes": 0,
+          "canonical_registration_identity": null,
+          "event": "launch",
+          "line": 137,
+          "procedure": "source_application::step"
+        },
+        {
+          "boundary": "original owning invocation end",
+          "buffer_handle": 14,
+          "bytes": 512,
+          "canonical_registration_identity": 3,
+          "event": "download",
+          "line": 142,
+          "procedure": "source_application::step",
+          "resource": "argument::c"
+        },
+        {
+          "boundary": "original owning invocation end",
+          "buffer_handle": null,
+          "bytes": 0,
+          "canonical_registration_identity": null,
+          "event": "close",
+          "line": 147,
+          "procedure": "source_application::step"
+        }
+      ]
+    }
+  ],
+  "canonical_resources": {
+    "argument::a": 2,
+    "argument::b": 1,
+    "argument::c": 3
+  },
+  "module_calls": [
+    {
+      "boundaries": [],
+      "calls": [
+        {
+          "caller": "source_application::step",
+          "coordinate_proof_identity": null,
+          "first_line": 29,
+          "handle_bindings": {
+            "1": 1,
+            "2": 2
+          },
+          "last_line": 29,
+          "mapped_call_node_id": null,
+          "resource_mappings": {
+            "argument::a": "argument::a",
+            "argument::b": "argument::b"
+          }
+        }
+      ],
+      "procedure": "source_application::produce",
+      "resource_mappings": {
+        "argument::a": "argument::a",
+        "argument::b": "argument::b"
+      }
+    },
+    {
+      "boundaries": [
+        {
+          "conditional_close": null,
+          "execution": "publish and close when reached; original continuation once",
+          "first_line": 14,
+          "last_line": 14,
+          "reason": "numerical effect requires typed authority for every original runtime guard",
+          "reopen": true
+        }
+      ],
+      "calls": [
+        {
+          "caller": "source_application::step",
+          "coordinate_proof_identity": null,
+          "first_line": 30,
+          "handle_bindings": {},
+          "last_line": 30,
+          "mapped_call_node_id": null,
+          "resource_mappings": {
+            "argument::b": "argument::b"
+          }
+        }
+      ],
+      "procedure": "source_application::native_scale",
+      "resource_mappings": {
+        "argument::b": "argument::b"
+      }
+    },
+    {
+      "boundaries": [],
+      "calls": [
+        {
+          "caller": "source_application::step",
+          "coordinate_proof_identity": null,
+          "first_line": 31,
+          "handle_bindings": {
+            "1": 1,
+            "2": 2,
+            "3": 3
+          },
+          "last_line": 31,
+          "mapped_call_node_id": null,
+          "resource_mappings": {
+            "argument::a": "argument::a",
+            "argument::b": "argument::b",
+            "argument::c": "argument::c"
+          }
+        }
+      ],
+      "procedure": "source_application::consume",
+      "resource_mappings": {
+        "argument::a": "argument::a",
+        "argument::b": "argument::b",
+        "argument::c": "argument::c"
+      }
+    }
+  ],
+  "schema_version": 1,
+  "scope_owner_count": 1,
+  "source_frontier_replacement": {
+    "first_line": 14,
+    "last_line": 14,
+    "replacement": "if (fort_borrowed_90723c9a79fb) then\nblock\nuse iso_c_binding, only: c_int, c_int32_t, c_null_char, c_null_ptr\nuse fort_scoped_memory, only: fort_scope_close, FORT_SCOPE_OK, fort_scope_trace_set_v1, &\nfort_scope_plan_abandon_remaining_v1, FORT_SCOPE_ARGUMENT, FORT_SCOPE_BOUNDARY, &\nFORT_SCOPE_UNINITIALIZED, FORT_SCOPE_PLAN_MISMATCH\ninteger(c_int) :: fort_close_status\nif (fort_child_query_90723c9a79fb) error stop 'unretired query schedule at source boundary'\nif (fort_child_context_90723c9a79fb /= 0) then\ncall fort_scope_trace_set_v1( &\n    fort_child_context_90723c9a79fb, &\n    59_c_int32_t, &\n    '8db0252cc0c168e83efc8219e53ab0aad686b788f0ac2b0bf6052851bf1fc672'//c_null_char, &\n    '6794c525c55be369d51a72127ad2e97c082343382f292c5ebc6e4b5407586139'//c_null_char, &\n    ''//c_null_char, &\n    ''//c_null_char, &\n    ''//c_null_char, &\n    'c6f9a1a05eb9783858886cac21e78d774a13325784e3941b3150085955fe3747'//c_null_char, &\n    c_null_ptr)\nfort_close_status = fort_scope_close(fort_child_context_90723c9a79fb)\nif (fort_close_status /= FORT_SCOPE_OK) error stop 'lexical owner publication failed'\nfort_child_context_90723c9a79fb = 0\nendif\nfort_child_epoch_90723c9a79fb = .false.\nfort_child_query_90723c9a79fb = .false.\nend block\nendif\nb=3*b\n",
+    "source": "/tmp/fortran-committable-snapshot-20261022/cuda-observation-runs/001-test_scoped_adaptation/pytest-temp/test_real_normal_scopes_build_0/application/src/application.f90",
+    "source_sha256": "9b15e4b78ebc9bb5944f458fa7693064cf9151d3ccd62f14316afc8b1d528b8b"
+  },
+  "source_native_boundary": {
+    "conditional_close": null,
+    "execution": "publish and close when reached; original continuation once",
+    "first_line": 14,
+    "last_line": 14,
+    "reason": "numerical effect requires typed authority for every original runtime guard",
+    "reopen": true
+  },
+  "totals": {
+    "allocations": 10,
+    "download_bytes": 1536,
+    "kernel_launches": 4,
+    "upload_bytes": 2304,
+    "verified": true
+  }
+}

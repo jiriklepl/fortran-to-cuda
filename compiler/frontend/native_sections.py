@@ -90,6 +90,7 @@ class NativeResourceSections:
     lower_bound_expressions: tuple[NativeBound | None, ...] = ()
     descriptor_lower_bounds: bool = False
     descriptor_origin: str = "allocation"
+    explicit_dummy_extents: tuple[int, ...] = ()
 
     @property
     def dependencies(self):
@@ -114,6 +115,8 @@ class NativeResourceSections:
     def public(self):
         return {"resource": self.resource, "rank": self.rank, "logical_lower_bounds": list(self.lower_bounds),
                 "empty_dimension_lower_bound": 1,
+                **({"guarded_explicit_dummy_extents": list(self.explicit_dummy_extents)}
+                   if self.explicit_dummy_extents else {}),
                 **({("original_allocation_lower_bounds" if self.descriptor_origin == "allocation"
                      else "original_dummy_lower_bounds"): True} if self.descriptor_lower_bounds else {}),
                 **({"logical_lower_bound_expressions": [bound.public() if bound else None
@@ -342,12 +345,22 @@ def _analyze_native_accesses(analysis, routine, *, logical):
                     raise CompilationError("native logical association requires separate authority: " + binding.root)
                 resources[binding.root] = {"binding": binding, "reads": [], "writes": [], "overwrites": []}
                 return resources[binding.root]
+            explicit_extents = ()
             if binding.name in routine.arguments and "allocatable" not in binding.attributes and any(
                     _kind(axis) != "Assumed_Shape_Spec" for axis in binding.shape_nodes):
-                # An explicit-shape dummy may describe only a prefix of its
-                # actual. Reject a physical access, not an unrelated unused
-                # declaration elsewhere in the original procedure.
-                raise CompilationError("native physical sections require assumed-shape array dummies")
+                # A one-dimensional explicit dummy has no hidden pitches. Its
+                # exact original extent is checked against the registered
+                # resource before acquisition. Do not extend this to writable,
+                # assumed-size, dynamic or reshaped multidimensional storage.
+                if (binding.rank != 1 or binding.intent != "in" or len(binding.shape_nodes) != 1
+                        or _kind(binding.shape_nodes[0]) != "Explicit_Shape_Spec"):
+                    raise CompilationError("native physical sections require assumed-shape array dummies or guarded read-only rank-one constant shape")
+                lower, upper = binding.shape_nodes[0].items
+                lo = 1 if lower is None else constant(typed(lower, binding, declaration=True))
+                hi = None if upper is None else constant(typed(upper, binding, declaration=True))
+                if lo is None or hi is None:
+                    raise CompilationError("native explicit-shape sections require constant original bounds")
+                explicit_extents = (max(0, hi-lo+1),)
             identity_boundary = analysis.resource_identity_boundary(binding)
             if identity_boundary:
                 raise CompilationError(identity_boundary)
@@ -384,6 +397,7 @@ def _analyze_native_accesses(analysis, routine, *, logical):
                         raise CompilationError("native local dynamic bounds require their original descriptor")
             resources[binding.root] = {"binding": binding, "lowers": lowers, "lower_expressions": expressions,
                                        "descriptor": descriptor, "descriptor_origin": descriptor_origin,
+                                       "explicit_extents": explicit_extents,
                                        "reads": [], "writes": [], "overwrites": []}
         return resources[binding.root]
 
@@ -650,13 +664,19 @@ def _analyze_native_accesses(analysis, routine, *, logical):
                               if _kind(attribute) == "Dimension_Attr_Spec"), None)
             for entity in _children(entities):
                 shape = entity.items[1] if entity.items[1] is not None else dimension
-                axes = _children(shape)
                 binding = analysis._binding(routine.scope, entity.items[0])
                 if binding is not None and binding.root in private_roots:
                     # The registered completion token proves this original
                     # fixed local storage stays private to the retained native
                     # team. It is not a synthetic assumed-shape capture.
                     continue
+                if _kind(shape) == "Assumed_Size_Spec":
+                    explicit, lower = shape.items
+                    axes = _children(explicit)
+                    if lower is not None:
+                        typed(lower, binding, declaration=True)
+                else:
+                    axes = _children(shape)
                 for axis in axes:
                     for bound_node in axis.items:
                         if bound_node is not None:
@@ -666,6 +686,8 @@ def _analyze_native_accesses(analysis, routine, *, logical):
             raise CompilationError("native section refinement requires assignment-only affine DO leaves")
         statements(nodes)
         for entry in resources.values():
+            if not logical and entry["explicit_extents"] and (entry["writes"] or entry["overwrites"]):
+                raise CompilationError("native explicit-shape dummy must have independently proved read-only effects")
             if (getattr(analysis, "_native_sections_include_entry", True)
                     and entry["binding"].intent == "out" and entry["reads"]):
                 raise CompilationError("native INTENT(OUT) reads require original-position definition hooks")
@@ -677,7 +699,8 @@ def _analyze_native_accesses(analysis, routine, *, logical):
         return NativeSections(True, resources=tuple(
             NativeResourceSections(root, entry["binding"].rank, entry["lowers"],
                                    *(tuple(entry[label]) for label in ("reads", "writes", "overwrites")),
-                                   entry["lower_expressions"], entry["descriptor"], entry["descriptor_origin"])
+                                   entry["lower_expressions"], entry["descriptor"], entry["descriptor_origin"],
+                                   entry["explicit_extents"])
             for root, entry in sorted(resources.items())))
     except CompilationError as error:
         return NativeLogicalAccesses(False, str(error)) if logical else NativeSections(False, str(error))

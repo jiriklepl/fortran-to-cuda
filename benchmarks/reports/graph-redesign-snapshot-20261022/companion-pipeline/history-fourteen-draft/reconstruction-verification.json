@@ -1,0 +1,25 @@
+[
+  {
+    "argv": [
+      "git",
+      "apply",
+      "--check",
+      "/tmp/fortran-committable-snapshot-20261022/companion-final-reconstruction-draft-01/all-fourteen-files-from-base.patch"
+    ],
+    "cwd": "/tmp/fortran-committable-snapshot-20261022/companion-final-reconstruction-draft-01/reconstruction-verification",
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "git",
+      "apply",
+      "/tmp/fortran-committable-snapshot-20261022/companion-final-reconstruction-draft-01/all-fourteen-files-from-base.patch"
+    ],
+    "cwd": "/tmp/fortran-committable-snapshot-20261022/companion-final-reconstruction-draft-01/reconstruction-verification",
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  }
+]

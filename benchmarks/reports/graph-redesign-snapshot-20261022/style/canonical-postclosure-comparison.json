@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "status": "no_new_canonical_lint_findings_after_all_source_fixes_and_baseline_pin",
+  "current_command_exit_code": 1,
+  "baseline_warnings": 114,
+  "current_warnings": 104,
+  "current_affected_files": 41,
+  "introduced_unique_warning_tuples": [],
+  "removed_unique_warning_tuples": [
+    [
+      "compiler/tests/test_lexical_source_owner_cuda.py",
+      "I001",
+      "Import block is un-sorted or un-formatted"
+    ],
+    [
+      "compiler/tests/test_nested_array_operations.py",
+      "I001",
+      "Import block is un-sorted or un-formatted"
+    ],
+    [
+      "compiler/tests/test_reached_definitions.py",
+      "I001",
+      "Import block is un-sorted or un-formatted"
+    ],
+    [
+      "compiler/tests/test_scoped_view_sources.py",
+      "PT018",
+      "Assertion should be broken down into multiple parts"
+    ],
+    [
+      "compiler/tests/test_source_numerical_closures.py",
+      "I001",
+      "Import block is un-sorted or un-formatted"
+    ],
+    [
+      "compiler/tests/test_source_rank_reduced_views.py",
+      "I001",
+      "Import block is un-sorted or un-formatted"
+    ],
+    [
+      "compiler/tests/test_source_scalar_actuals.py",
+      "PT006",
+      "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`"
+    ],
+    [
+      "compiler/tests/test_source_scalar_actuals.py",
+      "PT018",
+      "Assertion should be broken down into multiple parts"
+    ],
+    [
+      "compiler/tests/test_worksharing_region_dispatch.py",
+      "I001",
+      "Import block is un-sorted or un-formatted"
+    ]
+  ],
+  "fewer_warning_instances": 10,
+  "comparison_key": [
+    "relative_path",
+    "code",
+    "message"
+  ],
+  "raw": {
+    "baseline": {
+      "path": "/tmp/fortran-committable-snapshot-20261022/baseline-compiler-lint.json",
+      "sha256": "2c5450401a1a80136e1d6c449cb8d01e39570555a20806caa900f19b4d72aefa"
+    },
+    "current": {
+      "path": "/tmp/fortran-committable-snapshot-20261022/compiler-lint-postclosure-final.json",
+      "sha256": "65284981f33b74bf1bb71a5906866d4df8d83b0b440a58ddf0ad15f4ef7c9241"
+    }
+  },
+  "full_repository_lint_clean": false,
+  "main_and_companion_diff_check_exit_codes": [
+    0,
+    0
+  ],
+  "formatting": "Original reported format debt preserved; no formatting sweep or fresh full-format claim"
+}

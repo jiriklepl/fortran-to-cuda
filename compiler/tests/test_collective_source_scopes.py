@@ -6,10 +6,10 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import form_source_scopes
 
 SOURCE = """module operators

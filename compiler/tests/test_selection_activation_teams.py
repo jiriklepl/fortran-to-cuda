@@ -90,7 +90,7 @@ def test_multiple_tiled_original_units_retain_distinct_reached_read_authority(em
                 originals = member.builder.inline_for(call.procedure).original_selection(call.node)
                 assert len(originals) == len(proof.prepared._selection)
                 assert all(left is right for left, right in zip(originals, proof.prepared._selection, strict=True))
-    assert kinds == {"JoinedTeam", "StructuredScope"}
+    assert kinds == {"JoinedTeam", "CombinedNumericalTeam"}
 
 
 def test_multiple_tiled_original_units_compile_with_shared_guard_scratch(emitted):
@@ -111,7 +111,7 @@ def test_mutable_preparation_registry_cannot_reassociate_original_reads(emitted,
 
     if route == "lexical":
         _selected, owner, _outputs, _report = emit_activation_fixture(tmp_path / "original.f90")
-        expected_kind = "StructuredScope"
+        expected_kind = "CombinedNumericalTeam"
     else:
         _directory, owner, _outputs, _report, _text = emitted
         expected_kind = "JoinedTeam"

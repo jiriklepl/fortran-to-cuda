@@ -1,0 +1,20 @@
+{
+  "status": "root_reviewed_metadata_only_assembly_authorized",
+  "recipe": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/final-test-evidence-recipe.sealed.json",
+    "sha256": "192e36433dfe39401ba6f9ca5ab32e9af94d26c59b2fbc6e07d4f2eb232ad65f"
+  },
+  "assembler": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/assemble_test_evidence.py",
+    "sha256": "432be19ef025784effc03fee2d360c40a2cffa20e42533d5278e2fc2902497d9"
+  },
+  "verified_nested_reference_entries": 159,
+  "resolution_order_reviewed": true,
+  "all_earlier_failed_error_timeout_skip_phases_retained": true,
+  "whole_file_CPU92_normalization_preserves_actual_argv_and_original_summary": true,
+  "expected_total_nodes": 8901,
+  "expected_passed_conditional_until_assembler": 8899,
+  "classified_skips_remain_skips": 2,
+  "retired_replacements_never_inherit_old_outcomes": true,
+  "no_tests_compilers_apps_or_GPU_execution_authorized": true
+}

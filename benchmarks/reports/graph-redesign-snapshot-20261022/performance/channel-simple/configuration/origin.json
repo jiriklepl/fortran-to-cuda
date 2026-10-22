@@ -1,0 +1,73 @@
+{
+  "repository": "https://github.com/Erunno/elmm-in-clouds",
+  "commit": "8ddf8817d6701f45b526f6aeab0a83a398b86ab7",
+  "path": "channel-simple",
+  "files": {
+    "boundconds.conf": {
+      "sha256": "9a38b407dfed3b2538f9b831c3b96260775f3e07893b3e59ee5ac1e4a1013552",
+      "bytes": 1117
+    },
+    "grid.conf": {
+      "sha256": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+      "bytes": 443
+    },
+    "inlet.conf": {
+      "sha256": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+      "bytes": 1063
+    },
+    "large_scale.conf": {
+      "sha256": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+      "bytes": 149
+    },
+    "les.conf": {
+      "sha256": "8da8396a3d4abd601f685d876017a71140b2b513957decd10fcef574b9a90211",
+      "bytes": 244
+    },
+    "main.conf": {
+      "sha256": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+      "bytes": 607
+    },
+    "output.conf": {
+      "sha256": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+      "bytes": 107
+    },
+    "scalars.conf": {
+      "sha256": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+      "bytes": 2912
+    },
+    "time_stepping.conf": {
+      "sha256": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05",
+      "bytes": 196
+    }
+  },
+  "configuration": "channel-simple",
+  "prepared_files_sha256": {
+    "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+    "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+    "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+    "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+    "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+    "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+    "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+    "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+    "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05"
+  },
+  "parser_conversions": {
+    "boundconds.conf": "Translate legacy numeric boundary/inlet records to bc()/ic() objects: periodic west/east/south/north, no-slip top/bottom, same turbulent inlet values. The pinned ELMM parser requires stress_gradeint spelling.",
+    "les.conf": "Translate legacy sigma=2/no-filter=0/default-wall-model=1 to subgrid_model(type=sigma) and filter(type=none). Omit wall_model(): this pinned parser writes that value to filtertype; the default preserves wall model 1."
+  },
+  "duration": {
+    "start_time": 0,
+    "end_time": 0.5,
+    "time_step_cap": null,
+    "expected_reference_completed_steps": 109,
+    "note": "Original duration is preserved. Actual completed steps must agree with the fresh native reference."
+  },
+  "grid_cells": [
+    128,
+    64,
+    64
+  ],
+  "advection_method": 2,
+  "fortran_sources_modified_by_configuration_fixture": false
+}

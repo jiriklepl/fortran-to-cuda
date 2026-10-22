@@ -1,0 +1,213 @@
+{
+  "schema_version": 1,
+  "kind": "TEXT_ONLY_approved_fixedTOP_natural109_three_mode_storage_check",
+  "status": "held_for_root_review_and_post_CUDA_suite_lease",
+  "approval": "User approved exact deterministic pressure fix for common all-three-mode correctness; root relay2026-10-22. No new approval question required.",
+  "approved_pressure_source_sha256": "65d6ee76dc4b63b4545a1bfd481dbf875cb168f55a484bac7d0a39b78f21f7d0",
+  "existing_binary_reuse": "Only authentic existing private pressure-only full-field executables; no build/link/source/helper changes. Never retag public prepared artifacts.",
+  "binaries": {
+    "native": {
+      "path": "/tmp/fortran-native-top-reference-serial-01/build/ELMM-fields",
+      "sha256": "dadd3204148fde21aaafe568823028ee548dd8749803f93c4b902bb88e7fe97d"
+    },
+    "be58": {
+      "path": "/tmp/fortran-deterministic-top-cross-mode-20/build/be58/ELMM-fields",
+      "sha256": "08f6a078b7bf397928f7b41e9dc9f34fd8c2464b85739ec86e703ca9d0e9d27a"
+    },
+    "candidate20": {
+      "path": "/tmp/fortran-deterministic-top-cross-mode-20/build/candidate20/ELMM-fields",
+      "sha256": "f51cf924c1fc8fdd027ccedc517b74b0e4ad3a1f295a2ea53346e8fe1133de4d"
+    }
+  },
+  "bound_small_inputs_sha256": {
+    "/tmp/fortran-snapshot-simple109-correctness-20261022/run_three_mode.py": "c92600a4508c42ef680c7f4af55e82d56d23e780c9c9cedd5fe66afdddc3d9e8",
+    "/tmp/fortran-deterministic-top-cross-mode-20/plan.json": "840033fd059760ba0584e35a3223808c4f36fa6ecec2025e16baa9c61cccb017",
+    "/tmp/fortran-deterministic-top-cross-mode-20/script-stage.json": "3502a011734ebca8557b16a4edbb543dd8a53dd6ea062fe3b54201faece57a82",
+    "/tmp/fortran-deterministic-top-cross-mode-20/build_private.py": "aead7ea2af358ff66d5dfe955ca2f082d5ac7ca3fb5256e38c0df9b524524907",
+    "/tmp/fortran-deterministic-top-cross-mode-20/run_short.py": "d4ccbeccebc40e38a52ad7e028f8450ea79f42976a83374b7276210d56d0ab95",
+    "/tmp/fortran-deterministic-top-cross-mode-20/build-receipt.json": "2d7884eb85cc9223b1cff64779cd793ac3456cd2ab3ab6c3066f754219b4679b",
+    "/tmp/fortran-deterministic-top-cross-mode-20/short-01/report.json": "88ef6bf4eb3a689724c7d52a8dbef4e8296d8af033105e93de72311232304a05",
+    "/tmp/fortran-native-top-reference-serial-01/build-receipt.json": "cdd0c29d5d7ff226b475b552d8affd3bf777a2c2d103b4ad10913cc253ef808d",
+    "/tmp/fortran-native-top-reference-serial-01/build-plan.json": "0691d03a080d2f57df051d798cba87d4b8f41f46a8ba9246c354947b51065992",
+    "/tmp/fortran-native-top-reference-serial-01/pressure.f90": "65d6ee76dc4b63b4545a1bfd481dbf875cb168f55a484bac7d0a39b78f21f7d0",
+    "/home/jirka/research/fortran-abomination/containers/reproduce_e2e.py": "b32a8f30ce64312a54680d2e28d335a4faeb7e0a0b7231f44f360beda48d5f25",
+    "/home/jirka/research/fortran-abomination/containers/probe_prepared_e2e.py": "bcc002b038e8ddb0407c8f795c1e23c55ad5aba87b60825d04f8ac5e76f4066f",
+    "/home/jirka/research/fortran-abomination/containers/sgs_experiment.py": "844f700e6a6533285d9fdaeca1d6090fa19bd1bf002026a36499d22040730731",
+    "/home/jirka/research/fortran-abomination/containers/sgs_contract.json": "9d3f701a53a8e1837321112fc8d485dc43ab44d683c1891e4e75aea425e2bc3e",
+    "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+    "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+    "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+    "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05",
+    "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+    "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+    "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+    "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+    "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+    "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+    "/tmp/fortran-fftw-wisdom-diagnostic-01/fftw_control.c": "18c641419b729474c594e4f0554e616507ac32d57959be6a041625e137382c87",
+    "/tmp/fortran-fftw-wisdom-diagnostic-01/fftw_control.so": "3af8eacbbc2bc6fa57b283afcf67d2ae26df5913e58c095a79c20bdcb45796b4",
+    "/tmp/fortran-fftw-wisdom-diagnostic-01/executed-native-control-01/wisdom.f64.fftw": "2157036dcda409497b01cb99da2ba8a8a89a27e8c11ec06a2240ee03b73cd8b7"
+  },
+  "configuration_source": "/home/jirka/research/fortran-abomination/containers/cases/channel-simple",
+  "configuration_sha256": {
+    "output.conf": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+    "inlet.conf": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+    "grid.conf": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+    "time_stepping.conf": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05",
+    "les.conf": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+    "large_scale.conf": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+    "boundconds.conf": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+    "scalars.conf": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+    "origin.json": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+    "main.conf": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421"
+  },
+  "case": "channel-simple",
+  "natural_steps": 109,
+  "max_steps_override": null,
+  "order": [
+    "native",
+    "be58",
+    "candidate20"
+  ],
+  "per_application_timeout_seconds": 1800,
+  "threads": 4,
+  "cpu_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+  ],
+  "environment_overlay": {
+    "OMP_NUM_THREADS": "4",
+    "OMP_DYNAMIC": "FALSE",
+    "OMP_SCHEDULE": "static",
+    "OMP_PROC_BIND": "false",
+    "OMP_PLACES": null,
+    "GOMP_CPU_AFFINITY": null,
+    "OMP_WAIT_POLICY": null,
+    "GOMP_SPINCOUNT": null,
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "FORT_RUNTIME_TRACE": "0",
+    "FORT_OFFLOAD_TRACE": "0",
+    "LD_PRELOAD": "/tmp/fortran-fftw-wisdom-diagnostic-01/fftw_control.so",
+    "FORT_FFTW_CONTROL_PREFIX": "/tmp/fortran-fftw-wisdom-diagnostic-01/executed-native-control-01/wisdom",
+    "FORT_FFTW_CONTROL_MODE": "verify"
+  },
+  "environment_record_keys": [
+    "OMP_NUM_THREADS",
+    "OMP_DYNAMIC",
+    "OMP_SCHEDULE",
+    "OMP_PROC_BIND",
+    "OMP_PLACES",
+    "GOMP_CPU_AFFINITY",
+    "OMP_WAIT_POLICY",
+    "GOMP_SPINCOUNT",
+    "OPENBLAS_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "FORT_RUNTIME_TRACE",
+    "FORT_OFFLOAD_TRACE",
+    "LD_PRELOAD",
+    "FORT_FFTW_CONTROL_PREFIX",
+    "FORT_FFTW_CONTROL_MODE",
+    "FORT_FFTW_CONTROL_LOG",
+    "CUDA_VISIBLE_DEVICES",
+    "LD_LIBRARY_PATH",
+    "LIBRARY_PATH",
+    "FORT_SCOPE_GRAPH_QUEUE",
+    "FORT_SCOPE_CUDA_GRAPHS"
+  ],
+  "expected_exact_four_plan_records": [
+    {
+      "function": "fftw_plan_r2r_1d",
+      "precision": "fftw",
+      "original_thread_init_observed": true,
+      "threads": 1,
+      "original_flags": 0,
+      "rank": 1,
+      "dimensions": [
+        64
+      ],
+      "sign": 0,
+      "kinds": [
+        5
+      ],
+      "plan_sha256": "b94974415aee5798c6bedab829a82d3b9dde88778f9247ac149b732e75b88a72"
+    },
+    {
+      "function": "fftw_plan_r2r_1d",
+      "precision": "fftw",
+      "original_thread_init_observed": true,
+      "threads": 1,
+      "original_flags": 0,
+      "rank": 1,
+      "dimensions": [
+        64
+      ],
+      "sign": 0,
+      "kinds": [
+        4
+      ],
+      "plan_sha256": "8eb66f41aec2df44405e66037a761161ed03e932823eb9d6cdfef7edb45f4596"
+    },
+    {
+      "function": "fftw_plan_dft_2d",
+      "precision": "fftw",
+      "original_thread_init_observed": true,
+      "threads": 1,
+      "original_flags": 0,
+      "rank": 2,
+      "dimensions": [
+        64,
+        128
+      ],
+      "sign": -1,
+      "kinds": [],
+      "plan_sha256": "d7fc2c8c9d42194be31259500bf47fe990d3b1d2a4a7deebab23a6f367f60cc7"
+    },
+    {
+      "function": "fftw_plan_dft_2d",
+      "precision": "fftw",
+      "original_thread_init_observed": true,
+      "threads": 1,
+      "original_flags": 0,
+      "rank": 2,
+      "dimensions": [
+        64,
+        128
+      ],
+      "sign": 1,
+      "kinds": [],
+      "plan_sha256": "12669c88753de472ded55ef0f3d505a758ccdc8d6b1887f012e830c59da99908"
+    }
+  ],
+  "field_policy": {
+    "dtype": "float64",
+    "atol": 1e-06,
+    "rtol": 1e-05,
+    "metadata_format": "storage-shape-bounds-v1"
+  },
+  "comparisons": "Fresh native109 is reference; bothGPUmodes strict all20including shape/bounds/halos/empty fields plusfinal/averagedVTK; secondary20-vsbe58 records strictandbit comparisons. Native reference selfcheck is layout/finiteness only, not independentaccuracy.",
+  "failure_policy": "Process/IO/layout/proof/FFTW/native-reference failures HOLD later modes. Ordinary be58 numerical failure records unchangedandcontinues independent20 diagnosis.",
+  "concurrency_qualification": "NONPERFORMANCE correctness only. Execute onlyafterrootconfirms CUDAfullsuite/recovery closedandgrants lease; neveroverlapGPUapps/officialtiming/calibration. Elapsed fieldsare diagnostic only.",
+  "public_original_protected_closure": "Existing cross-mode build.checked_plan/protected_inputs/assert_originals authenticates original2931preparedartifactclosure pre/post, plusnative original298buildinputsandallprivate outputs. Private alteredsourcebinary neverpassed aspublicpreparedauthority.",
+  "command": [
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "/tmp/fortran-snapshot-simple109-correctness-20261022/run_three_mode.py",
+    "--execute",
+    "--authorization",
+    "/tmp/fortran-snapshot-simple109-correctness-20261022/root-authorization.json"
+  ],
+  "new_applications_authorized_by_this_stage": false,
+  "builds_compiles_tests_apps_executed_in_preparation": false,
+  "expected_output_directory": "/tmp/fortran-snapshot-simple109-correctness-20261022/runs-01",
+  "final_exit_status": "0 only for completed_strict_pass; ordinary numerical FAIL still completes independent modes then exits1; structural failures retain original exception."
+}

@@ -8,10 +8,10 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend.numerical_preparation import NumericalPreparationProvider
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.preflight import preflight_scope, preflight_source_scopes
 from compiler.scopes.source import ScopeBuilder
 
@@ -236,7 +236,7 @@ def test_cli_preflight_writes_no_output_directory(tmp_path):
     destination = tmp_path / "must-not-be-created"
     result = subprocess.run([sys.executable, "-m", "compiler", "--form-scopes", "--scope-preflight",
         "--input", str(path), "--kernel", "inspect_me::step", "--scope-facts", str(facts_path),
-        "--memory-model", "scoped", "--scope-execution", "reached", "--gpu-policy", "auto",
+        "--memory-model", "scoped", "--scope-execution", "graph", "--gpu-policy", "auto",
         "--output-dir", str(destination), "--json"], capture_output=True, text=True, check=True)
     report = json.loads(result.stdout)
     assert report["outputs"] == []

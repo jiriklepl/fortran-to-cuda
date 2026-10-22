@@ -8,8 +8,8 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT, assert_uncalibrated_native
 
@@ -149,7 +149,7 @@ def test_mixed_team_retains_original_work_once_and_reports_separate_authority(tm
     assert 'run_team' in text
     assert '!$omp master' in text
     assert '!$omp barrier' in text
-    assert 'fort_scope_host_begin' in text
+    assert 'fort_scope_access_begin_v1' in text
     assert 'fort_scope_host_end' in text
 
 

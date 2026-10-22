@@ -1,0 +1,30 @@
+[
+  {
+    "node": "main::compiler/tests/test_ordinary_numerical_regions_cuda.py::test_late_team_veto_publishes_gpu_prefix_without_replay[ordinary_team_binaries1]",
+    "classification": {
+      "reason": "late veto requires an executed GPU prefix; resource fallback has its own controls",
+      "classification": "structurally impossible GPU-prefix test with explicit zero-device-budget fixture; remains skipped",
+      "source_sha256": "5e39dfa8d88d7a37d8d9ea413f4d95559e9c633381cda8af125ed6188c29f8a2",
+      "evidence": [
+        {
+          "path": "/tmp/fortran-committable-snapshot-20261022/cuda-legitimate-inapplicable-skips.json",
+          "sha256": "29b32e5638b063b560191152c7620e42372d82f6a4e22c94d98ca4c7eae01d97"
+        }
+      ]
+    }
+  },
+  {
+    "node": "main::compiler/tests/test_ordinary_numerical_regions_cuda.py::test_late_team_veto_publishes_gpu_prefix_without_replay[ordinary_team_binaries3]",
+    "classification": {
+      "reason": "late veto requires an executed GPU prefix; resource fallback has its own controls",
+      "classification": "structurally impossible GPU-prefix test with explicit zero-device-budget fixture; remains skipped",
+      "source_sha256": "5e39dfa8d88d7a37d8d9ea413f4d95559e9c633381cda8af125ed6188c29f8a2",
+      "evidence": [
+        {
+          "path": "/tmp/fortran-committable-snapshot-20261022/cuda-legitimate-inapplicable-skips.json",
+          "sha256": "29b32e5638b063b560191152c7620e42372d82f6a4e22c94d98ca4c7eae01d97"
+        }
+      ]
+    }
+  }
+]

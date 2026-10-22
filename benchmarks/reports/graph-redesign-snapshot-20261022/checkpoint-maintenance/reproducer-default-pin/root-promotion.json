@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-10-22T10:39:53.182895+00:00",
+  "status": "exact3filebaselinepinpromoted_after109controller_and_protected_postguards_passed",
+  "review": {
+    "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/root-postguard-review.json",
+    "sha256": "3cfe28179266820959ec9673871b708dffd1cd6179549adbb8f2f593df950c3f"
+  },
+  "reviewed_patch_sha256": "20378081c7e6fc2125784be43fd747f31a87d7c2cf4dbf23df8222f9f47da3f7",
+  "files": [
+    {
+      "path": "containers/reproduce_e2e.py",
+      "current_preimage_sha256": "b32a8f30ce64312a54680d2e28d335a4faeb7e0a0b7231f44f360beda48d5f25",
+      "proposed_sha256": "80d04f9f2df437f918f2c74afd6dee4c5d9eb77950727449e4ee0535e96929b7"
+    },
+    {
+      "path": "containers/README.md",
+      "current_preimage_sha256": "9da68507e48eec3b1e05a6fdd1094ade547f94a381f01d1d796d7959b4fb4e2a",
+      "proposed_sha256": "1b022082f1e261526ea9a2f7abfafadc4bc7d05000450a6c2e48bb62b2ec44ab"
+    },
+    {
+      "path": "containers/tests/test_reproduce_e2e.py",
+      "current_preimage_sha256": "d176f24f8a341bcb735cb057ce1389edc521c2c1577ef7a3964471254aa4a5d6",
+      "proposed_sha256": "9ecdf391818eb71f477879111793b4d661f9792269e8d57c00c2c929ab7036f6"
+    }
+  ],
+  "source_semantics": "Pinned fullbe58 historicalSGS/direct default, explicitoverride retained,1parser-onlymockedregression; no compiler/runtime/profile changes.",
+  "remaining_validation": "Finalmain/pipelinecollection thenall7containers193nodes; finalsourceauthority/archive/stage."
+}

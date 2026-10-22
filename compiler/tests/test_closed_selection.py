@@ -5,9 +5,9 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.closed_selection import ClosedNumericalOwner, candidates, discover_closed_selections
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT

@@ -7,6 +7,7 @@ The original master owns runtime mutation; every member enters team workers.
 
 import re
 from copy import copy
+from hashlib import sha256
 
 from fparser.two.utils import walk
 
@@ -27,10 +28,49 @@ from compiler.scopes.segments import (
 from compiler.scopes.worksharing_inventory import prepare_worksharing_inventory, prepared_span, unit_span
 
 
+def ordinary_entry_guard(owner):
+    """An ordinary entry or fresh owning CPU latch needs no managed team.
+
+    Both guards are always-present local LOGICALs. Do not combine them with an
+    ENTRY-only dummy expression: Fortran logical operators do not short circuit.
+    """
+    if owner.builder.config.scope_execution != "graph":
+        return None
+    if owner.control_guard is not None:
+        return f".not. ({owner.control_guard})"
+    from compiler.scopes.native_owner_hint import latch
+    return latch(owner)
+
+
+def original_team_source(builder, originals, first, last, expected_sha256):
+    """Retain one complete label-free original team under existing authority."""
+    if any(getattr(getattr(node, "item", None), "label", None)
+           for original in originals for node in walk(original)):
+        return None
+    source = builder.analysis.source_text(builder.entry.scope.path).splitlines(keepends=True)
+    if not 1 <= first <= last <= len(source):
+        raise CompilationError("pristine original team lost its complete original source span")
+    original = "".join(source[first-1:last])
+    if sha256(original.encode()).hexdigest() != expected_sha256:
+        raise CompilationError("pristine original team changed its authenticated source span")
+    return original
+
+
 def declared_names(specification):
     """Generated local storage that DEFAULT(NONE) must explicitly share."""
     names = []
-    for line in specification:
+    statements, pending = [], ''
+    for declaration in specification:
+        for physical in declaration.splitlines():
+            line = pending + physical.strip().lstrip('& ')
+            if line.endswith('&'):
+                pending = line[:-1] + ' '
+            else:
+                statements.append(line)
+                pending = ''
+    if pending:
+        raise CompilationError('generated team declaration has an unfinished continuation')
+    for line in statements:
         if '::' not in line or re.search(r'\bparameter\b', line.split('::')[0], re.I):
             continue
         depth, start = 0, 0
@@ -66,6 +106,8 @@ class JoinedTeam(StructuredScope):
         self.units_by_loop = {key: candidate.unit for key, candidate in self.candidates_by_loop.items()}
         self.first = statement_span(nodes[0])[0]
         self.last = statement_span(nodes[-1])[1]
+        source = builder.analysis.source_text(builder.entry.scope.path).splitlines(keepends=True)
+        self.original_span_sha256 = sha256("".join(source[self.first-1:self.last]).encode()).hexdigest()
         self.tree = self._sequence(self.original_nodes)
         if not self.calls:
             raise CompilationError('original joined team contains no supported numerical worksharing unit')
@@ -143,7 +185,8 @@ class JoinedTeam(StructuredScope):
                 # this native operation; it cannot establish a definition.
                 operation.affine_sections = operation.sections
                 operation.sections = NativeSections(True, resources=())
-                if getattr(self.builder, '_selection_activation_binding', None) is not None:
+                if (getattr(self.builder, '_selection_activation_binding', None) is not None
+                        or self.builder.config.scope_execution == 'graph'):
                     from compiler.frontend.reached_read_requirements import prove_native_read_requirements
                     operation.source_reads = prove_native_read_requirements(self.builder.analysis,
                         self.builder.entry.qualified, tuple(loops), completion=proof)
@@ -237,6 +280,13 @@ class JoinedTeam(StructuredScope):
                 'numerical_unit_limit': 32,
                 'effect_budget_role': 'each reached proof; expanded effects are not summed across ownership'},
             'native_abi': 'unchanged original body; absent borrowed controls are never read',
+            'pristine_original_entry': {
+                'source_eligible': not any(getattr(getattr(node, 'item', None), 'label', None)
+                                           for original in self.original_nodes for node in walk(original)),
+                'original_span_sha256': self.original_span_sha256,
+                'requires': 'ordinary nonborrowed entry or immutable owning native latch; complete original team and source authority',
+                'execution': 'original whole team directly; no runtime acquisition, commit or copyback',
+                'borrowed': 'unchanged checked original-team participant protocol'},
             'numerical_fallback_definitions': {
                 'entry_whole_requirement': 'deferred only for the exact guarded numerical/native pair',
                 'gpu': 'exact query definitions validated before execution',
@@ -265,6 +315,14 @@ class JoinedTeam(StructuredScope):
         from compiler.scopes.source import _checked
 
         builder = self.builder
+        unmanaged = ordinary_entry_guard(owner)
+        pristine = None
+        if unmanaged is not None:
+            inventory = ordered_worksharing_inventory(builder.analysis, builder.entry.qualified, self.original_nodes)
+            if inventory.parent is not self.completion:
+                raise CompilationError('pristine joined team lost its original completion authority')
+            pristine = original_team_source(builder, self.original_nodes, self.first, self.last,
+                                            self.original_span_sha256)
         from compiler.scopes.provenance import position, source_id
         trace_segment = source_id(builder, 'segment', span=(self.first, self.last))
         imports.append('use omp_lib, only: fort_team_omp_level => omp_get_level, fort_team_omp_threads => omp_get_num_threads')
@@ -273,6 +331,10 @@ class JoinedTeam(StructuredScope):
         original_owner, original_handles = owner, handles
         owner = copy(owner)
         owner.context, owner.enabled, owner.control_guard = 'fort_team_context', 'fort_team_enabled', None
+        graph_epoch = builder.config.scope_execution == 'graph'
+        if graph_epoch:
+            owner.epoch_pristine = 'fort_team_epoch_pristine'
+            owner.query_plan = 'fort_team_query_plan'
         handles = {root: 'fort_team_buffer_' + str(index) for index, root in enumerate(original_handles)}
         extra = ['logical :: fort_team_run, fort_team_native, fort_team_owned, fort_team_enabled',
                  'integer(c_int64_t) :: fort_team_context',
@@ -283,6 +345,12 @@ class JoinedTeam(StructuredScope):
                   'fort_team_owned = .true.']
         after = ['if (fort_team_owned) then', f'{original_owner.context} = fort_team_context',
                  f'{original_owner.enabled} = fort_team_enabled', 'endif']
+        if graph_epoch:
+            extra += ['logical :: fort_team_epoch_pristine, fort_team_query_plan']
+            before += [f'fort_team_epoch_pristine = {original_owner.epoch_pristine}',
+                       f'fort_team_query_plan = {original_owner.query_plan}']
+            after[-1:-1] = [f'{original_owner.epoch_pristine} = fort_team_epoch_pristine',
+                            f'{original_owner.query_plan} = fort_team_query_plan']
         patches = []
         numeric = {id(self.guarded[id(call.node)]): call for call in self.calls}
         lowers = {root: tuple(f'lbound({values[root]}, {axis}, kind=c_int64_t)'
@@ -295,7 +363,7 @@ class JoinedTeam(StructuredScope):
                     'endif', '!$omp end master', '!$omp barrier']
 
         def fail():
-            return [*owner.close(), 'fort_native_ready = .false.']
+            return [*owner.close(prework=True, prework_status='fort_status'), 'fort_native_ready = .false.']
 
         # Declaration storage is outside the team and shared. Section TARGETs
         # remain alive through host_end; preparation occurs only when reached.
@@ -337,7 +405,6 @@ class JoinedTeam(StructuredScope):
                     prepare += [*access.prepare, f'fort_bindings({index}) = fort_scope_plan_binding()',
                                 f'fort_bindings({index})%buffer = {access.handle}',
                                 f'fort_bindings({index})%access = {access.access_name}']
-                    begins += _checked(f'fort_scope_host_begin(fort_context, {access.handle}, {access.access_name})')
                     ends += _checked(f'fort_scope_host_end(fort_context, {access.handle})')
                 count = len(accesses)
                 if operation.source_reads is not None:
@@ -355,9 +422,10 @@ class JoinedTeam(StructuredScope):
                     prepare += [f'fort_bindings({index}) = fort_scope_plan_binding()',
                                 f'fort_bindings({index})%buffer = {handles[root]}',
                                 f'fort_bindings({index})%access%flags = ' + ' + '.join(flags)]
-                    begins += _checked(f'fort_scope_host_begin(fort_context, {handles[root]}, fort_bindings({index})%access)')
                     ends += _checked(f'fort_scope_host_end(fort_context, {handles[root]})')
                 count = len(operation.coherence_effects)
+            from compiler.scopes.access import native_access_begin
+            begins = _checked(native_access_begin(count))
             prepare += ['if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_plan_add( &',
                         'fort_context, FORT_SCOPE_PLAN_NATIVE, 0_c_int64_t, &',
                         f'{"c_loc(fort_bindings)" if count else "c_null_ptr"}, {count}_c_size_t, &',
@@ -413,6 +481,16 @@ class JoinedTeam(StructuredScope):
                     from compiler.offload.selection_cost import choice
                     lines += ['if (fort_status == FORT_SCOPE_OK) then',
                               *choice(owner, unit, handles, values), 'endif']
+                if price_units:
+                    # The original native operation below has independent
+                    # effect/completion authority. Replace only a wholly
+                    # untouched all-CPU numerical schedule; ordinary reset and
+                    # close still reject an unfinished GPU or executed plan.
+                    lines += ['if (fort_status == FORT_SCOPE_OK .and. fort_native_ready .and. &',
+                              '    fort_decision%gpu_units == 0) then',
+                              'fort_status = fort_scope_plan_cancel_native_v1(fort_context)',
+                              "if (fort_status /= FORT_SCOPE_OK) error stop 'joined native choice cancellation failed'",
+                              'endif']
                 selected = 'fort_decision%gpu_units > 0' if price_units else '.true.'
                 lines += ['if (fort_status /= FORT_SCOPE_OK) then', *fail(),
                           'else', 'fort_team_run = fort_native_ready .and. (' + selected + ')', 'endif', 'end block ' + read_block, 'endif',
@@ -426,7 +504,8 @@ class JoinedTeam(StructuredScope):
             # next reached query validates definitions, without publishing any
             # unrelated device-current fields. Native work commits first.
             suffix = coordinated(['if (fort_team_native) then', *ends, 'endif',
-                                  *_checked('fort_scope_wait(fort_context)')])
+                                  *([] if builder.config.scope_execution == "graph" else
+                                    _checked('fort_scope_wait(fort_context)'))])
             first, last = operation.span
             if call is not None:
                 run = builder.inline.emit_call(call, handles, values, imports, query=False, collective=True,
@@ -451,4 +530,19 @@ class JoinedTeam(StructuredScope):
         qualification = coordinated([f'if (fort_team_omp_level() /= 1 .or. fort_team_omp_threads() /= {builder.config.host_threads}) then',
                                      *fail(), 'endif'])
         patches.append((first, last, '\n'.join(fortran_lines([parallel, *qualification])) + '\n'))
+        if pristine is not None:
+            from compiler.scopes.compose import _apply
+
+            # Reuse the same checked edit composition as independent roots.
+            # Every coordinated operation remains inside the managed ELSE;
+            # the original ABI reaches no borrowed dummy, hook or copyback.
+            relative = []
+            for first, last, replacement in patches:
+                if not self.first <= first <= self.last+1 or not first-1 <= last <= self.last:
+                    raise CompilationError('pristine joined team contains an edit outside its original source span')
+                relative.append({'first_line': first-self.first+1, 'last_line': last-self.first+1,
+                                 'replacement': replacement})
+            managed = _apply(pristine, relative)
+            replacement = (f'if ({unmanaged}) then\n' + pristine + 'else\n' + managed + 'endif\n')
+            patches = [(self.first, self.last, replacement)]
         return extra, patches, before, after

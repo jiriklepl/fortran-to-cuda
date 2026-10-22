@@ -3,11 +3,10 @@ from hashlib import sha256
 
 import pytest
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT
-
 
 SOURCE = """module renamed_planes
 contains
@@ -74,7 +73,7 @@ def test_boundary_planes_use_retained_axes_and_exact_native_hooks(tmp_path):
     assert all(item["actual_rank"] == 3 and item["logical_rank"] == 2 for item in records)
     assert all(item["section"]["retained_axes"] == [0, 2] for item in records)
     generated = outputs[next(path for path in outputs if path.startswith("sources/"))]
-    assert "fort_scope_view_get_v2" in generated and "fort_scope_host_begin" in generated
+    assert "fort_scope_view_get_v2" in generated and "fort_scope_access_begin_v1" in generated
     assert "fort_scope_forget_definition(" not in generated
     entries = [text for path, text in outputs.items() if path.endswith("_views/shared_entry.cu")]
     assert entries and all(".rank != 2" in text for text in entries)

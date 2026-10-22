@@ -1,0 +1,70 @@
+--- /tmp/fortran-snapshot-simple109-correctness-20261022/run_three_mode.py
++++ /tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/run_three_mode.py
+@@ -29,6 +29,39 @@
+         raise RuntimeError('preserve existing partial report: ' + str(temporary))
+     temporary.write_text(json.dumps(value, indent=2) + '\n')
+     temporary.replace(path)
++
++def historical_helper_projection(bindings, stage):
++    """Resolve one reviewed historical parser preimage; every other guard is unchanged."""
++    policy = stage['historical_helper_compatibility']
++    current = '/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/gpu_validation.py'
++    old_sha = '8e1cf21aff1ae868f02082ef077fee225cb4626a682ae8f6c408ca84381756cf'
++    new_sha = '1fa37f95456d1779477214a413264b6112950f21e1129ef2fc9574f58ee66479'
++    if (policy['current']['path'] != current or policy['current']['sha256'] != new_sha
++            or policy['historical_preimage']['sha256'] != old_sha):
++        raise RuntimeError('unexpected historical validator compatibility identity')
++    if digest(current) != new_sha or digest(policy['historical_preimage']['path']) != old_sha:
++        raise RuntimeError('approved current parser or retained historical parser changed')
++    result = dict(bindings)
++    if current in result:
++        if result[current] != old_sha:
++            raise RuntimeError('historical helper binding is not the exact reviewed preimage')
++        result[current] = new_sha
++        result[policy['historical_preimage']['path']] = old_sha
++    return result
++
++
++def checked_historical_plan(build, stage):
++    # Original modules/stages stay byte-exact; this explicit sidecar resolves only
++    # the approved parser-path change, without modifying their functions.
++    if digest(build.PLAN) != build.PLAN_SHA256:
++        raise RuntimeError('reviewed original plan changed')
++    original_stage = read(build.STAGE)
++    if original_stage['plan'] != {'path': str(build.PLAN), 'sha256': build.PLAN_SHA256}:
++        raise RuntimeError('original script stage belongs to another plan')
++    build.verify_hashes(original_stage['script_files_sha256'])
++    build.verify_hashes(historical_helper_projection(original_stage['validation_helpers_sha256'], stage))
++    return read(build.PLAN), original_stage
++
+ 
+ def main():
+     parser = argparse.ArgumentParser(description=__doc__)
+@@ -53,7 +86,7 @@
+     sys.path.insert(0, str(EXISTING))
+     import build_private as build
+     import run_short as short
+-    plan, original_stage = build.checked_plan()
++    plan, original_stage = checked_historical_plan(build, stage)
+     receipt = read(EXISTING / 'build-receipt.json')
+     native_receipt = read(NATIVE / 'build-receipt.json')
+     if (receipt['status'] != 'built_private_diagnostic_only'
+@@ -62,8 +95,8 @@
+             or receipt['actual_compile_count'] != 2 or receipt['actual_diagnostic_link_count'] != 2
+             or native_receipt['status'] != 'built_private_diagnostic_only'):
+         raise RuntimeError('authentic pressure-only builds required')
+-    protected = build.protected_inputs(plan, original_stage)
+-    for values in [receipt['protected_inputs_sha256'], receipt['outputs_sha256'],
++    protected = historical_helper_projection(build.protected_inputs(plan, original_stage), stage)
++    for values in [historical_helper_projection(receipt['protected_inputs_sha256'], stage), receipt['outputs_sha256'],
+                    read(NATIVE / 'build-plan.json')['original_inputs_sha256'],
+                    native_receipt['outputs_sha256'], stage['bound_small_inputs_sha256']]:
+         build.add_bindings(protected, values)
+@@ -92,6 +125,7 @@
+               'private_pressure_only_diagnostic_links': True,
+               'final_public_qualification': False, 'performance_sample': False,
+               'stage_sha256': digest(STAGE), 'driver_sha256': digest(__file__),
++              'historical_helper_compatibility': stage['historical_helper_compatibility'],
+               'authorization': {'path': str(args.authorization), 'sha256': digest(args.authorization)},
+               'field_policy': stage['field_policy'], 'runs': [],
+               'original_public_guard_before': {'passed': True, 'authenticated_files': len(public_inputs)},

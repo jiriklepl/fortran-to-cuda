@@ -1,0 +1,51 @@
+{
+  "schema_version": 2,
+  "status": "complete_with_two_documented_structural_skips",
+  "all_required_applicable_tests_passed": true,
+  "all_collected_nodes_passed": false,
+  "collected_nodes": 8901,
+  "passed": 8899,
+  "classified_structural_skipped": 2,
+  "failed": 0,
+  "blocked": 0,
+  "by_suite": {
+    "main": {
+      "collected_nodes": 8061,
+      "passed": 8059,
+      "classified_skipped": 2
+    },
+    "pipeline": {
+      "collected_nodes": 840,
+      "passed": 840,
+      "classified_skipped": 0
+    }
+  },
+  "source_file_count": 463,
+  "command_run_rows": 602,
+  "original_nodes": 8894,
+  "new_nodes": 7,
+  "explicit_retired_node_replacements": 2,
+  "subtests": "Supplemental unittest/pytest-subtest records never inflate collectednode counts.",
+  "summary": {
+    "path": "tests/summary.json",
+    "sha256": "7a97233ff578ada475a6b93b13e6e5558fcdcbd68fd62fde7d2702b63fcd94cd"
+  },
+  "raw_archive": {
+    "path": "tests/raw-evidence.tar.gz",
+    "sha256": "346d2d086a1f9917c68fafed02c703cd10a55b9bb5f9ca51d538ea18e323f06e",
+    "members": 1966,
+    "all_extraction_hashes_verified": true
+  },
+  "source_authority": {
+    "path": "tests/root-source-authority.json",
+    "sha256": "dcfd5076069ca556ad2f8e23d32a2541abe2bcc7c4cc3e67be806b026d52f347"
+  },
+  "root_final_review": {
+    "path": "tests/root-final-review.json",
+    "sha256": "a8af71684cb4a4985d9fc46021cbf73e32c689f309fa63a70a0419d530176104"
+  },
+  "coverage": "tests/coverage-by-file.csv",
+  "skip_details": "tests/remaining-skips.json",
+  "all_initial_failures_timeouts_and_reviewed_followups_preserved": true,
+  "packaging_scope": "Metadata joining/compression/copy only; no new tests, builds, apps, timing, calibration or profiling. Root/author executed actual test phases recorded in raw evidence."
+}

@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "status": "ROOT_REVIEW_REQUIRED_METADATA_ONLY_NO_NORMALIZER_EXECUTION",
+  "normalizer": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/normalize_whole_file_summaries.py",
+    "sha256": "688da78e6354e22bc0041881188b6e99ab32e6de26d61e6be18dd7e0e9e487da"
+  },
+  "original_recipe": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/final-test-evidence-recipe.sealed.json",
+    "sha256": "192e36433dfe39401ba6f9ca5ab32e9af94d26c59b2fbc6e07d4f2eb232ad65f"
+  },
+  "inventories": [
+    {
+      "suite": "main",
+      "path": "/tmp/fortran-committable-snapshot-20261022/final-collection/main/inventory.json",
+      "sha256": "280d1862d851440ec90a0ca1799c5800e56f9d174aa9e00e72e5332bd2fd8cf3",
+      "expected_count": 8061
+    },
+    {
+      "suite": "pipeline",
+      "path": "/tmp/fortran-committable-snapshot-20261022/final-collection/pipeline/inventory.json",
+      "sha256": "0fd2075a8aa6768a6acb10775268f90c273b46793b46cdda8701f18898fe450b",
+      "expected_count": 840
+    }
+  ],
+  "summaries": [
+    {
+      "input": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/summary.json",
+        "sha256": "f69ba400242e44fba6e989af6442290b75e6ab8290122c40e031aaee69426988"
+      },
+      "output": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-contract-batch.normalized.json",
+      "original_recipe_suite": "main",
+      "rows": 7
+    },
+    {
+      "input": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-source-costs/summary.json",
+        "sha256": "f24cd2b3ea61fde169a4912e115ab56d9fd7d3b63530ebebf0a6b035de53ac98"
+      },
+      "output": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-source-costs.normalized.json",
+      "original_recipe_suite": "main",
+      "rows": 3
+    },
+    {
+      "input": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-pending-report-final/summary.json",
+        "sha256": "81043b201f401eb1cd3a83b8a48b1cce0325d50b0bd6e3f18b479a8b28756316"
+      },
+      "output": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-pending-report-final.normalized.json",
+      "original_recipe_suite": "main",
+      "rows": 1
+    },
+    {
+      "input": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-object-final/summary.json",
+        "sha256": "127dc6f2b09be7e6c5cab1eb53e96d0ac3f775c09de0285ccdb1051a1f8132f9"
+      },
+      "output": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-object-final.normalized.json",
+      "original_recipe_suite": "main",
+      "rows": 1
+    },
+    {
+      "input": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-structured-final/summary.json",
+        "sha256": "5c9e7a71cd5225085d58659689c7681236d3ed9b253f3f2a23b64806338a4b55"
+      },
+      "output": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-structured-final.normalized.json",
+      "original_recipe_suite": "main",
+      "rows": 1
+    },
+    {
+      "input": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-current-protocol/summary.json",
+        "sha256": "1bb0452b10ec1499429cb9df2099bf582608e8903d1f9929b2e03bd3a2d11428"
+      },
+      "output": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/pipeline-followups-current-protocol.normalized.json",
+      "original_recipe_suite": "pipeline",
+      "rows": 2
+    },
+    {
+      "input": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-removed-measurement/summary.json",
+        "sha256": "c3529a7e0af195617c1219d487748ab2287cc82e0dcbaff3437263a87aba64fd"
+      },
+      "output": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/pipeline-followups-removed-measurement.normalized.json",
+      "original_recipe_suite": "pipeline",
+      "rows": 1
+    },
+    {
+      "input": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/summary.json",
+        "sha256": "bba934f88022ce30e95b7b7aad4c31fb12f78790dd42cd6013ea48951a2c6ab4"
+      },
+      "output": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/pipeline-followups-source-final.normalized.json",
+      "original_recipe_suite": "pipeline",
+      "rows": 3
+    },
+    {
+      "input": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/summary.json",
+        "sha256": "dd5957b8c3f303b9a66f5822773f0278f6cc7624b5e6e9f723860267734f80a0"
+      },
+      "output": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/cpu-followups-final-reviewed-files.normalized.json",
+      "original_recipe_suite": "main",
+      "rows": 3
+    }
+  ],
+  "wrapper_recipe_instruction": "New versionedrecipe2 replaces only these9summary path/SHA references in sameorder. Every normalizedrow explicitsuite from disjointfinalinventoryfilemembership, including declaredmain finalreviewed thirdpipelinefile. Alloldrawsummaries/recipe/sourceauthority unchanged. RawJUnit names exactlymatch current nodeIDs, including2renamedproducer replacements actuallyexecuted afterrename; no oldname\u2192newname relabeling.",
+  "preserved_failures": "Historical pending-owner exit1/two nodes; owner_measurement exit1/36; local_scopes exit1/17 remain failed rows/exit1. No postsourcehash fabricated; originalsource_sha256 remains.",
+  "scope_count_correction": "Author/root prose said10summaries; exact enumeration is9summaries/22rows. Earlier unexecuted preparation assertion expected10 and stopped beforeplan/outputs. No normalizer/tests/apps ran."
+}

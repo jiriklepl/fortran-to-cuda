@@ -196,6 +196,7 @@ def test_structured_workers_match_native_with_shared_transfers(tmp_path, collect
     fc = shutil.which("gfortran-15") or shutil.which("gfortran")
     if not nvcc or not fc:
         pytest.skip("requires CUDA and Fortran")
+    host = shutil.which(os.environ.get("CUDAHOSTCXX", "g++-14"))
     mixed = policy == "auto_mixed"
     if mixed:
         policy = "auto"
@@ -205,9 +206,17 @@ def test_structured_workers_match_native_with_shared_transfers(tmp_path, collect
         source = source.replace("end subroutine", "do i=n+2,n+2\na(i)=b(i)*scale\nend do\nend subroutine")
     profile = None
     if policy == "auto":
-        profile = load_profile(
-            Path(__file__).resolve().parents[2] / "benchmarks/results/gpu-strategies-20261006/calibration.json"
-        )
+        calibration = Path(__file__).resolve().parents[2] / "benchmarks/results/gpu-strategies-20261006/calibration.json"
+        if calibration.exists():
+            profile = load_profile(calibration)
+        else:
+            # Observe real device/tool identities; the costs below are only
+            # synthetic correctness controls, not an archived calibration.
+            from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
+
+            if not host:
+                pytest.skip("CUDA host C++ compiler unavailable")
+            profile = actual_profile(tmp_path, nvcc, host)
         # A deterministic correctness control, excluded from performance evidence.
         profile["rates"].update(
             cpu_flops_per_second=1,
@@ -282,7 +291,6 @@ print *, 'STRUCTURED_GPU_PASS'
 end program
 """)
     env = dict(os.environ, OMP_NUM_THREADS="4", OMP_DYNAMIC="FALSE", FORT_RUNTIME_TRACE="1", FORT_OFFLOAD_TRACE="1")
-    host = shutil.which(os.environ.get("CUDAHOSTCXX", "g++-14"))
     flags = [nvcc, "-O2", "-std=c++17", "-Xcompiler=-fopenmp", "-arch=sm_86"]
     if host:
         flags += ["-ccbin", host]

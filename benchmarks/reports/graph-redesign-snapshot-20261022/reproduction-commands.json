@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "historical_development_commands": [
+    {
+      "case": "channel-simple",
+      "argv": [
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "/tmp/fortran-quick-20-launch.py",
+        "--prepared-builds",
+        "/tmp/fortran-convection-graph-probe-01/prepared-builds-20.json",
+        "--case",
+        "channel-simple",
+        "--threads",
+        "4",
+        "--warmups",
+        "1",
+        "--repeats",
+        "3",
+        "--timeout",
+        "240",
+        "--nvcc",
+        "/usr/local/cuda/bin/nvcc",
+        "--cuda-host",
+        "/usr/bin/g++-14",
+        "--arch",
+        "86",
+        "--output",
+        "/tmp/fortran-quick-20-primary-01"
+      ],
+      "cwd": "/home/jirka/research/fortran-abomination",
+      "environment_overlay": {
+        "FC": "/usr/bin/gfortran-15"
+      }
+    },
+    {
+      "case": "channel",
+      "argv": [
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "/tmp/fortran-quick-20-launch.py",
+        "--prepared-builds",
+        "/tmp/fortran-convection-graph-probe-01/prepared-builds-20.json",
+        "--case",
+        "channel",
+        "--threads",
+        "4",
+        "--warmups",
+        "1",
+        "--repeats",
+        "3",
+        "--timeout",
+        "240",
+        "--nvcc",
+        "/usr/local/cuda/bin/nvcc",
+        "--cuda-host",
+        "/usr/bin/g++-14",
+        "--arch",
+        "86",
+        "--output",
+        "/tmp/fortran-quick-20-channel-01"
+      ],
+      "cwd": "/home/jirka/research/fortran-abomination",
+      "environment_overlay": {
+        "FC": "/usr/bin/gfortran-15"
+      }
+    }
+  ],
+  "historical_private_natural_command": [
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "/tmp/fortran-deterministic-top-cross-mode-20-natural-01/natural.py",
+    "--execute",
+    "--authorization",
+    "/tmp/fortran-deterministic-top-cross-mode-20-natural-01/root-authorization.json"
+  ],
+  "historical_native_natural_recipe": "recipes/native-natural-execution-recipe.json",
+  "historical_private_build_and_short_stage": "correctness/cross-mode-script-stage.json",
+  "historical_qualification": "These exact historical drivers require their original SHA-bound files and fresh output directories. They are preserved for audit; do not overwrite or rerun old output paths.",
+  "portable_development_example": [
+    ".venv/bin/python",
+    "containers/probe_prepared_e2e.py",
+    "--prepared-builds",
+    "PREPARED.json",
+    "--case",
+    "channel-simple",
+    "--threads",
+    "4",
+    "--warmups",
+    "1",
+    "--repeats",
+    "3",
+    "--timeout",
+    "240",
+    "--output",
+    "NEW_OUTPUT_DIRECTORY"
+  ],
+  "future_final_qualification": "Full containers/reproduce_e2e.py comparison with natural correctness, one warmup/seven rotated fresh production samples and actual current proof/CUPTI. channel may use --timing-steps100 only for timing/profile; correctness remains natural2458. A new clean common approved-source checkout/contract and all-three fresh build/proof bindings are required before claiming that public qualification. Existing DEFAULT_CONTRACT remains original basis in this checkpoint.",
+  "snapshot_default_control": {
+    "committed_ref": "be58ab809296b97ea39d701828a2621adfc6b3dc",
+    "explicit_override": "--committed-ref",
+    "reason": "AvoidnewHEADselfcomparison/retiredCLIaftercommittinggraphsnapshot. Exactrevieweddefaultpin appliedafter109protectedpostguards.",
+    "evidence": "checkpoint-maintenance/reproducer-default-pin/root-promotion.json"
+  },
+  "approved_common_basis_natural109": {
+    "stage": "correctness/simple109-approved-top/recipe/stage.json",
+    "driver": "correctness/simple109-approved-top/recipe/run_three_mode.py.source",
+    "auth": "correctness/simple109-approved-top/recipe/root-authorization.json",
+    "report": "correctness/simple109-approved-top/report.json",
+    "scope": "Historicalexecutedpressure-onlyprivate links, originalall20/VTK/4plans/tolerances, nonperformance/no publicretag. Absoluteoriginalpaths/oldhelpers intentionallyguarded; archivecontainsbefore/currentparser compatibility evidence."
+  }
+}

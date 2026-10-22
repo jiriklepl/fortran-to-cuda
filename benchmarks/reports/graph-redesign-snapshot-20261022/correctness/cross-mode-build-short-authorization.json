@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-10-22T05:40:27.071444+00:00",
+  "kind": "root-privateTOP-build-prefix-authorization",
+  "plan_sha256": "840033fd059760ba0584e35a3223808c4f36fa6ecec2025e16baa9c61cccb017",
+  "script_stage_sha256": "3502a011734ebca8557b16a4edbb543dd8a53dd6ea062fe3b54201faece57a82",
+  "independent_review_sha256": "25e1545c94e86dd9b1c4ff504d34132f64378da02fa99e4c2a5fa3d5d36d0c96",
+  "root_review": "Read bothscripts; verified63helper/scriptSHArefs and Python AST, exactprivate -o/-J/source+oneobject linkdeltas; fulloriginal public prepared closure before/after addresses independent condition. No privatebinary/source retagged.",
+  "authorized": [
+    "build_private.py --execute withouter240",
+    "ifbuildPASScorrectmoduleandinputs,run_short.py --execute withouter240 GPUauthorized"
+  ],
+  "natural_runs_authorized": false,
+  "official_basis_substitution_authorized": false,
+  "official_basis_user_reply": "pending_no_reply",
+  "nonperformance": true,
+  "concurrent_private_CPU_compiler_checks_allowed": true,
+  "production20_mutations_authorized": false
+}

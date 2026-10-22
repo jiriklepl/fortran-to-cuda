@@ -169,7 +169,7 @@ def batch_binaries(tmp_path_factory):
             package.write_text(json.dumps(negative_package(case,original)))
             numerical_sources=["--numerical-sources",str(package)]
         output = case/"output"
-        public = json.loads(_run([sys.executable,"-m","compiler","--form-scopes","--input",str(original),
+        public = json.loads(_run([sys.executable,"-m","compiler.tests.support.reference_scopes","--form-scopes","--input",str(original),
             "--kernel","step","--scope-facts",str(captures),"--memory-model","scoped","--gpu-policy",policy,
             "--scope-transfers",transfers,"--calibration-profile",str(costs),"--opt-level","0",
             *numerical_sources,"--json","--output-dir",str(output)],checkout,env={**os.environ,"PYTHONPATH":str(checkout)}).stdout)
@@ -224,6 +224,20 @@ def test_complete_batch_fields_and_halos_match_native_from_independent_checkout(
     assert "array temporary" not in result.stderr.lower()
     events=[json.loads(line.removeprefix("FORT_SCOPED evidence ")) for line in result.stderr.splitlines()
             if line.startswith("FORT_SCOPED evidence ")]
+    if label == "automatic":
+        # This legacy transfer-only correctness profile has no original
+        # Fortran source-compute v2 evidence. AUTO therefore retains native
+        # execution; the four forced sections cases below exercise batching.
+        scope, = manifest["scopes"]
+        reason = "native Fortran compute requires numerical calibration v2"
+        assert not scope["estimate_available"]
+        assert scope["planning_reason"] == reason
+        assert scope["transfer_configuration"]["placement_estimate_reason"] == reason
+        native_selection = "Successful static native selection: all numerical alternatives lack compatible offline estimates: "
+        assert any(native_selection + reason in edit["replacement"] for edit in manifest["source_edits"])
+        assert not events
+        assert "FORT_SCOPED " not in result.stderr
+        return
     batches=[event for event in events if event["event"] == "batch_statistics" and event["applied"]]
     assert batches, result.stderr
     assert all(event["batches"] >= 2 and event["completed_batches"] == event["batches"] for event in batches)

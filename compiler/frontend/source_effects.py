@@ -27,7 +27,7 @@ from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
 # Bump when source-effect, call-composition or summary semantics change.
-SOURCE_SUMMARY_VERSION = 21
+SOURCE_SUMMARY_VERSION = 22
 _DEFAULT_SUMMARY_CACHE = SummaryCache()
 
 
@@ -880,6 +880,19 @@ class SourceEffects:
                         members += [(scope.module, str(p).lower()) for p in item.items[0].items]
                 if generic and members:
                     scope.generics[generic] = members
+                elif generic is None and all(_kind(item) in {
+                        "Interface_Stmt", "End_Interface_Stmt", "Subroutine_Body", "Function_Body", "Comment"}
+                        for item in _children(node)):
+                    # An explicit external declaration executes nothing. Keep
+                    # its names as external/shadowing bindings; each call still
+                    # needs independent source/effect/interface authority. An
+                    # unrelated opaque declaration must not poison the effects
+                    # of numerical work elsewhere in this original routine.
+                    for item in _children(node):
+                        header = (_part(item, "Subroutine_Stmt") if _kind(item) == "Subroutine_Body"
+                                  else _part(item, "Function_Stmt") if _kind(item) == "Function_Body" else None)
+                        if header is not None:
+                            scope.externals.add(str(header.items[1]).lower())
                 else:
                     issues.append("non-module generic interface is unavailable")
             elif name == "Procedure_Declaration_Stmt":
@@ -1108,8 +1121,14 @@ class SourceEffects:
         if len(items) == 3 and str(items[1]) in {"+", "-", "*", "/"}:
             left = self._signature(scope, items[0], _depth + 1)
             right = self._signature(scope, items[2], _depth + 1)
-            return left if left == right and left in {
-                ("integer", 4, 0), ("integer", 8, 0), ("real", 4, 0), ("real", 8, 0)} else None
+            supported = {("integer", 4, 0), ("integer", 8, 0), ("real", 4, 0), ("real", 8, 0)}
+            if left not in supported or right not in supported:
+                return None
+            # For supported ordinary numeric kinds, mixed integer arithmetic
+            # uses the wider integer kind. A real operand determines real
+            # result kind independently of the integer operand's width.
+            reals = [value[1] for value in (left, right) if value[0] == "real"]
+            return ("real", max(reals), 0) if reals else ("integer", max(left[1], right[1]), 0)
         if _kind(node) in {"Int_Literal_Constant", "Real_Literal_Constant", "Logical_Literal_Constant"}:
             dtype = {"Int_Literal_Constant": "integer", "Real_Literal_Constant": "real",
                      "Logical_Literal_Constant": "logical"}[_kind(node)]

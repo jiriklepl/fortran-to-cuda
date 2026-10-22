@@ -1,0 +1,9 @@
+{
+  "authorized_execution": "approved_fixedTOP_natural109_three_mode_only",
+  "stage_sha256": "2f1b87e952885727b5d704b5111cefb83b4fb7522ca28db90d0d5f02f1bd8f43",
+  "created_utc": "2026-10-22T10:37:04.332508+00:00",
+  "user_pressure_reference_approval": "/tmp/fortran-deterministic-TOP-official-user-approval-20261022.json",
+  "approved_single_historical_helper_projection": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/compatibility-addendum.json",
+  "original_first_preflight_failure": "/tmp/fortran-snapshot-simple109-correctness-20261022/attempt-01-preflight-failure.json",
+  "concurrency": "All actual tests/builds/GPU jobs closed. Exclusive three-mode correctness GPU lease; lightweight metadata only. No performance samples."
+}

@@ -1,18 +1,19 @@
 """Exact original-read admission after an unchanged native prefix."""
 
+from collections.abc import Mapping
 from copy import copy
 from dataclasses import replace
 from functools import partial
 
 import pytest
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend.selection_activation import (
     SelectionActivationProof,
     prove_selection_activation,
     selection_activation_demands,
 )
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.closed_selection import ClosedIntervalOwner
 from compiler.tests.test_interval_draft import SOURCE
 from compiler.tests.test_original_interval_owner import builder, call_pair
@@ -217,7 +218,7 @@ def test_module_threadprivate_storage_remains_ineligible(tmp_path):
 def test_selected_reads_require_original_alias_safe_registration(tmp_path):
     _selected, owner, outputs, report = emit_activation_fixture(tmp_path / "prefix.f90")
     text = outputs[report["sources"][str(tmp_path / "prefix.f90")]["replacement"]]
-    first_claim = text.index("fort_scope_admit_source_reads_v1")
+    first_claim = text.index("fort_status = fort_scope_admit_source_reads_v1(")
     assert text.index("fort_scope_register(") < first_claim
     assert text.index("is_contiguous(") < first_claim
     assert text.index("fort_scope_layout_get(") < first_claim
@@ -225,8 +226,9 @@ def test_selected_reads_require_original_alias_safe_registration(tmp_path):
     for member in owner.execution_plan.members:
         for unit in owner.execution_plan.units(member):
             requirements = getattr(unit.scope, "source_reads", {})
-            if hasattr(requirements, "values"):
-                for proof in requirements.values():
+            proofs = requirements.values() if isinstance(requirements, Mapping) else (requirements,)
+            for proof in proofs:
+                if proof is not None:
                     assert proof.validate(member.builder.analysis, member.routine.qualified,
                                           proof.prepared._selection, proof.prepared) is proof
 
@@ -236,8 +238,9 @@ def test_source_read_token_cannot_move_to_another_original_call(tmp_path):
     _selected, owner, _outputs, _report = emit_activation_fixture(tmp_path / "prefix.f90")
     member = next(member for member in owner.execution_plan.members
                   if member.routine.qualified == "interval_fields::momentum")
-    pairs = [(call, unit.scope.source_reads[call.procedure])
-             for unit in owner.execution_plan.units(member) for call in unit.scope.calls
+    pairs = [(call, requirements[call.procedure] if isinstance(requirements, Mapping) else requirements)
+             for unit in owner.execution_plan.units(member)
+             for requirements in (unit.scope.source_reads,) for call in unit.scope.calls
              if call.region is not None]
     assert len(pairs) == 2
     (first, first_proof), (second, second_proof) = pairs

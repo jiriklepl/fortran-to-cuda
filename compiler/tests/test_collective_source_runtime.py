@@ -300,7 +300,7 @@ def source_team_binaries(tmp_path_factory):
         output.mkdir()
         facts = output / "facts.json"
         facts.write_text(json.dumps(_facts(original, native=entry == "step_native", budget=budget)))
-        response = _run([sys.executable, "-m", "compiler", "--input", str(original), "--kernel", "operators::" + entry,
+        response = _run([sys.executable, "-m", "compiler.tests.support.reference_scopes", "--input", str(original), "--kernel", "operators::" + entry,
                          "--form-scopes", "--scope-facts", str(facts), "--memory-model", "scoped",
                          "--gpu-policy", policy, "--gpu-collective", "--host-threads", "4", "--json",
                          "--output-dir", str(output)], checkout, env=compiler_env)
@@ -310,7 +310,10 @@ def source_team_binaries(tmp_path_factory):
         if label == "auto":
             assert manifest["scope_count"] == 0
             assert manifest["participation"]["schema_version"] == 2
-            assert "collective synchronization calibration" in manifest["boundaries"][0]["reason"]
+            assert manifest["boundaries"][0]["reason"] == (
+                "no calibration profile supplied; automatic policy retains native execution; "
+                "no calibration profile or exact-window evidence supplied; "
+                "automatic policy retains unchanged native source")
             assert not manifest["build_sources"]
             binaries[label] = native_binary
             continue

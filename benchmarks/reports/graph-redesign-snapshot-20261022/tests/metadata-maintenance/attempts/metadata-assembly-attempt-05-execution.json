@@ -1,0 +1,14 @@
+{
+  "exit_code": 0,
+  "log": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/metadata-assembly-attempt-05.log",
+    "sha256": "669ba502810e783656d0318c291790f1ed686ccdb56772cca82d022148e744b5"
+  },
+  "assembler_sha256": "b6b28f7e30bbf8da93f6a6d9fcbca9ada076edb072eb9230837950b59bff334d",
+  "recipe": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/final-test-evidence-recipe.v4.sealed.json",
+    "sha256": "8503b7caf018be375b75dc46bd5ee23c020894661b6db936bbeae2ceb146dccd"
+  },
+  "metadata_only": true,
+  "root_review": "One omitted existing closed passing1-node capability phase inserted after protocolcapabilities; actual current source hash/process0/JUnit PASS verified, all otherrawphases/authority unchanged."
+}

@@ -23,7 +23,7 @@ class BorrowedCoordinator:
         self.root = getattr(builder, "_coordinator_root", builder)
         self.routine = builder.analysis.routines[procedure]
         self.procedure = procedure
-        self.reached = builder.config.scope_execution == "reached"
+        self.reached = builder.config.reached_execution
         graph = builder.analysis.structure(procedure) if self.reached else None
         self.summary = ({"summary_identity": graph.identity, "proof_role": "structured_execution"}
                         if graph else builder.analysis.summarize(procedure))
@@ -78,7 +78,7 @@ class BorrowedCoordinator:
                 from compiler.scopes.segments import original_roots
                 originals = original_roots(self.builder.inline.original_selection(operations[0]))
                 fallback = fragment(self.builder, originals, kind="joined native OpenMP")
-                self.scope = CombinedNumericalTeam(self.builder, originals)
+                self.scope = CombinedNumericalTeam(self.builder, originals, owning_native=False)
                 self.scope.borrowed_fallback = fallback
                 self.scope.native = [fallback]
                 self.scope.guarded = {id(self.scope.calls[0].node): fallback}

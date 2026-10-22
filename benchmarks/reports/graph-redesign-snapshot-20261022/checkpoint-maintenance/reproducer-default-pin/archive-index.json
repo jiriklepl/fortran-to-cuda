@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "source_semantics": "Pinned default fullbe58 historicalcontrol with explicitoverride retained;1parser-onlymocktest. Appliedonlyafterclosed109/public2931postguards. No compiler/runtime/model/profile changes.",
+  "final_validation": "All7finalcontainerfiles193PASS0skip exactcurrent sources; fullsource/testassembly authority documented separately.",
+  "root_commit_authorization": "Userupdatedstage-onlyscope toalso localcommitsafterfinalreviews. Earliersealedrecordsremainas-of-their-time.",
+  "copies": [
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/reproducer-default-pin-root-promotion.json",
+      "archive_path": "root-promotion.json",
+      "sha256": "f3272214e5c73bd73fc9156541d5f14ecd5ec4ff735863cfc05dd7b217accba8",
+      "bytes": 1533
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/reproducer-default-pin-draft/plan.json",
+      "archive_path": "reviewed-plan.json",
+      "sha256": "36c844d353588b3b42117c1f5e7c8b687e4509b9477abad0b931bba84330c76a",
+      "bytes": 2812
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/reproducer-default-pin-draft/proposed.patch",
+      "archive_path": "reviewed.patch",
+      "sha256": "20378081c7e6fc2125784be43fd747f31a87d7c2cf4dbf23df8222f9f47da3f7",
+      "bytes": 3103
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/user-commit-authorization-addendum.json",
+      "archive_path": "user-commit-authorization-addendum.json",
+      "sha256": "e54632c371eacbf7e5bae4c1863fbfc8e37d9893a60f688b65a3998fa231ded4",
+      "bytes": 825
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/reproducer-default-pin-draft/preimages/containers/reproduce_e2e.py",
+      "archive_path": "preimages/containers/reproduce_e2e.py.source",
+      "sha256": "b32a8f30ce64312a54680d2e28d335a4faeb7e0a0b7231f44f360beda48d5f25",
+      "bytes": 93486
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/reproducer-default-pin-draft/preimages/containers/README.md",
+      "archive_path": "preimages/containers/README.md",
+      "sha256": "9da68507e48eec3b1e05a6fdd1094ade547f94a381f01d1d796d7959b4fb4e2a",
+      "bytes": 25271
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/reproducer-default-pin-draft/preimages/containers/tests/test_reproduce_e2e.py",
+      "archive_path": "preimages/containers/tests/test_reproduce_e2e.py.source",
+      "sha256": "d176f24f8a341bcb735cb057ce1389edc521c2c1577ef7a3964471254aa4a5d6",
+      "bytes": 46566
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/reproducer-default-pin-draft/proposed/containers/reproduce_e2e.py",
+      "archive_path": "proposed/containers/reproduce_e2e.py.source",
+      "sha256": "80d04f9f2df437f918f2c74afd6dee4c5d9eb77950727449e4ee0535e96929b7",
+      "bytes": 93642
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/reproducer-default-pin-draft/proposed/containers/README.md",
+      "archive_path": "proposed/containers/README.md",
+      "sha256": "1b022082f1e261526ea9a2f7abfafadc4bc7d05000450a6c2e48bb62b2ec44ab",
+      "bytes": 25509
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/reproducer-default-pin-draft/proposed/containers/tests/test_reproduce_e2e.py",
+      "archive_path": "proposed/containers/tests/test_reproduce_e2e.py.source",
+      "sha256": "9ecdf391818eb71f477879111793b4d661f9792269e8d57c00c2c929ab7036f6",
+      "bytes": 47071
+    }
+  ]
+}

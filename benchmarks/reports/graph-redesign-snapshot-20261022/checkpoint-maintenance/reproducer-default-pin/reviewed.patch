@@ -1,0 +1,51 @@
+--- a/containers/reproduce_e2e.py
++++ b/containers/reproduce_e2e.py
+@@ -1375,7 +1375,8 @@
+     parser.add_argument("--app-root", type=Path, default=PIPELINE / ".cache/repos")
+     parser.add_argument("--pipeline-root", type=Path, default=PIPELINE)
+     parser.add_argument("--committed-root", type=Path, default=COMPILER)
+-    parser.add_argument("--committed-ref", default="HEAD")
++    parser.add_argument("--committed-ref", default="be58ab809296b97ea39d701828a2621adfc6b3dc",
++                        help="Historical SGS/direct compiler revision; an explicit value overrides the pinned default")
+     parser.add_argument("--candidate-root", type=Path, default=COMPILER)
+     parser.add_argument("--prepared-builds", type=Path, help="Reuse an authenticated prepared build set across cases; collect every run afresh")
+     parser.add_argument("--control-evidence", type=Path, help="Reuse authenticated natural native/committed fields from this session; candidate correctness and every timing run stay fresh")
+--- a/containers/README.md
++++ b/containers/README.md
+@@ -273,6 +273,9 @@
+ historical binaries or reuses historical timings. The committed compiler comes
+ from `git archive` of the selected revision, irrespective of dirty/staged files;
+ the candidate compiler is frozen in a separate snapshot before compilation.
++The default committed revision is `be58ab809296b97ea39d701828a2621adfc6b3dc`, the historical
++SGS/direct control. `--committed-ref` can explicitly select another compatible
++historical compiler revision.
+ 
+ ```bash
+ # Fresh full-duration comparison, one warmup and seven rotated samples per mode.
+@@ -286,7 +289,7 @@
+ # read-only to let the container archive exact committed compiler bytes.
+ WORKSPACE_ROOT="$PWD" OUTPUT_DIR="$PWD/out" ./containers/run-docker.sh e2e \
+     --candidate-request /workspace/containers/requests/elmm-sgs-convection-graph.json \
+-    --committed-root /workspace --committed-ref HEAD --output-dir /output/comparison-01
++    --committed-root /workspace --committed-ref be58ab809296b97ea39d701828a2621adfc6b3dc --output-dir /output/comparison-01
+ 
+ # Primary fourth-order channel: preserve natural-duration correctness, while
+ # profiling and timing use the same explicit 100-step duration in all modes.
+--- a/containers/tests/test_reproduce_e2e.py
++++ b/containers/tests/test_reproduce_e2e.py
+@@ -12,6 +12,15 @@
+ spec = importlib.util.spec_from_file_location("reproduce_e2e", HERE / "reproduce_e2e.py")
+ runner = importlib.util.module_from_spec(spec)
+ spec.loader.exec_module(runner)
++
++
++def test_cli_defaults_to_pinned_sgs_control_and_preserves_explicit_override(tmp_path, monkeypatch):
++    calls = []
++    monkeypatch.setattr(runner, "run_comparison", calls.append)
++    runner.main(["--output-dir", str(tmp_path / "default")])
++    assert calls[-1].committed_ref == "be58ab809296b97ea39d701828a2621adfc6b3dc"
++    runner.main(["--committed-ref", "explicit-compatible-revision", "--output-dir", str(tmp_path / "override")])
++    assert calls[-1].committed_ref == "explicit-compatible-revision"
+ 
+ 
+ def test_rounds_rotate_all_three_modes_fairly():

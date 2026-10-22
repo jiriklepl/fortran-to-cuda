@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "first_pass_preserved": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+  "retry_policy": "only root/peer reviewed maintenance; explicit strict-affinity capability",
+  "root_authorized_concurrent_nonperformance_validation": false,
+  "first_pass_completed_files_at_start": 310,
+  "complete": true,
+  "results": [
+    {
+      "kind": "reviewed_test_maintenance",
+      "file": "compiler/tests/test_structured_effects.py",
+      "nodes": 27,
+      "selection": "full current file",
+      "argv": [
+        "taskset",
+        "-c",
+        "0-11",
+        "timeout",
+        "240s",
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-c",
+        "/home/jirka/research/fortran-abomination/compiler/pyproject.toml",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/fortran-committable-snapshot-20261022/followup-pytest-cache",
+        "--basetemp=/tmp/fortran-committable-snapshot-20261022/cpu-followups-structured-final/00-test_structured_effects/temporary",
+        "--junitxml=/tmp/fortran-committable-snapshot-20261022/cpu-followups-structured-final/00-test_structured_effects/junit.xml",
+        "/home/jirka/research/fortran-abomination/compiler/tests/test_structured_effects.py"
+      ],
+      "source_sha256": "2bfea4ef1b6fa88e06f4b6f627184fb90e901a4c25d855a7bc46f97be91a28ad",
+      "seconds": 1.1530908959975932,
+      "exit_code": 0,
+      "log": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-structured-final/00-test_structured_effects/output.log",
+      "junit": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-structured-final/00-test_structured_effects/junit.xml",
+      "counts": {
+        "tests": 27,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "suite": "main",
+      "selection_kind": "entire_file_inventory",
+      "selected_nodeids": [
+        "compiler/tests/test_structured_effects.py::test_unknown_else_does_not_poison_reached_then",
+        "compiler/tests/test_structured_effects.py::test_entire_oversized_closure_keeps_bounded_reached_segments",
+        "compiler/tests/test_structured_effects.py::test_structural_containers_do_not_spend_the_source_operation_budget",
+        "compiler/tests/test_structured_effects.py::test_structural_accounting_keeps_the_operation_limit",
+        "compiler/tests/test_structured_effects.py::test_counted_body_directives_keep_loop_guard_and_previous_join_stays_outside",
+        "compiler/tests/test_structured_effects.py::test_condition_and_loop_header_ids_preserve_original_protected_expressions",
+        "compiler/tests/test_structured_effects.py::test_original_out_definition_is_once_at_reached_child_entry",
+        "compiler/tests/test_structured_effects.py::test_foreign_nodes_copies_mutated_source_and_unordered_selections_reject",
+        "compiler/tests/test_structured_effects.py::test_mutated_original_ast_cannot_borrow_its_old_graph",
+        "compiler/tests/test_structured_effects.py::test_original_span_and_graph_records_cannot_be_replaced_to_grant_authority",
+        "compiler/tests/test_structured_effects.py::test_segments_from_mutually_exclusive_arms_do_not_form_one_reached_sequence",
+        "compiler/tests/test_structured_effects.py::test_capture_locals_and_entry_effects_are_explicit",
+        "compiler/tests/test_structured_effects.py::test_descriptor_stable_allocatable_inout_and_transitive_forwarding",
+        "compiler/tests/test_structured_effects.py::test_descriptor_changes_unknown_effects_and_whole_assignments_reject[allocate(a(3))]",
+        "compiler/tests/test_structured_effects.py::test_descriptor_changes_unknown_effects_and_whole_assignments_reject[deallocate(a)]",
+        "compiler/tests/test_structured_effects.py::test_descriptor_changes_unknown_effects_and_whole_assignments_reject[a=3]",
+        "compiler/tests/test_structured_effects.py::test_descriptor_changes_unknown_effects_and_whole_assignments_reject[call unknown(a)]",
+        "compiler/tests/test_structured_effects.py::test_descriptor_changes_unknown_effects_and_whole_assignments_reject[if(flag) then\\na(1)=2\\nelse\\ncall unknown(a)\\nendif]",
+        "compiler/tests/test_structured_effects.py::test_empty_out_dummy_still_has_descriptor_entry_change",
+        "compiler/tests/test_structured_effects.py::test_reached_native_read_does_not_repeat_original_out_entry_event",
+        "compiler/tests/test_structured_effects.py::test_reached_dynamic_dummy_uses_original_descriptor_after_bound_scalar_changed",
+        "compiler/tests/test_structured_effects.py::test_structural_cache_is_rebound_to_original_ast_and_invalidates_contracts",
+        "compiler/tests/test_structured_effects.py::test_structural_cache_tampering_is_rejected_even_with_fresh_payload_digest[effects]",
+        "compiler/tests/test_structured_effects.py::test_structural_cache_tampering_is_rejected_even_with_fresh_payload_digest[old_structure_version]",
+        "compiler/tests/test_structured_effects.py::test_diamond_graph_reuses_leaves_but_counts_each_reached_call",
+        "compiler/tests/test_structured_effects.py::test_bounded_graph_exhaustion_is_not_a_complete_empty_proof",
+        "compiler/tests/test_structured_effects.py::test_nested_native_unknown_child_cannot_establish_descriptor_stability"
+      ],
+      "selected_nodes": 27,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-structured-final/00-test_structured_effects/command.json",
+        "sha256": "2c113eb913dc76aceee255608afd20e44a8cef81b3cb66c020d2a1218b3d3c9c"
+      },
+      "log_sha256": "cec34160d2ec7e8a76253c251485c32c7dff1a3a2a4412de4000f1730618fb82",
+      "junit_sha256": "b1c913865e4ae959579aa3c672d7a781994d9182a5cb7e05d01765b86a6cd3b6"
+    }
+  ],
+  "normalization_inputs": [
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-structured-final/summary.json",
+      "sha256": "5c9e7a71cd5225085d58659689c7681236d3ed9b253f3f2a23b64806338a4b55"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/final-collection/main/inventory.json",
+      "sha256": "280d1862d851440ec90a0ca1799c5800e56f9d174aa9e00e72e5332bd2fd8cf3"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/final-collection/pipeline/inventory.json",
+      "sha256": "0fd2075a8aa6768a6acb10775268f90c273b46793b46cdda8701f18898fe450b"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/normalize_whole_file_summaries.py",
+      "sha256": "688da78e6354e22bc0041881188b6e99ab32e6de26d61e6be18dd7e0e9e487da"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/plan.json",
+      "sha256": "7c4b91e8aa418fd0abb909a2d76b1ea1f831c9af0b4579c624523bd17103786b"
+    }
+  ],
+  "normalization": "Metadata only: exact selected nodes/suite derived from final inventory and all raw JUnit case identities; original argv, source_sha256, exit codes and failed outcomes unchanged. Missing/wrong/multifile/partial coverage fails closed; no historical node renamed or relabeled."
+}

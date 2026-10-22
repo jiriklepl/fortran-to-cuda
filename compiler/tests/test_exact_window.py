@@ -357,8 +357,8 @@ enddo
 def test_uncovered_payload_control_or_primitive_is_not_admitted(tmp_path, replacement):
     from hashlib import sha256
 
-    from compiler.driver.options import CompilerOptions
-    from compiler.offload.config import OffloadConfig
+    from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+    from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
     from compiler.scopes.source import ScopeBuilder
     from compiler.tests.test_source_scopes import FACT
 

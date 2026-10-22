@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "source": "Rootrelayofexplicitusersteering2026-10-22",
+  "user_words": "1% difference is fine for the snapshot, carry on",
+  "scope": "Accept currentcommittablesnapshotcomparisons; retain exactmeasuredchanges, no broaderperformancewin/parity/final7claim.",
+  "measured_median_wall_percent_vs_be58": {
+    "channel-simple": -0.48274194967208306,
+    "channel100": 1.2683089753486199
+  },
+  "evidence_changed": false
+}

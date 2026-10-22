@@ -1,0 +1,14 @@
+{
+  "exit_code": 1,
+  "log": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/metadata-assembly-attempt-04.log",
+    "sha256": "dbbb8a376999d9544e3346763fa926669dafa7621db8c5a813c009b8970f3710"
+  },
+  "assembler_sha256": "b6b28f7e30bbf8da93f6a6d9fcbca9ada076edb072eb9230837950b59bff334d",
+  "recipe": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/final-test-evidence-recipe.v3.sealed.json",
+    "sha256": "ce55f6741d4f987cc6965badc567958f9606beb4b1e1bf1edafb7689ec785986"
+  },
+  "metadata_only": true,
+  "root_review": "Only single revision02 rawsource record projection; exact explicit2-nodeargv/rawSHA/afterpeerflags validated, otherinventories/authority/order/skip/lineage unchanged."
+}

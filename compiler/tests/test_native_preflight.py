@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.analysis import build_execution_plan
 from compiler.emission import generate_sources
 from compiler.emission.cuda.native_preflight import generate_native_preflight
 from compiler.frontend import lower_source
-from compiler.offload.config import OffloadConfig
 from compiler.offload.preparation import prepare_offload
 from compiler.tests.test_source_compute_costs import SOURCE, profile_v2
 

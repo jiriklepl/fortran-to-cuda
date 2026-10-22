@@ -128,7 +128,8 @@ def borrowed_team_binaries(tmp_path_factory, request):
         directory / "original", precision=precision, owner_source=source)
     owner, = report["scopes"]
     boundary, = owner["boundaries"]
-    assert boundary["reason"] == "native rectangular source-call mapping requires projected native hooks"
+    assert "independent original owned storage: argument::work versus argument::a" in boundary["reason"]
+    assert "native rectangular source-call mapping requires projected native hooks" in boundary["reason"]
     assert boundary["conditional_close"].lower() == "reject_partial"
     assert boundary["reopen"] is False
     emitted = outputs[report["sources"][str(originals[1])]["replacement"]].lower().replace(" ", "")

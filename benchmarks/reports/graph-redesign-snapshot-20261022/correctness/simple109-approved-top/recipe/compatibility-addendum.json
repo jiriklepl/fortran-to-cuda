@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "status": "TMP_ONLY_NO_EXECUTION_AUTHORIZATION_CREATED",
+  "reason": "First109attempt stopped in nested checked_plan historicalhelperhash guard before anyapp/runsdir; oldplan/driver/stage/auth and firstfailure remain preserved. Root will separately record tool-observed failure (no raw redirect claimed).",
+  "driver": {
+    "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/run_three_mode.py",
+    "sha256": "17f35adc1d2241d4d5af5a988265aaf8c34bc10920f78501c984ff2e9d3dd1f2",
+    "bytes": 14277
+  },
+  "stage": {
+    "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/stage.json",
+    "sha256": "2f1b87e952885727b5d704b5111cefb83b4fb7522ca28db90d0d5f02f1bd8f43",
+    "bytes": 14511
+  },
+  "diff": {
+    "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/driver-v1-to-v2.diff",
+    "sha256": "98103152fef52ec6ee6cb20dd9400354eb8c51b850e5fe136b4fb59278b7de5d",
+    "bytes": 4256
+  },
+  "retained_old_parser": {
+    "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/historical-validator/gpu_validation.py.source",
+    "sha256": "8e1cf21aff1ae868f02082ef077fee225cb4626a682ae8f6c408ca84381756cf",
+    "bytes": 17704
+  },
+  "current_approved_parser": {
+    "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/gpu_validation.py",
+    "sha256": "1fa37f95456d1779477214a413264b6112950f21e1129ef2fc9574f58ee66479",
+    "bytes": 19261
+  },
+  "originals": [
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-20261022/run_three_mode.py",
+      "sha256": "c92600a4508c42ef680c7f4af55e82d56d23e780c9c9cedd5fe66afdddc3d9e8",
+      "bytes": 12173
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-20261022/stage.json",
+      "sha256": "4cba3dcf2f050160dd12854d22570a73a492dc94222b2992b8a2e3f53de198cd",
+      "bytes": 11006
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-20261022/root-authorization.json",
+      "sha256": "76d61d595c52f10a5a03fd2cb8091405a5053e760e40246f31e1558130859a21",
+      "bytes": 610
+    }
+  ],
+  "executable_change_scope": "New explicit historical_helper_projection and checked_historical_plan; call original unchanged hash/publicclosure functions with exact one-path compatibility mapping. Reportadds compatibility metadata. All apps/configs/flags/FFTW/fields/VTK/tolerances/order/timeout/failurecontinuation unchanged. Newoutputdirectory/newrootauthrequired.",
+  "preparation_execution": {
+    "source_AST_parse_only": true,
+    "git_show_preimage_read_only": true,
+    "public_validator": false,
+    "tests": false,
+    "builds": false,
+    "apps": false,
+    "GPU": false
+  },
+  "unexecuted_first_draft_preserved": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/unexecuted-draft-preimages"
+}

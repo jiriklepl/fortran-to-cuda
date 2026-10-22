@@ -17,17 +17,25 @@ enddo
 !$omp end do
 !$omp end parallel
 call consumer""")
-    original, output, manifest = generate(tmp_path, source, facts={
+    original, output, manifest = generate(tmp_path, source, scope_execution="reached", facts={
         "schema_version": 1, "participation": "serial",
         "captures": {"argument::a": FACT, "argument::b": FACT, "argument::out": FACT}})
     scope, = manifest["scopes"]
-    operation, = [item for item in scope["native_operations"] if item["kind"] == "joined native OpenMP"]
+    parent, = [item for item in scope["checked_execution_plan"]["procedures"]
+               if item["procedure"] == "original::step"]
+    operation, = [item for unit in parent["units"] for item in unit["operations"]["native_operations"]
+                  if item["kind"] == "joined native OpenMP"]
     assert set(operation["private_resources"]) == {"original::step::i", "original::step::scratch"}
     assert set(operation["resources"]) == {"argument::a", "argument::b"}
     assert operation["sections"]["available"]
+    private, = operation["completion"]["original_private_arrays"]
+    assert private["resource"] == "original::step::scratch"
+    assert private["contents"] == "undefined original OpenMP PRIVATE contents; no capture or registration"
+    assert operation["completion"]["retains_original_team_and_directives"]
     assert "original::step::scratch" not in scope["ownership"]["retained_resources"]
     generated = (output / manifest["sources"][str(original)]["replacement"]).read_text()
-    owner = generated[generated.index("subroutine " + scope["owner"]):generated.index("end subroutine " + scope["owner"])]
-    assert ":: scratch(1:2)" in owner
+    start = generated.index("subroutine step(")
+    owner = generated[start:generated.index("end subroutine", start)]
+    assert "real(8)::scratch(2)" in owner
     assert "private(i,scratch)" in owner.lower()
     assert original.read_text() == source

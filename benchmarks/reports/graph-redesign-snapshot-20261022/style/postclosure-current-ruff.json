@@ -1,0 +1,3498 @@
+[
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 57,
+      "row": 17
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/frontend/component_bindings.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport re\nfrom copy import copy\nfrom dataclasses import dataclass, field\n\nfrom fparser.two.utils import Base\n\nfrom compiler.ir import CompilationError, SourceLocation\n\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 20
+          },
+          "location": {
+            "column": 1,
+            "row": 9
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 9
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 9,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 80,
+      "row": 12
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/frontend/numerical_completion.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import json\nfrom dataclasses import dataclass, field\nfrom hashlib import sha256\n\nfrom fparser.two.utils import walk\n\nfrom compiler.frontend.native_completion import _children, _directive, _joined_completion_facts, _kind\nfrom compiler.frontend.structured_effects import _freeze, _thaw\nfrom compiler.ir import CompilationError\nfrom compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 14
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 3,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "SIM102",
+    "end_location": {
+      "column": 71,
+      "row": 147
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/frontend/numerical_completion.py",
+    "fix": null,
+    "location": {
+      "column": 13,
+      "row": 146
+    },
+    "message": "Use a single `if` statement instead of nested `if` statements",
+    "name": "collapsible-if",
+    "noqa_row": 146,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/collapsible-if"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 62,
+      "row": 19
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/frontend/omp_reductions.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport json\nimport re\nfrom dataclasses import dataclass, field\nfrom hashlib import sha256\n\nfrom fparser.two.utils import walk\n\nfrom compiler.frontend.native_completion import _children, _directive, _kind\nfrom compiler.frontend.structured_effects import _freeze, _thaw\nfrom compiler.ir import CompilationError, ScalarType, SourceLocation\nfrom compiler.ir.intrinsics import INTRINSICS, intrinsic_type\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 21
+          },
+          "location": {
+            "column": 1,
+            "row": 7
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 7
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 7,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 57,
+      "row": 15
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/frontend/reductions.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport json\nfrom dataclasses import dataclass, field\nfrom hashlib import sha256\n\nfrom compiler.frontend.structured_effects import _freeze, _thaw\nfrom compiler.ir import CompilationError, SourceLocation\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 17
+          },
+          "location": {
+            "column": 1,
+            "row": 8
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 8
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 8,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 2,
+      "row": 23
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/offload/numerical_calibration.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport json\nimport math\nimport os\nimport re\nimport statistics\nfrom copy import deepcopy\nfrom dataclasses import replace\nfrom hashlib import sha256\nfrom pathlib import Path\n\nfrom compiler.numerical_contract import (\n    cuda_compile_options,\n    numerical_build_contract,\n    require_explicit_cuda_environment,\n)\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 25
+          },
+          "location": {
+            "column": 1,
+            "row": 7
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 7
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 7,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "B905",
+    "end_location": {
+      "column": 60,
+      "row": 366
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/offload/numerical_calibration.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": ", strict=False",
+          "end_location": {
+            "column": 59,
+            "row": 366
+          },
+          "location": {
+            "column": 59,
+            "row": 366
+          }
+        }
+      ],
+      "message": "Add explicit value for parameter `strict=`"
+    },
+    "location": {
+      "column": 17,
+      "row": 366
+    },
+    "message": "`zip()` without an explicit `strict=` parameter",
+    "name": "zip-without-explicit-strict",
+    "noqa_row": 366,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/zip-without-explicit-strict"
+  },
+  {
+    "cell": null,
+    "code": "B905",
+    "end_location": {
+      "column": 81,
+      "row": 601
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/offload/numerical_calibration.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": ", strict=False",
+          "end_location": {
+            "column": 80,
+            "row": 601
+          },
+          "location": {
+            "column": 80,
+            "row": 601
+          }
+        }
+      ],
+      "message": "Add explicit value for parameter `strict=`"
+    },
+    "location": {
+      "column": 48,
+      "row": 601
+    },
+    "message": "`zip()` without an explicit `strict=` parameter",
+    "name": "zip-without-explicit-strict",
+    "noqa_row": 601,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/zip-without-explicit-strict"
+  },
+  {
+    "cell": null,
+    "code": "E731",
+    "end_location": {
+      "column": 83,
+      "row": 90
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/scopes/definitions.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "def mapped(roots):\n                    return {mapping.get(root, root) for root in roots}",
+          "end_location": {
+            "column": 83,
+            "row": 90
+          },
+          "location": {
+            "column": 17,
+            "row": 90
+          }
+        }
+      ],
+      "message": "Rewrite `mapped` as a `def`"
+    },
+    "location": {
+      "column": 17,
+      "row": 90
+    },
+    "message": "Do not assign a `lambda` expression, use a `def`",
+    "name": "lambda-assignment",
+    "noqa_row": 90,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/lambda-assignment"
+  },
+  {
+    "cell": null,
+    "code": "B023",
+    "end_location": {
+      "column": 48,
+      "row": 90
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/scopes/definitions.py",
+    "fix": null,
+    "location": {
+      "column": 41,
+      "row": 90
+    },
+    "message": "Function definition does not bind loop variable `mapping`",
+    "name": "function-uses-loop-variable",
+    "noqa_row": 90,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/function-uses-loop-variable"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 14,
+      "row": 5
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_child_region_authority.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import pytest\n\nfrom compiler.tests.test_source_scopes import FACT, generate\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 8
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 3,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 89,
+      "row": 93
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_child_region_authority.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert len(owner['boundaries']) == 1\n    assert 'alias' in owner['boundaries'][0]['reason']\n",
+          "end_location": {
+            "column": 1,
+            "row": 94
+          },
+          "location": {
+            "column": 1,
+            "row": 93
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 93
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 93,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 41,
+      "row": 10
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_component_bindings.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from copy import copy\n\nimport pytest\nfrom fparser.two import Fortran2003 as F\nfrom fparser.two.utils import walk\n\nfrom compiler.frontend.component_bindings import component_access, references, source_scope_for\nfrom compiler.frontend.source_effects import SourceEffects\nfrom compiler.ir import CompilationError\n\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 13
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 3,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 50,
+      "row": 149
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_compute_identity.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert runtime.available\n    assert runtime.required\n",
+          "end_location": {
+            "column": 1,
+            "row": 150
+          },
+          "location": {
+            "column": 1,
+            "row": 149
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 149
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 149,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 58,
+      "row": 134
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_deferred_native_group_effects.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert result[\"complete\"]\n    assert not result[\"cloneable\"]\n",
+          "end_location": {
+            "column": 1,
+            "row": 135
+          },
+          "location": {
+            "column": 1,
+            "row": 134
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 134
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 134,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 39,
+      "row": 92
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_indirect_native_sections.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "    from dataclasses import replace\n\n    from fparser.two import Fortran2003 as F\n    from fparser.two.utils import walk\n",
+          "end_location": {
+            "column": 1,
+            "row": 93
+          },
+          "location": {
+            "column": 1,
+            "row": 90
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 5,
+      "row": 90
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 90,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 54,
+      "row": 213
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_indirect_native_sections.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert \"markers(\" in source\n    assert \")%row\" in source\n",
+          "end_location": {
+            "column": 1,
+            "row": 214
+          },
+          "location": {
+            "column": 1,
+            "row": 213
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 213
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 213,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 70,
+      "row": 214
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_indirect_native_sections.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert \"c_sizeof\" not in source\n    assert \"c_loc(markers\" not in source\n",
+          "end_location": {
+            "column": 1,
+            "row": 215
+          },
+          "location": {
+            "column": 1,
+            "row": 214
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 214
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 214,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 64,
+      "row": 216
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_indirect_native_sections.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert \"%read_count\" in source\n    assert \"%write_count\" in source\n",
+          "end_location": {
+            "column": 1,
+            "row": 217
+          },
+          "location": {
+            "column": 1,
+            "row": 216
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 216
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 216,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 36,
+      "row": 312
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_indirect_native_sections.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert not boxes\n    assert not counts\n",
+          "end_location": {
+            "column": 1,
+            "row": 313
+          },
+          "location": {
+            "column": 1,
+            "row": 312
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 312
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 312,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 36,
+      "row": 329
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_indirect_native_sections.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert not boxes\n    assert not counts\n",
+          "end_location": {
+            "column": 1,
+            "row": 330
+          },
+          "location": {
+            "column": 1,
+            "row": 329
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 329
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 329,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 36,
+      "row": 340
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_indirect_native_sections.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert not boxes\n    assert not counts\n",
+          "end_location": {
+            "column": 1,
+            "row": 341
+          },
+          "location": {
+            "column": 1,
+            "row": 340
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 340
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 340,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 51,
+      "row": 9
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_joined_uniform_branches.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from compiler.scopes.segments import joined_group_completion",
+          "end_location": {
+            "column": 76,
+            "row": 9
+          },
+          "location": {
+            "column": 1,
+            "row": 9
+          }
+        }
+      ],
+      "message": "Remove unused import: `compiler.scopes.segments.grouped_nodes`"
+    },
+    "location": {
+      "column": 38,
+      "row": 9
+    },
+    "message": "`compiler.scopes.segments.grouped_nodes` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 9,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 67,
+      "row": 48
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_joined_uniform_branches.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert result[\"available\"]\n    assert result[\"has_openmp_in_closure\"]\n",
+          "end_location": {
+            "column": 1,
+            "row": 49
+          },
+          "location": {
+            "column": 1,
+            "row": 48
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 48
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 48,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 73,
+      "row": 50
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_joined_uniform_branches.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert \"PARALLEL\" in result[\"reason\"]\n    assert \"join\" in result[\"reason\"]\n",
+          "end_location": {
+            "column": 1,
+            "row": 51
+          },
+          "location": {
+            "column": 1,
+            "row": 50
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 50
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 50,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 58,
+      "row": 53
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_joined_uniform_branches.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"condition\", \"clause\", \"update\", \"reason\")",
+          "end_location": {
+            "column": 58,
+            "row": 53
+          },
+          "location": {
+            "column": 26,
+            "row": 53
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 53
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 53,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 41,
+      "row": 8
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_lazy_source_effect_report.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import pytest\nfrom fparser.two import Fortran2003 as F\nfrom fparser.two.utils import walk\n\nfrom compiler.frontend.source_effects import SourceEffects\nfrom compiler.ir import CompilationError\n\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 11
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 3,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 61,
+      "row": 58
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_lazy_source_effect_report.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert not analysis._closures\n    assert not analysis.summaries\n",
+          "end_location": {
+            "column": 1,
+            "row": 59
+          },
+          "location": {
+            "column": 1,
+            "row": 58
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 58
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 58,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 52,
+      "row": 66
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_lazy_source_effect_report.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert leaf[\"complete\"]\n    assert segment[\"complete\"]\n",
+          "end_location": {
+            "column": 1,
+            "row": 67
+          },
+          "location": {
+            "column": 1,
+            "row": 66
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 66
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 66,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 56,
+      "row": 13
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_native_affine_sections.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport shutil\nimport subprocess\nfrom pathlib import Path\n\nimport pytest\n\nfrom compiler.frontend.source_effects import SourceEffects\nfrom compiler.ir import CompilationError\nfrom compiler.scopes.access import build_native_access\nfrom compiler.tests.test_native_sections import analyze\n\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 16
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 3,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 39,
+      "row": 50
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_native_affine_sections.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"body\", \"points\")",
+          "end_location": {
+            "column": 39,
+            "row": 50
+          },
+          "location": {
+            "column": 26,
+            "row": 50
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 50
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 50,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 39,
+      "row": 67
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_native_affine_sections.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"body\", \"reason\")",
+          "end_location": {
+            "column": 39,
+            "row": 67
+          },
+          "location": {
+            "column": 26,
+            "row": 67
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 67
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 67,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 50,
+      "row": 108
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_native_affine_sections.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"body\", \"n\", \"expected\", \"status\")",
+          "end_location": {
+            "column": 50,
+            "row": 108
+          },
+          "location": {
+            "column": 26,
+            "row": 108
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 108
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 108,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 82,
+      "row": 34
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_native_completion_tokens.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert public[\"available\"]\n    assert public[\"retains_original_team_and_directives\"]\n",
+          "end_location": {
+            "column": 1,
+            "row": 35
+          },
+          "location": {
+            "column": 1,
+            "row": 34
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 34
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 34,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 54,
+      "row": 116
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_native_completion_tokens.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"body\", \"opening\", \"ending\", \"reason\")",
+          "end_location": {
+            "column": 54,
+            "row": 116
+          },
+          "location": {
+            "column": 26,
+            "row": 116
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 116
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 116,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 56,
+      "row": 13
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_native_view_access_v2.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport re\nimport shutil\nimport subprocess\nfrom pathlib import Path\n\nimport pytest\n\nfrom compiler.scopes.access import build_native_access\nfrom compiler.tests.test_native_sections import analyze\n\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 16
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 3,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 54,
+      "row": 56
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_native_view_access_v2.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"axes\", \"body\", \"extents\", \"expected\")",
+          "end_location": {
+            "column": 54,
+            "row": 56
+          },
+          "location": {
+            "column": 26,
+            "row": 56
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 56
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 56,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 50,
+      "row": 10
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_nested_array_operations_cuda.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import os\nimport shutil\n\nimport pytest\n\nfrom compiler.tests.test_nested_array_operations import SOURCE, build\nfrom compiler.tests.test_scoped_batch_sources_cuda import actual_profile\nfrom compiler.tests.test_source_scopes import run\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 13
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 3,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 32,
+      "row": 70
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_nested_array_operations_cuda.py",
+    "fix": null,
+    "location": {
+      "column": 31,
+      "row": 70
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 70,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 56,
+      "row": 14
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_numerical_calibration.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import json\nfrom copy import deepcopy\nfrom types import SimpleNamespace\n\nimport pytest\n\nfrom compiler.offload.numerical_calibration import (\n    BACKEND_ID,\n    FAMILIES,\n    FIT_SIZES,\n    HOLDOUT_SIZES,\n    INTRINSIC_BACKEND_ID,\n    MIX_FAMILIES,\n    NumericalCalibrationError,\n    _fit,\n    calibrate_numerical,\n    generator_identity,\n    numerical_costs,\n    numerical_intrinsic_costs,\n    parse_measurements,\n    profile_from_measurements,\n)\nfrom compiler.offload.profile import ProfileError, validate_profile\nfrom compiler.tests.test_offload_profile import profile\n\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 17
+          },
+          "location": {
+            "column": 1,
+            "row": 2
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 2
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 2,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 66,
+      "row": 13
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_numerical_closures.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import os\nimport shutil\nimport subprocess\n\nimport pytest\n\nfrom compiler.analysis import build_execution_plan\nfrom compiler.emission import generate_sources, read_common_header\nfrom compiler.frontend import discover_file, lower_file\nfrom compiler.ir import Assignment, Binary, CompilationError, If, Literal, Loop, Reference, walk_expr\nfrom compiler.tests.test_native import cuda_device as cuda_device\n\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 16
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 3,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 35,
+      "row": 11
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_numerical_closures.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from compiler.ir import CompilationError, If, Literal, Loop, Reference, walk_expr",
+          "end_location": {
+            "column": 102,
+            "row": 11
+          },
+          "location": {
+            "column": 1,
+            "row": 11
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 25,
+      "row": 11
+    },
+    "message": "`compiler.ir.Assignment` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 11,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 43,
+      "row": 11
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_numerical_closures.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from compiler.ir import CompilationError, If, Literal, Loop, Reference, walk_expr",
+          "end_location": {
+            "column": 102,
+            "row": 11
+          },
+          "location": {
+            "column": 1,
+            "row": 11
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 37,
+      "row": 11
+    },
+    "message": "`compiler.ir.Binary` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 11,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 42,
+      "row": 146
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_numerical_closures.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"change\", \"message\")",
+          "end_location": {
+            "column": 42,
+            "row": 146
+          },
+          "location": {
+            "column": 26,
+            "row": 146
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 146
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 146,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 2,
+      "row": 31
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_offload_profile.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import json\nfrom copy import deepcopy\nfrom types import SimpleNamespace\n\nimport pytest\n\nfrom compiler.numerical_contract import numerical_build_contract\nfrom compiler.offload.calibrate import (\n    CalibrationError,\n    fit_transfer,\n    parse_measurements,\n    parse_scoped_measurements,\n    profile_from_measurements,\n    profile_with_scoped_measurements,\n    scoped_transfers_from_measurements,\n)\nfrom compiler.offload.profile import (\n    LATENCY_RATES,\n    SCOPED_BATCH_PAYLOADS,\n    SCOPED_COST_NAMES,\n    THROUGHPUT_RATES,\n    WORKER_RATES,\n    ProfileError,\n    compiler_identity,\n    load_profile,\n    scoped_costs,\n    scoped_transfer_costs,\n    validate_profile,\n)\n\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 34
+          },
+          "location": {
+            "column": 1,
+            "row": 2
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 2
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 2,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 50,
+      "row": 10
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_reached_definitions_cuda.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import os\nimport shutil\n\nimport pytest\n\nfrom compiler.tests.test_reached_definitions import SOURCE, build\nfrom compiler.tests.test_scoped_batch_sources_cuda import actual_profile\nfrom compiler.tests.test_source_scopes import run\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 13
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 3,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "E702",
+    "end_location": {
+      "column": 34,
+      "row": 74
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_reached_definitions_cuda.py",
+    "fix": null,
+    "location": {
+      "column": 33,
+      "row": 74
+    },
+    "message": "Multiple statements on one line (semicolon)",
+    "name": "multiple-statements-on-one-line-semicolon",
+    "noqa_row": 74,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/multiple-statements-on-one-line-semicolon"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 66,
+      "row": 10
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_runtime_trace.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import os\nimport shutil\nimport subprocess\nfrom collections import Counter\n\nimport pytest\n\nfrom compiler.emission.common.resources import read_common_header\n\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 13
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 3,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 63,
+      "row": 17
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_numerical_costs.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import ctypes as c\nimport math\n\nimport pytest\n\nfrom compiler._legacy.config import LegacyOffloadConfig as OffloadConfig\nfrom compiler.analysis import build_execution_plan\nfrom compiler.emission import generate_sources\nfrom compiler.emission.common.resources import read_scoped_runtime\nfrom compiler.frontend import lower_file\nfrom compiler.offload.numerical_calibration import MIX_FAMILIES, profile_from_measurements\nfrom compiler.tests.test_numerical_calibration import observations\nfrom compiler.tests.test_offload_profile import scoped_profile\nfrom compiler.tests.test_scoped_planning_runtime import (\n    TOKEN,\n    Binding,\n    Scope,\n    costs,\n    planning,\n    runtime,\n    select,\n)\n\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 20
+          },
+          "location": {
+            "column": 1,
+            "row": 2
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 2
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 2,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 43,
+      "row": 8
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_numerical_costs.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from compiler.tests.test_scoped_planning_runtime import (\n    Binding, Scope, TOKEN, costs, select,\n)",
+          "end_location": {
+            "column": 2,
+            "row": 9
+          },
+          "location": {
+            "column": 1,
+            "row": 7
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 35,
+      "row": 8
+    },
+    "message": "`compiler.tests.test_scoped_planning_runtime.planning` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 8,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 52,
+      "row": 8
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_numerical_costs.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from compiler.tests.test_scoped_planning_runtime import (\n    Binding, Scope, TOKEN, costs, select,\n)",
+          "end_location": {
+            "column": 2,
+            "row": 9
+          },
+          "location": {
+            "column": 1,
+            "row": 7
+          }
+        }
+      ],
+      "message": "Remove unused import"
+    },
+    "location": {
+      "column": 45,
+      "row": 8
+    },
+    "message": "`compiler.tests.test_scoped_planning_runtime.runtime` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 8,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 44,
+      "row": 20
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_numerical_costs.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"cpu\", \"gpu\", \"expected\")",
+          "end_location": {
+            "column": 44,
+            "row": 20
+          },
+          "location": {
+            "column": 26,
+            "row": 20
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 20
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 20,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "F811",
+    "end_location": {
+      "column": 61,
+      "row": 21
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_numerical_costs.py",
+    "fix": null,
+    "location": {
+      "column": 53,
+      "row": 21
+    },
+    "message": "Redefinition of unused `planning` from line 8: `planning` redefined here",
+    "name": "redefined-while-unused",
+    "noqa_row": 21,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/redefined-while-unused"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 61,
+      "row": 29
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_numerical_costs.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert result.available\n    assert result.gpu_units == expected\n",
+          "end_location": {
+            "column": 1,
+            "row": 30
+          },
+          "location": {
+            "column": 1,
+            "row": 29
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 29
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 29,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "F811",
+    "end_location": {
+      "column": 59,
+      "row": 39
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_numerical_costs.py",
+    "fix": null,
+    "location": {
+      "column": 51,
+      "row": 39
+    },
+    "message": "Redefinition of unused `planning` from line 8: `planning` redefined here",
+    "name": "redefined-while-unused",
+    "noqa_row": 39,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/redefined-while-unused"
+  },
+  {
+    "cell": null,
+    "code": "F811",
+    "end_location": {
+      "column": 100,
+      "row": 83
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_numerical_costs.py",
+    "fix": null,
+    "location": {
+      "column": 92,
+      "row": 83
+    },
+    "message": "Redefinition of unused `planning` from line 8: `planning` redefined here",
+    "name": "redefined-while-unused",
+    "noqa_row": 83,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/redefined-while-unused"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 86,
+      "row": 86
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_numerical_costs.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert public[\"automatic_estimate_available\"]\n    assert public[\"planning\"][\"available\"]\n",
+          "end_location": {
+            "column": 1,
+            "row": 87
+          },
+          "location": {
+            "column": 1,
+            "row": 86
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 86
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 86,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 42,
+      "row": 92
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_numerical_costs.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert math.isfinite(cpu)\n    assert cpu > 0\n",
+          "end_location": {
+            "column": 1,
+            "row": 93
+          },
+          "location": {
+            "column": 1,
+            "row": 92
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 92
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 92,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 48,
+      "row": 93
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_numerical_costs.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert math.isfinite(gpu)\n    assert 0 < gpu < cpu\n",
+          "end_location": {
+            "column": 1,
+            "row": 94
+          },
+          "location": {
+            "column": 1,
+            "row": 93
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 93
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 93,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 58,
+      "row": 109
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_numerical_costs.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert decision.available\n    assert decision.gpu_units == 1\n",
+          "end_location": {
+            "column": 1,
+            "row": 110
+          },
+          "location": {
+            "column": 1,
+            "row": 109
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 109
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 109,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 43,
+      "row": 119
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_numerical_costs.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"evidence\", \"reason\")",
+          "end_location": {
+            "column": 43,
+            "row": 119
+          },
+          "location": {
+            "column": 26,
+            "row": 119
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 119
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 119,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "F811",
+    "end_location": {
+      "column": 95,
+      "row": 121
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_numerical_costs.py",
+    "fix": null,
+    "location": {
+      "column": 87,
+      "row": 121
+    },
+    "message": "Redefinition of unused `planning` from line 8: `planning` redefined here",
+    "name": "redefined-while-unused",
+    "noqa_row": 121,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/redefined-while-unused"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 62,
+      "row": 140
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_numerical_costs.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert not decision.available\n    assert decision.gpu_units == 0\n",
+          "end_location": {
+            "column": 1,
+            "row": 141
+          },
+          "location": {
+            "column": 1,
+            "row": 140
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 140
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 140,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 54,
+      "row": 47
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_rank_reduced_views.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert layout.rank == 2\n    assert layout.root.rank == 3\n",
+          "end_location": {
+            "column": 1,
+            "row": 48
+          },
+          "location": {
+            "column": 1,
+            "row": 47
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 47
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 47,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 58,
+      "row": 53
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_rank_reduced_views.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert layout.offset == 928\n    assert layout.elements == 12\n",
+          "end_location": {
+            "column": 1,
+            "row": 54
+          },
+          "location": {
+            "column": 1,
+            "row": 53
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 53
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 53,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 14,
+      "row": 11
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_regions.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport ctypes\nimport itertools\nimport json\nimport shutil\nimport subprocess\nfrom pathlib import Path\n\nimport pytest\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 13
+          },
+          "location": {
+            "column": 1,
+            "row": 2
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 2
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 2,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 14,
+      "row": 9
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_team_native_calls.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import json\nimport os\nimport shutil\nimport subprocess\nfrom pathlib import Path\n\nimport pytest\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 11
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 3,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 14,
+      "row": 10
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_team_planning_model.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from __future__ import annotations\n\nimport json\nimport shutil\nimport subprocess\nfrom pathlib import Path\n\nimport pytest\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 12
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 3,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 49,
+      "row": 259
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_team_planning_model.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"scenario\", \"expected_gpu\")",
+          "end_location": {
+            "column": 49,
+            "row": 259
+          },
+          "location": {
+            "column": 26,
+            "row": 259
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 259
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 259,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 49,
+      "row": 269
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_team_planning_model.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"scenario\", \"expected_gpu\")",
+          "end_location": {
+            "column": 49,
+            "row": 269
+          },
+          "location": {
+            "column": 26,
+            "row": 269
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 269
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 269,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 49,
+      "row": 305
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_team_planning_model.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"scenario\", \"expected_gpu\")",
+          "end_location": {
+            "column": 49,
+            "row": 305
+          },
+          "location": {
+            "column": 26,
+            "row": 305
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 305
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 305,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 74,
+      "row": 158
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_transfers_sources.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert preflight[\"successful\"]\n    assert preflight[\"selection\"] == \"native\"\n",
+          "end_location": {
+            "column": 1,
+            "row": 159
+          },
+          "location": {
+            "column": 1,
+            "row": 158
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 158
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 158,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 100,
+      "row": 12
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_array_operations_runtime.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import ctypes\nimport os\nimport shutil\nimport struct\nfrom hashlib import sha256\nfrom pathlib import Path\n\nimport pytest\n\nfrom compiler.tests.test_source_scopes import FACT, ROOT, assert_uncalibrated_native, generate, run\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 15
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 3,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "F401",
+    "end_location": {
+      "column": 25,
+      "row": 6
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_array_operations_runtime.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "",
+          "end_location": {
+            "column": 1,
+            "row": 7
+          },
+          "location": {
+            "column": 1,
+            "row": 6
+          }
+        }
+      ],
+      "message": "Remove unused import: `pathlib.Path`"
+    },
+    "location": {
+      "column": 21,
+      "row": 6
+    },
+    "message": "`pathlib.Path` imported but unused",
+    "name": "unused-import",
+    "noqa_row": 6,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unused-import"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 74,
+      "row": 207
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_call_bindings.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert mapping.binding.rank == 3\n    assert mapping.formal_binding.rank == 2\n",
+          "end_location": {
+            "column": 1,
+            "row": 208
+          },
+          "location": {
+            "column": 1,
+            "row": 207
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 207
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 207,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 101,
+      "row": 213
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_call_bindings.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert record[\"rank\"] == 3 and record[\"logical_rank\"] == 2\n    assert record[\"retained_axes\"] == [0, 2]\n",
+          "end_location": {
+            "column": 1,
+            "row": 214
+          },
+          "location": {
+            "column": 1,
+            "row": 213
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 213
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 213,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 51,
+      "row": 12
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_component_regions.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import pytest\nfrom fparser.two import Fortran2003 as F\nfrom fparser.two.utils import walk\n\nfrom compiler.driver.options import CompilerOptions\nfrom compiler.driver.pipeline import prepare_function\nfrom compiler.frontend import lower_source\nfrom compiler.frontend.source_effects import SourceEffects\nfrom compiler.scopes.array_operations import extract_array_operation\nfrom compiler.scopes.regions import extract_region\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 15
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 3,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 76,
+      "row": 659
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_effects.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert descriptor[\"resource\"] == \"argument::a\"\n    assert descriptor[\"stable\"]\n",
+          "end_location": {
+            "column": 1,
+            "row": 660
+          },
+          "location": {
+            "column": 1,
+            "row": 659
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 659
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 659,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 46,
+      "row": 109
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_numerical_closures.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"replacement\", \"reason\")",
+          "end_location": {
+            "column": 46,
+            "row": 109
+          },
+          "location": {
+            "column": 26,
+            "row": 109
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 109
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 109,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "PT012",
+    "end_location": {
+      "column": 123,
+      "row": 117
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_numerical_closures.py",
+    "fix": null,
+    "location": {
+      "column": 5,
+      "row": 115
+    },
+    "message": "`pytest.raises()` block should contain a single simple statement",
+    "name": "pytest-raises-with-multiple-statements",
+    "noqa_row": 115,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-raises-with-multiple-statements"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 41,
+      "row": 273
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_numerical_closures.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"change\", \"reason\")",
+          "end_location": {
+            "column": 41,
+            "row": 273
+          },
+          "location": {
+            "column": 26,
+            "row": 273
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 273
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 273,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 85,
+      "row": 67
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_openmp_reductions.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert record[\"source_analysis_available\"]\n    assert not record[\"execution_supported\"]\n",
+          "end_location": {
+            "column": 1,
+            "row": 68
+          },
+          "location": {
+            "column": 1,
+            "row": 67
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 67
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 67,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 47,
+      "row": 117
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_openmp_reductions.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"body\", \"options\", \"reason\")",
+          "end_location": {
+            "column": 47,
+            "row": 117
+          },
+          "location": {
+            "column": 26,
+            "row": 117
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 117
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 117,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 91,
+      "row": 170
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_openmp_reductions.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert requested[\"source_analysis_available\"]\n    assert not requested[\"execution_supported\"]\n",
+          "end_location": {
+            "column": 1,
+            "row": 171
+          },
+          "location": {
+            "column": 1,
+            "row": 170
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 170
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 170,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 95,
+      "row": 76
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_rank_reduced_views.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert \"fort_scope_view_get_v2\" in generated\n    assert \"fort_scope_access_begin_v1\" in generated\n",
+          "end_location": {
+            "column": 1,
+            "row": 77
+          },
+          "location": {
+            "column": 1,
+            "row": 76
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 76
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 76,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 69,
+      "row": 79
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_rank_reduced_views.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert entries\n    assert all(\".rank != 2\" in text for text in entries)\n",
+          "end_location": {
+            "column": 1,
+            "row": 80
+          },
+          "location": {
+            "column": 1,
+            "row": 79
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 79
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 79,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 73,
+      "row": 94
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_rank_reduced_views.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert \"_parent_axes\" in generated\n    assert \"_parent_origin\" in generated\n",
+          "end_location": {
+            "column": 1,
+            "row": 95
+          },
+          "location": {
+            "column": 1,
+            "row": 94
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 94
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 94,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 100,
+      "row": 10
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_rank_reduced_views_cuda.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "import ctypes\nimport os\nimport shutil\nfrom hashlib import sha256\n\nimport pytest\n\nfrom compiler.tests.test_source_rank_reduced_views import SOURCE\nfrom compiler.tests.test_source_scopes import FACT, ROOT, assert_uncalibrated_native, generate, run\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 13
+          },
+          "location": {
+            "column": 1,
+            "row": 2
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 2
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 2,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 41,
+      "row": 27
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_reductions.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"name\", \"identity\")",
+          "end_location": {
+            "column": 41,
+            "row": 27
+          },
+          "location": {
+            "column": 26,
+            "row": 27
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 27
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 27,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 41,
+      "row": 48
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_reductions.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"name\", \"identity\")",
+          "end_location": {
+            "column": 41,
+            "row": 48
+          },
+          "location": {
+            "column": 26,
+            "row": 48
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 48
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 48,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 44,
+      "row": 95
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_reductions.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"import_text\", \"call\")",
+          "end_location": {
+            "column": 44,
+            "row": 95
+          },
+          "location": {
+            "column": 26,
+            "row": 95
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 95
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 95,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 45,
+      "row": 111
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_reductions.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "(\"body\", \"dtype\", \"reason\")",
+          "end_location": {
+            "column": 45,
+            "row": 111
+          },
+          "location": {
+            "column": 26,
+            "row": 111
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 111
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 111,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 65,
+      "row": 198
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_reductions.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert bounded[\"truncated\"]\n    assert len(bounded[\"records\"]) == 2\n",
+          "end_location": {
+            "column": 1,
+            "row": 199
+          },
+          "location": {
+            "column": 1,
+            "row": 198
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 198
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 198,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 59,
+      "row": 3
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_use_renames.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from compiler.frontend.source_effects import SourceEffects\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 6
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 3,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 52,
+      "row": 130
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_source_use_renames.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert first['complete']\n    assert second['complete']\n",
+          "end_location": {
+            "column": 1,
+            "row": 131
+          },
+          "location": {
+            "column": 1,
+            "row": 130
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 130
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 130,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 71,
+      "row": 137
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_structured_effects.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert len(events) == 1\n    assert events[0][\"resource\"] == \"argument::a\"\n",
+          "end_location": {
+            "column": 1,
+            "row": 138
+          },
+          "location": {
+            "column": 1,
+            "row": 137
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 137
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 137,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 57,
+      "row": 192
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_structured_effects.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert ordinary[\"complete\"]\n    assert captured[\"complete\"]\n",
+          "end_location": {
+            "column": 1,
+            "row": 193
+          },
+          "location": {
+            "column": 1,
+            "row": 192
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 192
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 192,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 81,
+      "row": 255
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_structured_effects.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert not with_entry.available\n    assert \"INTENT(OUT) reads\" in with_entry.reason\n",
+          "end_location": {
+            "column": 1,
+            "row": 256
+          },
+          "location": {
+            "column": 1,
+            "row": 255
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 255
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 255,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 49,
+      "row": 345
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_structured_effects.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert not graph.available\n    assert graph.reasons\n",
+          "end_location": {
+            "column": 1,
+            "row": 346
+          },
+          "location": {
+            "column": 1,
+            "row": 345
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 345
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 345,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "I001",
+    "end_location": {
+      "column": 76,
+      "row": 12
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_worksharing_native_completion.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "from dataclasses import replace\n\nimport pytest\nfrom fparser.two import Fortran2003 as F\nfrom fparser.two.utils import walk\n\nfrom compiler.frontend.source_effects import SourceEffects\nfrom compiler.ir import CompilationError\nfrom compiler.scopes.regions import extract_region\nfrom compiler.tests.test_native_completion_tokens import PROCEDURE, fixture\n\n",
+          "end_location": {
+            "column": 1,
+            "row": 15
+          },
+          "location": {
+            "column": 1,
+            "row": 3
+          }
+        }
+      ],
+      "message": "Organize imports"
+    },
+    "location": {
+      "column": 1,
+      "row": 3
+    },
+    "message": "Import block is un-sorted or un-formatted",
+    "name": "unsorted-imports",
+    "noqa_row": 3,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/unsorted-imports"
+  },
+  {
+    "cell": null,
+    "code": "PT006",
+    "end_location": {
+      "column": 39,
+      "row": 98
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_worksharing_native_completion.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "('body', 'reason')",
+          "end_location": {
+            "column": 39,
+            "row": 98
+          },
+          "location": {
+            "column": 26,
+            "row": 98
+          }
+        }
+      ],
+      "message": "Use a `tuple` for the first argument"
+    },
+    "location": {
+      "column": 26,
+      "row": 98
+    },
+    "message": "Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`",
+    "name": "pytest-parametrize-names-wrong-type",
+    "noqa_row": 98,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-parametrize-names-wrong-type"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 83,
+      "row": 151
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_worksharing_native_completion.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert writes\n    assert all(operation['section'] == 'whole' for operation in writes)\n",
+          "end_location": {
+            "column": 1,
+            "row": 152
+          },
+          "location": {
+            "column": 1,
+            "row": 151
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 151
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 151,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 71,
+      "row": 92
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_worksharing_region_dispatch.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert \"case (1)\" in serial_body\n    assert \"case (2)\" not in serial_body\n",
+          "end_location": {
+            "column": 1,
+            "row": 93
+          },
+          "location": {
+            "column": 1,
+            "row": 92
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 92
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 92,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  },
+  {
+    "cell": null,
+    "code": "PT018",
+    "end_location": {
+      "column": 95,
+      "row": 93
+    },
+    "filename": "/home/jirka/research/fortran-abomination/compiler/tests/test_worksharing_region_dispatch.py",
+    "fix": {
+      "applicability": "unsafe",
+      "edits": [
+        {
+          "content": "    assert \"case (1)\" not in team_body and \"case (2)\" in team_body\n    assert \"case (3)\" in team_body\n",
+          "end_location": {
+            "column": 1,
+            "row": 94
+          },
+          "location": {
+            "column": 1,
+            "row": 93
+          }
+        }
+      ],
+      "message": "Break down assertion into multiple parts"
+    },
+    "location": {
+      "column": 5,
+      "row": 93
+    },
+    "message": "Assertion should be broken down into multiple parts",
+    "name": "pytest-composite-assertion",
+    "noqa_row": 93,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/pytest-composite-assertion"
+  }
+]

@@ -9,7 +9,7 @@ import struct
 
 import pytest
 
-from compiler.tests.test_source_scopes import FACT, ROOT, generate, run
+from compiler.tests.test_source_scopes import FACT, ROOT, assert_uncalibrated_native, generate, run
 
 
 SOURCE = """module renamed_boundaries
@@ -89,10 +89,19 @@ def array_operation_binaries(tmp_path_factory):
     for policy in ("sections", "auto"):
         original, output, manifest = generate(directory / policy, SOURCE, entry="advance", mode=policy,
                                              facts=facts, checkout=checkout)
-        assert manifest["scope_count"], manifest["boundaries"]
-        regions = manifest["inline_numerical_regions"]["regions"]
-        assert any(region["operation_kind"] == "array_assignment" for region in regions)
+        if policy == "auto":
+            assert_uncalibrated_native(manifest)
+            assert original.read_text() == SOURCE
+        else:
+            assert manifest["scope_count"], manifest["boundaries"]
+            regions = manifest["inline_numerical_regions"]["regions"]
+            assert any(region["operation_kind"] == "array_assignment" for region in regions)
         objects = []
+        if policy == "auto":
+            target = output / "unchanged-original.o"
+            run([fortran, "-std=f2018", "-fopenmp", "-fcheck=all", "-c", str(original),
+                 "-o", str(target)], cwd=output)
+            objects.append(str(target))
         # Only public build roles and hashes are consumed by this independent
         # caller. No generated-CUDA or compiler-IR inspection is required.
         for role in ("common_runtime", "shared_entry", "original_source"):

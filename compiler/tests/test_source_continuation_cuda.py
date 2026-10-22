@@ -12,7 +12,7 @@ import pytest
 
 from compiler.tests.test_module_allocatable_scopes_runtime import ROOT, _run
 from compiler.tests.test_source_continuation import TREE
-from compiler.tests.test_source_scopes import FACT, generate
+from compiler.tests.test_source_scopes import FACT, assert_uncalibrated_native, generate
 
 SOURCE = TREE.replace("real(8),intent(out)::b(:)", "real(8),intent(inout)::b(:)").replace(
     "real(8),intent(out)::out(:)", "real(8),intent(inout)::out(:)").replace(
@@ -134,9 +134,17 @@ def continuation_binaries(tmp_path_factory):
         if label in {"allocated-module", "hidden-array"}:
             facts["captures"]["original::field"] = FACT
         original, output, manifest = generate(case, source, mode=policy, facts=facts, checkout=checkout)
-        scope, = manifest["scopes"]
-        assert scope["ownership"]["planning_mode"] == "continuation", manifest["boundaries"]
+        if policy == "auto":
+            assert_uncalibrated_native(manifest)
+            assert original.read_text() == source
+        else:
+            scope, = manifest["scopes"]
+            assert scope["ownership"]["planning_mode"] == "continuation", manifest["boundaries"]
         objects = []
+        if policy == "auto":
+            target = output / "unchanged-original.o"
+            _run([*fortran_flags, "-c", str(original), "-o", str(target)], output)
+            objects.append(str(target))
         for role in ("common_runtime", "shared_entry", "original_source"):
             for item in manifest["build_sources"]:
                 if item["role"] != role:
@@ -158,14 +166,17 @@ def continuation_binaries(tmp_path_factory):
                 else:
                     _run([*fortran_flags, "-c", str(output / artifact), "-o", str(target)], output)
                 objects.append(str(target))
-        diagnostic = output / "close-evidence.cpp"
-        diagnostic.write_text(DIAGNOSTIC)
-        diagnostic_object = output / "close-evidence.o"
-        _run([host, "-std=c++17", "-I", str(output), "-c", str(diagnostic), "-o", str(diagnostic_object)], output)
+        diagnostic_objects = []
+        if policy != "auto":
+            diagnostic = output / "close-evidence.cpp"
+            diagnostic.write_text(DIAGNOSTIC)
+            diagnostic_object = output / "close-evidence.o"
+            _run([host, "-std=c++17", "-I", str(output), "-c", str(diagnostic), "-o", str(diagnostic_object)], output)
+            diagnostic_objects = [str(diagnostic_object), "-Wl,--wrap=fort_scope_close"]
         driver = output / "driver.f90"
         driver.write_text(MODULE_DRIVER if label in {"allocated-module", "hidden-array"} else ALLOCATED_DRIVER if label == "allocated-formals" else DRIVER)
         target = output / "verify"
-        _run([*fortran_flags, str(driver), *objects, str(diagnostic_object), "-Wl,--wrap=fort_scope_close",
+        _run([*fortran_flags, str(driver), *objects, *diagnostic_objects,
               "-L/usr/local/cuda/lib64", "-Wl,-rpath,/usr/local/cuda/lib64", "-lcudart", "-lstdc++", "-o", str(target)], output)
         native = output / "native"
         _run([*fortran_flags, str(original), str(driver), "-o", str(native)], output)
@@ -205,6 +216,44 @@ def test_source_continuation_matches_complete_native_fields(continuation_binarie
         if label == "resource-before":
             assert "FORT_SCOPED launch" not in result.stderr
             assert "FORT_SCOPED upload" not in result.stderr
+        elif label == "joined":
+            # This independent original team closes the selected prefix. Its
+            # following consumer stays in the original native suffix.
+            manifest = json.loads((output / "scope-manifest.json").read_text())
+            assert any(boundary["first_line"] == 43 and boundary["last_line"] == 49
+                       and boundary["reason"] == "unsupported exit or native ordering boundary: ClosedSelectionBoundary"
+                       for boundary in manifest["boundaries"])
+            contexts = {}
+            closed = set()
+            for line in result.stderr.splitlines():
+                if not line.startswith("FORT_SCOPED ") or line.startswith("FORT_SCOPED evidence "):
+                    continue
+                context = re.search(r"\bcontext=(\d+)\b", line)
+                if context is None:
+                    continue
+                identity = int(context.group(1))
+                assert identity not in closed, line
+                events = contexts.setdefault(identity, [])
+                event = line.split()[1]
+                events.append((event, line))
+                if event == "close":
+                    closed.add(identity)
+            assert len(contexts) == len(closed) == 8
+            assert [sum(event == "launch" for event, _ in events)
+                    for events in contexts.values()] == [0, 0, 0, 0, 1, 1, 1, 1]
+            for events, expected_bytes in zip(contexts.values(), [0, 0, 0, 0, 48, 48, 240, 240], strict=True):
+                names = [event for event, _ in events]
+                assert names.count("create") == 1
+                assert names.count("close") == 1
+                assert names[0] == "create"
+                assert names[-1] == "close"
+                transfers = [(event, int(re.search(r"\bbuffer=(\d+)\b", line).group(1)),
+                              int(re.search(r"\bbytes=(\d+)\b", line).group(1)))
+                             for event, line in events if event in {"upload", "download"}]
+                expected = [("upload", 1, expected_bytes), ("download", 2, expected_bytes)] if expected_bytes else []
+                assert transfers == expected
+                if expected_bytes:
+                    assert names.index("upload") < names.index("launch") < names.index("download") < names.index("close")
         else:
             assert result.stderr.count("FORT_SCOPED launch") >= 8, result.stderr
     else:

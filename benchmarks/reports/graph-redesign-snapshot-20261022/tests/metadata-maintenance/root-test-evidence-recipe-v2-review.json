@@ -1,0 +1,28 @@
+{
+  "status": "root_reviewed_recipe_v2_metadata_assembly_authorized",
+  "recipe": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/final-test-evidence-recipe.v2.sealed.json",
+    "sha256": "767417451fe6daab830d5e85a3915b15891bea8cea44cbaf620d01e00f86bbfd"
+  },
+  "assembler": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/assemble_test_evidence.py",
+    "sha256": "b6b28f7e30bbf8da93f6a6d9fcbca9ada076edb072eb9230837950b59bff334d"
+  },
+  "source_and_inventory_and_lineage_and_skip_authority_unchanged": true,
+  "only_summary_positions_changed": [
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14
+  ],
+  "summary_order_preserved": true,
+  "raw_failed_attempts_preserved": true,
+  "all_nested_reference_entries_verified": 185,
+  "new_whole_file_wrapper_peer_clear_sha256": "66873382cd3498ae065950795403afcd3f3061b7df0ccf40395ca006a65f2195",
+  "no_tests_or_applications_executed": true
+}

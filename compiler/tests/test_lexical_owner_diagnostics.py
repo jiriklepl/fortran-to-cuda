@@ -4,12 +4,12 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend import source_effects
 from compiler.frontend.source_effects import _children
 from compiler.frontend.summary_cache import SummaryCache
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.lexical import LexicalOwner, lexical_attempt_diagnostics
 from compiler.scopes.source import ScopeBuilder
 

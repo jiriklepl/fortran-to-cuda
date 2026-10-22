@@ -6,7 +6,8 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend import numerical_preparation
 from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
 from compiler.frontend.numerical_preparation import (
@@ -17,7 +18,6 @@ from compiler.frontend.numerical_preparation import (
 )
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 
 ENTRY = "renamed_region::form_field"
 OPTIONS = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="reached")

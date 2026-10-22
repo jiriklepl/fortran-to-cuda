@@ -1,0 +1,35 @@
+{
+  "status": "CLEAR",
+  "scope": "Exacttwo-line metadataadapterdelta only",
+  "assembler": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/assemble_test_evidence.py",
+    "sha256": "b6b28f7e30bbf8da93f6a6d9fcbca9ada076edb072eb9230837950b59bff334d"
+  },
+  "before": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/suite-independent-junit-module-adapter/assemble_test_evidence.before.py.source",
+    "sha256": "432be19ef025784effc03fee2d360c40a2cffa20e42533d5278e2fc2902497d9"
+  },
+  "proposal_review": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/suite-independent-junit-module-adapter/review.json",
+    "sha256": "1497fcbb0ac8cd4eec7a0998da2cb065bfbaf545ad29f576825d729201004860"
+  },
+  "diff": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/suite-independent-junit-module-adapter/change.diff",
+    "sha256": "261d1a5715457e8f770ed88d8ec07cf3a4471c261a1d67d025d6735dab53fcbf"
+  },
+  "exact_reconstructed_two_line_delta": true,
+  "main_actual5cases_unique_authenticated_file_matches": true,
+  "raw_command": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/cpu-runs/000-test_build/command.json",
+    "sha256": "9c90ccff1a3cb5872fffeaf95c954bb3ccf26cd35b4b0863d0398a2e81d34c56"
+  },
+  "raw_junit": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/cpu-runs/000-test_build/junit.xml",
+    "sha256": "57dc31c7394dc9b13a4983a56a68ad79e4a5756fab16289bc7e3df5ae720fd9f"
+  },
+  "known_suite_single_file_only": true,
+  "wrong_class_name_multi_file_path_unknown_suite_rejected": true,
+  "all_existing_source_process_selection_outcome_uniqueness_coverage_checks_unchanged": true,
+  "raw_XML_argv_and_test_sources_not_modified": true,
+  "execution": "Onlytwo puremetadata functiondefs compiled/executed against preservedXML+command; no main/assembly/test import/pytest/compiler/app/build/generation/collection"
+}

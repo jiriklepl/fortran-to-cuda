@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "references": [
+    {
+      "original_path": "/tmp/fortran-convection-graph-probe-01/prepared-builds-20.json",
+      "sha256": "a771b132b186763fc6c02ccd83751af03fb547c6d46d0d8790ad02d3e60b0bcf",
+      "bytes": 321895,
+      "copied": false,
+      "reason": "existing independently archived evidence or large prepared identity map"
+    },
+    {
+      "original_path": "/tmp/fortran-convection-graph-probe-01/compiler-snapshot-20-final.json",
+      "sha256": "06e0aacdf81d2f77db2566c2eeac7e51ced97216bb6daff0a6bddc64e4cda9ef",
+      "bytes": 104477,
+      "copied": false,
+      "reason": "existing independently archived evidence or large prepared identity map"
+    },
+    {
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/graph-redesign-20261021/integration-20/index.json",
+      "sha256": "1049487a695ab9b1b7908562bac177ecadf46074d224cf0db60401f6da54a1af",
+      "bytes": 19360,
+      "copied": false,
+      "reason": "existing independently archived evidence or large prepared identity map"
+    },
+    {
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/graph-redesign-20261021/integration-20/application-01/index.json",
+      "sha256": "6102d529597e37acc169cc95cec782b42611d6eba7043f28061a9a66ca8042ef",
+      "bytes": 1297323,
+      "copied": false,
+      "reason": "existing independently archived evidence or large prepared identity map"
+    },
+    {
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/graph-redesign-20261021/development-20/index.json",
+      "sha256": "897fb06b76319f71558bd3077a706f36a051cfbee6c0c4bb63a0a3a855315be2",
+      "bytes": 152421,
+      "copied": false,
+      "reason": "existing independently archived evidence or large prepared identity map"
+    },
+    {
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/graph-redesign-20261021/native-repeatability-fixed-fftw/cross-mode-20-natural/index.json",
+      "sha256": "ba79387c5440d8b3a9bd38487903f84b7957ceb3291030b0c57058788899bec7",
+      "bytes": 122984,
+      "copied": false,
+      "reason": "existing independently archived evidence or large prepared identity map"
+    },
+    {
+      "original_path": "/home/jirka/research/fortran-abomination/benchmarks/results/graph-redesign-20261021/native-repeatability-fixed-fftw/full-serialized-top/index.json",
+      "sha256": "e03b651c9ee24243ba0994cbebafd4f1b8cddd4baf57c36a8ad79ff5e0e6ebe8",
+      "bytes": 124004,
+      "copied": false,
+      "reason": "existing independently archived evidence or large prepared identity map"
+    },
+    {
+      "original_path": "/tmp/fortran-threeway-harness-smoke-02/work/native/build/ELMM",
+      "recorded_sha256": "fdf23e86be69b3bf6f88bd49b013d16e2912e5197fb287bf46e83a6925d2b311",
+      "copied": false,
+      "rehash_performed_by_packager": false,
+      "reason": "executed production binary identity retained by original authenticated build receipt"
+    },
+    {
+      "original_path": "/tmp/fortran-threeway-harness-smoke-02/work/committed/build/ELMM",
+      "recorded_sha256": "b2a317c38d3a23ac1043a5ae234830b3b06264ada5323a953479180fe4a5f592",
+      "copied": false,
+      "rehash_performed_by_packager": false,
+      "reason": "executed production binary identity retained by original authenticated build receipt"
+    },
+    {
+      "original_path": "/tmp/fortran-convection-graph-probe-01/candidate-20/build/ELMM",
+      "recorded_sha256": "463eaa18dcf26e873b1eff7b41e987239e90ed69d656473d1730bb835c8e0471",
+      "copied": false,
+      "rehash_performed_by_packager": false,
+      "reason": "executed production binary identity retained by original authenticated build receipt"
+    },
+    {
+      "original_path": "/tmp/fortran-threeway-harness-smoke-02/work/native/diagnostic/ELMM",
+      "recorded_sha256": "c2dcab71c17b2a993ca1715f2b132f5f0bc86dff0f61201e1c76a3760f4ff577",
+      "copied": false,
+      "rehash_performed_by_packager": false,
+      "reason": "large full-field diagnostic executable; authority stays original prepared record"
+    },
+    {
+      "original_path": "/tmp/fortran-threeway-harness-smoke-02/work/committed/diagnostic/ELMM",
+      "recorded_sha256": "e1d91e38330b455e0efcb618b46ec0f1b99fce5c37c80c60c59992a00905f900",
+      "copied": false,
+      "rehash_performed_by_packager": false,
+      "reason": "large full-field diagnostic executable; authority stays original prepared record"
+    },
+    {
+      "original_path": "/tmp/fortran-convection-graph-probe-01/candidate-20/diagnostic/ELMM",
+      "recorded_sha256": "35171f475c5c268220ff0708b15cae1467689c8e86a935493ec7ffd47429cc08",
+      "copied": false,
+      "rehash_performed_by_packager": false,
+      "reason": "large full-field diagnostic executable; authority stays original prepared record"
+    }
+  ],
+  "physical_field_and_VTK_SHA_records": "See copied natural reports for every field/shape/VTK hash and original paths. GB-scale payloads remain external; this package is a compact evidence index, not a complete binary/data distribution.",
+  "natural109_physical_payload_references": {
+    "index": "correctness/simple109-approved-top/archive-index.json",
+    "index_sha256": "0d4477ba167080d31cb27e29c18ebb32b4ac3886c70d3b1cbc84d0e9c06f4f35",
+    "records": 135,
+    "kind": "120binary/layoutfiles plus15VTK, recordedSHAfrom authenticatedactualreport; physicalpayloadsnotcopied/rehashnotrepeatedby packager."
+  },
+  "generated_command_log": {
+    "move_receipt": "historical/generated-command-log-move-receipt.json",
+    "receipt_sha256": "8c6359630b99f969df70b829b14cfc264c066afc5de0a8a56e1cee3d8ba26b6b",
+    "recorded_bytes": 261382,
+    "recorded_sha256": "9fb8c6f16bdaf3fd30bf0f01d5e0d5243a8bd6718648878e9988e619f7ff197e",
+    "reason": "Generatedartifact excludedfromsource/index, reversiblypreservedbyroot; notintendedsource."
+  }
+}

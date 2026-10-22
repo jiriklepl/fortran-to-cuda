@@ -163,6 +163,7 @@ template<size_t Capacity> class ViewAccessBatch {
         sealed_=true; return FORT_SCOPE_OK;
     }
 public:
+    static constexpr size_t binding_capacity = Capacity;
     explicit ViewAccessBatch(fort_scope_t context):context_(context),batch_(context) {}
     ViewAccessBatch(const ViewAccessBatch &)=delete;
     int add(const fort_scope_view_v1 *view,const fort_scope_access &access) {
@@ -188,6 +189,10 @@ public:
         return batch_.record_compute(kind,unit,flops,memory,gpu,compute);
     }
     int decision(uint64_t unit,bool &gpu) { if(const int status=seal()) return status; return batch_.decision(unit,gpu); }
+    int export_bindings(fort_scope_plan_binding *out,size_t capacity,size_t *count) {
+        if(const int status=seal()) return status;
+        return batch_.export_bindings(out,capacity,count);
+    }
     int begin(bool device) { if(const int status=seal()) return status; return batch_.begin(device); }
     void cancel() noexcept { batch_.cancel(); }
     void executing() { batch_.executing(); }

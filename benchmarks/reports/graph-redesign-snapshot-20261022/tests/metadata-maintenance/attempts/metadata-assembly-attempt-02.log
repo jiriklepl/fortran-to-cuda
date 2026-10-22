@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/tmp/fortran-committable-snapshot-20261022/assemble_test_evidence.py", line 218, in <module>
+    main()
+    ~~~~^^
+  File "/tmp/fortran-committable-snapshot-20261022/assemble_test_evidence.py", line 133, in main
+    assert selected and len(set(selected)) == len(selected)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError

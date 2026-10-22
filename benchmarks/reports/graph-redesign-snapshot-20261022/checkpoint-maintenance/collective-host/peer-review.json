@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "kind": "read-only compiler collective host work-tracking scope correction",
+  "status": "CLEAR_FOR_ROOT_HELD_PROMOTION_AFTER_BASELINE_103_FILE_PASS_CLOSES",
+  "inputs": {
+    "proposal": {
+      "path": "/tmp/fortran-committable-snapshot-20261022/collective-host-scope-fix-proposal-v2/proposal.diff",
+      "sha256": "f3237273a7cb66080efa264dd6d15cc776f84562b6a07a39e89358542b098c6c"
+    },
+    "author_review": {
+      "path": "/tmp/fortran-committable-snapshot-20261022/collective-host-scope-fix-proposal-v2/review.json",
+      "sha256": "a84879e722e2a211b46fd895b23343e56d7f351242d01ab7468bc548adbc6517"
+    },
+    "generation": {
+      "path": "/tmp/fortran-committable-snapshot-20261022/collective-host-scope-fix-proposal-v2/generation-summary.json",
+      "sha256": "95b6401731ee3c6f14eed8a6709cd2da7781847ed1897a7e3aa25be134a92f98"
+    },
+    "proposed_source": {
+      "path": "/tmp/fortran-committable-snapshot-20261022/collective-host-scope-fix-proposal-v2/scoped.py.proposed",
+      "sha256": "14c748e3cebda4d1c4c21474e4cf5073906f6cab529d13a95035a8fe7ca5fa1b"
+    }
+  },
+  "workspace_source": {
+    "path": "/home/jirka/research/fortran-abomination/compiler/emission/cuda/scoped.py",
+    "sha256": "d063724ab47fbf32e3821dc073c9b1f6762a7cdd27b41cf7dfd79b20e353fe6c"
+  },
+  "assessment": [
+    "Real public compiler bug: host() expands a serial-entry local fort_entry_work_started into a separately scoped collective entry. Changing test admission or inserting a test declaration would hide the bug.",
+    "Exact three-hunk delta adds a per-call serial_work_tracking keyword defaulting true, conditions only the serial marker, and disables it only for collective HostBlock/SequentialRegion reuse. Both serial callers retain default tracking even when collective output is also emitted.",
+    "Collective shared->work_started remains write-sensitive and unchanged. coordinate status guards, barriers, device validation and postwork execution-error poisoning are unchanged. No runtime ABI, numerical body, descriptor, policy, profile or costs change.",
+    "Independently verified all six authored generated CUDA hashes and zero exits; HostBlock and true SequentialRegion outputs each remove only the one undeclared serial-marker line; collective shared marker counts unchanged; guarded no-host output byte-identical.",
+    "Authenticated historical20 CUDA applicability audit finds no collective host() batch in all18 actual compiled inputs/17 collective entries. This is static construction evidence only, not regenerated application-byte or final-binary qualification.",
+    "After root promotion require existing full current test_scoped_team_sources.py and twelve actual test_scoped_team_runtime.py cases. Historical measured20 source/build identities must remain distinct from final checkpoint compile fix."
+  ],
+  "historical_applicability": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/collective-host-emitter-implementation-review/elmm20-emitted-cuda-applicability.json",
+    "sha256": "a6d8a168ec7c2b9b12a09970dca97ef1f2cca910f1ee15be9b568721c156add3"
+  },
+  "reviewer_tests_generation_builds_apps_profiles_executed": false,
+  "workspace_modified_by_review": false
+}

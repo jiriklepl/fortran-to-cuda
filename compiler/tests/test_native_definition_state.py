@@ -139,9 +139,20 @@ def test_joined_arms_retain_reads_and_only_discharge_requested_output_interiors(
 def test_fixed_array_input_still_requires_physical_mapping_for_coherence(tmp_path):
     _path, analysis, routine, groups, outputs, associations = fixture(tmp_path)
     completion = analysis.joined_completion(routine.qualified, groups[0])
-    with pytest.raises(CompilationError, match="physical sections require assumed-shape"):
-        prove_native_definitions(analysis, routine.qualified, groups[0], completion=completion)
-    assert issue(analysis, routine, groups[0], outputs, associations).transfer().candidate_definitions
+    physical = prove_native_definitions(analysis, routine.qualified, groups[0], completion=completion)
+    physical.validate(analysis, routine.qualified, groups[0])
+    coefficient, = [item for item in physical.public()["resources"] if item["resource"] == "argument::weights"]
+    assert coefficient["guarded_explicit_dummy_extents"] == [3]
+    assert coefficient["logical_lower_bounds"] == [1]
+    for step in physical.steps:
+        coefficient, = [item for item in step.sections.resources if item.resource == "argument::weights"]
+        assert coefficient.reads
+        assert not coefficient.writes
+        assert not coefficient.overwrites
+    logical = issue(analysis, routine, groups[0], outputs, associations)
+    assert logical.public()["physical_mapping_authority"] is False
+    assert logical.public()["descriptor_lifetime_authority"] is False
+    assert logical.transfer().candidate_definitions
 
 
 def test_missing_immutable_authority_keeps_fixed_array_read_uncovered(tmp_path):

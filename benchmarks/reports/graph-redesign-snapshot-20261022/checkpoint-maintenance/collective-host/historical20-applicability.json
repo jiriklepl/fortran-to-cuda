@@ -1,0 +1,243 @@
+{
+  "schema_version": 1,
+  "kind": "authenticated historical production20 ELMM emitted CUDA applicability audit for collective host tracking fix",
+  "build_receipt": {
+    "path": "/tmp/fortran-convection-graph-probe-01/candidate-20/build/build-receipts.json",
+    "sha256": "391018e8b623f7d028fa77a874d300fe14c5be62d840145c0db8b018f2de77a9"
+  },
+  "rows": [
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/entries/entry_c330529a8f87/shared_entry.cu",
+      "sha256": "aa7b79490595dfaf14603be14511854a37fdc4a82dd85c11524301e7aceabecb",
+      "compile_succeeded": true,
+      "collective_entries": [
+        {
+          "entry": "cpp_fort_shared_4239a7e1a9ea_team",
+          "serial_tracking_identifier_occurrences": 0,
+          "host_step_executing_markers": 0,
+          "shared_work_tracking_occurrences": 4
+        }
+      ]
+    },
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/scoped_runtime.cu",
+      "sha256": "a806fc0bf3dc764a3dbf244ff8aa4f40dc0f64e8b86050672461eccbb5ab7cae",
+      "compile_succeeded": true,
+      "collective_entries": []
+    },
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/entries/entry_d76f18f26b3c/shared_entry.cu",
+      "sha256": "04c5af2e17b30d2ad53a76bbc0423b3d389b9de399cdcb5d8640c75e26d3ae1f",
+      "compile_succeeded": true,
+      "collective_entries": [
+        {
+          "entry": "cpp_fort_shared_044ea1011bdd_team",
+          "serial_tracking_identifier_occurrences": 0,
+          "host_step_executing_markers": 0,
+          "shared_work_tracking_occurrences": 12
+        }
+      ]
+    },
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/entries/entry_6f587dddd91f/shared_entry.cu",
+      "sha256": "16668d36b3c0dd9a5e82da69814c206075863af425b1bb10beedddafeba1421a",
+      "compile_succeeded": true,
+      "collective_entries": [
+        {
+          "entry": "cpp_fort_shared_918e747eceff_team",
+          "serial_tracking_identifier_occurrences": 0,
+          "host_step_executing_markers": 0,
+          "shared_work_tracking_occurrences": 24
+        }
+      ]
+    },
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/entries/entry_d7e47c603321/shared_entry.cu",
+      "sha256": "17863d651c54df89ceef6151da109615e529385fcf43d55ca27055f380846db7",
+      "compile_succeeded": true,
+      "collective_entries": [
+        {
+          "entry": "cpp_fort_shared_92704e0d3e42_team",
+          "serial_tracking_identifier_occurrences": 0,
+          "host_step_executing_markers": 0,
+          "shared_work_tracking_occurrences": 12
+        }
+      ]
+    },
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/entries/entry_c782c37b08f2/shared_entry.cu",
+      "sha256": "d27760ffcfb0b5eeb1d62950e67014b5b05aa945ae4c6b2ddeed4f003a41824d",
+      "compile_succeeded": true,
+      "collective_entries": [
+        {
+          "entry": "cpp_fort_shared_5b0fcb0a6fd0_team",
+          "serial_tracking_identifier_occurrences": 0,
+          "host_step_executing_markers": 0,
+          "shared_work_tracking_occurrences": 12
+        }
+      ]
+    },
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/entries/entry_8b685de1467e/shared_entry.cu",
+      "sha256": "9427dc276b8434d565302c688871b9858904b8c51e53694e7d4ed1f941bb8e71",
+      "compile_succeeded": true,
+      "collective_entries": [
+        {
+          "entry": "cpp_fort_shared_f5451c621ba5_team",
+          "serial_tracking_identifier_occurrences": 0,
+          "host_step_executing_markers": 0,
+          "shared_work_tracking_occurrences": 4
+        }
+      ]
+    },
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/entries/entry_f91a9331ae9c/shared_entry.cu",
+      "sha256": "b7303842c75f6b555773c327f1f8c3f095beea5b61fe4c719694249f38ec742e",
+      "compile_succeeded": true,
+      "collective_entries": [
+        {
+          "entry": "cpp_fort_shared_55bae4a5b522_team",
+          "serial_tracking_identifier_occurrences": 0,
+          "host_step_executing_markers": 0,
+          "shared_work_tracking_occurrences": 4
+        }
+      ]
+    },
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/entries/entry_72ead57b0f12/shared_entry.cu",
+      "sha256": "2d651001e877d0687360e37828468ee2951998edb9d61490147558fbebd73f62",
+      "compile_succeeded": true,
+      "collective_entries": [
+        {
+          "entry": "cpp_fort_shared_9720a9a772f7_team",
+          "serial_tracking_identifier_occurrences": 0,
+          "host_step_executing_markers": 0,
+          "shared_work_tracking_occurrences": 4
+        }
+      ]
+    },
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/entries/entry_dd21891eee83/shared_entry.cu",
+      "sha256": "7877f4ceef6815f5a6eb6d2e0644102d9c335d5d1980cca957c556ebba1874c4",
+      "compile_succeeded": true,
+      "collective_entries": [
+        {
+          "entry": "cpp_fort_shared_c93a4b6163a6_team",
+          "serial_tracking_identifier_occurrences": 0,
+          "host_step_executing_markers": 0,
+          "shared_work_tracking_occurrences": 4
+        }
+      ]
+    },
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/entries/entry_f2abc1883b3b/shared_entry.cu",
+      "sha256": "3820008817ec7e18495251671f357e7fa7f6d2929910fbd0a7f5d0e88d2fdc0e",
+      "compile_succeeded": true,
+      "collective_entries": [
+        {
+          "entry": "cpp_fort_shared_f9530d11f8c1_team",
+          "serial_tracking_identifier_occurrences": 0,
+          "host_step_executing_markers": 0,
+          "shared_work_tracking_occurrences": 4
+        }
+      ]
+    },
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/entries/entry_b5535dd392ed/shared_entry.cu",
+      "sha256": "4ca3ab07c611f4a3a83ae129e6fe008cf4141dacea5ebd0e5753f43e149ab3ca",
+      "compile_succeeded": true,
+      "collective_entries": [
+        {
+          "entry": "cpp_fort_shared_99be05164f25_team",
+          "serial_tracking_identifier_occurrences": 0,
+          "host_step_executing_markers": 0,
+          "shared_work_tracking_occurrences": 4
+        }
+      ]
+    },
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/entries/entry_0d2141e735a1/shared_entry.cu",
+      "sha256": "ab2fa62bddd04278b52943708ac15e2bd5771801995b1a081f9bf62e9f933fd8",
+      "compile_succeeded": true,
+      "collective_entries": [
+        {
+          "entry": "cpp_fort_shared_2cc7291570a3_team",
+          "serial_tracking_identifier_occurrences": 0,
+          "host_step_executing_markers": 0,
+          "shared_work_tracking_occurrences": 4
+        }
+      ]
+    },
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/entries/entry_3c72b6c46902/shared_entry.cu",
+      "sha256": "2bb434747dea5bb559332a1dad7671299a805393dcd270f7fce1930015ed77a7",
+      "compile_succeeded": true,
+      "collective_entries": [
+        {
+          "entry": "cpp_fort_shared_b3b36cdab685_team",
+          "serial_tracking_identifier_occurrences": 0,
+          "host_step_executing_markers": 0,
+          "shared_work_tracking_occurrences": 4
+        }
+      ]
+    },
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/entries/entry_88bf5dce03bf/shared_entry.cu",
+      "sha256": "c09b5e83cd92e5d411554b9ddf47428eca9e7f95b1291141e54750b85c2a4d87",
+      "compile_succeeded": true,
+      "collective_entries": [
+        {
+          "entry": "cpp_fort_shared_191f21c6d5e9_team",
+          "serial_tracking_identifier_occurrences": 0,
+          "host_step_executing_markers": 0,
+          "shared_work_tracking_occurrences": 4
+        }
+      ]
+    },
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/entries/entry_fdac987e235f/shared_entry.cu",
+      "sha256": "8efd7ae646f4dd52c075c1a1b4f588ad505b54497b40eb842e4143e7b7b501b8",
+      "compile_succeeded": true,
+      "collective_entries": [
+        {
+          "entry": "cpp_fort_shared_c5c4382df300_team",
+          "serial_tracking_identifier_occurrences": 0,
+          "host_step_executing_markers": 0,
+          "shared_work_tracking_occurrences": 4
+        }
+      ]
+    },
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/entries/entry_12c702ebf3ed/shared_entry.cu",
+      "sha256": "4e4d34b29448e453bb16dba8c18e38f292179ae250ae52d7cf033f5ceee72f5c",
+      "compile_succeeded": true,
+      "collective_entries": [
+        {
+          "entry": "cpp_fort_shared_d8fb9759fb2e_team",
+          "serial_tracking_identifier_occurrences": 0,
+          "host_step_executing_markers": 0,
+          "shared_work_tracking_occurrences": 4
+        }
+      ]
+    },
+    {
+      "source": "/tmp/fortran-convection-graph-probe-01/composed-20/entries/entry_128bb3aaefcf/shared_entry.cu",
+      "sha256": "5f67618380cffc76df838ce63d766b7c2eb58ff8c2668b42b065daf2de5e53ac",
+      "compile_succeeded": true,
+      "collective_entries": [
+        {
+          "entry": "cpp_fort_shared_3aae06148abb_team",
+          "serial_tracking_identifier_occurrences": 0,
+          "host_step_executing_markers": 0,
+          "shared_work_tracking_occurrences": 4
+        }
+      ]
+    }
+  ],
+  "cuda_sources": 18,
+  "collective_entries": 17,
+  "affected_host_markers": 0,
+  "invalid_serial_identifiers_in_collective": 0,
+  "qualification": "Static inspection of exact successfully compiled historical payloads only. Not full application regeneration after proposed compiler fix; frozen20 source/binaries/measurements unchanged.",
+  "new_tests_builds_apps_or_generation_executed": false
+}

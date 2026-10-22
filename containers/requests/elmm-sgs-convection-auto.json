@@ -1,0 +1,367 @@
+[
+  {
+    "schema_version": 1,
+    "source": "elmm/src/subgrid.f90",
+    "entry": "subgrid::sgs_sigma_uniform",
+    "source_files": [
+      "PoisFFT/src/customfftw3.f90",
+      "PoisFFT/src/fft.f90",
+      "PoisFFT/src/main.f90",
+      "PoisFFT/src/parameters.f90",
+      "PoisFFT/src/poisfft.f90",
+      "PoisFFT/src/precisions.f90",
+      "elmm/src/advection.f90",
+      "elmm/src/advection_variable_z.f90",
+      "elmm/src/alternate_ieee_isnan.f90",
+      "elmm/src/areasources.f90",
+      "elmm/src/arrayutilities.f90",
+      "elmm/src/boundaries.f90",
+      "elmm/src/buoyant_gases.f90",
+      "elmm/src/diabatic_processes.f90",
+      "elmm/src/dummy_cgal_polyhedra.f90",
+      "elmm/src/dummy_par.f90",
+      "elmm/src/dynamics.f90",
+      "elmm/src/elevationmodels.f90",
+      "elmm/src/endianness.f90",
+      "elmm/src/filters.f90",
+      "elmm/src/frames.f90",
+      "elmm/src/frames_common.f90",
+      "elmm/src/freeunit.f90",
+      "elmm/src/geometricshapes.f90",
+      "elmm/src/geometricshapes2d.f90",
+      "elmm/src/immersedboundary.f90",
+      "elmm/src/initial.f90",
+      "elmm/src/interpolation.f90",
+      "elmm/src/large_scale_processes.f90",
+      "elmm/src/limiters.f90",
+      "elmm/src/linearforcing.f90",
+      "elmm/src/linesources.f90",
+      "elmm/src/lists.f90",
+      "elmm/src/main.f90",
+      "elmm/src/momentum_diffusion.f90",
+      "elmm/src/multigrid.f90",
+      "elmm/src/multigrid2d.f90",
+      "elmm/src/numerical_operators.f90",
+      "elmm/src/output_helpers.f90",
+      "elmm/src/outputs.f90",
+      "elmm/src/parameters.f90",
+      "elmm/src/pointsources.f90",
+      "elmm/src/poisson.f90",
+      "elmm/src/pressure.f90",
+      "elmm/src/pthreads.f90",
+      "elmm/src/puffs.f90",
+      "elmm/src/radiation.f90",
+      "elmm/src/rng_par_zig.f90",
+      "elmm/src/scalar_advection.f90",
+      "elmm/src/scalar_diffusion.f90",
+      "elmm/src/scalarboundaries.f90",
+      "elmm/src/scalars.f90",
+      "elmm/src/simplevtk.f90",
+      "elmm/src/solarradiation.f90",
+      "elmm/src/solidbodies.f90",
+      "elmm/src/sponge.f90",
+      "elmm/src/stop.f90",
+      "elmm/src/strings.f90",
+      "elmm/src/subgrid_mixedtimescale.f90",
+      "elmm/src/surfacemapframes.f90",
+      "elmm/src/tiling.f90",
+      "elmm/src/tsteps.f90",
+      "elmm/src/turbinlet.f90",
+      "elmm/src/vertical_profiles.f90",
+      "elmm/src/volumesources.f90",
+      "elmm/src/vtkframes.f90",
+      "elmm/src/wallmodels.f90",
+      "elmm/src/water_thermodynamics.f90"
+    ],
+    "capture_facts": {
+      "schema_version": 1,
+      "participation": "serial",
+      "captures": {
+        "argument::u": {
+          "storage": "stable",
+          "initialized": "whole",
+          "escapes": false,
+          "allocation_changes": false
+        },
+        "argument::v": {
+          "storage": "stable",
+          "initialized": "whole",
+          "escapes": false,
+          "allocation_changes": false
+        },
+        "argument::w": {
+          "storage": "stable",
+          "initialized": "whole",
+          "escapes": false,
+          "allocation_changes": false
+        },
+        "tiling::tilenx": {
+          "storage": "stable",
+          "initialized": "whole",
+          "escapes": false,
+          "allocation_changes": false
+        },
+        "tiling::tileny": {
+          "storage": "stable",
+          "initialized": "whole",
+          "escapes": false,
+          "allocation_changes": false
+        },
+        "tiling::tilenz": {
+          "storage": "stable",
+          "initialized": "whole",
+          "escapes": false,
+          "allocation_changes": false
+        },
+        "parameters::viscosity": {
+          "storage": "stable",
+          "initialized": "none",
+          "escapes": false,
+          "allocation_changes": false
+        }
+      }
+    },
+    "options": {
+      "gpu_policy": "auto",
+      "scope_execution": "graph",
+      "scope_transfers": "direct"
+    },
+    "request_provenance": {
+      "purpose": "Evaluate the same checked roots with generic transfer-aware CPU/GPU placement; no numerical-leaf whitelist or application-specific placement rules",
+      "primary_cases": [
+        "channel-simple",
+        "channel"
+      ],
+      "calibration": "Supply an independently measured hardware profile with scoped costs for the exact runtime; absent or incompatible costs retain native execution",
+      "performance_claim": "Requires fresh whole-application correctness, timing and transfer measurements"
+    }
+  },
+  {
+    "schema_version": 1,
+    "source": "elmm/src/dynamics.f90",
+    "entry": "dynamics::convection",
+    "source_files": [
+      "elmm/src/subgrid.f90",
+      "PoisFFT/src/customfftw3.f90",
+      "PoisFFT/src/fft.f90",
+      "PoisFFT/src/main.f90",
+      "PoisFFT/src/parameters.f90",
+      "PoisFFT/src/poisfft.f90",
+      "PoisFFT/src/precisions.f90",
+      "elmm/src/advection.f90",
+      "elmm/src/advection_variable_z.f90",
+      "elmm/src/alternate_ieee_isnan.f90",
+      "elmm/src/areasources.f90",
+      "elmm/src/arrayutilities.f90",
+      "elmm/src/boundaries.f90",
+      "elmm/src/buoyant_gases.f90",
+      "elmm/src/diabatic_processes.f90",
+      "elmm/src/dummy_cgal_polyhedra.f90",
+      "elmm/src/dummy_par.f90",
+      "elmm/src/elevationmodels.f90",
+      "elmm/src/endianness.f90",
+      "elmm/src/filters.f90",
+      "elmm/src/frames.f90",
+      "elmm/src/frames_common.f90",
+      "elmm/src/freeunit.f90",
+      "elmm/src/geometricshapes.f90",
+      "elmm/src/geometricshapes2d.f90",
+      "elmm/src/immersedboundary.f90",
+      "elmm/src/initial.f90",
+      "elmm/src/interpolation.f90",
+      "elmm/src/large_scale_processes.f90",
+      "elmm/src/limiters.f90",
+      "elmm/src/linearforcing.f90",
+      "elmm/src/linesources.f90",
+      "elmm/src/lists.f90",
+      "elmm/src/main.f90",
+      "elmm/src/momentum_diffusion.f90",
+      "elmm/src/multigrid.f90",
+      "elmm/src/multigrid2d.f90",
+      "elmm/src/numerical_operators.f90",
+      "elmm/src/output_helpers.f90",
+      "elmm/src/outputs.f90",
+      "elmm/src/parameters.f90",
+      "elmm/src/pointsources.f90",
+      "elmm/src/poisson.f90",
+      "elmm/src/pressure.f90",
+      "elmm/src/pthreads.f90",
+      "elmm/src/puffs.f90",
+      "elmm/src/radiation.f90",
+      "elmm/src/rng_par_zig.f90",
+      "elmm/src/scalar_advection.f90",
+      "elmm/src/scalar_diffusion.f90",
+      "elmm/src/scalarboundaries.f90",
+      "elmm/src/scalars.f90",
+      "elmm/src/simplevtk.f90",
+      "elmm/src/solarradiation.f90",
+      "elmm/src/solidbodies.f90",
+      "elmm/src/sponge.f90",
+      "elmm/src/stop.f90",
+      "elmm/src/strings.f90",
+      "elmm/src/subgrid_mixedtimescale.f90",
+      "elmm/src/surfacemapframes.f90",
+      "elmm/src/tiling.f90",
+      "elmm/src/tsteps.f90",
+      "elmm/src/turbinlet.f90",
+      "elmm/src/vertical_profiles.f90",
+      "elmm/src/volumesources.f90",
+      "elmm/src/vtkframes.f90",
+      "elmm/src/wallmodels.f90",
+      "elmm/src/water_thermodynamics.f90"
+    ],
+    "capture_facts": {
+      "captures": {
+        "argument::beta": {
+          "allocation_changes": false,
+          "escapes": false,
+          "initialized": "whole",
+          "storage": "stable"
+        },
+        "argument::rho": {
+          "allocation_changes": false,
+          "escapes": false,
+          "initialized": "whole",
+          "storage": "stable"
+        },
+        "argument::u": {
+          "allocation_changes": false,
+          "escapes": false,
+          "initialized": "whole",
+          "storage": "stable"
+        },
+        "argument::u2": {
+          "allocation_changes": false,
+          "escapes": false,
+          "initialized": "none",
+          "storage": "stable"
+        },
+        "argument::ustar": {
+          "allocation_changes": false,
+          "escapes": false,
+          "initialized": "whole",
+          "storage": "stable"
+        },
+        "argument::v": {
+          "allocation_changes": false,
+          "escapes": false,
+          "initialized": "whole",
+          "storage": "stable"
+        },
+        "argument::v2": {
+          "allocation_changes": false,
+          "escapes": false,
+          "initialized": "none",
+          "storage": "stable"
+        },
+        "argument::vstar": {
+          "allocation_changes": false,
+          "escapes": false,
+          "initialized": "whole",
+          "storage": "stable"
+        },
+        "argument::w": {
+          "allocation_changes": false,
+          "escapes": false,
+          "initialized": "whole",
+          "storage": "stable"
+        },
+        "argument::w2": {
+          "allocation_changes": false,
+          "escapes": false,
+          "initialized": "none",
+          "storage": "stable"
+        },
+        "argument::wstar": {
+          "allocation_changes": false,
+          "escapes": false,
+          "initialized": "whole",
+          "storage": "stable"
+        },
+        "parameters::btype": {
+          "allocation_changes": false,
+          "escapes": false,
+          "initialized": "whole",
+          "storage": "stable"
+        },
+        "parameters::viscosity": {
+          "allocation_changes": false,
+          "escapes": false,
+          "expected_descriptor": {
+            "extents": [
+              132,
+              68,
+              68
+            ],
+            "lower_bounds": [
+              -1,
+              -1,
+              -1
+            ]
+          },
+          "initialized": "sections",
+          "sections": [
+            {
+              "lower": [
+                1,
+                1,
+                1
+              ],
+              "upper": [
+                131,
+                67,
+                67
+              ]
+            }
+          ],
+          "storage": "stable"
+        },
+        "tiling::tilenx": {
+          "allocation_changes": false,
+          "escapes": false,
+          "initialized": "whole",
+          "storage": "stable"
+        },
+        "tiling::tileny": {
+          "allocation_changes": false,
+          "escapes": false,
+          "initialized": "whole",
+          "storage": "stable"
+        },
+        "tiling::tilenz": {
+          "allocation_changes": false,
+          "escapes": false,
+          "initialized": "whole",
+          "storage": "stable"
+        }
+      },
+      "participation": "serial",
+      "schema_version": 1
+    },
+    "options": {
+      "gpu_policy": "auto",
+      "scope_execution": "graph",
+      "scope_transfers": "direct"
+    },
+    "provenance": {
+      "capture_facts_source": "benchmarks/results/checked-plan-application-20261014/capture-facts.json",
+      "capture_facts_sha256": "1bea5abea7e5c512cb8ec880c0ab8c419a20f3e0a3804dff495711dcd89465c2",
+      "source_identity": "pristine pinned ELMM ddb426fca5b020216083f02a218292fea70c1df2 and PoisFFT 256a2338254c08f611881b2df5e72bdfa73bc257",
+      "applicability": "Primary channel-simple and original channel configurations: same128x64x64 grid and shared archived capture-facts identity. Retains reviewed viscosity descriptor/defined sections; original advection/filter/wall controls remain unchanged.",
+      "note": "Only retained caller capture facts are transported. Old source paths/hashes are replaced by freshly verified pristine sources. Six private advection INTENT declaration changes from the archived request are deliberately absent.",
+      "primary_cases": [
+        "channel-simple",
+        "channel"
+      ]
+    },
+    "request_provenance": {
+      "purpose": "Evaluate the same checked roots with generic transfer-aware CPU/GPU placement; no numerical-leaf whitelist or application-specific placement rules",
+      "primary_cases": [
+        "channel-simple",
+        "channel"
+      ],
+      "calibration": "Supply an independently measured hardware profile with scoped costs for the exact runtime; absent or incompatible costs retain native execution",
+      "performance_claim": "Requires fresh whole-application correctness, timing and transfer measurements"
+    }
+  }
+]

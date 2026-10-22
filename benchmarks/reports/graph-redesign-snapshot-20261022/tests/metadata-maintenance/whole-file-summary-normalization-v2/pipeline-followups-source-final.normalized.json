@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "first_pass_preserved": "/tmp/fortran-committable-snapshot-20261022/pipeline-final/cpu-summary.json",
+  "retry_policy": "only root/peer reviewed maintenance; explicit strict-affinity capability",
+  "root_authorized_concurrent_nonperformance_validation": false,
+  "first_pass_completed_files_at_start": 48,
+  "complete": true,
+  "results": [
+    {
+      "kind": "reviewed_test_maintenance",
+      "file": "elmm-pipeline/tests/test_owner_measurement.py",
+      "nodes": 36,
+      "selection": "full current file",
+      "argv": [
+        "taskset",
+        "-c",
+        "0-11",
+        "timeout",
+        "240s",
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-c",
+        "/home/jirka/research/fortran-abomination/compiler/pyproject.toml",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/fortran-committable-snapshot-20261022/followup-pytest-cache",
+        "--basetemp=/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/00-test_owner_measurement/temporary",
+        "--junitxml=/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/00-test_owner_measurement/junit.xml",
+        "/home/jirka/research/fortran-abomination/elmm-pipeline/tests/test_owner_measurement.py"
+      ],
+      "source_sha256": "8725d163902415ab76d83bf3ee53338902c2005c241cbfcd305c5618a7e4734b",
+      "seconds": 0.5894386430009035,
+      "exit_code": 0,
+      "log": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/00-test_owner_measurement/output.log",
+      "junit": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/00-test_owner_measurement/junit.xml",
+      "counts": {
+        "tests": 36,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "suite": "pipeline",
+      "selection_kind": "entire_file_inventory",
+      "selected_nodeids": [
+        "elmm-pipeline/tests/test_owner_measurement.py::test_authenticated_diagnostic_record_has_no_placement_authority[native]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_authenticated_diagnostic_record_has_no_placement_authority[resident]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_ordinary_package_requires_no_measurement_contract",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_measurement_contract_mismatch_rejects_even_after_rehash[schema_version-True]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_measurement_contract_mismatch_rejects_even_after_rehash[protocol-unknown]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_measurement_contract_mismatch_rejects_even_after_rehash[variant-resident]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_measurement_contract_mismatch_rejects_even_after_rehash[placement_authority-True]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_measurement_contract_mismatch_rejects_even_after_rehash[calibration_evidence-True]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_measurement_contract_mismatch_rejects_even_after_rehash[automatic_estimate_available-True]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_measurement_contract_mismatch_rejects_even_after_rehash[execution_identity-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_measurement_contract_mismatch_rejects_even_after_rehash[source_inputs_identity-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_measurement_contract_mismatch_rejects_even_after_rehash[configuration_identity-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_measurement_contract_mismatch_rejects_even_after_rehash[capture_facts_identity-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_measurement_contract_mismatch_rejects_even_after_rehash[compiler_identity-invalid]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_measurement_contract_mismatch_rejects_even_after_rehash[clock-cpu_time]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_measurement_contract_mismatch_rejects_even_after_rehash[observation_prefix-ordinary timing]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_measurement_contract_mismatch_rejects_even_after_rehash[limitations-value13]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_measurement_contract_mismatch_rejects_even_after_rehash[call_sites-value14]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_measurement_contract_mismatch_rejects_even_after_rehash[extra-1]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_native_exception_cannot_relax_ordinary_runtime_requirements[identity]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_native_exception_cannot_relax_ordinary_runtime_requirements[top_variant]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_native_exception_cannot_relax_ordinary_runtime_requirements[scope_count]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_native_exception_cannot_relax_ordinary_runtime_requirements[missing_record]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_native_exception_cannot_relax_ordinary_runtime_requirements[automatic]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_native_exception_cannot_relax_ordinary_runtime_requirements[native_runtime]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_native_exception_cannot_relax_ordinary_runtime_requirements[native_cuda]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_native_exception_cannot_relax_ordinary_runtime_requirements[native_helper]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_native_exception_cannot_relax_ordinary_runtime_requirements[native_extra_source]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_call_sites_are_bound_to_exact_original_source[caller_source]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_call_sites_are_bound_to_exact_original_source[source_digest]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_call_sites_are_bound_to_exact_original_source[call_digest]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_call_sites_are_bound_to_exact_original_source[line]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_call_sites_are_bound_to_exact_original_source[duplicate]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_call_sites_are_bound_to_exact_original_source[file_changed]",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_resident_runtime_identity_is_authenticated",
+        "elmm-pipeline/tests/test_owner_measurement.py::test_public_compiler_rejects_removed_measurement_options_before_source_edits"
+      ],
+      "selected_nodes": 36,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/00-test_owner_measurement/command.json",
+        "sha256": "1ace1916a5b9bd0aea20b39afd87936731b2a10d3dc0dfa9d6dcedcbf35397d7"
+      },
+      "log_sha256": "12f9f8689618f10190cfeeb23d4e3804f49b5ac3e92ac0e1b9044628c9bf6ff8",
+      "junit_sha256": "2d513a0b13979c439759a4fac949da58824b619f5a8ef349c5072e7a8a079cae"
+    },
+    {
+      "kind": "reviewed_test_maintenance",
+      "file": "elmm-pipeline/tests/test_local_scopes.py",
+      "nodes": 17,
+      "selection": "full current file",
+      "argv": [
+        "taskset",
+        "-c",
+        "0-11",
+        "timeout",
+        "240s",
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-c",
+        "/home/jirka/research/fortran-abomination/compiler/pyproject.toml",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/fortran-committable-snapshot-20261022/followup-pytest-cache",
+        "--basetemp=/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/01-test_local_scopes/temporary",
+        "--junitxml=/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/01-test_local_scopes/junit.xml",
+        "/home/jirka/research/fortran-abomination/elmm-pipeline/tests/test_local_scopes.py"
+      ],
+      "source_sha256": "20aa302b277d37462d2f1cfd87b543214c5e23fd3586098b32fd10a6218aad6c",
+      "seconds": 41.123264772002585,
+      "exit_code": 1,
+      "log": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/01-test_local_scopes/output.log",
+      "junit": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/01-test_local_scopes/junit.xml",
+      "counts": {
+        "tests": 17,
+        "failures": 1,
+        "errors": 0,
+        "skipped": 0
+      },
+      "suite": "pipeline",
+      "selection_kind": "entire_file_inventory",
+      "selected_nodeids": [
+        "elmm-pipeline/tests/test_local_scopes.py::test_independent_checkouts_form_and_apply_public_scope",
+        "elmm-pipeline/tests/test_local_scopes.py::test_independent_compiler_packages_compose_without_ir_or_source_merging",
+        "elmm-pipeline/tests/test_local_scopes.py::test_automatic_missing_profile_composes_authenticated_native_package[bounded]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_automatic_missing_profile_composes_authenticated_native_package[reached]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_independent_adapter_transports_transfer_choice_and_compiler_reason[pinned]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_independent_adapter_transports_transfer_choice_and_compiler_reason[pipelined]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_independent_adapter_transports_transfer_choice_and_compiler_reason[coalesced]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_independent_adapter_transports_reached_execution_without_choosing_segments",
+        "elmm-pipeline/tests/test_local_scopes.py::test_independent_adapter_reuses_summary_cache_and_invalidates_changed_sources",
+        "elmm-pipeline/tests/test_local_scopes.py::test_independent_adapter_accepts_original_descriptor_guards",
+        "elmm-pipeline/tests/test_local_scopes.py::test_stale_application_source_is_rejected_before_any_edit",
+        "elmm-pipeline/tests/test_local_scopes.py::test_modified_replacement_is_rejected_before_any_edit",
+        "elmm-pipeline/tests/test_local_scopes.py::test_incompatible_public_build_manifest_is_rejected[abi]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_incompatible_public_build_manifest_is_rejected[runtime_identity]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_incompatible_public_build_manifest_is_rejected[build_role]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_incompatible_public_build_manifest_is_rejected[escape]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_pipeline_builds_and_links_public_common_runtime_once"
+      ],
+      "selected_nodes": 17,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/01-test_local_scopes/command.json",
+        "sha256": "178f7ec504009bc0b1d5e365116569719c21603c29aeaa48fb179ac9c60906a4"
+      },
+      "log_sha256": "ff19b451ef5258b0799b9d28d609c365778bff7853b9b9ce7d33a1dc9f498b61",
+      "junit_sha256": "b3d48a02aff9cebb9416f601f8779be8947d42348c4884e3f3eedf328294ab87"
+    },
+    {
+      "kind": "reviewed_test_maintenance",
+      "file": "elmm-pipeline/tests/test_scope_extraction.py",
+      "nodes": 4,
+      "selection": "full current file",
+      "argv": [
+        "taskset",
+        "-c",
+        "0-11",
+        "timeout",
+        "240s",
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-c",
+        "/home/jirka/research/fortran-abomination/compiler/pyproject.toml",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/fortran-committable-snapshot-20261022/followup-pytest-cache",
+        "--basetemp=/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/02-test_scope_extraction/temporary",
+        "--junitxml=/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/02-test_scope_extraction/junit.xml",
+        "/home/jirka/research/fortran-abomination/elmm-pipeline/tests/test_scope_extraction.py"
+      ],
+      "source_sha256": "f30374d370ccd74f7521270c893c530c751823b384bef59823df458ae9e90bda",
+      "seconds": 3.3351490899949567,
+      "exit_code": 0,
+      "log": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/02-test_scope_extraction/output.log",
+      "junit": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/02-test_scope_extraction/junit.xml",
+      "counts": {
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "suite": "pipeline",
+      "selection_kind": "entire_file_inventory",
+      "selected_nodeids": [
+        "elmm-pipeline/tests/test_scope_extraction.py::test_independent_pipeline_exports_leaves_without_grouping_decisions",
+        "elmm-pipeline/tests/test_scope_extraction.py::test_unsafe_leaf_stays_native_in_extraction_report",
+        "elmm-pipeline/tests/test_scope_extraction.py::test_configured_source_package_keeps_original_includes_and_cpp_branch",
+        "elmm-pipeline/tests/test_scope_extraction.py::test_empty_array_lower_bound_is_evaluated_in_original_dummy_coordinates"
+      ],
+      "selected_nodes": 4,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/02-test_scope_extraction/command.json",
+        "sha256": "b2b1ed9f205956e37314aa213222126d45a6bcf94c2b4d2338ec35d3760be084"
+      },
+      "log_sha256": "c2a5285fdeedf79fa600f6db9741f5a65ed9e2ef5f029156220272592613ffe1",
+      "junit_sha256": "7fd8b15c280a6308a1811c67906f98476edff17bcc7ac9b01f927426c133d89d"
+    }
+  ],
+  "normalization_inputs": [
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/summary.json",
+      "sha256": "bba934f88022ce30e95b7b7aad4c31fb12f78790dd42cd6013ea48951a2c6ab4"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/final-collection/main/inventory.json",
+      "sha256": "280d1862d851440ec90a0ca1799c5800e56f9d174aa9e00e72e5332bd2fd8cf3"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/final-collection/pipeline/inventory.json",
+      "sha256": "0fd2075a8aa6768a6acb10775268f90c273b46793b46cdda8701f18898fe450b"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/normalize_whole_file_summaries.py",
+      "sha256": "688da78e6354e22bc0041881188b6e99ab32e6de26d61e6be18dd7e0e9e487da"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/plan.json",
+      "sha256": "7c4b91e8aa418fd0abb909a2d76b1ea1f831c9af0b4579c624523bd17103786b"
+    }
+  ],
+  "normalization": "Metadata only: exact selected nodes/suite derived from final inventory and all raw JUnit case identities; original argv, source_sha256, exit codes and failed outcomes unchanged. Missing/wrong/multifile/partial coverage fails closed; no historical node renamed or relabeled."
+}

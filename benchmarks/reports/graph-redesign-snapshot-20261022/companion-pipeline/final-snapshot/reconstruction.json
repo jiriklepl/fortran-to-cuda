@@ -1,0 +1,175 @@
+{
+  "schema_version": 1,
+  "status": "FINAL16_SOURCE_RECONSTRUCTION_VERIFIED_AND_TEST_QUALIFIED",
+  "base_commit": "81e374410efe61d2e6dd64e8968264b22991fac5",
+  "source_repository": "/home/jirka/research/fortran-abomination/elmm-pipeline",
+  "modified_tracked_files": 12,
+  "new_files": 4,
+  "required_delta_files": [
+    {
+      "path": "elmm_pipeline/_legacy_scopes.py",
+      "status": "??",
+      "current_sha256": "e34639824021851b66124636f1c33ef978099b6df4815cfa9644d53156e950c1",
+      "current_copy": "current/elmm_pipeline/_legacy_scopes.py.source",
+      "base_sha256": null,
+      "base_status": "absent at base"
+    },
+    {
+      "path": "elmm_pipeline/cli.py",
+      "status": " M",
+      "current_sha256": "41d4df8a6a034a96a8ced06488280c4d1274a9a1f60d5e4e1f7c749bd0991cb7",
+      "current_copy": "current/elmm_pipeline/cli.py.source",
+      "base_sha256": "913fcfa7931ba83613fb9681227df0a4bba40488592065ce4a7e6d4ceb8327e8",
+      "base_status": "tracked",
+      "base_copy": "base/elmm_pipeline/cli.py.source"
+    },
+    {
+      "path": "elmm_pipeline/dataflow_graph.py",
+      "status": "??",
+      "current_sha256": "942ccf4558378327dca6efb4410b181f9798c171fdeb6afd4977344104444dce",
+      "current_copy": "current/elmm_pipeline/dataflow_graph.py.source",
+      "base_sha256": null,
+      "base_status": "absent at base"
+    },
+    {
+      "path": "elmm_pipeline/gpu_validation.py",
+      "status": " M",
+      "current_sha256": "1fa37f95456d1779477214a413264b6112950f21e1129ef2fc9574f58ee66479",
+      "current_copy": "current/elmm_pipeline/gpu_validation.py.source",
+      "base_sha256": "8e1cf21aff1ae868f02082ef077fee225cb4626a682ae8f6c408ca84381756cf",
+      "base_status": "tracked",
+      "base_copy": "base/elmm_pipeline/gpu_validation.py.source"
+    },
+    {
+      "path": "elmm_pipeline/local_adapter.py",
+      "status": " M",
+      "current_sha256": "b8315fff76d091a84e47d1ea75a19ade21a3492fdb557aa86fa291af72ecf2f1",
+      "current_copy": "current/elmm_pipeline/local_adapter.py.source",
+      "base_sha256": "9c168021745983841954182be9ef2a6e1578a02e282e03afa705d66f7a8fec9f",
+      "base_status": "tracked",
+      "base_copy": "base/elmm_pipeline/local_adapter.py.source"
+    },
+    {
+      "path": "tests/test_application_build.py",
+      "status": " M",
+      "current_sha256": "8757e8869b33e807d5bd311c0342f36cd4c074ddf6167d3df32dce0c65079122",
+      "current_copy": "current/tests/test_application_build.py.source",
+      "base_sha256": "517af79a61237388d9c72284b5dc48badae9301d4ecfa64c38527cd26935c433",
+      "base_status": "tracked",
+      "base_copy": "base/tests/test_application_build.py.source"
+    },
+    {
+      "path": "tests/test_checked_execution_plan.py",
+      "status": " M",
+      "current_sha256": "740952c8b610e5db704cd4cc05d46477565597a51e125e3dfe1ddae13cb610e5",
+      "current_copy": "current/tests/test_checked_execution_plan.py.source",
+      "base_sha256": "eb3149a2aa41681cc351ee5d092138c0b78c92c59bf11b7e24ba67c412ac67f7",
+      "base_status": "tracked",
+      "base_copy": "base/tests/test_checked_execution_plan.py.source"
+    },
+    {
+      "path": "tests/test_collective_scopes.py",
+      "status": " M",
+      "current_sha256": "b8ee17961dd8fcab85df216a230ce9ef9b311a847d9fbd14eeb6b5ba3253ce6f",
+      "current_copy": "current/tests/test_collective_scopes.py.source",
+      "base_sha256": "f213872d810d1afcb52b639dbb8b3851ccf589f8ba62bbbdb557d9e3515e91cd",
+      "base_status": "tracked",
+      "base_copy": "base/tests/test_collective_scopes.py.source"
+    },
+    {
+      "path": "tests/test_current_scope_protocol.py",
+      "status": "??",
+      "current_sha256": "be2e6847fd4ce734072d41a49bd6a4d62362e0fd4ec467644cad7ff41af7c04c",
+      "current_copy": "current/tests/test_current_scope_protocol.py.source",
+      "base_sha256": null,
+      "base_status": "absent at base"
+    },
+    {
+      "path": "tests/test_dataflow_graph.py",
+      "status": "??",
+      "current_sha256": "a44a1856e93cc0bbbc5b0141c2fa9898754bc9d88af5c94c2a138912af163e03",
+      "current_copy": "current/tests/test_dataflow_graph.py.source",
+      "base_sha256": null,
+      "base_status": "absent at base"
+    },
+    {
+      "path": "tests/test_gpu_validation.py",
+      "status": " M",
+      "current_sha256": "e0146c111f07ba2f32fa685bfdaa34328c4864fab010cd1baf8af640a6769e8d",
+      "current_copy": "current/tests/test_gpu_validation.py.source",
+      "base_sha256": "e62cdc8ae7be992cd0b44e3149e31cfd98849037b9954be6c121775f467f7405",
+      "base_status": "tracked",
+      "base_copy": "base/tests/test_gpu_validation.py.source"
+    },
+    {
+      "path": "tests/test_local_scopes.py",
+      "status": " M",
+      "current_sha256": "fcd919b06064aa6e514dacf4fdda9f2fa1110fba2a4e78e63a0309e9f3b8685f",
+      "current_copy": "current/tests/test_local_scopes.py.source",
+      "base_sha256": "52c9a4a767ea3fb381ecf6a740801d440d88975af0b9687039cace287e53e028",
+      "base_status": "tracked",
+      "base_copy": "base/tests/test_local_scopes.py.source"
+    },
+    {
+      "path": "tests/test_owner_measurement.py",
+      "status": " M",
+      "current_sha256": "8725d163902415ab76d83bf3ee53338902c2005c241cbfcd305c5618a7e4734b",
+      "current_copy": "current/tests/test_owner_measurement.py.source",
+      "base_sha256": "f9430dad7e6328d6a8fd181c51afbe846525e2912368b0fd17e2527a5f67cf2c",
+      "base_status": "tracked",
+      "base_copy": "base/tests/test_owner_measurement.py.source"
+    },
+    {
+      "path": "tests/test_scope_extraction.py",
+      "status": " M",
+      "current_sha256": "f30374d370ccd74f7521270c893c530c751823b384bef59823df458ae9e90bda",
+      "current_copy": "current/tests/test_scope_extraction.py.source",
+      "base_sha256": "8013b23e2e483b30669257b41470d0a69cd4c50845479d4b34d117878366013b",
+      "base_status": "tracked",
+      "base_copy": "base/tests/test_scope_extraction.py.source"
+    },
+    {
+      "path": "tests/test_scoped_adaptation.py",
+      "status": " M",
+      "current_sha256": "7cf7919891bff8b1392bcbf763933476980f916c493e3f8f79df767a6bb41d65",
+      "current_copy": "current/tests/test_scoped_adaptation.py.source",
+      "base_sha256": "9f7152fc9f9baeaa09d7c4e64249ca4122adb0a650886cea9b1da58832401851",
+      "base_status": "tracked",
+      "base_copy": "base/tests/test_scoped_adaptation.py.source"
+    },
+    {
+      "path": "tests/test_selection_request.py",
+      "status": " M",
+      "current_sha256": "4dc59a420fe08626484cfc650fb4dc86cb49dec45fda7ba5e01facb8793c9b08",
+      "current_copy": "current/tests/test_selection_request.py.source",
+      "base_sha256": "44cee49c2b41bc1909b152bfbbc1329f5eda384b96552e21608fc6ddfb0955fb",
+      "base_status": "tracked",
+      "base_copy": "base/tests/test_selection_request.py.source"
+    }
+  ],
+  "binary_diff_patch": {
+    "path": "all-sixteen-files-from-base.patch",
+    "sha256": "8ca17b7cc7a36418e8f7f99e1dccaa6e6cfef3b90f0b80aafc4cb7a9c4ffd2d1"
+  },
+  "verification": {
+    "path": "reconstruction-verification.json",
+    "sha256": "d6277712c3be3c3f4762f674d2002e0db883f08e6a01c70299406ed0bc80fe97"
+  },
+  "historical_eight_file_package": {
+    "path": "../reconstruction.json",
+    "sha256": "cf9d76ff1edae15ade0d8f438569ca13e6772b044267d3788811051c998912bc"
+  },
+  "historical_fourteen_file_draft": {
+    "path": "../history-fourteen-draft/reconstruction.json",
+    "sha256": "eb28c9d9dd0fe57b9ea3ed299d9e201c91214d01ca1caef3c6c33dd74b999fb6"
+  },
+  "production_pipeline_delta": "Initial4integration production files plus strict3-current-runtime-statistics schemas in gpu_validation.py. Unknown/type/context rejection and physicalGPUproof accounting unchanged. Other added paths are reviewed tests.",
+  "source_archive_suffix": ".py.source preserves exact original bytes without pytest discovery. Apply fullpatch or restore originalpath mapping.",
+  "test_status": "Final840companionnodesPASS, includedin rootsealed8901nodejoin; strictparser44CPU/fulladaptation18actual and allhistory retained. Exact16sourcepostimages reconstructed frombase; no historicalresultsretagged.",
+  "packaging_only": true,
+  "no_repository_or_index_mutation": true,
+  "final_test_summary": {
+    "path": "../../tests/summary.json",
+    "sha256": "7a97233ff578ada475a6b93b13e6e5558fcdcbd68fd62fde7d2702b63fcd94cd"
+  }
+}

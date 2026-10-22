@@ -8,7 +8,7 @@ from hashlib import sha256
 import pytest
 
 from compiler.tests.test_source_descriptor_forwarding import program
-from compiler.tests.test_source_scopes import FACT, ROOT, generate, run
+from compiler.tests.test_source_scopes import FACT, ROOT, assert_uncalibrated_native, generate, run
 
 CASES = {
     "omitted": (False, False, False),
@@ -91,12 +91,20 @@ def descriptor_binaries(tmp_path_factory):
         for mode in ("auto", "sections"):
             case = directory / label / mode
             original, output, manifest = generate(case, source, mode=mode, facts=facts, checkout=checkout)
-            assert manifest["scope_count"] == 1, manifest["boundaries"]
+            if mode == "auto":
+                assert_uncalibrated_native(manifest)
+                assert original.read_text() == source
+            else:
+                assert manifest["scope_count"] == 1, manifest["boundaries"]
             build = case / "build"
             build.mkdir()
             objects = []
+            if mode == "auto":
+                target = build / "unchanged-original.o"
+                run([*fflags, "-J", str(build), "-c", str(original), "-o", str(target)], cwd=build)
+                objects.append(str(target))
             headers = tuple((name, digest) for name, digest in sorted(manifest["artifacts_sha256"].items())
-                            if name.endswith((".h", ".hpp", ".cuh")))
+                            if name.endswith((".h", ".hpp", ".cuh"))) if mode == "sections" else ()
             for role in ("common_runtime", "shared_entry", "original_source"):
                 for item in manifest["build_sources"]:
                     if item["role"] != role:

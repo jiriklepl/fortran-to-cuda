@@ -4,10 +4,10 @@ from hashlib import sha256
 
 import pytest
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import form_source_scopes
 
 
@@ -111,6 +111,9 @@ end module
     assert binding["shape"][-1]["bounds"][1] == "*"
     assert binding["lower_bounds"][-1] == ("- 2" if "-2:" in shape else "1")
     assert external["call_interface"]["available"]
+    physical = analysis.native_sections("$external::touch")
+    assert not physical.available
+    assert "assumed-shape array dummies" in physical.reason
 
 
 def test_module_and_external_identical_names_remain_distinct(tmp_path):

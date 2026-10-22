@@ -48,6 +48,14 @@ cudaMemPool_t existing_pool() {
     return found == registry.devices.end() ? nullptr : found->second->pool;
 }
 
+std::uint64_t active_leases() {
+    auto& registry = storage::allocation_detail::pool_registry();
+    std::lock_guard<std::mutex> guard(registry.mutex);
+    std::uint64_t result = 0;
+    for (const auto& entry : registry.devices) result += entry.second->active_leases;
+    return result;
+}
+
 std::uint64_t attribute(cudaMemPool_t pool, cudaMemPoolAttr name) {
     std::uint64_t value = 0;
     CUCH(cudaMemPoolGetAttribute(pool, name, &value));
@@ -83,6 +91,7 @@ int main() {
     CUCH(cudaDeviceGetMemPool(&application_pool, 0));
     constexpr int n = 16384, repetitions = 8;
     std::vector<double> a(n), b(n);
+    std::vector<std::uint64_t> used_samples, reserved_samples, active_lease_samples;
     auto call = [&](int iteration) {
         for (int i = 0; i < n; ++i) {
             a[i] = i - iteration;
@@ -93,26 +102,45 @@ int main() {
         const auto end = Clock::now();
         for (int i = 0; i < n; ++i)
             assert(a[i] == i - iteration + b[i] * (iteration + 1));
+        // Observe ownership and driver accounting after completed calls, outside
+        // the call interval. UsedMemCurrent is diagnostic, not the retirement oracle.
+        CUCH(cudaDeviceSynchronize());
+        const auto leases = active_leases();
+        assert(leases == 0);
+        active_lease_samples.push_back(leases);
+        const auto pool = existing_pool();
+        used_samples.push_back(pool ? attribute(pool, cudaMemPoolAttrUsedMemCurrent) : 0);
+        reserved_samples.push_back(pool ? attribute(pool, cudaMemPoolAttrReservedMemCurrent) : 0);
         return std::chrono::duration<double, std::milli>(end - begin).count();
     };
 
     const double cold = call(0);
+    // Observe completed pool accounting outside the measured call interval.
+    CUCH(cudaDeviceSynchronize());
     cudaMemPool_t private_pool = existing_pool();
-    std::uint64_t reserved_before = 0;
+    std::uint64_t reserved_before = 0, used_after_trim = 0, reserved_after_trim = 0;
+    std::uint64_t used_after_reset_trim = 0, reserved_after_reset_trim = 0;
     if (pooled) {
         assert(private_pool && private_pool != application_pool);
         reserved_before = attribute(private_pool, cudaMemPoolAttrReservedMemCurrent);
         assert(reserved_before > 0);
-        assert(attribute(private_pool, cudaMemPoolAttrUsedMemCurrent) == 0);
     } else {
         assert(!private_pool);
     }
     double warm = 0;
     for (int i = 1; i <= repetitions; ++i) warm += call(i);
+    CUCH(cudaDeviceSynchronize());
     const auto reserved_after = pooled ? attribute(private_pool, cudaMemPoolAttrReservedMemCurrent) : 0;
     if (pooled) {
-        assert(attribute(private_pool, cudaMemPoolAttrUsedMemCurrent) == 0);
         assert(reserved_after == reserved_before);
+        // The legal cudaFree path can leave stale UsedMemCurrent accounting.
+        // Logical leases must be zero, and physical reservation must trim to zero.
+        assert(active_leases() == 0);
+        CUCH(cudaMemPoolTrimTo(private_pool, 0));
+        CUCH(cudaDeviceSynchronize());
+        used_after_trim = attribute(private_pool, cudaMemPoolAttrUsedMemCurrent);
+        reserved_after_trim = attribute(private_pool, cudaMemPoolAttrReservedMemCurrent);
+        assert(reserved_after_trim == 0);
     }
     cudaMemPool_t still_application_pool = nullptr;
     CUCH(cudaDeviceGetMemPool(&still_application_pool, 0));
@@ -122,15 +150,47 @@ int main() {
     // The documented reset boundary first releases the compiler's private pool.
     CUCH(cudaDeviceReset());
     CUCH(cudaSetDevice(0));
+    cudaMemPool_t reset_application_pool = nullptr;
+    CUCH(cudaDeviceGetMemPool(&reset_application_pool, 0));
     call(repetitions + 1);
-    if (pooled) assert(existing_pool());
+    if (pooled) {
+        const auto reset_pool = existing_pool();
+        assert(reset_pool && reset_pool != reset_application_pool);
+        assert(active_leases() == 0);
+        CUCH(cudaMemPoolTrimTo(reset_pool, 0));
+        CUCH(cudaDeviceSynchronize());
+        used_after_reset_trim = attribute(reset_pool, cudaMemPoolAttrUsedMemCurrent);
+        reserved_after_reset_trim = attribute(reset_pool, cudaMemPoolAttrReservedMemCurrent);
+        assert(reserved_after_reset_trim == 0);
+    }
+    CUCH(cudaDeviceGetMemPool(&still_application_pool, 0));
+    assert(still_application_pool == reset_application_pool);
     cpp_entry_trim_cache();
     assert(!existing_pool());
     std::cout << std::setprecision(12)
               << "{\"pooled\":" << (pooled ? "true" : "false")
               << ",\"cold_ms\":" << cold << ",\"warm_mean_ms\":" << warm / repetitions
               << ",\"reserved_before\":" << reserved_before
-              << ",\"reserved_after\":" << reserved_after << "}\n";
+              << ",\"reserved_after\":" << reserved_after
+              << ",\"schema_version\":1,\"allocation_bytes\":" << n * sizeof(double)
+              << ",\"allocations_per_call\":2,\"calls_before_reset\":" << repetitions + 1
+              << ",\"used_after_trim\":" << used_after_trim
+              << ",\"reserved_after_trim\":" << reserved_after_trim
+              << ",\"used_after_reset_trim\":" << used_after_reset_trim
+              << ",\"reserved_after_reset_trim\":" << reserved_after_reset_trim
+              << ",\"used_accounting_is_retirement_oracle\":false,\"used_samples\":[";
+    auto values = [](const std::vector<std::uint64_t>& samples) {
+        for (std::size_t i = 0; i < samples.size(); ++i) {
+            if (i) std::cout << ',';
+            std::cout << samples[i];
+        }
+    };
+    values(used_samples);
+    std::cout << "],\"reserved_samples\":[";
+    values(reserved_samples);
+    std::cout << "],\"active_lease_samples\":[";
+    values(active_lease_samples);
+    std::cout << "]}\n";
 #endif
 }
 """
@@ -173,9 +233,38 @@ def test_native_backing_reuse_and_reset(native_pool_binary, budget):
     assert result.returncode == 0, result.stdout + result.stderr
     measurements = json.loads(result.stdout)
     assert measurements["pooled"] == (budget != "0")
+    assert measurements["schema_version"] == 1
+    assert measurements["used_accounting_is_retirement_oracle"] is False
+    counters = ("allocation_bytes", "allocations_per_call", "calls_before_reset", "reserved_before",
+                "reserved_after", "used_after_trim", "reserved_after_trim", "used_after_reset_trim",
+                "reserved_after_reset_trim")
+    for name in counters:
+        assert type(measurements[name]) is int
+        assert 0 <= measurements[name] < 2**64
+    for name in ("used_samples", "reserved_samples", "active_lease_samples"):
+        assert len(measurements[name]) == 10
+        assert all(type(value) is int and 0 <= value < 2**64 for value in measurements[name])
+    assert measurements["allocation_bytes"] == 16384 * 8
+    assert measurements["allocations_per_call"] == 2
+    assert measurements["calls_before_reset"] == 9
+    assert measurements["active_lease_samples"] == [0] * 10
+    assert measurements["reserved_after_trim"] == measurements["reserved_after_reset_trim"] == 0
+    if budget != "0":
+        assert measurements["reserved_before"] > 0
+        assert measurements["reserved_samples"][:9] == [measurements["reserved_before"]] * 9
+        assert measurements["reserved_after"] == measurements["reserved_before"]
+        assert measurements["reserved_samples"][9] > 0
+    else:
+        assert measurements["reserved_samples"] == [0] * 10
+        assert measurements["used_samples"] == [0] * 10
+    # UsedMemCurrent is retained verbatim: this CUDA driver can report cumulative
+    # freed payload despite zero active leases and zero physical reservation.
     # One cold run, eight warm runs, and one run after reset; every run transfers.
     operations = re.findall(r"^FORT_RUNTIME (\w+)", result.stderr, re.MULTILINE)
     assert operations.count("upload") == 20
     assert operations.count("download") == 10
     assert operations.count("kernel") == 10
+    assert operations.count("alloc") == operations.count("free") == 20
+    assert operations.count("pool_alloc") == operations.count("pool_free") == (20 if budget != "0" else 0)
+    assert operations.count("pool_create") == operations.count("pool_destroy") == (2 if budget != "0" else 0)
     (native_pool_binary.parent / f"measurements-{budget}.json").write_text(result.stdout)

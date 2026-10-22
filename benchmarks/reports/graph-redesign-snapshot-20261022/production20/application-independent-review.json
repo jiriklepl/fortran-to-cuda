@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "kind": "received independent read-only pre-run review",
+  "reviewer": "/root/task_graph",
+  "status": "clear_before_execution",
+  "workflow_sha256": "efcfd40625304f9deab1a7db41f8e85802c47921d641fddc533ecafeb95d9296",
+  "policy_addendum_sha256": "d7da83258c5858cd8624724d280c1aa0b4bcff5d6a838a0d88de01f90b8c7dc8",
+  "runtime_id": "9517e2476a8182d00f52d62574c9573549439091eaca7a3d6ffc343f7590a4aa",
+  "requirements": [
+    "authenticate completed prepared20 builds first",
+    "unchanged strict all20 float64, bounds, halos and VTK",
+    "actual independent CUPTI/runtime counts and bytes agree with current checked proof",
+    "zero retired carrier kernels",
+    "hold timings for explicit review of any deviation from expected7 numerical kernels/old payload bytes",
+    "no official correctness-reference substitution without pending userapproval"
+  ],
+  "checks_are_manual_policy_plus_existing_public_validators": true,
+  "apps_or_tests_executed_by_reviewer": false,
+  "performance_qualification": false
+}

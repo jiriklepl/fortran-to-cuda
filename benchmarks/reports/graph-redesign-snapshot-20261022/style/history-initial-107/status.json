@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "canonical_command": [
+    ".venv/bin/ruff",
+    "check",
+    "--config",
+    "compiler/pyproject.toml",
+    "compiler",
+    "--output-format",
+    "json"
+  ],
+  "current_warnings": 107,
+  "current_affected_files": 44,
+  "exact_be58_baseline_warnings": 114,
+  "comparison_key": [
+    "relative_path",
+    "code",
+    "message"
+  ],
+  "introduced_warnings": 0,
+  "removed_warnings": 7,
+  "full_repo_lint_clean": false,
+  "format_check_clean": false,
+  "root_reported_format_status": {
+    "would_reformat_files": 500,
+    "already_formatted_files": 105,
+    "unsolicited_format_cleanup_authorized": false
+  },
+  "formatter_raw_reference": {
+    "original_path": "/tmp/fortran-committable-snapshot-20261022/compiler-format.stdout",
+    "sha256": "bf7d40ea0036a82992099274da7233b8394563fcbc5b80d937c797420a3da412",
+    "bytes": 5923559,
+    "copied": false
+  },
+  "git_diff_whitespace_check": "PASS reported by root; packaging makes no additional whitespace gate claim",
+  "mixed_configuration_exploratory_ruff_not_used": true
+}

@@ -1,0 +1,2097 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-10-21T12:22:43.423585+00:00",
+  "hardware": {
+    "gpu_uuid": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+    "gpu_name": "NVIDIA GeForce RTX 3060 Ti",
+    "compute_capability": "8.6",
+    "cpu_name": "AMD Ryzen 5 5600G with Radeon Graphics",
+    "machine": "x86_64",
+    "device_ordinal": 0,
+    "async_engine_count": 1
+  },
+  "toolchain": {
+    "nvcc_version": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2026 NVIDIA Corporation\nBuilt on Tue_Sep_01_08:45:21_PDT_2026\nCuda compilation tools, release 13.4, V13.4.92\nBuild cuda_13.4.r13.4/compiler.38855100_0",
+    "host_cxx_version": "x86_64-linux-gnu-g++-14 (Debian 14.4.0-3) 14.4.0\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+    "cuda_runtime_version": 13040,
+    "driver_version": 13040
+  },
+  "precision_bits": 64,
+  "cpu_threads": 4,
+  "rates": {
+    "launch_latency_seconds": 4.97221e-05,
+    "pump_latency_seconds": 2.1751649999999997e-05,
+    "cpu_flops_per_second": 22530834806.20918,
+    "cpu_memory_bytes_per_second": 36175985049.95328,
+    "cpu_worker_flops_per_second": 16916117997.600721,
+    "cpu_worker_memory_bytes_per_second": 45745397434.77882,
+    "pack_bytes_per_second": 10598528341.554136,
+    "unpack_bytes_per_second": 12523824595.558157,
+    "gpu_flops_per_second": 126978474768.90509,
+    "gpu_memory_bytes_per_second": 396387102136.00665,
+    "h2d_pageable": {
+      "latency_seconds": 5.8921378997513684e-05,
+      "bandwidth_bytes_per_second": 12679277490.558182,
+      "fit_max_relative_error": 0.05051240564426332
+    },
+    "d2h_pageable": {
+      "latency_seconds": 5.3719146394824464e-05,
+      "bandwidth_bytes_per_second": 10151764059.370962,
+      "fit_max_relative_error": 0.25172657550221444
+    },
+    "h2d_pinned": {
+      "latency_seconds": 4.8348171216520134e-05,
+      "bandwidth_bytes_per_second": 13202426823.328638,
+      "fit_max_relative_error": 0.05354707377533093
+    },
+    "d2h_pinned": {
+      "latency_seconds": 5.02501470497914e-05,
+      "bandwidth_bytes_per_second": 13217179778.755499,
+      "fit_max_relative_error": 0.07318843043444012
+    }
+  },
+  "measurement_method": {
+    "samples": "median of five warmed measurements",
+    "transfer": "wall time of serialized cudaMemcpyAsync plus stream synchronization; nonnegative linear fit",
+    "launch": "wall time of empty launch plus stream synchronization",
+    "pump": "host enqueue time of one pinned 4KiB H2D, empty kernel, and pinned 4KiB D2H; excludes final wait",
+    "cpu_compute": "four independent multiply-add recurrences per element, 256 steps, FMA counts as two ops",
+    "gpu_compute": "same recurrence workload timed with CUDA events",
+    "memory": "array triad; traffic counts two reads and one write",
+    "packing": "single-thread gather/scatter at stride four into pinned storage; payload bytes only",
+    "cpu_workers": "measured with cpu_threads minus one, reserving one thread for the GPU pump",
+    "compatibility": "schema, CPU name, GPU UUID/compute capability, toolchain versions, precision, CPU threads"
+  },
+  "measurements": [
+    {
+      "kind": "device",
+      "gpu_name": "NVIDIA GeForce RTX 3060 Ti",
+      "gpu_uuid": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+      "compute_capability": "8.6",
+      "device_ordinal": 0,
+      "cuda_runtime_version": 13040,
+      "driver_version": 13040,
+      "async_engine_count": 1,
+      "cpu_threads": 4
+    },
+    {
+      "kind": "transfer",
+      "direction": "h2d",
+      "memory": "pageable",
+      "bytes": 4096,
+      "seconds": [
+        6.0967599999999995e-05,
+        5.7046574999999995e-05,
+        5.63213e-05,
+        6.07811e-05,
+        5.7431575e-05
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "h2d",
+      "memory": "pageable",
+      "bytes": 65536,
+      "seconds": [
+        6.5700675e-05,
+        6.510717499999999e-05,
+        7.752385e-05,
+        6.8034225e-05,
+        6.74997e-05
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "h2d",
+      "memory": "pageable",
+      "bytes": 1048576,
+      "seconds": [
+        0.0001641922,
+        0.0001602082,
+        0.0001412918,
+        0.000140498,
+        0.000134668
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "h2d",
+      "memory": "pageable",
+      "bytes": 2097152,
+      "seconds": [
+        0.0002325074,
+        0.0002285232,
+        0.00022208520000000003,
+        0.00021918720000000001,
+        0.00022261120000000001
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "h2d",
+      "memory": "pageable",
+      "bytes": 8388608,
+      "seconds": [
+        0.0007370464,
+        0.0007209642,
+        0.0006989138,
+        0.000715178,
+        0.0007601528
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "d2h",
+      "memory": "pageable",
+      "bytes": 4096,
+      "seconds": [
+        4.49119e-05,
+        4.3238375e-05,
+        4.21891e-05,
+        4.4137375e-05,
+        4.267285e-05
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "d2h",
+      "memory": "pageable",
+      "bytes": 65536,
+      "seconds": [
+        4.7722175e-05,
+        4.68749e-05,
+        5.3292249999999994e-05,
+        5.1177975e-05,
+        5.2833250000000004e-05
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "d2h",
+      "memory": "pageable",
+      "bytes": 1048576,
+      "seconds": [
+        0.0001790246,
+        0.00018209660000000001,
+        0.0001741286,
+        0.00017975440000000001,
+        0.0001757886
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "d2h",
+      "memory": "pageable",
+      "bytes": 2097152,
+      "seconds": [
+        0.00025553960000000004,
+        0.0002505014,
+        0.0002610218,
+        0.0002673938,
+        0.0002775198
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "d2h",
+      "memory": "pageable",
+      "bytes": 8388608,
+      "seconds": [
+        0.0008737745999999999,
+        0.0008793944,
+        0.0009038048,
+        0.0008743301999999999,
+        0.0008771823999999999
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "h2d",
+      "memory": "pinned",
+      "bytes": 4096,
+      "seconds": [
+        4.65799e-05,
+        4.550415e-05,
+        4.6375425e-05,
+        4.8197425e-05,
+        4.6645925e-05
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "h2d",
+      "memory": "pinned",
+      "bytes": 65536,
+      "seconds": [
+        5.2433475000000004e-05,
+        5.25785e-05,
+        5.297925e-05,
+        5.4659275e-05,
+        5.6227025e-05
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "h2d",
+      "memory": "pinned",
+      "bytes": 1048576,
+      "seconds": [
+        0.0001472222,
+        0.000135,
+        0.0001371478,
+        0.000132466,
+        0.0001267198
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "h2d",
+      "memory": "pinned",
+      "bytes": 2097152,
+      "seconds": [
+        0.000215329,
+        0.000203155,
+        0.0002019708,
+        0.00020163279999999998,
+        0.0002014928
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "h2d",
+      "memory": "pinned",
+      "bytes": 8388608,
+      "seconds": [
+        0.0006764536,
+        0.0006739976,
+        0.0006841378000000001,
+        0.0006943178,
+        0.0006937798
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "d2h",
+      "memory": "pinned",
+      "bytes": 4096,
+      "seconds": [
+        5.410175e-05,
+        5.33685e-05,
+        5.293625e-05,
+        5.4639025e-05,
+        5.0644700000000007e-05
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "d2h",
+      "memory": "pinned",
+      "bytes": 65536,
+      "seconds": [
+        5.191375e-05,
+        5.0156975000000006e-05,
+        5.0699225000000006e-05,
+        5.1443474999999995e-05,
+        5.4570024999999996e-05
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "d2h",
+      "memory": "pinned",
+      "bytes": 1048576,
+      "seconds": [
+        0.000146038,
+        0.000139476,
+        0.00013300779999999998,
+        0.00013254,
+        0.0001271858
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "d2h",
+      "memory": "pinned",
+      "bytes": 2097152,
+      "seconds": [
+        0.00021211899999999998,
+        0.0002047068,
+        0.00020656899999999998,
+        0.00020293680000000003,
+        0.000206163
+      ]
+    },
+    {
+      "kind": "transfer",
+      "direction": "d2h",
+      "memory": "pinned",
+      "bytes": 8388608,
+      "seconds": [
+        0.0006875718,
+        0.0006821236,
+        0.0006861818000000001,
+        0.0006834858,
+        0.0006852138
+      ]
+    },
+    {
+      "kind": "latency",
+      "name": "launch_latency_seconds",
+      "seconds": [
+        6.47617e-05,
+        4.97221e-05,
+        4.801658e-05,
+        4.5824350000000005e-05,
+        6.0366760000000003e-05
+      ]
+    },
+    {
+      "kind": "latency",
+      "name": "pump_latency_seconds",
+      "seconds": [
+        2.557283e-05,
+        2.1751649999999997e-05,
+        2.1210220000000007e-05,
+        2.133891999999999e-05,
+        4.332291999999998e-05
+      ]
+    },
+    {
+      "kind": "rate",
+      "name": "cpu_flops_per_second",
+      "work": 537657344,
+      "seconds": [
+        0.024347664,
+        0.025555882,
+        0.023485862,
+        0.023355079,
+        0.023863179
+      ]
+    },
+    {
+      "kind": "rate",
+      "name": "cpu_memory_bytes_per_second",
+      "work": 25165824,
+      "seconds": [
+        0.00071219,
+        0.000729521,
+        0.00069565,
+        0.000654889,
+        0.000653849
+      ]
+    },
+    {
+      "kind": "rate",
+      "name": "cpu_worker_flops_per_second",
+      "work": 537657344,
+      "seconds": [
+        0.031783731,
+        0.035621999,
+        0.03219258,
+        0.031569487,
+        0.031523085
+      ]
+    },
+    {
+      "kind": "rate",
+      "name": "cpu_worker_memory_bytes_per_second",
+      "work": 25165824,
+      "seconds": [
+        0.00071186,
+        0.000633159,
+        0.000550128,
+        0.000513457,
+        0.000506927
+      ]
+    },
+    {
+      "kind": "rate",
+      "name": "pack_bytes_per_second",
+      "work": 2097152,
+      "seconds": [
+        0.000308275,
+        0.000205933,
+        0.000197872,
+        0.000167603,
+        0.000158512
+      ]
+    },
+    {
+      "kind": "rate",
+      "name": "unpack_bytes_per_second",
+      "work": 2097152,
+      "seconds": [
+        0.000387275,
+        0.000208253,
+        0.000167453,
+        0.000162522,
+        0.000164312
+      ]
+    },
+    {
+      "kind": "rate",
+      "name": "gpu_flops_per_second",
+      "work": 537657344,
+      "seconds": [
+        0.004235263824462891,
+        0.004235263824462891,
+        0.004234240055084228,
+        0.004234240055084228,
+        0.004234240055084228
+      ]
+    },
+    {
+      "kind": "rate",
+      "name": "gpu_memory_bytes_per_second",
+      "work": 25165824,
+      "seconds": [
+        6.348799914121628e-05,
+        6.348799914121628e-05,
+        6.348799914121628e-05,
+        7.270400226116181e-05,
+        7.065600156784058e-05
+      ]
+    }
+  ],
+  "numerical_contract": {
+    "schema_version": 1,
+    "id": "separate-arithmetic-v1",
+    "required_cuda_options": [
+      "--fmad=false",
+      "--ftz=false",
+      "--prec-div=true",
+      "--prec-sqrt=true"
+    ],
+    "required_host_options": [
+      "-ffp-contract=off"
+    ],
+    "identity": "552311d688f9bf1e9744a3143d4ca17c30e162bc35c0035dad77b6d769f6ce19"
+  },
+  "calibration": {
+    "build_command": [
+      "/usr/local/cuda-13.4/bin/nvcc",
+      "-O3",
+      "--fmad=false",
+      "--ftz=false",
+      "--prec-div=true",
+      "--prec-sqrt=true",
+      "-Xcompiler=-ffp-contract=off",
+      "-std=c++17",
+      "-arch=sm_86",
+      "-ccbin",
+      "/usr/bin/x86_64-linux-gnu-g++-14",
+      "-Xcompiler=-fopenmp",
+      "-DCALIBRATION_PRECISION=64",
+      "/tmp/fortran-convection-graph-probe-01/compiler-snapshot-07/compiler/offload/calibration.cu",
+      "-o",
+      "/tmp/fortran-graph-final-calibration-07-scoped/build/calibration"
+    ],
+    "run_command": [
+      "/tmp/fortran-graph-final-calibration-07-scoped/build/calibration",
+      "4",
+      "8",
+      "0"
+    ],
+    "benchmark_source_sha256": "50c9aceaffdac7419249dd830d07f8cee88ab30741ce648d2986de3346e173ef",
+    "max_transfer_bytes": 8388608,
+    "artifacts": "/tmp/fortran-graph-final-calibration-07-scoped/build",
+    "application_profiled": false
+  },
+  "scoped": {
+    "schema_version": 1,
+    "runtime_id": "9517e2476a8182d00f52d62574c9573549439091eaca7a3d6ffc343f7590a4aa",
+    "created_utc": "2026-10-22T05:08:39.637563+00:00",
+    "max_allocation_bytes": 67108864,
+    "costs": {
+      "cold_driver_startup_seconds": 0.239352046,
+      "create_seconds": 2.9681445312500007e-07,
+      "register_seconds": 3.640957031250012e-07,
+      "host_access_seconds": 1.0079199218749955e-06,
+      "gpu_setup_seconds": 1.7384062499999998e-06,
+      "device_access_seconds": 1.2898281250000002e-06,
+      "launch_enqueue_seconds": 2.1351242187500004e-05,
+      "wait_seconds": 5.41587265625e-05,
+      "allocation_seconds": 1.829375e-06,
+      "release_seconds": 1.2325e-06,
+      "planning_operation_seconds": 1.1594046875000002e-05
+    },
+    "measurements": [
+      {
+        "kind": "device",
+        "gpu_name": "NVIDIA GeForce RTX 3060 Ti",
+        "gpu_uuid": "GPU-d16b0d42-ee00-3af3-0c7e-d757b0cf9515",
+        "compute_capability": "8.6",
+        "cpu_threads": 4,
+        "cuda_runtime_version": 13040,
+        "driver_version": 13040
+      },
+      {
+        "kind": "scoped_cost",
+        "name": "create_seconds",
+        "seconds": [
+          2.9681445312500007e-07,
+          3.131230468750013e-07,
+          2.9464648437500056e-07,
+          2.964628906250001e-07,
+          3.2556445312500006e-07
+        ]
+      },
+      {
+        "kind": "scoped_cost",
+        "name": "register_seconds",
+        "seconds": [
+          3.636484375000016e-07,
+          3.640957031250012e-07,
+          3.6429687500000116e-07,
+          3.640390625000012e-07,
+          3.6425390625000117e-07
+        ]
+      },
+      {
+        "kind": "scoped_cost",
+        "name": "host_access_seconds",
+        "seconds": [
+          1.0405761718749926e-06,
+          1.0628593749999957e-06,
+          9.73820312499995e-07,
+          1.0079199218749955e-06,
+          9.764746093749944e-07
+        ]
+      },
+      {
+        "kind": "scoped_cost",
+        "name": "gpu_setup_seconds",
+        "seconds": [
+          1.8852812499999995e-06,
+          1.7387499999999997e-06,
+          1.7352812499999997e-06,
+          1.7374999999999997e-06,
+          1.7384062499999998e-06
+        ]
+      },
+      {
+        "kind": "scoped_cost",
+        "name": "device_access_seconds",
+        "seconds": [
+          1.2925703125e-06,
+          1.2819374999999992e-06,
+          1.2825781249999991e-06,
+          1.2898281250000002e-06,
+          1.6804687499999993e-06
+        ]
+      },
+      {
+        "kind": "scoped_cost",
+        "name": "launch_enqueue_seconds",
+        "seconds": [
+          2.1823164062500006e-05,
+          3.3838187499999986e-05,
+          1.6402328125e-05,
+          2.1351242187500004e-05,
+          1.7232390624999998e-05
+        ]
+      },
+      {
+        "kind": "scoped_cost",
+        "name": "wait_seconds",
+        "seconds": [
+          4.75259765625e-05,
+          5.41587265625e-05,
+          5.165474999999998e-05,
+          6.362942187500002e-05,
+          7.029333593749997e-05
+        ]
+      },
+      {
+        "kind": "scoped_allocation",
+        "name": "allocation_seconds",
+        "bytes": 4096,
+        "seconds": [
+          2.0174999999999997e-06,
+          1.8362500000000002e-06,
+          1.8262500000000003e-06,
+          1.8286875e-06,
+          1.829375e-06
+        ]
+      },
+      {
+        "kind": "scoped_allocation",
+        "name": "release_seconds",
+        "bytes": 4096,
+        "seconds": [
+          1.4318750000000002e-06,
+          1.2312499999999999e-06,
+          1.2249375000000002e-06,
+          1.219375e-06,
+          1.2211874999999998e-06
+        ]
+      },
+      {
+        "kind": "scoped_allocation",
+        "name": "allocation_seconds",
+        "bytes": 65536,
+        "seconds": [
+          1.840625e-06,
+          1.8118750000000001e-06,
+          1.8049375000000002e-06,
+          1.81125e-06,
+          1.8093125e-06
+        ]
+      },
+      {
+        "kind": "scoped_allocation",
+        "name": "release_seconds",
+        "bytes": 65536,
+        "seconds": [
+          1.2343749999999997e-06,
+          1.225e-06,
+          1.4131249999999997e-06,
+          1.2250000000000001e-06,
+          1.22375e-06
+        ]
+      },
+      {
+        "kind": "scoped_allocation",
+        "name": "allocation_seconds",
+        "bytes": 1048576,
+        "seconds": [
+          1.8250000000000003e-06,
+          1.8125000000000004e-06,
+          1.8175e-06,
+          1.80625e-06,
+          1.8168125e-06
+        ]
+      },
+      {
+        "kind": "scoped_allocation",
+        "name": "release_seconds",
+        "bytes": 1048576,
+        "seconds": [
+          1.2337500000000003e-06,
+          1.2237500000000001e-06,
+          1.22625e-06,
+          1.235e-06,
+          1.2262500000000001e-06
+        ]
+      },
+      {
+        "kind": "scoped_allocation",
+        "name": "allocation_seconds",
+        "bytes": 67108864,
+        "seconds": [
+          1.8381250000000003e-06,
+          1.8011875000000002e-06,
+          1.8037500000000003e-06,
+          1.8093125e-06,
+          1.8093750000000001e-06
+        ]
+      },
+      {
+        "kind": "scoped_allocation",
+        "name": "release_seconds",
+        "bytes": 67108864,
+        "seconds": [
+          1.23875e-06,
+          1.2330625e-06,
+          1.2325e-06,
+          1.2305625e-06,
+          1.2306249999999998e-06
+        ]
+      },
+      {
+        "kind": "scoped_planning",
+        "footprint": "full",
+        "units": 1,
+        "work": 10,
+        "candidates": 2,
+        "seconds": [
+          9.41553125e-06,
+          8.1243125e-06,
+          8.64021875e-06,
+          7.810875000000002e-06,
+          7.80271875e-06
+        ]
+      },
+      {
+        "kind": "scoped_planning",
+        "footprint": "full",
+        "units": 4,
+        "work": 59,
+        "candidates": 8,
+        "seconds": [
+          5.1494843749999995e-05,
+          4.7439531249999996e-05,
+          4.8377343749999996e-05,
+          5.049765625e-05,
+          5.472040625000001e-05
+        ]
+      },
+      {
+        "kind": "scoped_planning",
+        "footprint": "full",
+        "units": 16,
+        "work": 1790,
+        "candidates": 21,
+        "seconds": [
+          0.0014936497812499997,
+          0.0014190788750000002,
+          0.0014354177812500003,
+          0.0014382508749999998,
+          0.0014160536250000001
+        ]
+      },
+      {
+        "kind": "scoped_planning",
+        "footprint": "opposite_faces",
+        "units": 1,
+        "work": 10,
+        "candidates": 2,
+        "seconds": [
+          1.8033281250000006e-05,
+          1.637046875e-05,
+          1.6307656250000002e-05,
+          1.679234375e-05,
+          1.9166093750000007e-05
+        ]
+      },
+      {
+        "kind": "scoped_planning",
+        "footprint": "opposite_faces",
+        "units": 4,
+        "work": 59,
+        "candidates": 8,
+        "seconds": [
+          9.445850000000002e-05,
+          9.820909375e-05,
+          9.3350375e-05,
+          9.493440625e-05,
+          0.00010132246875
+        ]
+      },
+      {
+        "kind": "scoped_planning",
+        "footprint": "opposite_faces",
+        "units": 16,
+        "work": 1790,
+        "candidates": 21,
+        "seconds": [
+          0.00296168228125,
+          0.0028116369375000005,
+          0.00301488046875,
+          0.00284609596875,
+          0.0028665837187500007
+        ]
+      },
+      {
+        "kind": "scoped_planning",
+        "footprint": "eight_rectangles",
+        "units": 1,
+        "work": 10,
+        "candidates": 2,
+        "seconds": [
+          0.00011498765625,
+          0.0001158051875,
+          0.00011594046875000002,
+          0.00014069368750000002,
+          0.0001320165625
+        ]
+      },
+      {
+        "kind": "scoped_planning",
+        "footprint": "eight_rectangles",
+        "units": 4,
+        "work": 59,
+        "candidates": 8,
+        "seconds": [
+          0.0005549132500000001,
+          0.000583607375,
+          0.00056529528125,
+          0.0005916872812500001,
+          0.000615577375
+        ]
+      },
+      {
+        "kind": "scoped_planning",
+        "footprint": "eight_rectangles",
+        "units": 16,
+        "work": 1790,
+        "candidates": 21,
+        "seconds": [
+          0.02010256628125,
+          0.019762796843749996,
+          0.019858986843750003,
+          0.02016709528125,
+          0.02006179596875
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "staging_cold_seconds",
+        "bytes": 262144,
+        "seconds": [
+          0.0016613650000000002,
+          0.0016523045,
+          0.001657637,
+          0.001660764,
+          0.00161520225
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "staging_reuse_seconds",
+        "bytes": 262144,
+        "seconds": [
+          5.359375000000012e-08,
+          5.265625000000012e-08,
+          5.2578125000000125e-08,
+          5.367187500000013e-08,
+          5.2578125000000125e-08
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "pack_bytes_per_second",
+        "bytes": 262144,
+        "geometry": "contiguous",
+        "rows": 1,
+        "seconds": [
+          5.4425e-06,
+          4.5825e-06,
+          5.2649999999999996e-06,
+          5.062499999999999e-06,
+          4.56225e-06
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "unpack_bytes_per_second",
+        "bytes": 262144,
+        "geometry": "contiguous",
+        "rows": 1,
+        "seconds": [
+          4.9175e-06,
+          4.535e-06,
+          4.51e-06,
+          4.517250000000001e-06,
+          4.5425e-06
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "pack_bytes_per_second",
+        "bytes": 262144,
+        "geometry": "thin_rows",
+        "rows": 262144,
+        "seconds": [
+          0.000761338,
+          0.00074105825,
+          0.0007489577500000001,
+          0.0007498405,
+          0.00075316275
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "unpack_bytes_per_second",
+        "bytes": 262144,
+        "geometry": "thin_rows",
+        "rows": 262144,
+        "seconds": [
+          0.00073879775,
+          0.00074414575,
+          0.0007425705000000001,
+          0.000754518,
+          0.0007516755
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "staging_cold_seconds",
+        "bytes": 1048576,
+        "seconds": [
+          0.00161735925,
+          0.0016257975,
+          0.0016212219999999999,
+          0.00165333975,
+          0.001633562
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "staging_reuse_seconds",
+        "bytes": 1048576,
+        "seconds": [
+          9.569531250000017e-08,
+          9.898437500000024e-08,
+          1.0234375000000022e-07,
+          1.0234375000000022e-07,
+          8.156250000000013e-08
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "pack_bytes_per_second",
+        "bytes": 1048576,
+        "geometry": "contiguous",
+        "rows": 1,
+        "seconds": [
+          2.038225e-05,
+          2.011475e-05,
+          2.017975e-05,
+          2.012e-05,
+          2.006475e-05
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "unpack_bytes_per_second",
+        "bytes": 1048576,
+        "geometry": "contiguous",
+        "rows": 1,
+        "seconds": [
+          1.96375e-05,
+          1.962225e-05,
+          1.9657250000000002e-05,
+          1.958975e-05,
+          1.9554999999999998e-05
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "pack_bytes_per_second",
+        "bytes": 1048576,
+        "geometry": "thin_rows",
+        "rows": 1048576,
+        "seconds": [
+          0.00303545375,
+          0.00297796725,
+          0.0030049492500000006,
+          0.00299778925,
+          0.0029844320000000004
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "unpack_bytes_per_second",
+        "bytes": 1048576,
+        "geometry": "thin_rows",
+        "rows": 1048576,
+        "seconds": [
+          0.00298128175,
+          0.0029837547500000004,
+          0.0030146789999999997,
+          0.00301820175,
+          0.0030627435
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "staging_cold_seconds",
+        "bytes": 4194304,
+        "seconds": [
+          0.005526125749999999,
+          0.00557216,
+          0.00571642625,
+          0.00602145275,
+          0.0063085434999999995
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "staging_reuse_seconds",
+        "bytes": 4194304,
+        "seconds": [
+          5.296875000000012e-08,
+          5.234375000000012e-08,
+          5.0000000000000123e-08,
+          5.0000000000000123e-08,
+          5.234375000000012e-08
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "pack_bytes_per_second",
+        "bytes": 4194304,
+        "geometry": "contiguous",
+        "rows": 1,
+        "seconds": [
+          0.00012222375,
+          8.864425e-05,
+          9.335174999999999e-05,
+          8.8259e-05,
+          0.00010482175
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "unpack_bytes_per_second",
+        "bytes": 4194304,
+        "geometry": "contiguous",
+        "rows": 1,
+        "seconds": [
+          9.193925e-05,
+          8.781675e-05,
+          9.33065e-05,
+          8.848925e-05,
+          8.779175e-05
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "pack_bytes_per_second",
+        "bytes": 4194304,
+        "geometry": "thin_rows",
+        "rows": 4194304,
+        "seconds": [
+          0.01200979225,
+          0.012076944,
+          0.01196499,
+          0.011998309749999998,
+          0.01197782
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "unpack_bytes_per_second",
+        "bytes": 4194304,
+        "geometry": "thin_rows",
+        "rows": 4194304,
+        "seconds": [
+          0.012052152,
+          0.01202108725,
+          0.012144818,
+          0.011951615250000002,
+          0.01217337825
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "staging_cold_seconds",
+        "bytes": 16777216,
+        "seconds": [
+          0.0190097485,
+          0.01892075275,
+          0.019832383749999998,
+          0.018787476,
+          0.0189919415
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "staging_reuse_seconds",
+        "bytes": 16777216,
+        "seconds": [
+          5.304687500000012e-08,
+          5.2265625000000115e-08,
+          5.210156250000012e-08,
+          5.234375000000012e-08,
+          5.250000000000012e-08
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "pack_bytes_per_second",
+        "bytes": 16777216,
+        "geometry": "contiguous",
+        "rows": 1,
+        "seconds": [
+          0.001040088,
+          0.000947706,
+          0.000936436,
+          0.00099244575,
+          0.0008612870000000001
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "unpack_bytes_per_second",
+        "bytes": 16777216,
+        "geometry": "contiguous",
+        "rows": 1,
+        "seconds": [
+          0.002958537,
+          0.0029960217500000002,
+          0.0031195182500000002,
+          0.0034679422499999998,
+          0.0031388355
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "pack_bytes_per_second",
+        "bytes": 16777216,
+        "geometry": "thin_rows",
+        "rows": 16777216,
+        "seconds": [
+          0.048011396750000004,
+          0.0482379045,
+          0.050023332499999996,
+          0.050678147,
+          0.04884998100000001
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "unpack_bytes_per_second",
+        "bytes": 16777216,
+        "geometry": "thin_rows",
+        "rows": 16777216,
+        "seconds": [
+          0.0482093725,
+          0.04842038525,
+          0.04820469975,
+          0.050021746750000005,
+          0.048299734000000004
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "event_record_seconds",
+        "seconds": [
+          1.5311718750000005e-07,
+          1.5273437500000009e-07,
+          1.4843750000000011e-07,
+          1.4796875000000017e-07,
+          1.4882812500000015e-07
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "event_wait_seconds",
+        "seconds": [
+          9.210937500000028e-08,
+          9.085937500000028e-08,
+          8.726562500000016e-08,
+          8.710937500000013e-08,
+          9.070312500000028e-08
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "ready_event_seconds",
+        "seconds": [
+          2.796015625000001e-07,
+          2.768750000000001e-07,
+          3.080390624999999e-07,
+          2.7742187500000003e-07,
+          2.77578125e-07
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "preparation_operation_seconds",
+        "units": 1,
+        "work": 57,
+        "seconds": [
+          1.2963968750000004e-05,
+          1.3233312499999998e-05,
+          1.1229250000000001e-05,
+          1.2866437500000002e-05,
+          1.1184906249999999e-05
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "preparation_operation_seconds",
+        "units": 4,
+        "work": 159,
+        "seconds": [
+          2.1247312499999993e-05,
+          1.9347000000000003e-05,
+          1.9174187499999996e-05,
+          1.9148562500000002e-05,
+          2.1381031249999998e-05
+        ]
+      },
+      {
+        "kind": "scoped_transfer",
+        "name": "preparation_operation_seconds",
+        "units": 16,
+        "work": 567,
+        "seconds": [
+          6.04100625e-05,
+          6.174003125e-05,
+          5.979946875e-05,
+          6.0387531249999994e-05,
+          6.707678125000003e-05
+        ]
+      }
+    ],
+    "cold_driver_startup_samples_seconds": [
+      0.30278549,
+      0.228610011,
+      0.239352046,
+      0.228198672,
+      0.583763708
+    ],
+    "measurement_method": {
+      "samples": "median of five warmed observations; maximum median across allocation sizes and planning cases",
+      "cold_driver_startup": "CUDA set-device and primary-context initialization in five fresh processes; no OS cold-state claim",
+      "gpu_setup": "complete warm GPU scope lifecycle: create, first enter/leave, and close including mandatory stream/pool destruction",
+      "create": "scope metadata creation; cleanup excluded",
+      "register": "three-dimensional whole-root registration with negative lower bounds; unregister excluded",
+      "host_access": "read access begin/end to an already-current host rectangle; no transfer",
+      "device_access": "access begin/end to an already-allocated device rectangle; no transfer or wait",
+      "allocation": "first device begin/end and completion wait on undefined storage; includes access bookkeeping",
+      "release": "unregister of allocated undefined storage and completion wait; includes unregister bookkeeping",
+      "wait": "common-runtime completion wait after an empty kernel; enqueue excluded",
+      "launch_enqueue": "empty kernel enqueue, CUDA error check, and runtime launch notification; final wait excluded",
+      "planning": "actual bounded common-runtime candidate simulation; 1/4/16 mixed units with full, opposite-face, and eight-rectangle effects; complete duration divided by reported work count",
+      "accounting": "management costs are conservative complete-call costs; allocation/release can include bookkeeping charged elsewhere",
+      "application_profiled": false
+    },
+    "transfers": {
+      "schema_version": 1,
+      "max_slot_bytes": 16777216,
+      "batch_payload_bytes": [
+        262144,
+        1048576,
+        4194304,
+        16777216
+      ],
+      "costs": {
+        "staging_cold_seconds": [
+          0.001657637,
+          0.0016257975,
+          0.00571642625,
+          0.0189919415
+        ],
+        "staging_reuse_seconds": [
+          5.265625000000012e-08,
+          9.898437500000024e-08,
+          5.234375000000012e-08,
+          5.234375000000012e-08
+        ],
+        "event_record_seconds": 1.4882812500000015e-07,
+        "event_wait_seconds": 9.070312500000028e-08,
+        "ready_event_seconds": 2.77578125e-07,
+        "preparation_operation_seconds": 2.2572697368421056e-07,
+        "pack_bytes_per_second": 17702975395.32302,
+        "pack_row_seconds": 2.8551980853080754e-09,
+        "unpack_bytes_per_second": 5378143243.7524605,
+        "unpack_row_seconds": 2.692950710654259e-09
+      },
+      "measurements": [
+        {
+          "kind": "scoped_transfer",
+          "name": "staging_cold_seconds",
+          "bytes": 262144,
+          "seconds": [
+            0.0016613650000000002,
+            0.0016523045,
+            0.001657637,
+            0.001660764,
+            0.00161520225
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "staging_reuse_seconds",
+          "bytes": 262144,
+          "seconds": [
+            5.359375000000012e-08,
+            5.265625000000012e-08,
+            5.2578125000000125e-08,
+            5.367187500000013e-08,
+            5.2578125000000125e-08
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "pack_bytes_per_second",
+          "bytes": 262144,
+          "geometry": "contiguous",
+          "rows": 1,
+          "seconds": [
+            5.4425e-06,
+            4.5825e-06,
+            5.2649999999999996e-06,
+            5.062499999999999e-06,
+            4.56225e-06
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "unpack_bytes_per_second",
+          "bytes": 262144,
+          "geometry": "contiguous",
+          "rows": 1,
+          "seconds": [
+            4.9175e-06,
+            4.535e-06,
+            4.51e-06,
+            4.517250000000001e-06,
+            4.5425e-06
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "pack_bytes_per_second",
+          "bytes": 262144,
+          "geometry": "thin_rows",
+          "rows": 262144,
+          "seconds": [
+            0.000761338,
+            0.00074105825,
+            0.0007489577500000001,
+            0.0007498405,
+            0.00075316275
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "unpack_bytes_per_second",
+          "bytes": 262144,
+          "geometry": "thin_rows",
+          "rows": 262144,
+          "seconds": [
+            0.00073879775,
+            0.00074414575,
+            0.0007425705000000001,
+            0.000754518,
+            0.0007516755
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "staging_cold_seconds",
+          "bytes": 1048576,
+          "seconds": [
+            0.00161735925,
+            0.0016257975,
+            0.0016212219999999999,
+            0.00165333975,
+            0.001633562
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "staging_reuse_seconds",
+          "bytes": 1048576,
+          "seconds": [
+            9.569531250000017e-08,
+            9.898437500000024e-08,
+            1.0234375000000022e-07,
+            1.0234375000000022e-07,
+            8.156250000000013e-08
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "pack_bytes_per_second",
+          "bytes": 1048576,
+          "geometry": "contiguous",
+          "rows": 1,
+          "seconds": [
+            2.038225e-05,
+            2.011475e-05,
+            2.017975e-05,
+            2.012e-05,
+            2.006475e-05
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "unpack_bytes_per_second",
+          "bytes": 1048576,
+          "geometry": "contiguous",
+          "rows": 1,
+          "seconds": [
+            1.96375e-05,
+            1.962225e-05,
+            1.9657250000000002e-05,
+            1.958975e-05,
+            1.9554999999999998e-05
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "pack_bytes_per_second",
+          "bytes": 1048576,
+          "geometry": "thin_rows",
+          "rows": 1048576,
+          "seconds": [
+            0.00303545375,
+            0.00297796725,
+            0.0030049492500000006,
+            0.00299778925,
+            0.0029844320000000004
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "unpack_bytes_per_second",
+          "bytes": 1048576,
+          "geometry": "thin_rows",
+          "rows": 1048576,
+          "seconds": [
+            0.00298128175,
+            0.0029837547500000004,
+            0.0030146789999999997,
+            0.00301820175,
+            0.0030627435
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "staging_cold_seconds",
+          "bytes": 4194304,
+          "seconds": [
+            0.005526125749999999,
+            0.00557216,
+            0.00571642625,
+            0.00602145275,
+            0.0063085434999999995
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "staging_reuse_seconds",
+          "bytes": 4194304,
+          "seconds": [
+            5.296875000000012e-08,
+            5.234375000000012e-08,
+            5.0000000000000123e-08,
+            5.0000000000000123e-08,
+            5.234375000000012e-08
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "pack_bytes_per_second",
+          "bytes": 4194304,
+          "geometry": "contiguous",
+          "rows": 1,
+          "seconds": [
+            0.00012222375,
+            8.864425e-05,
+            9.335174999999999e-05,
+            8.8259e-05,
+            0.00010482175
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "unpack_bytes_per_second",
+          "bytes": 4194304,
+          "geometry": "contiguous",
+          "rows": 1,
+          "seconds": [
+            9.193925e-05,
+            8.781675e-05,
+            9.33065e-05,
+            8.848925e-05,
+            8.779175e-05
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "pack_bytes_per_second",
+          "bytes": 4194304,
+          "geometry": "thin_rows",
+          "rows": 4194304,
+          "seconds": [
+            0.01200979225,
+            0.012076944,
+            0.01196499,
+            0.011998309749999998,
+            0.01197782
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "unpack_bytes_per_second",
+          "bytes": 4194304,
+          "geometry": "thin_rows",
+          "rows": 4194304,
+          "seconds": [
+            0.012052152,
+            0.01202108725,
+            0.012144818,
+            0.011951615250000002,
+            0.01217337825
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "staging_cold_seconds",
+          "bytes": 16777216,
+          "seconds": [
+            0.0190097485,
+            0.01892075275,
+            0.019832383749999998,
+            0.018787476,
+            0.0189919415
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "staging_reuse_seconds",
+          "bytes": 16777216,
+          "seconds": [
+            5.304687500000012e-08,
+            5.2265625000000115e-08,
+            5.210156250000012e-08,
+            5.234375000000012e-08,
+            5.250000000000012e-08
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "pack_bytes_per_second",
+          "bytes": 16777216,
+          "geometry": "contiguous",
+          "rows": 1,
+          "seconds": [
+            0.001040088,
+            0.000947706,
+            0.000936436,
+            0.00099244575,
+            0.0008612870000000001
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "unpack_bytes_per_second",
+          "bytes": 16777216,
+          "geometry": "contiguous",
+          "rows": 1,
+          "seconds": [
+            0.002958537,
+            0.0029960217500000002,
+            0.0031195182500000002,
+            0.0034679422499999998,
+            0.0031388355
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "pack_bytes_per_second",
+          "bytes": 16777216,
+          "geometry": "thin_rows",
+          "rows": 16777216,
+          "seconds": [
+            0.048011396750000004,
+            0.0482379045,
+            0.050023332499999996,
+            0.050678147,
+            0.04884998100000001
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "unpack_bytes_per_second",
+          "bytes": 16777216,
+          "geometry": "thin_rows",
+          "rows": 16777216,
+          "seconds": [
+            0.0482093725,
+            0.04842038525,
+            0.04820469975,
+            0.050021746750000005,
+            0.048299734000000004
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "event_record_seconds",
+          "seconds": [
+            1.5311718750000005e-07,
+            1.5273437500000009e-07,
+            1.4843750000000011e-07,
+            1.4796875000000017e-07,
+            1.4882812500000015e-07
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "event_wait_seconds",
+          "seconds": [
+            9.210937500000028e-08,
+            9.085937500000028e-08,
+            8.726562500000016e-08,
+            8.710937500000013e-08,
+            9.070312500000028e-08
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "ready_event_seconds",
+          "seconds": [
+            2.796015625000001e-07,
+            2.768750000000001e-07,
+            3.080390624999999e-07,
+            2.7742187500000003e-07,
+            2.77578125e-07
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "preparation_operation_seconds",
+          "units": 1,
+          "work": 57,
+          "seconds": [
+            1.2963968750000004e-05,
+            1.3233312499999998e-05,
+            1.1229250000000001e-05,
+            1.2866437500000002e-05,
+            1.1184906249999999e-05
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "preparation_operation_seconds",
+          "units": 4,
+          "work": 159,
+          "seconds": [
+            2.1247312499999993e-05,
+            1.9347000000000003e-05,
+            1.9174187499999996e-05,
+            1.9148562500000002e-05,
+            2.1381031249999998e-05
+          ]
+        },
+        {
+          "kind": "scoped_transfer",
+          "name": "preparation_operation_seconds",
+          "units": 16,
+          "work": 567,
+          "seconds": [
+            6.04100625e-05,
+            6.174003125e-05,
+            5.979946875e-05,
+            6.0387531249999994e-05,
+            6.707678125000003e-05
+          ]
+        }
+      ],
+      "measurement_method": {
+        "application_profiled": false,
+        "coordinators": 1,
+        "staging": "actual shared two-slot acquire/release; cold allocation and cached reuse measured separately",
+        "packing": "exact physical rectangular row copies into/from pinned storage; conservative contiguous bandwidth plus nonnegative per-row overhead from thin rows",
+        "events": "non-default stream completion event record and completed-event wait measured separately",
+        "batch_prepare": "actual metadata-only versioned batch preview divided by its reported preparation work; no callback execution",
+        "aggregation": "maximum median fixed costs per slot payload; minimum contiguous bandwidth and maximum nonnegative thin-row residual across bounded observations",
+        "pipeline": "model includes preparation, initial immutable uploads, per-batch launches/events, fill and drain; no online timing feedback"
+      }
+    },
+    "calibration": {
+      "build_command": [
+        "/usr/local/cuda-13.4/bin/nvcc",
+        "-O3",
+        "--fmad=false",
+        "--ftz=false",
+        "--prec-div=true",
+        "--prec-sqrt=true",
+        "-Xcompiler=-ffp-contract=off",
+        "-std=c++17",
+        "-arch=sm_86",
+        "-ccbin",
+        "/usr/bin/x86_64-linux-gnu-g++-14",
+        "-Xcompiler=-fopenmp",
+        "-DCALIBRATION_PRECISION=64",
+        "-I/tmp/fortran-graph-final-calibration-20-scoped/build/scoped",
+        "/tmp/fortran-convection-graph-probe-01/compiler-snapshot-20-final/compiler/offload/scoped_calibration.cu",
+        "/tmp/fortran-graph-final-calibration-20-scoped/build/scoped/scoped_runtime.cu",
+        "-o",
+        "/tmp/fortran-graph-final-calibration-20-scoped/build/scoped/scoped-calibration"
+      ],
+      "run_command": [
+        "/tmp/fortran-graph-final-calibration-20-scoped/build/scoped/scoped-calibration",
+        "4",
+        "64",
+        "0"
+      ],
+      "cold_startup_commands": [
+        [
+          "/tmp/fortran-graph-final-calibration-20-scoped/build/scoped/scoped-calibration",
+          "--cold-startup",
+          "0"
+        ],
+        [
+          "/tmp/fortran-graph-final-calibration-20-scoped/build/scoped/scoped-calibration",
+          "--cold-startup",
+          "0"
+        ],
+        [
+          "/tmp/fortran-graph-final-calibration-20-scoped/build/scoped/scoped-calibration",
+          "--cold-startup",
+          "0"
+        ],
+        [
+          "/tmp/fortran-graph-final-calibration-20-scoped/build/scoped/scoped-calibration",
+          "--cold-startup",
+          "0"
+        ],
+        [
+          "/tmp/fortran-graph-final-calibration-20-scoped/build/scoped/scoped-calibration",
+          "--cold-startup",
+          "0"
+        ]
+      ],
+      "runtime": {
+        "schema_version": 1,
+        "abi_version": 1,
+        "runtime_id": "9517e2476a8182d00f52d62574c9573549439091eaca7a3d6ffc343f7590a4aa",
+        "runtime_provenance": {
+          "schema_version": 1,
+          "activation": "FORT_RUNTIME_TRACE=1",
+          "set": "fort_scope_trace_set_v1",
+          "restore": "fort_scope_trace_restore_v1",
+          "identity": "full compiler manifest SHA256; unknown fields are explicit",
+          "events": "actual API submissions and coherence commits; no physical execution timestamps",
+          "initial_context_creation": "unknown until the source coordinator binds its owner",
+          "batch_worker_attribution": "unavailable; batch callbacks cannot call context APIs",
+          "execution_error_attribution": "unavailable; existing numerical errors are unchanged",
+          "disabled": "no context lookup, allocations, coherence changes or numerical errors"
+        },
+        "link_once": true,
+        "numerical_contract": {
+          "schema_version": 1,
+          "id": "separate-arithmetic-v1",
+          "required_cuda_options": [
+            "--fmad=false",
+            "--ftz=false",
+            "--prec-div=true",
+            "--prec-sqrt=true"
+          ],
+          "required_host_options": [
+            "-ffp-contract=off"
+          ],
+          "identity": "552311d688f9bf1e9744a3143d4ca17c30e162bc35c0035dad77b6d769f6ce19"
+        },
+        "headers": [
+          "floating_environment.hpp",
+          "scoped_cuda_resources.hpp",
+          "scoped_entry.hpp",
+          "scoped_graphs.hpp",
+          "scoped_host_metadata.hpp",
+          "scoped_memo.hpp",
+          "scoped_planning.hpp",
+          "scoped_regions.hpp",
+          "scoped_runtime.h",
+          "scoped_team_observer.hpp",
+          "section_copy.hpp",
+          "staging.hpp",
+          "view_entry.hpp"
+        ],
+        "task_acquisition": {
+          "abi_version": 1,
+          "begin": "fort_scope_access_begin_v1",
+          "validation": "all resource effects before transfers or numerical execution",
+          "host_completion": "one completion for task downloads; independent and disjoint accesses do not wait",
+          "upload_lifetime": "exact pending DMA read sections; completion events precede unrelated numerical work",
+          "completion_statistics": "fort_scope_completion_stats_get_v1"
+        },
+        "graph_execution": {
+          "abi_version": 1,
+          "execute": "fort_scope_graph_execute_v1",
+          "enqueue": "fort_scope_graph_enqueue_v1",
+          "flush": "fort_scope_graph_flush_v1",
+          "queue_statistics": "fort_scope_graph_queue_stats_get_v1",
+          "queue_lifetime": "owned kernel argument bytes and effects span generated helper calls",
+          "host_boundaries": "drain conflicting tasks and their dependencies; retain independent queued work",
+          "planning": "pending task writes contribute virtual definitions without premature physical commits",
+          "reserve": "fort_scope_device_reserve_v1",
+          "reserve_many": "fort_scope_device_reserve_many_v1",
+          "buffer_valid": "fort_scope_buffer_valid_v1",
+          "statistics": "fort_scope_graph_stats_get_v1",
+          "residency_statistics": "fort_scope_residency_stats_get_v1",
+          "budget_eviction": "whole-task reservation pins its footprint; pressure flushes queued arguments before exact dirty publication and LRU retirement",
+          "effects": "ordered original task effects with one atomic coherence commit",
+          "residency": "canonical context buffers shared across submissions and iterations",
+          "replay": "context-owned CUDA executable graph; current kernel parameters updated before launch",
+          "submission_policy": "first matching topology uses direct launches; second builds a graph; later reaches replay; topology changes restart warmup",
+          "warmup_evidence": "graph_warmup_direct plus actual direct_submissions/direct_kernels; never graph_resource_fallbacks",
+          "observation": "fort_scope_observe_v1",
+          "discard": "fort_scope_discard_v1",
+          "retire": "fort_scope_retire_v1",
+          "fallback": "before numerical submission only; graph resource failure uses ordered direct launches",
+          "ablation": {
+            "queue": "FORT_SCOPE_GRAPH_QUEUE=0",
+            "cuda_graphs": "FORT_SCOPE_CUDA_GRAPHS=0"
+          },
+          "definition_kill": "semantic coverage changes retain physical freshness; explicit discard retires dead values"
+        },
+        "idle_execution_resources": {
+          "schema_version": 1,
+          "limit_per_device": 1,
+          "retained_device_bytes_limit": 67108864,
+          "contents": "completed stream and allocation-free CUDA memory pool only",
+          "freshness": "all identities, definitions and coherence are invocation-local",
+          "trace_reuse": "FORT_SCOPED initialize_reuse; bytes is retained pool capacity",
+          "legacy_allocations": "logical field allocations, including reused physical pages",
+          "failure": "poisoned or incomplete resources are never cached",
+          "close_completion": "stream-ordered publication and field/scratch retirement share one wait"
+        },
+        "borrowed_views": {
+          "abi_version": 1,
+          "validate": "fort_scope_view_get_v1",
+          "partial_definition": "fort_scope_forget_sections_v1",
+          "planning_definition": "fort_scope_plan_forget_sections_v1",
+          "coordinates": "canonical root physical origins and pitches; child logical bounds and extents",
+          "allocation": "borrow existing full-layout root; no independent registration or device buffer",
+          "aliases": "bounded exact read unions; writable formal views must be disjoint",
+          "bounds": "checked original descriptor generation and existing INTEGER ABI",
+          "rank_reduced": {
+            "abi_version": 2,
+            "validate": "fort_scope_view_get_v2",
+            "coordinates": "root-rank origins; logical-rank extents and distinct retained-axis mapping",
+            "footprints": "exact rectangular planes; omitted axes select one original coordinate",
+            "strides": "original root pitches; initial actual views retain unit logical strides",
+            "compatibility": "version 1 interfaces retained"
+          }
+        },
+        "planning_abi_version": 2,
+        "planning_candidate_memo": {
+          "storage": "bounded metadata LRU; owned exact keys and worker choice vectors only",
+          "eligibility": "validated fresh host-only graph query; no pending work, device allocation or scratch",
+          "key": "full numeric model, canonical alias incidence, geometry, effects and observed placement environment",
+          "reuse": "reprice all-native and cached candidate with current simulator, work and profitability gates",
+          "authority": "current definition proof, hardware/profile, floating-point and worker binding guards remain required",
+          "reporting": "actual key/lookup duration traced; unpriced memo work invalidates complete and owner estimates",
+          "limitation": "conservative candidate reuse; cached native choices do not search for newly profitable alternatives",
+          "failure": "unknown metadata or optional allocation failure uses ordinary planning"
+        },
+        "native_owner_hint": {
+          "abi_version": 1,
+          "begin": "fort_scope_native_hint_begin_v1",
+          "finish": "fort_scope_native_hint_finish_v1",
+          "observation": "fort_scope_native_hint_observation_v1",
+          "word_limit": 512,
+          "entry_limit": 64,
+          "hits_before_reprobe": 64,
+          "authority": "conservative original-native scheduling hint; no plan, definition or data authority",
+          "observation_bracket": "normal successful root completion with no live contexts, GPU choice/attempt/acceptance or unexpected runtime error",
+          "expected_prework_status": 7,
+          "key": "copied source/profile/policy/descriptor metadata plus original entry CPU/OpenMP/FP/environment",
+          "entry_environment": "shared exact collector with placement memo; no CUDA initialization or payload reads",
+          "evidence_prefix": "FORT_SCOPED native_hint",
+          "estimates_available": false,
+          "quality_limit": "native hits can suppress newly profitable work until the forced ordinary reprobe"
+        },
+        "planning_numerical_costs": {
+          "abi_version": 2,
+          "record": "fort_scope_plan_add_costs_v2",
+          "basis": "static scalar intrinsic counts and compatible independent offline holdouts",
+          "missing_or_incompatible": "unknown estimate; automatic placement remains native"
+        },
+        "planning_compute_costs": {
+          "abi_version": 1,
+          "record": "fort_scope_plan_add_compute_costs_v3",
+          "payload": "fort_scope_compute_costs_v1",
+          "backends": {
+            "native_fortran": 1,
+            "generated_cpu": 2,
+            "gpu": 4
+          },
+          "basis": "complete compute seconds; original Fortran and generated workers calibrated independently",
+          "native_operation_cpu": "actual coordinated host execution including candidate-only preparation",
+          "separate_costs": "transfers, allocation, launches, synchronization and coordination",
+          "applicability": "original compiler semantics, fixed CPU placement, workload class and runtime item range",
+          "missing_or_incompatible": "definition validation retained; automatic estimate unavailable",
+          "continuation": "coherent host counterfactual; no replay of earlier numerical work",
+          "compatibility": "v1/v2 planning interfaces retain their original meaning"
+        },
+        "numerical_environment": {
+          "check": "fort_scope_numerical_environment_supported",
+          "requires": "original nontrapping round-to-nearest thread; native IEEE guards stay in place",
+          "runtime_setup": "preserve caller flags, rounding and trap mask"
+        },
+        "collective_automatic_calibration": {
+          "abi_version": 1,
+          "protocol_id": "0x4654434f4c4c0001",
+          "configure": "fort_scope_set_team_costs_v1",
+          "ready": "fort_scope_team_costs_ready_v1",
+          "entry_marker": "fort_scope_plan_team_entry_v1",
+          "native_call_marker": "fort_scope_plan_team_native_call_v1",
+          "requirement": "offline persistent-team rates and exact emitted coordination, fixed team and toolchain",
+          "missing_or_incompatible": "uniform unchanged native execution before numerical work"
+        },
+        "planning_continuation": {
+          "abi_version": 2,
+          "reset": "fort_scope_plan_reset_mode",
+          "report": "fort_scope_plan_report_v2",
+          "native_handoff": "fort_scope_plan_cancel_native_v1",
+          "native_unit_begin": "fort_scope_plan_native_begin_v1",
+          "native_unit_worker": "fort_scope_native_worker_v1",
+          "native_unit_effects": "independent original-native proof; exact current all-CPU worker range only",
+          "native_unit_costs": "uncalibrated original-native substitution invalidates pending and owner estimates",
+          "suffix_handoff": "fort_scope_plan_abandon_remaining_v1",
+          "suffix_boundary": "compiler-proved prework boundary only; accepted prefix commands and versions retained",
+          "prework_mismatch_status": 9,
+          "postwork_error": "execution failure; no source replay",
+          "endpoints": {
+            "complete": 0,
+            "continue": 1
+          },
+          "costs": "incremental execution plus change in eventual publication/teardown liability",
+          "terminal_operations": "hypothetical until owner close; excluded from executed segment counters",
+          "native_selection": "execute reached segment with coherence hooks; retain owning context",
+          "owner_estimate": "unavailable if a pending segment report is superseded or an original-source suffix is used"
+        },
+        "sources": [
+          {
+            "path": "scoped_runtime.cu",
+            "language": "cuda",
+            "standard": "c++17",
+            "host_openmp": true,
+            "numerical_contract": {
+              "schema_version": 1,
+              "id": "separate-arithmetic-v1",
+              "required_cuda_options": [
+                "--fmad=false",
+                "--ftz=false",
+                "--prec-div=true",
+                "--prec-sqrt=true"
+              ],
+              "required_host_options": [
+                "-ffp-contract=off"
+              ],
+              "identity": "552311d688f9bf1e9744a3143d4ca17c30e162bc35c0035dad77b6d769f6ce19"
+            }
+          },
+          {
+            "path": "fort_scoped_memory.f90",
+            "language": "fortran",
+            "module": "fort_scoped_memory"
+          },
+          {
+            "path": "fort_scoped_team_observer.f90",
+            "language": "fortran",
+            "module": "fort_scoped_team_observer"
+          }
+        ],
+        "source_sha256": {
+          "scoped_runtime.h": "c85fab9dcc68c5e162da5d83c942bc8f76cbabc4fb2e20921fbe9c6362f0c3c7",
+          "floating_environment.hpp": "e6a13295c9e90476185e576e813aa2300eace4324afecf821ba4d8a044456cd0",
+          "scoped_entry.hpp": "92421c21e4c3dc352bb239a40be959ae96db2b3bda8871990c56c058628734e0",
+          "scoped_team_observer.hpp": "374dcb2874c2e6395f259392e6aa814efe03fbe5b0861184b6e3fce9ab1dd223",
+          "fort_scoped_team_observer.f90": "e80d7abaef437f568d285d16a5da65bd89643ab2eef768d1bc66fb7981f0036a",
+          "view_entry.hpp": "8ca1648ff7e4743a2b784a9d2710f4c72a429c7c20a4f39a49f96632bf3415f2",
+          "section_copy.hpp": "6c5a24d97431cb08ea8aad06a82e07ba7978d317dffc72a7623f860d369ecc3f",
+          "staging.hpp": "96125904c5f37adca1f126d88777604693e76535253dbe0d385da848b239236b",
+          "scoped_cuda_resources.hpp": "134b233537d62611f27d7fcf54f8b16ba411f0284d0447cc902fe7e3fc99d289",
+          "scoped_graphs.hpp": "2a66e85dadac4d10f123e1dd76e2fc4d89437af617692e16783edcc3421b67e0",
+          "scoped_regions.hpp": "a748167bf8014f983d988e0d61049b3b95bb63bafeced7bf3274de01572d70c7",
+          "scoped_planning.hpp": "17b9f3c18427008d7774ace1acf443b6e2429859442e53aedf1b8a15e3e43434",
+          "scoped_memo.hpp": "4f6939df83d4f725a97306e50abf277ece8ca83856b42d92d40e217a5c05f1a6",
+          "scoped_host_metadata.hpp": "73c4bd4fc5658091381b0c56fb79a16b38867567d357985eded58894940b0b4b",
+          "scoped_runtime.cu": "a806fc0bf3dc764a3dbf244ff8aa4f40dc0f64e8b86050672461eccbb5ab7cae",
+          "fort_scoped_memory.f90": "a9f09e6a6b403b86ef129295d293332e0c215e0d946b1fe8ffaaabe74c837a2f"
+        },
+        "devices_per_context": 1,
+        "streams_per_context": 1,
+        "scratch": {
+          "abi_version": 1,
+          "acquire": "fort_scope_scratch_acquire_v1",
+          "release": "fort_scope_scratch_release_v1",
+          "statistics": "fort_scope_scratch_stats_get_v1",
+          "leases_per_context": 1,
+          "storage": "cached context-owned device arena; no host binding or publication",
+          "ordering": "existing context stream; growth waits for earlier use before replacement",
+          "budget": "cached capacity and registered field payload share the context device budget",
+          "zero_bytes": "null pointer with a release-required token; no CUDA initialization",
+          "automatic_costs": "unavailable until numerical integration prices scratch lifetime costs",
+          "compatibility": "existing field statistics and runtime interfaces remain unchanged"
+        },
+        "scope_transfers": {
+          "abi_version": 1,
+          "configure": "fort_scope_set_transfers",
+          "statistics": "fort_scope_transfer_stats_get_v1",
+          "completed_statistics_event": "transfer_statistics",
+          "default": "direct",
+          "modes": {
+            "direct": 0,
+            "pinned": 1,
+            "pipelined": 2,
+            "auto": 3,
+            "coalesced": 4
+          },
+          "supported": [
+            "direct",
+            "pinned",
+            "pipelined",
+            "auto",
+            "coalesced"
+          ],
+          "pinned_execution": "synchronous exact-section packing, copy, completion and unpack",
+          "staging_slots": 2,
+          "staging_streams": "two reusable non-default streams in the process-wide pool",
+          "pinned_budget_bytes": 67108864,
+          "budget_scope": "active, allocating and cached staging for scoped and chunked/hybrid calls",
+          "automatic_placement": "calibrated pinned synchronous pricing; pipelined/auto retain direct placement baseline and select transfers for approved GPU subchains",
+          "coalesced_execution": {
+            "experimental": true,
+            "direction": "upload only; output sections remain exact",
+            "minimum_physical_copies": 2,
+            "maximum_extra_bytes_fraction": 0.125,
+            "source_requirement": "whole canonical source resource is defined and host current",
+            "pinning": false,
+            "coordinates": "original full-layout pitches and logical coordinates",
+            "placement": "cost-selected plans use exact direct transfers until coalesced costs are calibrated",
+            "actual_bytes": "normal upload statistics; upload_coalesced trace records actual span bytes",
+            "required_bytes": "upload_requested trace event",
+            "fallback": "exact direct transfers with coalesced_upload_ineligible"
+          },
+          "fallback_reasons": {
+            "missing_calibration": "transfer_estimates_unavailable",
+            "unproved_partition": "unsupported_chain",
+            "resource_failure": "pre_execution_resource_failure",
+            "coalesced_upload": "coalesced_upload_ineligible"
+          },
+          "batch": {
+            "abi_version": 1,
+            "execute": "fort_scope_batch_execute_v1",
+            "configure_costs": "fort_scope_set_transfer_costs_v1",
+            "report": "fort_scope_batch_report_get_v1",
+            "completed_statistics_event": "batch_statistics",
+            "statistics_version": 1,
+            "preview": "compatible=-1; metadata only; no callback, CUDA, schedule consumption or coherence changes",
+            "callback": "complete source-proven GPU subchain; full-layout views and original coordinates; no reentrant context calls",
+            "concurrency": "one active batch per context; two non-default staging streams",
+            "completion": "both slots complete before return or native boundary",
+            "batch_payload_bytes": [
+              262144,
+              1048576,
+              4194304,
+              16777216
+            ],
+            "costs": "offline staging/row packing/events/preparation plus compute, launch and pinned transfer rates; fill/drain included",
+            "cost_reporting": "execution and terminal delta separate; unrepriced complete-owner estimate is unavailable",
+            "failure": "unapplied fallback preserves schedule; started execution errors poison the context and prohibit replay"
+          }
+        },
+        "stream_ordered": true,
+        "section_coordinates": "zero-based physical offsets, exclusive upper bounds",
+        "host_storage": "borrowed stable contiguous whole arrays",
+        "concurrent_access": "separate contexts with nonconflicting host storage",
+        "rectangle_limit": 32,
+        "intersection_limit": 1024,
+        "capabilities": [
+          "section_coherence",
+          "partial_host_initialization",
+          "source_definition_changes",
+          "device_memory_budget",
+          "coherent_runtime_placement",
+          "ordered_definition_validation",
+          "context_query_reuse",
+          "segment_continuation",
+          "pinned_section_transfers",
+          "pipelined_subchain_transfers",
+          "context_scratch_leases"
+        ]
+      },
+      "benchmark_source_sha256": "0d4c378b0f6c86ae35504b399190c1c0f489f8b2bae8839c8119645fa6a85626",
+      "artifacts": "/tmp/fortran-graph-final-calibration-20-scoped/build/scoped",
+      "application_profiled": false,
+      "base_profile": {
+        "path": "/tmp/fortran-graph-final-calibration-12-scoped/hardware.json",
+        "sha256": "43aff945989e71f529541589a6408d5d082bb34ac19bc6f726a4a95e10b2a8a0",
+        "base_rates_remeasured": false,
+        "identity_checked": "CPU, toolchain, precision and thread budget; current GPU/runtime/driver verified by new scoped measurements"
+      }
+    }
+  }
+}

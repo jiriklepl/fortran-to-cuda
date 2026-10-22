@@ -9,6 +9,11 @@ offloaded to a GPU — with the generated kernel running **~40–60× faster** t
 Fortran — and identifies host↔device data transfer as the dominant remaining
 bottleneck, motivating the memory framework work.
 
+The [2026-10-22 graph offloading checkpoint](benchmarks/reports/graph-redesign-snapshot-20261022/README.md)
+records the current compiler snapshot, test results, and ELMM channel-simple/channel
+performance comparisons. Application timings and their qualification limits are
+reported separately from the kernel measurements above.
+
 ---
 
 ## Repository Structure

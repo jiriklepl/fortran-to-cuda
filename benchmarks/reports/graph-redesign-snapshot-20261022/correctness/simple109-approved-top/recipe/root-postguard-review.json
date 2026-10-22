@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-10-22T10:39:13.668377+00:00",
+  "status": "root_verified_all3_natural109_full_storage_VTK_and_protected_guards_passed",
+  "controller_exit_code": 0,
+  "report": {
+    "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/report.json",
+    "sha256": "21db79686d99d13a2b7267f6089771fcbdb4485bbadaf3aa76b86f1b6d3cd8aa"
+  },
+  "runs": [
+    {
+      "mode": "native",
+      "full_float64_fields": 20,
+      "data_and_shape_artifacts": 40,
+      "strict_fields_and_VTK_passed": true,
+      "max_absolute_error": 0.0,
+      "bitwise_different_values": 0
+    },
+    {
+      "mode": "be58",
+      "full_float64_fields": 20,
+      "data_and_shape_artifacts": 40,
+      "strict_fields_and_VTK_passed": true,
+      "max_absolute_error": 4.243521476432477e-07,
+      "bitwise_different_values": 9128427
+    },
+    {
+      "mode": "candidate20",
+      "full_float64_fields": 20,
+      "data_and_shape_artifacts": 40,
+      "strict_fields_and_VTK_passed": true,
+      "max_absolute_error": 4.243521476432477e-07,
+      "bitwise_different_values": 9128427
+    }
+  ],
+  "candidate20_vs_be58_all20_bitwise_identical": true,
+  "secondary_bit_different_values": 0,
+  "public_artifacts_verified_before_after": 2931,
+  "original_and_private_inputs_unchanged": true,
+  "field_policy": {
+    "dtype": "float64",
+    "atol": 1e-06,
+    "rtol": 1e-05,
+    "metadata_format": "storage-shape-bounds-v1"
+  },
+  "private_pressure_only_diagnostic_links": true,
+  "final_public_qualification": false,
+  "performance_sample": false,
+  "helper_compatibility": {
+    "path_scope": "EXACT_ONE_HISTORICAL_WORKSPACE_PARSER_BINDING_ONLY",
+    "current": {
+      "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/gpu_validation.py",
+      "sha256": "1fa37f95456d1779477214a413264b6112950f21e1129ef2fc9574f58ee66479",
+      "bytes": 19261
+    },
+    "historical_preimage": {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/historical-validator/gpu_validation.py.source",
+      "sha256": "8e1cf21aff1ae868f02082ef077fee225cb4626a682ae8f6c408ca84381756cf",
+      "bytes": 17704
+    },
+    "historical_base_commit": "81e374410efe61d2e6dd64e8968264b22991fac5",
+    "original_records_unchanged": [
+      {
+        "path": "/tmp/fortran-snapshot-simple109-correctness-20261022/run_three_mode.py",
+        "sha256": "c92600a4508c42ef680c7f4af55e82d56d23e780c9c9cedd5fe66afdddc3d9e8",
+        "bytes": 12173
+      },
+      {
+        "path": "/tmp/fortran-snapshot-simple109-correctness-20261022/stage.json",
+        "sha256": "4cba3dcf2f050160dd12854d22570a73a492dc94222b2992b8a2e3f53de198cd",
+        "bytes": 11006
+      },
+      {
+        "path": "/tmp/fortran-snapshot-simple109-correctness-20261022/root-authorization.json",
+        "sha256": "76d61d595c52f10a5a03fd2cb8091405a5053e760e40246f31e1558130859a21",
+        "bytes": 610
+      }
+    ],
+    "approved_change": "Strict additive typed graph/completion/commandqueue statistics support, including complete=false; oldclosedunknown/type/context/physicalGPUproof checks retained. CPU44PASS, actualFULL_FIELDS_OK and currentstrictparserPASS already captured; trafficoracle is separately maintained.",
+    "projection": "Only an existing original helper path expected8e1 may resolve to separately bound current1fa plus retained exact8e1preimage. Any other hash/value/path is rejected. All other original inputs and public2931pre/post guards run unchanged; original build_private/run_short functions are not modified or monkeypatched.",
+    "preimage_execution": "Retained old bytes are authenticated historical evidence only, not imported/executed."
+  },
+  "review_count_correction": "Initial metadata-only root review incorrectly expected20 field artifact files, failed before any mutation; actual40=20bin+20shape. Corrected review verifiesboth filetypes and20comparedfields. Driver/controller/application outcomes unchanged.",
+  "public_default_pin_now_released": true
+}

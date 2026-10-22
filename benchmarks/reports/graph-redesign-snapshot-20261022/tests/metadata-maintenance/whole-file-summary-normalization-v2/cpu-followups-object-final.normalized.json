@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "first_pass_preserved": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+  "retry_policy": "only root/peer reviewed maintenance; explicit strict-affinity capability",
+  "root_authorized_concurrent_nonperformance_validation": true,
+  "first_pass_completed_files_at_start": 288,
+  "complete": true,
+  "results": [
+    {
+      "kind": "reviewed_test_maintenance",
+      "file": "compiler/tests/test_source_object_calls.py",
+      "nodes": 45,
+      "selection": "full current file",
+      "argv": [
+        "taskset",
+        "-c",
+        "0-11",
+        "timeout",
+        "240s",
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-c",
+        "/home/jirka/research/fortran-abomination/compiler/pyproject.toml",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/fortran-committable-snapshot-20261022/followup-pytest-cache",
+        "--basetemp=/tmp/fortran-committable-snapshot-20261022/cpu-followups-object-final/00-test_source_object_calls/temporary",
+        "--junitxml=/tmp/fortran-committable-snapshot-20261022/cpu-followups-object-final/00-test_source_object_calls/junit.xml",
+        "/home/jirka/research/fortran-abomination/compiler/tests/test_source_object_calls.py"
+      ],
+      "source_sha256": "0fae296d6a8af944196b6385ce91a49ebf3490fbd4184af88bd6b67cbd77b26d",
+      "seconds": 0.9395200989965815,
+      "exit_code": 0,
+      "log": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-object-final/00-test_source_object_calls/output.log",
+      "junit": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-object-final/00-test_source_object_calls/junit.xml",
+      "counts": {
+        "tests": 45,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "suite": "main",
+      "selection_kind": "entire_file_inventory",
+      "selected_nodeids": [
+        "compiler/tests/test_source_object_calls.py::test_fixed_object_call_keeps_original_keyword_storage_and_component_effects",
+        "compiler/tests/test_source_object_calls.py::test_reached_projection_preserves_original_object_storage_and_type",
+        "compiler/tests/test_source_object_calls.py::test_original_object_descriptor_inquiries_do_not_require_value_copy_semantics",
+        "compiler/tests/test_source_object_calls.py::test_renamed_multifile_type_is_resolved_in_each_original_declaring_scope",
+        "compiler/tests/test_source_object_calls.py::test_same_spelling_distinct_modules_select_generic_by_canonical_type[left_type]",
+        "compiler/tests/test_source_object_calls.py::test_same_spelling_distinct_modules_select_generic_by_canonical_type[right_type]",
+        "compiler/tests/test_source_object_calls.py::test_identically_spelled_different_types_are_not_structurally_interchangeable",
+        "compiler/tests/test_source_object_calls.py::test_diamond_reexports_share_one_original_declaring_type",
+        "compiler/tests/test_source_object_calls.py::test_nested_fixed_fields_numeric_out_and_original_guards_compose",
+        "compiler/tests/test_source_object_calls.py::test_uncertain_or_array_actual_storage_is_rejected_even_when_unused[type(state),pointer::s]",
+        "compiler/tests/test_source_object_calls.py::test_uncertain_or_array_actual_storage_is_rejected_even_when_unused[type(state),allocatable::s]",
+        "compiler/tests/test_source_object_calls.py::test_uncertain_or_array_actual_storage_is_rejected_even_when_unused[type(state),optional::s]",
+        "compiler/tests/test_source_object_calls.py::test_uncertain_or_array_actual_storage_is_rejected_even_when_unused[type(state),volatile::s]",
+        "compiler/tests/test_source_object_calls.py::test_uncertain_or_array_actual_storage_is_rejected_even_when_unused[type(state),asynchronous::s]",
+        "compiler/tests/test_source_object_calls.py::test_uncertain_or_array_actual_storage_is_rejected_even_when_unused[type(state)::s(2)]",
+        "compiler/tests/test_source_object_calls.py::test_unsupported_formal_semantics_do_not_disappear_when_unused[type(state),intent(out)::x]",
+        "compiler/tests/test_source_object_calls.py::test_unsupported_formal_semantics_do_not_disappear_when_unused[type(state),value,intent(in)::x]",
+        "compiler/tests/test_source_object_calls.py::test_unsupported_formal_semantics_do_not_disappear_when_unused[type(state),optional,intent(in)::x]",
+        "compiler/tests/test_source_object_calls.py::test_unsupported_formal_semantics_do_not_disappear_when_unused[type(state),pointer,intent(in)::x]",
+        "compiler/tests/test_source_object_calls.py::test_unsupported_formal_semantics_do_not_disappear_when_unused[type(state),allocatable,intent(in)::x]",
+        "compiler/tests/test_source_object_calls.py::test_unsupported_formal_semantics_do_not_disappear_when_unused[type(state),intent(in)::x(2)]",
+        "compiler/tests/test_source_object_calls.py::test_unsupported_formal_semantics_do_not_disappear_when_unused[class(state),intent(in)::x]",
+        "compiler/tests/test_source_object_calls.py::test_complete_type_checks_reject_unsupported_unused_components[real(8),allocatable::value(:)]",
+        "compiler/tests/test_source_object_calls.py::test_complete_type_checks_reject_unsupported_unused_components[real(8),pointer::value]",
+        "compiler/tests/test_source_object_calls.py::test_complete_type_checks_reject_unsupported_unused_components[class(*),allocatable::value]",
+        "compiler/tests/test_source_object_calls.py::test_complete_type_checks_reject_unsupported_unused_components[character(4)::value]",
+        "compiler/tests/test_source_object_calls.py::test_complete_type_checks_reject_unsupported_unused_components[complex(8)::value]",
+        "compiler/tests/test_source_object_calls.py::test_complete_type_checks_reject_unsupported_unused_components[procedure(),pointer,nopass::value]",
+        "compiler/tests/test_source_object_calls.py::test_complete_type_checks_reject_unsupported_unused_components[real(8)::value\\ncontains\\nprocedure,nopass::method=>operation]",
+        "compiler/tests/test_source_object_calls.py::test_complete_type_checks_reject_unsupported_unused_components[real(8)::value\\ncontains\\nfinal::finish]",
+        "compiler/tests/test_source_object_calls.py::test_unsupported_type_features_are_rejected_through_the_entire_type[type::base\\nreal(8)::value\\nend type\\ntype,extends(base)::state\\ninteger::extra\\nend type]",
+        "compiler/tests/test_source_object_calls.py::test_unsupported_type_features_are_rejected_through_the_entire_type[type::state(k)\\ninteger,kind::k\\nreal(k)::value\\nend type]",
+        "compiler/tests/test_source_object_calls.py::test_unsupported_type_features_are_rejected_through_the_entire_type[type::inner\\nreal(8),allocatable::value(:)\\nend type\\ntype::state\\ntype(inner)::nested\\nend type]",
+        "compiler/tests/test_source_object_calls.py::test_unsupported_type_features_are_rejected_through_the_entire_type[type::inner\\nreal(8)::value\\nend type\\ntype::state\\ntype(inner)::nested(2)\\nend type]",
+        "compiler/tests/test_source_object_calls.py::test_expressions_and_component_actuals_do_not_gain_object_mapping[state(1.0_8)]",
+        "compiler/tests/test_source_object_calls.py::test_expressions_and_component_actuals_do_not_gain_object_mapping[s%value]",
+        "compiler/tests/test_source_object_calls.py::test_whole_object_assignment_with_defined_assignment_is_not_a_field_effect",
+        "compiler/tests/test_source_object_calls.py::test_original_source_and_declaration_authority_cannot_be_replaced[source]",
+        "compiler/tests/test_source_object_calls.py::test_original_source_and_declaration_authority_cannot_be_replaced[schema]",
+        "compiler/tests/test_source_object_calls.py::test_original_source_and_declaration_authority_cannot_be_replaced[imports]",
+        "compiler/tests/test_source_object_calls.py::test_original_source_and_declaration_authority_cannot_be_replaced[binding]",
+        "compiler/tests/test_source_object_calls.py::test_original_source_and_declaration_authority_cannot_be_replaced[kinds]",
+        "compiler/tests/test_source_object_calls.py::test_copied_call_syntax_cannot_issue_source_object_mapping",
+        "compiler/tests/test_source_object_calls.py::test_source_object_proofs_are_rebuilt_and_versioned_not_imported_as_cache_authority",
+        "compiler/tests/test_source_object_calls.py::test_fixed_type_proof_respects_existing_operation_budget"
+      ],
+      "selected_nodes": 45,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-object-final/00-test_source_object_calls/command.json",
+        "sha256": "9d1ad19841f6aef12df0d794e675ae8dd63501c0043e9cf0a158fea79a7d21db"
+      },
+      "log_sha256": "e4a52cd470d8b7dbbb659e27508816fafa9297c861eed3e52412793d1fb62823",
+      "junit_sha256": "7e14b0aec9e53ef173d92529246ee150a1445508d407a5e1072ff0e616eefce9"
+    }
+  ],
+  "normalization_inputs": [
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-object-final/summary.json",
+      "sha256": "127dc6f2b09be7e6c5cab1eb53e96d0ac3f775c09de0285ccdb1051a1f8132f9"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/final-collection/main/inventory.json",
+      "sha256": "280d1862d851440ec90a0ca1799c5800e56f9d174aa9e00e72e5332bd2fd8cf3"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/final-collection/pipeline/inventory.json",
+      "sha256": "0fd2075a8aa6768a6acb10775268f90c273b46793b46cdda8701f18898fe450b"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/normalize_whole_file_summaries.py",
+      "sha256": "688da78e6354e22bc0041881188b6e99ab32e6de26d61e6be18dd7e0e9e487da"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/plan.json",
+      "sha256": "7c4b91e8aa418fd0abb909a2d76b1ea1f831c9af0b4579c624523bd17103786b"
+    }
+  ],
+  "normalization": "Metadata only: exact selected nodes/suite derived from final inventory and all raw JUnit case identities; original argv, source_sha256, exit codes and failed outcomes unchanged. Missing/wrong/multifile/partial coverage fails closed; no historical node renamed or relabeled."
+}

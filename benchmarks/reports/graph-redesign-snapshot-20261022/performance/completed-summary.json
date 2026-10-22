@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "case": "channel-simple",
+      "report": {
+        "path": "/tmp/fortran-quick-20-primary-01/report.json",
+        "sha256": "0123228354a3e2703dc104ae895e62712a18893213311f1f73d689c0258761c4"
+      },
+      "status": "completed_development_probe",
+      "all12_runs_VTK_and_duration_passed": true,
+      "modes": {
+        "native": {
+          "median_seconds": 12.205093251992366,
+          "samples_seconds": [
+            12.205093251992366,
+            12.305588380986592,
+            12.204174521000823
+          ],
+          "median_loop_seconds": 11.85,
+          "median_poisson_seconds": 0.92,
+          "iqr_seconds": 0.0507069299928844
+        },
+        "committed": {
+          "median_seconds": 10.249355797001044,
+          "samples_seconds": [
+            10.301328173998627,
+            10.249355797001044,
+            9.998341344995424
+          ],
+          "median_loop_seconds": 9.55,
+          "median_poisson_seconds": 0.96,
+          "iqr_seconds": 0.15149341450160136
+        },
+        "reworked": {
+          "median_seconds": 10.199877856997773,
+          "samples_seconds": [
+            10.198654949010233,
+            10.199877856997773,
+            10.399635975001729
+          ],
+          "median_loop_seconds": 9.55,
+          "median_poisson_seconds": 0.94,
+          "iqr_seconds": 0.10049051299574785
+        }
+      },
+      "candidate_median_vs_be58_percent": -0.48274194967208306
+    },
+    {
+      "case": "channel",
+      "report": {
+        "path": "/tmp/fortran-quick-20-channel-01/report.json",
+        "sha256": "2058376c591b4c39f9f916fda1bff9340576c9a780cb565fa95cc84e9c35b41b"
+      },
+      "status": "completed_development_probe",
+      "all12_runs_VTK_and_duration_passed": true,
+      "modes": {
+        "native": {
+          "median_seconds": 13.808077605994185,
+          "samples_seconds": [
+            13.714079112003674,
+            13.808077605994185,
+            14.059395352000138
+          ],
+          "median_loop_seconds": 13.43,
+          "median_poisson_seconds": 0.84,
+          "iqr_seconds": 0.172658119998232
+        },
+        "committed": {
+          "median_seconds": 11.80395257899363,
+          "samples_seconds": [
+            11.905495612008963,
+            11.80395257899363,
+            11.701680229991325
+          ],
+          "median_loop_seconds": 11.15,
+          "median_poisson_seconds": 0.85,
+          "iqr_seconds": 0.1019076910088188
+        },
+        "reworked": {
+          "median_seconds": 11.9536631689989,
+          "samples_seconds": [
+            11.9536631689989,
+            12.455511078005657,
+            11.754238303008606
+          ],
+          "median_loop_seconds": 11.26,
+          "median_poisson_seconds": 0.85,
+          "iqr_seconds": 0.35063638749852544
+        }
+      },
+      "candidate_median_vs_be58_percent": 1.2683089753486199
+    }
+  ],
+  "sessions": {
+    "channel-simple": 60375,
+    "channel": 42074
+  },
+  "all_samples_retained": true,
+  "timings_reused": false,
+  "full_natural_candidate_correctness_qualified": false,
+  "final_performance_qualified": false,
+  "exclusive_quiet_released": true
+}

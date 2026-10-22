@@ -4,8 +4,8 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_offload_profile import scoped_profile
 from compiler.tests.test_source_scopes import FACT
@@ -82,7 +82,7 @@ def test_public_owner_retains_original_call_and_later_resources(tmp_path):
     text = outputs[report["sources"][str(path)]["replacement"]]
     assert text.count("call correct(-0.5d0*a(0))") == 1
     assert text.count("metadata%flux(1)=metadata%flux(1)+1.d0") == 1
-    assert "fort_scope_host_begin" in text
+    assert "fort_scope_access_begin_v1" in text
     assert "fort_scope_host_end" in text
     assert all("metadata" not in row["resource"] for row in scope["checked_execution_plan"]["resources"])
 

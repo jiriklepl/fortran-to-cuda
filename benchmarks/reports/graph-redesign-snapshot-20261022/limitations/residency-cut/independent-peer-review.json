@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "status": "CLEAR_READ_ONLY_V2_REQUIRES_ROOT_PROMOTION_AND_FULL18_ACTUAL_FOLLOWUP",
+  "reviewed": {
+    "draft": {
+      "bytes": 25439,
+      "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-residency-cut-observation-draft-v2/test_scoped_adaptation.py",
+      "sha256": "7cf7919891bff8b1392bcbf763933476980f916c493e3f8f79df767a6bb41d65"
+    },
+    "diff": {
+      "bytes": 3394,
+      "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-residency-cut-observation-draft-v2/maintenance.diff",
+      "sha256": "dca9fedd5bd7f1623366a20e438766c7b7067b4ec0c0546c383ad7b24e96602a"
+    },
+    "exact_source_ledger": {
+      "bytes": 11607,
+      "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-residency-cut-observation-draft-v2/exact-ledger.json",
+      "sha256": "68e781a36a92e54fbafba7c694572523498920f80c1d14432f207b5c52e92543"
+    },
+    "actual_activity": {
+      "bytes": 20629,
+      "path": "/tmp/fortran-committable-snapshot-20261022/cuda-observation-runs/001-test_scoped_adaptation/pytest-temp/test_real_normal_scopes_build_0/integration-activity.json",
+      "sha256": "c5a8a889e6f6855c3356af92b06f06b71166b7c4d4e56f53ed76c9b527356c0c"
+    },
+    "actual_runtime_log": {
+      "bytes": 55251,
+      "path": "/tmp/fortran-committable-snapshot-20261022/cuda-observation-runs/001-test_scoped_adaptation/pytest-temp/test_real_normal_scopes_build_0/integration-runtime.log",
+      "sha256": "ca7bc213850fa414291e1b17191f22d3a76e039f3b3612b0b86540d461b62158"
+    },
+    "original_failure_log": {
+      "bytes": 9036,
+      "path": "/tmp/fortran-committable-snapshot-20261022/cuda-observation-runs/001-test_scoped_adaptation/output.log",
+      "sha256": "0bd99c5aa154d9d512ba6cf38fab07e9af617adcc07c22cf9e732fd108770710"
+    }
+  },
+  "author_review": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-residency-cut-observation-draft-v2/review.json",
+    "sha256": "b107bdd96a188ef759592050fae2b2c84520a774282c99dc02b72bfc12b2fb43",
+    "bytes": 4650
+  },
+  "change_scope": [
+    [
+      23,
+      "test_real_normal_scopes_build_and_execute_full_fields"
+    ]
+  ],
+  "source_frontier_independent_check": {
+    "one_lexical_owner": true,
+    "original_native_statement": "b=3*b",
+    "original_line": 14,
+    "manifest_reason": "numerical effect requires typed authority for every original runtime guard",
+    "execution": "publish and close when reached; original continuation once",
+    "reopen": true,
+    "generated_behavior": "native_scale borrowed ENTRY closes context then sets context0/epochfalse/queryfalse before exact original b=3*b; consume creates fresh context when0"
+  },
+  "oracle": "Exact canonical-resource ordered per-context create/upA/kernel/downB/close, then newcreate/upA/upB/kernel/downC/close for n32/64. Requires4contexts,6uploads,4downloads,4kernels,2304H2D/1536D2H; no interleaving and exact manifest native authority cut. Existing full fields/halos/nativeAUTO/build/proof checks preserved.",
+  "initial_peer_correction": "V1 still expected4upload events despite its6-event ledger. V2 fixes exact6 and strengthens create/close4; V1 remains preserved.",
+  "limitation": "Read-only A mirror does not survive this context lifetime cut;768 duplicate H2Dbytes real. No cross-cut residency success, speedup, allocator change, or private22 adoption claimed.",
+  "execution": {
+    "tests": false,
+    "apps": false,
+    "builds": false,
+    "generation": false,
+    "GPU": false,
+    "static_AST_and_captured_metadata_only": true
+  },
+  "not_a_result": "Offline/source review cannot replace current-source full18 process exit0; original parserFAIL and trafficFAIL remain in history."
+}

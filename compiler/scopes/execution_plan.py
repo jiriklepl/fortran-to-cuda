@@ -10,7 +10,7 @@ JSON is a diagnostic view and cannot be imported as execution authority.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, fields, is_dataclass, replace
+from dataclasses import dataclass, fields, is_dataclass
 from hashlib import sha256
 from types import MappingProxyType, SimpleNamespace
 
@@ -38,7 +38,7 @@ def _configuration(builder):
 
     # Observations select an already defined alternative. They cannot change
     # its identity, otherwise a calibration could never select that same plan.
-    config = replace(builder.config, exact_window=None, scope_measurement=None)
+    config = builder.config.for_numerical_entry()
     return configuration(builder.options, config, builder._numerical_environment_root,
                          getattr(builder, "immutable_inputs", {}), _Budget())
 
@@ -278,7 +278,15 @@ def _seal_execution(owner):
 
     def borrowed(value):
         if isinstance(value, Base):
+            if syntax.get(id(value)) is value:
+                return True
             descendants = tuple(walk(value))
+            if session is not None and session.contains(value):
+                # The source session has already sealed these exact nodes.
+                # Record descendant identities once for parser-id map keys;
+                # repeated unit/task payload edges need no resealing walk.
+                syntax.update((id(node), node) for node in descendants)
+                return True
             for node in descendants:
                 item = getattr(node, "item", None)
                 if type(item) is SimpleNamespace:
@@ -362,7 +370,15 @@ def _seal_execution(owner):
 
         return _digest(visit(root))
 
-    return ({member.routine.qualified: record(member) for member in owner.members.values()},
+    # Every member reaches the same owner/member cycle. Serializing that full
+    # connected program independently from every procedure was quadratic in
+    # helper count. Bind it once, then name each exact member within that same
+    # immutable program. All fields and borrowed source/proof authorities still
+    # participate in the shared digest.
+    program_identity = record(owner)
+    return ({member.routine.qualified: _digest({"program_emission_identity": program_identity,
+                                               "procedure": member.routine.qualified})
+             for member in owner.members.values()},
             tuple(numerical_authorities.values()))
 
 
@@ -441,6 +457,88 @@ class _ProcedurePlan:
 
 
 @dataclass(frozen=True, slots=True)
+class _ProofHandoff:
+    """An independently validated proof whose retained payload is immutable."""
+    proof: object
+    analysis: object
+    registry: str
+    key: object
+    state: tuple
+    session: object
+    authority: str
+
+    def validate(self, providers):
+        if (getattr(self.analysis, self.registry, {}).get(self.key) is not self.proof
+                or self.analysis._source_session is not self.session
+                or any(id(getattr(self.proof, name)) != identity for name, identity in self.state)):
+            raise CompilationError("checked execution lost its registered immutable proof handoff")
+        self.session.verify(self.analysis)
+        provider = getattr(self.proof, "_provider", None)
+        if provider is not None and id(provider) not in providers:
+            provider.validate(self.analysis)
+            providers.add(id(provider))
+
+
+def _proof_handoffs(owner, numerical):
+    """Validate source geometry once, then seal its transitive data payload.
+
+    Source sessions and registered proof identities retain their own authority.
+    Providers/configuration and mutable analysis policy are checked afresh at
+    reuse; immutable geometry never needs another AST traversal or derivation.
+    """
+    from fparser.two.utils import Base
+
+    from compiler.frontend.immutable_graph import GraphFreezer
+    from compiler.frontend.sealed_syntax import seal as seal_syntax
+    from compiler.frontend.source_effects import SourceEffects
+    from compiler.scopes.source_reads import validate_native_source_reads, validate_source_reads
+
+    retained = {}
+    for proof in numerical:
+        analysis = proof._provider._analysis
+        proof.validate(analysis, proof.procedure, proof._selection)
+        retained[id(proof)] = proof, analysis, "_numerical_preparations"
+    for member in owner.members.values():
+        for unit in member.units:
+            for operation in unit.scope.native:
+                validate_native_source_reads(member.builder, operation)
+                proof = operation.source_reads
+                if proof is not None:
+                    registry = ("_worksharing_native_completions" if type(proof).__name__ == "WorksharingNativeCompletionProof"
+                                else "_native_definition_proofs")
+                    retained[id(proof)] = proof, operation.proof_analysis, registry
+            proofs = getattr(unit.scope, "source_reads", None)
+            for call in unit.scope.calls:
+                proof = proofs.get(call.procedure) if isinstance(proofs, (dict, MappingProxyType)) else proofs
+                validate_source_reads(member.builder, call, proof)
+                if proof is not None:
+                    retained[id(proof)] = proof, member.builder.analysis, "_reached_read_requirements_proofs"
+    authorities, authority_types = _registered_authorities(owner, ())
+
+    def borrowed(value):
+        if isinstance(value, Base):
+            seal_syntax((value,))
+            return True
+        if isinstance(value, SourceEffects) or authorities.get(id(value)) is value:
+            return True
+        if isinstance(value, MappingProxyType):
+            return True  # Frontend _freeze owns these recursively immutable JSON records.
+        return any(session.contains(value) for session in sessions.values())
+
+    sessions = {id(analysis._source_session): analysis._source_session
+                for _proof, analysis, _registry in retained.values()}
+    freezer = GraphFreezer(own_if=is_dataclass, borrowed_types=authority_types, borrow_if=borrowed)
+    result = []
+    for proof, analysis, registry in retained.values():
+        for part in fields(proof):
+            object.__setattr__(proof, part.name, freezer.freeze(getattr(proof, part.name)))
+        result.append(_ProofHandoff(proof, analysis, registry, proof.identity,
+            tuple((part.name, id(getattr(proof, part.name))) for part in fields(proof)), analysis._source_session,
+            _digest(analysis._summary_authority())))
+    return tuple(result)
+
+
+@dataclass(frozen=True, slots=True)
 class CheckedExecutionPlan:
     identity: str
     execution_identity: str
@@ -451,6 +549,7 @@ class CheckedExecutionPlan:
     _contexts: tuple
     _numerical_authorities: tuple
     _selection_prefixes: tuple
+    _proof_handoffs: tuple
     _record: str
     _issuer: object
 
@@ -485,22 +584,27 @@ class CheckedExecutionPlan:
         """One emission checkpoint; never another discovery or proof search."""
         self._require_owner()
         self.exact_window_placement()
+        configurations, fact_identities, analyses = {}, {}, {}
         for builder, analysis, routine, configuration, facts in self._contexts:
+            key = (id(builder.options), id(builder.config), builder._numerical_environment_root,
+                   tuple((root, id(proof)) for root, proof in sorted(getattr(builder, "immutable_inputs", {}).items())))
+            if key not in configurations:
+                configurations[key] = _configuration(builder)
+            if id(builder.facts) not in fact_identities:
+                fact_identities[id(builder.facts)] = _digest(builder.facts)
             if (builder.analysis is not analysis or builder.entry is not routine
-                    or _configuration(builder) != configuration or _digest(builder.facts) != facts):
+                    or configurations[key] != configuration or fact_identities[id(builder.facts)] != facts):
                 raise CompilationError("execution plan source context, configuration or capture facts changed after placement")
+            analyses[id(analysis)] = analysis
+        for analysis in analyses.values():
             analysis.verify_publication()
-        for proof in self._numerical_authorities:
-            proof.validate(proof._provider._analysis, proof.procedure, proof._selection)
-        from compiler.scopes.source_reads import validate_native_source_reads, validate_source_reads
-        for member in self.members:
-            for unit in self.units(member):
-                for operation in unit.scope.native:
-                    validate_native_source_reads(member.builder, operation)
-                proofs = getattr(unit.scope, "source_reads", None)
-                for call in unit.scope.calls:
-                    proof = proofs.get(call.procedure) if isinstance(proofs, (dict, MappingProxyType)) else proofs
-                    validate_source_reads(member.builder, call, proof)
+        providers, authorities = set(), {}
+        for handoff in self._proof_handoffs:
+            handoff.validate(providers)
+            if id(handoff.analysis) not in authorities:
+                authorities[id(handoff.analysis)] = _digest(handoff.analysis._summary_authority())
+            if authorities[id(handoff.analysis)] != handoff.authority:
+                raise CompilationError("checked execution source analysis policy changed after proof handoff")
         for member, proof in self._selection_prefixes:
             if member.emission.selection_prefix is not proof:
                 raise CompilationError("execution plan lost its exact original selection prefix authority")
@@ -562,9 +666,9 @@ class CheckedExecutionPlan:
         if placement is not None:
             return placement.native_reason
         reasons = self.public()["cost_requirements"]
-        # Keep the existing conservative policy. A complete-window observation
-        # can cover these costs only after its independent admission checks.
-        if reasons:
+        # Graph AUTO reports unpriced preparation as heuristic uncertainty.
+        # Storage and execution authority remain independently checked.
+        if reasons and self._owner.builder.config.scope_execution != "graph":
             return reasons[-1]["reason"]
         return self._owner.builder.automatic_native_preflight(self.leaves)
 
@@ -605,6 +709,7 @@ def build_execution_plan(owner):
     if not members or members[0] is not owner:
         raise CompilationError("execution plan requires its original root procedure")
     emission_identities, numerical_authorities = _seal_execution(owner)
+    proof_handoffs = _proof_handoffs(owner, numerical_authorities)
     procedures = []
     for member in members:
         units = tuple(member.units)
@@ -627,11 +732,15 @@ def build_execution_plan(owner):
         "numerical_invocations": invocations,
         "gpu_leaves": sorted(leaves),
         "policy": {
-            "order": "original source order within each procedure; original call sites and guards retained",
+            "order": ("dependency-verified task schedule within original control regions; source/effect provenance retained"
+                      if owner.builder.config.scope_execution == "graph" else
+                      "original source order within each procedure; original call sites and guards retained"),
             "lifetime": ("original reached selection; fresh context per execution" if hasattr(owner, "interval_site") else
                          "closed original numerical selection" if hasattr(owner, "closed_selection") else
                          "one-shot reached interval" if hasattr(owner, "window_proof") else "original invocation"),
-            "guards": "original reached evaluation points; no hoisting across native effects",
+            "guards": ("original control regions; motion preserves proved data, descriptor and observable dependencies"
+                       if owner.builder.config.scope_execution == "graph" else
+                       "original reached evaluation points; no hoisting across native effects"),
             "fallback": "publish and continue the unexecuted suffix once; execution failure never authorizes replay",
             "authority": "existing source, numerical, definition, native-effect and completion proofs",
             "public_record": "diagnostics only; cannot be imported as execution authority",
@@ -665,6 +774,7 @@ def build_execution_plan(owner):
                                   numerical_authorities,
                                   tuple((member, member.emission.selection_prefix) for member in members
                                         if member.emission.selection_prefix is not None),
+                                  proof_handoffs,
                                   _json(record), _ISSUER)
     # The only publication of authority occurs after the entire graph is sealed.
     object.__setattr__(owner, "execution_plan", result)

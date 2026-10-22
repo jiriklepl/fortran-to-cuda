@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "first_pass_preserved": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+  "retry_policy": "only root/peer reviewed maintenance; explicit strict-affinity capability",
+  "root_authorized_concurrent_nonperformance_validation": false,
+  "first_pass_completed_files_at_start": 310,
+  "complete": true,
+  "results": [
+    {
+      "kind": "reviewed_test_maintenance",
+      "file": "compiler/tests/test_source_compute_costs.py",
+      "nodes": 27,
+      "selection": "full current file",
+      "argv": [
+        "taskset",
+        "-c",
+        "0-11",
+        "timeout",
+        "240s",
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-c",
+        "/home/jirka/research/fortran-abomination/compiler/pyproject.toml",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/fortran-committable-snapshot-20261022/followup-pytest-cache",
+        "--basetemp=/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/00-test_source_compute_costs/temporary",
+        "--junitxml=/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/00-test_source_compute_costs/junit.xml",
+        "/home/jirka/research/fortran-abomination/compiler/tests/test_source_compute_costs.py"
+      ],
+      "source_sha256": "a4201f43762a9dfd626bf268318cacd69613b2fa0421b9683c2325c01aa83c99",
+      "seconds": 2.150411176990019,
+      "exit_code": 0,
+      "log": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/00-test_source_compute_costs/output.log",
+      "junit": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/00-test_source_compute_costs/junit.xml",
+      "counts": {
+        "tests": 27,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "suite": "main",
+      "selection_kind": "entire_file_inventory",
+      "selected_nodeids": [
+        "compiler/tests/test_source_compute_costs.py::test_original_static_joined_teams_have_calibrated_fork_join_participation[False-]",
+        "compiler/tests/test_source_compute_costs.py::test_original_static_joined_teams_have_calibrated_fork_join_participation[False- schedule(static)]",
+        "compiler/tests/test_source_compute_costs.py::test_original_static_joined_teams_have_calibrated_fork_join_participation[True-]",
+        "compiler/tests/test_source_compute_costs.py::test_original_static_joined_teams_have_calibrated_fork_join_participation[True- schedule(static)]",
+        "compiler/tests/test_source_compute_costs.py::test_runtime_schedules_retain_completion_but_not_automatic_compute_estimates[False-schedule(runtime)]",
+        "compiler/tests/test_source_compute_costs.py::test_runtime_schedules_retain_completion_but_not_automatic_compute_estimates[False-SCHEDULE ( RUNTIME )]",
+        "compiler/tests/test_source_compute_costs.py::test_runtime_schedules_retain_completion_but_not_automatic_compute_estimates[True-schedule(runtime)]",
+        "compiler/tests/test_source_compute_costs.py::test_runtime_schedules_retain_completion_but_not_automatic_compute_estimates[True-SCHEDULE ( RUNTIME )]",
+        "compiler/tests/test_source_compute_costs.py::test_schedule_compatibility_is_local_to_the_selected_original_region",
+        "compiler/tests/test_source_compute_costs.py::test_static_chunked_and_other_schedules_do_not_borrow_contiguous_costs[static,1]",
+        "compiler/tests/test_source_compute_costs.py::test_static_chunked_and_other_schedules_do_not_borrow_contiguous_costs[static,4]",
+        "compiler/tests/test_source_compute_costs.py::test_static_chunked_and_other_schedules_do_not_borrow_contiguous_costs[dynamic]",
+        "compiler/tests/test_source_compute_costs.py::test_static_chunked_and_other_schedules_do_not_borrow_contiguous_costs[guided]",
+        "compiler/tests/test_source_compute_costs.py::test_explicit_team_protocols_do_not_borrow_fixed_budget_costs[num_threads(2)]",
+        "compiler/tests/test_source_compute_costs.py::test_explicit_team_protocols_do_not_borrow_fixed_budget_costs[NUM_THREADS ( n )]",
+        "compiler/tests/test_source_compute_costs.py::test_explicit_team_protocols_do_not_borrow_fixed_budget_costs[if(n > 8)]",
+        "compiler/tests/test_source_compute_costs.py::test_explicit_team_protocols_do_not_borrow_fixed_budget_costs[proc_bind(close)]",
+        "compiler/tests/test_source_compute_costs.py::test_piecewise_memory_unknown_physical_sections_decline_only_the_estimate[flags0]",
+        "compiler/tests/test_source_compute_costs.py::test_piecewise_memory_unknown_physical_sections_decline_only_the_estimate[flags1]",
+        "compiler/tests/test_source_compute_costs.py::test_piecewise_memory_unknown_physical_sections_decline_only_the_estimate[flags2]",
+        "compiler/tests/test_source_compute_costs.py::test_source_models_restore_known_work_and_keep_original_backend_distinct",
+        "compiler/tests/test_source_compute_costs.py::test_cpp_only_evidence_does_not_establish_original_fortran_costs",
+        "compiler/tests/test_source_compute_costs.py::test_missing_existing_team_and_shared_fork_join_contracts_remain_unavailable",
+        "compiler/tests/test_source_compute_costs.py::test_public_scoped_queries_supply_three_totals_with_runtime_range_and_placement_checks",
+        "compiler/tests/test_source_compute_costs.py::test_query_records_launch_coverage_only_with_known_gpu_estimate[False]",
+        "compiler/tests/test_source_compute_costs.py::test_query_records_launch_coverage_only_with_known_gpu_estimate[True]",
+        "compiler/tests/test_source_compute_costs.py::test_unavailable_original_object_identity_is_an_explicit_native_requirement"
+      ],
+      "selected_nodes": 27,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/00-test_source_compute_costs/command.json",
+        "sha256": "5c222568d4643f7af637f7c6340edfb07ebf6d192b0d0f55280c14d5886f733d"
+      },
+      "log_sha256": "463b4552b1a5af001349bc94dbaa8ed12722c47092f1ddc3fbbc8efba2480c3a",
+      "junit_sha256": "8088cd597dcc82db539222d01e1f79341bf208ec9f5ce61cfeda7d495d3912b1"
+    },
+    {
+      "kind": "reviewed_test_maintenance",
+      "file": "compiler/tests/test_source_compute_memory.py",
+      "nodes": 25,
+      "selection": "full current file",
+      "argv": [
+        "taskset",
+        "-c",
+        "0-11",
+        "timeout",
+        "240s",
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-c",
+        "/home/jirka/research/fortran-abomination/compiler/pyproject.toml",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/fortran-committable-snapshot-20261022/followup-pytest-cache",
+        "--basetemp=/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/01-test_source_compute_memory/temporary",
+        "--junitxml=/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/01-test_source_compute_memory/junit.xml",
+        "/home/jirka/research/fortran-abomination/compiler/tests/test_source_compute_memory.py"
+      ],
+      "source_sha256": "187c8d469abcaf9ddb9793839402a867ea2612e6e27a91bcc8f968de76ca4b66",
+      "seconds": 8.216111810994335,
+      "exit_code": 0,
+      "log": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/01-test_source_compute_memory/output.log",
+      "junit": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/01-test_source_compute_memory/junit.xml",
+      "counts": {
+        "tests": 25,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "suite": "main",
+      "selection_kind": "entire_file_inventory",
+      "selected_nodeids": [
+        "compiler/tests/test_source_compute_memory.py::test_later_cpu_role_retains_placement_guard_after_gpu_only_unit[None]",
+        "compiler/tests/test_source_compute_memory.py::test_later_cpu_role_retains_placement_guard_after_gpu_only_unit[affinity]",
+        "compiler/tests/test_source_compute_memory.py::test_later_cpu_role_retains_placement_guard_after_gpu_only_unit[environment]",
+        "compiler/tests/test_source_compute_memory.py::test_total_memory_public_query_composes_once_and_preserves_backend_and_gain_gates[gpu_total-15-1]",
+        "compiler/tests/test_source_compute_memory.py::test_total_memory_public_query_composes_once_and_preserves_backend_and_gain_gates[gpu_total_no_cpu-13-1]",
+        "compiler/tests/test_source_compute_memory.py::test_total_memory_public_query_composes_once_and_preserves_backend_and_gain_gates[gpu_total_no_gpu-3-0]",
+        "compiler/tests/test_source_compute_memory.py::test_total_memory_public_query_composes_once_and_preserves_backend_and_gain_gates[gpu_total_small_gain-15-0]",
+        "compiler/tests/test_source_compute_memory.py::test_total_memory_public_query_composes_once_and_preserves_backend_and_gain_gates[gpu_total_missing_contract-3-0]",
+        "compiler/tests/test_source_compute_memory.py::test_total_memory_public_query_composes_once_and_preserves_backend_and_gain_gates[gpu_total_no_native-14-0]",
+        "compiler/tests/test_source_compute_memory.py::test_total_memory_public_query_composes_once_and_preserves_backend_and_gain_gates[gpu_total_only-12-0]",
+        "compiler/tests/test_source_compute_memory.py::test_read_write_union_enforces_physical_range_without_losing_definitions[0-0]",
+        "compiler/tests/test_source_compute_memory.py::test_read_write_union_enforces_physical_range_without_losing_definitions[65536-0]",
+        "compiler/tests/test_source_compute_memory.py::test_read_write_union_enforces_physical_range_without_losing_definitions[196607-0]",
+        "compiler/tests/test_source_compute_memory.py::test_read_write_union_enforces_physical_range_without_losing_definitions[196608-7]",
+        "compiler/tests/test_source_compute_memory.py::test_read_write_union_enforces_physical_range_without_losing_definitions[524288-7]",
+        "compiler/tests/test_source_compute_memory.py::test_read_write_union_enforces_physical_range_without_losing_definitions[1048576-7]",
+        "compiler/tests/test_source_compute_memory.py::test_read_write_union_enforces_physical_range_without_losing_definitions[1048577-0]",
+        "compiler/tests/test_source_compute_memory.py::test_read_only_aliases_decline_costs_without_erasing_ordered_output_effects[False]",
+        "compiler/tests/test_source_compute_memory.py::test_read_only_aliases_decline_costs_without_erasing_ordered_output_effects[True]",
+        "compiler/tests/test_source_compute_memory.py::test_conservative_whole_read_keeps_definitions_but_has_no_physical_estimate",
+        "compiler/tests/test_source_compute_memory.py::test_shared_borrowed_read_views_preserve_exact_effects_around_undefined_storage",
+        "compiler/tests/test_source_compute_memory.py::test_each_backend_requires_its_own_memory_applicability",
+        "compiler/tests/test_source_compute_memory.py::test_runtime_schedule_is_rechecked_for_every_public_query_without_losing_definitions",
+        "compiler/tests/test_source_compute_memory.py::test_validated_rank_reduced_view_prices_touched_elements_not_root_span[196607-0]",
+        "compiler/tests/test_source_compute_memory.py::test_validated_rank_reduced_view_prices_touched_elements_not_root_span[196608-7]"
+      ],
+      "selected_nodes": 25,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/01-test_source_compute_memory/command.json",
+        "sha256": "d7c7d5550f5616a21a4be5c2258689c84a9f89bfd76d6a6be8574920fce21378"
+      },
+      "log_sha256": "05339845a7d9eec469225b65642ce9592f772adcc6563d921f486d4a8e515f36",
+      "junit_sha256": "7508603d429b40f7a6447c16ca501f28988bba8a63119ad3853166e485a1e37f"
+    },
+    {
+      "kind": "reviewed_test_maintenance",
+      "file": "elmm-pipeline/tests/test_local_scopes.py",
+      "nodes": 17,
+      "selection": "full current file",
+      "argv": [
+        "taskset",
+        "-c",
+        "0-11",
+        "timeout",
+        "240s",
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-c",
+        "/home/jirka/research/fortran-abomination/compiler/pyproject.toml",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/fortran-committable-snapshot-20261022/followup-pytest-cache",
+        "--basetemp=/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/02-test_local_scopes/temporary",
+        "--junitxml=/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/02-test_local_scopes/junit.xml",
+        "/home/jirka/research/fortran-abomination/elmm-pipeline/tests/test_local_scopes.py"
+      ],
+      "source_sha256": "fcd919b06064aa6e514dacf4fdda9f2fa1110fba2a4e78e63a0309e9f3b8685f",
+      "seconds": 39.07703573600156,
+      "exit_code": 0,
+      "log": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/02-test_local_scopes/output.log",
+      "junit": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/02-test_local_scopes/junit.xml",
+      "counts": {
+        "tests": 17,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "suite": "pipeline",
+      "selection_kind": "entire_file_inventory",
+      "selected_nodeids": [
+        "elmm-pipeline/tests/test_local_scopes.py::test_independent_checkouts_form_and_apply_public_scope",
+        "elmm-pipeline/tests/test_local_scopes.py::test_independent_compiler_packages_compose_without_ir_or_source_merging",
+        "elmm-pipeline/tests/test_local_scopes.py::test_automatic_missing_profile_composes_authenticated_native_package[bounded]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_automatic_missing_profile_composes_authenticated_native_package[reached]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_independent_adapter_transports_transfer_choice_and_compiler_reason[pinned]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_independent_adapter_transports_transfer_choice_and_compiler_reason[pipelined]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_independent_adapter_transports_transfer_choice_and_compiler_reason[coalesced]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_independent_adapter_transports_reached_execution_without_choosing_segments",
+        "elmm-pipeline/tests/test_local_scopes.py::test_independent_adapter_reuses_summary_cache_and_invalidates_changed_sources",
+        "elmm-pipeline/tests/test_local_scopes.py::test_independent_adapter_accepts_original_descriptor_guards",
+        "elmm-pipeline/tests/test_local_scopes.py::test_stale_application_source_is_rejected_before_any_edit",
+        "elmm-pipeline/tests/test_local_scopes.py::test_modified_replacement_is_rejected_before_any_edit",
+        "elmm-pipeline/tests/test_local_scopes.py::test_incompatible_public_build_manifest_is_rejected[abi]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_incompatible_public_build_manifest_is_rejected[runtime_identity]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_incompatible_public_build_manifest_is_rejected[build_role]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_incompatible_public_build_manifest_is_rejected[escape]",
+        "elmm-pipeline/tests/test_local_scopes.py::test_pipeline_builds_and_links_public_common_runtime_once"
+      ],
+      "selected_nodes": 17,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/02-test_local_scopes/command.json",
+        "sha256": "5e305e96a9e9b9c1f7fe72c0591d24c3a73a8fa5debf87b52c8080c9fba74249"
+      },
+      "log_sha256": "abc507ff95f215469184c92688c38960ef556fde6253b2217b121eb58cd18a1a",
+      "junit_sha256": "5b892a42edcf204496867294028c59b03b9966334d57e0fed164d5873123c4a3"
+    }
+  ],
+  "normalization_inputs": [
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/summary.json",
+      "sha256": "dd5957b8c3f303b9a66f5822773f0278f6cc7624b5e6e9f723860267734f80a0"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/final-collection/main/inventory.json",
+      "sha256": "280d1862d851440ec90a0ca1799c5800e56f9d174aa9e00e72e5332bd2fd8cf3"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/final-collection/pipeline/inventory.json",
+      "sha256": "0fd2075a8aa6768a6acb10775268f90c273b46793b46cdda8701f18898fe450b"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/normalize_whole_file_summaries.py",
+      "sha256": "688da78e6354e22bc0041881188b6e99ab32e6de26d61e6be18dd7e0e9e487da"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/plan.json",
+      "sha256": "7c4b91e8aa418fd0abb909a2d76b1ea1f831c9af0b4579c624523bd17103786b"
+    }
+  ],
+  "normalization": "Metadata only: exact selected nodes/suite derived from final inventory and all raw JUnit case identities; original argv, source_sha256, exit codes and failed outcomes unchanged. Missing/wrong/multifile/partial coverage fails closed; no historical node renamed or relabeled."
+}

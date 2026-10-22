@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "kind": "new approval addendum; immutable historical reports remain unchanged",
+  "recorded_utc": "2026-10-22T07:05:17.820621+00:00",
+  "approval_authority": "User instruction relayed explicitly by root on2026-10-22 in benchmark_runner task: user approved deterministic TOP fix for OFFICIAL common all-three-mode correctness qualification; do not ask again.",
+  "approval_status": "approved",
+  "scope": "The exact deterministic non-PAR pressure reference-plane source fix applied equivalently to native, committed be58 and production20 for common-basis numerical correctness.",
+  "original_source_sha256": "0548a1a1b33284d5811335beff0051c60faf273f1f9535ef737b34be141bf9af",
+  "approved_source_sha256": "65d6ee76dc4b63b4545a1bfd481dbf875cb168f55a484bac7d0a39b78f21f7d0",
+  "patch_sha256": "707f87819df0841831f082a6a915e4d630b767fcaf1a8336cf006fe63a621805",
+  "historical_evidence": {
+    "native_repeat": {
+      "path": "correctness/fixed-top-native-natural-report.json",
+      "sha256": "53352ee2151eb0d4152fbfdb5ff1d3b2358b96eebdfd46e37b6f14915cdaf43c"
+    },
+    "be58_and20": {
+      "path": "correctness/fixed-top-cross-mode-natural-report.json",
+      "sha256": "e3d6a3cf968156f6ca26ea20c885743ea27deec5be79b7c1eab2aa4912202ed5"
+    }
+  },
+  "tolerances_changed": false,
+  "historical_report_flags_changed": false,
+  "original_source_failures_deleted_or_reclassified": false,
+  "prepared20_binaries_or_source_proofs_retagged": false,
+  "new_public_common_basis_build_or_final_seven_round_campaign_claimed": false,
+  "context": "Private pressure-only recompiles/full-field relinks and fixed FFTW wisdom were used. User approval is recorded now; historical official_qualification=false flags are preserved as issued. Production comparison timings remain original-pressure-source development results."
+}

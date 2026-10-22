@@ -14,6 +14,7 @@ from compiler.emission.driver import generate_sources
 from compiler.frontend import lower_file
 from compiler.offload.config import OffloadConfig
 from compiler.offload.profile import load_profile
+from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
 
 
 def run(command, path, environment=None):
@@ -149,6 +150,7 @@ end module
 def test_sections_and_native_decisions_match_fortran(tmp_path, policy, collective, boundary):
     nvcc = shutil.which(os.environ.get("NVCC", "/usr/local/cuda/bin/nvcc"))
     fc = shutil.which("gfortran-15") or shutil.which("gfortran")
+    host = shutil.which(os.environ.get("CUDAHOSTCXX", "g++-14"))
     if not nvcc or not fc:
         pytest.skip("CUDA and Fortran compilers required")
     mixed = policy == "auto_mixed"
@@ -159,7 +161,11 @@ def test_sections_and_native_decisions_match_fortran(tmp_path, policy, collectiv
     source = BOUNDARY if boundary else SOURCE
     if mixed:
         if profile is None:
-            pytest.skip("A compatible local calibration identity is required")
+            if host is None:
+                pytest.skip("CUDA host compiler required for observed correctness identity")
+            # Real hardware/tool identity; the synthetic rates below remain
+            # correctness controls and are never performance evidence.
+            profile = actual_profile(tmp_path, nvcc, host)
         # Deterministic correctness control, never used for performance evidence.
         rates = profile["rates"]
         rates.update(cpu_flops_per_second=1e6, gpu_flops_per_second=1e9,
@@ -219,7 +225,6 @@ print *, 'SECTIONS_NATIVE_PASS'
 end program
 """)
     environment = dict(os.environ, OMP_NUM_THREADS="4", OMP_DYNAMIC="FALSE", FORT_OFFLOAD_TRACE="1", FORT_RUNTIME_TRACE="1")
-    host = shutil.which(os.environ.get("CUDAHOSTCXX", "g++-14"))
     command = [nvcc, "-std=c++17", "-O2", "-Xcompiler=-fopenmp", "-arch=sm_86"]
     if host:
         command += ["-ccbin", host]

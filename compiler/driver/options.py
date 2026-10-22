@@ -15,7 +15,7 @@ class CompilerOptions:
     gpu_policy: str = "always"
     memory_model: str = "call"
     scope_transfers: str = "direct"
-    scope_execution: str = "bounded"
+    scope_execution: str | None = None
 
     def __post_init__(self) -> None:
         if self.opt_level not in (0, 1):
@@ -38,10 +38,13 @@ class CompilerOptions:
             raise CompilationError("scope transfers must be direct, pinned, pipelined, auto, or coalesced")
         if self.scope_transfers != "direct" and self.memory_model != "scoped":
             raise CompilationError("nondefault scope transfers require scoped memory")
-        if self.scope_execution not in {"bounded", "reached"}:
-            raise CompilationError("scope execution must be bounded or reached")
-        if self.scope_execution != "bounded" and self.memory_model != "scoped":
-            raise CompilationError("reached scope execution requires scoped memory")
+        self._validate_scope_execution()
+
+    def _validate_scope_execution(self) -> None:
+        if self.scope_execution not in {None, "graph"}:
+            raise CompilationError("source scopes use graph execution")
+        if self.scope_execution == "graph" and self.memory_model != "scoped":
+            raise CompilationError("graph scope execution requires scoped memory")
 
     @property
     def resolved_schedule(self) -> str:

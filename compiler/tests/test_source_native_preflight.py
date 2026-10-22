@@ -7,8 +7,8 @@ from hashlib import sha256
 
 import pytest
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.native_preflight import source_native_preflight
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_compute_costs import profile_v2
@@ -40,6 +40,9 @@ end module
 def builder_for(tmp_path, monkeypatch, source=SOURCE, *, mode="reached", profile=True,
                 facts=None, numerical_sources=None):
     monkeypatch.setattr("compiler.emission.cuda.scoped.compiler_identity", lambda _: {})
+    # These legacy proof fixtures exercise lexical metadata preflight rather
+    # than public graph routing through original-body module companions.
+    monkeypatch.setattr("compiler.scopes.module_owner.borrow_module", lambda *_args, **_kwargs: False)
     path = tmp_path / "original.f90"
     path.write_text(source)
     captures = facts or {"argument::a": FACT}

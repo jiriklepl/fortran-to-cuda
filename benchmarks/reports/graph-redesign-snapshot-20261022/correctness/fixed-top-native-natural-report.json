@@ -1,0 +1,1291 @@
+{
+  "schema_version": 1,
+  "kind": "controlled natural2458 private serializedTOP native bit-level repeatability",
+  "status": "completed_controlled_diagnostic",
+  "official_qualification": false,
+  "performance_sample": false,
+  "plan_sha256": "d14c11be3c3f622d2c502c3c7c018a8d9e39a118e95bf5e7b447e416ce559ff4",
+  "field_policy": {
+    "dtype": "float64",
+    "atol": 1e-06,
+    "rtol": 1e-05,
+    "metadata_format": "storage-shape-bounds-v1"
+  },
+  "runs": [
+    {
+      "name": "steps-2458-repeat-1",
+      "steps": 2458,
+      "timing": {
+        "completed_steps": 2458,
+        "natural_end": true,
+        "time_steps_seconds": 336.73,
+        "poisson_seconds": 21.15
+      },
+      "plans": [
+        {
+          "function": "fftw_plan_r2r_1d",
+          "precision": "fftw",
+          "original_thread_init_observed": true,
+          "threads": 1,
+          "original_flags": 0,
+          "rank": 1,
+          "dimensions": [
+            64
+          ],
+          "sign": 0,
+          "kinds": [
+            5
+          ],
+          "plan_sha256": "b94974415aee5798c6bedab829a82d3b9dde88778f9247ac149b732e75b88a72"
+        },
+        {
+          "function": "fftw_plan_r2r_1d",
+          "precision": "fftw",
+          "original_thread_init_observed": true,
+          "threads": 1,
+          "original_flags": 0,
+          "rank": 1,
+          "dimensions": [
+            64
+          ],
+          "sign": 0,
+          "kinds": [
+            4
+          ],
+          "plan_sha256": "8eb66f41aec2df44405e66037a761161ed03e932823eb9d6cdfef7edb45f4596"
+        },
+        {
+          "function": "fftw_plan_dft_2d",
+          "precision": "fftw",
+          "original_thread_init_observed": true,
+          "threads": 1,
+          "original_flags": 0,
+          "rank": 2,
+          "dimensions": [
+            64,
+            128
+          ],
+          "sign": -1,
+          "kinds": [],
+          "plan_sha256": "d7fc2c8c9d42194be31259500bf47fe990d3b1d2a4a7deebab23a6f367f60cc7"
+        },
+        {
+          "function": "fftw_plan_dft_2d",
+          "precision": "fftw",
+          "original_thread_init_observed": true,
+          "threads": 1,
+          "original_flags": 0,
+          "rank": 2,
+          "dimensions": [
+            64,
+            128
+          ],
+          "sign": 1,
+          "kinds": [],
+          "plan_sha256": "12669c88753de472ded55ef0f3d505a758ccdc8d6b1887f012e830c59da99908"
+        }
+      ],
+      "argv": [
+        "/tmp/fortran-native-top-reference-serial-01/build/ELMM-fields",
+        "output_dir='output/'"
+      ],
+      "cwd": "/tmp/fortran-native-top-reference-serial-01/natural-01/steps-2458-repeat-1/run",
+      "log_sha256": "f20fe8a55b565dcdbce5756ab88ee43f306519c667b6b35d671cba00fe0ad6e0",
+      "plan_log_sha256": "5b31e06250a7085f59859713f1950d2d7fa7e1ca172fb0781f5d6ae8e947f718",
+      "diagnostic_wall_seconds": 337.0424487059936,
+      "performance_sample": false,
+      "environment": {
+        "OMP_NUM_THREADS": "4",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_SCHEDULE": "static",
+        "OMP_PROC_BIND": "false",
+        "OMP_WAIT_POLICY": null,
+        "GOMP_SPINCOUNT": null,
+        "LD_PRELOAD": "/tmp/fortran-fftw-wisdom-diagnostic-01/fftw_control.so",
+        "FORT_FFTW_CONTROL_PREFIX": "/tmp/fortran-fftw-wisdom-diagnostic-01/executed-native-control-01/wisdom",
+        "FORT_FFTW_CONTROL_MODE": "verify"
+      },
+      "field_files_sha256": {
+        "fields-Moisture.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "fields-U_avg.bin": "3743cb76559a092f28b7d365c58687885867875ff3f7c9e776b3c2a4918b19ca",
+        "fields-W.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "fields-Moisture.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "fields-V.bin": "8511de54d28e482bf9973940e042b311adc632d115aaf46548432876175de124",
+        "fields-W_avg.bin": "8554338dd885a17e460ce271bf1a6a30bc9fd737d46656bdead60c4c3fab28cf",
+        "fields-Viscosity.bin": "39f916d2cd38f97a146b5a3acacbf45672c0ed529391a46475f3bebbb61968b5",
+        "fields-W.bin": "8628bf59bc3971b6abb5844e18b31925f0302f3b92d9b0e2563889e5dec19c04",
+        "fields-Wstar.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "fields-Scalar_avg.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+        "fields-TDiff.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "fields-V2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-V.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-Scalar.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "fields-Viscosity.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+        "fields-U2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-Wstar.bin": "2a60899e4fd8c77407afa3e2540bf3ec87e933bc9fc8419001ed85f4692391aa",
+        "fields-U.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-U2.bin": "8554e4b32d9df04efa0eadada8733cef0fbb88a6c30a52fef699d346536c0109",
+        "fields-W_avg.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "fields-Vstar.bin": "a98c04a78d8fb056ccc4f8d5976167ca74e2d631b515bec9d1032bf7f9d45979",
+        "fields-V_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-Vstar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-U_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-W2.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "fields-W2.bin": "2449f701dffbf563847cf26e3a147419efc0078c950adc50922e4e056b420041",
+        "fields-Scalar_avg.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "fields-V_avg.bin": "452e7b238cc8d85b23151fa1fa622dfc4441fd84cf578a9334ba768cbb7187a7",
+        "fields-Pr_avg.bin": "a83c012ac29404eda3d833b00bf9a52e5ea2e3bda4726e3473c6903613986139",
+        "fields-Temperature.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "fields-Ustar.bin": "e0b1c16126d44420db1ec7147da7b0a4accb4878c588ca9618f6cc89f75e9b07",
+        "fields-Pr.bin": "05768140d488012b09491d84314e55ccf0edfa1e096bab89a7112d9fc2b0723e",
+        "fields-Scalar.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+        "fields-Temperature.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "fields-Pr.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+        "fields-U.bin": "b2633a7c7d359a42e937ec37e49c86905f663be68aee8c2783971afa8cf691ad",
+        "fields-Pr_avg.shape": "3196fd7ddeb27f50d5ccb0303f770f61c9bdf1e94505ed7d6c6d0a1758246be8",
+        "fields-V2.bin": "690a1a177d55b88774705dacb590c5bfd933ac5264a99cef9388d43d77b2eeda",
+        "fields-Ustar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-TDiff.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "vtk_sha256": {
+        "frame-y-35.vtk": "dbd105f381570f268ddc33f401ca27e1f0c46ebaa528197abe5a8c759cc74628",
+        "frame-y-27.vtk": "39222529a0eb793ec442366abc6fdc7d22c307f11e19ab09123d785c39fe7432",
+        "frame-y-28.vtk": "bda4eac272894fd42bc2dab7d5c7501973121ba7ba46d542f0885e3d6da3fa44",
+        "frame-z-34.vtk": "02d9f0bf7b800a082b969ce03629b62a50f302ec0b09966041d6e27e8a172fa6",
+        "frame-y-4.vtk": "b2806b170a901520126ecc938ef3da25794b198392df8eed46eb0eaff51660c6",
+        "frame-y-44.vtk": "f0c5fa634a3ec7b46860771ab50c2eca64150153cb49995abf2a78925613d418",
+        "frame-y-47.vtk": "d96265e259f9836cd114e1488188a593e34413508b949c9e776a0841881ad034",
+        "frame-z-26.vtk": "2e3b46298d1d94ba66b863409fe21a2e1b36fc04df6c17f7d7a6ad3608a89a21",
+        "frame-y-12.vtk": "f33c4853f88d2c7ddeb9480036b658069d0743f1343703a3076894767698f13b",
+        "frame-z-5.vtk": "180549a69d1e8658a8d6b3107a0f4b43ddb332531090172feb17860412458fa1",
+        "frame-z-37.vtk": "6a47fc38e4bd7c32db6f0915a139a8d36c0e1cbc1a06bd6a8d27aad8d46eeb66",
+        "frame-y-39.vtk": "7c100b973f1fe8ead1fc385472ed7d1a68906b0fbbabc994c8aeb24fa6bd5d79",
+        "frame-z-0.vtk": "5990be552dd34304f0ad9b6b292d7fea95093f6cd4c1d23620289503ea8ecf9f",
+        "W.vtk": "0c62646621efda1fa49e23002467337f6473dc6490033dc209cb15e2631bdc6e",
+        "frame-y-2.vtk": "92975e31d1c070643039cc1a4fdee4ea61c3260766cd04bc9a7884cd7e31b3f3",
+        "frame-y-33.vtk": "f102c1fe99f5b81f3339aa0a2ac4d2595c8acde87d603b68be9cfb3f76762691",
+        "frame-y-37.vtk": "1dbe018b03d7cf9f104fdd2092d888681bf58bb3534d04f4fef983792a3525f1",
+        "frame-z-41.vtk": "1c591b6329753d524f9935fc9e32556d4c503277ae17a433ad2d5594fe168ebb",
+        "frame-z-14.vtk": "2ac148d6d87f24935cab88a5a462068f2b3d7ad62f94fbd912e21267dddf8763",
+        "U.vtk": "4bfaa0662ecc3480354bf30fad565848671b6eb9d6ca10aadb7305f4182ea1b7",
+        "frame-z-30.vtk": "396eec7bdc91a5be0c840a9af8a8454ef5d3a83db48131bf448b6a3991e19440",
+        "frame-z-50.vtk": "321eee89a5d0b8791f56a3ec2a0100f5a89b30bc8f84b09a25bbf127aad6c693",
+        "frame-y-48.vtk": "e7d5c14cf79d751cddd6be1ce9c30e24d4020a961dbd5ffedad49f145ec5ac7c",
+        "frame-y-29.vtk": "62b1f15b7dbab1800ac379f8a6ccaf660e855650424dc3419e815f5a8a529aa1",
+        "frame-y-45.vtk": "7020b7d07370f87dd78d29eb4031b4b4366f022fc92276f12456a152db8453cc",
+        "frame-y-22.vtk": "0252e9d1b8ffc8363c98c66b66bb624b647366edd2e171ec2d87d7f9e8d66d4a",
+        "frame-y-43.vtk": "5bf899a3deef0e52050889a4b27f4a54a4241f5dd98992039b3ba1429f907de2",
+        "frame-z-20.vtk": "39242d10d9c5d6004e15fe4ed55c0a2d30f11149291b0befa9071cb025a97b12",
+        "frame-z-33.vtk": "4b9f68eb95f20ccedd0688863f6e4188d97cd20f51580a8d19a5ab400225cf6d",
+        "frame-y-49.vtk": "4c3a3976939c8e638d93ed35bc83441f7c74298b64b3c1208ef4958e17de41f6",
+        "frame-z-9.vtk": "94c6827553fabbcbc7677f906450901e3a2c3f99cb2dfea99d8bb6ad01734f4c",
+        "frame-z-29.vtk": "18f8700e8612e4c8657af7e7c2cae7119457440f8d805c6ce154fa77acce23e9",
+        "frame-z-31.vtk": "e1c9ff1372d99a05d1df0ce26fbf34d26953e02278bafd3728ef955eba85cafd",
+        "frame-y-30.vtk": "f4f93ce7d78fd33c157cd3b6a82d5c41d969a6eccd0f81107c03e9b695166be5",
+        "frame-z-45.vtk": "de2bac19f58be616a2263b70430ad042a59743c329dfca286574b2d849e9853b",
+        "frame-y-7.vtk": "2b54bce10399adb27d8b300122f03e95c8931b1402008a81d052d690bbecb69b",
+        "frame-z-36.vtk": "006c3f7063a1dd944b7e5d19510b4c6d1618cbc593674a153f5107ae701b298a",
+        "frame-y-32.vtk": "8598834b9e443fdcab7f7bf7f5a62046e73dcb6e5e2ee4c54b4670567ee1e951",
+        "frame-z-38.vtk": "93aef0fe60a3de84ae7fa5b7b94223d0cefc1fe9dd456447837b62b59b84e4e6",
+        "Vavg.vtk": "d566e1c8bac69a395b54e0d42fcf50d72b519fd7329a4decffa827888e3fb13b",
+        "frame-z-17.vtk": "8d8a317a092b0aa0627637852d9a540b90f2a24ebc0d034af055264fa9c6749c",
+        "frame-z-32.vtk": "b8c7e06a7af1d1a791b96a0ab586a679568bea3290b2df3a6a06864498f44d37",
+        "frame-y-8.vtk": "dee6301c9c90b6b0481472acd7ad718c49b9683a65dce7c24009d9c737a86fa3",
+        "V.vtk": "583284bbdea986183b637a2d2b86354ff734e28967e29904d3808d84c9718eab",
+        "frame-z-35.vtk": "788c742821dc42ed686431a044641ea7565e8177af9fb14ebba372ede7c23dc0",
+        "frame-y-31.vtk": "92f361ea20541e3f80ce39b0fc6f57a582e2e9b5cb4f876995282d7352c5de55",
+        "frame-y-1.vtk": "e4136a72f14df0bad7f0dd644364102cc70cc8337ad7def953783c7b7feb66a2",
+        "frame-y-23.vtk": "5d1b3e36a089949255b791f16c5254a6350d591b75aec8a038fe7e5289867a93",
+        "frame-z-2.vtk": "ea8c1216daf57c294cf3f7bec0ddb91ba85951759fef75d54fd46a645bd9fd7c",
+        "frame-z-12.vtk": "48e773bc3ed5561f24354b35bd3246b384c99375eae64ed43614901526a0690e",
+        "frame-z-18.vtk": "e9788a35f5077fa1b6bc028a8a56505f69b3d89f4c05eec7b7069cd483b8a63e",
+        "frame-y-11.vtk": "1497e88e24796a66c86585ca1cbca379766bec4ca971baeec896ce5321ae5bfe",
+        "avg.vtk": "1d58db996019b1ff768e669ef507f3e15f55f213722cacae467144ea45f6b243",
+        "frame-y-16.vtk": "eb340d0a9518903733d0b611e599e8e23e5ff1a3cc06c22fd92b097277e2df7d",
+        "frame-y-13.vtk": "69559b845ce820db1a2a05c7b356a4278c9c639297add1017004981aa232cd2a",
+        "frame-y-20.vtk": "089611f907eacd1cd3b1772d4db0932e820c86adab6e580e157c384d495e27ca",
+        "frame-y-41.vtk": "ff6e6d71c2cc9f6e5021dc45da83c2008a6aa154eaa4699c10d46f46b3adcaf3",
+        "frame-z-15.vtk": "fe81dd5f5d56a1971770595662527c99a2b08dec02f43e6342ec97db2edcf68c",
+        "frame-y-34.vtk": "5693a93a5c85fb8d51b095c6cea49c851a7afb3fe2618368209bf54ff2f7589f",
+        "frame-z-11.vtk": "3fe2172c054345922f80a4c1ac2f60764877a1302ec07989c6142ef75c55c86f",
+        "frame-z-49.vtk": "579d9c656a545b1fa54ea1c0b4cdc2ce0153ca7b8bf361d017d940dce7278896",
+        "frame-y-42.vtk": "06f89c2df11c8a808b13865c0c0bda2c90d073f5e264f5a187d895169ef3b75f",
+        "frame-z-46.vtk": "86a9ea187ad90242a2964bf31e31f21d7939b74a0bbbdf3864c14afd67cab559",
+        "frame-y-10.vtk": "0afe6efbccf0bf14c1ed93626d33203a59b3047d7c0a0bac4eb6ee4f2abf2148",
+        "frame-z-7.vtk": "d4c3873cdc9f7b3cbd81511db2842526e6e7a8446c169f80623f00744d3234b3",
+        "frame-z-1.vtk": "40a2e77d1cbe8fe63190e9fc68d2387dda9c6a66fe8ae3475d276fb07599d970",
+        "frame-z-24.vtk": "bcdc2fc3f0e9425e55c7da831748dca8b394574fb2aa661ec52f127fc92a3e8c",
+        "frame-z-21.vtk": "f26f0dfc344236454ba64fe12167fb279998a295513d36405125a92a70ec23d1",
+        "frame-y-40.vtk": "537ae93ad340b8369f2a9f4bee68a25e0c2a511951406ebaf48d4d6081795519",
+        "out.vtk": "e9f490abcda45190a5a80a562c6ddee59d416b66b5150e78582c84a77d302c05",
+        "frame-y-3.vtk": "1e90b0c8ca5db47c3e4621474b2a100d963af469635d93e375c6471ecd8519ea",
+        "frame-y-15.vtk": "7c8132dbef364963b859d3849e48034848f332e19cc84c5fbd03372ddf0256ce",
+        "frame-z-43.vtk": "ca9752e85ab0b95d130aa87fbe29872ebc65e751f6c7e35fd010732936076696",
+        "frame-z-4.vtk": "1d548f8b34acdf00d5a52851b0f7d316baed1313f7c6336c4f066da7cc6cd434",
+        "frame-z-42.vtk": "0f1ede46a131a9dbc7d6f8b2ff92adffbd2a00dbb3fd4eb5eed74985e5722aa2",
+        "frame-z-47.vtk": "73e4439a252e9d1c458dc04244e52ad34608d643d908a6f1dcb27fde9932bc9f",
+        "frame-y-50.vtk": "15af227f764112433d52e5152fe4afda058542180351244c4ccdf0d316e000d7",
+        "Wavg.vtk": "f91ba78fa0ceb20ad6bf83f8adcd86c564ea4a0374b3f63ff64807ef345510f4",
+        "frame-z-39.vtk": "23c0938db17cd8ff8a2fa2db97b02df32141c683ba24b15a86f1609c057bcb2e",
+        "Uavg.vtk": "83d2238c77980835b8cb7b11c7f73fb7c6c1a2d77d59032a6f3eff83db5d89b0",
+        "frame-y-14.vtk": "38bcb3e234639a99c7ee4aa8647d644c84694ef0c0c1d55ef296fa4ff2cdc8e2",
+        "frame-z-3.vtk": "87c6edd7499881e4a3b0258e194a92f415b7f400198ade3cfdda5a7f62fa1bde",
+        "frame-z-8.vtk": "37d9cc939d6515f0efa70c6f5ce60c4a65ae0019a708099d053ed92736305986",
+        "frame-z-10.vtk": "218bc49b4877a9439427da8e0f6b469bc7b4f922ec1b97765837d4ed4d09ce48",
+        "frame-z-27.vtk": "8d450600e2b5ca8723a03ce8fbe8d522bbe8681d8f6e62003e0891691961630f",
+        "frame-z-25.vtk": "db925a987c75f25ecd784ea8ba34c9c1b3b59681d99de08ad36142dbd310ec7f",
+        "frame-y-5.vtk": "ab602cb86a472f501e2fa37e221c216c7fcb394caefcc155cfb0e21707b24883",
+        "frame-z-6.vtk": "b1e6d0ec97e04d87cba25e772ebaa3a06ec7d864cd5c75f86a7c2905413af333",
+        "frame-y-21.vtk": "ac5ac9e67589f48069a56f92b06af19bbbcd7f0c9b1efa3db169ee1f5331bd62",
+        "frame-z-28.vtk": "b03007ddc7661a20420d06d2e084260e1e7900d1bc961c137dac52170be8ed85",
+        "frame-z-23.vtk": "ec2fa13bcbe9b345c4a52182ffd2c08b7dc866e272a75f2c95f5104cde221730",
+        "frame-y-36.vtk": "7f7a990030d31c4e6f2e41e6fb778e97ab46e3beff9d67b1ac4acce682fcb1ca",
+        "frame-y-46.vtk": "692034a851f56dfe048cf5957c7de8bc438281ecaaa06e51ac916895199461da",
+        "frame-z-22.vtk": "90a092ca2683867b0b110a2a96e84ffb2f31381a87df435d4a0163c3b1be7277",
+        "frame-z-13.vtk": "85ed27e53dc35783aacc4fbd69ba92030489136c6c0d0c321a2dc3f7a4005dfa",
+        "frame-y-38.vtk": "51358dbd4e9bf6045d294877ce3e49d8585059f88441f6daeee3e8868a831feb",
+        "frame-z-40.vtk": "941a5c9e688a6126d4dbb1bf3a2fc56850e24c8a2d7d39455c013186a9b1b95c",
+        "frame-z-44.vtk": "617848a9b3d1d420b9c39d315fc99ddd9ae0d0b3fa18cd9c63a2f784beff4098",
+        "frame-z-16.vtk": "2a20098b059abcb0bd577a3567d5385e13860235d2c23f9d1e546460b40a3067",
+        "frame-z-19.vtk": "4a3bbe06ee07254bbfa63d242c19235cb1d0ff507b269222328d2bd1dcc39825",
+        "frame-y-24.vtk": "91dfc4f9c281dce27db413e4c3b8e1b74005ed534b38dfa778477e9905f30b2a",
+        "frame-y-18.vtk": "34a264d44e66931fa727b746287dfd24c7537d0ec3214b0625d2bce28f579910",
+        "frame-y-19.vtk": "22e0fc193a984e17c07c49eb25360535efe153d0db7ef627e94be0c1c2c03995",
+        "frame-y-17.vtk": "c19297e151f60daa610dd427b67bdd0a15901cfd08969e5ccbc844c8999af278",
+        "frame-y-0.vtk": "38252478618850612b7ec56bfebb3134803c18c769e2f0487c453a4858bde4bf",
+        "frame-z-48.vtk": "646098c122ed66b130e735bec4f8bebad730a64556cb6b4b653ea6dbfbb3f4dc",
+        "frame-y-6.vtk": "63e8f4b32700dac9112863df4ec6504208dd48692b39f7d3efe514b8f4b7ea8c",
+        "frame-y-26.vtk": "1db1b3f341cb5cd38f031b1cb49436f5ffdee370ead4f83b37511bec20db3e06",
+        "frame-y-9.vtk": "b6c5cb3bad0ace53d6533f9ed30a349cbc47eb3e8dc3f8b0476af5b0a8c4a79c",
+        "frame-y-25.vtk": "79e8ab6dead15e6b853f9724d945a956acb4951ffdcfc41b47480bcfc063e597"
+      }
+    },
+    {
+      "name": "steps-2458-repeat-2",
+      "steps": 2458,
+      "timing": {
+        "completed_steps": 2458,
+        "natural_end": true,
+        "time_steps_seconds": 341.19,
+        "poisson_seconds": 21.43
+      },
+      "plans": [
+        {
+          "function": "fftw_plan_r2r_1d",
+          "precision": "fftw",
+          "original_thread_init_observed": true,
+          "threads": 1,
+          "original_flags": 0,
+          "rank": 1,
+          "dimensions": [
+            64
+          ],
+          "sign": 0,
+          "kinds": [
+            5
+          ],
+          "plan_sha256": "b94974415aee5798c6bedab829a82d3b9dde88778f9247ac149b732e75b88a72"
+        },
+        {
+          "function": "fftw_plan_r2r_1d",
+          "precision": "fftw",
+          "original_thread_init_observed": true,
+          "threads": 1,
+          "original_flags": 0,
+          "rank": 1,
+          "dimensions": [
+            64
+          ],
+          "sign": 0,
+          "kinds": [
+            4
+          ],
+          "plan_sha256": "8eb66f41aec2df44405e66037a761161ed03e932823eb9d6cdfef7edb45f4596"
+        },
+        {
+          "function": "fftw_plan_dft_2d",
+          "precision": "fftw",
+          "original_thread_init_observed": true,
+          "threads": 1,
+          "original_flags": 0,
+          "rank": 2,
+          "dimensions": [
+            64,
+            128
+          ],
+          "sign": -1,
+          "kinds": [],
+          "plan_sha256": "d7fc2c8c9d42194be31259500bf47fe990d3b1d2a4a7deebab23a6f367f60cc7"
+        },
+        {
+          "function": "fftw_plan_dft_2d",
+          "precision": "fftw",
+          "original_thread_init_observed": true,
+          "threads": 1,
+          "original_flags": 0,
+          "rank": 2,
+          "dimensions": [
+            64,
+            128
+          ],
+          "sign": 1,
+          "kinds": [],
+          "plan_sha256": "12669c88753de472ded55ef0f3d505a758ccdc8d6b1887f012e830c59da99908"
+        }
+      ],
+      "argv": [
+        "/tmp/fortran-native-top-reference-serial-01/build/ELMM-fields",
+        "output_dir='output/'"
+      ],
+      "cwd": "/tmp/fortran-native-top-reference-serial-01/natural-01/steps-2458-repeat-2/run",
+      "log_sha256": "f879d134dc09eb140c63d4c1b9aa5ac942a6fa560646590ab96cde3015f94bf6",
+      "plan_log_sha256": "5b31e06250a7085f59859713f1950d2d7fa7e1ca172fb0781f5d6ae8e947f718",
+      "diagnostic_wall_seconds": 341.5622707589937,
+      "performance_sample": false,
+      "environment": {
+        "OMP_NUM_THREADS": "4",
+        "OMP_DYNAMIC": "FALSE",
+        "OMP_SCHEDULE": "static",
+        "OMP_PROC_BIND": "false",
+        "OMP_WAIT_POLICY": null,
+        "GOMP_SPINCOUNT": null,
+        "LD_PRELOAD": "/tmp/fortran-fftw-wisdom-diagnostic-01/fftw_control.so",
+        "FORT_FFTW_CONTROL_PREFIX": "/tmp/fortran-fftw-wisdom-diagnostic-01/executed-native-control-01/wisdom",
+        "FORT_FFTW_CONTROL_MODE": "verify"
+      },
+      "field_files_sha256": {
+        "fields-Moisture.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "fields-U_avg.bin": "3743cb76559a092f28b7d365c58687885867875ff3f7c9e776b3c2a4918b19ca",
+        "fields-W.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "fields-Moisture.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "fields-V.bin": "8511de54d28e482bf9973940e042b311adc632d115aaf46548432876175de124",
+        "fields-W_avg.bin": "8554338dd885a17e460ce271bf1a6a30bc9fd737d46656bdead60c4c3fab28cf",
+        "fields-Viscosity.bin": "39f916d2cd38f97a146b5a3acacbf45672c0ed529391a46475f3bebbb61968b5",
+        "fields-W.bin": "8628bf59bc3971b6abb5844e18b31925f0302f3b92d9b0e2563889e5dec19c04",
+        "fields-Wstar.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "fields-Scalar_avg.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+        "fields-TDiff.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "fields-V2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-V.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-Scalar.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "fields-Viscosity.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+        "fields-U2.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-Wstar.bin": "2a60899e4fd8c77407afa3e2540bf3ec87e933bc9fc8419001ed85f4692391aa",
+        "fields-U.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-U2.bin": "8554e4b32d9df04efa0eadada8733cef0fbb88a6c30a52fef699d346536c0109",
+        "fields-W_avg.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "fields-Vstar.bin": "a98c04a78d8fb056ccc4f8d5976167ca74e2d631b515bec9d1032bf7f9d45979",
+        "fields-V_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-Vstar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-U_avg.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-W2.shape": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+        "fields-W2.bin": "2449f701dffbf563847cf26e3a147419efc0078c950adc50922e4e056b420041",
+        "fields-Scalar_avg.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "fields-V_avg.bin": "452e7b238cc8d85b23151fa1fa622dfc4441fd84cf578a9334ba768cbb7187a7",
+        "fields-Pr_avg.bin": "a83c012ac29404eda3d833b00bf9a52e5ea2e3bda4726e3473c6903613986139",
+        "fields-Temperature.shape": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+        "fields-Ustar.bin": "e0b1c16126d44420db1ec7147da7b0a4accb4878c588ca9618f6cc89f75e9b07",
+        "fields-Pr.bin": "05768140d488012b09491d84314e55ccf0edfa1e096bab89a7112d9fc2b0723e",
+        "fields-Scalar.shape": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+        "fields-Temperature.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "fields-Pr.shape": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+        "fields-U.bin": "b2633a7c7d359a42e937ec37e49c86905f663be68aee8c2783971afa8cf691ad",
+        "fields-Pr_avg.shape": "3196fd7ddeb27f50d5ccb0303f770f61c9bdf1e94505ed7d6c6d0a1758246be8",
+        "fields-V2.bin": "690a1a177d55b88774705dacb590c5bfd933ac5264a99cef9388d43d77b2eeda",
+        "fields-Ustar.shape": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+        "fields-TDiff.bin": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "vtk_sha256": {
+        "frame-y-35.vtk": "dbd105f381570f268ddc33f401ca27e1f0c46ebaa528197abe5a8c759cc74628",
+        "frame-y-27.vtk": "39222529a0eb793ec442366abc6fdc7d22c307f11e19ab09123d785c39fe7432",
+        "frame-y-28.vtk": "bda4eac272894fd42bc2dab7d5c7501973121ba7ba46d542f0885e3d6da3fa44",
+        "frame-z-34.vtk": "02d9f0bf7b800a082b969ce03629b62a50f302ec0b09966041d6e27e8a172fa6",
+        "frame-y-4.vtk": "b2806b170a901520126ecc938ef3da25794b198392df8eed46eb0eaff51660c6",
+        "frame-y-44.vtk": "f0c5fa634a3ec7b46860771ab50c2eca64150153cb49995abf2a78925613d418",
+        "frame-y-47.vtk": "d96265e259f9836cd114e1488188a593e34413508b949c9e776a0841881ad034",
+        "frame-z-26.vtk": "2e3b46298d1d94ba66b863409fe21a2e1b36fc04df6c17f7d7a6ad3608a89a21",
+        "frame-y-12.vtk": "f33c4853f88d2c7ddeb9480036b658069d0743f1343703a3076894767698f13b",
+        "frame-z-5.vtk": "180549a69d1e8658a8d6b3107a0f4b43ddb332531090172feb17860412458fa1",
+        "frame-z-37.vtk": "6a47fc38e4bd7c32db6f0915a139a8d36c0e1cbc1a06bd6a8d27aad8d46eeb66",
+        "frame-y-39.vtk": "7c100b973f1fe8ead1fc385472ed7d1a68906b0fbbabc994c8aeb24fa6bd5d79",
+        "frame-z-0.vtk": "5990be552dd34304f0ad9b6b292d7fea95093f6cd4c1d23620289503ea8ecf9f",
+        "W.vtk": "0c62646621efda1fa49e23002467337f6473dc6490033dc209cb15e2631bdc6e",
+        "frame-y-2.vtk": "92975e31d1c070643039cc1a4fdee4ea61c3260766cd04bc9a7884cd7e31b3f3",
+        "frame-y-33.vtk": "f102c1fe99f5b81f3339aa0a2ac4d2595c8acde87d603b68be9cfb3f76762691",
+        "frame-y-37.vtk": "1dbe018b03d7cf9f104fdd2092d888681bf58bb3534d04f4fef983792a3525f1",
+        "frame-z-41.vtk": "1c591b6329753d524f9935fc9e32556d4c503277ae17a433ad2d5594fe168ebb",
+        "frame-z-14.vtk": "2ac148d6d87f24935cab88a5a462068f2b3d7ad62f94fbd912e21267dddf8763",
+        "U.vtk": "4bfaa0662ecc3480354bf30fad565848671b6eb9d6ca10aadb7305f4182ea1b7",
+        "frame-z-30.vtk": "396eec7bdc91a5be0c840a9af8a8454ef5d3a83db48131bf448b6a3991e19440",
+        "frame-z-50.vtk": "321eee89a5d0b8791f56a3ec2a0100f5a89b30bc8f84b09a25bbf127aad6c693",
+        "frame-y-48.vtk": "e7d5c14cf79d751cddd6be1ce9c30e24d4020a961dbd5ffedad49f145ec5ac7c",
+        "frame-y-29.vtk": "62b1f15b7dbab1800ac379f8a6ccaf660e855650424dc3419e815f5a8a529aa1",
+        "frame-y-45.vtk": "7020b7d07370f87dd78d29eb4031b4b4366f022fc92276f12456a152db8453cc",
+        "frame-y-22.vtk": "0252e9d1b8ffc8363c98c66b66bb624b647366edd2e171ec2d87d7f9e8d66d4a",
+        "frame-y-43.vtk": "5bf899a3deef0e52050889a4b27f4a54a4241f5dd98992039b3ba1429f907de2",
+        "frame-z-20.vtk": "39242d10d9c5d6004e15fe4ed55c0a2d30f11149291b0befa9071cb025a97b12",
+        "frame-z-33.vtk": "4b9f68eb95f20ccedd0688863f6e4188d97cd20f51580a8d19a5ab400225cf6d",
+        "frame-y-49.vtk": "4c3a3976939c8e638d93ed35bc83441f7c74298b64b3c1208ef4958e17de41f6",
+        "frame-z-9.vtk": "94c6827553fabbcbc7677f906450901e3a2c3f99cb2dfea99d8bb6ad01734f4c",
+        "frame-z-29.vtk": "18f8700e8612e4c8657af7e7c2cae7119457440f8d805c6ce154fa77acce23e9",
+        "frame-z-31.vtk": "e1c9ff1372d99a05d1df0ce26fbf34d26953e02278bafd3728ef955eba85cafd",
+        "frame-y-30.vtk": "f4f93ce7d78fd33c157cd3b6a82d5c41d969a6eccd0f81107c03e9b695166be5",
+        "frame-z-45.vtk": "de2bac19f58be616a2263b70430ad042a59743c329dfca286574b2d849e9853b",
+        "frame-y-7.vtk": "2b54bce10399adb27d8b300122f03e95c8931b1402008a81d052d690bbecb69b",
+        "frame-z-36.vtk": "006c3f7063a1dd944b7e5d19510b4c6d1618cbc593674a153f5107ae701b298a",
+        "frame-y-32.vtk": "8598834b9e443fdcab7f7bf7f5a62046e73dcb6e5e2ee4c54b4670567ee1e951",
+        "frame-z-38.vtk": "93aef0fe60a3de84ae7fa5b7b94223d0cefc1fe9dd456447837b62b59b84e4e6",
+        "Vavg.vtk": "d566e1c8bac69a395b54e0d42fcf50d72b519fd7329a4decffa827888e3fb13b",
+        "frame-z-17.vtk": "8d8a317a092b0aa0627637852d9a540b90f2a24ebc0d034af055264fa9c6749c",
+        "frame-z-32.vtk": "b8c7e06a7af1d1a791b96a0ab586a679568bea3290b2df3a6a06864498f44d37",
+        "frame-y-8.vtk": "dee6301c9c90b6b0481472acd7ad718c49b9683a65dce7c24009d9c737a86fa3",
+        "V.vtk": "583284bbdea986183b637a2d2b86354ff734e28967e29904d3808d84c9718eab",
+        "frame-z-35.vtk": "788c742821dc42ed686431a044641ea7565e8177af9fb14ebba372ede7c23dc0",
+        "frame-y-31.vtk": "92f361ea20541e3f80ce39b0fc6f57a582e2e9b5cb4f876995282d7352c5de55",
+        "frame-y-1.vtk": "e4136a72f14df0bad7f0dd644364102cc70cc8337ad7def953783c7b7feb66a2",
+        "frame-y-23.vtk": "5d1b3e36a089949255b791f16c5254a6350d591b75aec8a038fe7e5289867a93",
+        "frame-z-2.vtk": "ea8c1216daf57c294cf3f7bec0ddb91ba85951759fef75d54fd46a645bd9fd7c",
+        "frame-z-12.vtk": "48e773bc3ed5561f24354b35bd3246b384c99375eae64ed43614901526a0690e",
+        "frame-z-18.vtk": "e9788a35f5077fa1b6bc028a8a56505f69b3d89f4c05eec7b7069cd483b8a63e",
+        "frame-y-11.vtk": "1497e88e24796a66c86585ca1cbca379766bec4ca971baeec896ce5321ae5bfe",
+        "avg.vtk": "1d58db996019b1ff768e669ef507f3e15f55f213722cacae467144ea45f6b243",
+        "frame-y-16.vtk": "eb340d0a9518903733d0b611e599e8e23e5ff1a3cc06c22fd92b097277e2df7d",
+        "frame-y-13.vtk": "69559b845ce820db1a2a05c7b356a4278c9c639297add1017004981aa232cd2a",
+        "frame-y-20.vtk": "089611f907eacd1cd3b1772d4db0932e820c86adab6e580e157c384d495e27ca",
+        "frame-y-41.vtk": "ff6e6d71c2cc9f6e5021dc45da83c2008a6aa154eaa4699c10d46f46b3adcaf3",
+        "frame-z-15.vtk": "fe81dd5f5d56a1971770595662527c99a2b08dec02f43e6342ec97db2edcf68c",
+        "frame-y-34.vtk": "5693a93a5c85fb8d51b095c6cea49c851a7afb3fe2618368209bf54ff2f7589f",
+        "frame-z-11.vtk": "3fe2172c054345922f80a4c1ac2f60764877a1302ec07989c6142ef75c55c86f",
+        "frame-z-49.vtk": "579d9c656a545b1fa54ea1c0b4cdc2ce0153ca7b8bf361d017d940dce7278896",
+        "frame-y-42.vtk": "06f89c2df11c8a808b13865c0c0bda2c90d073f5e264f5a187d895169ef3b75f",
+        "frame-z-46.vtk": "86a9ea187ad90242a2964bf31e31f21d7939b74a0bbbdf3864c14afd67cab559",
+        "frame-y-10.vtk": "0afe6efbccf0bf14c1ed93626d33203a59b3047d7c0a0bac4eb6ee4f2abf2148",
+        "frame-z-7.vtk": "d4c3873cdc9f7b3cbd81511db2842526e6e7a8446c169f80623f00744d3234b3",
+        "frame-z-1.vtk": "40a2e77d1cbe8fe63190e9fc68d2387dda9c6a66fe8ae3475d276fb07599d970",
+        "frame-z-24.vtk": "bcdc2fc3f0e9425e55c7da831748dca8b394574fb2aa661ec52f127fc92a3e8c",
+        "frame-z-21.vtk": "f26f0dfc344236454ba64fe12167fb279998a295513d36405125a92a70ec23d1",
+        "frame-y-40.vtk": "537ae93ad340b8369f2a9f4bee68a25e0c2a511951406ebaf48d4d6081795519",
+        "out.vtk": "e9f490abcda45190a5a80a562c6ddee59d416b66b5150e78582c84a77d302c05",
+        "frame-y-3.vtk": "1e90b0c8ca5db47c3e4621474b2a100d963af469635d93e375c6471ecd8519ea",
+        "frame-y-15.vtk": "7c8132dbef364963b859d3849e48034848f332e19cc84c5fbd03372ddf0256ce",
+        "frame-z-43.vtk": "ca9752e85ab0b95d130aa87fbe29872ebc65e751f6c7e35fd010732936076696",
+        "frame-z-4.vtk": "1d548f8b34acdf00d5a52851b0f7d316baed1313f7c6336c4f066da7cc6cd434",
+        "frame-z-42.vtk": "0f1ede46a131a9dbc7d6f8b2ff92adffbd2a00dbb3fd4eb5eed74985e5722aa2",
+        "frame-z-47.vtk": "73e4439a252e9d1c458dc04244e52ad34608d643d908a6f1dcb27fde9932bc9f",
+        "frame-y-50.vtk": "15af227f764112433d52e5152fe4afda058542180351244c4ccdf0d316e000d7",
+        "Wavg.vtk": "f91ba78fa0ceb20ad6bf83f8adcd86c564ea4a0374b3f63ff64807ef345510f4",
+        "frame-z-39.vtk": "23c0938db17cd8ff8a2fa2db97b02df32141c683ba24b15a86f1609c057bcb2e",
+        "Uavg.vtk": "83d2238c77980835b8cb7b11c7f73fb7c6c1a2d77d59032a6f3eff83db5d89b0",
+        "frame-y-14.vtk": "38bcb3e234639a99c7ee4aa8647d644c84694ef0c0c1d55ef296fa4ff2cdc8e2",
+        "frame-z-3.vtk": "87c6edd7499881e4a3b0258e194a92f415b7f400198ade3cfdda5a7f62fa1bde",
+        "frame-z-8.vtk": "37d9cc939d6515f0efa70c6f5ce60c4a65ae0019a708099d053ed92736305986",
+        "frame-z-10.vtk": "218bc49b4877a9439427da8e0f6b469bc7b4f922ec1b97765837d4ed4d09ce48",
+        "frame-z-27.vtk": "8d450600e2b5ca8723a03ce8fbe8d522bbe8681d8f6e62003e0891691961630f",
+        "frame-z-25.vtk": "db925a987c75f25ecd784ea8ba34c9c1b3b59681d99de08ad36142dbd310ec7f",
+        "frame-y-5.vtk": "ab602cb86a472f501e2fa37e221c216c7fcb394caefcc155cfb0e21707b24883",
+        "frame-z-6.vtk": "b1e6d0ec97e04d87cba25e772ebaa3a06ec7d864cd5c75f86a7c2905413af333",
+        "frame-y-21.vtk": "ac5ac9e67589f48069a56f92b06af19bbbcd7f0c9b1efa3db169ee1f5331bd62",
+        "frame-z-28.vtk": "b03007ddc7661a20420d06d2e084260e1e7900d1bc961c137dac52170be8ed85",
+        "frame-z-23.vtk": "ec2fa13bcbe9b345c4a52182ffd2c08b7dc866e272a75f2c95f5104cde221730",
+        "frame-y-36.vtk": "7f7a990030d31c4e6f2e41e6fb778e97ab46e3beff9d67b1ac4acce682fcb1ca",
+        "frame-y-46.vtk": "692034a851f56dfe048cf5957c7de8bc438281ecaaa06e51ac916895199461da",
+        "frame-z-22.vtk": "90a092ca2683867b0b110a2a96e84ffb2f31381a87df435d4a0163c3b1be7277",
+        "frame-z-13.vtk": "85ed27e53dc35783aacc4fbd69ba92030489136c6c0d0c321a2dc3f7a4005dfa",
+        "frame-y-38.vtk": "51358dbd4e9bf6045d294877ce3e49d8585059f88441f6daeee3e8868a831feb",
+        "frame-z-40.vtk": "941a5c9e688a6126d4dbb1bf3a2fc56850e24c8a2d7d39455c013186a9b1b95c",
+        "frame-z-44.vtk": "617848a9b3d1d420b9c39d315fc99ddd9ae0d0b3fa18cd9c63a2f784beff4098",
+        "frame-z-16.vtk": "2a20098b059abcb0bd577a3567d5385e13860235d2c23f9d1e546460b40a3067",
+        "frame-z-19.vtk": "4a3bbe06ee07254bbfa63d242c19235cb1d0ff507b269222328d2bd1dcc39825",
+        "frame-y-24.vtk": "91dfc4f9c281dce27db413e4c3b8e1b74005ed534b38dfa778477e9905f30b2a",
+        "frame-y-18.vtk": "34a264d44e66931fa727b746287dfd24c7537d0ec3214b0625d2bce28f579910",
+        "frame-y-19.vtk": "22e0fc193a984e17c07c49eb25360535efe153d0db7ef627e94be0c1c2c03995",
+        "frame-y-17.vtk": "c19297e151f60daa610dd427b67bdd0a15901cfd08969e5ccbc844c8999af278",
+        "frame-y-0.vtk": "38252478618850612b7ec56bfebb3134803c18c769e2f0487c453a4858bde4bf",
+        "frame-z-48.vtk": "646098c122ed66b130e735bec4f8bebad730a64556cb6b4b653ea6dbfbb3f4dc",
+        "frame-y-6.vtk": "63e8f4b32700dac9112863df4ec6504208dd48692b39f7d3efe514b8f4b7ea8c",
+        "frame-y-26.vtk": "1db1b3f341cb5cd38f031b1cb49436f5ffdee370ead4f83b37511bec20db3e06",
+        "frame-y-9.vtk": "b6c5cb3bad0ace53d6533f9ed30a349cbc47eb3e8dc3f8b0476af5b0a8c4a79c",
+        "frame-y-25.vtk": "79e8ab6dead15e6b853f9724d945a956acb4951ffdcfc41b47480bcfc063e597"
+      }
+    }
+  ],
+  "comparisons": {
+    "2458": {
+      "vtk_validation": {
+        "schema_version": 2,
+        "passed": true,
+        "atol": 1e-06,
+        "rtol": 1e-05,
+        "files": {
+          "out.vtk": {
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "fields": {
+              "X_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 64
+              },
+              "p": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 524288
+              },
+              "ptype": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 524288
+              },
+              "u": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 1572864
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds."
+          },
+          "avg.vtk": {
+            "passed": true,
+            "atol": 1e-06,
+            "rtol": 1e-05,
+            "fields": {
+              "X_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 128
+              },
+              "Y_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 64
+              },
+              "Z_COORDINATES": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 64
+              },
+              "p": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 524288
+              },
+              "ptype": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 524288
+              },
+              "u": {
+                "max_absolute_error": 0.0,
+                "failed_values": 0,
+                "values": 1572864
+              }
+            },
+            "note": "ELMM final VTK values are float32, including double-precision builds."
+          }
+        },
+        "note": "Final and available averaged VTK fields; float32 output, no float64 halo claim."
+      },
+      "strict_passed": true,
+      "all20_fields_byte_identical": true,
+      "fields": {
+        "fields-Moisture.bin": {
+          "values": 0,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              0,
+              0,
+              0
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              0,
+              0,
+              0
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-U_avg.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-V.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-W_avg.bin": {
+          "values": 647220,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              69
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              66
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-Viscosity.bin": {
+          "values": 610368,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              132,
+              68,
+              68
+            ],
+            "lower_bounds": [
+              -1,
+              -1,
+              -1
+            ],
+            "upper_bounds": [
+              130,
+              66,
+              66
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-W.bin": {
+          "values": 647220,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              69
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              66
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-Scalar.bin": {
+          "values": 0,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-Wstar.bin": {
+          "values": 647220,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              69
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              66
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-U2.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-Vstar.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-W2.bin": {
+          "values": 647220,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              69
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              66
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-Scalar_avg.bin": {
+          "values": 0,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              0,
+              0,
+              0,
+              0
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-V_avg.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-Pr_avg.bin": {
+          "values": 524288,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              128,
+              64,
+              64
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              128,
+              64,
+              64
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-Ustar.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-Pr.bin": {
+          "values": 610368,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              132,
+              68,
+              68
+            ],
+            "lower_bounds": [
+              -1,
+              -1,
+              -1
+            ],
+            "upper_bounds": [
+              130,
+              66,
+              66
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-Temperature.bin": {
+          "values": 0,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              0,
+              0,
+              0
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              0,
+              0,
+              0
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-U.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-V2.bin": {
+          "values": 656600,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              134,
+              70,
+              70
+            ],
+            "lower_bounds": [
+              -2,
+              -2,
+              -2
+            ],
+            "upper_bounds": [
+              131,
+              67,
+              67
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        },
+        "fields-TDiff.bin": {
+          "values": 0,
+          "passed": true,
+          "failed_values": 0,
+          "candidate_nonfinite_values": 0,
+          "reference_nonfinite_values": 0,
+          "absolute_error_nonfinite_values": 0,
+          "max_absolute_error": 0.0,
+          "failed_flat_indices": [],
+          "failed_locations_truncated": false,
+          "atol": 1e-06,
+          "rtol": 1e-05,
+          "layout": {
+            "bits": 64,
+            "shape": [
+              0,
+              0,
+              0
+            ],
+            "lower_bounds": [
+              1,
+              1,
+              1
+            ],
+            "upper_bounds": [
+              0,
+              0,
+              0
+            ]
+          },
+          "bitwise_different_values": 0,
+          "first_bitwise_different_flat_indices": [],
+          "first_bitwise_different_fortran_indices": []
+        }
+      }
+    }
+  }
+}

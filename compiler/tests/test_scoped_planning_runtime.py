@@ -20,7 +20,8 @@ class Costs(c.Structure):
             "h2d_latency", "h2d_bandwidth", "d2h_latency", "d2h_bandwidth",
             "create_seconds", "register_seconds", "host_access_seconds", "device_access_seconds",
             "gpu_setup_seconds", "cold_driver_startup_seconds", "allocation_seconds", "release_seconds",
-            "wait_seconds", "launch_enqueue_seconds", "planning_operation_seconds")]
+            "wait_seconds", "launch_enqueue_seconds", "planning_operation_seconds",
+            "h2d_fit_relative_error", "d2h_fit_relative_error")]
 
 
 class Decision(c.Structure):
@@ -32,9 +33,10 @@ class Decision(c.Structure):
 
 
 def costs():
-    result = Costs(1, 1, 1 << 26)
+    result = Costs(2, 1, 1 << 26)
     for name, _ in Costs._fields_[3:]:
         setattr(result, name, 1e-9)
+    result.h2d_fit_relative_error = result.d2h_fit_relative_error = 0
     result.cpu_flops = result.cpu_bandwidth = 1e8
     result.gpu_flops = result.gpu_bandwidth = result.h2d_bandwidth = result.d2h_bandwidth = 1e12
     return result
@@ -87,6 +89,39 @@ def test_query_records_without_execution_and_cached_preview_checks_costs(plannin
     assert decision.gpu_units == 0
     scope.close()
     assert list(values) == list(range(32))
+
+
+def test_reservation_reuse_invalidates_cached_eviction_costs(planning):
+    scope = Scope(planning)
+    scope.check(planning.fort_scope_set_device_budget(scope.handle, 128))
+    planning.fort_scope_task_graph_enable_v1.argtypes = [TOKEN]
+    planning.fort_scope_device_reserve_many_v1.argtypes = [
+        TOKEN, c.POINTER(TOKEN), c.c_size_t, c.POINTER(c.c_void_p)]
+    scope.check(planning.fort_scope_task_graph_enable_v1(scope.handle))
+    arrays = [(c.c_double * 8)(*range(8)) for _ in range(3)]
+    handles = []
+    for identity, values in enumerate(arrays, 1):
+        status, handle = scope.register(values, [8], identity=identity)
+        scope.check(status)
+        handles.append(handle)
+    a, b, other = handles
+    for handle in (a, b):
+        scope.gpu(handle, access(flags=1))
+        scope.gpu_end(handle)
+    scope.check(planning.fort_scope_plan_reset(scope.handle))
+    record(scope, 1, other, access(flags=1))
+    record(scope, 2, a, access(flags=1))
+    before = select(scope, costs(), -1)
+    assert before.gpu_units == 2
+    assert before.upload_bytes == 128  # Oldest A must be reloaded after C.
+    requested = (TOKEN * 1)(a.value)
+    pointer = (c.c_void_p * 1)()
+    scope.check(planning.fort_scope_device_reserve_many_v1(scope.handle, requested, 1, pointer))
+    after = select(scope, costs(), -1)
+    assert after.gpu_units == 2
+    assert after.upload_bytes == 64  # A reuse makes B the next eviction victim.
+    assert scope.stats().upload_bytes == 128  # Both previews execute no copies.
+    scope.close()
 
 
 def test_native_thin_worker_and_missing_profile_have_zero_transfers(planning):
@@ -189,9 +224,9 @@ def test_installed_worker_effects_and_sequence_cannot_change(planning):
     bindings = record(scope, 44, handle, access(flags=3))
     assert select(scope, costs()).gpu_units == 1
     chosen = c.c_int()
-    assert planning.fort_scope_plan_next(scope.handle, 45, bindings, 1, c.byref(chosen)) == 8
+    assert planning.fort_scope_plan_next(scope.handle, 45, bindings, 1, c.byref(chosen)) == 9
     changed = (Binding * 1)(Binding(handle, access(flags=1)))
-    assert planning.fort_scope_plan_next(scope.handle, 44, changed, 1, c.byref(chosen)) == 8
+    assert planning.fort_scope_plan_next(scope.handle, 44, changed, 1, c.byref(chosen)) == 9
     assert planning.fort_scope_close(scope.handle) == 8
     scope.check(planning.fort_scope_plan_next(scope.handle, 44, bindings, 1, c.byref(chosen)))
     scope.close()

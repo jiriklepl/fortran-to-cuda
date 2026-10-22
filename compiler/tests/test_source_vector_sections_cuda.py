@@ -8,8 +8,8 @@ from hashlib import sha256
 
 import pytest
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT, run
 from compiler.tests.test_source_vector_sections import fixture

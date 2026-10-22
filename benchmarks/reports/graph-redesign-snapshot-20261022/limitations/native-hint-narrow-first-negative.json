@@ -1,0 +1,32 @@
+{
+  "kind": "preserved original order negative correctness-path evidence; not a performance measurement",
+  "rows": [
+    {
+      "mode": "wide",
+      "log": "/tmp/fortran-committable-snapshot-20261022/firstpass-fixture-preservation/095/pytest-2877/wide_source_queries0/wide/enabled.stderr",
+      "sha256": "ed4aa6ae5fbc68ab89256c04e3c3a4d050efd4de817bc59a1efb96bfbdadb563",
+      "lookup_count": 12,
+      "hit_count": 9,
+      "learned_count": 3,
+      "decision_gpu_units": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "mode": "mismatch",
+      "log": "/tmp/fortran-committable-snapshot-20261022/firstpass-fixture-preservation/095/pytest-2877/wide_source_queries0/mismatch/enabled.stderr",
+      "sha256": "07860550becd6cf0076d3996e36929fb7fbc15d875796d0d859b0c0f31151c3d",
+      "lookup_count": 12,
+      "hit_count": 9,
+      "learned_count": 3,
+      "decision_gpu_units": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "limitation": "Conservative metadata-only nativeownerhint learned on an initial narrow allCPU arm can suppress a later wider profitable GPU arm with identical descriptor key. Reordered correctness fixture reaches coldwide before that learning; no optimizer-equivalence or performance guarantee claimed, and no runtime correction made. Original failed order/field agreement/hit evidence retained."
+}

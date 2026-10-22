@@ -139,7 +139,7 @@ def generate(directory, *, original=ORIGINAL, normalized=NORMALIZED):
     facts_path=directory/"facts.json"
     facts_path.write_text(json.dumps(facts))
     output=directory/"output"
-    response=run([sys.executable,"-m","compiler","--input",str(source),"--kernel","original::step",
+    response=run([sys.executable,"-m","compiler.tests.support.reference_scopes","--input",str(source),"--kernel","original::step",
                   "--form-scopes","--scope-facts",str(facts_path),"--numerical-sources",str(package_path),
                   "--memory-model","scoped","--gpu-policy","sections","--json","--output-dir",str(output)],cwd=ROOT)
     manifest=json.loads(response.stdout)["scopes"]
@@ -205,8 +205,8 @@ def test_module_and_formal_alias_is_an_explained_native_boundary(tmp_path):
     # would prepare the same handle twice. Reject before any transformed work.
     source=ORIGINAL.replace("call producer(a,b,n)","call producer(weights,b,n)")
     original,_numerical,document=package(tmp_path,original=source)
+    from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
     from compiler.driver.options import CompilerOptions
-    from compiler.offload.config import OffloadConfig
     from compiler.scopes.source import form_source_scopes
 
     facts={"schema_version":1,"participation":"serial","sources":document["source_inputs"],

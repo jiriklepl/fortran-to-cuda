@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-10-22T05:56:40.298565+00:00",
+  "authorized_execution": "private_natural2458_cross_mode_only",
+  "natural_stage_sha256": "00a66a78fa9b8b31c6bf4a7d145aff540b4d47c69b9c77b3e175e3608e5532dd",
+  "driver_sha256": "2ab76a0159f75b865b4e44499be364a2ead6b6f1cbf98af5a1f9da2324cc816d",
+  "GPU_fixture_closed_PASS_sha256": "3ec7e34c54df41ee7f915f314e855e6f39edd9e1ef38261f4bbac229aa823482",
+  "GPU_fixture_lease_released": true,
+  "root_review": "Readfullnaturaldriver; bothread-onlyindependentreviews clear; one-line envreportcleanupverifiedwithall71SHA; fulloriginal2931artifactclosureprepost; prefixes4strictPASS; bothnativefixedTOPnaturalbyteidenticalreferences; unchanged20float64bounds/halos/VTK and4exactFFTWplans; no privateauthorityretagging.",
+  "schedule": {
+    "order": [
+      "be58",
+      "candidate20"
+    ],
+    "applications": 2,
+    "completed_steps_each": 2458,
+    "natural_end_each": true,
+    "threads": 4,
+    "affinity": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "application_timeout_seconds": 1800,
+    "tracing": "0",
+    "numerical_failure_on_be58_continues_candidate20": true,
+    "execution_IO_layout_proof_FFTW_failure_holds": true,
+    "concurrent_single_AST_only_private21_source_generation_allowed": true,
+    "concurrent_other_GPU_tests_apps_profiles_or_any_performance_calibration_forbidden": true,
+    "concurrent_full_application_builds_forbidden": true
+  },
+  "basis": "PRIVATE deterministicTOP hypothesis; officialoriginalsourcefailures preserved anduserapprovalstillpending",
+  "performance_or_official_qualification": false
+}

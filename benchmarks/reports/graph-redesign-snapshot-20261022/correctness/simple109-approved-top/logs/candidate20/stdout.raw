@@ -1,0 +1,312 @@
+ Reading parameters...
+ Re=   70000.000000000000     
+ eps=   9.9999999999999995E-008
+ maxCNiter=           8
+ epsCN=   1.0000000000000001E-009
+ debug parameter=   1.0000000000000000E-004
+ x0=  -6.0000000000000000     
+ y0=  -2.0000000000000000     
+ z0=   0.0000000000000000     
+ lx=   12.000000000000000     
+ ly=   4.0000000000000000     
+ lz=   2.0000000000000000     
+ nx=         128
+ ny=          64
+ nz=          64
+ dxmin    9.3750000000000000E-002
+ dymin    6.2500000000000000E-002
+ dzmin    3.1250000000000000E-002
+ lx:   12.000000000000000     
+ ly:   4.0000000000000000     
+ lz:   2.0000000000000000     
+ Coriolis_parameter=   0.0000000000000000     
+ pr_gradient_x=  -2.0000000000000000E-003
+ pr_gradient_y=   0.0000000000000000     
+ SubsidenceGradient=   0.0000000000000000     
+ num_of_scalars           0
+ Boundaries:
+ W periodic
+ E periodic
+ S periodic
+ N periodic
+ B noslip
+ T noslip
+ Uniform grid
+ stagframes.conf not found, no staggered frames will be saved.
+ set
+ Setting up boundary conditions...
+   ...computing grid coordinates.
+   ...creating grid cell type arrays.
+   ...reading pressure gradient profile.
+   ...reading geostrophic wind.
+   ...reading forcing.conf
+   ...getting inlet conditions.
+   ...pressure correction.
+   ...initializing subsidence profile.
+   ...initializing loop tiles.
+   ...preparing solid bodies.
+   ...volume source bodies.
+   ...preparing solid bodies boundary conditions.
+       ...finding cells inside solid bodies.
+       ...finding cells neighbouring solid bodies.
+       ...preparing immersed boundary interpolations.
+       ...preparing wall model scalar points.
+       ...preparing wall model velocity points.
+   ...getting outside boundaries wall model points.
+   ...creating wall model points arrays.
+   ...creating wall model mask arrays.
+   ...setting nullified points.
+   ...getting volume scalar sources.
+   ...getting area scalar sources.
+   ...getting line scalar sources.
+   ...getting point scalar sources.
+   ...getting puff scalar sources.
+   ...setting scalar removal zones.
+   ...creating output directories.
+   ...preparing VTK frames.
+   ...preparing constant height frames.
+ boundary conditions set.
+ Allocating arrays...
+ Preparing output data and files...
+   ...allocating arrays for 3D statistics.
+   ...preparing probes.
+   ...allocating probe time series.
+   ...allocating global time series.
+ Setting up initial conditions...
+   ...setting initial dummy values.
+   ...computing initial conditions.
+   ...computing turbulent initial conditions.
+   ...setting initial viscosity and diffusivity.
+   ...setting ghost cell values.
+   ...computing pressure correction.
+   ...computing initial eddy viscosity.
+   ...setting viscosity in ghost cells.
+   ...computing wall model in scalar points.
+   ...computing wall model in velocity points.
+   ...setting viscosity in ghost cells.
+   ...initializing fixed flow_rates.
+ initial conditions set.
+ Computing...
+tstep:            1   time:     0.000000
+  dt:     0.004877
+tstep:            2   time:     0.004877
+  dt:     0.004920
+tstep:            3   time:     0.009797
+  dt:     0.004990
+tstep:            4   time:     0.014787
+  dt:     0.005030
+tstep:            5   time:     0.019817
+  dt:     0.005100
+tstep:            6   time:     0.024917
+  dt:     0.005144
+tstep:            7   time:     0.030061
+  dt:     0.005200
+tstep:            8   time:     0.035260
+  dt:     0.005257
+tstep:            9   time:     0.040518
+  dt:     0.005286
+tstep:           10   time:     0.045803
+  dt:     0.005325
+tstep:           11   time:     0.051129
+  dt:     0.005343
+tstep:           12   time:     0.056471
+  dt:     0.005193
+tstep:           13   time:     0.061664
+  dt:     0.005104
+tstep:           14   time:     0.066768
+  dt:     0.005067
+tstep:           15   time:     0.071836
+  dt:     0.005083
+tstep:           16   time:     0.076919
+  dt:     0.004992
+tstep:           17   time:     0.081911
+  dt:     0.004862
+tstep:           18   time:     0.086773
+  dt:     0.004762
+tstep:           19   time:     0.091535
+  dt:     0.004690
+tstep:           20   time:     0.096225
+  dt:     0.004641
+tstep:           21   time:     0.100866
+  dt:     0.004615
+tstep:           22   time:     0.105481
+  dt:     0.004609
+tstep:           23   time:     0.110090
+  dt:     0.004623
+tstep:           24   time:     0.114713
+  dt:     0.004655
+tstep:           25   time:     0.119368
+  dt:     0.004706
+tstep:           26   time:     0.124074
+  dt:     0.004777
+tstep:           27   time:     0.128851
+  dt:     0.004871
+tstep:           28   time:     0.133722
+  dt:     0.004991
+tstep:           29   time:     0.138713
+  dt:     0.005134
+tstep:           30   time:     0.143847
+  dt:     0.005074
+tstep:           31   time:     0.148922
+  dt:     0.005040
+tstep:           32   time:     0.153962
+  dt:     0.004995
+tstep:           33   time:     0.158957
+  dt:     0.004895
+tstep:           34   time:     0.163852
+  dt:     0.004851
+tstep:           35   time:     0.168703
+  dt:     0.004858
+tstep:           36   time:     0.173561
+  dt:     0.004918
+tstep:           37   time:     0.178479
+  dt:     0.004926
+tstep:           38   time:     0.183405
+  dt:     0.004996
+tstep:           39   time:     0.188402
+  dt:     0.005037
+tstep:           40   time:     0.193439
+  dt:     0.004984
+tstep:           41   time:     0.198422
+  dt:     0.004911
+tstep:           42   time:     0.203333
+  dt:     0.004878
+tstep:           43   time:     0.208211
+  dt:     0.004882
+tstep:           44   time:     0.213093
+  dt:     0.004946
+tstep:           45   time:     0.218039
+  dt:     0.004988
+tstep:           46   time:     0.223028
+  dt:     0.004883
+tstep:           47   time:     0.227911
+  dt:     0.004804
+tstep:           48   time:     0.232715
+  dt:     0.004722
+tstep:           49   time:     0.237437
+  dt:     0.004559
+tstep:           50   time:     0.241996
+  dt:     0.004459
+tstep:           51   time:     0.246455
+  dt:     0.004417
+tstep:           52   time:     0.250872
+  dt:     0.004425
+tstep:           53   time:     0.255297
+  dt:     0.004483
+tstep:           54   time:     0.259780
+  dt:     0.004593
+tstep:           55   time:     0.264373
+  dt:     0.004489
+tstep:           56   time:     0.268862
+  dt:     0.004436
+tstep:           57   time:     0.273298
+  dt:     0.004428
+tstep:           58   time:     0.277726
+  dt:     0.004466
+tstep:           59   time:     0.282192
+  dt:     0.004550
+tstep:           60   time:     0.286743
+  dt:     0.004543
+tstep:           61   time:     0.291286
+  dt:     0.004527
+tstep:           62   time:     0.295813
+  dt:     0.004560
+tstep:           63   time:     0.300373
+  dt:     0.004558
+tstep:           64   time:     0.304930
+  dt:     0.004587
+tstep:           65   time:     0.309517
+  dt:     0.004534
+tstep:           66   time:     0.314052
+  dt:     0.004412
+tstep:           67   time:     0.318464
+  dt:     0.004342
+tstep:           68   time:     0.322806
+  dt:     0.004323
+tstep:           69   time:     0.327129
+  dt:     0.004357
+tstep:           70   time:     0.331486
+  dt:     0.004445
+tstep:           71   time:     0.335931
+  dt:     0.004415
+tstep:           72   time:     0.340346
+  dt:     0.004367
+tstep:           73   time:     0.344713
+  dt:     0.004352
+tstep:           74   time:     0.349065
+  dt:     0.004223
+tstep:           75   time:     0.353288
+  dt:     0.004075
+tstep:           76   time:     0.357363
+  dt:     0.003983
+tstep:           77   time:     0.361346
+  dt:     0.003939
+tstep:           78   time:     0.365286
+  dt:     0.003938
+tstep:           79   time:     0.369224
+  dt:     0.003985
+tstep:           80   time:     0.373209
+  dt:     0.004089
+tstep:           81   time:     0.377298
+  dt:     0.004068
+tstep:           82   time:     0.381366
+  dt:     0.004033
+tstep:           83   time:     0.385399
+  dt:     0.004031
+tstep:           84   time:     0.389430
+  dt:     0.004062
+tstep:           85   time:     0.393492
+  dt:     0.004129
+tstep:           86   time:     0.397621
+  dt:     0.004223
+tstep:           87   time:     0.401844
+  dt:     0.004183
+tstep:           88   time:     0.406027
+  dt:     0.004156
+tstep:           89   time:     0.410183
+  dt:     0.004177
+tstep:           90   time:     0.414360
+  dt:     0.004248
+tstep:           91   time:     0.418607
+  dt:     0.004382
+tstep:           92   time:     0.422989
+  dt:     0.004442
+tstep:           93   time:     0.427432
+  dt:     0.004263
+tstep:           94   time:     0.431695
+  dt:     0.004108
+tstep:           95   time:     0.435803
+  dt:     0.004011
+tstep:           96   time:     0.439814
+  dt:     0.003964
+tstep:           97   time:     0.443779
+  dt:     0.003965
+tstep:           98   time:     0.447744
+  dt:     0.004015
+tstep:           99   time:     0.451759
+  dt:     0.004123
+tstep:          100   time:     0.455882
+  dt:     0.004297
+tstep:          101   time:     0.460179
+  dt:     0.004515
+tstep:          102   time:     0.464694
+  dt:     0.004508
+tstep:          103   time:     0.469202
+  dt:     0.004526
+tstep:          104   time:     0.473728
+  dt:     0.004501
+tstep:          105   time:     0.478229
+  dt:     0.004387
+tstep:          106   time:     0.482617
+  dt:     0.004337
+tstep:          107   time:     0.486953
+  dt:     0.004344
+tstep:          108   time:     0.491297
+  dt:     0.004410
+tstep:          109   time:     0.495707
+  dt:     0.004293
+ Time limit reached.
+ Total wall clock time for time steps: 13.08
+ Wall clock time for Poisson solver: 1.20
+ Saving results...
+ saved.

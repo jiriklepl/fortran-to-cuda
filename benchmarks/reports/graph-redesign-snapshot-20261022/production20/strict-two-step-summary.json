@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "status": "passed_both_current20_short_gates",
+  "completed_utc": "2026-10-22T05:20:53.043120+00:00",
+  "sealed_workflow": {
+    "path": "/tmp/fortran-candidate20-application-workflow-sealed.json",
+    "sha256": "7639e1af16bba7d6ace0acc23a42c5f0487828aceb119050349fcd50f7bc4c0c"
+  },
+  "policy_addendum": {
+    "path": "/tmp/fortran-candidate20-application-policy-addendum.json",
+    "sha256": "d7da83258c5858cd8624724d280c1aa0b4bcff5d6a838a0d88de01f90b8c7dc8"
+  },
+  "launch_receipt": {
+    "path": "/tmp/fortran-candidate20-gates-01/launch-plan.json",
+    "sha256": "8c41bce05de0f4cf1238699b6106cddfab574775582f4c00c5006d1d288aa81f"
+  },
+  "sessions": {
+    "auth": {
+      "session_id": 38861,
+      "exit_code": 0
+    },
+    "channel-simple": {
+      "session_id": 70256,
+      "exit_code": 0
+    },
+    "channel": {
+      "session_id": 24246,
+      "exit_code": 0
+    }
+  },
+  "cases": [
+    {
+      "case": "channel-simple",
+      "report": {
+        "path": "/tmp/fortran-graph-20-smoke-channel-simple/report.json",
+        "sha256": "67d191394c9925d99c130f362a3fa2ffb2d337877fe024508fd2ac4c03d27300"
+      },
+      "status": "passed",
+      "full20_float64_shapes_bounds_halos_and_VTK_passed": true,
+      "no_validation_failures": true,
+      "contexts": 9,
+      "runtime_numerical_kernels": 7,
+      "runtime_carrier_kernels": 0,
+      "cupti_kernels": 7,
+      "cupti_available": true,
+      "h2d_payload_bytes": 93872128,
+      "d2h_payload_bytes": 29360128,
+      "cupti_transfer_count": 70,
+      "native_hint_counts": {
+        "events": 21,
+        "lookups": 13,
+        "lookup_hits": 5,
+        "observation_eligible": 8,
+        "finishes": 8,
+        "learned": 1
+      },
+      "modeled_decision_summary": {
+        "calls": 36,
+        "units_are_modeled": true,
+        "selections": [
+          {
+            "reason": "native_stationary_single_candidate",
+            "available": true,
+            "gpu_units": 0,
+            "cpu_units": 0,
+            "occurrences": 25
+          },
+          {
+            "reason": "coherent_gpu_schedule_selected",
+            "available": true,
+            "gpu_units": 1,
+            "cpu_units": 0,
+            "occurrences": 7
+          },
+          {
+            "reason": "native_is_cheaper",
+            "available": true,
+            "gpu_units": 0,
+            "cpu_units": 6,
+            "occurrences": 1
+          },
+          {
+            "reason": "native_graph_transfer_fit_dispersion_not_met",
+            "available": true,
+            "gpu_units": 0,
+            "cpu_units": 12,
+            "occurrences": 1
+          },
+          {
+            "reason": "native_is_cheaper",
+            "available": true,
+            "gpu_units": 0,
+            "cpu_units": 1,
+            "occurrences": 1
+          },
+          {
+            "reason": "native_is_cheaper",
+            "available": true,
+            "gpu_units": 0,
+            "cpu_units": 3,
+            "occurrences": 1
+          }
+        ]
+      },
+      "separate_stream_transport": {
+        "path": "/tmp/fortran-graph-20-smoke-channel-simple/separate-stream-transport.json",
+        "sha256": "48465d130af404d5230233ffc6f7338082ce2df7d18f9a86b914e9296899b177"
+      },
+      "timing_qualification": false
+    },
+    {
+      "case": "channel",
+      "report": {
+        "path": "/tmp/fortran-graph-20-smoke-channel/report.json",
+        "sha256": "27313eee66ef3fceb74de91ff65ccc2b9b4636300549d2f4f9643e16dd27d45b"
+      },
+      "status": "passed",
+      "full20_float64_shapes_bounds_halos_and_VTK_passed": true,
+      "no_validation_failures": true,
+      "contexts": 30,
+      "runtime_numerical_kernels": 7,
+      "runtime_carrier_kernels": 0,
+      "cupti_kernels": 7,
+      "cupti_available": true,
+      "h2d_payload_bytes": 93872128,
+      "d2h_payload_bytes": 29360128,
+      "cupti_transfer_count": 70,
+      "native_hint_counts": {
+        "events": 21,
+        "lookups": 13,
+        "lookup_hits": 5,
+        "observation_eligible": 8,
+        "finishes": 8,
+        "learned": 1
+      },
+      "modeled_decision_summary": {
+        "calls": 41,
+        "units_are_modeled": true,
+        "selections": [
+          {
+            "reason": "native_stationary_single_candidate",
+            "available": true,
+            "gpu_units": 0,
+            "cpu_units": 0,
+            "occurrences": 28
+          },
+          {
+            "reason": "coherent_gpu_schedule_selected",
+            "available": true,
+            "gpu_units": 1,
+            "cpu_units": 0,
+            "occurrences": 7
+          },
+          {
+            "reason": "native_is_cheaper",
+            "available": true,
+            "gpu_units": 0,
+            "cpu_units": 6,
+            "occurrences": 1
+          },
+          {
+            "reason": "native_is_cheaper",
+            "available": true,
+            "gpu_units": 0,
+            "cpu_units": 1,
+            "occurrences": 4
+          },
+          {
+            "reason": "native_is_cheaper",
+            "available": true,
+            "gpu_units": 0,
+            "cpu_units": 3,
+            "occurrences": 1
+          }
+        ]
+      },
+      "separate_stream_transport": {
+        "path": "/tmp/fortran-graph-20-smoke-channel/separate-stream-transport.json",
+        "sha256": "0c39b1298320a1cf8176022e450a34401e6f3afc1cd1bea3f9f924058f97b773"
+      },
+      "timing_qualification": false
+    }
+  ],
+  "pre_run_expected_numerical_or_payload_deviations": [],
+  "carrier_zero_invariant_passed": true,
+  "current_runtime_CUPTI_counts_and_payloads_agree": true,
+  "official_timings_started": false,
+  "timing_authorization": "HELD for root review of actual gate results; no self-authorization",
+  "original_reference_basis_approval": "pending, no substitutions",
+  "full_natural_candidate_correctness_qualified": false,
+  "final_performance_qualified": false
+}

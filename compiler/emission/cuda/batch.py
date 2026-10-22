@@ -11,17 +11,28 @@ from compiler.offload.analysis import _add, _scale
 from compiler.offload.codegen import profile_expression, query_expression
 
 
-def base_cost_lines(profile, costs, *, available=True):
-    result = ["fort_scope_plan_costs costs{}; costs.version = FORT_SCOPE_PLANNING_ABI_VERSION;"]
-    if costs is None:
-        return result
+def base_cost_fields(profile, costs):
+    """Representative costs and separately observed transfer-fit dispersion.
+
+    Profiles without residual evidence retain nominal placement. Synthetic
+    exact-fit fixtures use zero. This scenario is not a speedup guarantee.
+    """
     rates = profile["rates"]
-    fields = {"cpu_flops": rates["cpu_flops_per_second"], "cpu_bandwidth": rates["cpu_memory_bytes_per_second"],
+    return {"cpu_flops": rates["cpu_flops_per_second"], "cpu_bandwidth": rates["cpu_memory_bytes_per_second"],
               "gpu_flops": rates["gpu_flops_per_second"], "gpu_bandwidth": rates["gpu_memory_bytes_per_second"],
               "h2d_latency": rates["h2d_pageable"]["latency_seconds"],
               "h2d_bandwidth": rates["h2d_pageable"]["bandwidth_bytes_per_second"],
               "d2h_latency": rates["d2h_pageable"]["latency_seconds"],
-              "d2h_bandwidth": rates["d2h_pageable"]["bandwidth_bytes_per_second"], **costs}
+              "d2h_bandwidth": rates["d2h_pageable"]["bandwidth_bytes_per_second"],
+              "h2d_fit_relative_error": rates["h2d_pageable"].get("fit_max_relative_error", 0),
+              "d2h_fit_relative_error": rates["d2h_pageable"].get("fit_max_relative_error", 0), **costs}
+
+
+def base_cost_lines(profile, costs, *, available=True):
+    result = ["fort_scope_plan_costs costs{}; costs.version = FORT_SCOPE_PLANNING_ABI_VERSION;"]
+    if costs is None:
+        return result
+    fields = base_cost_fields(profile, costs)
     return [*result, f"costs.valid = {int(available)};",
             f"costs.max_allocation_bytes = {profile['scoped']['max_allocation_bytes']}ULL;",
             *[f"costs.{field} = {float(value)!r};" for field, value in fields.items()]]

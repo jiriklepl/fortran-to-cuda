@@ -119,7 +119,7 @@ def deferred_module_binaries(tmp_path_factory, request):
         assert result.returncode == 0, result.stdout + result.stderr
         return result
 
-    response = run([sys.executable, "-m", "compiler", "--form-scopes", "--input", str(paths[-1]),
+    response = run([sys.executable, "-m", "compiler.tests.support.reference_scopes", "--form-scopes", "--input", str(paths[-1]),
         *(argument for path in paths[:-1] for argument in ("--source-file", str(path))),
         "--kernel", "saffron_owner::advance", "--scope-facts", str(facts_path), "--host-threads", "4",
         "--scope-execution", "reached", "--gpu-policy", "sections", "--memory-model", "scoped",
@@ -134,11 +134,12 @@ def deferred_module_binaries(tmp_path_factory, request):
     companions = {item["procedure"]: item for item in owner["module_coordinators"]}
     assert "saffron_gate::branch_inputs" in companions
     assert companions["saffron_gate::branch_inputs"]["boundaries"]
-    sweep, = manifest["borrowed_source_coordinators"]
-    assert sweep["procedure"] == "saffron_sweep::diffuse"
-    assert sweep["ownership"]["close_count"] == 0
-    assert len(sweep["gpu_leaves"]) == 2
-    point, = (operation for operation in sweep["native_operations"]
+    sweep = companions["saffron_sweep::diffuse"]
+    assert not manifest["borrowed_source_coordinators"]
+    assert not sweep["boundaries"]
+    segments = [segment["operations"] for segment in sweep["planning_segments"]]
+    assert sum(len(plan["gpu_leaves"]) for segment in segments for plan in segment["planning_segments"]) == 2
+    point, = (operation for segment in segments for operation in segment["native_operations"]
               if operation["resource_effects"] == {"argument::result": ["read", "write"]})
     section, = point["sections"]["resources"]
     assert section["reads"][0]["axes"][0]["kind"] == "point"

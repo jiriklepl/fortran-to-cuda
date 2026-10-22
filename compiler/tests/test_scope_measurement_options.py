@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend.numerical_preparation import _Budget, _configuration
-from compiler.offload.config import OffloadConfig
 
 
 @pytest.mark.parametrize("updates", [
@@ -35,8 +35,8 @@ def test_observation_variant_does_not_change_numerical_preparation_identity():
 
 
 @pytest.mark.parametrize("extra", [[], ["--form-scopes"],
-    ["--form-scopes", "--scope-execution", "reached", "--gpu-policy", "auto"],
-    ["--form-scopes", "--scope-execution", "reached", "--gpu-policy", "sections", "--gpu-collective"]])
+    ["--form-scopes", "--scope-execution", "graph", "--gpu-policy", "auto"],
+    ["--form-scopes", "--scope-execution", "graph", "--gpu-policy", "sections", "--gpu-collective"]])
 def test_cli_rejects_incompatible_measurement_without_touching_output(tmp_path, extra):
     output = tmp_path / "output"
     output.mkdir()

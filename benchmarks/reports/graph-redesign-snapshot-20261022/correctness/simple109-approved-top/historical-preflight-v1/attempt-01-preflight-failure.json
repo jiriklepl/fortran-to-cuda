@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "recorded_utc": "2026-10-22T10:34:54.728950+00:00",
+  "kind": "root observed tool-result receipt; stderr was displayed by exec tool, not redirected raw capture",
+  "status": "failed_before_any_application_execution",
+  "argv": [
+    "taskset",
+    "-c",
+    "0-11",
+    ".venv/bin/python",
+    "/tmp/fortran-snapshot-simple109-correctness-20261022/run_three_mode.py",
+    "--execute",
+    "--authorization",
+    "/tmp/fortran-snapshot-simple109-correctness-20261022/root-authorization.json"
+  ],
+  "exit_code": 1,
+  "error_type": "RuntimeError",
+  "error_message": "changed protected input: /home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/gpu_validation.py",
+  "failed_guard": "build_private.checked_plan -> verify_hashes(originalstage.validation_helpers_sha256)",
+  "changed_helper": {
+    "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/gpu_validation.py",
+    "historical_expected_sha256": "8e1cf21aff1ae868f02082ef077fee225cb4626a682ae8f6c408ca84381756cf",
+    "current_approved_sha256": "1fa37f95456d1779477214a413264b6112950f21e1129ef2fc9574f58ee66479"
+  },
+  "bound_original_stage_27_small_inputs_passed": true,
+  "applications_started": 0,
+  "fresh_runs_directory_absent": true,
+  "original_stage_driver_authorization_sha256": {
+    "/tmp/fortran-snapshot-simple109-correctness-20261022/stage.json": "4cba3dcf2f050160dd12854d22570a73a492dc94222b2992b8a2e3f53de198cd",
+    "/tmp/fortran-snapshot-simple109-correctness-20261022/run_three_mode.py": "c92600a4508c42ef680c7f4af55e82d56d23e780c9c9cedd5fe66afdddc3d9e8",
+    "/tmp/fortran-snapshot-simple109-correctness-20261022/root-authorization.json": "76d61d595c52f10a5a03fd2cb8091405a5053e760e40246f31e1558130859a21",
+    "/tmp/fortran-deterministic-top-cross-mode-20/script-stage.json": "3502a011734ebca8557b16a4edbb543dd8a53dd6ea062fe3b54201faece57a82"
+  },
+  "recovery": "Versioned explicit single approved helper binding projection under root review; original plans/stages/receipts/data never retagged; public default pin remains held"
+}

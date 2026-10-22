@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "kind": "independent read-only native top-reference serial reduction review",
+  "created_utc": "2026-10-22T03:11:18.770965+00:00",
+  "reviewer": "/root/task_graph",
+  "status": "text_review_passed",
+  "original": {
+    "path": "/tmp/fortran-threeway-harness-smoke-02/work/native/application/elmm/src/pressure.f90",
+    "sha256": "0548a1a1b33284d5811335beff0051c60faf273f1f9535ef737b34be141bf9af"
+  },
+  "diagnostic": {
+    "path": "/tmp/fortran-native-top-reference-serial-01/pressure.f90",
+    "sha256": "65d6ee76dc4b63b4545a1bfd481dbf875cb168f55a484bac7d0a39b78f21f7d0"
+  },
+  "plan": {
+    "path": "/tmp/fortran-native-top-reference-serial-01/plan.json",
+    "sha256": "b28d953eeb3aaf1e5c05c0e89f43aeb5c557429d2661da9d7c3d402d8d97f735"
+  },
+  "exact_edit": {
+    "before_occurrences": 1,
+    "single_byte_replacement_equals_diagnostic": true,
+    "before_bytes": 284,
+    "after_bytes": 246,
+    "all_other_bytes_preserved": true
+  },
+  "reasoning": [
+    "Phi_ref is initialized to zero before the parallel region; only i,j,k are PRIVATE, so Phi_ref is shared and initialization precedes the team fork.",
+    "The unchanged SINGLE assignment of shared k_ref has its original implicit barrier before the changed non-PAR plane sum.",
+    "Only the original OpenMP master performs the sum and division. The j-outer/i-inner lexical order is unchanged. Each participating thread retains private i,j loop variables.",
+    "The explicit barrier after END MASTER publishes the completed shared Phi_ref before any thread evaluates Phi_ref/=0 and enters the unchanged whole-volume OMP DO. All threads follow the same shared reference-type/boundary control.",
+    "The original four-thread whole-volume subtraction, PAR branches, other reference modes, declarations, and every other source byte are unchanged."
+  ],
+  "limitations": [
+    "Read-only source/byte review; no compilation, linking, application execution, or timing performed by this reviewer.",
+    "Repeatability still requires the planned empirical gates under unchanged compiler/FP flags and configuration. Source lexical reduction order alone is not an empirical bitwise reproducibility result.",
+    "This is a private diagnostic, not a source repair, production change, qualification-basis change, or performance sample.",
+    "Execution remains held pending completion of the authorized full no-reference native control and explicit root scheduling."
+  ],
+  "compile_or_application_executed": false,
+  "production_changed": false,
+  "official_qualification": false,
+  "performance_sample": false
+}

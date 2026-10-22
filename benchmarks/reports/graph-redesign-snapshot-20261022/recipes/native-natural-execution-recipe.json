@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "status": "text_prepared_not_executed_no_plan_yet",
+  "full2458_top_pair_held": true,
+  "official_qualification": false,
+  "performance_sample": false,
+  "diagnostic_only": true,
+  "script": {
+    "path": "/tmp/fortran-native-top-reference-serial-01/compare-natural.py",
+    "sha256": "3c8bed2add9d5332a473167981383c6f5bce7b7a91e76c20581c35335e69cbea"
+  },
+  "prerequisites": {
+    "fullNONE": "PASS2458all20byteidentical+strict+VTK unchangednative",
+    "serializedTOPprefix": "PASS2/10all20byteidentical+strict+VTK fromexactprivateonepressureobjectbinary"
+  },
+  "prepare_only": [
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "/tmp/fortran-native-top-reference-serial-01/compare-natural.py",
+    "--output",
+    "/tmp/fortran-native-top-reference-serial-01/natural-01"
+  ],
+  "future_execute_requires_parent_lease": [
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "/tmp/fortran-native-top-reference-serial-01/compare-natural.py",
+    "--output",
+    "/tmp/fortran-native-top-reference-serial-01/natural-01",
+    "--execute"
+  ],
+  "no_plan_created_reason": "Seal imported helper identities/configurations at actual launch preparation after candidate18 transport promotion; preserve all existing immutableplans.",
+  "per_application_timeout_seconds": 1800,
+  "steps": 2458,
+  "repetitions": 2,
+  "threads": 4,
+  "affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+  ],
+  "basis": "OriginalTOPconfiguration+exact4FFTWwisdomplans; private serializedpressurebinary only, originalproduction untouched. All20 strict/bits/bounds/halos+VTK; originalTOPfailurespreserved."
+}

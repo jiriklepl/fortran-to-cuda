@@ -5,10 +5,10 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend.source_effects import _children, _kind
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.counted_loops import reached_counted_body
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_lexical_source_owner import SOURCE, emit
@@ -122,8 +122,15 @@ def test_suffix_definition_cannot_hide_next_iteration_read_across_cycle(tmp_path
     source = source.replace("do stage=1,3", "t=0.d0\ndo stage=1,3\nvisits=visits+int(t)")
     source = source.replace("b(i)=2*a(i)+real(i,8)", "t=a(i)+1\nb(i)=t")
     source = source.replace("if(escape.and.stage==2) then", escape+"\nt=0.d0\nif(escape.and.stage==2) then")
-    _, _, report = emit(tmp_path, source)
-    assert len(report["scopes"][0]["gpu_leaves"]) == 1
+    path, outputs, report = emit(tmp_path, source)
+    if escape == "cycle":
+        # The unconditional escape leaves no reached GPU task after the
+        # rejected t-producing loop. Keep that original control flow intact.
+        assert report["scopes"] == []
+        assert list(outputs) == ["scope-manifest.json"]
+        assert path.read_text() == source
+    else:
+        assert len(report["scopes"][0]["gpu_leaves"]) == 1
     assert any("live after" in boundary["reason"] for boundary in report["boundaries"])
 
 

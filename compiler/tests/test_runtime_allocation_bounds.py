@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.numerical import load_numerical_sources
 from compiler.scopes.source import form_source_scopes
 from compiler.tests.test_numerical_sources import NORMALIZED, ORIGINAL, package

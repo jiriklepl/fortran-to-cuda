@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "kind": "source reconstruction of required companion pipeline delta",
+  "base_commit": "81e374410efe61d2e6dd64e8968264b22991fac5",
+  "source_repository": "/home/jirka/research/fortran-abomination/elmm-pipeline",
+  "modified_tracked_files": 4,
+  "new_files": 4,
+  "required_delta_files": [
+    {
+      "path": "elmm_pipeline/cli.py",
+      "base_sha256": "913fcfa7931ba83613fb9681227df0a4bba40488592065ce4a7e6d4ceb8327e8",
+      "current_sha256": "41d4df8a6a034a96a8ced06488280c4d1274a9a1f60d5e4e1f7c749bd0991cb7",
+      "base_status": "tracked",
+      "current_copy": "current/elmm_pipeline/cli.py.source",
+      "base_copy": "base/elmm_pipeline/cli.py.source"
+    },
+    {
+      "path": "elmm_pipeline/local_adapter.py",
+      "base_sha256": "9c168021745983841954182be9ef2a6e1578a02e282e03afa705d66f7a8fec9f",
+      "current_sha256": "b8315fff76d091a84e47d1ea75a19ade21a3492fdb557aa86fa291af72ecf2f1",
+      "base_status": "tracked",
+      "current_copy": "current/elmm_pipeline/local_adapter.py.source",
+      "base_copy": "base/elmm_pipeline/local_adapter.py.source"
+    },
+    {
+      "path": "tests/test_application_build.py",
+      "base_sha256": "517af79a61237388d9c72284b5dc48badae9301d4ecfa64c38527cd26935c433",
+      "current_sha256": "8757e8869b33e807d5bd311c0342f36cd4c074ddf6167d3df32dce0c65079122",
+      "base_status": "tracked",
+      "current_copy": "current/tests/test_application_build.py.source",
+      "base_copy": "base/tests/test_application_build.py.source"
+    },
+    {
+      "path": "tests/test_scoped_adaptation.py",
+      "base_sha256": "9f7152fc9f9baeaa09d7c4e64249ca4122adb0a650886cea9b1da58832401851",
+      "current_sha256": "6b34afd9944e5909d0b77a0723ce787f37c365ddb102c0d5acbed6e03e53965d",
+      "base_status": "tracked",
+      "current_copy": "current/tests/test_scoped_adaptation.py.source",
+      "base_copy": "base/tests/test_scoped_adaptation.py.source"
+    },
+    {
+      "path": "elmm_pipeline/_legacy_scopes.py",
+      "base_sha256": null,
+      "current_sha256": "e34639824021851b66124636f1c33ef978099b6df4815cfa9644d53156e950c1",
+      "base_status": "absent at base",
+      "current_copy": "current/elmm_pipeline/_legacy_scopes.py.source"
+    },
+    {
+      "path": "elmm_pipeline/dataflow_graph.py",
+      "base_sha256": null,
+      "current_sha256": "942ccf4558378327dca6efb4410b181f9798c171fdeb6afd4977344104444dce",
+      "base_status": "absent at base",
+      "current_copy": "current/elmm_pipeline/dataflow_graph.py.source"
+    },
+    {
+      "path": "tests/test_current_scope_protocol.py",
+      "base_sha256": null,
+      "current_sha256": "be2e6847fd4ce734072d41a49bd6a4d62362e0fd4ec467644cad7ff41af7c04c",
+      "base_status": "absent at base",
+      "current_copy": "current/tests/test_current_scope_protocol.py.source"
+    },
+    {
+      "path": "tests/test_dataflow_graph.py",
+      "base_sha256": null,
+      "current_sha256": "a44a1856e93cc0bbbc5b0141c2fa9898754bc9d88af5c94c2a138912af163e03",
+      "base_status": "absent at base",
+      "current_copy": "current/tests/test_dataflow_graph.py.source"
+    }
+  ],
+  "delta_file_inventory_sha256": "d57f17f5ef1bb9559b7e4af519a37ed0e1b0fdde4d42cc229a99deeb966e04ea",
+  "binary_diff_patch": {
+    "path": "all-eight-files-from-base.patch",
+    "sha256": "6ae38eb0fd57a830dd5aa926faa2225f13aecc4c934585fb382da561298198d0"
+  },
+  "reconstruction": [
+    "Start from an independent clean elmm-pipeline checkout at base_commit81e374410efe61d2e6dd64e8968264b22991fac5.",
+    "Apply all-eight-files-from-base.patch with git apply; all eight complete postimages are also supplied under current/.",
+    "Verify each resulting file against current_sha256. Repository index status and no commit are not required to reconstruct source bytes."
+  ],
+  "reviewer_git_index_writes": false,
+  "application_or_test_execution_by_packaging": false,
+  "final_pipeline_test_status": "pending root inventory",
+  "packaging_header_correction": {
+    "preimage": "packaging-attempt-01/patch-preimage.patch",
+    "preimage_sha256": "2842df938ec9d0ea3f8dadb4e4cc8b3e0075cc621066643c615f53d643072682",
+    "failure": "git apply --check rejected/asserted on malformed synthetic new-file-mode header before modifying any source; corrected missing space in four metadata lines",
+    "postimage_source_bytes_changed": false
+  },
+  "source_archive_suffix": ".py.source stores exact source bytes without adding pytest-discoverable .py files. Restore using original path field or apply unchanged patch."
+}

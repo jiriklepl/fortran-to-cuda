@@ -19,11 +19,11 @@ import subprocess
 from hashlib import sha256
 from pathlib import Path
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.numerical_contract import require_explicit_cuda_environment
 from compiler.offload.calibrate import cpu_identity
 from compiler.offload.collective_calibration import normalize_fortran_options
-from compiler.offload.config import OffloadConfig
 from compiler.offload.exact_window import (
     ENVIRONMENT,
     HOLDOUTS,

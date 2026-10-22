@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "status": "reviewed_literal_DIRECT_retirement_promoted_not_yet_application_qualified",
+  "closure": {
+    "path": "/tmp/fortran-direct-transport-retirement-20/closure.json",
+    "sha256": "e66ddf330af655aabea92decd117c0b6a991c85da5f54c4c0cfdf839e78e3eb5"
+  },
+  "root_review": {
+    "path": "/tmp/fortran-direct-transport-retirement-20/root-review.json",
+    "sha256": "449447d217ff43d2171543b0fe3059136cdda2114ee4728a3c0329d126214177"
+  },
+  "preimages": "/tmp/fortran20-promotion-preimages",
+  "files": [
+    {
+      "action": "modify",
+      "base_sha256": "ed93dd25e0927037464b45fba0f8b7d29af4f174e7e4b8b5f21c0df5eb5e9961",
+      "new_sha256": "3d04d167cd428cacff094cc3cf9020c1384bb39dd6929b82a1d0973796b7aa2d",
+      "path": "compiler/README.md",
+      "production_base_matches": true
+    },
+    {
+      "action": "modify",
+      "base_sha256": "637dd13a460cfaaa1f853cfc5b71cc12eef2067250b3de46b4f9f703ff7ca2c9",
+      "new_sha256": "ee028e06c6df54981ab58431e190daf6d6d4334895cfdf93587d7c583b29aa36",
+      "path": "compiler/emission/common/resources.py",
+      "production_base_matches": true
+    },
+    {
+      "action": "delete",
+      "base_sha256": "193222d568147ab0e73070c2b5e04f498782b94f2b7e8af66a75927ced303b12",
+      "new_sha256": null,
+      "path": "compiler/runtime/scoped_copy.hpp",
+      "production_base_matches": true
+    },
+    {
+      "action": "modify",
+      "base_sha256": "b295ae972025c7155cdb0d6702337b4f9d376966ad72003c26a092de200ebcff",
+      "new_sha256": "7ce0061dd1e5c575fc10b5aff17e7f4bafbd57952e5d2cfbb65df75e2be4c62a",
+      "path": "compiler/runtime/scoped_runtime.cu",
+      "production_base_matches": true
+    },
+    {
+      "action": "add",
+      "base_sha256": null,
+      "new_sha256": "84ef5b8f120a35dd0e6538a1dfc207bcfeed54ff7cac384778f8e61c25522294",
+      "path": "compiler/tests/test_scoped_direct_copy_cuda.py",
+      "production_base_matches": true
+    },
+    {
+      "action": "add",
+      "base_sha256": null,
+      "new_sha256": "34e82016ac72a5bf199933f551b3d508e998eaf8a3b175ed645a746592d9ff45",
+      "path": "compiler/tests/test_scoped_direct_transport.py",
+      "production_base_matches": true
+    },
+    {
+      "action": "delete",
+      "base_sha256": "014b1e91467e217ac80efe677e2fcab80f3bdc9bafb62e19c8cb5caf6c9997e4",
+      "new_sha256": null,
+      "path": "compiler/tests/test_scoped_packed_copy_cuda.py",
+      "production_base_matches": true
+    },
+    {
+      "action": "modify",
+      "base_sha256": "bc38aa5e0fabe719e6da9ffc1c1327661976858b05addf43bf859b11c9925d77",
+      "new_sha256": "40d35bfd1f79b579b667ac730942933ff2f8079bd70ea0be4a65eacc223d911e",
+      "path": "compiler/tests/test_scoped_planning_entries.py",
+      "production_base_matches": true
+    }
+  ],
+  "runtime_closure": {
+    "runtime_id": "9517e2476a8182d00f52d62574c9573549439091eaca7a3d6ffc343f7590a4aa",
+    "runtime_files_sha256": {
+      "scoped_runtime.h": "c85fab9dcc68c5e162da5d83c942bc8f76cbabc4fb2e20921fbe9c6362f0c3c7",
+      "floating_environment.hpp": "e6a13295c9e90476185e576e813aa2300eace4324afecf821ba4d8a044456cd0",
+      "scoped_entry.hpp": "92421c21e4c3dc352bb239a40be959ae96db2b3bda8871990c56c058628734e0",
+      "scoped_team_observer.hpp": "374dcb2874c2e6395f259392e6aa814efe03fbe5b0861184b6e3fce9ab1dd223",
+      "fort_scoped_team_observer.f90": "e80d7abaef437f568d285d16a5da65bd89643ab2eef768d1bc66fb7981f0036a",
+      "view_entry.hpp": "8ca1648ff7e4743a2b784a9d2710f4c72a429c7c20a4f39a49f96632bf3415f2",
+      "section_copy.hpp": "6c5a24d97431cb08ea8aad06a82e07ba7978d317dffc72a7623f860d369ecc3f",
+      "staging.hpp": "96125904c5f37adca1f126d88777604693e76535253dbe0d385da848b239236b",
+      "scoped_cuda_resources.hpp": "134b233537d62611f27d7fcf54f8b16ba411f0284d0447cc902fe7e3fc99d289",
+      "scoped_graphs.hpp": "2a66e85dadac4d10f123e1dd76e2fc4d89437af617692e16783edcc3421b67e0",
+      "scoped_regions.hpp": "a748167bf8014f983d988e0d61049b3b95bb63bafeced7bf3274de01572d70c7",
+      "scoped_planning.hpp": "17b9f3c18427008d7774ace1acf443b6e2429859442e53aedf1b8a15e3e43434",
+      "scoped_memo.hpp": "4f6939df83d4f725a97306e50abf277ece8ca83856b42d92d40e217a5c05f1a6",
+      "scoped_host_metadata.hpp": "73c4bd4fc5658091381b0c56fb79a16b38867567d357985eded58894940b0b4b",
+      "scoped_runtime.cu": "a806fc0bf3dc764a3dbf244ff8aa4f40dc0f64e8b86050672461eccbb5ab7cae",
+      "fort_scoped_memory.f90": "a9f09e6a6b403b86ef129295d293332e0c215e0d946b1fe8ffaaabe74c837a2f"
+    }
+  },
+  "goal_achieved": false,
+  "performance_qualification": false,
+  "fresh_matching_runtime_calibration_required": true,
+  "source_scalar_experiment_promoted": false,
+  "source_scalar_decision": "inconclusive private3pair timing; omit added source complexity pending stronger evidence"
+}

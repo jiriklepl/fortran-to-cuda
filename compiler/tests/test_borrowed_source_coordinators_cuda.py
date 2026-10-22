@@ -126,8 +126,82 @@ def calibrated_child_binary(tmp_path_factory, request):
         checkout=checkout, scope_execution=execution, facts={"schema_version": 1, "participation": "serial",
                                  "captures": {"argument::" + name: FACT for name in ("a", "b", "out")}})
     assert manifest["scopes"][0]["estimate_available"]
-    assert {item["procedure"] for item in manifest["borrowed_source_coordinators"]} == (
-        {"original::child", "original::transform"} if execution == "reached" else {"original::child"})
+    if execution == "bounded":
+        assert {item["procedure"] for item in manifest["borrowed_source_coordinators"]} == {"original::child"}
+    else:
+        # The reached graph keeps child as the original ModuleOwner body;
+        # transform is its separately checked borrowed numerical coordinator.
+        transform, = manifest["borrowed_source_coordinators"]
+        assert transform["procedure"] == "original::transform"
+        assert transform["role"] == "borrowed_reached_coordinator"
+        scope, = manifest["scopes"]
+        plan = scope["checked_execution_plan"]
+        assert plan["entry"] == "original::step"
+        leaves = {"original::producer#region1", "original::consumer#region1", "original::transform#region1"}
+        assert set(plan["gpu_leaves"]) == set(scope["gpu_leaves"]) == leaves
+        assert plan["numerical_invocations"] == 3
+        assert leaves <= {item["procedure"] for item in manifest["numerical_decisions"] if item["supported"]}
+        members = {item["procedure"]: item for item in plan["procedures"]}
+        assert len(plan["procedures"]) == len(members) == 4
+        assert set(members) == {"original::step", "original::child", "original::producer", "original::consumer"}
+        modules = {item["procedure"]: item for item in scope["module_coordinators"]}
+        assert len(scope["module_coordinators"]) == len(modules) == 3
+        assert set(modules) == {"original::child", "original::producer", "original::consumer"}
+        expected_calls = {
+            "original::child": ("original::step", "call child(a,b,out,n)", ("a", "b", "out")),
+            "original::producer": ("original::child", "call producer(a,b,n)", ("a", "b")),
+            "original::consumer": ("original::child", "call consumer(a,b,out,n)", ("a", "b", "out")),
+        }
+        for name, (caller, call_text, resources) in expected_calls.items():
+            module, member = modules[name], members[name]
+            assert module["interface"] == "original_module_entry_v1"
+            assert module["structured_summary_identity"] == member["structured_summary_identity"]
+            assert member["source_sha256"] == sha256(original.read_bytes()).hexdigest()
+            assert module["resource_mappings"] == {"argument::" + key: "argument::" + key for key in resources}
+            assert module["calls"] == member["calls"]
+            call, = member["calls"]
+            assert call["caller"] == caller
+            assert call["first_line"] == call["last_line"] == text.splitlines().index(call_text) + 1
+        point, delegated = members["original::child"]["units"]
+        native, = point["operations"]["native_operations"]
+        assert point["selected_node_ids"] == native["selected_original_nodes"]
+        assert point["first_line"] == point["last_line"] == text.splitlines().index("b(1)=b(1)+5.d0") + 1
+        assert native["resource_effects"] == {"argument::b": ["read", "write"]}
+        assert native["completion"]["available"]
+        assert not native["completion"]["has_opaque_calls_in_closure"]
+        assert not native["completion"]["has_openmp_in_closure"]
+        assert native["sections"]["available"]
+        section, = native["sections"]["resources"]
+        assert (section["resource"], section["rank"], section["logical_lower_bounds"]) == ("argument::b", 1, [1])
+        for effect in ("reads", "writes", "overwrites"):
+            access, = section[effect]
+            assert access["source_access"] == "b(1)"
+            axis, = access["axes"]
+            assert axis == {"kind": "point", "lower": {"kind": "literal", "value": 1},
+                            "upper": {"kind": "literal", "value": 1}}
+        node, = delegated["operations"]["structured_tree"]["nodes"]
+        assert node["kind"] == "reached_source_coordinator"
+        assert node["procedure"] == transform["procedure"]
+        assert node["structured_summary_identity"] == transform["structured_summary_identity"]
+        assert node["requirements"]["unique_canonical_resource_mappings"]
+        for name in ("original::producer", "original::consumer"):
+            unit, = members[name]["units"]
+            segment, = unit["operations"]["planning_segments"]
+            assert segment["query_available"]
+            assert segment["estimate_available"]
+            assert segment["gpu_leaves"] == [name + "#region1"]
+        segment, = transform["planning_segments"]
+        assert segment["query_available"]
+        assert segment["estimate_available"]
+        assert segment["gpu_leaves"] == ["original::transform#region1"]
+        if request.param == "reached_rollback":
+            boundary, = scope["boundaries"]
+            assert "alias" in boundary["reason"]
+            assert not boundary["reopen"]
+            assert boundary["execution"] == "publish and close when reached; original continuation once"
+            assert boundary["first_line"] == boundary["last_line"] == text.splitlines().index("call child(a,b,b,n)") + 1
+        else:
+            assert not scope["boundaries"]
     objects, commands = [], []
     headers = tuple((name, digest) for name, digest in sorted(manifest["artifacts_sha256"].items())
                     if name.endswith((".h", ".hpp", ".cuh")))

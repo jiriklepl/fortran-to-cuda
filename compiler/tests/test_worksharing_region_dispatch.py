@@ -1,20 +1,19 @@
 """Original-team regions use a bounded shared dispatcher with team workers."""
 
-from dataclasses import replace
-from hashlib import sha256
 import shutil
 import subprocess
+from dataclasses import replace
+from hashlib import sha256
 
+import pytest
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import walk
-import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT
-
 
 SOURCE = """module mixed
 implicit none

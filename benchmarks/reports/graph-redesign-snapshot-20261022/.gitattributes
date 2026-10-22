@@ -1,0 +1,8 @@
+# Preserve authenticated upstream sources, patches, configurations, and raw logs.
+* -text
+pressure/** -whitespace
+companion-pipeline/** -whitespace
+performance/** -whitespace
+tests/** -whitespace
+checkpoint-maintenance/** -whitespace
+correctness/** -whitespace

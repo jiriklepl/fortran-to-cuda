@@ -2,8 +2,8 @@
 
 from hashlib import sha256
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import form_source_scopes
 from compiler.tests.test_source_scopes import FACT, PROGRAM
 

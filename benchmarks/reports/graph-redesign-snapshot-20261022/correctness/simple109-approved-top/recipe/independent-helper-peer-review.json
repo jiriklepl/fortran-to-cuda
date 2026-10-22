@@ -1,0 +1,48 @@
+{
+  "addendum": {
+    "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/compatibility-addendum.json",
+    "sha256": "f23a1576c4aa7614781ec04a7bda7221fe357a6e95155e6b2007d03024dc5742"
+  },
+  "current_parser": {
+    "bytes": 19261,
+    "path": "/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/gpu_validation.py",
+    "sha256": "1fa37f95456d1779477214a413264b6112950f21e1129ef2fc9574f58ee66479"
+  },
+  "diff": {
+    "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/driver-v1-to-v2.diff",
+    "sha256": "98103152fef52ec6ee6cb20dd9400354eb8c51b850e5fe136b4fb59278b7de5d"
+  },
+  "driver": {
+    "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/run_three_mode.py",
+    "sha256": "17f35adc1d2241d4d5af5a988265aaf8c34bc10920f78501c984ff2e9d3dd1f2"
+  },
+  "execution_by_reviewer": false,
+  "limits": [
+    "This does not claim V2 preflight or applications passed. Root owns explicit fresh authorization/lease and actual before/after protected2931guard closure.",
+    "Original preflight failure before apps remains preserved. Historical measured20 binaries/proofs are not retagged; pressure-only private109 basis remains explicit and nonperformance."
+  ],
+  "retained_historical_preimage": {
+    "bytes": 17704,
+    "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/historical-validator/gpu_validation.py.source",
+    "sha256": "8e1cf21aff1ae868f02082ef077fee225cb4626a682ae8f6c408ca84381756cf"
+  },
+  "schema_version": 1,
+  "scope": "Static source/AST/hash/read-only gitshow only. Did not import driver/build/run_short, call publicvalidator, inspect2931files afresh, or execute applications/tests/builds/GPU.",
+  "stage": {
+    "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/stage.json",
+    "sha256": "2f1b87e952885727b5d704b5111cefb83b4fb7522ca28db90d0d5f02f1bd8f43"
+  },
+  "status": "CLEAR_METADATA_ONLY_EXACT_SINGLE_HELPER_COMPATIBILITY",
+  "verification": {
+    "all_old_small_input_bindings_retained_unchanged": true,
+    "all_other_bindings_copied_verbatim_and_original_conflict_rejection_retained": true,
+    "all_other_original_functions_AST_identical": true,
+    "application_loop_FFTW_fields_tolerances_flags_order_failure_logic_AST_identical_after_only_explicit_guard_projection_and_report_metadata": true,
+    "current_and_historical_parser_bytes_both_protected": true,
+    "historical_preimage_exact_git81e": true,
+    "no_monkeypatch_import_hook_broad_exception_or_unknown_hash_allowance": true,
+    "no_original_modules_or_plan_records_edited": true,
+    "only_existing_exact_parser_path_with_old8e1_value_may_project_to_current1fa": true,
+    "public_original_prepared2931_guard_and_pre_post_comparison_calls_retained_unmodified": true
+  }
+}

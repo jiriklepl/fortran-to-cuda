@@ -1,0 +1,421 @@
+{
+  "schema_version": 1,
+  "first_pass_preserved": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+  "retry_policy": "only root/peer reviewed maintenance; explicit strict-affinity capability",
+  "root_authorized_concurrent_nonperformance_validation": true,
+  "first_pass_completed_files_at_start": 257,
+  "complete": true,
+  "results": [
+    {
+      "kind": "reviewed_test_maintenance",
+      "file": "compiler/tests/test_numerical_environment_emission.py",
+      "nodes": 18,
+      "selection": "full current file",
+      "argv": [
+        "taskset",
+        "-c",
+        "0-11",
+        "timeout",
+        "240s",
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-c",
+        "/home/jirka/research/fortran-abomination/compiler/pyproject.toml",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/fortran-committable-snapshot-20261022/followup-pytest-cache",
+        "--basetemp=/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/00-test_numerical_environment_emission/temporary",
+        "--junitxml=/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/00-test_numerical_environment_emission/junit.xml",
+        "/home/jirka/research/fortran-abomination/compiler/tests/test_numerical_environment_emission.py"
+      ],
+      "source_sha256": "775be09beceb09cbfa7c522fa507e6606dbf8638a7799b41ebaa081f2a9fa9ee",
+      "seconds": 1.1264443860127358,
+      "exit_code": 0,
+      "log": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/00-test_numerical_environment_emission/output.log",
+      "junit": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/00-test_numerical_environment_emission/junit.xml",
+      "counts": {
+        "tests": 18,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "suite": "main",
+      "selection_kind": "entire_file_inventory",
+      "selected_nodeids": [
+        "compiler/tests/test_numerical_environment_emission.py::test_default_is_compatible_and_preparation_retains_requirement",
+        "compiler/tests/test_numerical_environment_emission.py::test_direct_and_each_session_run_check_before_work_and_environment_masking",
+        "compiler/tests/test_numerical_environment_emission.py::test_ordinary_policy_query_declines_but_direct_execution_never_uses_cpp_fallback[sections]",
+        "compiler/tests/test_numerical_environment_emission.py::test_ordinary_policy_query_declines_but_direct_execution_never_uses_cpp_fallback[auto]",
+        "compiler/tests/test_numerical_environment_emission.py::test_ordinary_policy_query_declines_but_direct_execution_never_uses_cpp_fallback[chunked]",
+        "compiler/tests/test_numerical_environment_emission.py::test_ordinary_policy_query_declines_but_direct_execution_never_uses_cpp_fallback[hybrid]",
+        "compiler/tests/test_numerical_environment_emission.py::test_scoped_public_entries_reject_before_effects_and_report_requirement[False]",
+        "compiler/tests/test_numerical_environment_emission.py::test_scoped_public_entries_reject_before_effects_and_report_requirement[True]",
+        "compiler/tests/test_numerical_environment_emission.py::test_public_batch_and_window_cannot_bypass_environment_check",
+        "compiler/tests/test_numerical_environment_emission.py::test_unflagged_entries_keep_existing_emission",
+        "compiler/tests/test_numerical_environment_emission.py::test_flagged_ordinary_auto_rejects_unpriced_protocol_in_query_and_actual_chooser[False]",
+        "compiler/tests/test_numerical_environment_emission.py::test_flagged_ordinary_auto_rejects_unpriced_protocol_in_query_and_actual_chooser[True]",
+        "compiler/tests/test_numerical_environment_emission.py::test_flagged_scoped_preserves_effect_queries_and_forced_gpu_but_declines_costs[auto]",
+        "compiler/tests/test_numerical_environment_emission.py::test_flagged_scoped_preserves_effect_queries_and_forced_gpu_but_declines_costs[sections]",
+        "compiler/tests/test_numerical_environment_emission.py::test_graph_flagged_heuristic_retains_unpriced_provenance_and_prework_guards[False]",
+        "compiler/tests/test_numerical_environment_emission.py::test_graph_flagged_heuristic_retains_unpriced_provenance_and_prework_guards[True]",
+        "compiler/tests/test_numerical_environment_emission.py::test_guard_rejects_rounding_and_traps_before_work_and_preserves_existing_flags",
+        "compiler/tests/test_numerical_environment_emission.py::test_collective_query_rejects_one_unsupported_participant_uniformly"
+      ],
+      "selected_nodes": 18,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/00-test_numerical_environment_emission/command.json",
+        "sha256": "357ce983648ab9635053232da972aaea6c4981ec3c3073cfc3631abb9264083b"
+      },
+      "log_sha256": "a494628ae7fa0497e7146fcd2d7fdbed2d1b988e8bd85aae8afe009e6ac4b212",
+      "junit_sha256": "e11b450bd873b533de780bbc5f841e7823b71ad052b249290e56b77b75aa54a1"
+    },
+    {
+      "kind": "reviewed_test_maintenance",
+      "file": "compiler/tests/test_reached_definitions.py",
+      "nodes": 5,
+      "selection": "full current file",
+      "argv": [
+        "taskset",
+        "-c",
+        "0-11",
+        "timeout",
+        "240s",
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-c",
+        "/home/jirka/research/fortran-abomination/compiler/pyproject.toml",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/fortran-committable-snapshot-20261022/followup-pytest-cache",
+        "--basetemp=/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/01-test_reached_definitions/temporary",
+        "--junitxml=/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/01-test_reached_definitions/junit.xml",
+        "/home/jirka/research/fortran-abomination/compiler/tests/test_reached_definitions.py"
+      ],
+      "source_sha256": "8f048b2fd94cad47f525691c810e3bf5444f54e7d2689cf1db9daf437df6985e",
+      "seconds": 4.429299619994708,
+      "exit_code": 0,
+      "log": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/01-test_reached_definitions/output.log",
+      "junit": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/01-test_reached_definitions/junit.xml",
+      "counts": {
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "suite": "main",
+      "selection_kind": "entire_file_inventory",
+      "selected_nodeids": [
+        "compiler/tests/test_reached_definitions.py::test_full_child_definition_satisfies_later_conservative_access",
+        "compiler/tests/test_reached_definitions.py::test_every_branch_can_restore_whole_storage",
+        "compiler/tests/test_reached_definitions.py::test_missing_branch_or_later_out_event_does_not_reuse_old_definition[if(flag) then\\ncall fill(b)\\nendif]",
+        "compiler/tests/test_reached_definitions.py::test_missing_branch_or_later_out_event_does_not_reuse_old_definition[call fill(b)\\ncall partial(b)]",
+        "compiler/tests/test_reached_definitions.py::test_prior_lexical_initialization_uses_reached_coverage_not_entry_capture"
+      ],
+      "selected_nodes": 5,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/01-test_reached_definitions/command.json",
+        "sha256": "511ec69ddd081e2fb36d2707c7b1820669c6719a79a27ddfe02855c7171224d4"
+      },
+      "log_sha256": "4f0345b5a71deef2f260e78533b0cf1b8de66d87c6f558355cc018d2cdde5d4f",
+      "junit_sha256": "bcd47c4d76793966367eca953df70eac9bf54a2dab283b17b46b60d39e652f0e"
+    },
+    {
+      "kind": "reviewed_test_maintenance",
+      "file": "compiler/tests/test_reached_ieee_numerical_guards.py",
+      "nodes": 16,
+      "selection": "full current file",
+      "argv": [
+        "taskset",
+        "-c",
+        "0-11",
+        "timeout",
+        "240s",
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-c",
+        "/home/jirka/research/fortran-abomination/compiler/pyproject.toml",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/fortran-committable-snapshot-20261022/followup-pytest-cache",
+        "--basetemp=/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/02-test_reached_ieee_numerical_guards/temporary",
+        "--junitxml=/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/02-test_reached_ieee_numerical_guards/junit.xml",
+        "/home/jirka/research/fortran-abomination/compiler/tests/test_reached_ieee_numerical_guards.py"
+      ],
+      "source_sha256": "2cd6d520941452c6c0781731f16fe3d7e88199f7ca335af607258f8ac3b89e77",
+      "seconds": 3.585334483999759,
+      "exit_code": 0,
+      "log": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/02-test_reached_ieee_numerical_guards/output.log",
+      "junit": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/02-test_reached_ieee_numerical_guards/junit.xml",
+      "counts": {
+        "tests": 16,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "suite": "main",
+      "selection_kind": "entire_file_inventory",
+      "selected_nodeids": [
+        "compiler/tests/test_reached_ieee_numerical_guards.py::test_plain_arithmetic_cannot_lose_original_exception_flags[ieee_get_flag-4]",
+        "compiler/tests/test_reached_ieee_numerical_guards.py::test_plain_arithmetic_cannot_lose_original_exception_flags[ieee_get_flag-8]",
+        "compiler/tests/test_reached_ieee_numerical_guards.py::test_plain_arithmetic_cannot_lose_original_exception_flags[peek-4]",
+        "compiler/tests/test_reached_ieee_numerical_guards.py::test_plain_arithmetic_cannot_lose_original_exception_flags[peek-8]",
+        "compiler/tests/test_reached_ieee_numerical_guards.py::test_plain_arithmetic_user_observer_spelling_is_not_intrinsic_authority",
+        "compiler/tests/test_reached_ieee_numerical_guards.py::test_plain_arithmetic_after_restored_trap_has_reached_native_fallback",
+        "compiler/tests/test_reached_ieee_numerical_guards.py::test_child_ieee_state_guards_parent_regions_outlined_before_and_after_borrow",
+        "compiler/tests/test_reached_ieee_numerical_guards.py::test_renamed_intrinsic_setter_still_requires_environment_guard",
+        "compiler/tests/test_reached_ieee_numerical_guards.py::test_original_team_checks_every_participant_before_uniform_native_fallback",
+        "compiler/tests/test_reached_ieee_numerical_guards.py::test_source_without_original_ieee_calls_keeps_existing_numerical_contract",
+        "compiler/tests/test_reached_ieee_numerical_guards.py::test_disconnected_ieee_routine_does_not_change_whole_team_numerical_contract",
+        "compiler/tests/test_reached_ieee_numerical_guards.py::test_reachable_source_cycle_scan_never_materializes_effect_closures",
+        "compiler/tests/test_reached_ieee_numerical_guards.py::test_reachable_call_budget_exhaustion_requires_guard_conservatively",
+        "compiler/tests/test_reached_ieee_numerical_guards.py::test_counted_borrow_with_immutable_and_ieee_fallback_keeps_reached_owner[4]",
+        "compiler/tests/test_reached_ieee_numerical_guards.py::test_counted_borrow_with_immutable_and_ieee_fallback_keeps_reached_owner[8]",
+        "compiler/tests/test_reached_ieee_numerical_guards.py::test_immutable_unit_accepts_only_identical_registered_fallback"
+      ],
+      "selected_nodes": 16,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/02-test_reached_ieee_numerical_guards/command.json",
+        "sha256": "54af64c6695f4e8e43b59221e42f9c82e8d20c79f23ffbddb5468022bebe97e7"
+      },
+      "log_sha256": "e8ed6f805cef8af4a0b926c7e04fd0b6b239a892a6ec98f43abb940bab73e97d",
+      "junit_sha256": "a8b09467eb5f6c8daf42c7bbe20acff7e597d29c643789f80b92e53eb5e56154"
+    },
+    {
+      "kind": "reviewed_test_maintenance",
+      "file": "compiler/tests/test_scoped_numerical_costs.py",
+      "nodes": 8,
+      "selection": "full current file",
+      "argv": [
+        "taskset",
+        "-c",
+        "0-11",
+        "timeout",
+        "240s",
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-c",
+        "/home/jirka/research/fortran-abomination/compiler/pyproject.toml",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/fortran-committable-snapshot-20261022/followup-pytest-cache",
+        "--basetemp=/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/03-test_scoped_numerical_costs/temporary",
+        "--junitxml=/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/03-test_scoped_numerical_costs/junit.xml",
+        "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_numerical_costs.py"
+      ],
+      "source_sha256": "f34f4f27747b21535a50e6600b793609ec12498e76a345c83f918c1e9837a0e5",
+      "seconds": 5.6466981049889,
+      "exit_code": 0,
+      "log": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/03-test_scoped_numerical_costs/output.log",
+      "junit": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/03-test_scoped_numerical_costs/junit.xml",
+      "counts": {
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "suite": "main",
+      "selection_kind": "entire_file_inventory",
+      "selected_nodeids": [
+        "compiler/tests/test_scoped_numerical_costs.py::test_versioned_numerical_costs_change_placement[10.0-0.01-1]",
+        "compiler/tests/test_scoped_numerical_costs.py::test_versioned_numerical_costs_change_placement[0.01-10.0-0]",
+        "compiler/tests/test_scoped_numerical_costs.py::test_invalid_numerical_costs_fail_before_work[-1.0]",
+        "compiler/tests/test_scoped_numerical_costs.py::test_invalid_numerical_costs_fail_before_work[inf]",
+        "compiler/tests/test_scoped_numerical_costs.py::test_invalid_numerical_costs_fail_before_work[nan]",
+        "compiler/tests/test_scoped_numerical_costs.py::test_public_scoped_emission_supplies_independently_validated_intrinsic_costs",
+        "compiler/tests/test_scoped_numerical_costs.py::test_public_scoped_missing_or_rejected_intrinsic_costs_keep_auto_native[missing-numerical calibration]",
+        "compiler/tests/test_scoped_numerical_costs.py::test_public_scoped_missing_or_rejected_intrinsic_costs_keep_auto_native[rejected-mixed holdout]"
+      ],
+      "selected_nodes": 8,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/03-test_scoped_numerical_costs/command.json",
+        "sha256": "1e4c6104ecf26db589edc55384092286baf5466eb3fecc96710e2790212b9835"
+      },
+      "log_sha256": "e36453fd23043ed2ee1939aaac733ff700554c4657f2f9b76999dd6eb812d2d4",
+      "junit_sha256": "eac1a9f1e5d00db1946fa8aa3eeff29ac50637235a45ba7671dab306d73c66dd"
+    },
+    {
+      "kind": "reviewed_test_maintenance",
+      "file": "compiler/tests/test_scoped_pending_owner_report.py",
+      "nodes": 2,
+      "selection": "full current file",
+      "argv": [
+        "taskset",
+        "-c",
+        "0-11",
+        "timeout",
+        "240s",
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-c",
+        "/home/jirka/research/fortran-abomination/compiler/pyproject.toml",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/fortran-committable-snapshot-20261022/followup-pytest-cache",
+        "--basetemp=/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/04-test_scoped_pending_owner_report/temporary",
+        "--junitxml=/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/04-test_scoped_pending_owner_report/junit.xml",
+        "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_pending_owner_report.py"
+      ],
+      "source_sha256": "a36812584e002059291cb5f8fb30cea65b613db987dab80d26cea02c0e50deaa",
+      "seconds": 5.670783837995259,
+      "exit_code": 1,
+      "log": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/04-test_scoped_pending_owner_report/output.log",
+      "junit": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/04-test_scoped_pending_owner_report/junit.xml",
+      "counts": {
+        "tests": 2,
+        "failures": 1,
+        "errors": 0,
+        "skipped": 0
+      },
+      "suite": "main",
+      "selection_kind": "entire_file_inventory",
+      "selected_nodeids": [
+        "compiler/tests/test_scoped_pending_owner_report.py::test_owner_prediction_requires_every_reached_segment[True]",
+        "compiler/tests/test_scoped_pending_owner_report.py::test_owner_prediction_requires_every_reached_segment[False]"
+      ],
+      "selected_nodes": 2,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/04-test_scoped_pending_owner_report/command.json",
+        "sha256": "13e9a4c16d3cb4ce1be1274f53f8173bf5526e8f7b87f647732e118017324935"
+      },
+      "log_sha256": "b61d36e2a015db07353952557210124989be62f2b1fa181a3944721a1a53388c",
+      "junit_sha256": "adda92e2a35b839ead07cebb5a3cb9161cdbe8b42dca289cdd9c2c32beb20950"
+    },
+    {
+      "kind": "reviewed_test_maintenance",
+      "file": "compiler/tests/test_selection_activation_teams.py",
+      "nodes": 5,
+      "selection": "full current file",
+      "argv": [
+        "taskset",
+        "-c",
+        "0-11",
+        "timeout",
+        "240s",
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-c",
+        "/home/jirka/research/fortran-abomination/compiler/pyproject.toml",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/fortran-committable-snapshot-20261022/followup-pytest-cache",
+        "--basetemp=/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/05-test_selection_activation_teams/temporary",
+        "--junitxml=/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/05-test_selection_activation_teams/junit.xml",
+        "/home/jirka/research/fortran-abomination/compiler/tests/test_selection_activation_teams.py"
+      ],
+      "source_sha256": "7fafb8a8c7fec65a99f9d652bbf13df062f8d9df3e7bc0d8c41e86fce525a11c",
+      "seconds": 4.278400247989339,
+      "exit_code": 0,
+      "log": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/05-test_selection_activation_teams/output.log",
+      "junit": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/05-test_selection_activation_teams/junit.xml",
+      "counts": {
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "suite": "main",
+      "selection_kind": "entire_file_inventory",
+      "selected_nodeids": [
+        "compiler/tests/test_selection_activation_teams.py::test_multiple_tiled_original_units_retain_distinct_reached_read_authority",
+        "compiler/tests/test_selection_activation_teams.py::test_multiple_tiled_original_units_compile_with_shared_guard_scratch",
+        "compiler/tests/test_selection_activation_teams.py::test_mutable_preparation_registry_cannot_reassociate_original_reads[lexical]",
+        "compiler/tests/test_selection_activation_teams.py::test_mutable_preparation_registry_cannot_reassociate_original_reads[joined]",
+        "compiler/tests/test_selection_activation_teams.py::test_combined_original_team_facade_retains_exact_read_selection"
+      ],
+      "selected_nodes": 5,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/05-test_selection_activation_teams/command.json",
+        "sha256": "9bf53d58bc2664da85b05174374b53dbd4d6215fb68786040a1f9b319fcf5ef2"
+      },
+      "log_sha256": "38d5fff17b6f7b7072badf03d18645564176b5dc46b8da38ec96cbf325830f03",
+      "junit_sha256": "bdfc5cded5f1b92ded6eae8c98adf3d59f4a6e7b442f4369b66c1935e6324eb3"
+    },
+    {
+      "kind": "reviewed_test_maintenance",
+      "file": "compiler/tests/test_separate_numerical_team.py",
+      "nodes": 12,
+      "selection": "full current file",
+      "argv": [
+        "taskset",
+        "-c",
+        "0-11",
+        "timeout",
+        "240s",
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-c",
+        "/home/jirka/research/fortran-abomination/compiler/pyproject.toml",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/fortran-committable-snapshot-20261022/followup-pytest-cache",
+        "--basetemp=/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/06-test_separate_numerical_team/temporary",
+        "--junitxml=/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/06-test_separate_numerical_team/junit.xml",
+        "/home/jirka/research/fortran-abomination/compiler/tests/test_separate_numerical_team.py"
+      ],
+      "source_sha256": "5137950b50031dd7b07126c62fd4ff234f1a0463074210ad25018dbe61e62086",
+      "seconds": 1.8768501430022297,
+      "exit_code": 0,
+      "log": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/06-test_separate_numerical_team/output.log",
+      "junit": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/06-test_separate_numerical_team/junit.xml",
+      "counts": {
+        "tests": 12,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "suite": "main",
+      "selection_kind": "entire_file_inventory",
+      "selected_nodeids": [
+        "compiler/tests/test_separate_numerical_team.py::test_ordinary_separate_groups_keep_one_owner_and_native_partial_bridge[4]",
+        "compiler/tests/test_separate_numerical_team.py::test_native_separate_fallback_preserves_each_original_do_and_nowait[4]",
+        "compiler/tests/test_separate_numerical_team.py::test_ordinary_separate_groups_keep_one_owner_and_native_partial_bridge[8]",
+        "compiler/tests/test_separate_numerical_team.py::test_native_separate_fallback_preserves_each_original_do_and_nowait[8]",
+        "compiler/tests/test_separate_numerical_team.py::test_whole_nowait_group_keeps_ordered_units_but_requires_entry_reads",
+        "compiler/tests/test_separate_numerical_team.py::test_private_scalar_carried_between_original_do_units_cannot_become_a_capture",
+        "compiler/tests/test_separate_numerical_team.py::test_nonflat_or_native_siblings_keep_the_existing_joined_team_route[<lambda>0]",
+        "compiler/tests/test_separate_numerical_team.py::test_nonflat_or_native_siblings_keep_the_existing_joined_team_route[<lambda>1]",
+        "compiler/tests/test_separate_numerical_team.py::test_separate_partition_does_not_expand_original_parallel_clause_support[reduction(+:s)]",
+        "compiler/tests/test_separate_numerical_team.py::test_separate_partition_does_not_expand_original_parallel_clause_support[num_threads(4)]",
+        "compiler/tests/test_separate_numerical_team.py::test_separate_partition_does_not_expand_original_parallel_clause_support[if(n>0)]",
+        "compiler/tests/test_separate_numerical_team.py::test_separate_group_unit_budget_and_semicolon_source_boundary_are_enforced"
+      ],
+      "selected_nodes": 12,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/06-test_separate_numerical_team/command.json",
+        "sha256": "f3041d314b332316ae5cbcd7d4df1586160efd27f85aa927da0fb2cea827a17d"
+      },
+      "log_sha256": "fafdf99d5ba9e8f190288bd69619b6772fb05cde97bc0a36db5127a77b6a4d6f",
+      "junit_sha256": "26d1cbe98e9ac1c2384c3b8b96503e1427858797e5619d82f5baa721effce27a"
+    }
+  ],
+  "normalization_inputs": [
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/summary.json",
+      "sha256": "f69ba400242e44fba6e989af6442290b75e6ab8290122c40e031aaee69426988"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/final-collection/main/inventory.json",
+      "sha256": "280d1862d851440ec90a0ca1799c5800e56f9d174aa9e00e72e5332bd2fd8cf3"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/final-collection/pipeline/inventory.json",
+      "sha256": "0fd2075a8aa6768a6acb10775268f90c273b46793b46cdda8701f18898fe450b"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/normalize_whole_file_summaries.py",
+      "sha256": "688da78e6354e22bc0041881188b6e99ab32e6de26d61e6be18dd7e0e9e487da"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/plan.json",
+      "sha256": "7c4b91e8aa418fd0abb909a2d76b1ea1f831c9af0b4579c624523bd17103786b"
+    }
+  ],
+  "normalization": "Metadata only: exact selected nodes/suite derived from final inventory and all raw JUnit case identities; original argv, source_sha256, exit codes and failed outcomes unchanged. Missing/wrong/multifile/partial coverage fails closed; no historical node renamed or relabeled."
+}

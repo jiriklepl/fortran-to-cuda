@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "user_instruction": "also commit the stage pls",
+  "authorized_scope": "Stage and create local snapshot commits in both main and required companion elmm-pipeline repositories after final evidence and exact-index validation. No push or further redesign.",
+  "precedence": "Updates earlier stage-only scope; immutable source-authority and recipe no-commit statements describe authorization at their sealing time.",
+  "performance_snapshot_acceptance": "User: 1% difference is fine for the snapshot, carry on. Exact recorded differences remain -0.4827% channel-simple and +1.2683% channel100.",
+  "source_authority": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/final-source-authority-addendum.json",
+    "sha256": "dcfd5076069ca556ad2f8e23d32a2541abe2bcc7c4cc3e67be806b026d52f347"
+  }
+}

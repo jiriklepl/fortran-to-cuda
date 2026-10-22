@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "first_pass_preserved": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+  "retry_policy": "only root/peer reviewed maintenance; explicit strict-affinity capability",
+  "root_authorized_concurrent_nonperformance_validation": true,
+  "first_pass_completed_files_at_start": 275,
+  "complete": true,
+  "results": [
+    {
+      "kind": "reviewed_test_maintenance",
+      "file": "compiler/tests/test_scoped_pending_owner_report.py",
+      "nodes": 2,
+      "selection": "full current file",
+      "argv": [
+        "taskset",
+        "-c",
+        "0-11",
+        "timeout",
+        "240s",
+        "/home/jirka/research/fortran-abomination/.venv/bin/python",
+        "-m",
+        "pytest",
+        "-c",
+        "/home/jirka/research/fortran-abomination/compiler/pyproject.toml",
+        "-q",
+        "-o",
+        "cache_dir=/tmp/fortran-committable-snapshot-20261022/followup-pytest-cache",
+        "--basetemp=/tmp/fortran-committable-snapshot-20261022/cpu-followups-pending-report-final/00-test_scoped_pending_owner_report/temporary",
+        "--junitxml=/tmp/fortran-committable-snapshot-20261022/cpu-followups-pending-report-final/00-test_scoped_pending_owner_report/junit.xml",
+        "/home/jirka/research/fortran-abomination/compiler/tests/test_scoped_pending_owner_report.py"
+      ],
+      "source_sha256": "afe2c0c7fab4cdb35a4406c1cf415cea52b14352d4d248cf4f0038f3c7b1ea22",
+      "seconds": 5.451265568990493,
+      "exit_code": 0,
+      "log": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-pending-report-final/00-test_scoped_pending_owner_report/output.log",
+      "junit": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-pending-report-final/00-test_scoped_pending_owner_report/junit.xml",
+      "counts": {
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "suite": "main",
+      "selection_kind": "entire_file_inventory",
+      "selected_nodeids": [
+        "compiler/tests/test_scoped_pending_owner_report.py::test_owner_prediction_requires_every_reached_segment[True]",
+        "compiler/tests/test_scoped_pending_owner_report.py::test_owner_prediction_requires_every_reached_segment[False]"
+      ],
+      "selected_nodes": 2,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-pending-report-final/00-test_scoped_pending_owner_report/command.json",
+        "sha256": "447ff9678034b93d0d0871b851854e6079a72968cc387d10a9322645160a19bb"
+      },
+      "log_sha256": "d079d2677b09ed2411277136d26ea8c141d494a14a151201c3fb4334c97dc970",
+      "junit_sha256": "5d8d8f3cc6908e628e336bb1e384122fd33065b0ecd0191b44909ed2adf4f954"
+    }
+  ],
+  "normalization_inputs": [
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-pending-report-final/summary.json",
+      "sha256": "81043b201f401eb1cd3a83b8a48b1cce0325d50b0bd6e3f18b479a8b28756316"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/final-collection/main/inventory.json",
+      "sha256": "280d1862d851440ec90a0ca1799c5800e56f9d174aa9e00e72e5332bd2fd8cf3"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/final-collection/pipeline/inventory.json",
+      "sha256": "0fd2075a8aa6768a6acb10775268f90c273b46793b46cdda8701f18898fe450b"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/normalize_whole_file_summaries.py",
+      "sha256": "688da78e6354e22bc0041881188b6e99ab32e6de26d61e6be18dd7e0e9e487da"
+    },
+    {
+      "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/plan.json",
+      "sha256": "7c4b91e8aa418fd0abb909a2d76b1ea1f831c9af0b4579c624523bd17103786b"
+    }
+  ],
+  "normalization": "Metadata only: exact selected nodes/suite derived from final inventory and all raw JUnit case identities; original argv, source_sha256, exit codes and failed outcomes unchanged. Missing/wrong/multifile/partial coverage fails closed; no historical node renamed or relabeled."
+}

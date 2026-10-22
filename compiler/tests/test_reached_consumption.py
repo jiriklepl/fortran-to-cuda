@@ -6,12 +6,12 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend import native_group_structure, source_effects
 from compiler.frontend.reached_windows import ReachedWindowProof, prove_reached_window
 from compiler.frontend.summary_cache import SummaryCache
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.generation_transaction import GenerationTransaction
 from compiler.scopes.lexical import LexicalOwner
 from compiler.scopes.reached_owner import ReachedWindowOwner

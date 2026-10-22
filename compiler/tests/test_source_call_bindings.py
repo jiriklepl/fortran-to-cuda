@@ -7,11 +7,11 @@ from hashlib import sha256
 import pytest
 from fparser.two.utils import walk
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import form_source_scopes
 
 

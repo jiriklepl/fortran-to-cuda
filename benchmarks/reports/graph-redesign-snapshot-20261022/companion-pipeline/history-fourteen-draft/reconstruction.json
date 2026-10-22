@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "status": "DRAFT_CURRENT_SOURCE_RECONSTRUCTION_TEST_CLOSURE_PENDING",
+  "base_commit": "81e374410efe61d2e6dd64e8968264b22991fac5",
+  "source_repository": "/home/jirka/research/fortran-abomination/elmm-pipeline",
+  "modified_tracked_files": 10,
+  "new_files": 4,
+  "required_delta_files": [
+    {
+      "path": "elmm_pipeline/_legacy_scopes.py",
+      "current_sha256": "e34639824021851b66124636f1c33ef978099b6df4815cfa9644d53156e950c1",
+      "current_copy": "current/elmm_pipeline/_legacy_scopes.py.source",
+      "base_sha256": null,
+      "base_status": "absent at base"
+    },
+    {
+      "path": "elmm_pipeline/cli.py",
+      "current_sha256": "41d4df8a6a034a96a8ced06488280c4d1274a9a1f60d5e4e1f7c749bd0991cb7",
+      "current_copy": "current/elmm_pipeline/cli.py.source",
+      "base_sha256": "913fcfa7931ba83613fb9681227df0a4bba40488592065ce4a7e6d4ceb8327e8",
+      "base_status": "tracked",
+      "base_copy": "base/elmm_pipeline/cli.py.source"
+    },
+    {
+      "path": "elmm_pipeline/dataflow_graph.py",
+      "current_sha256": "942ccf4558378327dca6efb4410b181f9798c171fdeb6afd4977344104444dce",
+      "current_copy": "current/elmm_pipeline/dataflow_graph.py.source",
+      "base_sha256": null,
+      "base_status": "absent at base"
+    },
+    {
+      "path": "elmm_pipeline/local_adapter.py",
+      "current_sha256": "b8315fff76d091a84e47d1ea75a19ade21a3492fdb557aa86fa291af72ecf2f1",
+      "current_copy": "current/elmm_pipeline/local_adapter.py.source",
+      "base_sha256": "9c168021745983841954182be9ef2a6e1578a02e282e03afa705d66f7a8fec9f",
+      "base_status": "tracked",
+      "base_copy": "base/elmm_pipeline/local_adapter.py.source"
+    },
+    {
+      "path": "tests/test_application_build.py",
+      "current_sha256": "8757e8869b33e807d5bd311c0342f36cd4c074ddf6167d3df32dce0c65079122",
+      "current_copy": "current/tests/test_application_build.py.source",
+      "base_sha256": "517af79a61237388d9c72284b5dc48badae9301d4ecfa64c38527cd26935c433",
+      "base_status": "tracked",
+      "base_copy": "base/tests/test_application_build.py.source"
+    },
+    {
+      "path": "tests/test_checked_execution_plan.py",
+      "current_sha256": "740952c8b610e5db704cd4cc05d46477565597a51e125e3dfe1ddae13cb610e5",
+      "current_copy": "current/tests/test_checked_execution_plan.py.source",
+      "base_sha256": "eb3149a2aa41681cc351ee5d092138c0b78c92c59bf11b7e24ba67c412ac67f7",
+      "base_status": "tracked",
+      "base_copy": "base/tests/test_checked_execution_plan.py.source"
+    },
+    {
+      "path": "tests/test_collective_scopes.py",
+      "current_sha256": "b8ee17961dd8fcab85df216a230ce9ef9b311a847d9fbd14eeb6b5ba3253ce6f",
+      "current_copy": "current/tests/test_collective_scopes.py.source",
+      "base_sha256": "f213872d810d1afcb52b639dbb8b3851ccf589f8ba62bbbdb557d9e3515e91cd",
+      "base_status": "tracked",
+      "base_copy": "base/tests/test_collective_scopes.py.source"
+    },
+    {
+      "path": "tests/test_current_scope_protocol.py",
+      "current_sha256": "be2e6847fd4ce734072d41a49bd6a4d62362e0fd4ec467644cad7ff41af7c04c",
+      "current_copy": "current/tests/test_current_scope_protocol.py.source",
+      "base_sha256": null,
+      "base_status": "absent at base"
+    },
+    {
+      "path": "tests/test_dataflow_graph.py",
+      "current_sha256": "a44a1856e93cc0bbbc5b0141c2fa9898754bc9d88af5c94c2a138912af163e03",
+      "current_copy": "current/tests/test_dataflow_graph.py.source",
+      "base_sha256": null,
+      "base_status": "absent at base"
+    },
+    {
+      "path": "tests/test_local_scopes.py",
+      "current_sha256": "fcd919b06064aa6e514dacf4fdda9f2fa1110fba2a4e78e63a0309e9f3b8685f",
+      "current_copy": "current/tests/test_local_scopes.py.source",
+      "base_sha256": "52c9a4a767ea3fb381ecf6a740801d440d88975af0b9687039cace287e53e028",
+      "base_status": "tracked",
+      "base_copy": "base/tests/test_local_scopes.py.source"
+    },
+    {
+      "path": "tests/test_owner_measurement.py",
+      "current_sha256": "8725d163902415ab76d83bf3ee53338902c2005c241cbfcd305c5618a7e4734b",
+      "current_copy": "current/tests/test_owner_measurement.py.source",
+      "base_sha256": "f9430dad7e6328d6a8fd181c51afbe846525e2912368b0fd17e2527a5f67cf2c",
+      "base_status": "tracked",
+      "base_copy": "base/tests/test_owner_measurement.py.source"
+    },
+    {
+      "path": "tests/test_scope_extraction.py",
+      "current_sha256": "f30374d370ccd74f7521270c893c530c751823b384bef59823df458ae9e90bda",
+      "current_copy": "current/tests/test_scope_extraction.py.source",
+      "base_sha256": "8013b23e2e483b30669257b41470d0a69cd4c50845479d4b34d117878366013b",
+      "base_status": "tracked",
+      "base_copy": "base/tests/test_scope_extraction.py.source"
+    },
+    {
+      "path": "tests/test_scoped_adaptation.py",
+      "current_sha256": "6b34afd9944e5909d0b77a0723ce787f37c365ddb102c0d5acbed6e03e53965d",
+      "current_copy": "current/tests/test_scoped_adaptation.py.source",
+      "base_sha256": "9f7152fc9f9baeaa09d7c4e64249ca4122adb0a650886cea9b1da58832401851",
+      "base_status": "tracked",
+      "base_copy": "base/tests/test_scoped_adaptation.py.source"
+    },
+    {
+      "path": "tests/test_selection_request.py",
+      "current_sha256": "4dc59a420fe08626484cfc650fb4dc86cb49dec45fda7ba5e01facb8793c9b08",
+      "current_copy": "current/tests/test_selection_request.py.source",
+      "base_sha256": "44cee49c2b41bc1909b152bfbbc1329f5eda384b96552e21608fc6ddfb0955fb",
+      "base_status": "tracked",
+      "base_copy": "base/tests/test_selection_request.py.source"
+    }
+  ],
+  "binary_diff_patch": {
+    "path": "all-fourteen-files-from-base.patch",
+    "sha256": "066151f39bdf92b75a8da6e269a06d881ddca6d880ca9262812dd2fb26bf6f40"
+  },
+  "verification": "Fresh private copied base preimages: git apply --check and git apply exited0; all14 resulting postimages exactly match current source SHA. No existing repository/index changed.",
+  "initial_eight_file_package": "Existing companion-pipeline/reconstruction.json and all payload bytes retained separately, immutable. Final14 source snapshot expands maintenance files; does not rewrite retrospective firstpass authority.",
+  "test_status": "Root final test/source authority pending; not all-tests-pass evidence.",
+  "source_archive_suffix": ".py.source stores exact original bytes without pytest discovery; restore original path field or apply patch.",
+  "production_pipeline_delta": "Same four production integration files as initial8; six extra maintained-test files added to final14, subject to finalhash refresh after all hardware followups.",
+  "packaging_only": true
+}

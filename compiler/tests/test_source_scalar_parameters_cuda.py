@@ -99,7 +99,7 @@ end module
         assert result.returncode == 0, result.stdout + result.stderr
         return result
 
-    report = json.loads(run([sys.executable, "-m", "compiler", "--form-scopes", "--input", str(source),
+    report = json.loads(run([sys.executable, "-m", "compiler.tests.support.reference_scopes", "--form-scopes", "--input", str(source),
                             "--source-file", str(constants), "--source-file", str(helpers),
                             "--kernel", "renamed_owner::advance", "--scope-facts", str(facts_path),
                             "--scope-execution", "reached", "--gpu-policy", "sections", "--memory-model", "scoped",

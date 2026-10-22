@@ -6,8 +6,8 @@ from hashlib import sha256
 
 import pytest
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import form_source_scopes
 from compiler.tests.test_source_scopes import FACT, PROGRAM
 
@@ -53,7 +53,7 @@ def test_partial_native_overwrite_has_matching_query_and_execution_sections(tmp_
     assert "%write_count" in text
     assert "%overwrite_count" in text
     assert "%access = fort_native_" in text
-    assert "fort_scope_host_begin(fort_context," in text
+    assert "fort_scope_access_begin_v1(fort_context," in text
     assert "shared native access preparation failed" in text
     assert "FORT_SCOPE_WRITE_ALL" not in text
     assert "FORT_SCOPE_READ_ALL" not in text
@@ -84,7 +84,8 @@ def test_native_rmw_and_unknown_ranges_keep_distinct_safe_effects(tmp_path):
     assert report["scope_count"] == 1
     assert "FORT_SCOPE_WRITE_ALL" in text
     assert "fort_scope_plan_validate(" in text
-    assert "fort_native_" not in text
+    assert "fort_native_task_bindings(1)%access = fort_scope_access(flags=FORT_SCOPE_WRITE_ALL)" in text
+    assert "fort_scope_access_begin_v1(fort_context, c_loc(fort_native_task_bindings), 1_c_size_t" in text
 
 
 def test_partial_native_out_with_unproved_bounds_remains_an_original_boundary(tmp_path):

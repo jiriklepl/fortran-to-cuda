@@ -7,7 +7,7 @@ import shutil
 import pytest
 
 from compiler.tests.test_source_rank_reduced_views import SOURCE
-from compiler.tests.test_source_scopes import FACT, ROOT, generate, run
+from compiler.tests.test_source_scopes import FACT, ROOT, assert_uncalibrated_native, generate, run
 
 
 DRIVER = """program verify
@@ -57,11 +57,20 @@ def plane_binaries(tmp_path_factory):
     results, cache = {}, {}
     for mode in ("sections", "auto"):
         original, output, manifest = generate(directory / mode, SOURCE, entry="step", mode=mode, facts=facts, checkout=checkout)
-        assert manifest["scope_count"] == 1, manifest["boundaries"]
-        assert manifest["scopes"][0]["borrowed_views"]["abi_version"] == 2
+        if mode == "auto":
+            assert_uncalibrated_native(manifest)
+            assert original.read_text() == SOURCE
+        else:
+            assert manifest["scope_count"] == 1, manifest["boundaries"]
+            assert manifest["scopes"][0]["borrowed_views"]["abi_version"] == 2
         objects = []
+        if mode == "auto":
+            target = output / "unchanged-original.o"
+            run([fortran, "-O3", "-std=f2018", "-fopenmp", "-fcheck=all,array-temps", "-c", str(original),
+                 "-o", str(target)], cwd=output)
+            objects.append(str(target))
         headers = tuple((name, digest) for name, digest in sorted(manifest["artifacts_sha256"].items())
-                        if name.endswith((".h", ".hpp", ".cuh")))
+                        if name.endswith((".h", ".hpp", ".cuh"))) if mode == "sections" else ()
         for role in ("common_runtime", "shared_entry", "original_source"):
             for item in manifest["build_sources"]:
                 if item["role"] != role:

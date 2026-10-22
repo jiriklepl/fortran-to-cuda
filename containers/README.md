@@ -265,3 +265,163 @@ Use `--experiment FILE` to redraw one of those fresh paired reports.
 it does not measure the ELMM application or its 20% target. `entrypoint.sh test`
 runs the container workflow tests. Arbitrary commands such as `bash` remain
 available through either container launcher.
+
+## Fresh three-way compiler comparison (`e2e`)
+
+`reproduce_e2e.py` builds pristine original native ELMM, the committed compiler's
+SGS/direct control, and a selected reworked compiler graph. It never executes
+historical binaries or reuses historical timings. The committed compiler comes
+from `git archive` of the selected revision, irrespective of dirty/staged files;
+the candidate compiler is frozen in a separate snapshot before compilation.
+The default committed revision is `be58ab809296b97ea39d701828a2621adfc6b3dc`, the historical
+SGS/direct control. `--committed-ref` can explicitly select another compatible
+historical compiler revision.
+
+```bash
+# Fresh full-duration comparison, one warmup and seven rotated samples per mode.
+# Use the prepared parser environment; --python can select it independently.
+.venv/bin/python containers/reproduce_e2e.py \
+    --committed-ref be58ab809296b97ea39d701828a2621adfc6b3dc \
+    --candidate-request path/to/graph-request.json \
+    --output-dir out/comparison-01
+
+# Bind the checkout (including Git history and the prepared pipeline cache)
+# read-only to let the container archive exact committed compiler bytes.
+WORKSPACE_ROOT="$PWD" OUTPUT_DIR="$PWD/out" ./containers/run-docker.sh e2e \
+    --candidate-request /workspace/containers/requests/elmm-sgs-convection-graph.json \
+    --committed-root /workspace --committed-ref be58ab809296b97ea39d701828a2621adfc6b3dc --output-dir /output/comparison-01
+
+# Primary fourth-order channel: preserve natural-duration correctness, while
+# profiling and timing use the same explicit 100-step duration in all modes.
+.venv/bin/python containers/reproduce_e2e.py --case channel \
+    --timing-steps 100 --timeout 3600 --require-cuda-profile \
+    --candidate-request path/to/graph-request.json --output-dir out/channel-01
+```
+
+The candidate request uses application-relative paths and the compiler's capture
+facts; the runner transports those facts without inferring source semantics:
+
+```json
+{
+  "schema_version": 1,
+  "source": "elmm/src/dynamics.f90",
+  "entry": "dynamics::selected_procedure",
+  "source_files": ["elmm/src/subgrid.f90"],
+  "capture_facts": {},
+  "options": {"gpu_policy": "sections", "scope_execution": "graph", "scope_transfers": "direct"}
+}
+```
+
+Supply the actual checked entry and capture facts for the workload. Omitting
+`--candidate-request` selects the same SGS numerical coverage as the committed
+control through the candidate's graph execution; it does not claim broad graph
+coverage. The committed archive retains its original bounded/direct strategy.
+The primary workloads are `channel-simple` and the
+original fourth-order `channel`, including its filter and wall model. Legacy
+`second-order`/`fourth-order` presets remain available for component diagnostics;
+they do not replace either primary workload. The original configured duration is
+preserved for correctness unless `--steps` explicitly requests an all-phase smoke
+test. `--timing-steps N` caps only timing, warmup and profiling runs, using a
+separate native reference at that same duration. It retains natural-duration
+float64 correctness and reports capped performance distinctly from full-duration
+performance. `--config DIR`
+selects custom inputs. Output/work directories must be new.
+
+Every comparison writes `prepared-builds.json` after compiling. A second case
+can use `--prepared-builds PATH` to retain those exact executables while
+collecting every correctness, profile and timing run afresh. Compiler snapshots,
+pristine source identities, selected roots, thread/build options, every executed
+build receipt and generated artifact must still match. The native executable
+must contain only original compilation units, and the float64 diagnostic must
+match the current observer. Changed artifacts are rejected; historical runs and
+timing summaries are never imported. Use the frozen candidate compiler path
+from the first report with `--candidate-root` when reusing its build set.
+Comparison records refer to original proof manifests by sidecar path and SHA-256;
+they do not embed another copy of every proof. Reuse authenticates and loads the
+unchanged sidecars before checking their generated artifacts.
+Nsight profiling explicitly requests CUDA graph node activity, so actual kernel
+counts remain available when the application submits CUDA graphs. Graph API
+submissions, logical kernels, direct launches and device activity stay separate.
+
+`--control-evidence PATH` additionally accepts an explicit
+`fresh-session-natural-controls` manifest for separately executed native and
+committed natural controls from the same session. It requires prepared builds
+and revalidates complete float64 fields, original shapes/bounds, VTK bytes,
+logs, numerical input files, executable/build identities and the recorded
+thread/environment contract. Original strict comparison results and native
+repeatability failures remain unchanged and visible in the report. The final
+candidate's natural correctness runs, runtime traces, profiles and every rotated
+production timing sample remain fresh. No historical timing result is imported.
+
+A candidate request may also be a nonempty JSON array of these objects. Each
+root is generated independently against pristine source bytes, with a separate
+240-second compiler limit. The compiler's composition command authenticates and
+merges original source edits, rejects conflicting replacements, and shares one
+runtime build. The runner authenticates all component and merged artifacts
+before changing the application copy; original component proof manifests remain
+separate for runtime diagnostics. The supplied
+`requests/elmm-sgs-convection-graph.json` forces eligible numerical work onto the
+GPU while adding the wider Convection graph. This is a coverage experiment,
+not a performance recommendation: native neighbors can make those extra
+transfers expensive. `requests/elmm-sgs-convection-auto.json` supplies the same
+roots and capture facts with generic cost-based placement. It requires an
+independently measured applicable calibration profile; missing costs retain
+native execution. Selecting these entry roots does not prescribe numerical
+leaves, movement, or scheduling. Compare actual transfer counts and complete
+wall measurements before claiming an improvement.
+
+Pass the external profile with `--calibration-profile /absolute/path/to/hardware.json`;
+it is applied only to candidate roots. Its bytes, GPU UUID, CPU identity, thread
+count, float64 contract and scoped runtime identity are recorded and checked.
+Conflicting per-root profiles are rejected, and prepared builds reject changed
+profile bytes. The committed control retains its original policy. An all-native
+AUTO result requires explicit runtime decision or pre-execution decline evidence
+and retains every numerical gate. It reports unavailable CUDA activity when none
+occurred; it is not an offloading performance achievement.
+
+Each mode gets a fresh production build with executed build-command receipts.
+Separate diagnostic mains dump every element of the eleven maintained float64
+fields and any allocated optional/averaged fields, including halos, original
+bounds and shape. Production outputs and diagnostics must agree with the fresh
+native reference, and native repeatability is checked. The established field
+tolerances remain `atol=1e-6`, `rtol=1e-5`; matching NaNs/infinities fail.
+
+Timing samples use untraced production executables and complete process wall
+time. Traced diagnostics report observed runtime kernel submissions, transfer bytes,
+allocations and waits from runtime events, without inferring counts from call
+names or source structure. Additional Nsight Systems runs collect actual CUPTI
+kernel/copy counts, bytes, device activity durations, and separate CUDA API
+counts and CPU durations. Use `--require-cuda-profile` when those diagnostics
+must be available for GPU execution; a historical control that executes an
+untransformed native branch retains its zero observed runtime activity and
+unavailable device profile. The candidate must demonstrate CUDA execution or
+an explicit generic AUTO decision to retain native execution.
+`--skip-cuda-profile` explicitly skips profiling. Neither traced
+runtime nor Nsight durations enter the timing samples.
+Complete parsed runtime evidence is written once per trace to a SHA-256-bound
+`gpu-activity.json` sidecar. Reports retain observed counters, source identities,
+modeled decision summaries and preflight declines; readers can authenticate and
+restore complete records with `load_runtime_activity`. Generic policy labels
+are accepted only from literal trace calls in authenticated generated CUDA;
+versioned source positions provide attribution.
+`report.json` retains every sample, field comparison,
+manifest and input hash; `report.md` presents native/committed/reworked ratios.
+
+For a shorter development comparison of already built artifacts, run
+`python containers/probe_prepared_e2e.py --prepared-builds PREPARED.json --output NEW_DIR`.
+It authenticates the original sources, compiler snapshots, build receipts and
+binaries, then collects one warmup and three rotated samples for each mode.
+The simple case keeps its natural109 steps; channel uses100 matched steps.
+Each execution checks completed steps and VTK output against a fresh original
+native warmup. `--validate-only` authenticates and prepares inputs without
+executing an application. These probes do not validate full float64 storage or
+grant final performance qualification; final acceptance still uses the full
+comparison above with seven samples and natural-duration correctness.
+
+New candidate snapshots omit `compiler/_local` reports and cache directories.
+A separate `code_equivalence` digest records the included source files.
+Historical snapshot hashes and the files they authenticate remain unchanged.
+`--allow-validation-failure` explicitly permits collecting unqualified timings
+while preserving all mismatches. An all-phase smoke run or failed correctness check cannot
+qualify a performance claim. Keep the work directory with the report because
+build receipts reference its artifacts.

@@ -1,0 +1,245 @@
+"""Held approved fixed-TOP natural109 storage check; diagnostic links, never timing."""
+from __future__ import annotations
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import time
+
+ROOT = Path(__file__).resolve().parent
+STAGE = ROOT / 'stage.json'
+EXISTING = Path('/tmp/fortran-deterministic-top-cross-mode-20')
+NATIVE = Path('/tmp/fortran-native-top-reference-serial-01')
+
+def digest(path):
+    with Path(path).open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+def read(path):
+    return json.loads(Path(path).read_text())
+
+def write(path, value):
+    path = Path(path)
+    temporary = path.with_name(path.name + '.pending')
+    if temporary.exists():
+        raise RuntimeError('preserve existing partial report: ' + str(temporary))
+    temporary.write_text(json.dumps(value, indent=2) + '\n')
+    temporary.replace(path)
+
+def historical_helper_projection(bindings, stage):
+    """Resolve one reviewed historical parser preimage; every other guard is unchanged."""
+    policy = stage['historical_helper_compatibility']
+    current = '/home/jirka/research/fortran-abomination/elmm-pipeline/elmm_pipeline/gpu_validation.py'
+    old_sha = '8e1cf21aff1ae868f02082ef077fee225cb4626a682ae8f6c408ca84381756cf'
+    new_sha = '1fa37f95456d1779477214a413264b6112950f21e1129ef2fc9574f58ee66479'
+    if (policy['current']['path'] != current or policy['current']['sha256'] != new_sha
+            or policy['historical_preimage']['sha256'] != old_sha):
+        raise RuntimeError('unexpected historical validator compatibility identity')
+    if digest(current) != new_sha or digest(policy['historical_preimage']['path']) != old_sha:
+        raise RuntimeError('approved current parser or retained historical parser changed')
+    result = dict(bindings)
+    if current in result:
+        if result[current] != old_sha:
+            raise RuntimeError('historical helper binding is not the exact reviewed preimage')
+        result[current] = new_sha
+        result[policy['historical_preimage']['path']] = old_sha
+    return result
+
+
+def checked_historical_plan(build, stage):
+    # Original modules/stages stay byte-exact; this explicit sidecar resolves only
+    # the approved parser-path change, without modifying their functions.
+    if digest(build.PLAN) != build.PLAN_SHA256:
+        raise RuntimeError('reviewed original plan changed')
+    original_stage = read(build.STAGE)
+    if original_stage['plan'] != {'path': str(build.PLAN), 'sha256': build.PLAN_SHA256}:
+        raise RuntimeError('original script stage belongs to another plan')
+    build.verify_hashes(original_stage['script_files_sha256'])
+    build.verify_hashes(historical_helper_projection(original_stage['validation_helpers_sha256'], stage))
+    return read(build.PLAN), original_stage
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--execute', action='store_true')
+    parser.add_argument('--authorization', type=Path)
+    args = parser.parse_args()
+    if not args.execute:
+        print('TEXT ONLY: no imports/validator/compiler/application executed. Root authorization and lease required.')
+        return
+    if args.authorization is None:
+        raise RuntimeError('explicit root authorization sidecar required')
+    stage = read(STAGE)
+    auth = read(args.authorization)
+    if (auth.get('authorized_execution') != 'approved_fixedTOP_natural109_three_mode_only'
+            or auth.get('stage_sha256') != digest(STAGE)):
+        raise RuntimeError('root authorization does not bind this exact stage')
+    for path, expected in stage['bound_small_inputs_sha256'].items():
+        if digest(path) != expected:
+            raise RuntimeError('changed staged source/helper/configuration input: ' + path)
+    if sorted(os.sched_getaffinity(0)) != stage['cpu_affinity']:
+        raise RuntimeError('original affinity0..11 required')
+    sys.path.insert(0, str(EXISTING))
+    import build_private as build
+    import run_short as short
+    plan, original_stage = checked_historical_plan(build, stage)
+    receipt = read(EXISTING / 'build-receipt.json')
+    native_receipt = read(NATIVE / 'build-receipt.json')
+    if (receipt['status'] != 'built_private_diagnostic_only'
+            or not receipt['original_inputs_before_after_verified']
+            or not receipt['new_pressure_modules_identical']
+            or receipt['actual_compile_count'] != 2 or receipt['actual_diagnostic_link_count'] != 2
+            or native_receipt['status'] != 'built_private_diagnostic_only'):
+        raise RuntimeError('authentic pressure-only builds required')
+    protected = historical_helper_projection(build.protected_inputs(plan, original_stage), stage)
+    for values in [historical_helper_projection(receipt['protected_inputs_sha256'], stage), receipt['outputs_sha256'],
+                   read(NATIVE / 'build-plan.json')['original_inputs_sha256'],
+                   native_receipt['outputs_sha256'], stage['bound_small_inputs_sha256']]:
+        build.add_bindings(protected, values)
+    protected[str(STAGE)] = digest(STAGE)
+    protected[str(args.authorization)] = digest(args.authorization)
+    for mode, binary in stage['binaries'].items():
+        if protected.get(binary['path']) != binary['sha256']:
+            raise RuntimeError('private executable missing original output authority: ' + mode)
+    build.verify_hashes(protected)
+    public_inputs = short.assert_originals(plan, protected)
+    build.add_bindings(protected, public_inputs)
+    sys.path[:0] = [str(build.REPO / 'containers'), str(build.REPO / 'elmm-pipeline')]
+    import numpy as np
+    from elmm_pipeline.campaigns.halos import compare_fields, fields
+    from elmm_pipeline.validation import compare_vtk, read_vtk, validate_log
+    from probe_prepared_e2e import probe_environment
+    from sgs_experiment import compare_outputs, read_outputs
+    output = ROOT / 'runs-01'
+    output.mkdir(exist_ok=False)
+    report_path = output / 'report.json'
+    report = {'schema_version': 1, 'kind': 'approved_fixedTOP_natural109_three_mode_storage_check',
+              'status': 'preflight_passed', 'case': 'channel-simple', 'steps': 109,
+              'common_pressure_basis_user_approved': True,
+              'approved_source_sha256': stage['approved_pressure_source_sha256'],
+              'public_prepared_build_or_source_proofs_retagged': False,
+              'private_pressure_only_diagnostic_links': True,
+              'final_public_qualification': False, 'performance_sample': False,
+              'stage_sha256': digest(STAGE), 'driver_sha256': digest(__file__),
+              'historical_helper_compatibility': stage['historical_helper_compatibility'],
+              'authorization': {'path': str(args.authorization), 'sha256': digest(args.authorization)},
+              'field_policy': stage['field_policy'], 'runs': [],
+              'original_public_guard_before': {'passed': True, 'authenticated_files': len(public_inputs)},
+              'concurrency_qualification': stage['concurrency_qualification']}
+    write(report_path, report)
+    reference = None
+    try:
+        for mode in ['native', 'be58', 'candidate20']:
+            build.verify_hashes(protected)
+            source = Path(stage['configuration_source'])
+            current = {str(p.relative_to(source)): digest(p) for p in source.rglob('*') if p.is_file()}
+            if current != stage['configuration_sha256']:
+                raise RuntimeError('natural simple configuration changed')
+            directory = output / mode
+            shutil.copytree(source, directory)
+            if (directory / 'output').exists():
+                raise RuntimeError('fresh configuration has existing physical output')
+            env = probe_environment(4)
+            for name in list(env):
+                if name.startswith('ELMM_'):
+                    env.pop(name)
+            for name, value in stage['environment_overlay'].items():
+                if value is None:
+                    env.pop(name, None)
+                else:
+                    env[name] = value
+            env.pop('CUDA_VISIBLE_DEVICES', None)
+            plans = directory / 'plans.jsonl'
+            env['FORT_FFTW_CONTROL_LOG'] = str(plans)
+            binary = stage['binaries'][mode]
+            if digest(binary['path']) != binary['sha256']:
+                raise RuntimeError('private pressure-only executable changed')
+            argv = [binary['path'], "output_dir='output/'"]
+            stdout, stderr = directory / 'stdout.raw', directory / 'stderr.raw'
+            row = {'mode': mode, 'argv': argv, 'cwd': str(directory), 'binary_sha256': binary['sha256'],
+                   'configuration_sha256': current, 'expected_steps': 109, 'expected_natural_end': True,
+                   'cpu_affinity': sorted(os.sched_getaffinity(0)), 'timeout_seconds': 1800,
+                   'environment_sha256': build.value_digest(env),
+                   'environment': {k: env.get(k) for k in stage['environment_record_keys']},
+                   'stdout': str(stdout), 'stderr': str(stderr), 'performance_sample': False}
+            report['runs'].append(row)
+            report['status'] = 'application_active'
+            write(report_path, report)
+            print('APPROVED FIXEDTOP NATURAL109 START', mode, flush=True)
+            started = time.monotonic()
+            try:
+                with stdout.open('xb') as out, stderr.open('xb') as err:
+                    child = subprocess.run(argv, cwd=directory, env=env, stdout=out, stderr=err,
+                                           timeout=1800, check=False)
+                row['returncode'] = child.returncode
+            finally:
+                row['nonperformance_elapsed_seconds'] = time.monotonic() - started
+                for label, path in [('stdout', stdout), ('stderr', stderr)]:
+                    if path.exists():
+                        row[label + '_sha256'] = digest(path)
+                write(report_path, report)
+            if row['returncode'] != 0:
+                raise RuntimeError('application execution failure; remaining modes held')
+            text = stdout.read_text(errors='strict') + '\n' + stderr.read_text(errors='strict')
+            (directory / 'run.log').write_text(text)
+            row['run_log_sha256'] = digest(directory / 'run.log')
+            row['timing'] = validate_log(text, None, expected_completed_steps=109)
+            if not row['timing']['natural_end']:
+                raise RuntimeError('natural simple end missing; remaining modes held')
+            if 'FORT_SCOPED ' in text or 'FORT_OFFLOAD ' in text:
+                raise RuntimeError('unexpected runtime trace in untraced correctness run')
+            row['plans'] = short.attest_plans(plans, stage['expected_exact_four_plan_records'])
+            row['plan_log_sha256'] = digest(plans)
+            # The first native run is the new case-specific oracle. Its self-comparison
+            # validates physical layout/finiteness/VTK, not independent accuracy.
+            if reference is None:
+                reference = {'name': 'fresh_approved_fixedTOP_native_natural109', 'directory': str(directory)}
+                row['comparison_role'] = 'reference storage/layout/finiteness and VTK check only'
+            row['comparisons'] = short.compare_run(directory, [reference], stage['field_policy'], fields,
+                compare_fields, read_outputs, read_vtk, compare_outputs, compare_vtk, np)
+            row['strict_passed'] = all(x['strict_full20_passed'] and x['vtk_validation']['passed']
+                                       for x in row['comparisons'])
+            row['field_files_sha256'] = {p.name: digest(p) for p in directory.glob('fields-*')}
+            row['vtk_sha256'] = {p.name: digest(p) for p in (directory / 'output').glob('*.vtk')}
+            row['execution_IO_layout_FFTW_valid'] = True
+            if mode == 'native':
+                if not row['strict_passed']:
+                    raise RuntimeError('native reference contains nonfinite/invalid storage; later modes held')
+                for name, value in row['field_files_sha256'].items():
+                    protected[str(directory / name)] = value
+                for name, value in row['vtk_sha256'].items():
+                    protected[str(directory / 'output' / name)] = value
+                protected[str(directory / 'run.log')] = row['run_log_sha256']
+                protected[str(plans)] = row['plan_log_sha256']
+            row['ordinary_numerical_failure_continues_independent_candidate20'] = mode == 'be58' and not row['strict_passed']
+            write(report_path, report)
+            build.verify_hashes(protected)
+            print('APPROVED FIXEDTOP NATURAL109 CLOSED', mode, 'strict_passed', row['strict_passed'], flush=True)
+        report['secondary_candidate20_vs_be58'] = short.compare_run(output / 'candidate20',
+            [{'name': 'fresh_approved_fixedTOP_be58_natural109', 'directory': str(output / 'be58')}],
+            stage['field_policy'], fields, compare_fields, read_outputs, read_vtk, compare_outputs, compare_vtk, np)
+        after = short.assert_originals(plan, protected, public_inputs)
+        report.update(status='completed_strict_pass' if all(r['strict_passed'] for r in report['runs']) else 'completed_strict_numerical_fail',
+                      original_public_guard_after={'passed': True, 'authenticated_files': len(after)},
+                      original_and_private_inputs_before_after_verified=True, applications_completed=3)
+    except BaseException as error:
+        report.update(status='held_execution_IO_layout_proof_or_FFTW_failure',
+                      error={'type': type(error).__name__, 'message': str(error)})
+        try:
+            build.verify_hashes(protected)
+            report['protected_inputs_unchanged_after_failure'] = True
+        except BaseException as guard_error:
+            report['post_failure_guard_error'] = str(guard_error)
+        raise
+    finally:
+        write(report_path, report)
+    print('NATURAL109 REPORT', report_path, digest(report_path), flush=True)
+    if report['status'] != 'completed_strict_pass':
+        raise SystemExit(1)
+
+if __name__ == '__main__':
+    main()

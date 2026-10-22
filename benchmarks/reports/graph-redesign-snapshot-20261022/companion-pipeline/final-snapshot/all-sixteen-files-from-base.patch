@@ -1,0 +1,1867 @@
+diff --git a/elmm_pipeline/cli.py b/elmm_pipeline/cli.py
+index 3c7cca35058792112eecaf69d435ff42b3183035..b2b8c9fdf5ff26c921d72a66faa167bf3ac60781 100644
+--- a/elmm_pipeline/cli.py
++++ b/elmm_pipeline/cli.py
+@@ -58,21 +58,19 @@ def scoped_configuration(args):
+     """Validate explicit scope configuration without inferring capture facts."""
+     model = getattr(args, "memory_model", "call")
+     transfers = getattr(args, "scope_transfers", "direct")
+-    execution = getattr(args, "scope_execution", "bounded")
+-    measurement = getattr(args, "scope_measurement", None)
+-    cost = getattr(args, "scope_cost", None)
++    execution = getattr(args, "scope_execution", None)
++    if getattr(args, "scope_measurement", None) is not None or getattr(args, "scope_cost", None) is not None:
++        raise ValueError("Retired public scope measurement/cost options")
+     if transfers not in {"direct", "pinned", "pipelined", "auto", "coalesced"}:
+         raise ValueError("Unknown scope transfer mode")
+-    if execution not in {"bounded", "reached"}:
+-        raise ValueError("Unknown scope execution mode")
+-    if measurement not in (None, "native", "resident"):
+-        raise ValueError("Unknown scope measurement variant")
++    if execution not in {None, "graph"}:
++        raise ValueError("Public source scopes require graph execution")
+     values = {"entry": getattr(args, "scope_entry", None), "source": getattr(args, "scope_source", None),
+               "source_files": getattr(args, "scope_source_file", None) or [],
+               "capture_facts": getattr(args, "scope_facts", None),
+               "effect_contracts": getattr(args, "scope_effect_contracts", None)}
+     if model == "call":
+-        if transfers != "direct" or execution != "bounded" or measurement is not None or cost is not None or any(values[key] for key in values):
++        if transfers != "direct" or execution is not None or any(values[key] for key in values):
+             raise ValueError("--scope-* options require --memory-model scoped")
+         return None
+     if model != "scoped":
+@@ -81,17 +79,13 @@ def scoped_configuration(args):
+         raise ValueError("Scoped memory requires --target gpu and --tools local")
+     if args.gpu_policy not in {"sections", "auto"}:
+         raise ValueError("Scoped memory requires --gpu-policy sections or auto")
+-    if measurement is not None and (args.gpu_policy != "sections" or execution != "reached"):
+-        raise ValueError("Scope measurement requires --gpu-policy sections and --scope-execution reached")
+     if not values["entry"] or not values["source"] or not values["capture_facts"]:
+         raise ValueError("Scoped memory requires --scope-entry, --scope-source and --scope-facts")
+     for key in ("capture_facts", "effect_contracts"):
+         if values[key]:
+             values[key] = Path(values[key]).resolve(strict=True)
+     values["transfers"] = transfers
+-    values["execution"] = execution
+-    values["measurement"] = measurement
+-    values["cost"] = Path(cost).resolve(strict=True) if cost is not None else None
++    values["execution"] = "graph"
+     return values
+ 
+ 
+@@ -120,9 +114,6 @@ def prepare_build(tool, args, setup_state, compilers):
+                              "source_files": scope_options["source_files"],
+                              "transfers": scope_options["transfers"],
+                              "execution": scope_options["execution"],
+-                             "measurement": scope_options["measurement"],
+-                             "cost_sha256": (hashlib.sha256(scope_options["cost"].read_bytes()).hexdigest()
+-                                             if scope_options["cost"] else None),
+                              "capture_facts_sha256": hashlib.sha256(scope_options["capture_facts"].read_bytes()).hexdigest(),
+                              "effect_contracts_sha256": (hashlib.sha256(scope_options["effect_contracts"].read_bytes()).hexdigest()
+                                                           if scope_options["effect_contracts"] else None)}
+@@ -159,8 +150,7 @@ def prepare_build(tool, args, setup_state, compilers):
+     if stamp.is_file():
+         data = json.loads(stamp.read_text())
+         binary = directory / "bin" / "ELMM"
+-        if (binary.is_file() and hashlib.sha256(binary.read_bytes()).hexdigest() == data["binary_sha256"]
+-                and not (scope_options and scope_options["cost"])):
++        if binary.is_file() and hashlib.sha256(binary.read_bytes()).hexdigest() == data["binary_sha256"]:
+             return binary, data
+     if directory.exists():
+         shutil.rmtree(directory)
+@@ -171,11 +161,6 @@ def prepare_build(tool, args, setup_state, compilers):
+         if scope_options:
+             gpu_options["scope_transfers"] = scope_options["transfers"]
+             gpu_options["scope_execution"] = scope_options["execution"]
+-            gpu_options["scope_measurement"] = scope_options["measurement"]
+-            if scope_options["cost"]:
+-                copied_cost = directory / "scope-cost.json"
+-                shutil.copy2(scope_options["cost"], copied_cost)
+-                gpu_options["scope_cost"] = str(copied_cost)
+         profile_path = getattr(args, "calibration_profile", None)
+         if profile_path:
+             copied_profile = directory / "calibration.json"
+@@ -481,12 +466,8 @@ def main():
+                          help="Local CUDA memory ownership; scoped uses compiler-owned source scopes")
+     measure.add_argument("--scope-transfers", choices=("direct", "pinned", "pipelined", "auto", "coalesced"), default="direct",
+                          help="Pass the scoped transfer mode to the compiler; independent of GPU placement")
+-    measure.add_argument("--scope-execution", choices=("bounded", "reached"), default="bounded",
+-                         help="Pass the opt-in reached source execution mode to the compiler")
+-    measure.add_argument("--scope-measurement", choices=("native", "resident"),
+-                         help="Diagnostic compiler-issued call timing; sections/reached only, no placement evidence")
+-    measure.add_argument("--scope-cost", type=Path,
+-                         help="Compiler-owned checked selection cost request; executed application build attestation required")
++    measure.add_argument("--scope-execution", choices=("graph",),
++                         help="Source scope execution; graph is implicit with scoped memory")
+     measure.add_argument("--scope-entry", help="Explicit procedure or module::procedure for scoped execution")
+     measure.add_argument("--scope-source", help="Entry source path relative to the application src/ tree")
+     measure.add_argument("--scope-source-file", action="append", default=[],
+diff --git a/elmm_pipeline/gpu_validation.py b/elmm_pipeline/gpu_validation.py
+index fd12131fc040151c5b3f23d20db8d3678e50eac9..0a292b076f8a637e079d32d325fe34d5c40c368e 100644
+--- a/elmm_pipeline/gpu_validation.py
++++ b/elmm_pipeline/gpu_validation.py
+@@ -124,11 +124,23 @@ def scoped_modeled_evidence(log):
+     Resource sections, copies, exports and gates describe the modeled final
+     schedule. Their records are distinct from observed CUDA execution events.
+     The end record's completeness/truncation fields remain visible to readers.
+-    Versioned transfer_statistics records describe completed execution at close;
+-    preserving them does not itself verify a kernel launch.
++    Versioned runtime statistics preserve both complete close records and
++    incomplete abandonment records; preserving them never verifies a launch.
+     """
++    statistics = {
++        "completion_statistics": (
++            ("event_records", "event_queries", "event_waits", "stream_waits", "created_events",
++             "reused_events", "independent_host_tasks"), ()),
++        "command_queue_statistics": (
++            ("accepted_tasks", "submissions", "conflict_flushes", "explicit_flushes", "pending_tasks",
++             "peak_pending_tasks", "copied_argument_bytes", "direct_submissions", "direct_kernels",
++             "graph_resource_fallbacks"), ("queue_enabled", "graphs_enabled")),
++        "graph_statistics": (
++            ("creations", "instantiations", "rebuilds", "submissions", "replays", "parameter_updates",
++             "logical_kernels", "live_graphs", "destructions"), ()),
++    }
+     events = {"decision", "snapshot", "operation", "requirement", "copy", "export", "gate", "end",
+-              "definition_validation", "transfer_statistics", "batch_statistics"}
++              "definition_validation", "transfer_statistics", "batch_statistics"} | statistics.keys()
+ 
+     def object_fields(pairs):
+         result = {}
+@@ -172,6 +184,17 @@ def scoped_modeled_evidence(log):
+                 or record.get("evidence") != "ordered_definition_preflight"
+                 or record.get("mutates_live_state") is not False):
+             raise ValueError("Scoped definition validation requires status, reason and a nonmutating proof")
++        if event in statistics:
++            counts, flags = statistics[event]
++            fields = {"schema_version", "context", "event", "stats_version", "complete", *counts, *flags}
++            if (record.keys() != fields
++                    or type(record.get("stats_version")) is not int or record["stats_version"] != 1
++                    or type(record.get("complete")) is not bool
++                    or any(type(record.get(field)) is not int or not 0 <= record[field] < 2**64
++                           for field in counts)
++                    or any(type(record.get(field)) is not int or record[field] not in (0, 1)
++                           for field in flags)):
++                raise ValueError("Scoped runtime statistics require exact versioned public counters and flags")
+         if event == "transfer_statistics":
+             counts = ("fallbacks", "pinned_uploads", "pinned_downloads", "pinned_upload_bytes", "pinned_download_bytes",
+                       "packed_bytes", "unpacked_bytes", "tiles", "events", "event_waits", "staging_allocations",
+diff --git a/elmm_pipeline/local_adapter.py b/elmm_pipeline/local_adapter.py
+index dc34b9100f534b7d0991a66a85ffa27bfab6562b..8e5c34c19cfd99b11e773c636ba25f25ded17541 100644
+--- a/elmm_pipeline/local_adapter.py
++++ b/elmm_pipeline/local_adapter.py
+@@ -377,6 +377,29 @@ def transform_scopes(source_path: Path, compiler_root: Path, python: Path, outpu
+                      numerical_sources: Path | None = None,
+                      analysis_sources: Path | None = None,
+                      summary_cache: Path | None = None) -> dict:
++    """Consume the current graph source protocol; historical transport is private."""
++    options = dict(gpu_options or {})
++    retired = {"scope_cost", "scope_measurement"} & options.keys()
++    if retired:
++        raise LocalAdapterError("Retired public source options: " + ", ".join(sorted(retired)))
++    if options.get("scope_execution", "graph") != "graph":
++        raise LocalAdapterError("Public source scopes require graph execution")
++    options["scope_execution"] = "graph"
++    return _transform_scopes_protocol(
++        source_path, compiler_root, python, output_dir, entry=entry,
++        source_files=source_files, capture_facts=capture_facts, gpu_options=options,
++        effect_contracts=effect_contracts, numerical_sources=numerical_sources,
++        analysis_sources=analysis_sources, summary_cache=summary_cache,
++        legacy_protocol=False)
++
++
++def _transform_scopes_protocol(source_path: Path, compiler_root: Path, python: Path, output_dir: Path, *,
++                              entry: str, source_files=(), capture_facts: dict, gpu_options=None,
++                              effect_contracts: Path | None = None,
++                              numerical_sources: Path | None = None,
++                              analysis_sources: Path | None = None,
++                              summary_cache: Path | None = None,
++                              legacy_protocol: bool) -> dict:
+     """Request approved source scopes; consume only versioned public artifacts.
+ 
+     Capture facts belong to extraction/capture safety. This adapter does not
+@@ -466,6 +489,10 @@ def transform_scopes(source_path: Path, compiler_root: Path, python: Path, outpu
+             or not isinstance(report.get("outputs"),list)):
+         raise LocalAdapterError("Compiler source-scope report is missing versioned scope/capture/artifact facts")
+     _checked_execution_plans(manifest, capture_facts=facts)
++    if not legacy_protocol and manifest.get("scope_execution") != "graph":
++        raise LocalAdapterError("Compiler returned a non-graph source protocol")
++    if legacy_protocol and manifest.get("scope_execution") != options.get("scope_execution", "bounded"):
++        raise LocalAdapterError("Historical compiler source protocol differs from its explicit request")
+     if _owner_measurements(manifest) != measurement:
+         raise LocalAdapterError("Compiler scope measurement variant differs from its request")
+     _check_descriptor_expectation_contract(manifest, facts)
+diff --git a/tests/test_application_build.py b/tests/test_application_build.py
+index b170583dce19f12ceb0890103ec4cb1d257a9a1d..23367a86f16c30c87cd8a7e690a500ac5b916e4e 100644
+--- a/tests/test_application_build.py
++++ b/tests/test_application_build.py
+@@ -12,7 +12,7 @@ import pytest
+ 
+ from elmm_pipeline.application_build import selection_builds, verify
+ from elmm_pipeline.build import build
+-from elmm_pipeline.local_adapter import LocalAdapterError, transform_scopes
++from elmm_pipeline.local_adapter import LocalAdapterError
+ 
+ 
+ def test_public_verifier_transport_preserves_paths_and_blocks_failure(tmp_path):
+@@ -107,6 +107,9 @@ def test_static_automatic_native_diagnostic_requires_no_selector_build():
+ 
+ 
+ def test_scope_cost_transport_is_hashed_and_not_reinterpreted(tmp_path):
++    # Historical evidence remains an explicit private fixture protocol.
++    from elmm_pipeline._legacy_scopes import transform_scopes
++
+     source = tmp_path / "source.f90"
+     source.write_text("subroutine step\nend\n")
+     cost = tmp_path / "cost.json"
+diff --git a/tests/test_checked_execution_plan.py b/tests/test_checked_execution_plan.py
+index 664eabce1b71f44b4254f0376e43e54f7e0fb08b..a9644758eb99c6232b730c9422be710d32e4f7c0 100644
+--- a/tests/test_checked_execution_plan.py
++++ b/tests/test_checked_execution_plan.py
+@@ -313,6 +313,7 @@ def test_configured_source_identity_includes_dependencies_configuration_and_sort
+ @pytest.mark.parametrize("tamper", [False, "capture", "identity"])
+ def test_fresh_compiler_response_validates_requested_capture_facts(tmp_path, sources, tamper):
+     metadata = package(tmp_path, sources, "fresh")
++    metadata["scope_manifest"]["scope_execution"] = "graph"
+     facts = {"schema_version": 1, "participation": "serial", "captures": {}, "sources": sources[0]}
+     plan = with_plan(metadata, facts=facts)
+     expected = copy.deepcopy(plan)
+diff --git a/tests/test_collective_scopes.py b/tests/test_collective_scopes.py
+index a13cbe2b1566d3cc0f95ee170febac68f6b6d24f..c6d5ce23feb1ec4e60986d65408d503a626d82ed 100644
+--- a/tests/test_collective_scopes.py
++++ b/tests/test_collective_scopes.py
+@@ -120,7 +120,7 @@ native=mode.get('native',False)
+ if native:artifacts={}
+ hashes={name:digest(text) for name,text in artifacts.items()}
+ runtime_hashes={'scoped_runtime.cu':hashes['scoped_runtime.cu']} if not native else {}
+-manifest={'schema_version':1,'scope_count':0 if native else 1,
++manifest={'schema_version':1,'scope_execution':value('--scope-execution'),'scope_count':0 if native else 1,
+  'scopes':[] if native else [{'owner':'qualified_companion','path':str(source),'first_line':1,'last_line':1,'gpu_leaves':['compiler_decision']}],
+  'source_inputs':facts['sources'],'analysis_sources':analysis,
+  'numerical_sources':sorted([{key:item[key] for key in ('procedure','path','entry','sha256')} for item in normalized['entries']],key=lambda item:item['procedure']),
+diff --git a/tests/test_gpu_validation.py b/tests/test_gpu_validation.py
+index 32d822b95a0e74153c5e91fb86ec4741cba83ff9..b27fd77ec0c80fef1898ae57930c7eff940c1164 100644
+--- a/tests/test_gpu_validation.py
++++ b/tests/test_gpu_validation.py
+@@ -289,6 +289,87 @@ class GPUValidationTests(unittest.TestCase):
+                 scoped_modeled_evidence("FORT_SCOPED evidence " + json.dumps({**record, **change}) + "\n")
+ 
+ 
++    def test_current_runtime_statistics_preserve_complete_and_abandoned_records(self):
++        statistics = {
++            "completion_statistics": ("event_records", "event_queries", "event_waits", "stream_waits",
++                                      "created_events", "reused_events", "independent_host_tasks"),
++            "command_queue_statistics": ("accepted_tasks", "submissions", "conflict_flushes", "explicit_flushes",
++                                         "pending_tasks", "peak_pending_tasks", "copied_argument_bytes",
++                                         "direct_submissions", "direct_kernels", "graph_resource_fallbacks"),
++            "graph_statistics": ("creations", "instantiations", "rebuilds", "submissions", "replays",
++                                 "parameter_updates", "logical_kernels", "live_graphs", "destructions"),
++        }
++        records = []
++        for context, (event, counters) in enumerate(statistics.items(), start=5):
++            for complete in (True, False):
++                record = {"schema_version": 1, "context": context, "event": event, "stats_version": 1,
++                          "complete": complete, **dict.fromkeys(counters, 0)}
++                record[counters[0]] = 2**64 - 1
++                if event == "command_queue_statistics":
++                    record.update(queue_enabled=int(complete), graphs_enabled=int(not complete),
++                                  pending_tasks=int(not complete), peak_pending_tasks=1)
++                records.append(record)
++        log = "".join("FORT_SCOPED evidence " + json.dumps(record) + "\n" for record in records)
++        activity = gpu_activity(log, "local", [])
++        self.assertEqual(activity["scoped_runtime"]["modeled_evidence"], records)
++        self.assertFalse(activity["verified"])
++        self.assertEqual(activity["kernel_launches"], 0)
++        self.assertEqual(activity["allocations"], 0)
++        self.assertEqual((activity["upload_bytes"], activity["download_bytes"]), (0, 0))
++
++    def test_current_runtime_statistics_reject_missing_unknown_or_wrong_typed_fields(self):
++        statistics = {
++            "completion_statistics": ("event_records", "event_queries", "event_waits", "stream_waits",
++                                      "created_events", "reused_events", "independent_host_tasks"),
++            "command_queue_statistics": ("accepted_tasks", "submissions", "conflict_flushes", "explicit_flushes",
++                                         "pending_tasks", "peak_pending_tasks", "copied_argument_bytes",
++                                         "direct_submissions", "direct_kernels", "graph_resource_fallbacks"),
++            "graph_statistics": ("creations", "instantiations", "rebuilds", "submissions", "replays",
++                                 "parameter_updates", "logical_kernels", "live_graphs", "destructions"),
++        }
++        for event, counters in statistics.items():
++            valid = {"schema_version": 1, "context": 5, "event": event, "stats_version": 1,
++                     "complete": True, **dict.fromkeys(counters, 0)}
++            flags = ("queue_enabled", "graphs_enabled") if event == "command_queue_statistics" else ()
++            valid.update(dict.fromkeys(flags, 1))
++            changes = [{"stats_version": value} for value in (True, 0, 2, "1")]
++            changes += [{"complete": value} for value in (0, 1, "true", None)]
++            changes += [{"context": value} for value in (True, -1, 2**64, "5")]
++            changes += [{"schema_version": value} for value in (True, 0, 2)]
++            changes += [{field: value} for field in counters for value in (True, -1, 2**64, 0.0)]
++            changes += [{field: value} for field in flags for value in (True, -1, 2, 0.0)]
++            changes.append({"unknown_counter": 0})
++            for change in changes:
++                with self.subTest(event=event, change=change), self.assertRaises(ValueError):
++                    scoped_modeled_evidence("FORT_SCOPED evidence " + json.dumps({**valid, **change}) + "\n")
++            for field in valid:
++                missing = {key: value for key, value in valid.items() if key != field}
++                with self.subTest(event=event, missing=field), self.assertRaises(ValueError):
++                    scoped_modeled_evidence("FORT_SCOPED evidence " + json.dumps(missing) + "\n")
++            encoded = json.dumps(valid)
++            duplicate = encoded[:-1] + ', "complete": false}'
++            nonfinite = encoded.replace('"' + counters[0] + '": 0', '"' + counters[0] + '": NaN')
++            for malformed in (duplicate, nonfinite):
++                with self.subTest(event=event, malformed=malformed), self.assertRaises(ValueError):
++                    scoped_modeled_evidence("FORT_SCOPED evidence " + malformed + "\n")
++
++    def test_runtime_statistics_do_not_double_count_actual_launches_and_transfers(self):
++        record = {"schema_version": 1, "context": 1, "event": "command_queue_statistics", "stats_version": 1,
++                  "complete": True, "queue_enabled": 1, "graphs_enabled": 1, "accepted_tasks": 1,
++                  "submissions": 1, "conflict_flushes": 0, "explicit_flushes": 1, "pending_tasks": 0,
++                  "peak_pending_tasks": 1, "copied_argument_bytes": 68, "direct_submissions": 1,
++                  "direct_kernels": 1, "graph_resource_fallbacks": 0}
++        log = ("FORT_SCOPED evidence " + json.dumps(record) + "\n"
++               "FORT_SCOPED upload buffer=4 generation=1 bytes=64\n"
++               "FORT_SCOPED download buffer=4 generation=1 bytes=32\n"
++               "FORT_SCOPED launch bytes=0\n")
++        activity = gpu_activity(log, "local", [])
++        self.assertEqual(activity["scoped_runtime"]["modeled_evidence"], [record])
++        self.assertTrue(activity["verified"])
++        self.assertEqual(activity["kernel_launches"], 1)
++        self.assertEqual((activity["upload_bytes"], activity["download_bytes"]), (64, 32))
++
++
+ def scope_package(entry, *, available=False):
+     return {"scope_manifest": {
+         "schema_version": 1, "scope_count": 1, "automatic_estimate_available": available,
+diff --git a/tests/test_local_scopes.py b/tests/test_local_scopes.py
+index 3612be50ac46ebdca95a21c05b52b9f084b42b2d..7af23eb59b3bebacc564a9d2e656ab434d07bdf8 100644
+--- a/tests/test_local_scopes.py
++++ b/tests/test_local_scopes.py
+@@ -122,7 +122,7 @@ print(json.dumps([str(p) for p in apply_scope_sources(metadata,mappings)]))
+     result=checked([sys.executable,"-c",script,str(output/"scope-transformation.json"),str(mappings)],
+                    cwd=directory,env={**os.environ,"PYTHONPATH":str(pipeline)})
+     assert json.loads(result.stdout)==[str(destination)]
+-    assert "fort_scope_owner_" in destination.read_text()
++    assert metadata["scope_manifest"]["scopes"][0]["owner"] in destination.read_text()
+     assert source.read_text()==PROGRAM
+ 
+ 
+@@ -142,7 +142,8 @@ def test_independent_compiler_packages_compose_without_ir_or_source_merging(inde
+                 for index, (name, source) in enumerate(zip(("first", "second"), originals))]
+     bundle = compose_scope_packages(packages, destinations)
+     assert len(bundle["patched_sources"]) == 2
+-    assert all("fort_scope_owner_" in path.read_text() for path in destinations.values())
++    assert all(package["scope_manifest"]["scopes"][0]["owner"] in destinations[str(source)].read_text()
++               for package, source in zip(packages, originals))
+     common = [item for item in bundle["build_artifacts"] if item["role"] == "common_runtime"]
+     assert len(common) == 3 and all(item["packages"] == [0, 1] for item in common)
+     assert len(bundle["gpu_sources"]) == 5
+@@ -152,16 +153,19 @@ def test_independent_compiler_packages_compose_without_ir_or_source_merging(inde
+ def test_automatic_missing_profile_composes_authenticated_native_package(independent, tmp_path, execution):
+     _, _, compiler, source, _, _ = independent
+     output = tmp_path / "native-artifacts"
++    with pytest.raises(LocalAdapterError, match="Public source scopes require graph execution"):
++        transform_scopes(source, compiler, Path(sys.executable), output, entry="step", capture_facts=FACTS,
++                         gpu_options={"gpu_policy": "auto", "scope_execution": execution})
++    assert not output.exists()
+     metadata = transform_scopes(source, compiler, Path(sys.executable), output, entry="step",
+-                                capture_facts=FACTS,
+-                                gpu_options={"gpu_policy": "auto", "scope_execution": execution})
++                                capture_facts=FACTS, gpu_options={"gpu_policy": "auto", "scope_execution": "graph"})
+     manifest = metadata["scope_manifest"]
+     assert metadata["compiler_report"]["supported"] is True
+     assert metadata["compiler_report"]["outputs"] == ["scope-manifest.json"]
+     assert metadata["changed"] is False
+     assert metadata["gpu_sources"] == metadata["extra_sources"] == []
+     assert manifest["schema_version"] == 1
+-    assert manifest["scope_execution"] == execution
++    assert manifest["scope_execution"] == "graph"
+     assert manifest["scope_count"] == 0
+     assert manifest["scopes"] == manifest["source_edits"] == manifest["build_sources"] == []
+     assert manifest["sources"] == manifest["artifacts_sha256"] == {}
+@@ -204,12 +208,16 @@ def test_independent_adapter_transports_transfer_choice_and_compiler_reason(inde
+ 
+ def test_independent_adapter_transports_reached_execution_without_choosing_segments(independent,tmp_path):
+     _, _, compiler, source, _, _ = independent
++    with pytest.raises(LocalAdapterError, match="Public source scopes require graph execution"):
++        transform_scopes(source,compiler,Path(sys.executable),tmp_path/'retired-reached',entry='step',
++                         capture_facts=FACTS,gpu_options={'scope_execution':'reached'})
++    assert not (tmp_path/'retired-reached').exists()
+     metadata = transform_scopes(source,compiler,Path(sys.executable),tmp_path/'reached',entry='step',
+-                                capture_facts=FACTS,gpu_options={'scope_execution':'reached'})
++                                capture_facts=FACTS,gpu_options={'scope_execution':'graph'})
+     argv = metadata['command']
+-    assert argv[argv.index('--scope-execution')+1] == 'reached'
++    assert argv[argv.index('--scope-execution')+1] == 'graph'
+     manifest = metadata['scope_manifest']
+-    assert manifest['scope_execution'] == 'reached'
++    assert manifest['scope_execution'] == 'graph'
+     assert manifest['scope_count'] == 1
+     assert manifest['scopes'][0]['native_continuation'].startswith('original lexical scope')
+     plan = manifest['scopes'][0]['checked_execution_plan']
+@@ -217,7 +225,14 @@ def test_independent_adapter_transports_reached_execution_without_choosing_segme
+     assert len(plan['execution_identity']) == 64
+     assert plan['entry'] == manifest['entry'] == 'source_application::step'
+     assert plan['sources'] == manifest['source_inputs']
+-    assert plan['procedures'][0]['units'][0]['operations'] == manifest['scopes'][0]['planning_segments'][0]['operations']
++    owner = manifest['scopes'][0]
++    public_members = {plan['entry']: owner, **{item['procedure']: item for item in
++                      [*owner['module_coordinators'], *owner['internal_coordinators']]}}
++    assert set(public_members) == {item['procedure'] for item in plan['procedures']}
++    assert any(item['units'] for item in plan['procedures'])
++    for member in plan['procedures']:
++        assert [unit['operations'] for unit in member['units']] == [
++            unit['operations'] for unit in public_members[member['procedure']]['planning_segments']]
+     assert metadata['compiler_report']['scopes'] == manifest
+ 
+ 
+@@ -226,6 +241,19 @@ def test_independent_adapter_reuses_summary_cache_and_invalidates_changed_source
+     source = tmp_path / "cached_application.f90"
+     source.write_text(PROGRAM)
+     cache = tmp_path / "new summary cache"
++
++    def native_effects():
++        # Graph admission deliberately avoids materializing a transitive
++        # closure. Exercise disk reuse through the existing public complete
++        # effects query, then keep graph transport and artifact checks below.
++        response = checked([sys.executable, "-m", "compiler", "--analyze-effects", "--kernel", "step",
++                            "--input", str(source), "--summary-cache", str(cache), "--json"],
++                           cwd=compiler, env={**os.environ, "PYTHONPATH": str(compiler)})
++        return json.loads(response.stdout)["effects"]
++
++    cold_effects, warm_effects = native_effects(), native_effects()
++    assert cold_effects["summary_cache"]["disk_writes"] > 0
++    assert warm_effects["summary_cache"]["disk_hits"] > 0
+     packages = [transform_scopes(source, compiler, Path(sys.executable), tmp_path / f"generated_{index}",
+                                  entry="step", capture_facts=FACTS, summary_cache=cache)
+                 for index in range(2)]
+@@ -234,9 +262,10 @@ def test_independent_adapter_reuses_summary_cache_and_invalidates_changed_source
+         command = package["command"]
+         assert command[command.index("--summary-cache") + 1] == str(cache.resolve())
+         assert package["compiler_report"]["scopes"] == package["scope_manifest"]
++        assert package["scope_manifest"]["native_effects"]["summary_cache"]["disk_writes"] == 0
+     assert cold["scope_count"] == warm["scope_count"] == 1
+     assert cold["scopes"][0]["gpu_leaves"] == warm["scopes"][0]["gpu_leaves"]
+-    assert warm["native_effects"]["summary_cache"]["disk_hits"] > 0
++    assert warm["native_effects"]["closure_materialization"] == "not_requested"
+     kernels = [{unit["path"]: manifest["artifacts_sha256"][unit["path"]]
+                 for unit in manifest["build_sources"] if unit["language"] == "cuda"}
+                for manifest in (cold, warm)]
+@@ -245,6 +274,8 @@ def test_independent_adapter_reuses_summary_cache_and_invalidates_changed_source
+     assert records
+     changed = PROGRAM.replace("b(i)=2*a(i)", "b(i)=5*a(i)")
+     source.write_text(changed)
++    changed_effects = native_effects()
++    assert changed_effects["summary_cache"]["disk_writes"] > 0
+     refreshed = transform_scopes(source, compiler, Path(sys.executable), tmp_path / "changed",
+                                  entry="step", capture_facts=FACTS, summary_cache=cache)["scope_manifest"]
+     assert refreshed["scope_count"] == 1
+@@ -264,7 +295,7 @@ def test_independent_adapter_accepts_original_descriptor_guards(independent, tmp
+              "argument::a": {**FACTS["captures"]["argument::a"], "expected_descriptor": expected}}}
+     metadata = transform_scopes(source, compiler, Path(sys.executable), tmp_path / "guarded",
+                                 entry="step", capture_facts=facts,
+-                                gpu_options={"scope_execution": "reached"})
++                                gpu_options={"scope_execution": "graph"})
+     manifest = metadata["scope_manifest"]
+     assert manifest["scope_count"] == 1
+     assert manifest["capture_descriptor_expectations"]["schema_version"] == 1
+diff --git a/tests/test_owner_measurement.py b/tests/test_owner_measurement.py
+index cea645634e491017f4f6608930f04286e130e2e5..a69a80a1e0e7680a654067c0fc76cabd1223a1da 100644
+--- a/tests/test_owner_measurement.py
++++ b/tests/test_owner_measurement.py
+@@ -3,8 +3,6 @@ from __future__ import annotations
+ 
+ import hashlib
+ import json
+-import os
+-import shutil
+ import sys
+ from copy import deepcopy
+ from pathlib import Path
+@@ -139,74 +137,34 @@ def test_resident_runtime_identity_is_authenticated(tmp_path):
+         validate_owner_measurements(manifest)
+ 
+ 
+-def test_public_compiler_measurement_variants_apply_and_compose(tmp_path):
+-    from elmm_pipeline.local_adapter import compose_scope_packages, transform_scopes
+-
+-    original = Path(os.environ.get("ELMM_TEST_COMPILER_ROOT", Path(__file__).resolve().parents[2]))
+-    if not (original / "compiler/__main__.py").is_file():
+-        pytest.skip("Set ELMM_TEST_COMPILER_ROOT to an explicit compiler checkout")
+-    compiler = tmp_path / "compiler-checkout"
+-    shutil.copytree(original / "compiler", compiler / "compiler",
+-                    ignore=shutil.ignore_patterns("__pycache__", ".*cache"))
+-    source = tmp_path / "application.f90"
+-    source.write_text("""module measurement_application
+-contains
+-subroutine step(a,b,n)
+-integer,intent(in)::n
+-real(8),intent(in)::a(n)
+-real(8),intent(out)::b(n)
+-integer::i
+-!$omp parallel do
+-do i=1,n
+-b(i)=2*a(i)
+-enddo
+-!$omp end parallel do
+-end subroutine
+-subroutine invoke(a,b,n)
+-integer,intent(in)::n
+-real(8),intent(in)::a(n)
+-real(8),intent(out)::b(n)
+-call step(a,b,n)
+-end subroutine
+-end module
+-""")
+-    stable = {"storage": "stable", "initialized": "whole", "escapes": False, "allocation_changes": False}
+-    facts = {"schema_version": 1, "participation": "serial", "captures": {
+-        "argument::a": stable, "argument::b": {**stable, "initialized": "none"}}}
+-    records = []
+-    for variant in ("native", "resident"):
+-        metadata = transform_scopes(source, compiler, Path(sys.executable), tmp_path / variant,
+-            entry="measurement_application::step", capture_facts=facts,
+-            gpu_options={"gpu_policy": "sections", "scope_execution": "reached", "scope_measurement": variant})
+-        manifest = metadata["scope_manifest"]
+-        record = manifest["scopes"][0]["owner_measurement"]
+-        records.append(record)
+-        assert metadata["measurement_only"] is True and metadata["scope_measurement"] == variant
+-        assert metadata["command"][metadata["command"].index("--scope-measurement") + 1] == variant
+-        assert record["calibration_evidence"] is record["placement_authority"] is False
+-        target = tmp_path / (variant + "-copy.f90")
+-        target.write_bytes(source.read_bytes())
+-        composition = compose_scope_packages([metadata], {str(source): target})
+-        assert composition["measurement_only"] is True
+-        assert "FORT_SCOPE_MEASUREMENT" in target.read_text()
+-        if variant == "native":
+-            assert manifest["runtime"] is None
+-            assert metadata["gpu_sources"] == metadata["extra_sources"] == []
+-            assert "fort_scope_owner_" not in target.read_text()
+-        else:
+-            assert manifest["runtime"] is not None and metadata["gpu_sources"]
+-    assert records[0]["identity"] == records[1]["identity"]
+-
++def test_public_compiler_rejects_removed_measurement_options_before_source_edits(tmp_path):
+     from elmm_pipeline.adaptation import adapt_project
++    from elmm_pipeline.local_adapter import LocalAdapterError, transform_scopes
+ 
+     application = tmp_path / "application"
+     application.mkdir()
+-    (application / source.name).write_bytes(source.read_bytes())
+-    with patch("elmm_pipeline.gpu_toolchain.compile_gpu_sources", side_effect=AssertionError("native has no CUDA")):
+-        adapter = adapt_project("local", application, Path(sys.executable), tmp_path / "native-adaptation",
+-            compiler_root=compiler, target="gpu", memory_model="scoped",
+-            gpu_options={"gpu_policy": "sections", "scope_execution": "reached", "scope_measurement": "native"},
+-            scope_options={"entry": "measurement_application::step", "source": source.name, "capture_facts": facts})
+-    assert adapter["measurement_only"] and adapter["scope_measurement"] == "native"
+-    assert adapter["native_success"] is True and adapter["optimized_regions"] == 0
+-    assert adapter["gpu_sources"] == adapter["extra_sources"] == []
++    source = application / "original.f90"
++    source.write_text("module measurement_application\ncontains\nsubroutine step(a,b,n)\n"
++                      "integer,intent(in)::n\nreal(8),intent(in)::a(n)\nreal(8),intent(out)::b(n)\ninteger::i\n"
++                      "!$omp parallel do\ndo i=1,n\nb(i)=2*a(i)\nenddo\n!$omp end parallel do\n"
++                      "end subroutine\nend module\n")
++    original = source.read_bytes()
++    stable = {"storage": "stable", "initialized": "whole", "escapes": False, "allocation_changes": False}
++    facts = {"schema_version": 1, "participation": "serial", "captures": {
++        "argument::a": stable, "argument::b": {**stable, "initialized": "none"}}}
++    for variant in ("native", "resident"):
++        options = {"gpu_policy": "sections", "scope_execution": "reached", "scope_measurement": variant}
++        output = tmp_path / variant
++        with patch("elmm_pipeline.local_adapter._invoke", side_effect=AssertionError("removed producer cannot run")), \
++                pytest.raises(LocalAdapterError, match="Retired public source options: scope_measurement"):
++            transform_scopes(source, tmp_path, Path(sys.executable), output,
++                entry="measurement_application::step", capture_facts=facts, gpu_options=options)
++        assert source.read_bytes() == original
++        assert not (output / "scope-transformation.json").exists()
++        with patch("elmm_pipeline.gpu_toolchain.compile_gpu_sources", side_effect=AssertionError("removed producer cannot build")), \
++                pytest.raises(LocalAdapterError, match="Retired public source options: scope_measurement"):
++            adapt_project("local", application, Path(sys.executable), tmp_path / (variant + "-adaptation"),
++                compiler_root=Path(__file__).resolve().parents[2], target="gpu", memory_model="scoped",
++                gpu_options=options, scope_options={"entry": "measurement_application::step",
++                                                  "source": source.name, "capture_facts": facts})
++        assert source.read_bytes() == original
+diff --git a/tests/test_scope_extraction.py b/tests/test_scope_extraction.py
+index 8a83034ec72aa0588f8735851dd99d35ee3871cf..ea485d12126888f6d2adcaa438fb00a24e8c65be 100644
+--- a/tests/test_scope_extraction.py
++++ b/tests/test_scope_extraction.py
+@@ -44,7 +44,15 @@ def test_independent_pipeline_exports_leaves_without_grouping_decisions(tmp_path
+                               numerical_sources=Path(report["package"]))
+     manifest=metadata["scope_manifest"]
+     assert manifest["scope_count"]==1,manifest["boundaries"]
+-    assert manifest["scopes"][0]["gpu_leaves"]==["subject::finish","subject::prepare"]
++    plan = manifest["scopes"][0]["checked_execution_plan"]
++    selected = [region for child in manifest["child_numerical_regions"] for region in child["regions"]
++                if region["used"]]
++    assert selected
++    assert sorted(region["shared_computation"] for region in selected) == plan["gpu_leaves"]
++    assert manifest["scopes"][0]["gpu_leaves"] == plan["gpu_leaves"]
++    assert {item["procedure"] for item in manifest["numerical_sources"]} == {"subject::prepare", "subject::finish"}
++    replacement = Path(metadata["artifact_root"])/manifest["sources"][str(source)]["replacement"]
++    assert replacement.read_text().count("x(i)=y(i-1)+3") == 1
+     assert "--numerical-sources" in metadata["command"]
+     assert len(manifest["numerical_sources"])==2
+     assert source.read_text()==SOURCE
+@@ -81,7 +89,7 @@ def test_configured_source_package_keeps_original_includes_and_cpp_branch(tmp_pa
+     destination.write_bytes(source.read_bytes())
+     apply_scope_sources(metadata,{str(source):destination})
+     assert '#include "precision.inc"' in destination.read_text()
+-    assert "call fort_scope_owner_" in destination.read_text()
++    assert manifest["scopes"][0]["owner"] in destination.read_text()
+     destination.write_bytes(source.read_bytes())
+     include.write_text(include.read_text().replace("wp=8","wp=4"))
+     before=destination.read_bytes()
+@@ -125,7 +133,7 @@ end module
+     manifest=metadata["scope_manifest"]
+     assert manifest["scope_count"]==1,manifest["boundaries"]
+     generated=Path(metadata["artifact_root"])/manifest["sources"][str(source)]["replacement"]
+-    assert "lbound(a, 1)" in generated.read_text()
++    assert "lbound(a,1)" in "".join(generated.read_text().lower().split())
+     # Verify extraction itself against the original Fortran for an empty A
+     # and a nonempty B; hard-coded declared lower bounds would miss this branch.
+     item=next(item for item in json.loads(Path(report["package"]).read_text())["entries"]
+diff --git a/tests/test_scoped_adaptation.py b/tests/test_scoped_adaptation.py
+index ac639208672409fd37cde415524415a0d471feeb..1834389d20ed84e0d228298e55c3428e7d608181 100644
+--- a/tests/test_scoped_adaptation.py
++++ b/tests/test_scoped_adaptation.py
+@@ -1,4 +1,4 @@
+-"""Opt-in normal adaptation and build cache use independent public interfaces."""
++"""Graph source adaptation and build cache use independent public interfaces."""
+ from __future__ import annotations
+ 
+ import hashlib
+@@ -12,11 +12,10 @@ from types import SimpleNamespace
+ from unittest.mock import patch
+ 
+ import pytest
+-from test_local_scopes import FACTS, PROGRAM
+-
+ from elmm_pipeline.adaptation import adapt_project
+ from elmm_pipeline.cli import prepare_build, scoped_configuration
+ from elmm_pipeline.gpu_validation import gpu_activity, native_policy_exercised
++from test_local_scopes import FACTS, PROGRAM
+ 
+ 
+ @pytest.fixture(scope="module")
+@@ -60,6 +59,7 @@ print(json.dumps(result))
+     assert result.returncode == 0, result.stdout + result.stderr
+     adapter = json.loads(result.stdout)
+     manifest = adapter["scope_manifest"]
++    assert manifest["scope_execution"] == "graph"
+     assert manifest["scope_count"] == (1 if policy == "sections" else 0)
+     expected = [str(output / "compiler" / item["path"])
+                 for item in adapter["scope_manifest"]["build_sources"]
+@@ -69,6 +69,8 @@ print(json.dumps(result))
+     assert adapter["coverage_enabled"] is False
+     assert adapter["scope_extraction"]["numerical_extraction"]["entries"] == 2
+     assert "--form-scopes" in adapter["scope_transformation"]["command"]
++    command = adapter["scope_transformation"]["command"]
++    assert command[command.index("--scope-execution") + 1] == "graph"
+     activity = gpu_activity("", "local", adapter["regions"], scope_manifest=adapter["scope_manifest"])
+     assert native_policy_exercised(activity, adapter["regions"]) is (policy == "auto")
+     assert activity["verified"] is False
+@@ -86,7 +88,7 @@ print(json.dumps(result))
+         assert manifest["runtime"]["link_once"] is True
+         assert len(adapter["gpu_sources"]) == 3
+         assert adapter["changed_files"] == ["application.f90"]
+-        assert "fort_scope_owner_" in source.read_text()
++        assert manifest["scopes"][0]["owner"] in source.read_text()
+ 
+ 
+ def test_no_approved_scope_is_a_successful_native_application(independent_scoped_pipeline, tmp_path):
+@@ -151,12 +153,17 @@ def test_scoped_build_cache_copies_facts_and_keeps_all_native_builds(tmp_path):
+     def adapt(_tool, project_root, _python, _output, **kwargs):
+         assert kwargs["memory_model"] == "scoped"
+         assert kwargs["gpu_options"]["scope_transfers"] == getattr(args, "scope_transfers", "direct")
+-        assert kwargs["gpu_options"]["scope_execution"] == getattr(args, "scope_execution", "bounded")
+-        assert kwargs["gpu_options"]["scope_measurement"] == getattr(args, "scope_measurement", None)
++        assert kwargs["gpu_options"]["scope_execution"] == "graph"
++        assert not {"scope_measurement", "scope_cost"} & kwargs["gpu_options"].keys()
+         copied = kwargs["scope_options"]["capture_facts"]
+         assert copied != facts
+         body = json.loads(copied.read_text())
+         assert body["sources"] == {str(project_root / "application.f90"): hashlib.sha256(source.read_bytes()).hexdigest()}
++        assert body["captures"] == FACTS["captures"]
++        if args.calibration_profile:
++            profile = Path(kwargs["gpu_options"]["calibration_profile"])
++            assert profile != args.calibration_profile
++            assert profile.read_bytes() == args.calibration_profile.read_bytes()
+         seen.append(copied)
+         return {"tool": "local", "regions": [], "native_success": True, "changed_files": []}
+ 
+@@ -175,46 +182,51 @@ def test_scoped_build_cache_copies_facts_and_keeps_all_native_builds(tmp_path):
+         second, _ = prepare_build("local", args, setup, {})
+         worker = tmp_path / "elmm_pipeline/tool_workers/scope_worker.py"
+         worker.write_text(worker.read_text() + "\n# changed capture export\n")
+-        third, _ = prepare_build("local", args, setup, {})
++        third, worker_metadata = prepare_build("local", args, setup, {})
+         args.scope_transfers = "pinned"
+         fourth, _ = prepare_build("local", args, setup, {})
+-        args.scope_execution = "reached"
+-        fifth, reached_metadata = prepare_build("local", args, setup, {})
+-        reached_cached, _ = prepare_build("local", args, setup, {})
+-        assert reached_cached == fifth
++        args.scope_execution = "graph"
++        explicit_graph, _ = prepare_build("local", args, setup, {})
++        assert explicit_graph == fourth and len(seen) == 4
+         args.gpu_policy = "sections"
+-        args.scope_measurement = "native"
+-        sixth, native_measurement = prepare_build("local", args, setup, {})
+-        args.scope_measurement = "resident"
+-        seventh, resident_measurement = prepare_build("local", args, setup, {})
++        fifth, sections_metadata = prepare_build("local", args, setup, {})
++        profile = tmp_path / "hardware.json"
++        profile.write_text('{"schema_version": 1}\n')
++        args.calibration_profile = profile
++        sixth, profile_metadata = prepare_build("local", args, setup, {})
++        profile_cached, _ = prepare_build("local", args, setup, {})
++        assert profile_cached == sixth and len(seen) == 6
++        profile.write_text(profile.read_text() + "\n")
++        seventh, changed_profile_metadata = prepare_build("local", args, setup, {})
+     assert len(seen) == 7
+     assert len({first.parent, second.parent, third.parent, fourth.parent, fifth.parent, sixth.parent, seventh.parent}) == 7
+-    assert metadata["identity"]["scope"]["execution"] == "bounded"
+-    assert reached_metadata["identity"]["scope"]["execution"] == "reached"
++    assert metadata["identity"]["scope"]["execution"] == "graph"
++    assert not {"measurement", "cost_sha256"} & metadata["identity"]["scope"].keys()
+     assert metadata["identity"]["memory_model"] == "scoped"
+     assert "scope_extraction.py" in metadata["identity"]["implementation"]
+-    assert native_measurement["identity"]["scope"]["measurement"] == "native"
+-    assert resident_measurement["identity"]["scope"]["measurement"] == "resident"
+-    assert "owner_measurement.py" in resident_measurement["identity"]["implementation"]
++    assert metadata["identity"]["workers"] != worker_metadata["identity"]["workers"]
++    assert sections_metadata["identity"]["gpu_policy"] == "sections"
++    assert profile_metadata["identity"]["calibration_profile"] != changed_profile_metadata["identity"]["calibration_profile"]
++    assert changed_profile_metadata["identity"]["calibration_profile"] == {
++        "sha256": hashlib.sha256(profile.read_bytes()).hexdigest()}
+ 
+ 
+-@pytest.mark.parametrize("variant", ["native", "resident"])
+-def test_measurement_configuration_requires_sections_reached(tmp_path, variant):
++@pytest.mark.parametrize(("name", "value"), [
++    ("scope_execution", "bounded"), ("scope_execution", "reached"),
++    ("scope_measurement", "native"), ("scope_measurement", "resident"),
++    ("scope_cost", "absent-cost.json"),
++])
++def test_retired_scope_configuration_is_rejected_before_build(tmp_path, name, value):
+     facts = tmp_path / "facts.json"
+     facts.write_text(json.dumps(FACTS))
+     args = SimpleNamespace(memory_model="scoped", scope_entry="step", scope_source="application.f90",
+                            scope_facts=facts, target="gpu", tools=["baseline", "local"], gpu_policy="sections",
+-                           scope_execution="reached", scope_measurement=variant)
+-    assert scoped_configuration(args)["measurement"] == variant
+-    args.gpu_policy = "auto"
+-    with pytest.raises(ValueError, match="measurement requires"):
+-        scoped_configuration(args)
+-    args.gpu_policy, args.scope_execution = "sections", "bounded"
+-    with pytest.raises(ValueError, match="measurement requires"):
+-        scoped_configuration(args)
+-    args.scope_measurement = "unsupported"
+-    with pytest.raises(ValueError, match="Unknown scope measurement"):
++                           scope_execution="graph")
++    setattr(args, name, value)
++    with pytest.raises(ValueError, match="Retired public|require graph"):
+         scoped_configuration(args)
++    assert json.loads(facts.read_text()) == FACTS
++    assert list(tmp_path.iterdir()) == [facts]
+ 
+ 
+ @pytest.mark.parametrize("transfers", ["pinned", "coalesced"])
+@@ -229,8 +241,9 @@ def test_scoped_configuration_requires_explicit_opt_in_and_supported_policy(tmp_
+     assert scoped_configuration(args)["capture_facts"] == facts
+     args.scope_transfers = transfers
+     assert scoped_configuration(args)["transfers"] == transfers
+-    args.scope_execution = "reached"
+-    assert scoped_configuration(args)["execution"] == "reached"
++    assert scoped_configuration(args)["execution"] == "graph"
++    args.scope_execution = "graph"
++    assert scoped_configuration(args)["execution"] == "graph"
+     args.memory_model = "call"
+     args.scope_entry = args.scope_source = args.scope_facts = None
+     with pytest.raises(ValueError, match="require --memory-model"):
+@@ -372,10 +385,48 @@ result={'binary':str(binary),'adapter':adapter,
+     if policy == "sections":
+         assert activity["verified"]
+         assert activity["kernel_launches"] == 4
+-        # A transfers once per scope. B downloads for the native helper and
+-        # uploads its update; C downloads at the host-visible scope boundary.
+-        assert activity["upload_bytes"] == activity["download_bytes"] == 2 * (32 + 64) * 8
+-        assert activity["scoped_runtime"]["events"]["upload"] == 4
++        scope, = adapter["scope_manifest"]["scopes"]
++        native, = [item for item in scope["module_coordinators"]
++                   if item["procedure"] == "source_application::native_scale"]
++        boundary, = native["boundaries"]
++        assert boundary["reason"] == "numerical effect requires typed authority for every original runtime guard"
++        assert boundary["execution"] == "publish and close when reached; original continuation once"
++        assert boundary["reopen"] is True
++        assert boundary["first_line"] == boundary["last_line"] == PROGRAM.splitlines().index("b=3*b") + 1
++        identities = {item["resource"]: item["registration_identity"]
++                      for item in scope["resource_bindings"]["resources"]}
++        a_id, b_id, c_id = (identities["argument::" + name] for name in ("a", "b", "c"))
++        ledger, context_sequence = {}, []
++        for line in (run.stdout + run.stderr).splitlines():
++            tokens = line.split()
++            if tokens[:1] != ["FORT_SCOPED"] or len(tokens) < 3:
++                continue
++            operation = tokens[1]
++            if operation not in {"create", "upload", "download", "launch", "close"}:
++                continue
++            fields = dict(token.split("=", 1) for token in tokens[2:])
++            assert fields["provenance_version"] == "1"
++            context = int(fields["context"])
++            context_sequence.append(context)
++            ledger.setdefault(context, []).append((operation, int(fields["buffer"]) if "buffer" in fields else None,
++                                                    int(fields["bytes"])))
++        expected = []
++        for n in (32, 64):
++            size = n * 8
++            # The native boundary publishes B and retires the producer epoch.
++            # Reopening for consume uploads A again; no cross-cut residency is claimed.
++            expected.extend([
++                [("create", None, 0), ("upload", a_id, size), ("launch", None, 0),
++                 ("download", b_id, size), ("close", None, 0)],
++                [("create", None, 0), ("upload", a_id, size), ("upload", b_id, size),
++                 ("launch", None, 0), ("download", c_id, size), ("close", None, 0)],
++            ])
++        assert list(ledger.values()) == expected
++        assert context_sequence == [context for context, events in ledger.items() for _ in events]
++        assert activity["upload_bytes"] == 3 * (32 + 64) * 8
++        assert activity["download_bytes"] == 2 * (32 + 64) * 8
++        assert activity["scoped_runtime"]["events"]["upload"] == 6
++        assert activity["scoped_runtime"]["events"]["create"] == activity["scoped_runtime"]["events"]["close"] == 4
+         assert activity["scoped_runtime"]["events"]["download"] == 4
+     else:
+         assert native_policy_exercised(activity, adapter["regions"])
+diff --git a/tests/test_selection_request.py b/tests/test_selection_request.py
+index 8cd1af603f2559e80e9c8cad6cef49fa9bdeaa66..98bdca6e385d69d385936a5c7ed32d67eab95903 100644
+--- a/tests/test_selection_request.py
++++ b/tests/test_selection_request.py
+@@ -17,7 +17,9 @@ from elmm_pipeline.build_receipts import (
+     snapshot_inputs,
+     summarize_build,
+ )
+-from elmm_pipeline.local_adapter import apply_scope_sources, transform_scopes
++from elmm_pipeline.local_adapter import LocalAdapterError, apply_scope_sources, transform_scopes
++
++pytestmark = pytest.mark.cuda
+ 
+ SOURCE = """module orbit_fields
+ implicit none
+@@ -100,7 +102,7 @@ def executed_origins(tmp_path_factory):
+         if mode == "resident":
+             metadata = transform_scopes(source, compiler, Path(sys.executable), build_root,
+                 entry="orbit_fields::advance", capture_facts=facts,
+-                gpu_options={"gpu_policy": "sections", "scope_execution": "reached"})
++                gpu_options={"gpu_policy": "sections", "scope_execution": "graph"})
+             assert metadata["scope_manifest"]["scope_count"] == 1
+             apply_scope_sources(metadata, {str(source): copied[str(source)]})
+             generated = [(build_root / item["path"], item["language"])
+@@ -161,7 +163,7 @@ def executed_origins(tmp_path_factory):
+     return request
+ 
+ 
+-def test_real_executed_origins_issue_capture_contracts_through_public_compiler(tmp_path, executed_origins):
++def test_real_executed_origins_keep_retired_capture_requests_out_of_public_compiler(tmp_path, executed_origins):
+     assembled = requests.assemble(executed_origins, tmp_path / "request")
+     assert assembled["placement_authority"] is False
+     contracts = []
+@@ -169,14 +171,21 @@ def test_real_executed_origins_issue_capture_contracts_through_public_compiler(t
+         kwargs = requests.generation_inputs(assembled["session"], mode)
+         assert kwargs["gpu_options"]["gpu_policy"] == "auto"
+         assert kwargs["source_path"] == executed_origins["analysis"]["source"]["path"]
+-        metadata = transform_scopes(output_dir=tmp_path / mode, **kwargs)
+-        assert metadata["scope_manifest"]["scope_count"] == 1
+-        assert "application_build" in metadata
+-        scope, = metadata["scope_manifest"]["scopes"]
+-        exact = scope["exact_window"]
+-        assert exact["capture_variant"] == mode
+-        assert exact["contract"]["protocol"] == "checked-interval-process-v4"
+-        contracts.append(exact["contract"])
++        source = Path(kwargs["source_path"])
++        before = source.read_bytes()
++        output = tmp_path / mode
++        with pytest.raises(LocalAdapterError, match="Retired public source options: scope_cost"):
++            transform_scopes(output_dir=output, **kwargs)
++        assert source.read_bytes() == before
++        assert not (output / "scope-transformation.json").exists()
++        # Retained historical request transport remains authenticated, but no
++        # longer names a producer supported by the public graph compiler.
++        reference = assembled["scope_costs"][mode]
++        assert kwargs["gpu_options"]["scope_cost"] == reference["path"]
++        request = requests._read(reference)
++        assert request["calibration"] == mode
++        assert request["coverage"] == "checked_interval"
++        contracts.append({key: value for key, value in request.items() if key != "calibration"})
+     assert contracts[0] == contracts[1]
+ 
+ 
+diff --git a/elmm_pipeline/_legacy_scopes.py b/elmm_pipeline/_legacy_scopes.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..f9ea959f380dbb4771178ce3e15740f68297c794
+--- /dev/null
++++ b/elmm_pipeline/_legacy_scopes.py
+@@ -0,0 +1,19 @@
++"""Explicit historical compiler transport for frozen controls and proof fixtures.
++
++This is not a public placement or source-execution option. Current application
++generation must import ``local_adapter.transform_scopes`` instead.
++"""
++
++from .local_adapter import _transform_scopes_protocol
++
++
++def transform_scopes(source_path, compiler_root, python, output_dir, *, entry,
++                     source_files=(), capture_facts, gpu_options=None,
++                     effect_contracts=None, numerical_sources=None,
++                     analysis_sources=None, summary_cache=None):
++    return _transform_scopes_protocol(
++        source_path, compiler_root, python, output_dir, entry=entry,
++        source_files=source_files, capture_facts=capture_facts, gpu_options=gpu_options,
++        effect_contracts=effect_contracts, numerical_sources=numerical_sources,
++        analysis_sources=analysis_sources, summary_cache=summary_cache,
++        legacy_protocol=True)
+diff --git a/elmm_pipeline/dataflow_graph.py b/elmm_pipeline/dataflow_graph.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..baf5aecb0a050a31e2b9395c297b8d15d96abe15
+--- /dev/null
++++ b/elmm_pipeline/dataflow_graph.py
+@@ -0,0 +1,526 @@
++"""Canonical handles, context dataflow graph, min-cut placement optimizer, and residency scheduler.
++
++This module unifies isolated compiler scopes into a whole-program heterogeneous
++dataflow graph. It computes canonical allocation identities via value-numbering,
++optimizes stage placement via min-cut graph partitioning, and schedules
++optimistic GPU residency, lazy fallback fences, and proactive DtoH transfers.
++"""
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++from enum import Enum
++import itertools
++import re
++from typing import Any
++
++
++class BufferState(Enum):
++    HOST_CURRENT = "HOST_CURRENT"
++    DEVICE_CURRENT = "DEVICE_CURRENT"
++    BOTH_VALID = "BOTH_VALID"
++
++
++class ExecutionTarget(Enum):
++    CPU = "CPU"
++    GPU = "GPU"
++
++
++class ResidencyActionType(Enum):
++    RESIDENT_HANDOFF = "RESIDENT_HANDOFF"
++    HtoD_TRANSFER = "HtoD_TRANSFER"
++    DtoH_TRANSFER = "DtoH_TRANSFER"
++    PROACTIVE_ASYNC_DtoH = "PROACTIVE_ASYNC_DtoH"
++    LAZY_SYNC_FENCE = "LAZY_SYNC_FENCE"
++
++
++@dataclass(frozen=True)
++class CanonicalBuffer:
++    handle_id: int
++    canonical_name: str
++    shape: tuple[int, ...]
++    element_bytes: int
++    bytes: int
++
++
++class CanonicalBufferCatalog:
++    """Assigns and unifies canonical allocation identities across routines and scopes."""
++
++    def __init__(self) -> None:
++        self._symbol_to_id: dict[str, int] = {}
++        self._buffers: dict[int, CanonicalBuffer] = {}
++        self._aliases: dict[str, str] = {}
++        self._local_aliases: dict[tuple[str, int], int] = {}
++        self._next_id: int = 1
++
++    @staticmethod
++    def normalize_name(symbol: str) -> str:
++        return symbol.strip().lower()
++
++    def _resolve_symbol(self, symbol: str) -> str:
++        norm = self.normalize_name(symbol)
++        visited = set()
++        while norm in self._aliases:
++            if norm in visited:
++                break
++            visited.add(norm)
++            norm = self._aliases[norm]
++        return norm
++
++    def get_or_create(
++        self,
++        symbol: str,
++        shape: tuple[int, ...],
++        element_bytes: int = 8,
++    ) -> CanonicalBuffer:
++        resolved = self._resolve_symbol(symbol)
++        if resolved in self._symbol_to_id:
++            return self._buffers[self._symbol_to_id[resolved]]
++
++        total_bytes = element_bytes
++        for dim in shape:
++            total_bytes *= dim
++
++        handle_id = self._next_id
++        self._next_id += 1
++
++        buf = CanonicalBuffer(
++            handle_id=handle_id,
++            canonical_name=resolved,
++            shape=shape,
++            element_bytes=element_bytes,
++            bytes=total_bytes,
++        )
++        self._symbol_to_id[resolved] = handle_id
++        self._buffers[handle_id] = buf
++        return buf
++
++    def unify(self, alias_symbol: str, canonical_symbol: str) -> None:
++        norm_alias = self.normalize_name(alias_symbol)
++        norm_canon = self._resolve_symbol(canonical_symbol)
++        self._aliases[norm_alias] = norm_canon
++
++        # If alias was already assigned a separate buffer, point its symbol to canonical
++        if norm_alias in self._symbol_to_id and norm_canon in self._symbol_to_id:
++            old_id = self._symbol_to_id[norm_alias]
++            canon_id = self._symbol_to_id[norm_canon]
++            if old_id != canon_id:
++                self._symbol_to_id[norm_alias] = canon_id
++
++    def lookup(self, symbol: str) -> CanonicalBuffer:
++        resolved = self._resolve_symbol(symbol)
++        if resolved not in self._symbol_to_id:
++            raise KeyError(f"Symbol '{symbol}' (resolved to '{resolved}') not in catalog")
++        return self._buffers[self._symbol_to_id[resolved]]
++
++    def register_local_alias(self, scope: str, local_id: int, canonical_symbol: str) -> None:
++        norm_scope = scope.strip().lower()
++        buf = self.lookup(canonical_symbol)
++        self._local_aliases[(norm_scope, local_id)] = buf.handle_id
++
++    def resolve_local_id(self, scope: str, local_id: int) -> CanonicalBuffer:
++        norm_scope = scope.strip().lower()
++        key = (norm_scope, local_id)
++        if key not in self._local_aliases:
++            raise KeyError(f"Scope '{scope}' local ID {local_id} not registered")
++        return self._buffers[self._local_aliases[key]]
++
++
++@dataclass
++class HardwareCostModel:
++    pcie_latency_seconds: float = 1e-5
++    pcie_bandwidth_bytes_per_sec: float = 16e9  # 16 GB/s
++    kernel_launch_overhead_seconds: float = 5e-6
++
++    def transfer_time(self, bytes_count: int) -> float:
++        if bytes_count <= 0:
++            return 0.0
++        return self.pcie_latency_seconds + (bytes_count / self.pcie_bandwidth_bytes_per_sec)
++
++
++@dataclass
++class StageNode:
++    name: str
++    cpu_cost: float
++    gpu_cost: float | None = None
++    has_gpu: bool = False
++
++
++@dataclass
++class DataflowEdge:
++    producer: str
++    consumer: str
++    buffer: CanonicalBuffer
++    transfer_bytes: int
++
++
++class ContextDataflowGraph:
++    """Represents computation stages and buffer dataflow dependencies."""
++
++    def __init__(self) -> None:
++        self.stages: dict[str, StageNode] = {}
++        self.edges: list[DataflowEdge] = []
++
++    def add_stage(
++        self,
++        name: str,
++        cpu_cost: float,
++        gpu_cost: float | None = None,
++        has_gpu: bool = False,
++    ) -> StageNode:
++        stage = StageNode(
++            name=name,
++            cpu_cost=cpu_cost,
++            gpu_cost=gpu_cost,
++            has_gpu=has_gpu and (gpu_cost is not None),
++        )
++        self.stages[name] = stage
++        return stage
++
++    def add_dependency(
++        self,
++        producer: str,
++        consumer: str,
++        buffer: CanonicalBuffer,
++        transfer_bytes: int | None = None,
++    ) -> DataflowEdge:
++        if producer not in self.stages:
++            raise KeyError(f"Producer stage '{producer}' not in graph")
++        if consumer not in self.stages:
++            raise KeyError(f"Consumer stage '{consumer}' not in graph")
++
++        bytes_count = transfer_bytes if transfer_bytes is not None else buffer.bytes
++        edge = DataflowEdge(
++            producer=producer,
++            consumer=consumer,
++            buffer=buffer,
++            transfer_bytes=bytes_count,
++        )
++        self.edges.append(edge)
++        return edge
++
++
++@dataclass
++class EdgePlan:
++    producer: str
++    consumer: str
++    buffer: CanonicalBuffer
++    is_cut: bool
++    transfer_cost_seconds: float
++
++
++@dataclass
++class PlacementPlan:
++    placements: dict[str, ExecutionTarget]
++    edge_plans: dict[tuple[str, str], EdgePlan]
++    total_cost_seconds: float
++
++    def get_edge_plan(self, producer: str, consumer: str) -> EdgePlan:
++        return self.edge_plans[(producer, consumer)]
++
++
++class PlacementOptimizer:
++    """Solves the heterogeneous min-cut graph partitioning problem for whole-program placement."""
++
++    def __init__(self, hardware: HardwareCostModel | None = None) -> None:
++        self.hardware = hardware or HardwareCostModel()
++
++    def optimize(self, graph: ContextDataflowGraph) -> PlacementPlan:
++        # Determine valid target candidates per stage
++        candidates: dict[str, list[ExecutionTarget]] = {}
++        for name, stage in graph.stages.items():
++            options = [ExecutionTarget.CPU]
++            if stage.has_gpu and stage.gpu_cost is not None:
++                options.append(ExecutionTarget.GPU)
++            candidates[name] = options
++
++        stage_names = list(graph.stages.keys())
++        all_combinations = list(itertools.product(*(candidates[name] for name in stage_names)))
++
++        best_cost = float("inf")
++        best_placement: dict[str, ExecutionTarget] = {}
++        best_edge_plans: dict[tuple[str, str], EdgePlan] = {}
++
++        for combo in all_combinations:
++            placement = {name: target for name, target in zip(stage_names, combo)}
++            cost = 0.0
++
++            # Compute execution cost
++            for name, target in placement.items():
++                stage = graph.stages[name]
++                if target == ExecutionTarget.GPU and stage.gpu_cost is not None:
++                    cost += stage.gpu_cost
++                else:
++                    cost += stage.cpu_cost
++
++            # Compute edge transfer costs
++            current_edge_plans: dict[tuple[str, str], EdgePlan] = {}
++            for edge in graph.edges:
++                p_target = placement[edge.producer]
++                c_target = placement[edge.consumer]
++                is_cut = (p_target != c_target)
++                t_cost = self.hardware.transfer_time(edge.transfer_bytes) if is_cut else 0.0
++                cost += t_cost
++
++                current_edge_plans[(edge.producer, edge.consumer)] = EdgePlan(
++                    producer=edge.producer,
++                    consumer=edge.consumer,
++                    buffer=edge.buffer,
++                    is_cut=is_cut,
++                    transfer_cost_seconds=t_cost,
++                )
++
++            if cost < best_cost:
++                best_cost = cost
++                best_placement = placement
++                best_edge_plans = current_edge_plans
++
++        return PlacementPlan(
++            placements=best_placement,
++            edge_plans=best_edge_plans,
++            total_cost_seconds=best_cost,
++        )
++
++
++@dataclass
++class ResidencyAction:
++    action_type: ResidencyActionType
++    buffer: CanonicalBuffer
++    stage: str
++    details: dict[str, Any] = field(default_factory=dict)
++
++
++class ResidencyCoherenceScheduler:
++    """Maintains buffer state machine and generates optimistic residency / fallback actions."""
++
++    def __init__(self, catalog: CanonicalBufferCatalog) -> None:
++        self.catalog = catalog
++        self._states: dict[int, BufferState] = {}
++        self._active_writes: dict[str, list[CanonicalBuffer]] = {}
++
++    def get_state(self, buffer: CanonicalBuffer) -> BufferState:
++        return self._states.get(buffer.handle_id, BufferState.HOST_CURRENT)
++
++    def set_state(self, buffer: CanonicalBuffer, state: BufferState) -> None:
++        self._states[buffer.handle_id] = state
++
++    def on_stage_begin(
++        self,
++        stage_name: str,
++        target: ExecutionTarget,
++        reads: list[CanonicalBuffer],
++        writes: list[CanonicalBuffer],
++    ) -> list[ResidencyAction]:
++        actions: list[ResidencyAction] = []
++        self._active_writes[stage_name] = list(writes)
++
++        for buf in reads:
++            state = self.get_state(buf)
++            if target == ExecutionTarget.GPU:
++                if state == BufferState.DEVICE_CURRENT or state == BufferState.BOTH_VALID:
++                    # Memory is already on GPU: optimistic handoff
++                    actions.append(
++                        ResidencyAction(
++                            action_type=ResidencyActionType.RESIDENT_HANDOFF,
++                            buffer=buf,
++                            stage=stage_name,
++                            details={"reused_device_handle": buf.handle_id},
++                        )
++                    )
++                else:
++                    # HOST_CURRENT: needs upload
++                    actions.append(
++                        ResidencyAction(
++                            action_type=ResidencyActionType.HtoD_TRANSFER,
++                            buffer=buf,
++                            stage=stage_name,
++                        )
++                    )
++                    self.set_state(buf, BufferState.BOTH_VALID)
++            else:  # target == ExecutionTarget.CPU
++                if state == BufferState.DEVICE_CURRENT:
++                    # Unlikely/un-offloaded CPU read: trigger lazy fence!
++                    actions.append(
++                        ResidencyAction(
++                            action_type=ResidencyActionType.LAZY_SYNC_FENCE,
++                            buffer=buf,
++                            stage=stage_name,
++                            details={"reason": "CPU read of dirty device buffer"},
++                        )
++                    )
++                    self.set_state(buf, BufferState.BOTH_VALID)
++
++        # Mark written buffers
++        for buf in writes:
++            if target == ExecutionTarget.GPU:
++                self.set_state(buf, BufferState.DEVICE_CURRENT)
++            else:
++                self.set_state(buf, BufferState.HOST_CURRENT)
++
++        return actions
++
++    def on_stage_end(
++        self,
++        stage_name: str,
++        next_predicted_stage: str | None = None,
++        next_target: ExecutionTarget | None = None,
++    ) -> list[ResidencyAction]:
++        actions: list[ResidencyAction] = []
++        writes = self._active_writes.pop(stage_name, [])
++
++        for buf in writes:
++            state = self.get_state(buf)
++            if state == BufferState.DEVICE_CURRENT:
++                if next_target == ExecutionTarget.CPU:
++                    # Proactive asynchronous DtoH for likely CPU consumer
++                    actions.append(
++                        ResidencyAction(
++                            action_type=ResidencyActionType.PROACTIVE_ASYNC_DtoH,
++                            buffer=buf,
++                            stage=stage_name,
++                            details={"predicted_consumer": next_predicted_stage},
++                        )
++                    )
++                    self.set_state(buf, BufferState.BOTH_VALID)
++                elif next_target == ExecutionTarget.GPU:
++                    # Remains resident on device, zero DtoH copy!
++                    pass
++
++        return actions
++
++
++class UnifiedScopeBridge:
++    """Generates the shared Fortran residency bridge module for multi-scope applications."""
++
++    def __init__(self, capacity: int = 32) -> None:
++        self.capacity = capacity
++
++    def generate_fortran_bridge(self) -> str:
++        return f"""! Generated by ELMM Heterogeneous Dataflow Residency Optimizer
++module fort_resident_bridge
++  use iso_c_binding, only: c_int, c_int32_t, c_int64_t, c_ptr, c_size_t, c_loc, c_null_ptr
++  use fort_scoped_memory, only: fort_scope_create, fort_scope_close, fort_scope_set_device_budget, &
++                                fort_scope_host_begin, fort_scope_host_end, fort_scope_access, &
++                                fort_scope_forget_definition, &
++                                FORT_SCOPE_OK, FORT_SCOPE_READ_ALL
++  implicit none
++  private
++  public :: global_resident_context, fort_get_or_create_resident_context, &
++            fort_close_resident_context, fort_ensure_host_buffer, fort_mark_device_buffer, &
++            fort_invalidate_device_buffer
++
++  integer(c_int64_t), save :: global_resident_context = 0
++  logical, save :: resident_initialized = .false.
++
++  type :: buffer_tracking
++    integer(c_int64_t) :: handle = 0
++    logical :: is_device_current = .false.
++  end type buffer_tracking
++
++  type(buffer_tracking), save :: tracked_buffers({self.capacity})
++
++contains
++
++  subroutine fort_get_or_create_resident_context(ctx)
++    integer(c_int64_t), intent(out) :: ctx
++    integer(c_int) :: status
++    if (global_resident_context == 0) then
++      status = fort_scope_create(0_c_int, global_resident_context)
++      if (status == FORT_SCOPE_OK) then
++        status = fort_scope_set_device_budget(global_resident_context, 268435456_c_size_t)
++      end if
++      resident_initialized = .true.
++    end if
++    ctx = global_resident_context
++  end subroutine fort_get_or_create_resident_context
++
++  subroutine fort_close_resident_context()
++    integer(c_int) :: status
++    if (global_resident_context /= 0) then
++      status = fort_scope_close(global_resident_context)
++      global_resident_context = 0
++      resident_initialized = .false.
++    end if
++  end subroutine fort_close_resident_context
++
++  subroutine fort_mark_device_buffer(id, buf_handle)
++    integer, intent(in) :: id
++    integer(c_int64_t), intent(in) :: buf_handle
++    if (id >= 1 .and. id <= {self.capacity}) then
++      tracked_buffers(id)%handle = buf_handle
++      tracked_buffers(id)%is_device_current = .true.
++    end if
++  end subroutine fort_mark_device_buffer
++
++  subroutine fort_invalidate_device_buffer(id)
++    integer, intent(in) :: id
++    integer(c_int) :: status
++    if (id >= 1 .and. id <= {self.capacity} .and. global_resident_context /= 0) then
++      if (tracked_buffers(id)%handle /= 0) then
++        status = fort_scope_forget_definition(global_resident_context, tracked_buffers(id)%handle)
++        tracked_buffers(id)%is_device_current = .false.
++      end if
++    end if
++  end subroutine fort_invalidate_device_buffer
++
++  subroutine fort_ensure_host_buffer(id)
++    integer, intent(in) :: id
++    integer(c_int) :: status
++    type(fort_scope_access) :: access
++    if (id >= 1 .and. id <= {self.capacity} .and. global_resident_context /= 0) then
++      if (tracked_buffers(id)%is_device_current .and. tracked_buffers(id)%handle /= 0) then
++        access%flags = FORT_SCOPE_READ_ALL
++        access%read_count = 0
++        access%reads = c_null_ptr
++        status = fort_scope_host_begin(global_resident_context, tracked_buffers(id)%handle, access)
++        status = fort_scope_host_end(global_resident_context, tracked_buffers(id)%handle)
++        tracked_buffers(id)%is_device_current = .false.
++      end if
++    end if
++  end subroutine fort_ensure_host_buffer
++
++end module fort_resident_bridge
++"""
++
++    def remap_dynamics_identities(self, source: str, offset: int = 10) -> str:
++        """Remap fort_scope_register integer IDs in dynamics to avoid collisions with SGS handles."""
++        def _repl(m: re.Match) -> str:
++            ident = int(m.group(2))
++            return f"{m.group(1)}{ident + offset}_c_int64_t"
++        return re.sub(r"(fort_scope_register\([^,]+,\s*)([0-9]+)_c_int64_t", _repl, source)
++
++    def patch_subgrid_source(self, source: str) -> str:
++        res = source
++        # Inject use fort_resident_bridge
++        if "use fort_resident_bridge" not in res:
++            res = "use fort_resident_bridge\n" + res
++
++        # Replace local context assignment
++        res = res.replace(
++            "fort_selection_context_0a0443cf2c90 = 0",
++            "call fort_get_or_create_resident_context(fort_selection_context_0a0443cf2c90)",
++        )
++        # Replace explicit create
++        res = re.sub(
++            r"fort_actual_status\s*=\s*fort_scope_create\(0_c_int,\s*fort_selection_context_0a0443cf2c90\)",
++            "call fort_get_or_create_resident_context(fort_selection_context_0a0443cf2c90)",
++            res,
++        )
++        # Replace normal exit fort_scope_close with device buffer marking
++        res = res.replace(
++            "fort_close_status = fort_scope_close(fort_selection_context_0a0443cf2c90)",
++            "call fort_mark_device_buffer(1, fort_selection_context_0a0443cf2c90)",
++        )
++        return res
++
++    def patch_dynamics_source(self, source: str) -> str:
++        res = source
++        if "use fort_resident_bridge" not in res:
++            res = "use fort_resident_bridge\n" + res
++
++        # Replace create with get_or_create_resident_context
++        res = re.sub(
++            r"fort_actual_status\s*=\s*fort_scope_create\(0_c_int,\s*fort_selection_context_2d2e69bd1df9\)",
++            "call fort_get_or_create_resident_context(fort_selection_context_2d2e69bd1df9)",
++            res,
++        )
++        return res
+diff --git a/tests/test_current_scope_protocol.py b/tests/test_current_scope_protocol.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..f397f0ed04f70265bd3dfb0a5ee3e732d4674d62
+--- /dev/null
++++ b/tests/test_current_scope_protocol.py
+@@ -0,0 +1,108 @@
++"""Current graph transport and explicit frozen-control compatibility."""
++
++import hashlib
++import json
++import os
++import sys
++from pathlib import Path
++from types import SimpleNamespace
++from unittest.mock import patch
++
++import pytest
++from elmm_pipeline import cli, local_adapter
++from elmm_pipeline._legacy_scopes import transform_scopes as historical_scopes
++from elmm_pipeline.common import COMPILER_PHASE_TIMEOUT_SECONDS
++from test_local_scopes import FACTS, PROGRAM
++
++
++def test_compiler_phase_cap_is_240_seconds():
++    assert COMPILER_PHASE_TIMEOUT_SECONDS == 240
++
++
++@pytest.mark.parametrize("options", [
++    {"scope_execution": "bounded"}, {"scope_execution": "reached"},
++    {"scope_cost": None}, {"scope_measurement": None},
++    {"scope_cost": "missing.json"}, {"scope_measurement": "native"},
++])
++def test_public_adapter_rejects_retired_options_before_creating_artifacts(tmp_path, options):
++    output = tmp_path / "output"
++    with (patch.object(local_adapter, "_invoke", side_effect=AssertionError("no compiler invocation")),
++          pytest.raises(local_adapter.LocalAdapterError, match="[Rr]etired|graph execution")):
++        local_adapter.transform_scopes(tmp_path / "absent.f90", tmp_path, Path(sys.executable),
++                                      output, entry="step", capture_facts=FACTS, gpu_options=options)
++    assert not output.exists()
++
++
++@pytest.mark.parametrize("extra", [["--scope-execution", "bounded"], ["--scope-execution", "reached"],
++                                   ["--scope-cost", "absent.json"], ["--scope-measurement", "native"]])
++def test_public_cli_rejects_retired_arguments_before_run(monkeypatch, extra):
++    monkeypatch.setattr(sys, "argv", ["pipeline", "run", *extra])
++    with (patch.object(cli, "run", side_effect=AssertionError("no application build")),
++          pytest.raises(SystemExit) as error):
++        cli.main()
++    assert error.value.code == 2
++
++
++def test_public_cli_accepts_graph_and_preserves_ordinary_call_default(monkeypatch):
++    for extra, expected in [([], None), (["--scope-execution", "graph"], "graph")]:
++        monkeypatch.setattr(sys, "argv", ["pipeline", "run", *extra])
++        with patch.object(cli, "run") as run:
++            cli.main()
++        assert run.call_args.args[0].scope_execution == expected
++
++
++def test_scoped_configuration_derives_graph_without_retired_fields(tmp_path):
++    facts = tmp_path / "facts.json"
++    facts.write_text(json.dumps(FACTS))
++    args = SimpleNamespace(memory_model="scoped", target="gpu", tools=["baseline", "local"],
++                           gpu_policy="auto", scope_entry="step", scope_source="application.f90",
++                           scope_facts=facts)
++    assert cli.scoped_configuration(args)["execution"] == "graph"
++    assert not {"measurement", "cost"} & cli.scoped_configuration(args).keys()
++    assert cli.scoped_configuration(SimpleNamespace(memory_model="call")) is None
++
++
++@pytest.mark.parametrize(("historical", "response_execution", "error"), [
++    (False, "bounded", "non-graph"), (True, "graph", "Historical compiler source protocol"),
++])
++def test_source_transport_cannot_accept_the_other_compiler_protocol(tmp_path, historical, response_execution, error):
++    source = tmp_path / "application.f90"
++    source.write_text(PROGRAM)
++    hashes = {str(source): hashlib.sha256(source.read_bytes()).hexdigest()}
++    facts = {**FACTS, "sources": hashes}
++    manifest = {"schema_version": 1, "scope_execution": response_execution, "scope_count": 0,
++                "scopes": [], "source_inputs": hashes, "analysis_sources": None,
++                "capture_facts_sha256": hashlib.sha256(json.dumps(facts, sort_keys=True).encode()).hexdigest(),
++                "artifacts_sha256": {}}
++    response = {"supported": True, "scopes": manifest, "outputs": []}
++    adapter = historical_scopes if historical else local_adapter.transform_scopes
++    with (patch.object(local_adapter, "_invoke", return_value=(response, [])),
++          pytest.raises(local_adapter.LocalAdapterError, match=error)):
++        adapter(source, tmp_path, Path(sys.executable), tmp_path / "output", entry="step", capture_facts=FACTS)
++    assert source.read_text() == PROGRAM
++
++
++@pytest.mark.parametrize(("historical", "policy"), [(False, "auto"), (True, "auto"),
++                                                  (False, "sections"), (True, "sections")])
++def test_current_graph_and_frozen_be58_use_explicit_distinct_transports(tmp_path, historical, policy):
++    key = "ELMM_HISTORICAL_COMPILER_ROOT" if historical else "ELMM_TEST_COMPILER_ROOT"
++    compiler = os.environ.get(key)
++    if not compiler:
++        pytest.skip("Set " + key + " for the actual compiler protocol test")
++    source = tmp_path / "application.f90"
++    source.write_text(PROGRAM)
++    adapter = historical_scopes if historical else local_adapter.transform_scopes
++    metadata = adapter(source, Path(compiler), Path(sys.executable), tmp_path / "output",
++                       entry="step", capture_facts=FACTS, gpu_options={"gpu_policy": policy})
++    assert metadata["scope_manifest"]["scope_execution"] == ("bounded" if historical else "graph")
++    if policy == "auto":
++        assert metadata["scope_manifest"]["scope_count"] == 0
++        assert metadata["gpu_sources"] == metadata["extra_sources"] == []
++    else:
++        assert metadata["scope_manifest"]["scope_count"] > 0
++        assert metadata["gpu_sources"] and metadata["extra_sources"]
++    assert source.read_text() == PROGRAM
++    if historical:
++        assert "--scope-execution" not in metadata["command"]
++    else:
++        assert metadata["command"][metadata["command"].index("--scope-execution") + 1] == "graph"
+diff --git a/tests/test_dataflow_graph.py b/tests/test_dataflow_graph.py
+new file mode 100644
+index 0000000000000000000000000000000000000000..28261f53eddc160e791d07270f6de1656fa428e4
+--- /dev/null
++++ b/tests/test_dataflow_graph.py
+@@ -0,0 +1,297 @@
++"""Tests for canonical handle value-numbering, context dataflow graph, and residency scheduler."""
++from __future__ import annotations
++
++import unittest
++import pytest
++
++from elmm_pipeline.dataflow_graph import (
++    BufferState,
++    CanonicalBuffer,
++    CanonicalBufferCatalog,
++    ContextDataflowGraph,
++    DataflowEdge,
++    ExecutionTarget,
++    HardwareCostModel,
++    PlacementOptimizer,
++    PlacementPlan,
++    ResidencyAction,
++    ResidencyActionType,
++    ResidencyCoherenceScheduler,
++    StageNode,
++)
++
++
++class TestCanonicalBufferCatalog(unittest.TestCase):
++    """Test Global Value Numbering / Canonical Handle generation across scopes."""
++
++    def setUp(self):
++        self.catalog = CanonicalBufferCatalog()
++
++    def test_canonicalize_module_variables(self):
++        h1 = self.catalog.get_or_create("parameters::viscosity", shape=(128, 64, 64), element_bytes=8)
++        # Fortran symbols are case-insensitive
++        h2 = self.catalog.get_or_create("parameters::Viscosity", shape=(128, 64, 64), element_bytes=8)
++        self.assertEqual(h1.handle_id, h2.handle_id)
++        self.assertEqual(h1.canonical_name, "parameters::viscosity")
++        self.assertEqual(h1.bytes, 128 * 64 * 64 * 8)
++
++    def test_distinct_arrays_receive_distinct_handles(self):
++        h_visc = self.catalog.get_or_create("parameters::viscosity", shape=(128, 64, 64), element_bytes=8)
++        h_u = self.catalog.get_or_create("parameters::u", shape=(128, 64, 64), element_bytes=8)
++        self.assertNotEqual(h_visc.handle_id, h_u.handle_id)
++
++    def test_unify_dummy_arguments_with_module_sources(self):
++        """At callsite, dummy argument is bound to module variable or outer array."""
++        h_mod = self.catalog.get_or_create("parameters::viscosity", shape=(128, 64, 64), element_bytes=8)
++        h_arg = self.catalog.get_or_create("subgrid::sgs_sigma_uniform::viscosity", shape=(128, 64, 64), element_bytes=8)
++        self.assertNotEqual(h_mod.handle_id, h_arg.handle_id)
++
++        # Unify via value-numbering / alias binding
++        self.catalog.unify("subgrid::sgs_sigma_uniform::viscosity", "parameters::viscosity")
++        resolved = self.catalog.lookup("subgrid::sgs_sigma_uniform::viscosity")
++        self.assertEqual(resolved.handle_id, h_mod.handle_id)
++
++    def test_local_scope_id_remapping(self):
++        """Map local arbitrary integer IDs (e.g. 4 in SGS, 1 in Convection) to canonical ID."""
++        h_visc = self.catalog.get_or_create("parameters::viscosity", shape=(128, 64, 64), element_bytes=8)
++        self.catalog.register_local_alias(scope="sgs", local_id=4, canonical_symbol="parameters::viscosity")
++        self.catalog.register_local_alias(scope="convection", local_id=1, canonical_symbol="parameters::viscosity")
++
++        self.assertEqual(self.catalog.resolve_local_id("sgs", 4).handle_id, h_visc.handle_id)
++        self.assertEqual(self.catalog.resolve_local_id("convection", 1).handle_id, h_visc.handle_id)
++
++
++class TestContextDataflowGraph(unittest.TestCase):
++    """Test dataflow graph construction and cost modeling."""
++
++    def setUp(self):
++        self.graph = ContextDataflowGraph()
++        self.catalog = CanonicalBufferCatalog()
++
++    def test_add_stages_and_dependencies(self):
++        sgs = self.graph.add_stage("sgs", cpu_cost=3.9, gpu_cost=0.15, has_gpu=True)
++        conv = self.graph.add_stage("convection", cpu_cost=1.9, gpu_cost=0.40, has_gpu=True)
++        poisson = self.graph.add_stage("poisson", cpu_cost=1.14, gpu_cost=None, has_gpu=False)
++
++        h_visc = self.catalog.get_or_create("parameters::viscosity", shape=(128, 64, 64), element_bytes=8)
++        edge = self.graph.add_dependency(
++            producer="sgs",
++            consumer="convection",
++            buffer=h_visc,
++            transfer_bytes=h_visc.bytes
++        )
++
++        self.assertEqual(len(self.graph.stages), 3)
++        self.assertEqual(len(self.graph.edges), 1)
++        self.assertEqual(edge.producer, "sgs")
++        self.assertEqual(edge.consumer, "convection")
++        self.assertEqual(edge.buffer.handle_id, h_visc.handle_id)
++
++
++class TestPlacementOptimizer(unittest.TestCase):
++    """Test min-cut / heterogeneous graph partitioning placement optimization."""
++
++    def setUp(self):
++        self.graph = ContextDataflowGraph()
++        self.catalog = CanonicalBufferCatalog()
++        self.hardware = HardwareCostModel(
++            pcie_latency_seconds=1e-5,
++            pcie_bandwidth_bytes_per_sec=16e9,  # 16 GB/s PCIe Gen4
++            kernel_launch_overhead_seconds=5e-6
++        )
++        self.optimizer = PlacementOptimizer(hardware=self.hardware)
++
++    def test_isolated_vs_joint_gpu_placement(self):
++        """Verify that joint GPU placement collapses the intermediate cut edge to 0 cost."""
++        h_visc = self.catalog.get_or_create("parameters::viscosity", shape=(128, 64, 64), element_bytes=8)
++        h_vel = self.catalog.get_or_create("parameters::u2", shape=(128, 64, 64), element_bytes=8)
++
++        self.graph.add_stage("sgs", cpu_cost=3.9, gpu_cost=0.15, has_gpu=True)
++        self.graph.add_stage("convection", cpu_cost=1.9, gpu_cost=0.40, has_gpu=True)
++        self.graph.add_stage("poisson", cpu_cost=1.14, gpu_cost=None, has_gpu=False)
++
++        # SGS produces Viscosity for Convection
++        self.graph.add_dependency("sgs", "convection", h_visc, h_visc.bytes)
++        # Convection produces U2 for Poisson (CPU only)
++        self.graph.add_dependency("convection", "poisson", h_vel, h_vel.bytes)
++
++        plan = self.optimizer.optimize(self.graph)
++
++        # SGS and Convection should both be placed on GPU
++        self.assertEqual(plan.placements["sgs"], ExecutionTarget.GPU)
++        self.assertEqual(plan.placements["convection"], ExecutionTarget.GPU)
++        self.assertEqual(plan.placements["poisson"], ExecutionTarget.CPU)
++
++        # Edge (sgs, convection) should NOT be cut (resident on device)
++        sgs_conv_edge = plan.get_edge_plan("sgs", "convection")
++        self.assertFalse(sgs_conv_edge.is_cut)
++        self.assertEqual(sgs_conv_edge.transfer_cost_seconds, 0.0)
++
++        # Edge (convection, poisson) MUST be cut (GPU -> CPU transfer)
++        conv_pois_edge = plan.get_edge_plan("convection", "poisson")
++        self.assertTrue(conv_pois_edge.is_cut)
++        self.assertGreater(conv_pois_edge.transfer_cost_seconds, 0.0)
++
++    def test_threshold_fallback_to_cpu_when_overhead_dominates(self):
++        """If a stage has trivial GPU speedup and high transfer cost, fall back to CPU."""
++        h_buf = self.catalog.get_or_create("temp_data", shape=(256, 256, 256), element_bytes=8)  # 134 MB
++
++        # Tiny kernel: 1.00s CPU, 0.99s GPU (saves only 0.01s, but transferring 134MB takes ~0.01s + latency)
++        self.graph.add_stage("heavy_cpu_producer", cpu_cost=5.0, gpu_cost=None, has_gpu=False)
++        self.graph.add_stage("tiny_candidate", cpu_cost=1.00, gpu_cost=0.99, has_gpu=True)
++        self.graph.add_stage("heavy_cpu_consumer", cpu_cost=5.0, gpu_cost=None, has_gpu=False)
++
++        self.graph.add_dependency("heavy_cpu_producer", "tiny_candidate", h_buf, h_buf.bytes)
++        self.graph.add_dependency("tiny_candidate", "heavy_cpu_consumer", h_buf, h_buf.bytes)
++
++        plan = self.optimizer.optimize(self.graph)
++        # Offloading tiny_candidate would require HtoD and DtoH of 134MB twice, which exceeds 0.01s savings!
++        self.assertEqual(plan.placements["tiny_candidate"], ExecutionTarget.CPU)
++
++    def test_elmm_multistage_rk_placement(self):
++        """Verify full ELMM RK3 placement: collapses all internal GPU-GPU edges, cuts only to CPU Poisson."""
++        self.graph.add_stage("sgs", cpu_cost=3.90, gpu_cost=0.15, has_gpu=True)
++        self.graph.add_stage("convection_rk1", cpu_cost=0.63, gpu_cost=0.13, has_gpu=True)
++        self.graph.add_stage("convection_rk2", cpu_cost=0.63, gpu_cost=0.13, has_gpu=True)
++        self.graph.add_stage("convection_rk3", cpu_cost=0.63, gpu_cost=0.13, has_gpu=True)
++        self.graph.add_stage("poisson", cpu_cost=1.14, gpu_cost=None, has_gpu=False)
++
++        visc = self.catalog.get_or_create("parameters::viscosity", shape=(128, 64, 64), element_bytes=8)
++        u = self.catalog.get_or_create("parameters::u", shape=(128, 64, 64), element_bytes=8)
++
++        self.graph.add_dependency("sgs", "convection_rk1", visc)
++        self.graph.add_dependency("convection_rk1", "convection_rk2", u)
++        self.graph.add_dependency("convection_rk2", "convection_rk3", u)
++        self.graph.add_dependency("convection_rk3", "poisson", u)
++
++        plan = self.optimizer.optimize(self.graph)
++
++        self.assertEqual(plan.placements["sgs"], ExecutionTarget.GPU)
++        self.assertEqual(plan.placements["convection_rk1"], ExecutionTarget.GPU)
++        self.assertEqual(plan.placements["convection_rk2"], ExecutionTarget.GPU)
++        self.assertEqual(plan.placements["convection_rk3"], ExecutionTarget.GPU)
++        self.assertEqual(plan.placements["poisson"], ExecutionTarget.CPU)
++
++        self.assertFalse(plan.get_edge_plan("sgs", "convection_rk1").is_cut)
++        self.assertFalse(plan.get_edge_plan("convection_rk1", "convection_rk2").is_cut)
++        self.assertFalse(plan.get_edge_plan("convection_rk2", "convection_rk3").is_cut)
++        self.assertTrue(plan.get_edge_plan("convection_rk3", "poisson").is_cut)
++
++
++
++class TestResidencyCoherenceScheduler(unittest.TestCase):
++    """Test memory residency state tracking, optimistic handoff, lazy fallback, and proactive DtoH."""
++
++    def setUp(self):
++        self.catalog = CanonicalBufferCatalog()
++        self.scheduler = ResidencyCoherenceScheduler(self.catalog)
++
++    def test_optimistic_gpu_to_gpu_handoff(self):
++        """When producer and consumer are both on GPU, memory stays DEVICE_CURRENT with zero copy."""
++        h_visc = self.catalog.get_or_create("parameters::viscosity", shape=(128, 64, 64), element_bytes=8)
++
++        # 1. SGS runs on GPU
++        actions_sgs = self.scheduler.on_stage_begin("sgs", target=ExecutionTarget.GPU, reads=[], writes=[h_visc])
++        self.assertEqual(self.scheduler.get_state(h_visc), BufferState.DEVICE_CURRENT)
++
++        actions_sgs_end = self.scheduler.on_stage_end("sgs", next_predicted_stage="convection", next_target=ExecutionTarget.GPU)
++        # Zero DtoH transfer should be scheduled on SGS exit!
++        dtoh_transfers = [a for a in actions_sgs_end if a.action_type == ResidencyActionType.DtoH_TRANSFER]
++        self.assertEqual(len(dtoh_transfers), 0)
++
++        # 2. Convection starts on GPU and reads Viscosity
++        actions_conv = self.scheduler.on_stage_begin("convection", target=ExecutionTarget.GPU, reads=[h_visc], writes=[])
++        # Should be an optimistic resident handoff, zero HtoD transfer
++        self.assertTrue(any(a.action_type == ResidencyActionType.RESIDENT_HANDOFF for a in actions_conv))
++        htod_transfers = [a for a in actions_conv if a.action_type == ResidencyActionType.HtoD_TRANSFER]
++        self.assertEqual(len(htod_transfers), 0)
++
++    def test_proactive_async_synchronization_for_likely_cpu_consumer(self):
++        """If the predicted next consumer is CPU, schedule non-blocking async DtoH immediately."""
++        h_u2 = self.catalog.get_or_create("parameters::u2", shape=(128, 64, 64), element_bytes=8)
++
++        self.scheduler.on_stage_begin("convection", target=ExecutionTarget.GPU, reads=[], writes=[h_u2])
++        # On exit, next stage is Poisson which is on CPU
++        actions = self.scheduler.on_stage_end("convection", next_predicted_stage="poisson", next_target=ExecutionTarget.CPU)
++
++        proactive_actions = [a for a in actions if a.action_type == ResidencyActionType.PROACTIVE_ASYNC_DtoH]
++        self.assertEqual(len(proactive_actions), 1)
++        self.assertEqual(proactive_actions[0].buffer.handle_id, h_u2.handle_id)
++
++    def test_lazy_fallback_synchronization_fence_on_unlikely_cpu_read(self):
++        """If an unexpected branch reaches a CPU stage while buffer is DEVICE_CURRENT, emit a lazy fence."""
++        h_visc = self.catalog.get_or_create("parameters::viscosity", shape=(128, 64, 64), element_bytes=8)
++
++        # SGS writes Viscosity on GPU
++        self.scheduler.on_stage_begin("sgs", target=ExecutionTarget.GPU, reads=[], writes=[h_visc])
++        self.scheduler.on_stage_end("sgs", next_predicted_stage="convection", next_target=ExecutionTarget.GPU)
++
++        # Unexpected branch: a CPU diagnostics routine reads Viscosity
++        actions = self.scheduler.on_stage_begin("cpu_diagnostics", target=ExecutionTarget.CPU, reads=[h_visc], writes=[])
++
++        lazy_fences = [a for a in actions if a.action_type == ResidencyActionType.LAZY_SYNC_FENCE]
++        self.assertEqual(len(lazy_fences), 1)
++        self.assertEqual(lazy_fences[0].buffer.handle_id, h_visc.handle_id)
++        # After the lazy fence, state becomes BOTH_VALID
++        self.assertEqual(self.scheduler.get_state(h_visc), BufferState.BOTH_VALID)
++
++
++class TestUnifiedScopeBridge(unittest.TestCase):
++    """Test generating the shared Fortran/C++ residency bridge module."""
++
++    def test_bridge_source_generation(self):
++        from elmm_pipeline.dataflow_graph import UnifiedScopeBridge
++
++        bridge = UnifiedScopeBridge()
++        fortran_source = bridge.generate_fortran_bridge()
++
++        self.assertIn("module fort_resident_bridge", fortran_source)
++        self.assertIn("global_resident_context", fortran_source)
++        self.assertIn("fort_get_or_create_resident_context", fortran_source)
++        self.assertIn("fort_close_resident_context", fortran_source)
++        self.assertIn("fort_ensure_host_buffer", fortran_source)
++        self.assertIn("fort_mark_device_buffer", fortran_source)
++
++    def test_patch_subgrid_source(self):
++        from elmm_pipeline.dataflow_graph import UnifiedScopeBridge
++
++        bridge = UnifiedScopeBridge()
++        sample_subgrid = """
++integer(fort_selection_kind_0a0443cf2c90) :: fort_selection_context_0a0443cf2c90
++fort_selection_context_0a0443cf2c90 = 0
++fort_actual_status = fort_scope_create(0_c_int, fort_selection_context_0a0443cf2c90)
++fort_close_status = fort_scope_close(fort_selection_context_0a0443cf2c90)
++"""
++        patched = bridge.patch_subgrid_source(sample_subgrid)
++        self.assertIn("use fort_resident_bridge", patched)
++        self.assertIn("fort_get_or_create_resident_context", patched)
++        self.assertIn("fort_mark_device_buffer", patched)
++        self.assertNotIn("fort_close_status = fort_scope_close(fort_selection_context_0a0443cf2c90)", patched)
++
++    def test_remap_dynamics_identities(self):
++        from elmm_pipeline.dataflow_graph import UnifiedScopeBridge
++
++        bridge = UnifiedScopeBridge()
++        sample = """
++fort_actual_status = fort_scope_register(fort_selection_context_2d2e69bd1df9, 3_c_int64_t, &
++1_c_int64_t, fort_actual_layout, 1_c_int, fort_buffer_3)
++fort_status = fort_scope_register(fort_context, 5_c_int64_t, &
++1_c_int64_t, fort_layout, 1_c_int, fort_team_buffer_5)
++"""
++        remapped = bridge.remap_dynamics_identities(sample, offset=10)
++        self.assertIn("13_c_int64_t", remapped)
++        self.assertIn("15_c_int64_t", remapped)
++        self.assertNotIn(" 3_c_int64_t", remapped)
++        self.assertNotIn(" 5_c_int64_t", remapped)
++
++    def test_bridge_has_invalidation_helper(self):
++        from elmm_pipeline.dataflow_graph import UnifiedScopeBridge
++
++        bridge = UnifiedScopeBridge()
++        source = bridge.generate_fortran_bridge()
++        self.assertIn("fort_invalidate_device_buffer", source)
++        self.assertIn("fort_scope_forget_definition", source)
++
++
++if __name__ == "__main__":
++    unittest.main()

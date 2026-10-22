@@ -1,0 +1,13 @@
+{
+  "status": "root_reviewed_metadata_adapter_and_assembly_retry_authorized",
+  "assembler_sha256": "b6b28f7e30bbf8da93f6a6d9fcbca9ada076edb072eb9230837950b59bff334d",
+  "peer_review": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/suite-independent-junit-module-adapter/runtime-peer-review.json",
+    "sha256": "f46d0c5597d7b241fedaa0b4e939865feab1c3be905f0c5df1c42cc06aa9e69f"
+  },
+  "diff_review": "Only suite gate pipeline to known main/pipeline and comment. Single authenticated commandfile, exactcase/name/classchain, current-source hash, unique matching and enclosing exit0 retained.",
+  "test_or_application_changes": false,
+  "raw_XML_or_argv_changes": false,
+  "original_failed_attempt_preserved": true,
+  "recipe_unchanged_sha256": "192e36433dfe39401ba6f9ca5ab32e9af94d26c59b2fbc6e07d4f2eb232ad65f"
+}

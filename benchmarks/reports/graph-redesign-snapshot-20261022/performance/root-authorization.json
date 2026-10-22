@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "kind": "root-development20-plan-authorization",
+  "created_utc": "2026-10-22T05:22:47.492950+00:00",
+  "plan": {
+    "path": "/tmp/fortran-candidate20-development-plan-01/plan.json",
+    "sha256": "f690ee61fdbcfcc5312f728031d74efd12c5085c4c567c1c1b8ea7aeb24dca64"
+  },
+  "gates_root_review_sha256": "1280fa202ed25cf9c0b43fc528af1cd1aba338787925abefc91c78ec8ecfdb33",
+  "review": "Verified direct referenced gates, bindings, actualproductionSHA, helpers; quick20wrapper identical public timingcall with PIDfilename/formatting only vs18",
+  "authorized": "Both serialcases exactplan;1warm+3rotated all3modes;20percent stop and preserveallrows; no other workloads",
+  "exclusive_quiet_lease": true,
+  "full_or_final_qualification": false,
+  "original_TOP_basis_approval": "pending_no_substitution"
+}

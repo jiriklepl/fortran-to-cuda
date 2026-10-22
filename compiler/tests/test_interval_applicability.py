@@ -4,8 +4,8 @@ from dataclasses import replace
 
 import pytest
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.offload.exact_window import digest
 from compiler.offload.interval_applicability import analyze_interval_applicability
 from compiler.tests.test_checked_execution_plan import scanned

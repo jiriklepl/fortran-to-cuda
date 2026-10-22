@@ -1,0 +1,49 @@
+{
+  "status": "root_reviewed_complete_with_two_classified_structural_skips",
+  "assembled_summary": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/assembled-test-evidence-raw-01/summary.json",
+    "sha256": "7a97233ff578ada475a6b93b13e6e5558fcdcbd68fd62fde7d2702b63fcd94cd"
+  },
+  "assembled_nodes": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/assembled-test-evidence-raw-01/nodes.json",
+    "sha256": "0d498395f1bd0f9e0bd7231df6f1b00c90cac4155fd6d15eda7684b6c7fbb36a"
+  },
+  "assembled_runs": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/assembled-test-evidence-raw-01/runs.json",
+    "sha256": "4666e0ddaca253c44deb07f2256d966b6a7bdb44d29999cfb7acd504522767d3"
+  },
+  "recipe": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/final-test-evidence-recipe.v4.sealed.json",
+    "sha256": "8503b7caf018be375b75dc46bd5ee23c020894661b6db936bbeae2ceb146dccd"
+  },
+  "execution": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/metadata-assembly-attempt-05-execution.json",
+    "sha256": "d4a47a83ad853b6061ea74758a4fa7de999eb22246a730a50434e32fa28ac274"
+  },
+  "final_outcomes": {
+    "passed": 8899,
+    "skipped": 2
+  },
+  "collected": 8901,
+  "by_suite": {
+    "main": {
+      "passed": 8059,
+      "skipped": 2
+    },
+    "pipeline": {
+      "passed": 840
+    }
+  },
+  "all_463_current_test_source_hashes_reverified": true,
+  "all_latest_current_attempts_enclosing_process_exit0": true,
+  "raw_command_runs_preserved": 602,
+  "retired_original_histories_preserved": 2,
+  "no_subtest_count_inflation": true,
+  "historical_failures_timeouts_and_metadata_assembly_failures_preserved": true,
+  "deterministic_archive_and_final_report_publication_authorized": true,
+  "git_staging_and_local_commits_authorized_by_later_user_instruction": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/user-commit-authorization-addendum.json",
+    "sha256": "e54632c371eacbf7e5bae4c1863fbfc8e37d9893a60f688b65a3998fa231ded4"
+  },
+  "no_tests_apps_or_redesign_executed_by_metadata_assembly": true
+}

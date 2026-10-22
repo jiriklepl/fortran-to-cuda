@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "status": "generated_test_artifact_reversibly_moved_out_of_source_staging",
+  "original_path": "/home/jirka/research/fortran-abomination/command-log.jsonl",
+  "preserved_path": "/tmp/fortran-committable-snapshot-20261022/generated-command-log.preserved.jsonl",
+  "bytes": 261382,
+  "sha256": "9fb8c6f16bdaf3fd30bf0f01d5e0d5243a8bd6718648878e9988e619f7ff197e",
+  "all_test_build_application_jobs_closed": true,
+  "no_payload_content_printed": true,
+  "not_implementation_source": true,
+  "move_method": "copy, exact-byte verify both source/destination, unlink source (cross-filesystem rename unsupported; prior rename attempt failed without mutation)",
+  "restore": "Copy preserved_path to original_path if needed; do not overwrite a new file."
+}

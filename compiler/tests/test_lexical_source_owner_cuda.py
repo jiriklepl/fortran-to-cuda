@@ -7,16 +7,27 @@ import shutil
 import pytest
 
 from compiler.tests.test_lexical_source_owner import (
-    SOURCE, INTERNAL_SOURCE, ASSOCIATE_SOURCE, GUARDED_CHILD_SOURCE, PROTECTED_SOURCE,
-    MODULE_SOURCE, NESTED_MODULE_SOURCE, STRIDED_MODULE_SOURCE, RETURN_MODULE_SOURCE, PAYLOAD_SOURCE,
-    ALLOCATION_GUARD_SOURCE, NATIVE_ATOMIC_SOURCE, GUARDED_NATIVE_SOURCE, emit,
-    FIRST_GUARD_SOURCE, FIRST_GUARD_MODULE_SOURCE,
-    NATIVE_METADATA_SOURCE, METADATA_ALIAS_SOURCE,
+    ALLOCATION_GUARD_SOURCE,
+    ASSOCIATE_SOURCE,
+    FIRST_GUARD_MODULE_SOURCE,
+    FIRST_GUARD_SOURCE,
+    GUARDED_CHILD_SOURCE,
+    GUARDED_NATIVE_SOURCE,
+    INTERNAL_SOURCE,
+    METADATA_ALIAS_SOURCE,
+    MODULE_SOURCE,
+    NATIVE_ATOMIC_SOURCE,
+    NATIVE_METADATA_SOURCE,
+    NESTED_MODULE_SOURCE,
+    PAYLOAD_SOURCE,
+    PROTECTED_SOURCE,
+    RETURN_MODULE_SOURCE,
+    SOURCE,
+    STRIDED_MODULE_SOURCE,
+    emit,
 )
-from compiler.tests.test_source_scopes import FACT
 from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
-from compiler.tests.test_source_scopes import run
-
+from compiler.tests.test_source_scopes import FACT, run
 
 DRIVER = """subroutine opaque(b,n)
 use local_owner,only:visits
@@ -92,8 +103,8 @@ def lexical_binary(tmp_path_factory, request):
     if request.param == 'nested_module':
         captures = {'deep_child::weights': FACT}
     if request.param == 'configured_native':
-        from compiler.driver.options import CompilerOptions
-        from compiler.offload.config import OffloadConfig
+        from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+        from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
         from compiler.scopes.source import ScopeBuilder
         from compiler.tests.test_configured_sources import configured_native_owner
         original, document, facts = configured_native_owner(directory)

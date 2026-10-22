@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "status": "TEXT_DRAFT_ONLY_DO_NOT_APPLY_UNTIL_APPROVED109_RUNS_AND_PROTECTED_POST_GUARDS_CLOSE",
+  "root_approval": "Root authorized minimal default pin after109 completion and protected inputs verified. No additional compiler behavior change.",
+  "required_historical_control": "be58ab809296b97ea39d701828a2621adfc6b3dc",
+  "patch": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/reproducer-default-pin-draft/proposed.patch",
+    "sha256": "20378081c7e6fc2125784be43fd747f31a87d7c2cf4dbf23df8222f9f47da3f7"
+  },
+  "files": [
+    {
+      "path": "containers/reproduce_e2e.py",
+      "current_preimage_sha256": "b32a8f30ce64312a54680d2e28d335a4faeb7e0a0b7231f44f360beda48d5f25",
+      "proposed_sha256": "80d04f9f2df437f918f2c74afd6dee4c5d9eb77950727449e4ee0535e96929b7"
+    },
+    {
+      "path": "containers/README.md",
+      "current_preimage_sha256": "9da68507e48eec3b1e05a6fdd1094ade547f94a381f01d1d796d7959b4fb4e2a",
+      "proposed_sha256": "1b022082f1e261526ea9a2f7abfafadc4bc7d05000450a6c2e48bb62b2ec44ab"
+    },
+    {
+      "path": "containers/tests/test_reproduce_e2e.py",
+      "current_preimage_sha256": "d176f24f8a341bcb735cb057ce1389edc521c2c1577ef7a3964471254aa4a5d6",
+      "proposed_sha256": "9ecdf391818eb71f477879111793b4d661f9792269e8d57c00c2c929ab7036f6"
+    }
+  ],
+  "post109_actions": [
+    "Require109 report+controller closed and before/after original/protected hash checks PASS.",
+    "Require exact draft preimage SHAs before applying or review only necessary rebase; never mutate old109 plan/report/stage.",
+    "Apply three-file patch, preserve old public helper bytes in snapshot recipes (already archived).",
+    "Run all seven containers test files under240-second phases, retaining initial results; parser new test must not run apps.",
+    "Recollect final main inventory8060 preserving original8057nodeids and2publicIEEE additions, pipeline837 unchanged.",
+    "Refresh final evidence/source authority/companion reconstruction/manifest; historical measured20 artifacts and timings remain unchanged."
+  ],
+  "test_intent": "Parser defaults and explicit override only via run_comparison mock; no build/transform/app/profiling invocation.",
+  "default_semantics": "Committed branch always uses legacy bounded SGS/direct transform. HEAD after snapshot commit no longer implements that public protocol, so fixed baseline is necessary for reproducibility. Explicit compatible historical override remains allowed.",
+  "executed_tests_builds_or_applications": false,
+  "actual_public_files_modified": false,
+  "preparation_attempt01": "Text-only initial copy loop stopped when an already-created parent directory existed; no public files touched. Retained partial draft preimages are checked equal, then preparation resumed with mkdir exist_ok."
+}

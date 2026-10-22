@@ -23,6 +23,7 @@ from compiler.tests.support.borrowed_numerical_team import (
     borrowed_team_fixture,
     borrowed_team_launch_counts,
     emit_borrowed_team_fixture,
+    run_borrowed_team_fixture,
 )
 
 
@@ -128,7 +129,7 @@ def test_actual_participants_vote_before_query_and_native_alternative_runs_once(
         probe = body.index("fort_scope_numerical_environment_supported()")
         query = body.index("fort_inline_query(")
         execute = body.index("fort_inline_team_run(")
-        begin = body.index("fort_scope_host_begin(")
+        begin = body.index("fort_scope_access_begin_v1(")
         end = body.index("fort_scope_host_end(")
         native = ("values(:,:,plane)=seed" if procedure == INITIALIZER
                   else "values(:,:,plane)=values(:,:,plane)*factor")
@@ -136,7 +137,7 @@ def test_actual_participants_vote_before_query_and_native_alternative_runs_once(
         assert compact.count(native) == 1
         original = compact.index(native)
         assert probe < query < execute
-        assert compact.index("fort_scope_host_begin(") < original < compact.index("fort_scope_host_end(")
+        assert compact.index("fort_scope_access_begin_v1(") < original < compact.index("fort_scope_host_end(")
         assert begin < end
         assert body.count("!$omp parallel") == 1
         assert body.count("!$omp end parallel") == 1
@@ -185,7 +186,7 @@ def test_borrowed_team_retains_fresh_source_and_configuration_authority(tmp_path
 def test_partial_out_helper_cannot_grant_whole_definition(tmp_path):
     initializer = HELPER_SOURCE.replace("do plane=1,size(values,3)", "do plane=1,size(values,3)-1", 1)
     paths, builder = borrowed_team_fixture(tmp_path, helper_source=initializer)
-    outputs, report = builder.run()
+    outputs, report = run_borrowed_team_fixture(builder)
     owner, = report["scopes"]
     assert owner["boundaries"], report
     decline, = (item for item in report["source_coordinator_boundaries"] if item["procedure"] == INITIALIZER)
@@ -218,7 +219,7 @@ enddo""", 1)
     native = fragment(local, originals, kind="joined native OpenMP")
     assert not native.overwrites
     assert native.summary["guaranteed_whole_overwrites"] == []
-    _outputs, report = builder.run()
+    _outputs, report = run_borrowed_team_fixture(builder)
     assert builder.coordinators.get(INITIALIZER) is None
     assert not _workers(report).get(INITIALIZER)
     assert builder.facts["captures"]["argument::b"]["initialized"] == "none"

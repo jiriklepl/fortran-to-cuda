@@ -230,9 +230,9 @@ def test_compute_fixture_uses_fixed_countable_work_and_reuses_one_leaf():
 
 
 def test_fixed_auto_holdout_uses_existing_analysis_budgets_and_public_work_counts(tmp_path):
+    from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
     from compiler.driver.options import CompilerOptions
     from compiler.emission.common.resources import read_scoped_runtime
-    from compiler.offload.config import OffloadConfig
     from compiler.scopes.source import form_source_scopes
 
     original = tmp_path / "original.f90"

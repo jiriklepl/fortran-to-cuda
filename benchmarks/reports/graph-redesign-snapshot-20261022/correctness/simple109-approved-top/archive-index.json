@@ -1,0 +1,1041 @@
+{
+  "schema_version": 1,
+  "status": "AUTHENTIC_CLOSED_PRIVATE_THREE_MODE_NATURAL109_CORRECTNESS",
+  "source_basis": "UserapproveddeterministicTOP65d6 pressure-onlyprivate recompiles/relinks; originalpublicpreparedproofs remainuntouched.",
+  "result": "All3natural109 strict20f64+shape/bounds/halos+VTK+same4FFTWplansPASS; be58/20all20bitidentical, maxabsnative4.243521476432477e-7. Native selfcomparisonlayout/finitenessonly, notindependentaccuracy.",
+  "public_guard": "Original2931preparedartifactclosure and original/privateinputs verifiedbefore/after; newtypedparsercompatibilityexplicitlyboundold8e1/current1fa, no monkeypatch/hashwaiver.",
+  "initial_preflight_failure": "Originalattempt failedbeforeanyapp/runsdir; toolobservationreceipt preserved, no rawredirectclaim. Rootpostreview40artifactcountcorrection is metadataonly, notappfailure.",
+  "performance_sample": false,
+  "fresh_public_prepared_qualification": false,
+  "final_seven_round_campaign": false,
+  "copies": [
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/report.json",
+      "archive_path": "report.json",
+      "sha256": "21db79686d99d13a2b7267f6089771fcbdb4485bbadaf3aa76b86f1b6d3cd8aa",
+      "bytes": 157957
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/run_three_mode.py",
+      "archive_path": "recipe/run_three_mode.py.source",
+      "sha256": "17f35adc1d2241d4d5af5a988265aaf8c34bc10920f78501c984ff2e9d3dd1f2",
+      "bytes": 14277
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/stage.json",
+      "archive_path": "recipe/stage.json",
+      "sha256": "2f1b87e952885727b5d704b5111cefb83b4fb7522ca28db90d0d5f02f1bd8f43",
+      "bytes": 14511
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/root-authorization.json",
+      "archive_path": "recipe/root-authorization.json",
+      "sha256": "488d3e0eb7539993be40e895ddb32072270fb36bb340ebf9d38aedcfd2886f92",
+      "bytes": 751
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/root-postguard-review.json",
+      "archive_path": "recipe/root-postguard-review.json",
+      "sha256": "3cfe28179266820959ec9673871b708dffd1cd6179549adbb8f2f593df950c3f",
+      "bytes": 4008
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/driver-v1-to-v2.diff",
+      "archive_path": "recipe/driver-v1-to-v2.diff",
+      "sha256": "98103152fef52ec6ee6cb20dd9400354eb8c51b850e5fe136b4fb59278b7de5d",
+      "bytes": 4256
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/compatibility-addendum.json",
+      "archive_path": "recipe/compatibility-addendum.json",
+      "sha256": "f23a1576c4aa7614781ec04a7bda7221fe357a6e95155e6b2007d03024dc5742",
+      "bytes": 2815
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/historical-failure-linkage.json",
+      "archive_path": "recipe/historical-failure-linkage.json",
+      "sha256": "1972c6cb2a1fdc7631ef7f95a47105341a84133fb459532cfbe8e1795abe08d8",
+      "bytes": 1484
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/historical-validator/gpu_validation.py.source",
+      "archive_path": "recipe/historical-validator/gpu_validation.py.source",
+      "sha256": "8e1cf21aff1ae868f02082ef077fee225cb4626a682ae8f6c408ca84381756cf",
+      "bytes": 17704
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-20261022/run_three_mode.py",
+      "archive_path": "historical-preflight-v1/run_three_mode.py.source",
+      "sha256": "c92600a4508c42ef680c7f4af55e82d56d23e780c9c9cedd5fe66afdddc3d9e8",
+      "bytes": 12173
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-20261022/stage.json",
+      "archive_path": "historical-preflight-v1/stage.json",
+      "sha256": "4cba3dcf2f050160dd12854d22570a73a492dc94222b2992b8a2e3f53de198cd",
+      "bytes": 11006
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-20261022/root-authorization.json",
+      "archive_path": "historical-preflight-v1/root-authorization.json",
+      "sha256": "76d61d595c52f10a5a03fd2cb8091405a5053e760e40246f31e1558130859a21",
+      "bytes": 610
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-20261022/attempt-01-preflight-failure.json",
+      "archive_path": "historical-preflight-v1/attempt-01-preflight-failure.json",
+      "sha256": "7c70d928066b65879c2103069d2dcc09cb5a65a535014d4a2bc3e134df81fc03",
+      "bytes": 2076
+    },
+    {
+      "original_path": "/tmp/fortran-committable-snapshot-20261022/simple109-helper-compat-v2-independent-peer-review.json",
+      "archive_path": "recipe/independent-helper-peer-review.json",
+      "sha256": "2d5ee70b028c749d9d85bfe216e41fb25cc8c18b018d90a81606354f47713487",
+      "bytes": 2776
+    },
+    {
+      "original_path": "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/output.conf",
+      "archive_path": "config/output.conf",
+      "sha256": "80ad8b4568d3ee704300c36678866cc340cfd132438e7bc17f77ff60703248c1",
+      "bytes": 107
+    },
+    {
+      "original_path": "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/inlet.conf",
+      "archive_path": "config/inlet.conf",
+      "sha256": "bf2b9fa5de5a9190eb0df0ad817c1b595fe895f77dc125101961a63134803fd7",
+      "bytes": 1063
+    },
+    {
+      "original_path": "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/grid.conf",
+      "archive_path": "config/grid.conf",
+      "sha256": "629482a14afe796386bbe8ac47dca6618991a84282e630611ef34eac1b9eadcc",
+      "bytes": 443
+    },
+    {
+      "original_path": "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/time_stepping.conf",
+      "archive_path": "config/time_stepping.conf",
+      "sha256": "6a07dbc8ee3d19402a1104c353f3472530fdb184969bb72276f13d6b867afc05",
+      "bytes": 196
+    },
+    {
+      "original_path": "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/les.conf",
+      "archive_path": "config/les.conf",
+      "sha256": "8cd9fb5732fff5d422a370e4e6459e323fb39bfbd6ac7e41c866ec814ff60a3e",
+      "bytes": 308
+    },
+    {
+      "original_path": "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/large_scale.conf",
+      "archive_path": "config/large_scale.conf",
+      "sha256": "f3a6030ffe6dcbb9e8ea2594bcb90bc16121c1cbd3ba8b86304e0135c23d3842",
+      "bytes": 149
+    },
+    {
+      "original_path": "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/boundconds.conf",
+      "archive_path": "config/boundconds.conf",
+      "sha256": "1de78aee774b3482468279f67b4cb56e24a1802353941a5e36f5fb3b35412b64",
+      "bytes": 498
+    },
+    {
+      "original_path": "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/scalars.conf",
+      "archive_path": "config/scalars.conf",
+      "sha256": "b130365e3cc1c54d5436601e7702775bfe734077632568af06e32a59e5fed939",
+      "bytes": 2912
+    },
+    {
+      "original_path": "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/origin.json",
+      "archive_path": "config/origin.json",
+      "sha256": "0fc3217c787b3da166b6c160370da96dcec7ac582fc9f6960586c4d24724b52c",
+      "bytes": 3102
+    },
+    {
+      "original_path": "/home/jirka/research/fortran-abomination/containers/cases/channel-simple/main.conf",
+      "archive_path": "config/main.conf",
+      "sha256": "47d394d2e56be5663550e2350377dbd87f88fdc60b033430dccd23a86fd50421",
+      "bytes": 607
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/stdout.raw",
+      "archive_path": "logs/native/stdout.raw",
+      "sha256": "f8e85d7603960c54cf54f3422185d0d8b5893eaab6a1d3a180a1f3a3f8200272",
+      "bytes": 9616
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/stderr.raw",
+      "archive_path": "logs/native/stderr.raw",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/run.log",
+      "archive_path": "logs/native/run.log",
+      "sha256": "18817228f8d6449ee2a20fd7c582d6a72212c0071c450e9fe02d90298ef30a5c",
+      "bytes": 9617
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/plans.jsonl",
+      "archive_path": "logs/native/plans.jsonl",
+      "sha256": "5b31e06250a7085f59859713f1950d2d7fa7e1ca172fb0781f5d6ae8e947f718",
+      "bytes": 1844
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/stdout.raw",
+      "archive_path": "logs/be58/stdout.raw",
+      "sha256": "b70e7834925c0a19c05b0f863fd1a1337403f11ce2371266b33191250954569e",
+      "bytes": 9616
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/stderr.raw",
+      "archive_path": "logs/be58/stderr.raw",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/run.log",
+      "archive_path": "logs/be58/run.log",
+      "sha256": "addcf1fbf3eefbf4db2eb86520ee9e34459f06e85b0dbff64ac78d7716537c12",
+      "bytes": 9617
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/plans.jsonl",
+      "archive_path": "logs/be58/plans.jsonl",
+      "sha256": "5b31e06250a7085f59859713f1950d2d7fa7e1ca172fb0781f5d6ae8e947f718",
+      "bytes": 1844
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/stdout.raw",
+      "archive_path": "logs/candidate20/stdout.raw",
+      "sha256": "4b6d9f9df1ff4491a21d44a2a779d962ab3a1410aacf85a3b37b54c884481425",
+      "bytes": 9616
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/stderr.raw",
+      "archive_path": "logs/candidate20/stderr.raw",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/run.log",
+      "archive_path": "logs/candidate20/run.log",
+      "sha256": "e5e3ecb85fb8ddf9682dc8549af070902673c8e213a2946795ada64245f432a4",
+      "bytes": 9617
+    },
+    {
+      "original_path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/plans.jsonl",
+      "archive_path": "logs/candidate20/plans.jsonl",
+      "sha256": "5b31e06250a7085f59859713f1950d2d7fa7e1ca172fb0781f5d6ae8e947f718",
+      "bytes": 1844
+    }
+  ],
+  "large_external_artifacts": [
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Moisture.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-U_avg.bin",
+      "sha256": "12ce05b97e297f2c1b5a73013fbefa772d5392279b45069de19113d939f2de70",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-W.shape",
+      "sha256": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Moisture.shape",
+      "sha256": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-V.bin",
+      "sha256": "1001c303ec41442120bc940773896e5e01852d3ae2da5656c3df16a03c0c643d",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-W_avg.bin",
+      "sha256": "a73248e66537821ed481b276dd9f2d021837f9afaf5c56fb382963d8e6b3f71a",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Viscosity.bin",
+      "sha256": "a61a016d98422ff001737fe824499326c2515b28efab74090a6dc6168669f51b",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-W.bin",
+      "sha256": "167ec1ed731900cc39d41a2deeacdd9d9cae3743f2dc5ed5a647cb18ce382fc1",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Wstar.shape",
+      "sha256": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Scalar_avg.shape",
+      "sha256": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-TDiff.shape",
+      "sha256": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-V2.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-V.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Scalar.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Viscosity.shape",
+      "sha256": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-U2.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Wstar.bin",
+      "sha256": "f987fa455a83a30c9f8682ba7cb5feda183769c004bcf1acbfea4a8fa243a6a4",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-U.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-U2.bin",
+      "sha256": "9bb2dbdd9fdef8d1a9a8f393d61e6938fa2228b82a74e1c6a491c17a2a63419f",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-W_avg.shape",
+      "sha256": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Vstar.bin",
+      "sha256": "8fca7cb9d880aee8525f0af5a06f89ce23761316e420f475ea85e37d64b8d5f0",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-V_avg.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Vstar.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-U_avg.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-W2.shape",
+      "sha256": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-W2.bin",
+      "sha256": "5027bddd90fe7419d6b2cd43cf2f5d95329eddf3e377e35eb52a064c89a50dec",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Scalar_avg.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-V_avg.bin",
+      "sha256": "e297a88366b6c8f6e91c9307ab207eef43f92f8b156479a976fa796f08a3e2ad",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Pr_avg.bin",
+      "sha256": "14a21196297684106770d9907bde9d59eec300727d6e4e4378be7c98832de6fe",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Temperature.shape",
+      "sha256": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Ustar.bin",
+      "sha256": "249f006d159ee7dfad2b3a107e0b82f9252974632f0d7b3771620e5a1fd06784",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Pr.bin",
+      "sha256": "dfad6cabc6d4afb7333105dbfa63baab5e65182f910132e13e3967f351119b6c",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Scalar.shape",
+      "sha256": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Temperature.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Pr.shape",
+      "sha256": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-U.bin",
+      "sha256": "994637a5f7c893db2047042cc0e78ed868aa497f402186201e5d30755504954f",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Pr_avg.shape",
+      "sha256": "3196fd7ddeb27f50d5ccb0303f770f61c9bdf1e94505ed7d6c6d0a1758246be8",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-V2.bin",
+      "sha256": "5a162e15e005ab631b0b30577b29911e9a485782502253a06dcd22c8e8f274d9",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-Ustar.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/fields-TDiff.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/output/W.vtk",
+      "sha256": "90c77afc9352fa1b8a5eedf034e9bb7140e7c49a5e3e68e09a1e9ab3a6969fad",
+      "kind": "VTK",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/output/U.vtk",
+      "sha256": "b85e4679c2a2047277f52b1760c6bf2396fd2aa5d656a0ca23b71ce02be7b8f7",
+      "kind": "VTK",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/output/V.vtk",
+      "sha256": "0183f1180717648abefbcc9500d4f7aaf36294082cb8ee88d7a942928e44510a",
+      "kind": "VTK",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/output/avg.vtk",
+      "sha256": "21ddbf2aa2f0794d31866a4e38ce919821eb9739ea4af08cfd9dee45c81519fc",
+      "kind": "VTK",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/native/output/out.vtk",
+      "sha256": "0ca5d0159e694b0bbf2c747b5ad7ccfe07d31510d072f07e2c0194fa7a18d926",
+      "kind": "VTK",
+      "mode": "native"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Moisture.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-U_avg.bin",
+      "sha256": "3f409143845efc5833aafccb899fd95fda03189290c160287ba8e098f5e51f26",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-W.shape",
+      "sha256": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Moisture.shape",
+      "sha256": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-V.bin",
+      "sha256": "1d667db21b7394066dea75788874ba38248151bd468bca5fdbd9fc14b49f59fe",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-W_avg.bin",
+      "sha256": "f082a17a51fb2371e6673811526b28d7b11d436e640383eebb82c1093ac39f0e",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Viscosity.bin",
+      "sha256": "e35016917f0cf419a0e65210e64e21e4a19b7b84b56a00f1cb720e237f4a07e5",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-W.bin",
+      "sha256": "4f997754c7ce3adb2bebd9e3455f72d15fa1227c0c2e4bdc68fd8ef52824c409",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Wstar.shape",
+      "sha256": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Scalar_avg.shape",
+      "sha256": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-TDiff.shape",
+      "sha256": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-V2.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-V.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Scalar.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Viscosity.shape",
+      "sha256": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-U2.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Wstar.bin",
+      "sha256": "821132ff58a81e116ea4a550b3452b1a672ed42876957053b436048add2fd66d",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-U.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-U2.bin",
+      "sha256": "df592dee76720800afc6ff9ef6d9976ec02814f749ec7ad9ae7356733e149d2b",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-W_avg.shape",
+      "sha256": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Vstar.bin",
+      "sha256": "5db2588c5c5d4ad8e79febb0ade78c422238dffbcf6630a58711d2588c3ea07b",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-V_avg.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Vstar.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-U_avg.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-W2.shape",
+      "sha256": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-W2.bin",
+      "sha256": "2e193eb98dfa8a4d40da2523a838504fa6c31c7fb190e22c113405959f42e21e",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Scalar_avg.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-V_avg.bin",
+      "sha256": "0e6d537c972cc5ad7a85ea78ef396dbfe38391394931dcb6b312a4d7cc5081d8",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Pr_avg.bin",
+      "sha256": "115cc14ccf362b26350104ebd937a3bcc6bfe6c1d081e01358be1dc92a8a929c",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Temperature.shape",
+      "sha256": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Ustar.bin",
+      "sha256": "9f1ad2e65fd04f87e7f4fe0639e2dc1084ffe39f3b30c0acf3462e94c6df1dd8",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Pr.bin",
+      "sha256": "ca192f81ff317bc4def5de86f43ec17f7c046f4a9aaba16159e9afe26e8bb22e",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Scalar.shape",
+      "sha256": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Temperature.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Pr.shape",
+      "sha256": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-U.bin",
+      "sha256": "4a4915113b814181b64d421a265cd10f37f26d828b198d64ef365ec8247d6787",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Pr_avg.shape",
+      "sha256": "3196fd7ddeb27f50d5ccb0303f770f61c9bdf1e94505ed7d6c6d0a1758246be8",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-V2.bin",
+      "sha256": "ea4c2ddad5929ead982121883b50a9591faa888b9ed267e8406372ebe7040b5f",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-Ustar.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/fields-TDiff.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/output/W.vtk",
+      "sha256": "91d036e418ef6088afe04f79cbcdf2c6ab4b1181b9976a737137a0144359c312",
+      "kind": "VTK",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/output/U.vtk",
+      "sha256": "64d4fd76248ddd4421a32507b6dcfd84dd68fd1d753827d52af65cc91e9585d6",
+      "kind": "VTK",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/output/V.vtk",
+      "sha256": "b99f7757321a03069e5cc0c3273f933de268e99a562d9aefb093ed272147026a",
+      "kind": "VTK",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/output/avg.vtk",
+      "sha256": "0333a965270ff51ba0b3f26ef58f0a0a5f4f4b3fdfb3e180bbe169ce302baabb",
+      "kind": "VTK",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/be58/output/out.vtk",
+      "sha256": "05e732832f87a17b7c0c3322b03caf6a21a287ade2c23d62eec8514cd5286589",
+      "kind": "VTK",
+      "mode": "be58"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Moisture.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-U_avg.bin",
+      "sha256": "3f409143845efc5833aafccb899fd95fda03189290c160287ba8e098f5e51f26",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-W.shape",
+      "sha256": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Moisture.shape",
+      "sha256": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-V.bin",
+      "sha256": "1d667db21b7394066dea75788874ba38248151bd468bca5fdbd9fc14b49f59fe",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-W_avg.bin",
+      "sha256": "f082a17a51fb2371e6673811526b28d7b11d436e640383eebb82c1093ac39f0e",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Viscosity.bin",
+      "sha256": "e35016917f0cf419a0e65210e64e21e4a19b7b84b56a00f1cb720e237f4a07e5",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-W.bin",
+      "sha256": "4f997754c7ce3adb2bebd9e3455f72d15fa1227c0c2e4bdc68fd8ef52824c409",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Wstar.shape",
+      "sha256": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Scalar_avg.shape",
+      "sha256": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-TDiff.shape",
+      "sha256": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-V2.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-V.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Scalar.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Viscosity.shape",
+      "sha256": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-U2.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Wstar.bin",
+      "sha256": "821132ff58a81e116ea4a550b3452b1a672ed42876957053b436048add2fd66d",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-U.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-U2.bin",
+      "sha256": "df592dee76720800afc6ff9ef6d9976ec02814f749ec7ad9ae7356733e149d2b",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-W_avg.shape",
+      "sha256": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Vstar.bin",
+      "sha256": "5db2588c5c5d4ad8e79febb0ade78c422238dffbcf6630a58711d2588c3ea07b",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-V_avg.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Vstar.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-U_avg.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-W2.shape",
+      "sha256": "aefe90bab7f77f164f1001184a17b40571495a0ce274a34132bfcfebd7ee451d",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-W2.bin",
+      "sha256": "2e193eb98dfa8a4d40da2523a838504fa6c31c7fb190e22c113405959f42e21e",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Scalar_avg.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-V_avg.bin",
+      "sha256": "0e6d537c972cc5ad7a85ea78ef396dbfe38391394931dcb6b312a4d7cc5081d8",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Pr_avg.bin",
+      "sha256": "115cc14ccf362b26350104ebd937a3bcc6bfe6c1d081e01358be1dc92a8a929c",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Temperature.shape",
+      "sha256": "90aef4e4c8b00f91fda62d258cf02588c030a0b252e5433053ff359eaceae8fd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Ustar.bin",
+      "sha256": "9f1ad2e65fd04f87e7f4fe0639e2dc1084ffe39f3b30c0acf3462e94c6df1dd8",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Pr.bin",
+      "sha256": "ca192f81ff317bc4def5de86f43ec17f7c046f4a9aaba16159e9afe26e8bb22e",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Scalar.shape",
+      "sha256": "eb1d93c744a591da9bfa4ee79cdbf2546a734f871a282af29370299c7bd4ae4e",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Temperature.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Pr.shape",
+      "sha256": "8297a7ad0e45030a5f1c4feaa413a3a4d7c292c50e62481023809159b22dcc64",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-U.bin",
+      "sha256": "4a4915113b814181b64d421a265cd10f37f26d828b198d64ef365ec8247d6787",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Pr_avg.shape",
+      "sha256": "3196fd7ddeb27f50d5ccb0303f770f61c9bdf1e94505ed7d6c6d0a1758246be8",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-V2.bin",
+      "sha256": "ea4c2ddad5929ead982121883b50a9591faa888b9ed267e8406372ebe7040b5f",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-Ustar.shape",
+      "sha256": "b72510af47851c07c5d1aeb6bea6ce170cf6da9e22b3bc31d52b45e30391d3bd",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/fields-TDiff.bin",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "kind": "physicalfloat64orlayoutobserver",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/output/W.vtk",
+      "sha256": "91d036e418ef6088afe04f79cbcdf2c6ab4b1181b9976a737137a0144359c312",
+      "kind": "VTK",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/output/U.vtk",
+      "sha256": "64d4fd76248ddd4421a32507b6dcfd84dd68fd1d753827d52af65cc91e9585d6",
+      "kind": "VTK",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/output/V.vtk",
+      "sha256": "b99f7757321a03069e5cc0c3273f933de268e99a562d9aefb093ed272147026a",
+      "kind": "VTK",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/output/avg.vtk",
+      "sha256": "0333a965270ff51ba0b3f26ef58f0a0a5f4f4b3fdfb3e180bbe169ce302baabb",
+      "kind": "VTK",
+      "mode": "candidate20"
+    },
+    {
+      "path": "/tmp/fortran-snapshot-simple109-correctness-helper-compat-v2/runs-01/candidate20/output/out.vtk",
+      "sha256": "05e732832f87a17b7c0c3322b03caf6a21a287ade2c23d62eec8514cd5286589",
+      "kind": "VTK",
+      "mode": "candidate20"
+    }
+  ]
+}

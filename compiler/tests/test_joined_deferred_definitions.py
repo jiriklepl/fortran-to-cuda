@@ -97,7 +97,7 @@ def test_tiled_gpu_alternative_does_not_inherit_coarse_native_whole_reads(tmp_pa
                       "b(i)=b(i)+sum(coefficient)", "c(i)=2.0_8*b(i)+real(i+1,8)"):
         assert text.count(statement) == 1
     assert "FORT_SCOPE_READ_ALL" in text
-    assert "fort_scope_host_begin" in text
+    assert "fort_scope_access_begin_v1" in text
     assert owner["reopen_after_boundary"] is False
 
 

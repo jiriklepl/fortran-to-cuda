@@ -1,0 +1,102 @@
+"""Normalize whole-file pytest metadata; preserve actual argv/source/outcomes verbatim."""
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import xml.etree.ElementTree as ET
+
+ROOT = Path('/home/jirka/research/fortran-abomination')
+
+
+def bound(path):
+    path = Path(path).resolve()
+    return {'path': str(path), 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+
+
+def checked(item):
+    assert bound(item['path']) == {'path': item['path'], 'sha256': item['sha256']}
+    return json.loads(Path(item['path']).read_text())
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--plan', type=Path, required=True)
+    parser.add_argument('--normalize', action='store_true')
+    args = parser.parse_args()
+    if not args.normalize:
+        print('TEXT ONLY: metadata normalization needs explicit root review; no tests/apps.')
+        return
+    plan = json.loads(args.plan.read_text())
+    assert bound(__file__) == plan['normalizer']
+    by_file = {}
+    for entry in plan['inventories']:
+        inventory = checked(entry)
+        assert inventory['exit_code'] == 0 and not inventory['collection_errors']
+        assert inventory['count'] == entry['expected_count'] == len(inventory['tests'])
+        for test in inventory['tests']:
+            file = test['file']
+            if file not in by_file:
+                by_file[file] = (entry['suite'], [])
+            assert by_file[file][0] == entry['suite']
+            by_file[file][1].append(test['nodeid'])
+    outputs = []
+    for entry in plan['summaries']:
+        raw = checked(entry['input'])
+        assert raw['complete'] is True
+        output = Path(entry['output'])
+        assert not output.exists(), 'Preserve any previous normalized output'
+        rows = []
+        for row in raw['results']:
+            file = row['file']
+            suite, selected = by_file[file]
+            command_path = Path(row['log']).parent / 'command.json'
+            command = json.loads(command_path.read_text())
+            assert command['file'] == file and command['argv'] == row['argv']
+            assert command['source_sha256'] == row['source_sha256']
+            argv = command['argv'][command['argv'].index('pytest') + 1:]
+            assert not any('::' in arg for arg in argv)
+            assert not any(arg in {'-k', '-m', '--lf', '--last-failed', '--collect-only'}
+                           or arg.startswith(('--deselect', '--ignore')) for arg in argv)
+            called = {str(Path(arg).resolve().relative_to(ROOT)) for arg in argv
+                      if not arg.startswith('-') and Path(arg).suffix == '.py'}
+            assert called == {file}
+            assert row['nodes'] == command['nodes'] == len(selected)
+            names = {}
+            for nodeid in selected:
+                suffix = nodeid.split('::', 1)[1]
+                head, bracket, params = suffix.partition('[')
+                parts = head.split('::')
+                key = (parts[-1] + bracket + params, '.'.join([Path(file).stem, *parts[:-1]]))
+                assert key not in names
+                names[key] = file + '::' + suffix
+            seen = set()
+            for case in ET.parse(row['junit']).getroot().iter('testcase'):
+                matches = [key for key in names if case.get('name') == key[0]
+                           and (case.get('classname', '') == key[1]
+                                or case.get('classname', '').endswith('.' + key[1])
+                                or case.get('classname', '') == key[1][len(Path(file).stem):])]
+                assert len(matches) == 1, (file, case.attrib, matches)
+                seen.add(matches[0])
+            assert seen == set(names), 'Exact final-file node identity coverage required even for historical failed rows'
+            normalized = dict(row)
+            normalized.update(suite=suite, selection_kind='entire_file_inventory',
+                              selected_nodeids=[names[key] for key in names], selected_nodes=len(selected),
+                              command_json=bound(command_path), log_sha256=bound(row['log'])['sha256'],
+                              junit_sha256=bound(row['junit'])['sha256'])
+            # Original single source_sha256 and exit/outcomes remain; no posthash is fabricated.
+            rows.append(normalized)
+        result = dict(raw)
+        result['results'] = rows
+        result['normalization_inputs'] = [entry['input'], *[
+            {'path': e['path'], 'sha256': e['sha256']} for e in plan['inventories']],
+            bound(__file__), bound(args.plan)]
+        result['normalization'] = ('Metadata only: exact selected nodes/suite derived from final inventory and '
+            'all raw JUnit case identities; original argv, source_sha256, exit codes and failed outcomes unchanged. '
+            'Missing/wrong/multifile/partial coverage fails closed; no historical node renamed or relabeled.')
+        output.write_text(json.dumps(result, indent=2) + '\n')
+        outputs.append(bound(output))
+    print(json.dumps({'normalized_summaries': outputs, 'no_tests_apps_or_imported_tested_code': True}))
+
+
+if __name__ == '__main__':
+    main()

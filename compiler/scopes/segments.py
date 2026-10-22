@@ -45,20 +45,23 @@ class Native:
     demand_effects: object = field(default=None, repr=False, compare=False)
     resource_demand: object = field(default=None, repr=False, compare=False)
     source_reads: object = field(default=None, repr=False, compare=False)
+    source_constants: dict = field(default_factory=dict)
 
     @property
     def coherence_effects(self):
         """Managed obligations only; ``effects`` still reports original reads."""
         return {root: actions for root, actions in self.effects.items()
-                if root not in self.host_only_reads and root not in self.immutable_inputs}
+                if root not in self.host_only_reads and root not in self.immutable_inputs
+                and root not in self.source_constants}
 
     @property
     def coherence_sections(self):
-        if self.sections is None or not (self.host_only_reads or self.immutable_inputs):
+        if self.sections is None or not (self.host_only_reads or self.immutable_inputs or self.source_constants):
             return self.sections
         return replace(self.sections, resources=tuple(section for section in self.sections.resources
                                                      if section.resource not in self.host_only_reads
-                                                     and section.resource not in self.immutable_inputs))
+                                                     and section.resource not in self.immutable_inputs
+                                                     and section.resource not in self.source_constants))
 
 
 def _native_analysis(analysis):
@@ -105,6 +108,15 @@ def _native_analysis(analysis):
 
 def _host_read_candidate(builder, binding):
     """A missing GPU capture proof can admit only original module storage."""
+    actual = getattr(builder, "_native_host_array_actuals", {}).get(binding.root)
+    if actual is not None:
+        # An original read-only dummy may borrow this operation's stable
+        # module allocation. The caller reserves that actual's BYTE range
+        # before association, and complete effects below must still be reads.
+        if (binding.intent != "in" or binding.rank != actual.rank
+                or binding.attributes & {"pointer", "optional", "allocatable", "volatile", "asynchronous", "value"}):
+            return False
+        binding = actual
     if binding.root in builder.facts.get("captures", {}):
         return False
     parts = binding.root.split("::")
@@ -275,7 +287,7 @@ def statement_span(node):
 
 def fragment(builder, nodes, *, kind="native source", selected=None, private_roots=(), native_metadata=False,
              native_host_reads=False,
-             completion=None, span=None):
+             completion=None, span=None, retain_proof_analysis=False):
     """Demand effects from exact original nodes, excluding owner entry events."""
     original = original_roots(builder.inline.original_selection(nodes)) if selected is None else ()
     full_original = original
@@ -343,7 +355,7 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     host_metadata = {binding.native_metadata_object.root: binding.native_metadata_object
                      for binding, _ in referenced if hasattr(binding, 'native_metadata_object')}
     payload_roots = {binding.root for binding, reference in referenced if id(reference) not in descriptor_references}
-    host_only_reads, immutable_inputs = {}, {}
+    host_only_reads, immutable_inputs, source_constants = {}, {}, {}
     for binding, _ in referenced:
         if hasattr(binding, 'native_metadata_object') or binding.root in host_metadata:
             continue
@@ -362,6 +374,18 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
             continue
         if binding.root in private_roots:
             private_bindings[binding.root] = binding
+            continue
+        if binding.rank and "parameter" in binding.attributes:
+            # These are original compile-time constants, not caller-owned
+            # arrays whose definitions or lifetimes need a runtime handle.
+            # Authenticate the declaration rather than trusting a copied
+            # Binding flag. Native execution retains the original initializer
+            # and storage, including arrays too large for scalar extraction.
+            from compiler.scopes.immutable_inputs import _declared
+            _declared(analysis, binding)
+            if binding.attributes & {"pointer", "allocatable", "optional", "target", "volatile", "asynchronous", "value"}:
+                raise CompilationError("native constant has incompatible storage attributes: " + binding.root)
+            source_constants[binding.root] = binding
             continue
         bindings[binding.root] = binding
         if native_host_reads and _host_read_candidate(builder, binding):
@@ -395,7 +419,7 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
         else:
             summary = analysis.segment_summary(builder.entry.qualified, selection, capture_locals=True)
     if (deferred is None and not summary["complete"] and completion_proof is not None
-            and builder.config.scope_execution == "reached"
+            and builder.config.reached_execution
             and any('budget exhausted' in reason for reason in summary['reasons'])):
         from compiler.scopes.native_atomic import summarize
         summary = summarize(analysis, builder.entry.qualified, selection, completion_proof)
@@ -429,7 +453,7 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
             raise CompilationError("host-only native storage requires read-only complete effects: " + root)
         if "write" in effects.get(root, ()) or root in summary["guaranteed_whole_overwrites"]:
             raise CompilationError("host-only native storage cannot acquire a managed write: " + root)
-    for root in immutable_inputs:
+    for root in (*immutable_inputs, *source_constants):
         if any(operation.get("resource") == root and operation["kind"] not in {"read", "descriptor_read"}
                for operation in summary["operations"]) or "write" in effects.get(root, ()):
             raise CompilationError("native immutable input requires original read-only effects: " + root)
@@ -455,7 +479,8 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
                                                 if item.resource not in private_roots
                                                 and item.resource not in native_states))
     source_reads = None
-    if (getattr(builder, "_selection_activation_binding", None) is not None
+    if ((getattr(builder, "_selection_activation_binding", None) is not None
+            or builder.config.scope_execution == "graph")
             and selected is None and kind == "native source" and sections.available
             and any(item.reads for item in sections.resources)):
         from compiler.frontend.reached_read_requirements import prove_native_read_requirements
@@ -466,8 +491,8 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
                   preserve_original=bool(native_environment),
                   host_only_reads=host_only_reads, host_only_proof=host_only_proof,
                   native_states=native_states, native_environment=tuple(native_environment.values()),
-                  proof_analysis=analysis if native_environment or source_reads is not None else None,
-                  immutable_inputs=immutable_inputs, source_reads=source_reads)
+                  proof_analysis=analysis if retain_proof_analysis or native_environment or source_reads is not None else None,
+                  immutable_inputs=immutable_inputs, source_reads=source_reads, source_constants=source_constants)
 
 
 def condition_fragment(builder, header, *, native_host_reads=False):
@@ -620,7 +645,8 @@ def native_demand_fragment(builder, nodes, demand, *, context=None):
                 raise CompilationError("demand-relative native whole access requires whole initialized storage: "
                                        + root + "; " + str(sections.reason))
     source_reads = None
-    if (context is not None and getattr(builder, "_selection_activation_binding", None) is not None
+    if (context is not None and (getattr(builder, "_selection_activation_binding", None) is not None
+            or builder.config.scope_execution == "graph")
             and sections.available and any(item.reads for item in sections.resources)):
         from compiler.frontend.reached_read_requirements import prove_native_read_requirements
 
@@ -727,7 +753,7 @@ class StructuredScope:
             if kind == "Comment" and not str(node).lstrip().lower().startswith("!$omp"):
                 continue
             if kind == "Call_Stmt":
-                if self.builder.config.scope_execution == "reached" and not hasattr(node, "fort_inline_region"):
+                if self.builder.config.reached_execution and not hasattr(node, "fort_inline_region"):
                     from compiler.frontend.native_environment import intrinsic_export
                     scope = self.builder.analysis.source_scope_for(node, self.builder.entry.scope)
                     if intrinsic_export(self.builder.analysis, scope, node.items[0]) in {
@@ -898,7 +924,7 @@ class StructuredScope:
             return result
         self.tree = visit(self.tree)
         cleared = {root for call in self.calls for root in self.builder.roots_for(call)[1]}
-        if (self.builder.config.scope_execution != "reached"
+        if (not self.builder.config.reached_execution
                 and any(root in cleared for segment in self.segments for root in segment.payload)):
             raise CompilationError("planning payload publication requires complete definitions across ownership")
 
@@ -926,7 +952,7 @@ class StructuredScope:
         from compiler.scopes.source import _span
 
         def reduction_diagnostic(operation):
-            if self.builder.config.scope_execution != "reached":
+            if not self.builder.config.reached_execution:
                 return self.builder.analysis.reduction_candidates(
                     self.builder.entry.qualified, operation.summary.get("selected_node_ids", ()))
             # Serialization must not expand another proof search. Explicit
@@ -999,6 +1025,10 @@ class StructuredScope:
                                    "demand_relative_effects": (operation.demand_effects.public()
                                                                if operation.demand_effects is not None else None),
                                    "immutable_inputs": [proof.public() for proof in operation.immutable_inputs.values()],
+                                   "source_constants": {root: {"binding": binding.public(),
+                                       "authority": "authenticated original PARAMETER declaration and complete read-only effects",
+                                       "device_capture": False, "managed_definitions": False}
+                                       for root, binding in operation.source_constants.items()},
                                    "private_resources": sorted(operation.private_bindings),
                                    "completion": operation.summary["native_completion"],
                                    "sections": operation.sections.public(),
@@ -1036,11 +1066,16 @@ class StructuredScope:
 
     def emit(self, handles, parameters, actuals, imports, *, selector, execution_mode=None, terminal_owner=True,
              logical_lower_bounds=None, selector_name="fort_choose", preflight_failure=None, surround_native=False,
-             provenance_segment=None):
+             provenance_segment=None, inherited_query=None):
         from compiler.scopes.provenance import position, source_id
         from compiler.scopes.source import _call, _checked, _name, _span
         builder = self.builder
         trace_segment = provenance_segment or source_id(builder, "segment", span=(self.first, self.last))
+
+        def task_completion():
+            # Graph-mode host acquisitions enforce their own exact hazards.
+            # A source unit/query boundary does not imply device completion.
+            return [] if builder.config.scope_execution == "graph" else _checked("fort_scope_wait(fort_context)")
 
         def refined(operation, *, query):
             from compiler.scopes.access import build_native_accesses
@@ -1085,26 +1120,27 @@ class StructuredScope:
                 # device completion, without publishing unrelated arrays.
                 lines += _checked("fort_scope_wait(fort_context)")
             accesses = refined(operation, query=False)
+            from compiler.scopes.access import build_native_acquisition
             if accesses is not None:
-                lines += ["block", *[line for access in accesses for line in access.specification]]
+                task = build_native_acquisition((access.handle, access.access_name) for access in accesses)
+                lines += ["block", *[line for access in accesses for line in access.specification], *task.specification]
                 for access in accesses:
-                    lines += [*access.prepare,
-                              *_checked(f"fort_scope_host_begin(fort_context, {access.handle}, {access.access_name})")]
-                return lines
+                    lines += [*access.prepare]
+                return [*lines, *task.prepare, *_checked(task.expression), "end block"]
+            prepared = []
             for root, actions in sorted(operation.coherence_effects.items()):
                 flags = (["FORT_SCOPE_READ_ALL"] if "read" in actions else [])
                 flags += ["FORT_SCOPE_WRITE_ALL"] if "write" in actions else []
                 flags += ["FORT_SCOPE_OVERWRITE_ALL"] if root in operation.overwrites else []
-                lines += ["fort_access = fort_scope_access()", "fort_access%flags = " + " + ".join(flags)]
-                lines += _checked(f"fort_scope_host_begin(fort_context, {handles[root]}, fort_access)")
-            return lines
+                prepared.append((handles[root], "fort_scope_access(flags=" + " + ".join(flags) + ")"))
+            task = build_native_acquisition(prepared)
+            return [*lines, "block", *task.specification, *task.prepare, *_checked(task.expression), "end block"]
 
         def native_end(operation):
             accesses = refined(operation, query=False)
             roots = ([access.handle for access in accesses] if accesses is not None
                      else [handles[root] for root in sorted(operation.coherence_effects)])
-            return [*[line for handle in roots for line in _checked(f"fort_scope_host_end(fort_context, {handle})")],
-                    *(["end block"] if accesses is not None else [])]
+            return [line for handle in roots for line in _checked(f"fort_scope_host_end(fort_context, {handle})")]
 
         def native_plan(operation):
             lines = []
@@ -1142,7 +1178,7 @@ class StructuredScope:
                       "if (fort_status /= FORT_SCOPE_OK) then",
                       *(preflight_failure if preflight_failure is not None else
                         _checked("fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)")), "endif"]
-            return lines
+            return ([f"if (.not. {inherited_query}) then", *lines, "endif"] if inherited_query else lines)
 
         def execute(calls, mode, *, terminal=False):
             return builder.owner_calls(calls, mode, handles, parameters, actuals, imports, terminal=terminal)
@@ -1153,7 +1189,7 @@ class StructuredScope:
                     return ["! Reached query unavailable: " + item.query[1], *preflight_failure]
                 return ["! Current segment has no safe query: " + item.query[1],
                         *_checked("fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"),
-                        *execute(item.calls, "0_c_int", terminal=terminal), *_checked("fort_scope_wait(fort_context)")]
+                        *execute(item.calls, "0_c_int", terminal=terminal), *task_completion()]
             lines = []
             source_reads = getattr(self, "source_reads", {})
             proof = source_reads.get(item.calls[0].procedure) if source_reads else None
@@ -1167,7 +1203,7 @@ class StructuredScope:
             if item.payload:
                 publication = Native((), {root: {"read"} for root in item.payload}, set(), {}, {}, "query payload read")
                 lines += [*native_plan(publication), *native_hooks(publication), *native_end(publication),
-                          *_checked("fort_scope_wait(fort_context)")]
+                          *task_completion()]
             lines += ["fort_status = fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"]
             for call in item.calls:
                 mapping = {formal: binding.root for formal, binding in call.bindings.items()}
@@ -1199,7 +1235,7 @@ class StructuredScope:
                         *_checked("fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"),
                         *execute(item.calls, "0_c_int", terminal=terminal)]),
                       "else", *execute(item.calls, "fort_mode", terminal=terminal), "endif",
-                      *_checked("fort_scope_wait(fort_context)")]
+                      *task_completion()]
             if proof is not None:
                 lines += ["end block"]
             return lines
@@ -1208,10 +1244,28 @@ class StructuredScope:
             tag = position(builder, segment=trace_segment, operation=source_id(builder, "numerical_segment",
                 span=(_span(item.calls[0].node)[0], _span(item.calls[-1].node)[1]), segment_id=item.identity))
             if execution_mode is None:
-                return [*tag, *record_segment(item, terminal=terminal)]
+                local = record_segment(item, terminal=terminal)
+                if inherited_query:
+                    if len(item.calls) != 1 or item.calls[0].region is None:
+                        # Only exact checked numerical leaves can inherit a
+                        # schedule; discovery cuts other source operations.
+                        return [*tag, *local]
+                    call, = item.calls
+                    inherited = builder.inline.emit_call(call, handles, parameters, imports,
+                        query=False, mode="fort_mode", check_status=False)
+                    # The generated entry returns EXECUTION after any work;
+                    # only these documented prework declines can replay this
+                    # original unit. No accepted prefix is replayed.
+                    inherited += ["if (fort_status /= FORT_SCOPE_OK) then",
+                        "if (fort_status /= FORT_SCOPE_ARGUMENT .and. fort_status /= FORT_SCOPE_BOUNDARY .and. &",
+                        "fort_status /= FORT_SCOPE_UNINITIALIZED .and. fort_status /= FORT_SCOPE_PLAN_MISMATCH) &",
+                        "error stop 'inherited entry failed after execution or invalid state'",
+                        *(preflight_failure or ["error stop 'inherited entry lacks original prework fallback'"]), "endif"]
+                    return [*tag, f"if ({inherited_query}) then", *inherited, "else", *local, "endif"]
+                return [*tag, *local]
             return [*tag, "if (" + execution_mode + " == 0_c_int) then",
                     *_checked("fort_scope_plan_reset_mode(fort_context, FORT_SCOPE_PLAN_CONTINUE)"),
-                    *execute(item.calls, "0_c_int", terminal=terminal), *_checked("fort_scope_wait(fort_context)"),
+                    *execute(item.calls, "0_c_int", terminal=terminal), *task_completion(),
                     "else", *record_segment(item, terminal=terminal), "endif"]
 
         def segment(item, *, terminal=False):
@@ -1234,7 +1288,7 @@ class StructuredScope:
             lines += ["if (fort_numerical_guard) then", *segment_impl(item, terminal=terminal), "else",
                       *native_plan(operation), *native_hooks(operation)]
             lines += [line for original in operation.nodes for line in renamed(builder, original, parameters).splitlines()]
-            return [*lines, *native_end(operation), *_checked("fort_scope_wait(fort_context)"), "endif"]
+            return [*lines, *native_end(operation), *task_completion(), "endif"]
 
         def branch(item, index=0, *, terminal=False):
             condition, body = item.alternatives[index]
@@ -1242,7 +1296,7 @@ class StructuredScope:
                 return emit(body, terminal=terminal)
             lines = [*native_plan(condition), *native_hooks(condition),
                      "fort_branch = " + renamed(builder, condition.nodes[0], parameters), *native_end(condition),
-                     *_checked("fort_scope_wait(fort_context)"),
+                     *task_completion(),
                      "if (fort_branch) then", *emit(body, terminal=terminal)]
             if index + 1 < len(item.alternatives):
                 lines += ["else", *branch(item, index + 1, terminal=terminal)]
@@ -1263,12 +1317,12 @@ class StructuredScope:
                 elif isinstance(item, Delegated):
                     lines += builder.owner_calls((item.call,), execution_mode or "fort_mode", handles, parameters,
                                                  actuals, imports, batch=False, terminal=False)
-                    lines += _checked("fort_scope_wait(fort_context)")
+                    lines += task_completion()
                 else:
                     lines += [*native_plan(item), *native_hooks(item)]
                     lines += [line for node in item.nodes for line in renamed(builder, node, parameters,
                               native_metadata=bool(item.host_metadata)).splitlines()]
-                    lines += [*native_end(item), *_checked("fort_scope_wait(fort_context)")]
+                    lines += [*native_end(item), *task_completion()]
             return lines
 
         if surround_native:
@@ -1277,5 +1331,5 @@ class StructuredScope:
                 raise CompilationError("original native hooks require one complete unrefined source operation")
             operation = self.tree[0]
             return ([*native_plan(operation), *native_hooks(operation)],
-                    [*native_end(operation), *_checked("fort_scope_wait(fort_context)")])
+                    [*native_end(operation), *task_completion()])
         return emit(self.tree, terminal=terminal_owner)

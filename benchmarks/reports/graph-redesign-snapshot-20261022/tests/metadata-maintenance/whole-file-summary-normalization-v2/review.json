@@ -1,0 +1,415 @@
+{
+  "schema_version": 1,
+  "status": "PROPOSED_METADATA_ONLY_EXACT22_ROWS_9_SUMMARIES",
+  "plan": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/plan.json",
+    "sha256": "7c4b91e8aa418fd0abb909a2d76b1ea1f831c9af0b4579c624523bd17103786b"
+  },
+  "normalizer": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/normalize_whole_file_summaries.py",
+    "sha256": "688da78e6354e22bc0041881188b6e99ab32e6de26d61e6be18dd7e0e9e487da"
+  },
+  "enumeration": [
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/summary.json",
+      "file": "compiler/tests/test_numerical_environment_emission.py",
+      "original_recipe_suite": "main",
+      "derived_suite": "main",
+      "selected_nodes": 18,
+      "exit_code": 0,
+      "source_sha256": "775be09beceb09cbfa7c522fa507e6606dbf8638a7799b41ebaa081f2a9fa9ee",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/00-test_numerical_environment_emission/command.json",
+        "sha256": "357ce983648ab9635053232da972aaea6c4981ec3c3073cfc3631abb9264083b"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/00-test_numerical_environment_emission/junit.xml",
+        "sha256": "e11b450bd873b533de780bbc5f841e7823b71ad052b249290e56b77b75aa54a1"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/summary.json",
+      "file": "compiler/tests/test_reached_definitions.py",
+      "original_recipe_suite": "main",
+      "derived_suite": "main",
+      "selected_nodes": 5,
+      "exit_code": 0,
+      "source_sha256": "8f048b2fd94cad47f525691c810e3bf5444f54e7d2689cf1db9daf437df6985e",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/01-test_reached_definitions/command.json",
+        "sha256": "511ec69ddd081e2fb36d2707c7b1820669c6719a79a27ddfe02855c7171224d4"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/01-test_reached_definitions/junit.xml",
+        "sha256": "bcd47c4d76793966367eca953df70eac9bf54a2dab283b17b46b60d39e652f0e"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/summary.json",
+      "file": "compiler/tests/test_reached_ieee_numerical_guards.py",
+      "original_recipe_suite": "main",
+      "derived_suite": "main",
+      "selected_nodes": 16,
+      "exit_code": 0,
+      "source_sha256": "2cd6d520941452c6c0781731f16fe3d7e88199f7ca335af607258f8ac3b89e77",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/02-test_reached_ieee_numerical_guards/command.json",
+        "sha256": "54af64c6695f4e8e43b59221e42f9c82e8d20c79f23ffbddb5468022bebe97e7"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/02-test_reached_ieee_numerical_guards/junit.xml",
+        "sha256": "a8b09467eb5f6c8daf42c7bbe20acff7e597d29c643789f80b92e53eb5e56154"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/summary.json",
+      "file": "compiler/tests/test_scoped_numerical_costs.py",
+      "original_recipe_suite": "main",
+      "derived_suite": "main",
+      "selected_nodes": 8,
+      "exit_code": 0,
+      "source_sha256": "f34f4f27747b21535a50e6600b793609ec12498e76a345c83f918c1e9837a0e5",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/03-test_scoped_numerical_costs/command.json",
+        "sha256": "1e4c6104ecf26db589edc55384092286baf5466eb3fecc96710e2790212b9835"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/03-test_scoped_numerical_costs/junit.xml",
+        "sha256": "eac1a9f1e5d00db1946fa8aa3eeff29ac50637235a45ba7671dab306d73c66dd"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/summary.json",
+      "file": "compiler/tests/test_scoped_pending_owner_report.py",
+      "original_recipe_suite": "main",
+      "derived_suite": "main",
+      "selected_nodes": 2,
+      "exit_code": 1,
+      "source_sha256": "a36812584e002059291cb5f8fb30cea65b613db987dab80d26cea02c0e50deaa",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/04-test_scoped_pending_owner_report/command.json",
+        "sha256": "13e9a4c16d3cb4ce1be1274f53f8173bf5526e8f7b87f647732e118017324935"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/04-test_scoped_pending_owner_report/junit.xml",
+        "sha256": "adda92e2a35b839ead07cebb5a3cb9161cdbe8b42dca289cdd9c2c32beb20950"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/summary.json",
+      "file": "compiler/tests/test_selection_activation_teams.py",
+      "original_recipe_suite": "main",
+      "derived_suite": "main",
+      "selected_nodes": 5,
+      "exit_code": 0,
+      "source_sha256": "7fafb8a8c7fec65a99f9d652bbf13df062f8d9df3e7bc0d8c41e86fce525a11c",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/05-test_selection_activation_teams/command.json",
+        "sha256": "9bf53d58bc2664da85b05174374b53dbd4d6215fb68786040a1f9b319fcf5ef2"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/05-test_selection_activation_teams/junit.xml",
+        "sha256": "bdfc5cded5f1b92ded6eae8c98adf3d59f4a6e7b442f4369b66c1935e6324eb3"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/summary.json",
+      "file": "compiler/tests/test_separate_numerical_team.py",
+      "original_recipe_suite": "main",
+      "derived_suite": "main",
+      "selected_nodes": 12,
+      "exit_code": 0,
+      "source_sha256": "5137950b50031dd7b07126c62fd4ff234f1a0463074210ad25018dbe61e62086",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/06-test_separate_numerical_team/command.json",
+        "sha256": "f3041d314b332316ae5cbcd7d4df1586160efd27f85aa927da0fb2cea827a17d"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-contract-batch/06-test_separate_numerical_team/junit.xml",
+        "sha256": "26d1cbe98e9ac1c2384c3b8b96503e1427858797e5619d82f5baa721effce27a"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-source-costs/summary.json",
+      "file": "compiler/tests/test_source_array_function_effects.py",
+      "original_recipe_suite": "main",
+      "derived_suite": "main",
+      "selected_nodes": 49,
+      "exit_code": 0,
+      "source_sha256": "456ee981056f32e2aaa7b74df7b6b240ab59a1720fdf99daf5148bed849890a7",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-source-costs/00-test_source_array_function_effects/command.json",
+        "sha256": "986740b8283c3dc5771c71bf804e65aec5a40e57167f991ebd77b1f46d115324"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-source-costs/00-test_source_array_function_effects/junit.xml",
+        "sha256": "3fd66664d7cbf5c853c291186a23e58db2fb89ecba11f8dabd22488582548fb4"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-source-costs/summary.json",
+      "file": "compiler/tests/test_source_compute_costs.py",
+      "original_recipe_suite": "main",
+      "derived_suite": "main",
+      "selected_nodes": 27,
+      "exit_code": 0,
+      "source_sha256": "e1759f6f655ca6f34d3a5aa9a446f5b64a30cbdba1dedaef60b44ba6d1fcc775",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-source-costs/01-test_source_compute_costs/command.json",
+        "sha256": "0254c75a3e6c66b70ba37785af9c76d3f0983255690379dd5bce074543c195f0"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-source-costs/01-test_source_compute_costs/junit.xml",
+        "sha256": "84ca16b1337a3012fc0c54efe953901aa8cb1c3c75bc54cb929e47d8def8abd4"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-source-costs/summary.json",
+      "file": "compiler/tests/test_source_compute_memory.py",
+      "original_recipe_suite": "main",
+      "derived_suite": "main",
+      "selected_nodes": 25,
+      "exit_code": 0,
+      "source_sha256": "3ccab4b4f54a6d3e5a609f5d52d076bc06aa72a24eff6c9a010c0e962d496ae1",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-source-costs/02-test_source_compute_memory/command.json",
+        "sha256": "17dc11452a64037e1341137758b33645f86efb84c7a34bc868bf26a9f714eb02"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-source-costs/02-test_source_compute_memory/junit.xml",
+        "sha256": "33fcb0af91bb19819538a6a897412aa030de1d7af006d59def6a2358587f3551"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-pending-report-final/summary.json",
+      "file": "compiler/tests/test_scoped_pending_owner_report.py",
+      "original_recipe_suite": "main",
+      "derived_suite": "main",
+      "selected_nodes": 2,
+      "exit_code": 0,
+      "source_sha256": "afe2c0c7fab4cdb35a4406c1cf415cea52b14352d4d248cf4f0038f3c7b1ea22",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-pending-report-final/00-test_scoped_pending_owner_report/command.json",
+        "sha256": "447ff9678034b93d0d0871b851854e6079a72968cc387d10a9322645160a19bb"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-pending-report-final/00-test_scoped_pending_owner_report/junit.xml",
+        "sha256": "5d8d8f3cc6908e628e336bb1e384122fd33065b0ecd0191b44909ed2adf4f954"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-object-final/summary.json",
+      "file": "compiler/tests/test_source_object_calls.py",
+      "original_recipe_suite": "main",
+      "derived_suite": "main",
+      "selected_nodes": 45,
+      "exit_code": 0,
+      "source_sha256": "0fae296d6a8af944196b6385ce91a49ebf3490fbd4184af88bd6b67cbd77b26d",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-object-final/00-test_source_object_calls/command.json",
+        "sha256": "9d1ad19841f6aef12df0d794e675ae8dd63501c0043e9cf0a158fea79a7d21db"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-object-final/00-test_source_object_calls/junit.xml",
+        "sha256": "7e14b0aec9e53ef173d92529246ee150a1445508d407a5e1072ff0e616eefce9"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-structured-final/summary.json",
+      "file": "compiler/tests/test_structured_effects.py",
+      "original_recipe_suite": "main",
+      "derived_suite": "main",
+      "selected_nodes": 27,
+      "exit_code": 0,
+      "source_sha256": "2bfea4ef1b6fa88e06f4b6f627184fb90e901a4c25d855a7bc46f97be91a28ad",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-structured-final/00-test_structured_effects/command.json",
+        "sha256": "2c113eb913dc76aceee255608afd20e44a8cef81b3cb66c020d2a1218b3d3c9c"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-structured-final/00-test_structured_effects/junit.xml",
+        "sha256": "b1c913865e4ae959579aa3c672d7a781994d9182a5cb7e05d01765b86a6cd3b6"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-current-protocol/summary.json",
+      "file": "elmm-pipeline/tests/test_checked_execution_plan.py",
+      "original_recipe_suite": "pipeline",
+      "derived_suite": "pipeline",
+      "selected_nodes": 83,
+      "exit_code": 0,
+      "source_sha256": "740952c8b610e5db704cd4cc05d46477565597a51e125e3dfe1ddae13cb610e5",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-current-protocol/00-test_checked_execution_plan/command.json",
+        "sha256": "303a8496e1ed44a74f8c8ff3c9151a1b57c65d3ccd9de7bcf1e8ac9477f090c3"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-current-protocol/00-test_checked_execution_plan/junit.xml",
+        "sha256": "22815931ef0e654ec836e41efc086a7f286b24d162456c42c3c5e1ef8ca6df32"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-current-protocol/summary.json",
+      "file": "elmm-pipeline/tests/test_collective_scopes.py",
+      "original_recipe_suite": "pipeline",
+      "derived_suite": "pipeline",
+      "selected_nodes": 30,
+      "exit_code": 0,
+      "source_sha256": "b8ee17961dd8fcab85df216a230ce9ef9b311a847d9fbd14eeb6b5ba3253ce6f",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-current-protocol/01-test_collective_scopes/command.json",
+        "sha256": "d3acbfb621a7d2a57fc29ca5e336c2ee64655f297309e80785c622b6fa24b695"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-current-protocol/01-test_collective_scopes/junit.xml",
+        "sha256": "b1dc1c23bbddf9fd060dbd2053c339b38df4480ab6045aa5cd97dd59dbeed0ee"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-removed-measurement/summary.json",
+      "file": "elmm-pipeline/tests/test_owner_measurement.py",
+      "original_recipe_suite": "pipeline",
+      "derived_suite": "pipeline",
+      "selected_nodes": 36,
+      "exit_code": 1,
+      "source_sha256": "411159f72c9a230a282d95724f9fc04240328d2fb1a1d20acf9d98b77ab8b473",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-removed-measurement/00-test_owner_measurement/command.json",
+        "sha256": "401f3b2fadc331e476800c516abe68f9b8255e5f48d2a793c4487f03a81dcc43"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-removed-measurement/00-test_owner_measurement/junit.xml",
+        "sha256": "34c6324a0d021f3c2634c040158b1314f601a0ca796afcc0d722f479bdc5b903"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/summary.json",
+      "file": "elmm-pipeline/tests/test_owner_measurement.py",
+      "original_recipe_suite": "pipeline",
+      "derived_suite": "pipeline",
+      "selected_nodes": 36,
+      "exit_code": 0,
+      "source_sha256": "8725d163902415ab76d83bf3ee53338902c2005c241cbfcd305c5618a7e4734b",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/00-test_owner_measurement/command.json",
+        "sha256": "1ace1916a5b9bd0aea20b39afd87936731b2a10d3dc0dfa9d6dcedcbf35397d7"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/00-test_owner_measurement/junit.xml",
+        "sha256": "2d513a0b13979c439759a4fac949da58824b619f5a8ef349c5072e7a8a079cae"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/summary.json",
+      "file": "elmm-pipeline/tests/test_local_scopes.py",
+      "original_recipe_suite": "pipeline",
+      "derived_suite": "pipeline",
+      "selected_nodes": 17,
+      "exit_code": 1,
+      "source_sha256": "20aa302b277d37462d2f1cfd87b543214c5e23fd3586098b32fd10a6218aad6c",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/01-test_local_scopes/command.json",
+        "sha256": "178f7ec504009bc0b1d5e365116569719c21603c29aeaa48fb179ac9c60906a4"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/01-test_local_scopes/junit.xml",
+        "sha256": "b3d48a02aff9cebb9416f601f8779be8947d42348c4884e3f3eedf328294ab87"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/summary.json",
+      "file": "elmm-pipeline/tests/test_scope_extraction.py",
+      "original_recipe_suite": "pipeline",
+      "derived_suite": "pipeline",
+      "selected_nodes": 4,
+      "exit_code": 0,
+      "source_sha256": "f30374d370ccd74f7521270c893c530c751823b384bef59823df458ae9e90bda",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/02-test_scope_extraction/command.json",
+        "sha256": "b2b1ed9f205956e37314aa213222126d45a6bcf94c2b4d2338ec35d3760be084"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/pipeline-followups-source-final/02-test_scope_extraction/junit.xml",
+        "sha256": "7fd8b15c280a6308a1811c67906f98476edff17bcc7ac9b01f927426c133d89d"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/summary.json",
+      "file": "compiler/tests/test_source_compute_costs.py",
+      "original_recipe_suite": "main",
+      "derived_suite": "main",
+      "selected_nodes": 27,
+      "exit_code": 0,
+      "source_sha256": "a4201f43762a9dfd626bf268318cacd69613b2fa0421b9683c2325c01aa83c99",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/00-test_source_compute_costs/command.json",
+        "sha256": "5c222568d4643f7af637f7c6340edfb07ebf6d192b0d0f55280c14d5886f733d"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/00-test_source_compute_costs/junit.xml",
+        "sha256": "8088cd597dcc82db539222d01e1f79341bf208ec9f5ce61cfeda7d495d3912b1"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/summary.json",
+      "file": "compiler/tests/test_source_compute_memory.py",
+      "original_recipe_suite": "main",
+      "derived_suite": "main",
+      "selected_nodes": 25,
+      "exit_code": 0,
+      "source_sha256": "187c8d469abcaf9ddb9793839402a867ea2612e6e27a91bcc8f968de76ca4b66",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/01-test_source_compute_memory/command.json",
+        "sha256": "d7c7d5550f5616a21a4be5c2258689c84a9f89bfd76d6a6be8574920fce21378"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/01-test_source_compute_memory/junit.xml",
+        "sha256": "7508603d429b40f7a6447c16ca501f28988bba8a63119ad3853166e485a1e37f"
+      }
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/summary.json",
+      "file": "elmm-pipeline/tests/test_local_scopes.py",
+      "original_recipe_suite": "main",
+      "derived_suite": "pipeline",
+      "selected_nodes": 17,
+      "exit_code": 0,
+      "source_sha256": "fcd919b06064aa6e514dacf4fdda9f2fa1110fba2a4e78e63a0309e9f3b8685f",
+      "exact_final_JUnit_node_identity_coverage": true,
+      "command_json": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/02-test_local_scopes/command.json",
+        "sha256": "5e305e96a9e9b9c1f7fe72c0591d24c3a73a8fa5debf87b52c8080c9fba74249"
+      },
+      "junit": {
+        "path": "/tmp/fortran-committable-snapshot-20261022/cpu-followups-final-reviewed-files/02-test_local_scopes/junit.xml",
+        "sha256": "5b892a42edcf204496867294028c59b03b9966334d57e0fed164d5873123c4a3"
+      }
+    }
+  ],
+  "total_wholefile_rows": 22,
+  "summary_count": 9,
+  "selected_rows": 516,
+  "execution": "Static ownnormalizer syntaxparse + read-only actualrawJSON/XML enumeration only, no normalizer/main/assembly/testedcode/tests/apps/compiler run.",
+  "guards": "Actualwholefileargv exactlyonefile/no -k/-m/deselect/ignore, finalfilecount+exact uniqueJUnit names/classchains, rawsource+commandidentity, failedexitpreserved. Newwrappernormalization_inputs retain everyrawsummary/inventory/script/plan."
+}

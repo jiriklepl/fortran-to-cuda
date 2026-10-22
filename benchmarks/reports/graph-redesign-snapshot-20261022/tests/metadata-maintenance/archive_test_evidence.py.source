@@ -1,0 +1,91 @@
+"""Package sealed test metadata only; deterministic compression, no test execution."""
+import argparse
+from collections import Counter, defaultdict
+import csv
+import gzip
+from hashlib import sha256
+import json
+from pathlib import Path
+import shutil
+import tarfile
+
+
+def digest(path):
+    return sha256(path.read_bytes()).hexdigest()
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--raw', type=Path, required=True)
+    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--pack', action='store_true')
+    args = parser.parse_args()
+    if not args.pack:
+        print('PENDING: --pack only after root reviews completed raw assembly/source authority')
+        return
+    result = json.loads((args.raw / 'summary.json').read_text())
+    assert result['status'] in {'complete_all_nodes_passed', 'complete_with_classified_skips'}
+    assert not args.output.exists(), 'New test archive directory required'
+    refs = {row['archive_path']: row for row in json.loads((args.raw / 'manifest.json').read_text())}
+    members = []
+    for path in sorted(args.raw.rglob('*')):
+        assert not path.is_symlink(), path
+        if path.is_file():
+            name = path.relative_to(args.raw).as_posix()
+            value = digest(path)
+            assert name not in refs or value == refs[name]['sha256']
+            members.append({'member': name, 'bytes': path.stat().st_size, 'sha256': value,
+                            'original_path': refs.get(name, {}).get('original_path', str(path))})
+    args.output.mkdir()
+    archive = args.output / 'raw-evidence.tar.gz'
+    with archive.open('xb') as stream, gzip.GzipFile(filename='', fileobj=stream, mode='wb', mtime=0, compresslevel=9) as zipped:
+        with tarfile.open(fileobj=zipped, mode='w', format=tarfile.PAX_FORMAT) as tar:
+            for row in members:
+                info = tarfile.TarInfo(row['member'])
+                info.size, info.mtime, info.uid, info.gid, info.mode = row['bytes'], 0, 0, 0, 0o644
+                info.uname = info.gname = ''
+                with (args.raw / row['member']).open('rb') as source:
+                    tar.addfile(info, source)
+    # Verify original bytes through the compressed stream; never unpack into source trees.
+    with tarfile.open(archive, 'r:gz') as tar:
+        assert tar.getnames() == [row['member'] for row in members]
+        for row in members:
+            assert sha256(tar.extractfile(row['member']).read()).hexdigest() == row['sha256']
+    nodes = json.loads((args.raw / 'nodes.json').read_text())
+    counts, sources, skips = defaultdict(Counter), {}, []
+    for key, node in nodes.items():
+        suite, file, _suffix = key.split('::', 2)
+        counts[suite, file][node['outcome']] += 1
+        sources[suite, file] = node['current_source_sha256']
+        if node['outcome'] == 'skipped':
+            skips.append({'node': key, 'classification': node['skip_classification']})
+    with (args.output / 'coverage-by-file.csv').open('w', newline='') as stream:
+        writer = csv.writer(stream)
+        writer.writerow(['suite', 'file', 'collected_nodes', 'passed', 'classified_skipped', 'current_source_sha256'])
+        for (suite, file), values in sorted(counts.items()):
+            assert set(values) <= {'passed', 'skipped'}
+            writer.writerow([suite, file, sum(values.values()), values['passed'], values['skipped'], sources[suite, file]])
+    maintenance = [row for row in members if any(token in row['original_path'] for token in
+                   ('test-maintenance', 'test-repairs', 'maintenance-ledger', 'shared-test-dependency', 'source-authority'))]
+    for name, value in [('archive-manifest.json', {'schema_version': 1, 'archive_sha256': digest(archive),
+                        'format': 'sorted regular-file PAX tar, uid/gid/mtime0, gzip filename empty/mtime0',
+                        'extraction_bytes_verified': True, 'members': members}),
+                        ('remaining-skips.json', skips), ('maintenance-evidence-index.json', maintenance)]:
+        (args.output / name).write_text(json.dumps(value, indent=2) + '\n')
+    shutil.copyfile(args.raw / 'summary.json', args.output / 'summary.json')
+    (args.output / 'README.md').write_text(
+        '# Snapshot test evidence\n\n'
+        'The readable summary and coverage table count collected nodes, not passed subtests. '
+        'Classified skips remain skips. Every historical failure, timeout and reviewed follow-up is retained '
+        'in the compressed raw evidence, including original and final inventories, exact commands, logs, '
+        'JUnit, source authority and original retired-node histories. Retired producer tests are not '
+        'relabeled as replacement passes.\n\n'
+        'The archive manifest binds every original path and byte hash. Compression/extraction was '
+        'verified without altering source or executing tests. Root reviews final source identity and '
+        'the snapshot test-status claim separately.\n')
+    print(json.dumps({'archive': str(archive), 'sha256': digest(archive), 'members': len(members),
+                      'compressed_bytes': archive.stat().st_size, 'all_extraction_hashes_verified': True}))
+
+
+if __name__ == '__main__':
+    main()

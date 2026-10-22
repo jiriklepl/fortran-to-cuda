@@ -1,0 +1,320 @@
+{
+  "schema_version": 1,
+  "kind": "comprehensive_metadata_schema_preflight_not_test_execution",
+  "recipe_path": "/tmp/fortran-committable-snapshot-20261022/final-test-evidence-recipe.v2.sealed.json",
+  "recipe_sha256": "767417451fe6daab830d5e85a3915b15891bea8cea44cbaf620d01e00f86bbfd",
+  "assembler_sha256": "b6b28f7e30bbf8da93f6a6d9fcbca9ada076edb072eb9230837950b59bff334d",
+  "summary_count": 26,
+  "rows_checked": 601,
+  "errors": [
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/test-maintenance/revision-02/summary.json",
+      "row": 0,
+      "file": [
+        "compiler/tests/test_borrowed_team_checkpoint.py",
+        "compiler/tests/test_child_region_authority.py"
+      ],
+      "issues": [
+        "selected_count_unsupported:None!=2"
+      ]
+    }
+  ],
+  "historical_source_notes": [
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 14,
+      "file": "compiler/tests/test_borrowed_team_checkpoint.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 18,
+      "file": "compiler/tests/test_child_region_authority.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 28,
+      "file": "compiler/tests/test_compute_dependency_integration.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 44,
+      "file": "compiler/tests/test_dependency_source.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 82,
+      "file": "compiler/tests/test_joined_native_private_storage.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 108,
+      "file": "compiler/tests/test_native_definition_state.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 120,
+      "file": "compiler/tests/test_native_preflight.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 130,
+      "file": "compiler/tests/test_nested_array_operations.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 139,
+      "file": "compiler/tests/test_numerical_environment_emission.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 158,
+      "file": "compiler/tests/test_owner_placement.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 161,
+      "file": "compiler/tests/test_planned_reached_closures.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 175,
+      "file": "compiler/tests/test_reached_definitions.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 177,
+      "file": "compiler/tests/test_reached_ieee_numerical_guards.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 219,
+      "file": "compiler/tests/test_scoped_numerical_costs.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 220,
+      "file": "compiler/tests/test_scoped_pending_owner_report.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 236,
+      "file": "compiler/tests/test_scoped_team_sources.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 242,
+      "file": "compiler/tests/test_selection_activation_teams.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 245,
+      "file": "compiler/tests/test_separate_numerical_team.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 248,
+      "file": "compiler/tests/test_source_array_function_effects.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 253,
+      "file": "compiler/tests/test_source_compute_costs.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 255,
+      "file": "compiler/tests/test_source_compute_memory.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 268,
+      "file": "compiler/tests/test_source_object_calls.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 291,
+      "file": "compiler/tests/test_structured_effects.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 303,
+      "file": "containers/tests/test_apptainer_messages.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 304,
+      "file": "containers/tests/test_build_context.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 305,
+      "file": "containers/tests/test_probe_prepared_e2e.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 306,
+      "file": "containers/tests/test_reproduce_e2e.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 307,
+      "file": "containers/tests/test_sgs_experiment.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 308,
+      "file": "containers/tests/test_workflow.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/cpu-summary.json",
+      "row": 309,
+      "file": "containers/tests/test_wrappers.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/pipeline-final/cpu-summary.json",
+      "row": 14,
+      "file": "elmm-pipeline/tests/test_checked_execution_plan.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/pipeline-final/cpu-summary.json",
+      "row": 16,
+      "file": "elmm-pipeline/tests/test_collective_scopes.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/pipeline-final/cpu-summary.json",
+      "row": 35,
+      "file": "elmm-pipeline/tests/test_gpu_validation.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/pipeline-final/cpu-summary.json",
+      "row": 38,
+      "file": "elmm-pipeline/tests/test_local_scopes.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/pipeline-final/cpu-summary.json",
+      "row": 39,
+      "file": "elmm-pipeline/tests/test_owner_measurement.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/pipeline-final/cpu-summary.json",
+      "row": 43,
+      "file": "elmm-pipeline/tests/test_scope_extraction.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/pipeline-final/cpu-summary.json",
+      "row": 46,
+      "file": "elmm-pipeline/tests/test_selection_request.py",
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": null
+    },
+    {
+      "summary": "/tmp/fortran-committable-snapshot-20261022/test-maintenance/revision-02/summary.json",
+      "row": 0,
+      "file": [
+        "compiler/tests/test_borrowed_team_checkpoint.py",
+        "compiler/tests/test_child_region_authority.py"
+      ],
+      "note": "No direct testedSHA/fallback forhistoricalchangedfile; latestcurrentfollowup stillrequired",
+      "source_files_field": [
+        {
+          "file": "compiler/tests/test_borrowed_team_checkpoint.py",
+          "selected_nodeid": "compiler/tests/test_borrowed_team_checkpoint.py::test_rejected_original_section_then_repeated_whole_calls_keep_lexical_owner",
+          "tested_source_sha256": "e5b1afafb973a65939378085ccb6f687c290b0baa807c0e666b06e6ea4c7a98d",
+          "pre_execution_source_authority": "benchmark peer-review04 sealed final file hash; same bytes verified after process exit",
+          "prior_tested_source_sha256": "d1805a485f4e065706b3f8a75440e25299702f48d73ec011041bb97ed97da24d",
+          "before_after_hashes_equal_to_peer_seal": true,
+          "unchanged_other_tests_imports_globals_helpers_ast_sha256": "843c36134ac2371001512c91a6b7aed6b61659c979a17a5018bf1f28526b809e",
+          "unchanged_other_tests_imports_globals_helpers_ast_equal": true
+        },
+        {
+          "file": "compiler/tests/test_child_region_authority.py",
+          "selected_nodeid": "compiler/tests/test_child_region_authority.py::test_diamond_child_regions_share_artifacts_and_keep_original_bounds",
+          "tested_source_sha256": "e435f2bdb4add2d066bb0e316fdd387cb4fefb9cea44ceb4447dfa66e01b843f",
+          "pre_execution_source_authority": "benchmark peer-review04 sealed final file hash; same bytes verified after process exit",
+          "prior_tested_source_sha256": "4d289b44e71aeea98e408c2b388f1773a65d2a4f6dab4ebe9f2acfe60708547c",
+          "before_after_hashes_equal_to_peer_seal": true,
+          "unchanged_other_tests_imports_globals_helpers_ast_sha256": "29d501a7d8e81c53f1d7a5eb635c611fe8ca3206f58903cc2fe40fe364474e43",
+          "unchanged_other_tests_imports_globals_helpers_ast_equal": true
+        }
+      ]
+    }
+  ],
+  "predicted_final_counts_from_current_source_rows": {
+    "passed": 8898,
+    "skipped": 3
+  },
+  "predicted_blocked_nodes": [],
+  "scope": "Read-only JSON/XML/currenttestsourceSHA and assemblerhelper definitions only; no main/assembly/archive/tests/apps/builds/profiles executed."
+}

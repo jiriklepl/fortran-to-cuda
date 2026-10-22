@@ -142,6 +142,10 @@ def _plan_inventory(plan):
         inventory.controls(builder.analysis, procedure, member.graph, boundary_ids, member.canonical)
         for binding, _number in member.resources.values():
             inventory.add(procedure, binding, member.canonical(binding), "registered")
+        for binding in getattr(member, "parameterized_actual_bindings", {}).values():
+            inventory.add(procedure, binding, member.canonical(binding), "managed")
+        for binding in getattr(member, "parameterized_native_bindings", {}).values():
+            inventory.add(procedure, binding, member.canonical(binding), "host_only")
         for unit in plan.units(member):
             originals = builder.inline.original_selection(unit.nodes)
             inventory.select(builder.analysis, procedure, originals, member.canonical)

@@ -1,0 +1,10 @@
+{
+  "exit_code": 1,
+  "log": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/metadata-assembly-attempt-02.log",
+    "sha256": "ab986f3617f770be080ab66c9bda343f15878fa5cab198c1be9430031f2cb471"
+  },
+  "assembler_sha256": "b6b28f7e30bbf8da93f6a6d9fcbca9ada076edb072eb9230837950b59bff334d",
+  "recipe_sha256": "192e36433dfe39401ba6f9ca5ab32e9af94d26c59b2fbc6e07d4f2eb232ad65f",
+  "metadata_only": true
+}

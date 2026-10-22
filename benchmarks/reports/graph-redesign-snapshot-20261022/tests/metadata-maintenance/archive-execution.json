@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "argv": [
+    "/home/jirka/research/fortran-abomination/.venv/bin/python",
+    "/tmp/fortran-committable-snapshot-20261022/archive_test_evidence.py",
+    "--raw",
+    "/tmp/fortran-committable-snapshot-20261022/assembled-test-evidence-raw-01",
+    "--output",
+    "/home/jirka/research/fortran-abomination/benchmarks/reports/graph-redesign-snapshot-20261022/tests",
+    "--pack"
+  ],
+  "tool_session": 70669,
+  "exit_code": 0,
+  "archiver_sha256": "7642e5f7f85ddb994071f1a0cea4ff99300b0b3fe367fb3d1a76a01f477937a1",
+  "archive": {
+    "path": "/home/jirka/research/fortran-abomination/benchmarks/reports/graph-redesign-snapshot-20261022/tests/raw-evidence.tar.gz",
+    "sha256": "346d2d086a1f9917c68fafed02c703cd10a55b9bb5f9ca51d538ea18e323f06e",
+    "bytes": 2389177
+  },
+  "members": 1966,
+  "all_extraction_hashes_verified": true,
+  "tests_apps_builds_executed": false,
+  "root_authorization_review": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/root-final-test-assembly-review.json",
+    "sha256": "a8af71684cb4a4985d9fc46021cbf73e32c689f309fa63a70a0419d530176104",
+    "bytes": 2043
+  }
+}

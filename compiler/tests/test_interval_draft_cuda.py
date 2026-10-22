@@ -49,7 +49,7 @@ def emit(directory, *, precision, device_budget):
 
 
 def emit_cross_module(directory, *, precision, device_budget):
-    from compiler.offload.config import OffloadConfig
+    from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 
     assert precision == 8
     assert device_budget is None

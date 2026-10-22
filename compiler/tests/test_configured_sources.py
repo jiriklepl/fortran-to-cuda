@@ -53,7 +53,7 @@ def generate(tmp_path, *, source=PROGRAM):
     package=tmp_path/"analysis.json"
     package.write_text(json.dumps(document))
     output=tmp_path/"output"
-    response=run([sys.executable,"-m","compiler","--input",str(original),"--kernel","step","--form-scopes",
+    response=run([sys.executable,"-m","compiler.tests.support.reference_scopes","--input",str(original),"--kernel","step","--form-scopes",
                   "--scope-facts",str(facts_path),"--analysis-sources",str(package),"--memory-model","scoped",
                   "--gpu-policy","sections","--output-dir",str(output),"--json"],cwd=ROOT)
     return original,prepared,output,json.loads(response.stdout)["scopes"]
@@ -96,8 +96,8 @@ def test_included_statement_does_not_use_prepared_line_for_original_edits(tmp_pa
 
 
 def test_unmapped_included_scalar_consumer_still_participates_in_liveness(tmp_path):
-    from compiler.driver.options import CompilerOptions
-    from compiler.offload.config import OffloadConfig
+    from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+    from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
     from compiler.scopes.source import ScopeBuilder
     from compiler.tests.test_lexical_source_owner import SOURCE
 
@@ -160,8 +160,8 @@ def configured_native_owner(tmp_path):
 
 
 def test_reached_owner_surrounds_configured_native_group_without_copying_it(tmp_path):
-    from compiler.driver.options import CompilerOptions
-    from compiler.offload.config import OffloadConfig
+    from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+    from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
     from compiler.scopes.source import ScopeBuilder
 
     original, document, facts = configured_native_owner(tmp_path)

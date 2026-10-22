@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "kind": "evidence packaging integrity checks; no tests/builds/apps",
+  "status": "PASS",
+  "initial_packaging_header_failure_preserved": {
+    "preimage": "packaging-attempt-01/patch-preimage.patch",
+    "preimage_sha256": "2842df938ec9d0ea3f8dadb4e4cc8b3e0075cc621066643c615f53d643072682",
+    "failure": "git apply --check rejected/asserted on malformed synthetic new-file-mode header before modifying any source; corrected missing space in four metadata lines",
+    "postimage_source_bytes_changed": false
+  },
+  "companion_eight_file_patch": "independent private reconstruction; all8 current file SHAs match",
+  "pressure_patch": "original0548a1a1 preimage -> approved65d6ee76 exact SHA",
+  "commands": [
+    {
+      "argv": [
+        "git",
+        "apply",
+        "--check",
+        "/home/jirka/research/fortran-abomination/benchmarks/reports/graph-redesign-snapshot-20261022/companion-pipeline/all-eight-files-from-base.patch"
+      ],
+      "cwd": "/tmp/fortran-snapshot-patch-verify-final-11ytm0ms/pipeline",
+      "returncode": 0,
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "apply",
+        "/home/jirka/research/fortran-abomination/benchmarks/reports/graph-redesign-snapshot-20261022/companion-pipeline/all-eight-files-from-base.patch"
+      ],
+      "cwd": "/tmp/fortran-snapshot-patch-verify-final-11ytm0ms/pipeline",
+      "returncode": 0,
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "apply",
+        "--check",
+        "/home/jirka/research/fortran-abomination/benchmarks/reports/graph-redesign-snapshot-20261022/pressure/elmm-deterministic-top.patch"
+      ],
+      "cwd": "/tmp/fortran-snapshot-patch-verify-final-11ytm0ms/elmm",
+      "returncode": 0,
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "git",
+        "apply",
+        "/home/jirka/research/fortran-abomination/benchmarks/reports/graph-redesign-snapshot-20261022/pressure/elmm-deterministic-top.patch"
+      ],
+      "cwd": "/tmp/fortran-snapshot-patch-verify-final-11ytm0ms/elmm",
+      "returncode": 0,
+      "stderr": ""
+    }
+  ],
+  "production_sources_or_git_indexes_modified": false,
+  "private_verification_directory": "/tmp/fortran-snapshot-patch-verify-final-11ytm0ms",
+  "tests_apps_compiles_or_profiles_executed": false
+}

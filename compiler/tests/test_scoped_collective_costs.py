@@ -23,7 +23,7 @@ fort_scope_team_costs team() {
  return t;
 }
 fort_scope_plan_costs prices() {
- fort_scope_plan_costs c{};c.version=1;c.valid=1;c.max_allocation_bytes=1<<20;
+ fort_scope_plan_costs c{};c.version=FORT_SCOPE_PLANNING_ABI_VERSION;c.valid=1;c.max_allocation_bytes=1<<20;
  c.cpu_flops=c.cpu_bandwidth=1e6;c.gpu_flops=c.gpu_bandwidth=1e9;
  c.h2d_bandwidth=c.d2h_bandwidth=1e12;
  c.h2d_latency=c.d2h_latency=c.create_seconds=c.register_seconds=c.host_access_seconds=

@@ -1,0 +1,25 @@
+{
+  "status": "root_reviewed_metadata_normalization_authorized",
+  "normalizer": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/normalize_whole_file_summaries.py",
+    "sha256": "688da78e6354e22bc0041881188b6e99ab32e6de26d61e6be18dd7e0e9e487da"
+  },
+  "plan": {
+    "path": "/tmp/fortran-committable-snapshot-20261022/whole-file-summary-normalization-v2/plan.json",
+    "sha256": "7c4b91e8aa418fd0abb909a2d76b1ea1f831c9af0b4579c624523bd17103786b"
+  },
+  "scope": "Exactly22 homogeneous whole-file metadata rows across9 original summaries;516 selected observations. All raw summaries, commands, source hashes, exits and JUnit remain unmodified.",
+  "guards_reviewed": [
+    "actual command-row source+argv identity",
+    "exact one command-selected .py file",
+    "no filtering/deselection/collection-only",
+    "exact final inventory count and JUnit identity coverage even in failed rows",
+    "no fabricated source-after hash",
+    "three failed rows keep nonzero exit",
+    "suite derives from disjoint inventoried file membership"
+  ],
+  "root_verified_all9_original_summary_bindings": true,
+  "raw_history_lineage_remapping": false,
+  "peer_review": "Independent runtime review requested; final evidence and commit remain subject to final review.",
+  "no_test_application_compiler_or_GPU_execution_authorized": true
+}
