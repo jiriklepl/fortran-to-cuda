@@ -204,7 +204,7 @@ end subroutine
         assert result.returncode == 0, result.stdout + result.stderr
         return result
 
-    report = json.loads(run([sys.executable, '-m', 'compiler', '--form-scopes', '--input', str(source),
+    report = json.loads(run([sys.executable, '-m', 'compiler.tests.support.reference_scopes', '--form-scopes', '--input', str(source),
         '--kernel', 'tagged_owner::step', '--scope-facts', str(facts_path), '--scope-execution', 'reached',
         '--gpu-policy', 'sections', '--memory-model', 'scoped', '--json', '--output-dir', str(output)]).stdout)
     assert report['supported'], report

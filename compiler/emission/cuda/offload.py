@@ -137,11 +137,18 @@ def _metadata(function, analysis, signature, name, value=_value, *, host_pointer
                                       "                b.lower.push_back(lo > 0 ? lo-1 : 0); b.upper.push_back(hi > 0 ? hi-1 : 0);", "            }"]
                         lines += [f"            if (d.valid) offload::append_box({target}, b);", "        }"]
                 lines += ["    }"]
-        # Distinct touched bytes are a conservative memory-traffic floor. The
-        # same estimate is used for both devices; uncertain work selects CPU.
-        lines += ["    for (std::size_t a=0; a<d.arrays.size(); ++a) {",
-                  f"        for (const auto &b : d.units[{unit.index}].arrays[a].upload) d.units[{unit.index}].memory_bytes += offload::box_bytes(d.arrays[a], b, d.valid);",
-                  f"        for (const auto &b : d.units[{unit.index}].arrays[a].download) d.units[{unit.index}].memory_bytes += offload::box_bytes(d.arrays[a], b, d.valid);", "    }"]
+        # Exact unions are separate for reads and writes, matching the triad
+        # calibration's two reads plus one write. Repeated stencil loads share
+        # a read footprint; read/modify/write storage still owes both directions.
+        # This is a traffic floor, not a cache or write-allocation model.
+        # Cost fragmentation does not invalidate legal layouts/effects or
+        # forced execution. Nonfinite work already declines AUTO estimates
+        # independently of definition-only validation in the scoped planner.
+        lines += ["    {", "        bool memory_known = true;",
+                  "        for (std::size_t a=0; a<d.arrays.size(); ++a) {",
+                  f"            d.units[{unit.index}].memory_bytes += offload::footprint_bytes(d.arrays[a], d.units[{unit.index}].arrays[a].upload, memory_known);",
+                  f"            d.units[{unit.index}].memory_bytes += offload::footprint_bytes(d.arrays[a], d.units[{unit.index}].arrays[a].download, memory_known);", "        }",
+                  f"        if (!memory_known) d.units[{unit.index}].memory_bytes = std::numeric_limits<double>::quiet_NaN();", "    }"]
     return [*lines, "    return d;", "}"]
 
 

@@ -5,13 +5,13 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.frontend.native_call_coordinates import prove_native_call_coordinates
 from compiler.frontend.reached_windows import plan_reached_window
 from compiler.frontend.source_effects import SourceEffects, _children
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.reached_owner import ReachedWindowOwner
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT

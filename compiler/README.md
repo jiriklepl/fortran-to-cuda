@@ -24,19 +24,26 @@ native execution until compatible calibration is supplied.
 
 ```mermaid
 flowchart LR
-    F[Fortran procedures] --> P[fparser frontend]
-    P --> I[Typed computation IR]
-    I --> A[Scalar lifetime and ISL conflicts]
-    A --> T[Checked scalar motion and fusion]
-    T --> A
-    T --> S[Explicit target schedules]
-    S --> D[Proved subscript widths]
-    D --> E[Checked execution plan]
-    E --> M[Memory operations]
-    M --> C[C++ / OpenMP and owned CPU sessions]
-    M --> G[CUDA and owned GPU sessions]
-    E --> B[Fortran bridge / shared ABI]
+    F[Original Fortran] --> P[fparser frontend]
+    P --> I[Typed numerical IR]
+    P --> N[Native effects and structured control]
+    I --> A[Checked numerical regions]
+    A --> T[Hierarchical dependency graph]
+    N --> T
+    T --> S[Legal motion and CPU/GPU placement]
+    S --> E[Checked execution plan and fusion]
+    E --> C[Original CPU work and access hooks]
+    E --> G[Queued CUDA tasks]
+    C --> R[Shared versions, allocations and completion]
+    G --> R
+    G --> Q[CUDA graph submission and replay]
 ```
+
+Source scopes use one canonical memory authority for native work and numerical
+entries. Source-call boundaries do not imply transfers, allocation release or
+synchronization. Valid read-only mirrors can coexist on CPU and GPU; writes,
+actual consumers and the device memory budget determine movement.
+
 
 Proved scalar motion and loop fusion are enabled by default. Equal rectangular
 loop domains fuse only when fresh dependence analysis proves the combined region
@@ -50,7 +57,11 @@ axis ordering favors Fortran locality; spatial tiling is explicit through
 valid regions whose independence is unproved sequentially on the host. Explicit
 sessions retain owned storage across calls, using the same Fortran interface for
 CPU and CUDA backends.
-See [CODE_MAP.md](CODE_MAP.md) for the implementation and extension points.
+The graph path starts in [scopes/graph.py](scopes/graph.py), with dependency
+construction in [analysis/task_dependencies.py](analysis/task_dependencies.py)
+and placement in [scheduling/task_graph.py](scheduling/task_graph.py).
+[runtime/scoped_runtime.cu](runtime/scoped_runtime.cu) owns buffer versions,
+transfers, completion and the deferred command queue.
 
 ## Implementation layout
 
@@ -64,11 +75,11 @@ compiler/
 ├── ir/                      Immutable computation nodes and execution plans
 ├── analysis/                Semantics, effects, dependence proofs, execution policy
 ├── transforms/              Checked scalar setup motion and greedy loop fusion
-├── scheduling/              Locality ordering and explicit spatial tile plans
+├── scheduling/              Task placement, locality ordering and explicit spatial tile plans
 ├── addressing/              Static integer ranges and proved subscript widths
 ├── memory/                  Explicit acquisition, coherence, and lifecycle plans
-├── scopes/                  Bounded source scopes, native hooks, original-module clones
-├── runtime/                 Numeric helpers, profiling, owned buffers, token registry
+├── scopes/                  Source task graphs, residency epochs, native hooks, helper composition
+├── runtime/                 Coherence, budgeted residency, completion, CUDA graphs, numeric helpers
 ├── emission/
 │   ├── driver.py            Generate all sources from one shared ABI
 │   ├── common/              ABI, expressions, loops, session glue, runtime header
@@ -87,7 +98,7 @@ header combines the template under `emission/common/templates/` with numeric,
 profiling, and storage units in `runtime/`, preserving a single distributable
 support header and `--common-header` behavior.
 
-Reached scope generation uses one bounded consumption pass in
+Source scope generation uses one checked consumption pass in
 `scopes/reached_consumption.py`. It authenticates the original source, admitted
 facts and compiler configuration before generation, then indexes exact prepared
 numerical regions together with their physical effects and mapped child calls.
@@ -208,16 +219,15 @@ python -m compiler --input FILE --kernel NAME [options]
 | `--indexing {source,auto}` | `auto` at level 1, `source` at level 0 | Select source INTEGER addressing or statically proved wide subscripts independently of fusion and scheduling |
 | `--tile-sizes N[,N...]` | untiled | Positive tile sizes in scheduled fastest-to-slowest order; omitted axes use 1 |
 | `--fallback {error,host}` | `error` | Reject unproved regions or run them sequentially on the host |
-| `--gpu-policy {always,sections,auto,chunked,hybrid}` | `always` | Select the ordinary-call transfer and execution prototype |
+| `--gpu-policy {always,sections,auto,chunked,hybrid}` | `sections` with `--form-scopes`, otherwise `always` | Select the transfer and execution policy; source graphs accept sections/auto |
 | `--calibration-profile FILE` | none | Explicit reusable hardware calibration for automatic decisions |
-| `--memory-model {call,scoped}` | `call` | Shared-buffer numerical entry prototype with `scoped`; requires sections/auto |
+| `--memory-model {call,scoped}` | `scoped` with `--form-scopes`, otherwise `call` | Shared-buffer numerical entries; scoped requires sections/auto |
 | `--scope-transfers {direct,pinned,pipelined,auto,coalesced}` | `direct` | Scoped transfer choice, separate from CPU/GPU placement |
-| `--scope-execution {bounded,reached}` | `bounded` | Opt-in reached ownership in original lexical procedures; requires `--form-scopes` |
+| `--scope-execution graph` | `graph` with `--form-scopes` | Dependency-based ownership in original procedures; requires `--form-scopes` |
 | `--analyze-effects` | off | Bounded native source effects without requiring GPU lowering; writes no artifacts |
-| `--form-scopes` | off | Emit bounded serial source scopes, original-module helpers, and public source/build manifests |
+| `--form-scopes` | off | Emit source task graphs, reusable original-module helpers, and source/build manifests |
 | `--scope-preflight` | off | With `--form-scopes`, report independent source/cost blockers without emitting scopes or artifacts |
 | `--scope-facts FILE` | none | Source-hash-bound capture, initialization, and caller facts; requires `--form-scopes` |
-| `--scope-cost FILE` | none | Source-bound scope cost request JSON; serial `--form-scopes` with `auto` or `sections`, separate from diagnostic measurement |
 | `--source-file FILE` | none | Additional effect-analysis source; repeat for separate modules |
 | `--effect-contracts FILE` | none | Versioned explicit contracts for opaque native calls; requires effect analysis |
 | `--summary-cache DIRECTORY` | memory only | Optional source-summary disk cache for effect/scope analysis |
@@ -244,7 +254,7 @@ With calibration, extra calls are allowed only when saved transfer time exceeds
 their latency cost. Ties, uncertain arithmetic, and excessive fragmentation
 retain the original rectangles; no bounding volume replaces holes or faces.
 
-`auto` compares native units with GPU intervals of up to four adjacent units
+For ordinary call-local entries, `auto` compares native units with GPU intervals of up to four adjacent units
 and the complete legal group. It retains units before optional fusion, respects
 source control flow and synchronization boundaries, and requires a modeled 20% advantage
 for GPU work. Dependent intervals execute in order, with host-visible outputs
@@ -396,7 +406,7 @@ included in timing hooks. Unwritten `intent(inout)` cells are preserved. Unwritt
 
 Shared ownership extends call-local transfers to shared buffers and section
 coherence across GPU entries and native CPU operations. The common runtime and
-bounded source scopes are opt-in features. Their public interfaces and supported
+source task graphs are opt-in features. Their public interfaces and supported
 boundaries are described below; eligibility alone does not establish a GPU
 speedup in a complete application.
 
@@ -480,20 +490,28 @@ or filling holes. Execution and planning use the same normalized coverage; the
 32-rectangle and 1,024-intersection limits remain in force.
 
 `fort_scope_register_sections` accepts partially initialized host coverage.
-`fort_scope_forget_definition` discards old defined/current coverage while
-retaining the device allocation, preserving procedure-entry `INTENT(OUT)` events.
+`fort_scope_forget_definition` clears semantic definition coverage while
+retaining physical versions and device storage. Publishing already executed
+writes remains possible after a semantic definition change. Exact body writes
+define new values; an ordinary intrinsic numeric OUT declaration does not by
+itself erase incoming physical or already established definition coverage in a
+graph owner.
 Neither re-registering a pointer nor keeping its allocation defines its contents.
 `fort_scope_set_device_budget` limits live full-layout fields and cached scratch
 payload bytes; set
-it before CUDA initialization. Resource exhaustion before an operation starts
-permits native continuation, including after earlier completed operations.
+it before CUDA initialization. A grouped reservation pins every buffer required
+by the task, evicts older unrequested allocations as necessary, and publishes
+only dirty device sections before eviction. Requested buffers must fit together;
+resource exhaustion before an operation starts permits native continuation,
+including after earlier completed operations.
 
 CPU reads retain device validity. CPU writes invalidate only affected sections;
 GPU writes similarly invalidate host sections. On excess fragmentation, the
 runtime reconciles current pieces before coarsening. Excess fragmented partial
 initialization requests a boundary before execution. Contexts initialize CUDA
-lazily, use one non-default stream and private pool where supported, and wait at
-host boundaries. All-native and empty accesses initialize no CUDA resources.
+lazily and use one non-default stream and private pool where supported. Host
+access waits for conflicting device work and pending DMA that reads a region
+before a host write. Independent CPU work does not force a device wait. All-native and empty accesses initialize no CUDA resources.
 Execution failures poison the context, preventing unsafe replay; abandoning a
 failed context releases resources without claiming valid host results.
 
@@ -664,9 +682,10 @@ serial entry names and behavior remain unchanged. Automatic team execution
 requires the separately measured collective protocol described below; serial
 calibration alone retains native execution with an explicit reason.
 
-Explicit entries and the initial source scopes below remain opt-in. Complete
-application evaluation and remaining lifetime/effect integration are tracked in
-[the memory-model plan](MEMORY_MODEL_PLAN.md).
+Explicit entries and compiler-owned source scopes remain opt-in. The
+[application comparison workflow](../containers/README.md) describes complete
+field validation and performance measurement against the original application
+and archived compiler.
 
 ### Compiler-owned source scopes
 
@@ -690,15 +709,13 @@ module stability or be registered before that window's fresh allocation,
 original-bound, layout and alias guards. The default remains `"invocation"`.
 Neither lifetime choice derives initialized payload from allocation presence.
 
-With `--gpu-policy auto`, absence of both a compatible calibration profile and
-an explicit complete-window evidence request selects unchanged native source
-before window discovery or numerical lowering. Source/configuration hashes,
+With `--gpu-policy auto`, absence of a compatible hardware profile selects unchanged native source
+before task discovery or numerical lowering. Source/configuration hashes,
 entry and package authentication, collective caller assertions, and final live
 input checks still apply. The result contains a reasoned boundary, zero scopes,
 no source edits, and no generated runtime or build sources. Its native-effect
 report contains local structure without materializing the transitive closure.
-A supplied profile or independent complete-window request follows its existing
-pricing and validation path; one unpriced leaf cannot suppress other estimable
+A supplied profile follows its pricing and validation path; one unpriced leaf cannot suppress other estimable
 alternatives. This early native decision is not evidence of automatic offloading.
 
 An optional capture `expected_descriptor` has exactly `lower_bounds` and
@@ -709,8 +726,9 @@ descriptor. Original lexical owners check it after separate allocation,
 contiguity and integer ABI checks, before registration or numerical queries.
 Borrowed module calls check the original actual before dummy association;
 rebased dummy bounds do not replace this check. A mismatch publishes and closes
-the current owner and executes the original suffix once, without replay or
-reopening. Expectations do not establish initialized values or replace
+the current residency epoch and executes the original operation once. A later
+epoch can reopen with fresh descriptors and source-point definition checks;
+invocation-entry initialization facts are not reused. Expectations do not establish initialized values or replace
 `initialized`/`sections` evidence. Synthetic owners, qualified collective owners
 and opaque native metadata currently reject this capture field. The additive public
 `capture_descriptor_expectations` version 1 capability and per-resource guard
@@ -726,18 +744,31 @@ requirements before host access; failure publishes and closes ownership before
 the original DO and remaining suffix run once. This deferral adds no definitions
 and does not apply to other native operations or boundary inspectors.
 
-The compiler selects bounded source spans, generates source helpers in their
-original modules, and passes explicit context/root handles down call-only helper
-paths. Original native procedures remain available. Native operations execute
-behind compiler-generated access hooks; numerical leaves retain physical section
-transfers and borrow the same registered buffers. CPU reads retain a current GPU
-mirror. Unknown calls, recursion, lifetime changes, uncertain effects, writable
-aliases, and unsupported mappings are boundaries. Structured owners preserve
-conditions and mutable scalar reads at their original execution points and plan
-only reached straight-line segments after their inputs become available. Original
+The compiler builds a hierarchical task graph for each admitted original
+procedure, generates reusable helpers in original modules, and forwards context/root handles
+through helper calls. Tasks describe reads, possible writes, complete overwrites,
+scalar dependencies, storage lifetimes and observable order. Checked independent
+CPU work can move past GPU work within the same procedure and control region so
+supported kernels become adjacent. Conditions,
+loops, trapping arithmetic and observable operations retain their required order.
+
+Native operations use the same registered storage and access hooks as numerical
+GPU tasks. A transfer adds a current mirror; it does not consume the source copy.
+Read-only CPU/GPU alternation therefore keeps both copies until a write or memory
+pressure requires a change. Exact partial writes invalidate only their affected
+sections. Unknown effects, recursion, lifetime changes, writable aliases and
+unsupported mappings close the current residency epoch. Later independent work
+can form a fresh epoch with new source-point checks. Original native procedures
+remain available, and executed prefixes are never replayed. Original
 caller guards remain outside their replacements. Active OpenMP teams select the original native span
 before descriptors are inspected; a runtime without OpenMP support also selects
 native execution because caller participation is unknown.
+
+Proved scalar assignments that read only array descriptors, such as `LBOUND`
+and `UBOUND`, remain at their original source points without creating payload
+registrations or planning queries. Their scalar and descriptor dependencies
+remain in the task graph. Guarded actions, payload effects, definition changes
+and unsupported side effects retain the existing managed path.
 
 Straight-line native assignment leaves can publish checked rectangular reads,
 writes, and complete overwrites, including separate opposite faces. Queries and
@@ -873,10 +904,12 @@ retains original execution. Required original native worksharing executes on the
 whole team between coordinator access hooks and a completion barrier. The context
 closes and all participants finish before capture reuse or return.
 
-This source prototype supports forced `sections`. Automatic execution requires
-the optional offline `scoped.collective` calibration for the actual persistent
-team, emitted coordination protocol, hardware and toolchain. Without it, `auto`
-produces a successful unchanged native result. The public
+This source path supports forced `sections` and graph `auto`. Graph AUTO can
+rank independently proved workers using an applicable hardware profile and
+scoped costs for the exact runtime. Missing persistent-team calibration is
+reported as unpriced team overhead. The optional `scoped.collective` profile
+prices the actual team protocol; retained reference strategies still require it
+for their calibrated decisions. The public
 manifest publishes versioned `participation` proof even when no scopes qualify,
 plus original-source role reasons. The independent adapter transports these
 facts, applies public source edits and build roles, and performs no role inference
@@ -902,8 +935,8 @@ compiler version and semantic options; dispatch checks those identities and the
 actual team level/width before reading descriptors. A cached preview cannot bypass
 the actual-team check. A whole-native decision closes its metadata-only context
 and executes the untouched original calls, using their separately measured rates.
-In addition to each interval's margin, a fresh collective owner's complete GPU
-or mixed schedule must beat the original whole-native estimate by at least 20%.
+Graph placement compares the complete GPU or mixed schedule with the original
+whole-native estimate using the graph's 5% margin.
 Unknown common native computation remains excluded from both estimates.
 Repeated `--fortran-flag=FLAG` options replace the default
 `-std=f2018 -O3 -fopenmp` list and must include `-fopenmp`. Use the application's
@@ -1007,8 +1040,9 @@ values live across a cut remain native. One mode-bearing dispatcher per procedur
 reuses approved numerical entries by region ID. Reached branch segments evaluate
 their own query after the original conditions and preceding scalar updates;
 native partial writes use the same coherence hooks as other source operations.
-Discovery accounts for rejected attempts too, with limits of 32 regions and
-256 original operations. Unknown
+Graph discovery has no invocation-wide region or operation window. Individual
+effect and numerical proofs retain their own work budgets; an exhausted proof
+does not consume the budget of later independent graph tasks. Unknown
 effects, allocation changes, unsupported synchronization and scalar state keep
 their original native boundaries. The `inline_numerical_regions` manifest records
 source identities, captures, completion proofs, shared computation and rejection
@@ -1039,6 +1073,17 @@ retain their context and execute the reached native segment with coherence hooks
 Host CPU, compiler, precision, and thread-budget compatibility are checked without
 CUDA initialization; GPU identity is checked only for a candidate requiring it.
 
+An all-CPU continuation remains an installed execution schedule. Generated CPU
+workers consume its choices normally. A source path with independent native
+effect and completion proofs may instead call `fort_scope_plan_cancel_native_v1`
+before its own checked host acquisitions and original body. This discards only
+an unstarted all-CPU plan: it preserves definitions, host/device mirrors,
+allocations and earlier queued GPU work, and performs no CUDA work or waits.
+Prepared accesses, a consumed worker, started numerical work or any GPU choice
+reject cancellation. Ordinary reset and close still reject unfinished schedules.
+Owning combined teams without independent native effect authority use their
+proved collective CPU worker, retaining the context and current definitions.
+
 Fresh `--scoped-costs` calibration also records the optional
 `scoped.transfers` extension for the exact published runtime identity. It
 measures cold/cached two-slot preparation for each finite payload, physical
@@ -1057,14 +1102,139 @@ the new scoped observations. The refreshed profile records the input's hash.
 This permits ordinary timing reuse only after the emitted artifacts themselves
 are also proved equivalent.
 
-The compiler considers native workers, GPU intervals of up to four adjacent units,
-and complete legal worker blocks. A bounded 16-state frontier retains distinct
-coherence states; at most 128 complete alternatives are compared. The same region
-algebra and physical copy plan drive execution and simulation, including retained
-full-array allocation peaks, CPU mirror reads/writes, waits, and final publication.
-Each GPU interval requires an estimated 20% advantage. A proven startup lower bound
-avoids searching GPU schedules when even their unavoidable fixed cost exceeds
-all modeled native work. No online timing or application-specific recipes are used.
+The graph runtime planner supports CPU and GPU alternatives without fixed
+source-window, worker-count or record-count limits. Search
+width is bounded to 16 frontier states and 128 completed alternatives; an all-GPU
+alternative for supported tasks survives expensive initial transfers. The same
+region algebra and physical copy plan drive execution and simulation, including
+read-only mirrors, partial invalidation, dirty eviction, full-layout allocation
+peaks, waits and terminal publication. A selected graph must beat its native
+alternative by an estimated 5%. Graph AUTO uses measured hardware rates and an
+explicit static floating-point work proxy, including intrinsic weights and
+conditional work. Stores, INTEGER/logical operations and array address
+calculations do not count as floating-point work; copies and fills can have zero
+FLOPs and retain their separate memory cost.
+Memory estimates count the union of footprints within each array and direction:
+overlapping reads count once, while read/write storage owes both directions.
+This remains a heuristic for memory traffic, without a cache or write-allocation
+model. An unavailable union estimate declines AUTO independently of layout,
+effect validity and forced execution.
+Direct-transfer GPU candidates also pass a scenario using the transfer fit's
+observed maximum relative residual. The planner applies adverse coefficients
+to the difference between candidate and native DMA costs, including terminal
+publication, so common transfers cancel. It retains the existing profit margin
+and reports nominal execution time separately from the scenario debit. This
+scenario is not a statistical confidence interval or a bound on future timings;
+profiles without residual evidence retain nominal pricing. Other transfer modes
+need their own matching evidence. Planning cost ABI 2 carries the two residuals;
+generated C, CUDA and Fortran clients must be rebuilt together.
+Original Fortran family timings are not required for this heuristic. Dynamic
+inner-loop counts, unpriced native preparation and missing team costs remain
+visible uncertainty; the estimate is not a speedup guarantee. These costs never
+authorize GPU execution: dependence, effect, alias, lifetime, descriptor and
+numerical-environment proofs remain separate requirements.
+
+Graph AUTO ranks recurring work after one-time CUDA driver startup, while
+reporting that startup debt in its predicted cold total. Each invocation still
+pays modeled context setup, allocation, transfer, coherence and publication
+costs. Production wall measurements include actual startup. This prevents a
+small local query from rejecting recurring GPU work forever solely because it
+would be the first CUDA use; it does not prove startup amortization. The profile
+checks hardware and exact scoped-runtime identities. Direct launch costs do not
+fully price CUDA graph construction, parameter updates, replay or grouped
+acquisition; these remain model limitations.
+
+Fresh host-only graph queries can reuse a bounded cache of candidate placements
+(64 entries, 8 MiB of metadata). Exact geometry, effects, model inputs and observed
+CPU placement must match. Every hit revalidates current definitions and reprices
+the candidate against native execution; no data, mirrors, proof tokens or old
+search costs are cached. Existing hardware and numerical-environment guards still
+apply. Key construction and lookup remain unpriced, so complete and owner cost
+reports are unavailable on this path. Reusing a candidate does not repeat the
+full search: a cached CPU choice can miss another GPU alternative that would
+become profitable with less search overhead. Resident or pending contexts retain
+normal planning.
+
+Queries with no supported GPU alternative bypass this cache. A sole native
+candidate can also avoid physical-state snapshots when a fresh host-only query
+proves that each used resource retains at most one stable coverage rectangle.
+Current metadata and definitions are still validated; pending readers, replica
+state, definition-kill events, team costs and backend-specific costs retain normal
+simulation. The new guard work remains unpriced, including failed guard attempts,
+so its execution estimates do not qualify complete or owner cost reports.
+Logical definition validation itself tracks initialized regions only; placement
+and execution continue to own physical mirror checks and transfers.
+
+Source AUTO discovers maximal straight regions within an entered control arm,
+including supported mapped helper calls. One metadata-only query records their
+existing checked workers and retains the selected schedule through those calls.
+Admission counts registered physical workers: one original source team with
+several workers can form a query. A single physical worker keeps its local query.
+Stable descriptors, actual mappings and existing external read definitions are
+required at the anchor. A small checked INTEGER recipe can reconstruct local
+geometry from readable scalar inputs or protected, host-current INTEGER vectors;
+every operation checks the original INTEGER range and every table access checks
+bounds. Floating-point preparation and original CPU work execute when reached.
+The query cannot perform future source-read admission or payload transfers.
+
+After an owner closes, its cached numeric handles carry no live definitions.
+When a nonempty required-whole read would therefore receive an uninitialized
+registration, the generated code can take the existing native fallback before
+creating another context. Original activation, descriptor and typed guards still run
+first. Live borrowed contexts, inherited schedules, externally required handles
+and empty reads retain their ordinary checks and continuation behavior.
+
+Unknown controls, mutable geometry, lifetime changes, unsupported native work
+and joined-team coordinators end a region. Remaining workers use their reached
+queries. Compile-time source motion still uses a relative scheduling heuristic
+within each procedure. These restrictions make the optimizer partial: neither
+the query nor the source graph is an application-wide placement proof. Query
+metadata reports accepted regions and the reasons other spans were declined.
+
+A worker mismatch before work begins returns `FORT_SCOPE_PLAN_MISMATCH`.
+At a proved prework boundary, `fort_scope_plan_abandon_remaining_v1` retires only
+the untouched suffix metadata, preserving accepted prefix commands, physical and
+virtual definitions, mirrors and allocations. The original current operation
+can then run once through checked native hooks. Prepared accesses and active
+work reject retirement; a failure after execution begins is fatal and cannot
+replay the original span. Ordinary reset and close retain their strict guards.
+
+Generated kernels enqueue owned arguments and per-task effects into the context.
+The queue joins work across numerical entries and helper calls. Conflicting host
+access drains its dependency closure; independent CPU work can continue. Queue
+flush uses direct launches on a topology's first reach, builds its CUDA graph on
+the second matching reach, and replays it on later reaches. Only ordered kernel
+functions and argument counts survive the first reach; each submission uses its
+current argument values and launch geometry. One-shot contexts create no CUDA
+graphs. A resource failure
+before graph launch permits ordered direct kernel submission; an execution failure
+poisons the context and never replays the work. For measurement ablations,
+`FORT_SCOPE_GRAPH_QUEUE=0` flushes each enqueue and `FORT_SCOPE_CUDA_GRAPHS=0`
+uses direct launches. These switches preserve the same coherence semantics.
+
+An independently proved original OpenMP body can replace an exact current range
+of all-CPU workers. The runtime validates every expected worker and effect before
+acquiring the original body's exact native accesses and advancing that range.
+Future GPU choices, accepted commands and valid mirrors survive. Native effects
+normally come from independent original native sections. For a complete team
+with exactly one physical numerical worker, its registered source-equivalent
+effect step can also supply sections under every typed preparation guard. The
+independent original summary, completion, storage and scalar/metadata checks
+still apply; several workers require their own aggregate native sections.
+The optional path requires distinct handles and original contiguous storage
+whose base and full shape match the registered roots. Read-only rank-one
+explicit-shape dummies with constant bounds also check their declared extent.
+Unsupported proofs or mappings retain the generated CPU worker.
+The original body runs once and publishes its writes after the team joins.
+When a query is already installed, the compiler can acquire that exact CPU range
+before the fork and execute the label-free original OpenMP span directly.
+Reached descriptor and typed guards still precede acquisition, and native access
+ends after the original join. Mixed or unavailable ranges retain the generated
+team protocol and its participant checks.
+
+DIRECT transfers use the exact requested physical copy operations without
+pinned staging, scratch allocations or carrier kernels. Read-only moves retain
+both valid mirrors, and writes invalidate only their affected sections.
 
 `FORT_RUNTIME_TRACE=1` publishes decisions, modeled bytes, launches, waits, and
 planning work. Its versioned `FORT_SCOPED evidence` JSON records show current and
@@ -1223,13 +1393,13 @@ covers those records only. Reduction records appear only after an explicit proof
 request. The default `report(entry)` and explicit `materialize=True` retain the
 legacy schema 1 complete-closure behavior and cache accounting.
 
-The default `bounded` coordinator path requires complete bounded legacy closures
-for called procedures. The experimental `--scope-execution reached` path uses
-reusable child requirements and local source graphs instead. Each original
-procedure supplies its own numerical regions, descriptor bounds and segment
-dispatcher; repeated calls do not duplicate the transitive effect list or consume
-one wrapper variant per source span. The four-variant per-procedure and
-128-variant compilation limits remain unchanged.
+The public coordinator uses graph execution and reusable child requirements.
+Each original procedure supplies its numerical regions, descriptor bounds and
+source dispatcher. Repeated calls share one generated helper with actual resource
+handles, rather than duplicating a transitive list per source span. Effect-proof
+budgets remain local to each requested proof; they do not cap the invocation's
+task graph. Historical bounded/reached configurations are private reference
+fixtures under `compiler._legacy`, and cannot be selected through the public CLI.
 For compatibility, rejected initial inline extraction attempts remain in the
 top-level `boundaries` list with their original reasons, labeled
 `kind: candidate_rejection` and `phase: inline_numerical_extraction`. A later
@@ -1260,7 +1430,7 @@ Copy-producing, optional or `INTENT(OUT)` associations and unproved entry-time
 specification expressions remain boundaries. Child-local arrays that would
 outlive their procedure also remain boundaries.
 Original complete joined OpenMP operations retain their teams and joins.
-In opt-in reached mode, supported separate worksharing DOs can use collective
+In graph scopes, supported separate worksharing DOs can use collective
 numerical workers inside that same original team. One master coordinates runtime
 queries and coherence, all members call the fixed-budget worker, and native
 corrections retain their original worksharing and synchronization. Uniform
@@ -1274,7 +1444,7 @@ can compose separately bounded original worksharing units. Their conservative
 access union is bounded too; calls, allocation/definition events and inferred
 whole overwrites are excluded. The original team still executes once, and this
 proof does not authorize an ordered child-call summary or GPU scatter writes.
-If the original flat skeleton exhausts its raw operation budget, reached mode
+If the original flat skeleton exhausts its raw operation budget, graph discovery
 can instead retain a complete native joined group as an explicit boundary with
 separately bounded condition and worksharing units. Generic descriptor,
 reduction and numerical consumers still treat that boundary conservatively.
@@ -1378,6 +1548,11 @@ validates remaining whole-array obligations against current runtime coverage.
 That check does not download data or treat registration facts as current
 freshness. Failed entry validation closes before executing the original child
 once. Public records include the ordered requirements and return guarantees.
+An original native handoff parses its canonical bindings once. When no commands
+are queued on entry, its complete access preflight can also supply the real
+acquisition preparation. With queued work, acquisition rebuilds preparations
+from actual state after draining conflicts; virtual future writes never become
+physically current merely because the CPU acquired another section.
 Single-line guards are evaluated once before their action's descriptor queries.
 Array payloads in an original IF header are published immediately before that
 header evaluates its expression once. An array-valued ELSEIF remains a boundary
@@ -1391,8 +1566,9 @@ conformance. Shifted or nonpointwise reads that require a snapshot remain native
 
 A reached unknown call, unsupported operation or return publishes and closes
 the context before the original continuation runs once. It cannot replay an
-earlier GPU prefix; later operations remain native for that invocation. An
-original procedure with statement labels remains native in reached mode;
+earlier GPU prefix. A later independently proved graph task may open a fresh
+epoch, using source-point definitions rather than the invocation's old entry
+facts. An original procedure with statement labels remains native;
 unproved branch targets cannot bypass owner setup or enter a generated block. An
 inactive, safely evaluated scalar branch does not close ownership. Array-valued
 conditions require coherent host reads; unproved effects still close ownership.
@@ -2116,24 +2292,13 @@ Rolling back a rejected scope also discards newly cached successful child
 coordinators with their numerical proof pairs. Retained coordinators keep their
 original registry identities; rebuilding a discarded child does not refund the
 procedure, inline-attempt or operation search limits.
-In opt-in serial `--scope-execution reached` mode, incomplete whole-entry
-descriptor stability for original allocatable formals, or explicit selected-window
-module captures, triggers compiler-owned window discovery before inline
-preparation. It considers at most four adjacent
-original units at entry or inside one top-level counted loop, with at most 16
-attempts. A selected window must admit two numerical invocations. Discovery
-version 4 also consumes planned closures, so an unsupported branch can finish
-ownership without rejecting a supported sibling. Staged emission must match the
-exact original close points before adoption. Failed attempts run in isolated generation
-transactions: source objects and registered proof identities remain original,
-while rejected artifacts, variants, coordinators, edits and analysis caches do
-not leak into existing fallback generation. The manifest's additive
-`reached_window_discovery` record reports original selections, limits, proof
-identities and rejection reasons. Rejected windows without enough numerical
-invocations retain bounded exact original prefix-disable and active-close reasons
-in `source_declines`, including source kinds, node identities and spans. AUTO with unavailable estimates retains the
-original native path. Module captures consume separate descriptor-window proofs
-at every reached consumer, without globally blessing their allocations.
+Graph execution covers original structured procedures and forms separate residency
+epochs around unsupported operations. It does not enumerate short adjacent source
+windows or require two numerical invocations before a task can be admitted.
+Generation transactions isolate rejected artifacts, helper variants, edits and
+analysis caches. Module captures still require descriptor and source-definition
+proofs at each consumer; graph structure does not establish allocation stability.
+
 Discovery neither invents capture facts nor proves whole-stage residency.
 Original descriptor and partial-definition proofs remain separate gates.
 
@@ -2541,10 +2706,16 @@ Runtime setup and profiling preserve pre-existing flags, rounding and trap masks
 Short serial reduction semantics were checked against the supported native
 gfortran 15 backend and semantic flags in both precisions; a different native
 backend needs independent conformance evidence, not an assumed parallel contract.
-Automatic estimates for these guarded numerical entries remain unavailable until
-offline calibration measures their extra entry/session checks and collective
-coordination. Forced controls remain available for correctness and measurement;
-an unchanged profile hash alone cannot price the added protocol.
+Ordinary AUTO and retained private fitted-protocol references decline automatic
+estimates for these guarded entries until offline calibration prices their extra
+entry/session checks and collective coordination. An unchanged profile hash alone
+cannot price that protocol. Public graph AUTO instead permits hardware roofline
+ranking from measured hardware rates and a static real-arithmetic work proxy.
+Numerical-environment checks and missing team coordination costs remain unpriced;
+this heuristic does not attest original Fortran protocol timings or guarantee a
+speedup. Its cost estimates never authorize execution: all pre-work floating-point
+environment checks and source-observable IEEE-flag restrictions above still apply.
+Forced controls remain available for correctness and measurement.
 
 Logical arrays, writable scalar entry arguments, recursion, runtime-cardinality
 slices and snapshots,
@@ -2854,6 +3025,33 @@ registration and ordered validation; an existing owner always uses coherent
 continuation. This preflight does not yet prove native execution from GPU startup
 costs; no unproved native memory-cost upper bound is assumed.
 
+Graph AUTO can also retain a conservative original-CPU hint for a complete
+owning invocation. An ordinary sample qualifies only after successful normal
+completion, with every context closed and no GPU selection, attempt, accepted
+task or unexpected runtime error during that invocation. Successful original
+fallbacks after a prework definition decline may qualify; they do not become
+priced plans or definition proofs. Roots with early returns or stops are
+excluded from this first implementation.
+
+The key binds the checked executable graph, profile, entry facts and epoch
+policy, safely available array descriptor metadata, and the caller's CPU,
+OpenMP and floating-point environment. Entry observations use allocation,
+contiguity, bounds and extents; optional, pointer and unavailable descriptors
+are omitted. Only copied metadata enters the cache. It holds at most 64 keys
+of 512 words each, including environment metadata. After 64 hits, the next
+invocation plans normally. Unobserved values or entered paths can make a new
+GPU opportunity profitable before that replan; this is an explicit placement
+quality limit of the hint.
+
+A hit runs the original CPU operations and whole OpenMP teams directly,
+preserving their original calls, array associations and saved state. Any live
+runtime context prevents a hit, so borrowed coherent callers continue through
+the existing validation and memory hooks. Read-only mirror retention, write
+invalidation and transfer completion rules remain governed by that coherence
+path. The separate `FORT_SCOPED native_hint` metadata event reports lookup and
+learning with unavailable estimates; it supplies no execution or speedup
+evidence.
+
 ## Legality and caller contract
 
 For each region the analyzer constructs statement iteration domains,
@@ -2973,349 +3171,15 @@ an inlined helper retain shared identity and are analyzed as aliases. Callers
 must provide valid extents and sufficient storage for every accessed index;
 general bounds checking and broader Fortran semantics are outside this subset.
 
-### Experimental complete-window observations
+### Retired source-window configuration
 
-`--scope-cost FILE` transports a JSON object into `OffloadConfig.exact_window`.
-The existing complete-owner request requires `--scope-execution reached`.
-A request with `"coverage": "original_selection"` uses bounded execution and
-the checked plan for a complete original numerical OpenMP group. The original
-scalar preparation and enclosing branch remain in place. The compiler closes
-the group's local context before any whole-group native fallback and never
-replays executed work. This discovery path uses the same numerical, definition,
-completion and resource proofs as reached owners; it does not supply effects
-for unsupported native operations or extend ownership across them.
-
-Cost requests are independent of per-kernel hardware profiles. Supplying a
-request does not establish that its evidence is available, compatible or
-profitable. The automatic policy retains native execution when those checks
-fail. Diagnostic `--scope-measurement` and `--scope-cost` are mutually exclusive.
-
-The checked-interval request uses `"coverage": "checked_interval"`; original
-numerical-group requests use `"coverage": "original_selection"` through the same
-checked-plan attachment. Both use
-`"calibration": "native"` or `"resident"` for separate observation artifacts,
-an executed application `build_contract`, and explicit `workloads`. Production
-omits `calibration` and supplies `evidence`. All three variants use the same
-automatic numerical options. The `checked-interval-process-v4` protocol
-compares complete application processes, including startup, every invocation,
-output and teardown. It checks seven rotated pairs and two holdouts, full-field
-agreement, actual completed GPU launches, reached descriptor/control keys and
-build identities. Successful interval cleanup and a sticky zero-fallback count
-are required, with actual GPU work in each resident process. Planned native
-interruptions are part of the measured alternative; a GPU prefix followed by a
-native suffix cannot qualify as complete resident evidence. Warm group timing
-alone cannot establish an application gain.
-
-The selection contract (schema 2) binds a timing acceptance criterion before
-calibration. Omitting `acceptance` retains `{"criterion": "strict_advantage"}`:
-every resident sample must be more than 5% faster than every native sample.
-An explicit `"acceptance": {"criterion": "paired_non_regression"}` instead
-requires the resident process to take no longer than its corresponding native
-process in each of the seven measured rounds and both holdouts. Equality is
-allowed; one slower pair rejects residency even if its median improves. This
-choice changes only the timing criterion. Numerical validation, build identity,
-completed GPU work and zero-fallback requirements remain unchanged. Changing the
-criterion or supplying earlier protocol evidence requires fresh calibration.
-
-Checked-interval discovery uses the same original-position block control as
-closed numerical groups. It considers contiguous serial source selections,
-keeps complete OpenMP groups indivisible, and prioritizes possible array reuse
-between bulk producers and consumers that write separate outputs. These hints
-use original assignments, loops and call argument intents; they are neither
-effect summaries nor cost estimates. Tied reuse counts prefer fewer complete
-source units. Candidates without visible reuse retain their original order,
-as does the entire search if its existing source-scan budget is exhausted.
-The candidate and admission budgets are unchanged. The manifest's
-`original_interval_discovery` records hints, attempts and the selected span;
-the selected interval still requires independent legality and placement proofs.
-Discovery opens a fresh context each time
-the selected site executes. The context publishes and closes before an excluded
-suffix or backedge. This path does not retry a declined selection through the
-older first-traversal or whole-entry owner. A proved local scalar prefix retains
-the existing entry contract. For a general native prefix, registered selection
-activation instead starts every managed resource with unknown definition state.
-The original prefix and conditions execute once, before any context opens; no
-complete prefix effect closure or invocation-entry payload fact is reused.
-Canonical roots register before borrowed dummy association rebases coordinates.
-
-At each reached numerical operation, a separate source-bound proof establishes
-the exact values required by well-defined original execution. It retains ordered
-unconditional reads before any write to that resource, exact affine sections,
-typed tiled-domain guards and independent joined-unit entry requirements.
-Conditional operands, whole-array or synthetic preservation uploads, shifted
-self updates and conflicting joined units decline this proof. Every upload must
-be covered by the exact original reads. After safe descriptor and original guard
-checks, `fort_scope_admit_source_reads_v1` adds only previously untracked sections
-to host definition coverage. Already current device values remain current;
-unread halos acquire no authority. This precedes the local planning query, whose
-cost and transfer simulation therefore sees the same coverage as execution.
-
-Unconditional native assignments can use the same reached-read admission before
-their native planning query. The existing ordered native-effect proof authenticates
-the original assignment, and exact read sections are rederived from that source.
-This covers native scalar setup from array elements and point corrections, through
-both precise native effects and demand-relative interval effects. The same contract
-can cover original native worksharing loops with stable indirect metadata when
-every managed write first reads that exact destination. Existing native completion
-authority and a fresh source derivation authenticate this condition; communication
-geometry alone cannot establish it. The coordinator reuses the already prepared
-exact inspector unions, including original empty-loop, bounds and budget guards,
-before the native query. It does not scan the metadata twice. Conditional operands,
-masked operations, function calls and unproved loop unions acquire no new read
-authority. Reads retain current device copies; subsequent native writes still
-invalidate only their proved sections. Entry state and unread sections remain
-unknown, and a rejected preflight continues only the unexecuted native suffix.
-
-These read preconditions grant no storage lifetime, alias freedom, native-effect
-or numerical-execution authority. Opaque native operations inside ownership still
-require the complete existing effects and coherence checks. General-prefix
-activation does not yet support repeated selections; the scalar-prefix repeated
-path retains its restricted suffix checks. Every admitted interval still needs
-at least two numerical invocations and checked resource and completion proofs.
-Unsupported consumers may instead have checked close points at their exact
-original positions. Reaching one publishes pending device writes, disables
-offloading for the remaining activation, and executes the original native
-suffix once. An unreached branch grants no effect authority. Close patches are
-rendered after placement is attached so process calibration observes every
-fallback; qualifying resident measurements still require zero fallbacks.
-Line-based replacements also require distinct original statement lines in the
-selection and its borrowed procedures. Sharing a line with another executable
-statement declines the interval; punctuation inside comments or literals does
-not count as another statement.
-
-Discovery inventories bounded source positions before spending admission
-attempts. Reached loop bodies precede their enclosing loop; outer sequences
-precede nested branches, and maximal selections at distinct positions precede
-shorter overlapping cuts. The existing source, adjacency and attempt limits
-still apply. An early branch therefore cannot consume the entire attempt budget
-by offering many overlapping cuts before later positions are considered.
-
-Entry keys use only the finalized plan's safely readable root descriptors and
-proved root controls. Original native branches, child-local tiling and private
-work remain at their original evaluation points and are included in measured
-process time. Their exact iteration counts need not be predicted. This empirical
-cost model grants no alias, lifetime, definition, numerical or completion proof.
-
-Before admitting operations, a source interval records numerical anchors and
-prospective resources across original calls. Repeated calls share an inventory
-member only when their original procedure, source selection and canonical array
-bindings match. Every resolved call edge retains its own checked association;
-unresolved calls remain obligations. Sharing analysis does not merge executions
-or assume equivalent scalar values.
-The draft's version 3 record represents this graph without expanding every call
-path. Each exact original call and canonical caller has one source-authenticated
-route: prepared numerical child, declined numerical child, or native operation.
-A numerical decline still permits one native admission attempt with the existing
-effect proofs; it does not imply that a native correction must close residency.
-Failed child or native admission closes at the original call without retrying
-through another child implementation. Source routing does not
-revalidate unrelated numerical payloads; final plan validation still checks
-every admitted preparation, native effect, definition and completion proof.
-
-An unconditional checked close ends admission of its exact original sequence.
-The remaining native text is authenticated and retained once. A close inside a
-branch, child, or loop does not truncate sibling branches, caller continuations,
-or later loop paths. Conditional closes retain later eligible operations, and
-the runtime's absorbing disable state prevents execution from replaying a GPU
-prefix or reactivating after a reached close.
-
-Mixed original teams share one source-only worksharing inventory between
-interval discovery and `JoinedTeam` admission. Each supported original DO
-retains its registered preparation and team-completion proof; emission consumes
-that same preparation. Unsupported corrections remain ordered native units.
-The complete team must satisfy every original DO barrier before a subregion
-can be prepared. Numerical preparation issues no capture, native-effect,
-definition or execution authority, and emits no artifacts.
-Exact lexical contexts over a sealed compilation session are reused without
-rewalking their immutable syntax. Reuse charges the same logical traversal work
-as a fresh query and retains source, configuration and publication checks;
-mutable standalone source analyses still derive fresh contexts.
-
-Workload documents bind arguments, relevant environment, input-file hashes and
-completion facts. The selector checks actual arguments, environment and bounded
-regular input files at the first eligible operation of each interval; these checks also run during
-calibration. No cached timestamp or launcher approval replaces the file contents.
-This is empirical applicability to observed complete workloads, not a proof of
-future invocation counts. Initially production pricing supports one admitted
-selection per bundle. Discovery may retain additional declined groups unchanged;
-multiple admitted selections support diagnostic capture but select native until
-complete bundle pricing is available.
-
-The process request binds its numerical validation policy before capture:
-required full-precision fields, storage layouts, ordinary output files,
-comparison tolerances and a reviewed diagnostic driver source. The compiler
-verifies actual payload hashes and numerical comparisons; a reported pass flag
-does not authorize placement. Distinct field hashes are retained when values
-agree within that fixed policy. The existing complete-window fixture protocol
-keeps its bitwise comparison requirement.
-
-Version 2 policies (`full-float64-comparison-v2`) and numerical receipts
-(`checked-selection-numerics-v2`) support either legacy binary VTK or raw
-float64 storage as ordinary outputs. Both use `schema_version: 2`.
-For raw outputs, declare `outputs: {"format": "raw-float64-storage-v1",
-"files": {"state": {"payload": "output/state.bin", "metadata":
-"output/state.shape"}}}`. Each receipt's `outputs.state` contains `payload`
-and `metadata` file references with absolute `path` and `sha256`; both files
-must appear in that run's `output_hashes`. Metadata uses the same
-`storage-shape-bounds-v1` format as diagnostic fields: precision `64`, then
-shape, lower bounds and upper bounds in dimension order. Payloads use the
-policy's `<f8` or `>f8` byte order, finite values and fixed tolerances; storage
-shapes and bounds must match exactly. Normal output and diagnostic field paths
-must be distinct, and both inventories remain nonempty and mandatory.
-
-For VTK, each declared ordinary output lists required data fields. The verifier
-requires matching complete layouts and compares every field present, including
-additional fields; other recorded output files need not be selected for
-comparison. Existing version 1 VTK policies and receipts retain their checks
-and tolerances; raw outputs require version 2. The build attestation binds the
-exact selection contract, including this policy and its workload identities.
-
-Each workload needs one full-float64 diagnostic pair from its native and
-resident capture builds, including original bounds and halos. Every measured
-pair also needs its required ordinary output comparisons. The diagnostic relink
-replaces one explicitly identified source/object and preserves the remaining
-objects, ordered compiler/link arguments and recorded environment. Its reviewed
-driver source is a trusted validation input: authenticating its hash does not
-prove that arbitrary instrumentation preserves numerical semantics. Diagnostic
-module inputs are checked against their recorded hashes; existing application
-receipts do not establish an original compile-time module inventory. Capture
-generation and build attestation alone do not establish application AUTO
-qualification. Earlier version 1, 2 or 3 process evidence cannot be relabeled as
-version 4 interval evidence.
-
-`python -m compiler.offload.selection_cost builds|evaluate --request FILE
---output FILE` provides the independent collector interface. `builds` accepts
-hashed contract JSON plus both application build observations and diagnostic
-relink observations; it returns the verified binary paths after rechecking all
-receipt inputs. `evaluate` accepts hashed contract and complete-process evidence
-JSON. It canonicalizes only observed CPU Fortran option paths using the existing
-raw-log verifier's normalization, then verifies the unchanged timing, build and
-numerical requirements. Its response includes the canonical evidence and either
-a resident/native decision or rejection. Neither command issues an execution
-plan or placement attachment; production generation revalidates the evidence
-against its own checked interval. The pipeline's `selection_campaign` collector
-uses these commands without importing compiler implementation modules. Compiler
-verification has a 240-second hard limit; application runs retain their separate,
-explicitly supplied runtime limit.
-
-`python -m compiler.offload.application_build preflight|attest` verifies the
-consumer's build through a versioned JSON request. Preflight binds original
-source destinations, final compiler artifacts and selector-specific macros.
-Attestation checks executed compiler/link receipts and the final binary before
-delivery. Native observations preserve the original group and need no numerical
-GPU workers; static native production needs no selector macro. The recorded
-local contract preserves ordered options and explicit inputs and libraries. It
-does not claim an inventory of implicit system headers or libraries. Consumers
-must preserve authenticated original source paths across calibration and
-production and apply edits to separate build destinations.
-
-`--scope-measurement native|resident` with `--form-scopes`,
-`--gpu-policy sections` and `--scope-execution reached` emits diagnostic timing
-for an already admitted complete
-lexical owner. Separate variants retain either the original native callee
-(including its unchanged declarations) or the existing resident implementation.
-Compiler-owned clock blocks surround authenticated standalone direct calls in
-registered ordinary subroutine callers. They include argument evaluation,
-automatic storage, original OpenMP joins, publication, cleanup and return;
-logging occurs afterward. PURE/ELEMENTAL, concurrent and directive-enclosed
-caller positions, ambiguous calls, labels and alternate returns are rejected.
-Completed original teams before the call remain supported. Main programs,
-function callers and indirect calls are outside this observation subset.
-
-The manifest binds both variants to the same admitted plan and call sites.
-`automatic_scope_available` retains its existing admission meaning; measurement
-records explicitly set placement and estimate authority to false. There is no
-runtime workload key: these observations are neither calibration evidence nor
-application performance qualification, and they cannot authorize AUTO
-placement. Resident guards may select native work; inspect separate runtime
-traces before attributing an observation to GPU execution. This measurement
-interface does not change the exact-window selector's admission restrictions.
-
-`compiler.offload.exact_window_calibration` is an independent offline consumer
-for a narrow alternative to per-kernel cost models. It compiles the untouched
-original Fortran and the compiler's resident implementation of a three-dimensional
-producer, current-host reader, native correction, diffusion and accumulation.
-Seven rotated pairs and two separate input holdouts measure complete **cold
-invocations**, including resident guards, context creation, transfers, native
-interruptions, publication and close. Full float64 fields, including halos, must
-agree. Output serialization and fixture input initialization are outside this
-window interval; these are not complete-application timing results.
-
-After selection, another seven rotated native/AUTO pairs and two input holdouts
-measure the final production selector without tracing or calibration overrides.
-These independent observations report an actual advantage or a model miss; they
-never revise the calibration or force a different decision. Performance reports
-use these production samples. Separate diagnostic traces require exactly three
-worker launches, full-field agreement, and predicted versus observed complete
-transfer bytes; transfer trace-event counts are not individual CUDA API counts.
-A changed thread setting must preserve native results with zero device launches.
-
-```bash
-python -m compiler.offload.exact_window_calibration \
-  --output /tmp/exact-window-observations --sizes 16,192 --architecture sm_86
-```
-
-Add `--original-teams` to retain three original four-thread joined loops in the
-native control. Complete-window protocol 4 binds the checked plan's portable
-execution fingerprint and independent source completion
-proofs for every original team and measures their startup, worksharing and joins
-inside the same complete invocation. It does not borrow serial or per-loop
-coefficients. Runtime thread limits, active-level limits and OpenMP placement
-environment are part of the identity; incompatible limits select native before
-CUDA work. The independent native measurement and resident selector both query
-`omp_get_schedule`: the effective kind (including the monotonic modifier bit)
-and chunk size must match, even when `OMP_SCHEDULE` is unchanged. Kinds use an
-unsigned 32-bit representation; zero is a valid static chunk size. The independent
-native sample uses a C-bound getter because GNU's legacy Fortran getter omits
-the monotonic modifier. A production
-schedule mismatch selects native before CUDA identity queries or ownership.
-Protocols 1–3 observations do not authorize this execution identity. The current
-complete-owner admission excludes calls that could change the schedule inside
-the measured interval; this check does not admit larger intervals.
-Original PRIVATE arrays contribute their entry-time sizes and lower bounds to
-the exact cost key, once per array even when several teams reuse it. This also
-covers unused PRIVATE storage that may incur allocation costs. Descriptor
-inquiries never re-evaluate specification expressions or register the payload.
-
-The experimental `OffloadConfig.exact_window` route consumes the measured record
-at one original lexical entry. It selects residency only when every measured
-resident interval beats every native interval by at least 5%. It never scales a
-pointwise coefficient to a stencil or extrapolates to different dimensions.
-Source/plan/runtime/helper identities, compiler options, capture facts, exact
-descriptor and integer-control values, original Fortran options, CPU model and placement
-and GPU identity bind each observation. A mismatch selects the existing native
-path before work. The normal numerical, effect, definition, alias and execution
-guards still apply, including publication without replay after a GPU prefix.
-
-The compiler retains this decision as an immutable attachment registered to the
-exact checked plan and its evidence request. The cost gate, per-unit pricing,
-control emission and diagnostics consume that same attachment; a public record,
-copied token or boolean marker cannot substitute for it. Changed evidence
-invalidates the attachment, while source, configuration and numerical proofs
-still undergo their existing checks. Missing or unprofitable complete-window
-evidence preserves the original native routine, including its declarations,
-before adding ownership instrumentation. Valid evidence that selects native
-still reports its estimate as available. The fixture build consumer retains its
-existing runtime linkage even for this static native selection.
-
-For the complete-owner protocol above, the **independent producer is currently
-the only supported build consumer**. The original-selection application build
-protocol described earlier is separate.
-It records and validates exact semantic CUDA/Fortran compile options before
-defining the contract-specific selector attestation macro. Without that macro,
-the emitted selector returns native. Other consumers must reject this manifest
-until they can enforce the complete performance build contract; enforcing only
-floating-point flags is insufficient. Calibration overrides exist only in
-explicit diagnostic artifacts, never in the resulting automatic selector.
-
-This admission class contains a complete branchless original owner with stable
-real array formals, integer input controls, affine counted loops and independently
-proved top-level joined OpenMP teams. Payload-dependent bounds/indices, hidden
-state controlling work, helpers, numerical-domain-sensitive primitives,
-allocation changes and child
-owners remain unsupported. In particular, this fixture does **not** establish
-automatic offloading or performance for either channel application. The
-maintained application controls and their broader cost models remain separate.
+The public CLI no longer accepts `--scope-cost`, `--scope-measurement`, or
+`--scope-execution bounded|reached`. Source graphs use canonical memory coherence,
+checked dependencies and hardware costs. Historical complete-window evidence
+protocols remain private test/reference tooling under `compiler._legacy`; they do
+not select production graph execution. Use the fresh application comparison in
+[containers](../containers/README.md) to validate full fields and measure the
+original application, archived compiler and current graph compiler separately.
 
 ## Development and validation
 

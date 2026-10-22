@@ -8,11 +8,11 @@ from hashlib import sha256
 import pytest
 from fparser.two.utils import walk
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend.call_bindings import resolve_source_call
 from compiler.frontend.source_effects import SourceEffects, _children, _kind
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.immutable_inputs import immutable_call_inputs
 from compiler.scopes.regions import extract_region
 from compiler.scopes.source import ScopeBuilder

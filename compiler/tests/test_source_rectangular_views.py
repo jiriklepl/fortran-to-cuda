@@ -4,8 +4,8 @@ from hashlib import sha256
 
 import pytest
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_compute_costs import profile_v2
 from compiler.tests.test_source_scopes import FACT
@@ -102,7 +102,7 @@ def test_native_rectangle_uses_projected_accesses_without_whole_root_coherence(t
     _, outputs, report = build(tmp_path, source)
     assert report["scope_count"] == 1, report["boundaries"]
     generated = outputs[next(path for path in outputs if path.startswith("sources/"))]
-    assert "fort_scope_host_begin" in generated
+    assert "fort_scope_access_begin_v1" in generated
     assert "_physical_origin" in generated
     if "fort_scope_view_query_" in generated:
         assert "type(fort_scope_plan_binding), target :: fort_bindings(" in generated
@@ -168,7 +168,7 @@ def test_nested_rectangular_native_middle_preserves_original_position(tmp_path):
     _, outputs, report = build(tmp_path, source)
     assert report["scope_count"] == 1, report["boundaries"]
     generated = outputs[next(path for path in outputs if path.startswith("sources/"))]
-    assert "fort_scope_host_begin" in generated
+    assert "fort_scope_access_begin_v1" in generated
     assert "_physical_origin" in generated
     if "fort_scope_view_query_" in generated:
         assert "type(fort_scope_plan_binding), target :: fort_bindings(" in generated

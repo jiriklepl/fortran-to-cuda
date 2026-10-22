@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
 from compiler.emission import generate_sources
@@ -27,7 +28,6 @@ from compiler.numerical_contract import (
 )
 from compiler.offload.calibrate import _calibrate_scoped, calibrate, profile_from_measurements
 from compiler.offload.collective_calibration import calibrate_collective
-from compiler.offload.config import OffloadConfig
 from compiler.offload.numerical_calibration import calibrate_numerical, calibrate_numerical_v2
 from compiler.offload.profile import ProfileError, compiler_identity, validate_profile
 from compiler.scopes.source import form_source_scopes

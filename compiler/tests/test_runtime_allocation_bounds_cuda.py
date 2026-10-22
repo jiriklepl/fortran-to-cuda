@@ -262,7 +262,7 @@ def allocation_bound_binaries(tmp_path_factory):
             facts.write_text(json.dumps(_facts(source, team), indent=2) + "\n")
             package.write_text(json.dumps(_package(source, normalized, rank), indent=2) + "\n")
             output = case / "generated"
-            command = [sys.executable, "-m", "compiler", "--form-scopes", "--scope-facts", str(facts),
+            command = [sys.executable, "-m", "compiler.tests.support.reference_scopes", "--form-scopes", "--scope-facts", str(facts),
                        "--numerical-sources", str(package), "--input", str(source), "--kernel", "step",
                        "--memory-model", "scoped", "--gpu-policy", "sections", "--host-threads", "4",
                        "--json", "--output-dir", str(output)]

@@ -6,9 +6,9 @@ from hashlib import sha256
 import pytest
 from fparser.two.utils import walk
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.closed_selection import ClosedIntervalOwner, interval_candidates
 from compiler.scopes.lexical import LexicalBoundaryPatch, LexicalOwner
 from compiler.scopes.source import ScopeBuilder
@@ -395,5 +395,5 @@ end subroutine
     text = outputs[report["sources"][str(path)]["replacement"]].lower()
     assert text.count("call correction()") == 1
     assert text.count("native_visits=native_visits+1") == 1
-    assert "fort_scope_host_begin" in text
+    assert "fort_scope_access_begin_v1" in text
     assert "fort_scope_host_end" in text

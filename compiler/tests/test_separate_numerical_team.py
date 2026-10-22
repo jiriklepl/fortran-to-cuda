@@ -4,12 +4,12 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
 from compiler.frontend.numerical_effects import prove_numerical_effects
 from compiler.frontend.numerical_preparation import NumericalPreparationProvider
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.combined_team import _source_partition, is_combined_group
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.support.numerical_regions import EmittedNumericalText
@@ -103,7 +103,7 @@ def test_native_separate_fallback_preserves_each_original_do_and_nowait(separate
         start = last + len("!$omp end parallel")
     assert len(bodies) == 2
     for body in bodies:
-        assert text.count("else\n" + body + "endif\n!$omp end parallel") == 1
+        assert text.count("if (.not. fort_team_run) then\n" + body + "endif\n!$omp end parallel") == 1
     assert text.count("!$omp do schedule(static)") == 3
     assert text.count("!$omp end do nowait") == 1
 

@@ -483,14 +483,14 @@ def test_partial_initialization_never_copies_or_reads_undefined_halos(runtime):
 
 
 @pytest.mark.native
-def test_definition_change_discards_device_values_and_reuses_allocation(runtime):
+def test_definition_change_retains_physical_values_and_reuses_allocation(runtime):
     scope = Scope(runtime)
     host = (c.c_double * 8)(*range(8))
     status, buffer = scope.register(host, [8])
     scope.check(status)
     device = scope.gpu(buffer, access(flags=6))
     for i in range(8):
-        device[i] = 1000+i
+        device[i] = 1000 + i
     scope.gpu_end(buffer)
     scope.check(runtime.fort_scope_forget_definition(scope.handle, buffer))
     assert scope.stats().downloads == 0
@@ -498,11 +498,89 @@ def test_definition_change_discards_device_values_and_reuses_allocation(runtime)
     middle = [([2], [6])]
     device = scope.gpu(buffer, access(write=middle, overwrite=middle))
     for i in range(2, 6):
-        device[i] = 2000+i
+        device[i] = 2000 + i
     scope.gpu_end(buffer)
     assert scope.stats().allocations == 1
     scope.close()
-    assert list(host) == [0, 1, 2002, 2003, 2004, 2005, 6, 7]
+    assert list(host) == [1000, 1001, 2002, 2003, 2004, 2005, 1006, 1007]
+
+
+@pytest.mark.native
+@pytest.mark.parametrize("partial", [False, True])
+def test_definition_kill_cannot_lose_executed_gpu_prefix_on_native_boundary(runtime, partial):
+    """Reject undefined reads while preserving physical state for source fallback.
+
+    Ordinary intrinsic INTENT(OUT) has no physical entry operation. A later
+    source boundary must therefore publish earlier device writes even when a
+    semantic definition event prevents another generated worker from reading
+    them. Discarding dead values is a separate, explicit lifetime operation.
+    """
+    scope = Scope(runtime)
+    host = (c.c_double * 8)(*range(8))
+    status, buffer = scope.register(host, [8])
+    scope.check(status)
+    written = [([1], [7])]
+    device = scope.gpu(buffer, access(write=written, overwrite=written))
+    for i in range(1, 7):
+        device[i] = 3000 + i
+    scope.gpu_end(buffer)
+    before = scope.stats()
+    if partial:
+        forgotten = access(read=[([2], [6])])
+        runtime.fort_scope_forget_sections_v1.argtypes = [TOKEN, TOKEN, c.POINTER(Section), SIZE]
+        scope.check(runtime.fort_scope_forget_sections_v1(scope.handle, buffer, forgotten.reads, forgotten.read_count))
+    else:
+        scope.check(runtime.fort_scope_forget_definition(scope.handle, buffer))
+    assert scope.stats().download_bytes == before.download_bytes
+    assert scope.stats().waits == before.waits
+    forbidden = access(read=[([3], [4])])
+    assert runtime.fort_scope_host_begin(scope.handle, buffer, c.byref(forbidden)) == 7
+    # The preflight did not execute its native task. Closing before resuming
+    # original source must materialize the already executed prefix exactly.
+    scope.close()
+    assert list(host) == [0, 3001, 3002, 3003, 3004, 3005, 3006, 7]
+
+
+@pytest.mark.native
+@pytest.mark.parametrize("device_source", [False, True])
+def test_read_only_fragmentation_reconciliation_retains_original_current_copy(runtime, device_source):
+    scope = Scope(runtime)
+    host = (c.c_double * 80)(*range(80))
+    status, buffer = scope.register(host, [80])
+    scope.check(status)
+    if device_source:
+        device = scope.gpu(buffer, access(flags=6))
+        for i in range(80):
+            device[i] = i + 100
+        scope.gpu_end(buffer)
+    else:
+        # First allocate without acquiring the payload on the device.
+        device = scope.gpu(buffer, access())
+        scope.gpu_end(buffer)
+    for i in range(33):
+        effects = access(read=[([2 * i], [2 * i + 1])])
+        if device_source:
+            scope.cpu_begin(buffer, effects)
+            assert host[2 * i] == 2 * i + 100
+            scope.cpu_end(buffer)
+        else:
+            device = scope.gpu(buffer, effects)
+            assert device[2 * i] == 2 * i
+            scope.gpu_end(buffer)
+    assert scope.stats().reconciliations
+    before = scope.stats()
+    if device_source:
+        device = scope.gpu(buffer, access(flags=1))
+        assert list(device[:80]) == [i + 100 for i in range(80)]
+        scope.gpu_end(buffer)
+        assert scope.stats().upload_bytes == before.upload_bytes
+    else:
+        scope.cpu_begin(buffer, access(flags=1))
+        scope.cpu_end(buffer)
+        assert scope.stats().download_bytes == before.download_bytes
+    scope.close()
+    assert runtime.fort_scope_wait(scope.handle) == 2
+
 
 
 @pytest.mark.native
@@ -531,7 +609,7 @@ def test_invalid_partial_initialization_is_rejected_before_registration(runtime)
 
 
 @pytest.mark.native
-def test_declared_device_budget_prevents_allocation_and_keeps_native_continuation(runtime):
+def test_declared_device_budget_evicts_dirty_cache_and_keeps_native_continuation(runtime):
     scope = Scope(runtime)
     host, other = (c.c_double * 8)(*range(8)), (c.c_double * 8)()
     status, first = scope.register(host, [8])
@@ -544,8 +622,11 @@ def test_declared_device_budget_prevents_allocation_and_keeps_native_continuatio
         device[i]+=100
     scope.gpu_end(first)
     assert runtime.fort_scope_set_device_budget(scope.handle,128)==8
-    assert runtime.fort_scope_device_begin(scope.handle,second,c.byref(access(flags=6)),c.byref(c.c_void_p()))==4
-    assert scope.stats().allocated_bytes==64
+    pointer=c.c_void_p()
+    scope.check(runtime.fort_scope_device_begin(scope.handle,second,c.byref(access(flags=6)),c.byref(pointer)))
+    assert scope.stats().allocated_bytes==scope.stats().peak_device_bytes==64
+    assert list(host)==[i+100 for i in range(8)]
+    scope.check(runtime.fort_scope_cancel_access(scope.handle,second))
     scope.cpu_begin(first,access(flags=1))
     scope.cpu_end(first)
     scope.cpu_begin(second,access(flags=6))

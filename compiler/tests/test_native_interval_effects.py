@@ -5,10 +5,10 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend.native_demand import prove_native_demand
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.interval_draft import prepare_interval_draft
 from compiler.scopes.lexical import LexicalOwner
 from compiler.scopes.segments import StructuredScope, native_demand_fragment

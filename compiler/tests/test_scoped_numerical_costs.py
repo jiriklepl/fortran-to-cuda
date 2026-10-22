@@ -11,7 +11,7 @@ from compiler.analysis import build_execution_plan
 from compiler.emission import generate_sources
 from compiler.emission.common.resources import read_scoped_runtime
 from compiler.frontend import lower_file
-from compiler.offload.config import OffloadConfig
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.offload.numerical_calibration import MIX_FAMILIES, profile_from_measurements
 from compiler.tests.test_numerical_calibration import observations
 from compiler.tests.test_offload_profile import scoped_profile

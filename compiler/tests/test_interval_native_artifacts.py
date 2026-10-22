@@ -8,8 +8,8 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_interval_draft import SOURCE
 from compiler.tests.test_selection_cost import build_validation, process_fixture  # noqa: F401

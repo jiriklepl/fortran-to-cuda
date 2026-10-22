@@ -149,7 +149,9 @@ def _build_structure(analysis, routine, authority_identity, *, defer_native_grou
     # the existing operation budget. Sequence/branch/loop containers describe
     # their structure, not additional work. A branch with an empty ELSE needs
     # at most four nodes per operation, plus the entry/root containers.
-    limit = 4 * analysis.operation_limit + 2
+    operation_limit = getattr(analysis, "source_graph_operation_limit", {}).get(
+        routine.qualified, analysis.operation_limit)
+    limit = 4 * operation_limit + 2
     operation_count = 0
 
     def add(path, kind, source=(), guard=(), *, role="statement", aliases=(), register_source=True, **values):
@@ -158,7 +160,7 @@ def _build_structure(analysis, routine, authority_identity, *, defer_native_grou
         if len(nodes) >= limit:
             raise CompilationError("bounded structured source node budget exhausted")
         if kind in {"operation", "call", "boundary"}:
-            if operation_count >= analysis.operation_limit:
+            if operation_count >= operation_limit:
                 raise CompilationError("bounded structured source operation budget exhausted")
             operation_count += 1
         source = tuple(source)
@@ -337,13 +339,13 @@ def _build_structure(analysis, routine, authority_identity, *, defer_native_grou
     public = {"version": STRUCTURED_EFFECT_VERSION, "procedure": routine.qualified,
               "analysis_identity": authority_identity, "entry": entry_id, "root": root_id,
               "available": not reasons, "reasons": reasons,
-              "operation_limit": analysis.operation_limit, "operation_count": operation_count,
+              "operation_limit": operation_limit, "operation_count": operation_count,
               "raw_structure_rejection": list(raw_rejection),
               "nodes": [node.public() for node in nodes.values()]}
     identity = sha256(_canonical(public).encode()).hexdigest()
     return StructuredSummary(routine.qualified, identity, authority_identity, root_id, entry_id,
                              MappingProxyType(nodes), not reasons, tuple(reasons), limit,
-                             analysis.operation_limit, operation_count,
+                             operation_limit, operation_count,
                              MappingProxyType(originals), MappingProxyType(ids),
                              native_groups=MappingProxyType(native_groups), raw_structure_rejection=tuple(raw_rejection))
 

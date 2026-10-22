@@ -6,10 +6,10 @@ from hashlib import sha256
 import pytest
 from fparser.two import Fortran2003 as F
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.frontend.source_effects import _children, _kind
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT
 

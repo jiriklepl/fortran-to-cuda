@@ -3,8 +3,8 @@
 import re
 from hashlib import sha256
 
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_source_scopes import FACT, assert_uncalibrated_native
 
@@ -334,7 +334,7 @@ def test_array_condition_publishes_before_original_header(tmp_path):
     text = outputs[report['sources'][str(path)]['replacement']]
     assert text.count('if(b(-2)>10.d0) then') == 1
     position = text.index('if(b(-2)>10.d0) then')
-    assert 'fort_scope_host_begin' in text[:position]
+    assert 'fort_scope_access_begin_v1' in text[:position]
     assert 'fort_scope_close(' in text[position:text.index('call opaque(b,n)')]
 
 

@@ -18,6 +18,39 @@ class NativeAccessCode:
     handle: str
 
 
+@dataclass(frozen=True)
+class NativeAcquisitionCode:
+    specification: tuple[str, ...]
+    prepare: tuple[str, ...]
+    expression: str
+
+
+def native_access_begin(count, *, bindings="fort_bindings", context="fort_context"):
+    """Drain dependencies and acquire every native resource as one transaction."""
+    if not count:
+        return "FORT_SCOPE_OK"
+    pointer = f"c_loc({bindings})" if count else "c_null_ptr"
+    return f"fort_scope_access_begin_v1({context}, {pointer}, {count}_c_size_t, 0_c_int, c_null_ptr)"
+
+
+def build_native_acquisition(accesses, prefix="fort_native_task", *, context="fort_context"):
+    """Collect already-guarded exact effects before the first prepared access.
+
+    Coordinate preparation must precede ``prepare``. The runtime copies every
+    section into its prepared state before returning from the acquisition.
+    """
+    accesses = tuple(accesses)
+    bindings = prefix + "_bindings"
+    specification = ((f"type(fort_scope_plan_binding), target :: {bindings}({len(accesses)})",)
+                     if accesses else ())
+    prepare = []
+    for index, (handle, access) in enumerate(accesses, 1):
+        prepare += [f"{bindings}({index}) = fort_scope_plan_binding()",
+                    f"{bindings}({index})%buffer = {handle}", f"{bindings}({index})%access = {access}"]
+    return NativeAcquisitionCode(specification, tuple(prepare),
+                                 native_access_begin(len(accesses), bindings=bindings, context=context))
+
+
 def _statement_lines(statement):
     """Continue generated statements at whitespace outside quoted literals."""
     lines = []
@@ -101,6 +134,12 @@ def build_native_access(resource: NativeResourceSections, handle: str, prefix: s
                         f"call c_f_pointer({layout}%axes, {physical_axes}, [{rank}])"]
     prepare += [f"call c_f_pointer({layout}%extents, {extents}, [{rank}])"]
     require(f"any({extents} < 0_c_size_t)")
+    if resource.explicit_dummy_extents:
+        if (rank != 1 or len(resource.explicit_dummy_extents) != rank or resource.writes or resource.overwrites
+                or any(extent < 0 or extent > INTEGER_MAX for extent in resource.explicit_dummy_extents)):
+            raise CompilationError("native explicit-shape access lacks exact read-only original extent authority")
+        declared = ",".join(f"{extent}_c_size_t" for extent in resource.explicit_dummy_extents)
+        require(f"any({extents} /= [{declared}])")
     bound_count = 0
 
     def checked(expression):

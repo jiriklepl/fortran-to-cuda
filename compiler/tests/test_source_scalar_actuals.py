@@ -26,38 +26,57 @@ end module
 """)
     analysis = SourceEffects([path])
     routine = analysis.routines["renamed_scalar_calls::driver"]
-    call, = [node for node in walk(routine.execution) if type(node).__name__ == "Call_Stmt"]
+    (call,) = [node for node in walk(routine.execution) if type(node).__name__ == "Call_Stmt"]
     return analysis, resolve_source_call(analysis, routine.scope, call)
 
 
-@pytest.mark.parametrize("expression,dtype,kind", [
-    ("k-6", "integer", 4),
-    ("-(k-6)", "integer", 4),
-    ("+(k*2)/3", "integer", 4),
-    ("k-6_8", "integer", 8),
-    ("-(k+2.e0)/3.e0", "real", 4),
-    ("(k-6.d0)*2.d0", "real", 8),
-])
+@pytest.mark.parametrize(
+    ("expression", "dtype", "kind"),
+    [
+        ("k-6", "integer", 4),
+        ("-(k-6)", "integer", 4),
+        ("+(k*2)/3", "integer", 4),
+        ("k-6_8", "integer", 8),
+        ("-(k+2.e0)/3.e0", "real", 4),
+        ("(k-6.d0)*2.d0", "real", 8),
+        ("k-6", "integer", 8),
+        ("-k/2", "real", 8),
+        ("k*2", "real", 8),
+        ("k/2_8", "real", 4),
+        ("k+1.e0", "real", 8),
+    ],
+)
 def test_same_kind_scalar_arithmetic_is_proved_without_rewriting_original_actual(tmp_path, expression, dtype, kind):
     analysis, call = resolve(tmp_path, expression, dtype=dtype, kind=kind)
-    actual, = call.actuals
-    mapping, = call.mappings
-    assert mapping.binding is None and mapping.section is None
+    (actual,) = call.actuals
+    (mapping,) = call.mappings
+    assert mapping.binding is None
+    assert mapping.section is None
     assert mapping.resource is None
     assert call.render_original_arguments() == (str(actual),)
     summary = analysis.summarize("renamed_scalar_calls::driver")
     assert summary["complete"], summary["reasons"]
-    assert any(item["kind"] == "read" and item["resource"] == "argument::k"
-               for item in summary["operations"])
+    assert any(item["kind"] == "read" and item["resource"] == "argument::k" for item in summary["operations"])
 
 
-@pytest.mark.parametrize("expression,options,reason", [
-    ("k-6", {"kind": 8}, "type, kind or rank mismatch"),
-    ("k+1.d0", {"dtype": "real"}, "type, kind or rank mismatch"),
-    ("a+1", {}, "type, kind or rank mismatch"),
-    ("k-6", {"intent": "inout"}, "writable or descriptor actual requires original storage"),
-    ("unknown(k)", {}, "type, kind or rank mismatch"),
-])
+@pytest.mark.parametrize(
+    ("expression", "options", "reason"),
+    [
+        ("k-6_8", {}, "type, kind or rank mismatch"),
+        ("k+1.d0", {"dtype": "real"}, "type, kind or rank mismatch"),
+        ("a+1", {}, "type, kind or rank mismatch"),
+        ("k-6", {"intent": "inout"}, "writable or descriptor actual requires original storage"),
+        ("unknown(k)", {}, "type, kind or rank mismatch"),
+    ],
+)
 def test_unproved_types_arrays_calls_and_writable_temporaries_stay_boundaries(tmp_path, expression, options, reason):
     with pytest.raises(CompilationError, match=reason):
         resolve(tmp_path, expression, **options)
+
+
+def test_mixed_constant_expression_selects_real_kind_without_payload_reads(tmp_path):
+    analysis, call = resolve(tmp_path, "-1.d0/2", dtype="real", kind=8)
+    assert call.render_original_arguments() == ("- 1.D0 / 2",)
+    summary = analysis.summarize("renamed_scalar_calls::driver")
+    assert summary["complete"], summary["reasons"]
+    assert not any(item["kind"] == "read" for item in summary["operations"])

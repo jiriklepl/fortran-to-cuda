@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.scopes.lexical import immutable_numerical_unit
 from compiler.scopes.segments import Segment
 from compiler.scopes.source import ScopeBuilder
@@ -112,7 +112,7 @@ def test_plain_arithmetic_after_restored_trap_has_reached_native_fallback(tmp_pa
     checked = suffix.index("fort_scope_numerical_environment_supported()")
     guarded = suffix[checked:]
     assert "fort_scope_plan_reset_mode" in guarded
-    assert "fort_scope_host_begin" in guarded
+    assert "fort_scope_access_begin_v1" in guarded
     assert "fort_scope_host_end" in guarded
     assert "FORT_SCOPE_PLAN_NATIVE" in guarded
     assert all(segment["guard_failure"] == "original native operation with coherence hooks; earlier work is retained"
@@ -191,7 +191,8 @@ def test_original_team_checks_every_participant_before_uniform_native_fallback(t
     assert decision.index(veto) < decision.index("fort_scope_plan_reset_mode")
     assert "fort_team_environment_supported = .true." not in decision
     assert "!$omp end master\n!$omp barrier\nif (fort_team_run) then" in decision
-    native = "else\n!$omp do\ndo i=-2,n-3\nb(i)=-a(i)\nenddo\n!$omp end do\nendif\n!$omp end parallel"
+    native = ("if (.not. fort_team_run) then\n!$omp do\ndo i=-2,n-3\nb(i)=-a(i)\nenddo\n"
+              "!$omp end do\nendif\n!$omp end parallel")
     assert decision.endswith(native)
     assert team.count("b(i)=-a(i)") == 1
     assert text.index("call ieee_set_halting_mode(ieee_invalid,.false.)") < first
@@ -227,7 +228,7 @@ end module
     assert len(regions) == 2
     assert all(not region["numerical_environment"]["required"] for region in regions)
     team_region, = [region for region in regions if region["completion"].get("has_openmp_in_closure")]
-    assert team_region["execution_participation"] == "serial_coordinator"
+    assert team_region["execution_participation"] == "qualified_original_team"
 
 
 def test_reachable_source_cycle_scan_never_materializes_effect_closures(tmp_path):

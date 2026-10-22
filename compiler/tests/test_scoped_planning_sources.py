@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.emission.common.resources import read_scoped_runtime
-from compiler.offload.config import OffloadConfig
 from compiler.offload.numerical_calibration import profile_from_compute_measurements
 from compiler.scopes.source import form_source_scopes
 from compiler.tests.test_numerical_calibration_v2 import observations_v2
@@ -214,7 +214,7 @@ def test_query_wrappers_preserve_source_definition_positions(tmp_path, monkeypat
     queries = text.split("subroutine fort_scope_query_")[1:]
     assert len(queries) >= 3
     assert any("FORT_SCOPE_PLAN_FORGET" in query.split("end subroutine", 1)[0] for query in queries)
-    assert all("fort_scope_host_begin" not in query.split("end subroutine", 1)[0] for query in queries)
+    assert all("fort_scope_access_begin_v1" not in query.split("end subroutine", 1)[0] for query in queries)
 
 
 def test_changed_control_scalar_queries_reached_continuation_segments(tmp_path, monkeypatch):

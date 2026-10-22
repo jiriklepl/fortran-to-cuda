@@ -251,12 +251,13 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
         raise ValueError("another pipeline checkout is already imported")
     sys.dont_write_bytecode = True
     sys.path.insert(0, str(pipeline_root))
+    from elmm_pipeline._legacy_scopes import transform_scopes
     from elmm_pipeline.build import build, preprocessing_defines
     from elmm_pipeline.common import clean_environment, command, digest_tree
     from elmm_pipeline.configuration import prepare_config
     from elmm_pipeline.gpu_toolchain import discover_toolchain
     from elmm_pipeline.gpu_validation import gpu_activity, trace_environment
-    from elmm_pipeline.local_adapter import apply_scope_sources, transform_scopes
+    from elmm_pipeline.local_adapter import apply_scope_sources
     from elmm_pipeline.scope_extraction import export_analysis_sources
     from elmm_pipeline.structural import Project
     from elmm_pipeline.validation import compare_vtk, read_vtk, validate_log
@@ -307,7 +308,7 @@ def run_experiment(*, app_root, compiler_root, pipeline_root, python, scons_pyth
                                              for path in native_library_dir.iterdir() if path.is_file()}
         receipt["compiler_tree_sha256"] = digest_tree(compiler_root / "compiler")
         helper_paths = [Path(importlib.import_module("elmm_pipeline." + name).__file__)
-                        for name in ("build", "common", "configuration", "gpu_toolchain", "gpu_validation",
+                        for name in ("_legacy_scopes", "build", "common", "configuration", "gpu_toolchain", "gpu_validation",
                                      "local_adapter", "scope_extraction", "structural", "validation", "scoped_provenance")]
         receipt["pipeline_helpers_sha256"] = {str(path): digest(path) for path in helper_paths}
         for mode in ("native", "current"):

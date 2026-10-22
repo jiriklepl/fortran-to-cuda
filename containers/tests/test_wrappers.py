@@ -626,3 +626,27 @@ def test_container_failure_status_is_preserved(sandbox, sif_env, script, engine)
     stub(engine)
     result = invoke(script, "run-elmm", overrides={"STUB_EXIT": "41"})
     assert result.returncode == 41
+
+
+@pytest.mark.parametrize('command', ['e2e', 'benchmark-e2e', 'run-e2e'])
+def test_three_way_docker_commands_request_gpu_by_default(sandbox, command):
+    _, _, capture, stub, invoke = sandbox
+    stub('docker')
+    result = invoke('run-docker.sh', command, '--output-dir', '/output/fresh')
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(capture.read_text())['argv']
+    assert values(argv, '--gpus') == ['all']
+    assert argv[-3:] == [command, '--output-dir', '/output/fresh']
+
+
+@pytest.mark.parametrize('command', ['e2e', 'benchmark-e2e', 'run-e2e'])
+def test_three_way_apptainer_commands_request_gpu_by_default(sandbox, command):
+    tmp, _, capture, stub, invoke = sandbox
+    stub('apptainer')
+    sif = tmp / 'compiler.sif'
+    sif.write_text('fake image\n')
+    result = invoke('run-apptainer.sh', command, overrides={'SIF_FILE':str(sif)})
+    assert result.returncode == 0, result.stderr
+    argv = json.loads(capture.read_text())['argv']
+    assert '--nv' in argv
+    assert argv[-1] == command

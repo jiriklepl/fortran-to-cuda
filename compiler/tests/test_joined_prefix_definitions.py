@@ -7,7 +7,8 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend.call_bindings import SourceDependency
 from compiler.frontend.native_definitions import (
     NativeDefinitionUnsupported,
@@ -27,7 +28,6 @@ from compiler.frontend.native_sections import (
 from compiler.frontend.reached_windows import plan_reached_window, prove_reached_window
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.module_owner import ModuleOwner
 from compiler.scopes.reached_owner import ReachedWindowOwner
 from compiler.scopes.source import ScopeBuilder

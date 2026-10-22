@@ -166,7 +166,8 @@ def test_3d_native_demand_keeps_current_host_read_and_complete_fields(tmp_path, 
     original = fixture_source(variant)
     source, _builder, outputs, manifest = generate(tmp_path, original)
     owner, = manifest["scopes"]
-    assert owner["checked_execution_plan"]["numerical_invocations"] == 3
+    expected_invocations = 1 if variant == "pointer_boundary" else 3
+    assert owner["checked_execution_plan"]["numerical_invocations"] == expected_invocations
     if variant == "cross_procedure":
         assert len(owner["checked_execution_plan"]["procedures"]) >= 2
     if variant == "pointer_boundary":
@@ -181,10 +182,12 @@ def test_3d_native_demand_keeps_current_host_read_and_complete_fields(tmp_path, 
             expected_effects["demand_owner::b"] = ["read", "write"]
         assert operation["resource_effects"] == expected_effects
     resources = owner["checked_execution_plan"]["resources"]
-    assert {row["resource"] for row in resources} == {
-        "demand_owner::a", "demand_owner::b", "demand_owner::star", "demand_owner::out"}
+    expected_resources = {"demand_owner::a", "demand_owner::b"}
+    if variant != "pointer_boundary":
+        expected_resources |= {"demand_owner::star", "demand_owner::out"}
+    assert {row["resource"] for row in resources} == expected_resources
     identities = {row["resource"].split("::")[-1]: row["registration_identity"] for row in resources}
-    assert len(set(identities.values())) == 4
+    assert len(set(identities.values())) == len(expected_resources)
     replacement = manifest["sources"][str(source)]["replacement"]
     if variant != "cross_procedure":
         assert outputs[replacement].count("call correct(-0.5d0*a(0,0,0))") == 1
@@ -257,6 +260,7 @@ def test_3d_native_demand_keeps_current_host_read_and_complete_fields(tmp_path, 
         assert sum(item["kind"] == "close" for item in events) == 1, trace
         assert len({item["context"] for item in events}) == 1, trace
         transfers = [item for item in events if item["kind"] in {"upload", "download"}]
+        assert {int(item["buffer"]) for item in transfers} == set(identities.values()), trace
         assert sum(item["kind"] == "upload" for item in transfers) == (3 if variant == "managed_correction" else 2), trace
         assert sum(item["kind"] == "download" for item in transfers) == (1 if variant == "pointer_boundary" else 3), trace
         uploads = {"a": 8**3 * 8, "b": 0, "star": 0, "out": 6**3 * 8}

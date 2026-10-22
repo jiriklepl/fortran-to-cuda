@@ -79,7 +79,7 @@ def candidates(builder):
         before = list(prefix)
         for item in grouped_original_sequence(nodes, {}):
             visits += 1
-            if visits > builder.analysis.operation_limit:
+            if builder.config.scope_execution != "graph" and visits > builder.analysis.operation_limit:
                 raise CompilationError("closed numerical selection discovery budget exhausted")
             if isinstance(item, NativeGroupCandidate):
                 original = item.original_nodes
@@ -175,11 +175,18 @@ class OriginalSelectionOwner(LexicalOwner):
         specification, entry = control(self) if self.exact_window is not None else ([], [])
         declarations = [f"integer({self.kind}) :: {self.context}", f"logical :: {self.enabled}",
                         *[f"integer({self.kind}) :: fort_buffer_{number}" for _binding, number in self.resources.values()]]
+        epoch_initialization = []
+        if self.builder.config.scope_execution == "graph":
+            declarations += [f"logical :: {self.epoch_pristine}", f"logical :: {self.query_plan}"]
+            # This independent original selection starts after native prefix
+            # work; invocation entry coverage cannot seed its fresh context.
+            epoch_initialization = [f"{self.epoch_pristine} = .false.",
+                                    f"{self.query_plan} = .false."]
         before = ["block", f"use iso_c_binding, only: {self.kind} => c_int64_t",
                   "use fort_scoped_memory, only: fort_scope_serial_caller", *specification, *declarations,
                   f"{self.context} = 0",
                   *[f"fort_buffer_{number} = 0" for _binding, number in self.resources.values()],
-                  f"{self.enabled} = fort_scope_serial_caller() /= 0", *entry]
+                  f"{self.enabled} = fort_scope_serial_caller() /= 0", *epoch_initialization, *entry]
         first, last = self.selection_context["first_line"], self.selection_context["last_line"]
         self.builder.add_edit(self.routine.scope.path, first, first - 1,
                               "\n".join(fortran_lines(before)) + "\n", prepend=True)

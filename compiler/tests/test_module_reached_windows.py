@@ -5,10 +5,10 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend.reached_windows import prove_reached_window
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.reached_owner import ReachedWindowOwner
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_reached_window_owner import ENTRY, SOURCE
@@ -135,7 +135,7 @@ def test_reached_native_partial_update_retains_same_module_owner(tmp_path, singl
     native_edit = compact.index("b(0)=b(0)+0.5_8")
     replacement = compact.index("callmove_alloc(a,temporary)")
     close = compact.rindex("fort_scope_close(", 0, replacement)
-    assert compact.index("fort_scope_host_begin(") < native_edit < close < replacement
+    assert compact.index("fort_scope_access_begin_v1(") < native_edit < close < replacement
     assert text.count("call move_alloc(a,temporary)") == 1
     assert path.read_text() == source
     assert builder.analysis.stable_module_allocatables == frozenset()

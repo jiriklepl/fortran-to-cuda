@@ -4,7 +4,6 @@ import pytest
 
 from compiler.tests.test_source_scopes import FACT, generate
 
-
 SOURCE = '''module planes
 implicit none
 contains
@@ -51,15 +50,31 @@ def test_plane_initialization_and_updates_keep_original_bounds(tmp_path):
     _, output, manifest = build(tmp_path)
     assert manifest['scope_count'] == 1, manifest['boundaries']
     assert not manifest['scopes'][0]['boundaries'], manifest['boundaries']
-    assert {item['procedure'] for item in manifest['borrowed_source_coordinators']} == {'planes::fill', 'planes::update'}
+    assert {item['procedure'] for item in manifest['borrowed_source_coordinators']} == {'planes::update'}
+    fill, = manifest['scopes'][0]['module_coordinators']
+    assert fill['procedure'] == 'planes::fill'
+    assert fill['interface'] == 'original_module_entry_v1'
+    assert fill['resource_mappings'] == {'argument::to': 'argument::b'}
+    plan = manifest['scopes'][0]['checked_execution_plan']
+    child, = [item for item in plan['procedures'] if item['procedure'] == 'planes::fill']
+    assert len(child['calls']) == 1
+    assert child['calls'][0]['caller'] == 'planes::step'
+    assert child['units'][0]['resources'] == fill['resource_mappings']
     regions = manifest['child_numerical_regions']
     assert {item['procedure'] for item in regions} == {'planes::fill', 'planes::update'}
     for item in regions:
-        assert all(region['used'] for region in item['regions'])
+        selected, = [region for region in item['regions'] if region['used']]
+        assert selected['shared_computation'] in plan['gpu_leaves']
+        if item['procedure'] == 'planes::fill':
+            team = child['units'][0]['operations']['combined_numerical_team']
+            assert team['completion']['available']
+            assert team['completion']['retains_original_team_and_directives']
+            assert team['completion']['proof_identity'] == selected['completion']['proof_identity']
     sources = '\n'.join(path.read_text() for path in (output/'regions').glob('*.source'))
     assert 'fort_section_index_' in sources
     assert 'fort_region_lb_to_1' in sources
-    update = next(item for item in regions if item['procedure'] == 'planes::update')['regions'][0]
+    update, = [region for item in regions if item['procedure'] == 'planes::update'
+               for region in item['regions'] if region['used']]
     assert any('size(from,1' in guard for guard in update['runtime_guards'])
 
 

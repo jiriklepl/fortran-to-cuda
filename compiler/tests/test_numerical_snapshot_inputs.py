@@ -4,10 +4,10 @@ from hashlib import sha256
 
 import pytest
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.ir import CompilationError
 from compiler.offload.collective_calibration import fixture_facts, fixture_source
-from compiler.offload.config import OffloadConfig
 from compiler.scopes import collective, source
 from compiler.tests.test_numerical_classification import ENTRY, SOURCE
 from compiler.tests.test_numerical_sources import package

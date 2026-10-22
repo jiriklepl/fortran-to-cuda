@@ -7,10 +7,10 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.segments import grouped_nodes
 from compiler.scopes.source import form_source_scopes
 from compiler.tests.test_source_scopes import FACT
@@ -304,7 +304,7 @@ end subroutine""")
     point, = [item for item in operation["sections"]["resources"] if item["resource"] == "argument::gate"]
     assert point["reads"][0]["axes"][0]["lower"]["value"] == 0
     generated = outputs[report["sources"][str(path)]["replacement"]]
-    begin = generated.index("fort_scope_host_begin(")
+    begin = generated.index("fort_scope_access_begin_v1(")
     opening = generated.lower().index("!$omp parallel private(i)", begin)
     ending = generated.lower().index("!$omp end parallel", opening)
     assert begin < opening

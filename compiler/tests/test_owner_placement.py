@@ -10,9 +10,9 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.combined_team import CombinedNumericalTeam
 from compiler.scopes.joined_team import JoinedTeam
 from compiler.scopes.lexical import LexicalOwner
@@ -91,15 +91,15 @@ def test_original_child_team_obeys_owning_placement_and_keeps_execution_proofs(t
     assert text.count("out(i)=a(i)+b(i)") == 1
     if mixed:
         assert text.count("b(i)=b(i)+sum(a)") == 1
-        assert "fort_scope_host_begin(" in text
+        assert "fort_scope_access_begin_v1(" in text
         assert "fort_scope_host_end(" in text
         assert "error stop 'original team numerical execution failed'" in text
         if forced:
-            assert "fort_team_run = .true." in text
+            assert "fort_team_run = fort_native_ready .and. (.true.)" in text
     else:
         assert "error stop 'combined original team numerical execution failed'" in text
         assert "error stop 'combined original team completion failed'" in text
-        assert text.index("fort_scope_plan_validate(") < text.index("fort_team_run = .true.")
+        assert text.index("fort_scope_plan_validate(") < text.index("fort_team_run = .not. fort_team_native")
 
 
 @pytest.mark.parametrize("mixed", [False, True], ids=["combined", "joined"])

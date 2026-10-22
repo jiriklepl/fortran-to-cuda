@@ -17,7 +17,7 @@ DRIVER = r'''
 using namespace fort_scoped::planning;
 fort_scope_plan_costs costs() {
     fort_scope_plan_costs c{};
-    c.version=1; c.valid=1; c.max_allocation_bytes=1<<20;
+    c.version=FORT_SCOPE_PLANNING_ABI_VERSION; c.valid=1; c.max_allocation_bytes=1<<20;
     c.cpu_flops=1; c.cpu_bandwidth=1e12; c.gpu_flops=1000; c.gpu_bandwidth=1e12;
     c.h2d_bandwidth=c.d2h_bandwidth=1e12; c.h2d_latency=1e-6; c.d2h_latency=.5;
     c.create_seconds=.02; c.register_seconds=.01;

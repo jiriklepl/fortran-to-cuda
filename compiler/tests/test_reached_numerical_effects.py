@@ -83,7 +83,7 @@ def test_emitted_mapped_chain_retains_original_native_partial_update(tmp_path):
     assert "call " + owner.members["quartz_numerics::touch_face"].entry in text
     assert text.count("bridge_visits=bridge_visits+1") == 1
     assert text.count("middle_visits=middle_visits+1") == 1
-    assert "fort_scope_host_begin" in text
+    assert "fort_scope_access_begin_v1" in text
     assert "fort_scope_host_end" in text
     assert not report["scopes"][0]["reopen_after_boundary"]
 

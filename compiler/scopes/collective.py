@@ -427,9 +427,13 @@ class CollectiveScopeBuilder(ScopeBuilder):
                          "!$omp master"]
                 for root in sorted(definitions):
                     body += self.checked(f"fort_scope_forget_definition(fort_state%context, {handles[root]})")
-                for root, kinds in sorted(actions.items()):
+                for position, (root, kinds) in enumerate(sorted(actions.items()), 1):
                     body += self.access_flags(kinds, root in overwrites)
-                    body += self.checked(f"fort_scope_host_begin(fort_state%context, {handles[root]}, fort_access)")
+                    body += [f"fort_bindings({position}) = fort_scope_plan_binding()",
+                             f"fort_bindings({position})%buffer = {handles[root]}",
+                             f"fort_bindings({position})%access = fort_access"]
+                from compiler.scopes.access import native_access_begin
+                body += self.checked(native_access_begin(len(actions), context="fort_state%context"))
                 body += ["!$omp end master", "!$omp barrier", *self.check_status()]
                 body += ["if (fort_observing) call fort_scope_team_observe_begin_v1(FORT_SCOPE_TEAM_OBSERVE_COMPUTE)"]
                 body += _call(str(call.node.items[0]), actuals(call))

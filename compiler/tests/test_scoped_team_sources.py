@@ -78,8 +78,9 @@ def team_text(emission):
 
 def serial_text(emission):
     value = emission.cuda.split('extern "C" int ' + emission.report["entry"] + "(", 1)[1]
-    delimiter = "\n    return FORT_SCOPE_OK;\n}\n"
-    return value.split(delimiter, 1)[0]
+    # Public entry wrappers may return a guarded execution result. Nested
+    # blocks are indented; the first column-zero brace ends this entry.
+    return value.split("\n}\n", 1)[0]
 
 
 def state_text(emission):
@@ -133,6 +134,9 @@ def test_shared_preparation_and_status_are_published_before_workers(tmp_path):
     assert "int limit{}" in state
     assert "scale" not in state
     text = team_text(emission)
+    serial = serial_text(emission)
+    assert serial.index("bool fort_entry_work_started=false;") < serial.index("fort_entry_work_started=true;")
+    assert "fort_entry_work_started" not in text
     assert "auto &coefficient = shared->coefficient" in text
     assert "auto &limit = shared->limit" in text
     assert "shared->status = [&]() -> int" in text

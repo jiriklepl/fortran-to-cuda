@@ -8,12 +8,12 @@ import pytest
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import walk
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.frontend import source_effects
 from compiler.frontend.summary_cache import SummaryCache
 from compiler.ir import CompilationError
 from compiler.offload import source_compute
-from compiler.offload.config import OffloadConfig
 from compiler.scopes import source
 from compiler.scopes.generation_transaction import GenerationTransaction
 

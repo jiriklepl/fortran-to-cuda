@@ -314,6 +314,20 @@ inline bool disjoint_union(const std::vector<Box> &input, std::vector<Box> &outp
     output = std::move(result);
     return true;
 }
+// Computational memory traffic counts each touched element once per direction.
+// append_box only coalesces some overlaps; its remaining boxes are not disjoint.
+// Keep read and write calls separate: a read/modify/write element owes both.
+inline std::size_t footprint_bytes(const Array &array, const std::vector<Box> &boxes, bool &valid) {
+    if (!valid) return 0;
+    std::vector<Box> disjoint;
+    if (!disjoint_union(boxes, disjoint)) { valid = false; return 0; }
+    std::size_t bytes = 0;
+    for (const auto &box : disjoint) {
+        const auto count = box_bytes(array, box, valid);
+        if (!valid || !add(bytes, count, bytes)) { valid = false; return 0; }
+    }
+    return bytes;
+}
 inline bool transfer_metrics(const Array &array, const std::vector<Box> &boxes,
                              std::size_t &bytes, std::size_t &copies) {
     bool valid = true;
@@ -418,7 +432,9 @@ inline Plan select(const Data &data, const Profile &p, bool automatic) {
         active |= unit.iterations != 0;
     }
     if (empty && active && !data.guarded_inputs_checked) return native_plan(data);
-    if (automatic && !p.valid) return native_plan(data);
+    if (automatic && (!p.valid || std::any_of(data.units.begin(), data.units.end(), [](const Unit &unit) {
+        return !std::isfinite(unit.memory_bytes);
+    }))) return native_plan(data);
     if (!automatic) {
         if (active) result.choices.push_back({0, count, true});
         else for (std::size_t i=0; i<count; ++i) result.choices.push_back({i, i+1, false});

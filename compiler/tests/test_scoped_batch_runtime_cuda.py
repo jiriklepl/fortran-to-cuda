@@ -25,7 +25,7 @@ void check(int status) {
     if (status) { std::fprintf(stderr,"status=%d: %s\n",status,fort_scope_error()); std::abort(); }
 }
 fort_scope_plan_costs base_costs() {
-    fort_scope_plan_costs c{}; c.version=1; c.valid=1; c.max_allocation_bytes=64ULL<<20;
+    fort_scope_plan_costs c{}; c.version=FORT_SCOPE_PLANNING_ABI_VERSION; c.valid=1; c.max_allocation_bytes=64ULL<<20;
     c.cpu_flops=c.cpu_bandwidth=1e8; c.gpu_flops=c.gpu_bandwidth=c.h2d_bandwidth=c.d2h_bandwidth=1e12;
     c.h2d_latency=c.d2h_latency=c.create_seconds=c.register_seconds=c.host_access_seconds=c.device_access_seconds=
     c.gpu_setup_seconds=c.cold_driver_startup_seconds=c.allocation_seconds=c.release_seconds=c.wait_seconds=

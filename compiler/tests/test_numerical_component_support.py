@@ -6,13 +6,13 @@ import pytest
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import walk
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend.component_bindings import ComponentAccessUnsupported, component_access
 from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
 from compiler.frontend.numerical_preparation import NumericalPreparationProvider, NumericalPreparationUnsupported
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.tests.support.numerical_regions import CHILD, CHILD_SOURCE, emit_reached_numerical_fixture
 
 TYPES = """module record_source

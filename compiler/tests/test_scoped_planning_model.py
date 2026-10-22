@@ -41,7 +41,7 @@ using namespace fort_scoped::planning;
 
 fort_scope_plan_costs costs() {
     fort_scope_plan_costs c{};
-    c.version=1; c.valid=1; c.max_allocation_bytes=size_t(1)<<30;
+    c.version=FORT_SCOPE_PLANNING_ABI_VERSION; c.valid=1; c.max_allocation_bytes=size_t(1)<<30;
     c.cpu_flops=1000; c.cpu_bandwidth=1e9; c.gpu_flops=1e6; c.gpu_bandwidth=1e10;
     c.h2d_latency=c.d2h_latency=1e-6; c.h2d_bandwidth=c.d2h_bandwidth=1e9;
     c.create_seconds=c.register_seconds=c.host_access_seconds=c.device_access_seconds=1e-9;
@@ -97,6 +97,23 @@ int main(int argc, char **argv) {
         else c.max_allocation_bytes=b.bytes-1;
     } else if (scenario=="cold" || scenario=="warm") {
         c.cold_driver_startup_seconds=2; in.driver_initialized=scenario=="warm";
+    } else if (scenario=="graph_cold" || scenario=="graph_warm" ||
+               scenario=="graph_cold_continue" || scenario=="graph_warm_continue" ||
+               scenario=="graph_cold_setup" || scenario=="graph_cold_allocation" ||
+               scenario=="graph_cold_transfer" || scenario=="graph_cold_undefined") {
+        in.graph_mode=true; c.cold_driver_startup_seconds=2;
+        in.driver_initialized=scenario=="graph_warm" || scenario=="graph_warm_continue";
+        in.continuation=scenario=="graph_cold_continue" || scenario=="graph_warm_continue";
+        if (scenario=="graph_cold_setup") c.gpu_setup_seconds=2;
+        if (scenario=="graph_cold_allocation") c.allocation_seconds=2;
+        if (scenario=="graph_cold_transfer") c.h2d_bandwidth=1;
+        if (scenario=="graph_cold_undefined") {
+            in.resources[0].initialized.clear(); in.resources[0].host_current.clear();
+        }
+    } else if (scenario=="graph_team_unpriced" || scenario=="legacy_team_unpriced") {
+        in.graph_mode=scenario=="graph_team_unpriced";
+        Operation entry; entry.kind=FORT_SCOPE_PLAN_TEAM_ENTRY;
+        in.operations.insert(in.operations.begin(),entry);
     } else if (scenario=="startup_small_native") {
         in.operations[0].flops=.001; in.query_construction_operations=7;
     } else if (scenario=="startup_prevalidated" || scenario=="startup_forget" ||
@@ -114,9 +131,43 @@ int main(int argc, char **argv) {
         }
     } else if (scenario=="common_native_compute") {
         in.operations.insert(in.operations.begin(), Operation{FORT_SCOPE_PLAN_NATIVE,0,{},1000000,0,false});
-    } else if (scenario=="below_margin" || scenario=="above_margin") {
+    } else if (scenario=="below_margin" || scenario=="above_margin" || scenario=="graph_below_legacy_margin") {
         in.resources.clear(); in.operations={{FORT_SCOPE_PLAN_WORKER,1,{},1000,0,true}};
-        c.gpu_flops=1000/(scenario=="below_margin" ? .81 : .79);
+        in.graph_mode=scenario=="graph_below_legacy_margin";
+        c.gpu_flops=1000/(scenario=="above_margin" ? .79 : .81);
+    } else if (scenario=="graph_large" || scenario=="graph_native_bridges" ||
+               scenario=="graph_many_resources" || scenario=="graph_inner_run") {
+        in.graph_mode=true; in.operations.clear();
+        const int count=scenario=="graph_inner_run" ? 20 : 320;
+        if (scenario=="graph_many_resources") in.resources.clear();
+        if (scenario=="graph_inner_run") c.launch_enqueue_seconds=.01;
+        for (int k=0;k<count;++k) {
+            if (scenario=="graph_many_resources") in.resources.push_back(resource(k+1,{512}));
+            const auto handle=scenario=="graph_many_resources" ? k+1 : 1;
+            const double flops=scenario=="graph_inner_run" && (k==0 || k==count-1) ? 1 : 1000;
+            in.operations.push_back(worker(k+1,handle,rw(full),flops));
+            if (scenario=="graph_native_bridges" || (scenario=="graph_large" && k%3==0))
+                in.operations.push_back(Operation{});
+        }
+    } else if (scenario=="graph_dirty_eviction" || scenario=="graph_read_eviction" ||
+               scenario=="graph_atomic_budget") {
+        in.graph_mode=true; in.resources.clear(); in.operations.clear();
+        for (int k=1;k<=4;++k) in.resources.push_back(resource(k,{8}));
+        const Region cells=in.resources.front().initialized;
+        const Effects read{cells,{},{}}, overwrite{{},cells,cells};
+        in.device_budget=128;
+        if (scenario=="graph_dirty_eviction") {
+            in.operations={worker(1,1,overwrite),worker(2,2,overwrite),
+                worker(3,1,read),worker(4,2,read)};
+            in.operations[2].bindings.push_back({3,overwrite});
+            in.operations[3].bindings.push_back({4,overwrite});
+        } else if (scenario=="graph_read_eviction") {
+            in.operations={worker(1,1,read),worker(2,2,read),worker(3,3,read),worker(4,1,read)};
+        } else {
+            in.device_budget=64;
+            in.operations={worker(1,1,read)};
+            in.operations.front().bindings.push_back({2,overwrite});
+        }
     } else if (scenario=="whole_group" || scenario=="many_units") {
         in.operations.clear(); const int count=scenario=="whole_group" ? 6 : 24;
         for (int k=0;k<count;++k) in.operations.push_back(worker(k+1,1,rw(full)));
@@ -168,6 +219,15 @@ int main(int argc, char **argv) {
     const auto input_heap=heap_live; heap_peak=input_heap;
     auto r=select(in,c); auto &d=r.decision;
     const auto metadata_peak=heap_peak-input_heap;
+    struct GateEvidence { bool seen=false, accepted=false; double seconds=0; } gate;
+    if (scenario.rfind("graph_cold",0)==0 || scenario=="graph_warm") {
+        const EvidenceSink sink{&gate,[](void *context,const EvidenceEvent &event) {
+            if (!event.event || std::string(event.event)!="gate") return;
+            auto &value=*static_cast<GateEvidence *>(context);
+            value.seen=true; value.accepted=event.accepted; value.seconds=event.seconds;
+        }};
+        evidence(in,c,r,sink);
+    }
     std::cout << std::setprecision(17) << "{\"available\":" << d.available << ",\"choices\":[";
     for(size_t k=0;k<r.gpu_workers.size();++k) { if(k)std::cout<<','; std::cout<<(r.gpu_workers[k]?1:0); }
     std::cout << "],\"reason\":\"" << r.reason << "\",\"candidates\":" << d.candidates
@@ -179,6 +239,11 @@ int main(int argc, char **argv) {
               << ",\"native_seconds\":" << d.native_seconds
               << ",\"native_common_excluded\":" << r.native_common_compute_excluded
               << ",\"startup_shortcut\":" << r.native_startup_shortcut
+              << ",\"ranking_seconds\":" << r.report.ranking_seconds
+              << ",\"cold_startup_debt\":" << r.cold_driver_startup_debt_seconds
+              << ",\"unpriced_team_overhead\":" << r.unpriced_team_overhead
+              << ",\"gate_seen\":" << gate.seen << ",\"gate_accepted\":" << gate.accepted
+              << ",\"gate_seconds\":" << gate.seconds
               << ",\"metadata_peak\":" << metadata_peak << "}\n";
 }
 '''
@@ -251,13 +316,13 @@ def test_transfer_latency_counts_physical_copy_calls(model):
     assert result["peak"] == 8 * 4 * 4 * 5 * 3 * 4
 
 
-def test_definition_forget_discards_values_and_retains_allocation(model):
+def test_definition_forget_preserves_physical_values_without_a_boundary_wait(model):
     result = model("forget")
     assert result["choices"] == [1, 1]
     assert result["uploads"] == 0
     assert result["downloads"] == result["allocations"] == 1
     assert result["download_bytes"] == result["peak"] == 4096
-    assert result["waits"] == 2 # Definition boundary plus one terminal wait.
+    assert result["waits"] == 1  # Only terminal publication waits.
 
 
 def test_stream_ordered_close_combines_publication_and_release_waits(model):
@@ -293,6 +358,48 @@ def test_cold_initialization_is_charged_until_device_is_known_initialized(model)
     assert cold["reason"] == "native_gpu_startup_lower_bound"
     assert warm["choices"] == [1]
     assert warm["candidates"] > 1
+
+
+@pytest.mark.parametrize("continuation", [False, True])
+def test_graph_warm_ranking_reports_cold_startup_debt_without_local_roi_promise(model, continuation):
+    suffix = "_continue" if continuation else ""
+    cold, warm = model("graph_cold" + suffix), model("graph_warm" + suffix)
+    assert cold["available"] == warm["available"] == 1
+    assert cold["choices"] == warm["choices"] == [1]
+    assert cold["ranking_seconds"] == pytest.approx(warm["ranking_seconds"])
+    assert cold["cold_startup_debt"] == 2
+    assert warm["cold_startup_debt"] == 0
+    assert cold["seconds"] == pytest.approx(warm["seconds"] + 2)
+    assert cold["seconds"] > cold["native_seconds"]
+    assert cold["ranking_seconds"] < cold["native_seconds"] * .95
+    assert cold["gate_seen"] == cold["gate_accepted"] == 1
+    assert cold["gate_seconds"] == pytest.approx(cold["ranking_seconds"])
+    assert cold["upload_bytes"] == warm["upload_bytes"] == 4096
+    assert cold["download_bytes"] == warm["download_bytes"] == (0 if continuation else 4096)
+
+
+@pytest.mark.parametrize("scenario", ["graph_cold_setup", "graph_cold_allocation", "graph_cold_transfer"])
+def test_graph_warm_ranking_still_charges_context_allocation_and_transfer_costs(model, scenario):
+    result = model(scenario)
+    assert result["available"] == 1
+    assert result["choices"] == [0]
+    assert result["cold_startup_debt"] == 0
+    assert result["allocations"] == result["uploads"] == result["launches"] == 0
+
+
+def test_graph_warm_ranking_cannot_hide_an_undefined_read(model):
+    result = model("graph_cold_undefined")
+    assert result["available"] == 0
+    assert result["reason"] == "uninitialized_read"
+    assert result["choices"] == [0]
+
+
+def test_graph_generic_team_estimate_does_not_require_a_qualified_protocol_cost(model):
+    graph, legacy = model("graph_team_unpriced"), model("legacy_team_unpriced")
+    assert graph["available"] == graph["unpriced_team_overhead"] == 1
+    assert graph["choices"] == [1]
+    assert legacy["available"] == legacy["unpriced_team_overhead"] == 0
+    assert legacy["reason"] == "collective_synchronization_calibration_unavailable"
 
 
 def test_proven_startup_lower_bound_returns_native_before_candidate_search(model):
@@ -417,3 +524,54 @@ def test_unknown_and_overflowed_estimates_remain_native(model, scenario, reason)
     assert result["available"] == 0
     assert not any(result["choices"])
     assert result["reason"] == reason
+
+
+@pytest.mark.parametrize("scenario", ["graph_large", "graph_native_bridges", "graph_many_resources"])
+def test_graph_placement_scales_past_legacy_worker_and_record_windows(model, scenario):
+    result = model(scenario)
+    assert result["available"] == 1
+    assert result["choices"] == [1] * 320
+    resources = 320 if scenario == "graph_many_resources" else 1
+    assert result["upload_bytes"] == result["download_bytes"] == resources * 4096
+    assert result["waits"] == 1
+    assert result["reason"] == "coherent_gpu_schedule_selected"
+    assert result["operations"] < 320 * 150
+
+
+def test_graph_placement_admits_long_profitable_interior_run(model):
+    result = model("graph_inner_run")
+    assert result["available"] == 1
+    assert result["choices"] == [0, *([1] * 18), 0]
+
+
+def test_graph_profitability_uses_whole_schedule_margin(model):
+    result = model("graph_below_legacy_margin")
+    assert result["available"] == 1
+    assert result["choices"] == [1]
+    assert result["seconds"] < result["native_seconds"] * .95
+
+
+def test_graph_budget_eviction_publishes_dirty_values_and_reloads_only_when_needed(model):
+    result = model("graph_dirty_eviction")
+    assert result["available"] == 1
+    assert result["choices"] == [1] * 4
+    assert result["allocations"] == 5
+    assert result["upload_bytes"] == 64
+    assert result["download_bytes"] == 256
+    assert result["peak"] == 128
+
+
+def test_graph_read_only_eviction_preserves_host_mirrors(model):
+    result = model("graph_read_eviction")
+    assert result["choices"] == [1] * 4
+    assert result["allocations"] == 4
+    assert result["upload_bytes"] == 256
+    assert result["download_bytes"] == 0
+    assert result["peak"] == 128
+
+
+def test_graph_task_must_fit_budget_as_one_pinned_group(model):
+    result = model("graph_atomic_budget")
+    assert result["available"] == 1
+    assert result["choices"] == [0]
+    assert result["allocations"] == result["upload_bytes"] == result["download_bytes"] == 0

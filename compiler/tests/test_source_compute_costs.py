@@ -4,12 +4,12 @@ from dataclasses import replace
 
 import pytest
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.analysis import build_execution_plan
 from compiler.emission import generate_sources
 from compiler.emission.common.resources import read_scoped_runtime
 from compiler.frontend import lower_source
 from compiler.offload.analysis import analyze_offload
-from compiler.offload.config import OffloadConfig
 from compiler.offload.numerical_calibration import profile_from_compute_measurements
 from compiler.offload.source_compute import (
     apply_source_compute_costs,

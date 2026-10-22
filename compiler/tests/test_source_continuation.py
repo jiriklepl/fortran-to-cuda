@@ -161,7 +161,7 @@ def test_affine_condition_point_uses_reached_scalar_and_definition_checks(tmp_pa
     _, owner = owner_text(manifest, text)
     assert "fort_scope_plan_validate(fort_context)" in owner
     point_condition = owner.index("fort_branch =", owner.index("fort_branch =") + 1)
-    assert owner.index("fort_scope_host_begin(") < point_condition
+    assert owner.index("fort_scope_access_begin_v1(") < point_condition
 
 
 def test_inline_parameter_capture_is_read_only(tmp_path):
@@ -254,16 +254,17 @@ def test_joined_native_team_retains_original_private_variables(tmp_path, monkeyp
     # admission; a legal joined region remains inside its owner either way.
     from hashlib import sha256
 
+    from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
     from compiler.driver.options import CompilerOptions
     from compiler.ir import CompilationError
-    from compiler.offload.config import OffloadConfig
-    from compiler.scopes import region_dispatch
+    from compiler.scopes import closed_selection, region_dispatch
     from compiler.scopes.source import ScopeBuilder
 
     def native_region(*args, **kwargs):
         raise CompilationError("inline numerical admission unavailable")
 
     monkeypatch.setattr(region_dispatch, "extract_region", native_region)
+    monkeypatch.setattr(closed_selection, "discover_closed_selections", lambda _builder: [])
     original = tmp_path / "original.f90"
     original.write_text(JOINED)
     facts = {"schema_version": 1, "participation": "serial",

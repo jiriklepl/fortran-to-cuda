@@ -8,7 +8,7 @@ from hashlib import sha256
 import pytest
 
 from compiler.tests.test_source_inline_dispatch import PROGRAM
-from compiler.tests.test_source_scopes import FACT, ROOT, generate, run
+from compiler.tests.test_source_scopes import FACT, ROOT, assert_uncalibrated_native, generate, run
 
 SOURCE = PROGRAM.replace("subroutine step(a,out,n)", "subroutine step(a,out,n,count)").replace(
     "integer,intent(in)::n", "integer,intent(in)::n\ninteger,intent(out)::count").replace(
@@ -79,13 +79,21 @@ def inline_binaries(tmp_path_factory):
         for mode in ("auto", "sections"):
             case = directory / label / mode
             original, output, manifest = generate(case, source, mode=mode, facts=facts, checkout=checkout)
-            assert manifest["scope_count"] == 1, manifest["boundaries"]
-            assert len(manifest["inline_numerical_regions"]["regions"]) == 2
+            if mode == "auto":
+                assert_uncalibrated_native(manifest)
+                assert original.read_text() == source
+            else:
+                assert manifest["scope_count"] == 1, manifest["boundaries"]
+                assert len(manifest["inline_numerical_regions"]["regions"]) == 2
             build = case / "build"
             build.mkdir()
             objects = []
+            if mode == "auto":
+                target = build / "unchanged-original.o"
+                run([*fflags, "-J", str(build), "-c", str(original), "-o", str(target)], cwd=build)
+                objects.append(str(target))
             headers = tuple((name, digest) for name, digest in sorted(manifest["artifacts_sha256"].items())
-                            if name.endswith((".h", ".hpp", ".cuh")))
+                            if name.endswith((".h", ".hpp", ".cuh"))) if mode == "sections" else ()
             for role in ("common_runtime", "shared_entry", "original_source"):
                 for item in manifest["build_sources"]:
                     if item["role"] != role:

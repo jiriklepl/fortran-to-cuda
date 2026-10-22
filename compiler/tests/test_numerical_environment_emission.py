@@ -123,8 +123,12 @@ def test_flagged_ordinary_auto_rejects_unpriced_protocol_in_query_and_actual_cho
 
 @pytest.mark.parametrize("policy", ["auto", "sections"])
 def test_flagged_scoped_preserves_effect_queries_and_forced_gpu_but_declines_costs(tmp_path, policy):
+    # This is the retained fitted-protocol oracle, distinct from the current
+    # public graph heuristic's explicitly unpriced protocol overhead.
+    from compiler._legacy.config import LegacyOffloadConfig
+
     function, plan = prepared(tmp_path)
-    scoped = generate_scoped(function, plan, OffloadConfig(policy=policy, profile=calibration()), "common.cuh",
+    scoped = generate_scoped(function, plan, LegacyOffloadConfig(policy=policy, profile=calibration()), "common.cuh",
                              runtime_id=read_scoped_runtime()[1]["runtime_id"])
     assert not scoped.report["automatic_estimate_available"]
     assert scoped.report["automatic_reason"] == "numerical_environment_protocol_calibration_unavailable"
@@ -137,6 +141,64 @@ def test_flagged_scoped_preserves_effect_queries_and_forced_gpu_but_declines_cos
     assert "costs.valid = 0;" in choose
     run = public_body(scoped.cuda, scoped.report["entry"], "int")
     assert "const bool fort_gpu_requested = fort_mode == 1;" in run
+
+
+@pytest.mark.parametrize("collective", [False, True])
+def test_graph_flagged_heuristic_retains_unpriced_provenance_and_prework_guards(tmp_path, collective):
+    function, plan = prepared(tmp_path)
+    scoped = generate_scoped(function, plan,
+        OffloadConfig(policy="auto", profile=calibration(), collective=collective), "common.cuh",
+        runtime_id=read_scoped_runtime()[1]["runtime_id"])
+    report = scoped.report
+    assert report["automatic_estimate_available"]
+    assert report["numerical_environment"]["required"]
+    provenance = report["graph_auto_costs"]
+    assert provenance["heuristic"]
+    assert provenance["cost_authorizes_execution"] is False
+    unit, = provenance["units"].values()
+    assert unit["kind"] == "hardware_roofline_heuristic"
+    assert unit["static_work_proxy"] == 1
+    assert unit["original_fortran_family_attestation"] is False
+    assert unit["speedup_guaranteed"] is False
+    assert provenance["unpriced_team_overhead"] is collective
+
+    def body(name):
+        # Limit each assertion to its actual public function, so later entries
+        # cannot accidentally supply the guard or operation being checked.
+        tail = public_body(scoped.cuda, name, "int")
+        opening = tail.index("{")
+        depth = 1
+        for position in range(opening + 1, len(tail)):
+            depth += (tail[position] == "{") - (tail[position] == "}")
+            if depth == 0:
+                return tail[opening + 1:position]
+        raise AssertionError("public function body is not closed")
+
+    planning = report["planning"]
+    run, query, choose = (body(name) for name in
+                          (report["entry"], planning["entry"], planning["selector"]))
+    guard = "if (!fort_runtime::numerical_environment_supported())"
+    assert run.index(guard) < run.index("fort_scope_layout_get(")
+    assert query.index(guard) < query.index("fort_scope_layout_get(")
+    assert choose.index(guard) < choose.index("costs.valid = 1;")
+    record, = [line for line in query.splitlines() if "fort_access.record(FORT_SCOPE_PLAN_WORKER," in line]
+    assert ", unit.units[0].flops, unit.units[0].memory_bytes, true," in record
+    assert "const bool fort_gpu_requested = fort_mode == 1;" in run
+    if collective:
+        team = body(report["team"]["entry"])
+        state_name = report["fortran_module"] + "_team_state"
+        state = scoped.cuda.split("struct " + state_name + " {", 1)[1].split("};", 1)[0]
+        assert "bool environment_supported = true;" in state
+        assert team.index(state_name + " local_state{};") < team.index("#pragma omp single copyprivate(shared)")
+        assert team.index("#pragma omp single copyprivate(shared)") < team.index("shared = &local_state;")
+        assert team.index("shared = &local_state;") < team.index(guard)
+        assert team.index(guard) < team.index("shared->environment_supported = false;")
+        assert team.index("shared->environment_supported = false;") < team.index("unsupported team numerical environment")
+        assert team.index("unsupported team numerical environment") < team.index("fort_scope_layout_get(")
+        assert "#pragma omp atomic write" in team
+        vote_done = team.index("#pragma omp barrier", team.index("shared->environment_supported = false;"))
+        check = team.index("if (!shared->environment_supported)")
+        assert vote_done < team.index("#pragma omp master", vote_done) < check
 
 
 def compile_probe(tmp_path, source):

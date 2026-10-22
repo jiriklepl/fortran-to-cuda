@@ -205,7 +205,7 @@ DRIVER = r'''
 #include <iostream>
 using namespace fort_scoped::planning;
 fort_scope_plan_costs costs() {
-    fort_scope_plan_costs c{}; c.version=1; c.valid=1; c.max_allocation_bytes=1<<20;
+    fort_scope_plan_costs c{}; c.version=FORT_SCOPE_PLANNING_ABI_VERSION; c.valid=1; c.max_allocation_bytes=1<<20;
     c.cpu_flops=c.cpu_bandwidth=c.gpu_flops=c.gpu_bandwidth=c.h2d_bandwidth=c.d2h_bandwidth=1e12;
     c.create_seconds=c.register_seconds=c.host_access_seconds=c.device_access_seconds=1e-9;
     c.gpu_setup_seconds=c.cold_driver_startup_seconds=c.allocation_seconds=c.release_seconds=1e-9;

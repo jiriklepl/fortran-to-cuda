@@ -134,7 +134,7 @@ def generate(case, checkout, transfers, policy):
     profile = case / "old-scoped-profile.json"
     profile.write_text(json.dumps(calibration()))
     output = case / "output"
-    result = _run([sys.executable, "-m", "compiler", "--form-scopes", "--scope-facts", str(facts),
+    result = _run([sys.executable, "-m", "compiler.tests.support.reference_scopes", "--form-scopes", "--scope-facts", str(facts),
                    "--input", str(original), "--kernel", "step", "--memory-model", "scoped",
                    "--gpu-policy", policy, "--scope-transfers", transfers,
                    *(["--calibration-profile", str(profile)] if policy == "auto" else []),

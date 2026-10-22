@@ -175,6 +175,8 @@ def validate_profile(
             raise ProfileError(f"missing rates.{name}")
         _number(transfer.get("latency_seconds"), f"rates.{name}.latency_seconds", zero=True)
         _number(transfer.get("bandwidth_bytes_per_second"), f"rates.{name}.bandwidth_bytes_per_second")
+        if "fit_max_relative_error" in transfer:
+            _number(transfer["fit_max_relative_error"], f"rates.{name}.fit_max_relative_error", zero=True)
     if "numerical" in profile:
         from .numerical_calibration import NumericalCalibrationError, validate_numerical_profile
         try:

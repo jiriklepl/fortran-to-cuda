@@ -7,7 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
 from compiler.frontend.native_prefix import _fork
 from compiler.frontend.native_sections import NativeAxis, NativeRectangle
@@ -20,7 +21,6 @@ from compiler.frontend.numerical_effects import (
 from compiler.frontend.numerical_preparation import NumericalPreparationUnsupported, prepare_original_region
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import Binary, CompilationError, Literal, ScalarType
-from compiler.offload.config import OffloadConfig
 
 ENTRY = "retained_cells::sweep"
 SOURCE = """module retained_cells

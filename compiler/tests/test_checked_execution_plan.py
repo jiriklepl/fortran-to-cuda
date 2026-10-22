@@ -7,10 +7,10 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend.numerical_preparation import NumericalPreparationProvider
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.execution_plan import _digest, build_execution_plan
 from compiler.scopes.lexical import LexicalOwner
 from compiler.scopes.ordinary_consumption import _OrdinaryPairConsumption
@@ -267,18 +267,33 @@ def test_mutated_borrowed_numerical_authority_cannot_validate_or_publish(tmp_pat
     _paths, _outputs, _report, owner = emit_combined_team_fixture(tmp_path)
     plan = owner.execution_plan
     proof = plan._numerical_authorities[0]
-    original = dict(proof.extraction.completion)
     assert proof.extraction.completion is proof.completion
-    try:
+    with pytest.raises(CompilationError, match="immutable"):
         proof.extraction.completion["changed_after_admission"] = True
-        with pytest.raises(CompilationError, match="completion record changed|authority changed"):
-            plan.validate()
-        with pytest.raises(CompilationError, match="completion record changed|authority changed"):
-            owner.builder.finish()
-    finally:
-        proof.extraction.completion.clear()
-        proof.extraction.completion.update(original)
     assert plan.validate() is plan
+    owner.builder.finish()
+
+
+def test_immutable_handoff_avoids_rederiving_geometry_and_rechecks_registry(tmp_path, monkeypatch):
+    from compiler.frontend.numerical_preparation import PreparedOriginalRegion
+
+    with scanned(tmp_path, config=OffloadConfig(policy="sections", scope_execution="graph")) as (_owner, plan):
+        proof = plan._numerical_authorities[0]
+
+        def unexpected(*_args, **_kwargs):
+            pytest.fail("immutable emission handoff recomputed original numerical geometry")
+
+        monkeypatch.setattr(PreparedOriginalRegion, "validate", unexpected)
+        assert plan.validate() is plan
+        assert plan.validate() is plan
+        registry = proof._provider._analysis._numerical_preparations
+        assert registry.pop(proof.identity) is proof
+        try:
+            with pytest.raises(CompilationError, match="registered immutable proof handoff"):
+                plan.validate()
+        finally:
+            registry[proof.identity] = proof
+        assert plan.validate() is plan
 
 
 def test_diagnostics_and_emission_share_the_checked_operation_tree(tmp_path):

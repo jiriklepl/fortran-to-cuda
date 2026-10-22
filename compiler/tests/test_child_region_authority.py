@@ -63,13 +63,14 @@ def test_diamond_child_regions_share_artifacts_and_keep_original_bounds(tmp_path
     assert all(r["used"] for r in child["regions"])
     variants = next(p for p in manifest["implementation_variants"]["procedures"]
                     if p["procedure"] == child["procedure"])["variants"]
-    assert {v["role"] for v in variants} == {"region_dispatcher", "call_worker"}
+    assert {v["role"] for v in variants} == {"region_dispatcher", "coordinator"}
     assert len(variants) == 2
     assert len([s for s in manifest["build_sources"] if s["path"].startswith("regions/")]) == 1
     generated = (output/manifest["sources"][str(original)]["replacement"]).read_text()
-    assert "lbound(p, 1, kind = 8)" in generated.lower()
-    assert "lbound(q, 1, kind = 8)" in generated.lower()
-    assert "lbound(s, 1, kind = 8)" in generated.lower()
+    compact = "".join(generated.lower().split())
+    assert "lbound(p,1,kind=8)" in compact
+    assert "lbound(q,1,kind=8)" in compact
+    assert "lbound(s,1,kind=8)" in compact
     assert "fort_numerical_guard" in generated
     assert all(s["path"] in manifest["artifacts_sha256"] for s in manifest["build_sources"])
 
@@ -90,8 +91,11 @@ def test_inactive_rejected_call_preserves_later_reused_child_artifacts(tmp_path)
     owner, = manifest['scopes']
     assert owner['native_continuation'].startswith('original lexical scope')
     assert len(owner['boundaries']) == 1 and 'alias' in owner['boundaries'][0]['reason']
-    assert {item['procedure'] for item in manifest['borrowed_source_coordinators']} == {
+    plan = owner['checked_execution_plan']
+    assert {item['procedure'] for item in plan['procedures'] if item['procedure'] != 'renamed_chain::step'} == {
         'renamed_chain::right', 'renamed_chain::leaf'}
+    leaf = next(item for item in plan['procedures'] if item['procedure'] == 'renamed_chain::leaf')
+    assert [site['caller'] for site in leaf['calls']] == ['renamed_chain::right']
     child, = manifest['child_numerical_regions']
     assert all(region['used'] for region in child['regions'])
     assert len([item for item in manifest['build_sources'] if item['path'].startswith('regions/')]) == 1
@@ -133,9 +137,16 @@ end module
     old = SourceEffects([original]).summarize('repeated_work::chain')
     assert not old['complete']
     assert any('budget' in reason for reason in old['reasons'])
-    child = next(item for item in manifest['borrowed_source_coordinators']
-                 if item['procedure'] == 'repeated_work::chain')
-    assert child['effect_authority'] == 'proved reached operations and reusable child interfaces'
+    owner, = manifest['scopes']
+    plan = owner['checked_execution_plan']
+    chain = next(item for item in plan['procedures'] if item['procedure'] == 'repeated_work::chain')
+    worker = next(item for item in plan['procedures'] if item['procedure'] == 'repeated_work::update')
+    assert [site['caller'] for site in chain['calls']] == ['repeated_work::step']
+    assert len(worker['calls']) == 28
+    assert {site['caller'] for site in worker['calls']} == {'repeated_work::chain'}
+    assert len({site['first_line'] for site in worker['calls']}) == 28
+    assert len(worker['units']) == 1
+    assert plan['policy']['authority'] == 'existing source, numerical, definition, native-effect and completion proofs'
     assert manifest['scope_count'] == 1, manifest['boundaries']
     assert manifest['implementation_variants']['limits'] == {'per_procedure': 4, 'compilation': 128}
 
@@ -171,9 +182,16 @@ end module
     if leading:
         source = source.replace('i=0\n!$omp', '!$omp')
     _, _, manifest = build(tmp_path, source)
-    child, = manifest['borrowed_source_coordinators']
-    assert child['procedure'] == 'guarded_chain::leaf'
-    native, = [item for item in child['native_operations'] if item['completion'].get('retains_original_team_and_directives')]
+    owner, = manifest['scopes']
+    child = next(item for item in owner['checked_execution_plan']['procedures']
+                 if item['procedure'] == 'guarded_chain::leaf')
+    team, = [unit['operations'] for unit in child['units'] if 'combined_numerical_team' in unit['operations']]
+    native = team['combined_numerical_team']
     assert native['completion']['available']
     assert native['completion']['retains_original_team_and_directives']
-    assert child['gpu_leaves'] == ['guarded_chain::leaf#region1']
+    regions, = manifest['child_numerical_regions']
+    used, = [region for region in regions['regions'] if region['used']]
+    assert used['completion']['proof_identity'] == native['completion']['proof_identity']
+    segment, = team['planning_segments']
+    assert segment['gpu_leaves'] == [used['shared_computation']]
+    assert segment['guard_failure'] == 'publish and close before original group; native suffix once; no reopening'

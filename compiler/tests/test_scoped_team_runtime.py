@@ -243,9 +243,30 @@ int main(int argc,char **argv) {
                            label=="badplan"?FORT_SCOPE_EXECUTION:FORT_SCOPE_OK;
         for (int status:statuses) require(status==expected,"all participants must report the same expected status");
         if (label=="badplan") {
-            // The first kernel has started. The failed entry cannot be replayed.
+            // The first GPU task is accepted. It may still be unsubmitted;
+            // either form makes a later plan mismatch fatal without replay.
+            for (int k=0;k<n;++k) {
+                require(a[k]==initial[k],"failed entry must not publish or replay A");
+                require(b[k]==k+1,"failed entry must preserve read-only B");
+            }
             require(fort_scope_wait(context)==FORT_SCOPE_EXECUTION,"later operations must see poisoned scope");
+            std::vector<int> retry_statuses(4,-1);
+            #pragma omp parallel num_threads(4)
+            {
+                retry_statuses[omp_get_thread_num()]=@TEAM@(context,mode,ha,hb,hc,&n,&outer,&inner,protected_input);
+            }
+            for (int status:retry_statuses)
+                require(status==FORT_SCOPE_EXECUTION,"retry must fail uniformly without replay");
+            require(fort_scope_close(context)==FORT_SCOPE_EXECUTION,"poisoned close must not publish");
+            for (int k=0;k<n;++k) {
+                require(a[k]==initial[k],"retry or close must not publish or replay A");
+                require(b[k]==k+1,"retry or close must preserve read-only B");
+            }
             check(fort_scope_abandon(context));
+            for (int k=0;k<n;++k) {
+                require(a[k]==initial[k],"abandon must not publish A");
+                require(b[k]==k+1,"abandon must preserve read-only B");
+            }
         } else {
             fort_scope_access all{};all.flags=FORT_SCOPE_READ_ALL;
             check(fort_scope_host_begin(context,ha,&all));check(fort_scope_host_end(context,ha));
@@ -349,16 +370,20 @@ def compiled_team(tmp_path_factory):
     return directory, executable, public
 
 
-def execute(compiled, mode, *, trace=True):
+def execute(compiled, mode, *, trace=True, queue_enabled=None):
     _memory_guard()
     directory, executable, public = compiled
     env = {**os.environ, "OMP_DYNAMIC": "FALSE"}
     env.pop("FORT_RUNTIME_TRACE", None)
     if trace:
         env["FORT_RUNTIME_TRACE"] = "1"
+    if queue_enabled is not None:
+        env["FORT_SCOPE_GRAPH_QUEUE"] = str(int(queue_enabled))
     result = subprocess.run([str(executable), mode], cwd=directory, env=env,
                             capture_output=True, text=True, timeout=30)
-    (directory / (mode + ("-traced" if trace else "-untraced") + ".log")).write_text(result.stdout + result.stderr)
+    queue_suffix = "" if queue_enabled is None else "-queue-" + str(int(queue_enabled))
+    (directory / (mode + queue_suffix + ("-traced" if trace else "-untraced") + ".log")).write_text(
+        result.stdout + result.stderr)
     if result.returncode == 77:
         pytest.skip("CUDA device unavailable")
     assert result.returncode == 0, result.stdout + result.stderr
@@ -392,6 +417,23 @@ def test_invalid_context_or_preparation_returns_uniformly_before_cuda(compiled_t
 
 @pytest.mark.cuda
 def test_failure_after_first_gpu_worker_poisoned_uniformly_without_replay(compiled_team):
-    stdout, stderr, _ = execute(compiled_team, "badplan")
-    assert "PASS badplan" in stdout
-    assert sum(line.startswith("FORT_SCOPED launch ") for line in stderr.splitlines()) == 4
+    for queue_enabled in (True, False):
+        stdout, stderr, _ = execute(compiled_team, "badplan", queue_enabled=queue_enabled)
+        assert "PASS badplan" in stdout
+        lines = stderr.splitlines()
+        assert sum(line.startswith("FORT_SCOPED queue_enqueue ") for line in lines) == 4
+        assert sum(line.startswith("FORT_SCOPED launch ") for line in lines) == (0 if queue_enabled else 4)
+        assert sum(line.startswith("FORT_SCOPED upload ") for line in lines) == (0 if queue_enabled else 8)
+        assert not any(line.startswith("FORT_SCOPED download ") for line in lines)
+        assert not any(line.startswith("FORT_SCOPED close ") for line in lines)
+        evidence = [json.loads(line.split("FORT_SCOPED evidence ", 1)[1])
+                    for line in lines if line.startswith("FORT_SCOPED evidence ")]
+        queues = [item for item in evidence if item["event"] == "command_queue_statistics"]
+        assert len(queues) == len({item["context"] for item in queues}) == 4
+        for item in queues:
+            assert item["complete"] is False
+            assert item["queue_enabled"] == int(queue_enabled)
+            assert item["accepted_tasks"] == 1
+            assert item["peak_pending_tasks"] == 1
+            assert item["submissions"] == int(not queue_enabled)
+            assert item["pending_tasks"] == int(queue_enabled)

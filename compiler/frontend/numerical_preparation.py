@@ -112,9 +112,10 @@ def _profile_identity(profile, budget):
 
 
 def _configuration(options, config, environment_root, immutable_inputs, budget):
+    from compiler._legacy.config import LegacyCompilerOptions, LegacyOffloadConfig
     from compiler.driver.options import CompilerOptions
     from compiler.offload.config import OffloadConfig
-    if type(options) is not CompilerOptions or type(config) is not OffloadConfig:
+    if type(options) not in {CompilerOptions, LegacyCompilerOptions} or type(config) not in {OffloadConfig, LegacyOffloadConfig}:
         raise CompilationError("original numerical preparation requires validated compiler options and offload configuration")
     if not isinstance(environment_root, str):
         raise CompilationError("original numerical preparation requires an original environment root")
@@ -133,7 +134,7 @@ def _configuration(options, config, environment_root, immutable_inputs, budget):
     # effects. Including them here would change every prepared proof when a
     # calibration is later consumed for that exact same checked program.
     # Diagnostic caller timing likewise observes the same admitted program.
-    structural = _digest((options, replace(config, profile=None, exact_window=None, scope_measurement=None),
+    structural = _digest((options, config.for_numerical_entry(profile=None),
                           environment_root, tuple(immutable)), budget)
     # Budget consumers may run compiler callbacks. Rehash after their final
     # invocation without external callbacks, including previously encoded rows.

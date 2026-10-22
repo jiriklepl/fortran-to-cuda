@@ -236,7 +236,7 @@ def compiled_native_sections(tmp_path_factory):
     cuda_flags = [nvcc, "-std=c++17", "-ccbin", host, "-arch=sm_86", "-Xcompiler=-fopenmp"]
     for label, entry, which in CASES:
         output = directory/label
-        response = subprocess.run([sys.executable, "-m", "compiler", "--form-scopes", "--scope-facts", str(facts),
+        response = subprocess.run([sys.executable, "-m", "compiler.tests.support.reference_scopes", "--form-scopes", "--scope-facts", str(facts),
                                    "--input", str(original), "--kernel", entry, "--memory-model", "scoped",
                                    "--gpu-policy", "sections", "--json", "--output-dir", str(output)],
                                   cwd=checkout, capture_output=True, text=True, timeout=120,

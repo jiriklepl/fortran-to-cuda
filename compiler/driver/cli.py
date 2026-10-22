@@ -143,32 +143,24 @@ def _parse_args() -> argparse.Namespace:
         help="Print normalized IR, transformations, schedules, addressing proofs, ordered regions, legality, and memory operations.",
     )
     parser.add_argument("--gpu-policy", choices=("always", "sections", "auto", "chunked", "hybrid"),
-                        default="always", help="Opt-in ordinary-call transfer/execution policy.")
-    parser.add_argument("--memory-model", choices=("call", "scoped"), default="call",
-                        help="Emit shared-buffer numerical entry interfaces with scoped; requires sections or auto.")
+                        help="GPU placement policy (default: sections for source scopes, always for numerical entries).")
+    parser.add_argument("--memory-model", choices=("call", "scoped"),
+                        help="Memory ownership (default: scoped for source scopes, call for numerical entries).")
     parser.add_argument("--scope-transfers", choices=("direct", "pinned", "pipelined", "auto", "coalesced"), default="direct",
                         help="Scoped transfer mode, independent of GPU placement (default: direct).")
-    parser.add_argument("--scope-execution", choices=("bounded", "reached"), default="bounded",
-                        help="Opt-in reached source execution; bounded retains existing source scopes.")
-    parser.add_argument("--scope-measurement", choices=("native", "resident"),
-                        help="Diagnostic complete-owner timing; requires reached sections scopes and supplies no AUTO costs.")
-    parser.add_argument("--scope-cost", metavar="FILE",
-                        help="Source-bound cost request JSON for automatic source scopes, original selections or checked intervals.")
+    parser.add_argument("--scope-execution", choices=("graph",),
+                        help="Source execution strategy (graph is the default with --form-scopes).")
     parser.add_argument("--calibration-profile", metavar="FILE", help="Explicit offline hardware calibration JSON.")
     parser.add_argument("--host-threads", type=int, default=4, help="Total host-thread budget, including GPU coordination.")
     parser.add_argument("--gpu-collective", action="store_true",
                         help="Opt-in entry is called by every thread of one existing OpenMP team.")
     args = parser.parse_args()
+    args.memory_model = args.memory_model or ("scoped" if args.form_scopes else "call")
+    args.gpu_policy = args.gpu_policy or ("sections" if args.form_scopes else "always")
     if args.scope_preflight and not args.form_scopes:
         parser.error("--scope-preflight requires --form-scopes")
-    if args.scope_execution != "bounded" and not args.form_scopes:
-        parser.error("--scope-execution reached requires --form-scopes")
-    if args.scope_measurement is not None and (not args.form_scopes or args.scope_execution != "reached"
-                                             or args.gpu_policy != "sections" or args.gpu_collective):
-        parser.error("--scope-measurement requires --form-scopes, --scope-execution reached and --gpu-policy sections")
-    if args.scope_cost is not None and (not args.form_scopes or args.gpu_policy not in {"auto", "sections"}
-                                        or args.gpu_collective or args.scope_measurement is not None):
-        parser.error("--scope-cost requires serial --form-scopes with auto/sections and no --scope-measurement")
+    if args.scope_execution is not None and not args.form_scopes:
+        parser.error("--scope-execution requires --form-scopes")
     if args.analyze_effects and (args.list_candidates or args.emit_scoped_runtime or args.form_scopes):
         parser.error("--analyze-effects cannot be combined with candidate listing or runtime export")
     if (args.source_file or args.effect_contracts) and not (args.analyze_effects or args.form_scopes):
@@ -182,10 +174,11 @@ def _parse_args() -> argparse.Namespace:
     if args.analysis_sources and not (args.form_scopes or args.analyze_effects):
         parser.error("--analysis-sources requires --form-scopes or --analyze-effects")
     if args.form_scopes:
+        args.scope_execution = "graph"
         if args.list_candidates or args.emit_scoped_runtime:
             parser.error("--form-scopes cannot be combined with candidate listing or runtime export")
-        if not args.scope_facts or args.memory_model != "scoped":
-            parser.error("--form-scopes requires --scope-facts and --memory-model scoped")
+        if not args.scope_facts or args.memory_model != "scoped" or args.gpu_policy not in {"sections", "auto"}:
+            parser.error("--form-scopes requires --scope-facts, scoped memory and sections or auto GPU policy")
     if args.emit_scoped_runtime:
         if args.input or args.kernel or args.list_candidates:
             parser.error("--emit-scoped-runtime cannot be combined with input, kernel, or candidate listing")
@@ -198,14 +191,6 @@ def _parse_args() -> argparse.Namespace:
 
 def _offload_config(args):
     profile, reason = None, None
-    cost_request = None
-    if getattr(args, "scope_cost", None):
-        try:
-            cost_request = json.loads(Path(args.scope_cost).read_text())
-        except (OSError, UnicodeError, ValueError) as error:
-            raise CompilationError("Cannot read --scope-cost request: " + str(error)) from error
-        if type(cost_request) is not dict:
-            raise CompilationError("--scope-cost request must be an object")
     if args.calibration_profile:
         from compiler.offload.profile import compiler_identity, load_profile
         try:
@@ -218,9 +203,7 @@ def _offload_config(args):
         reason = "no calibration profile supplied; automatic policy retains native execution"
     try:
         return OffloadConfig(args.gpu_policy, profile, args.host_threads, args.gpu_collective, reason,
-                             getattr(args, "scope_transfers", "direct"), getattr(args, "scope_execution", "bounded"),
-                             exact_window=cost_request,
-                             scope_measurement=getattr(args, "scope_measurement", None))
+                             getattr(args, "scope_transfers", "direct"))
     except ValueError as error:
         raise CompilationError(str(error)) from error
 

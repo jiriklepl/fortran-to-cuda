@@ -7,9 +7,13 @@ from compiler.scopes.registration import RegistrationCode
 
 def prepare_source_reads(builder, call):
     """Retain a source token before the ordered execution plan is sealed."""
-    if getattr(builder, "_selection_activation_binding", None) is None:
+    if (getattr(builder, "_selection_activation_binding", None) is None
+            and builder.config.scope_execution != "graph"):
         return None
-    from compiler.frontend.reached_read_requirements import prove_reached_read_requirements
+    from compiler.frontend.reached_read_requirements import (
+        ReachedReadRequirementsUnsupported,
+        prove_reached_read_requirements,
+    )
 
     if call.region is None:
         raise CompilationError("original read admission requires prepared original numerical source")
@@ -17,8 +21,17 @@ def prepare_source_reads(builder, call):
     prepared = inline.prepared_regions.get(call.procedure)
     if prepared is None:
         raise CompilationError("original read admission lost its original numerical preparation")
-    return prove_reached_read_requirements(builder.analysis, builder.entry.qualified,
-                                          prepared._selection, prepared)
+    try:
+        return prove_reached_read_requirements(builder.analysis, builder.entry.qualified,
+                                              prepared._selection, prepared)
+    except ReachedReadRequirementsUnsupported:
+        if builder.config.scope_execution != "graph":
+            raise
+        # Some conservative GPU upload envelopes include values the original
+        # source overwrites first. They have no source-read authority. Existing
+        # runtime coverage may still satisfy the task; a reopened empty epoch
+        # must decline it locally rather than invent those input definitions.
+        return None
 
 
 def validate_source_reads(builder, call, proof):

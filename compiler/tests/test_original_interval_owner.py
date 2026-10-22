@@ -6,9 +6,9 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.closed_selection import ClosedIntervalOwner, interval_candidates
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_interval_draft import SOURCE
@@ -214,7 +214,7 @@ def test_original_call_interval_uses_one_checked_plan_at_each_reached_site(tmp_p
     assert "fort_window_spent_" not in text
     assert text.count("visits=visits+1") == 1
     assert "v(0)=v(0)+a(0)" in text
-    assert "fort_scope_host_begin" in text
+    assert "fort_scope_access_begin_v1" in text
     assert "fort_scope_host_end" in text
 
 

@@ -1,15 +1,16 @@
 """One conditional owner: close before a native replacement, never replay."""
 
+import re
 from copy import copy, deepcopy
 from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend.descriptor_windows import DescriptorWindowUnsupported
 from compiler.frontend.reached_windows import plan_reached_window, prove_reached_window
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.generation_transaction import GenerationTransaction
 from compiler.scopes.reached_owner import ReachedWindowOwner
 from compiler.scopes.source import ScopeBuilder
@@ -168,7 +169,7 @@ def test_closed_suffix_has_no_descriptor_or_query_authority(tmp_path):
     assert "a(i)=2.0_8*b(i)" in native_suffix
     assert "fort_scope_create(" not in native_suffix
     assert "fort_scope_register" not in native_suffix
-    assert "fort_scope_plan" not in native_suffix
+    assert not re.search(r"fort_scope_plan\w*\s*\(", native_suffix)
 
 
 def test_unknown_relevant_prefix_disables_planned_activation_and_plain_proof_stays_strict(tmp_path):

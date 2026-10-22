@@ -89,8 +89,8 @@ def test_calibrated_auto_child_imports_its_own_public_selector(tmp_path):
 def test_auto_reached_alias_rollback_restores_retained_compute_identities(tmp_path):
     from hashlib import sha256
 
-    from compiler.driver.options import CompilerOptions
-    from compiler.offload.config import OffloadConfig
+    from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+    from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
     from compiler.scopes.source import ScopeBuilder
 
     text = source().replace("call child(a,b,out,n)",

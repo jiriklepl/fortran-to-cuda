@@ -98,8 +98,27 @@ def test_rejected_original_section_then_repeated_whole_calls_keep_lexical_owner(
     assert owner["owner_variant"] is not None
     boundary, = owner["boundaries"]
     assert "native rectangular source-call mapping" in boundary["reason"]
-    assert "whole original array actuals" in boundary["reason"]
+    assert "requires projected native hooks" in boundary["reason"]
+    assert "independent original owned storage: argument::b versus argument::a" in boundary["reason"]
     assert boundary["reopen"] is False
+    # An unconditional close absorbs the legacy native suffix. It must not
+    # manufacture a worker for later calls that remain original Fortran.
+    assert SCALER not in builder.coordinators
+    original_actual = "call scale(b(:,:,:),scale_factor)"
+    emitted = outputs[report["sources"][str(paths[1])]["replacement"]].lower().replace(" ", "")
+    assert emitted.count(original_actual.replace(" ", "")) == 1
+    assert "fort_scope_close(" in emitted[:emitted.index(original_actual.replace(" ", ""))]
+    for actual in ("b", "c", "d"):
+        assert emitted.count(f"callscale({actual},scale_factor)") == 1
+
+    # A close inside an original branch permits the unaffected path to keep
+    # using one reusable helper for the later whole-array calls.
+    source = OWNER_SOURCE.replace("call scale(b,scale_factor)",
+        "if(n<0) then\ncall scale(b(:,:,:),scale_factor)\nendif\ncall scale(b,scale_factor)", 1)
+    paths, outputs, report, builder = emit_borrowed_team_fixture(tmp_path / "guarded", owner_source=source)
+    assert report["lexical_owner_attempt"]["outcome"] == "accepted"
+    guarded_owner, = report["scopes"]
+    assert guarded_owner["owner_variant"] is not None
     scaler = builder.coordinators[SCALER]
     assert scaler.whole_team
     scaler.scope._validate()

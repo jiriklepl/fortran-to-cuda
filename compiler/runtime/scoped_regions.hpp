@@ -92,6 +92,10 @@ inline Region subtract(const Box &box, const Box &cut, Budget &budget) {
 inline Region difference(const Region &a, const Region &b, Budget &budget) {
     Region result;
     for (const auto &box : a) {
+        // An already-current exact section needs no splitting work. Avoid
+        // consuming the intersection budget while searching unrelated cuts
+        // before a containing rectangle, as unite already does for coverage.
+        if (std::any_of(b.begin(),b.end(),[&](const Box &cut) { return contains(cut,box); })) continue;
         Region pending{box};
         for (const auto &cut : b) {
             Region next;
@@ -122,8 +126,13 @@ struct AdmittedReads { Region initialized, host_current; };
 template<class State> inline AdmittedReads admit_source_reads(const State &b, const Region &reads) {
     Budget budget;
     const auto missing = difference(reads, b.initialized, budget);
+    if (missing.empty()) return {b.initialized,b.host_current};
     auto initialized = unite(b.initialized, missing, budget);
-    auto host = unite(b.host_current, missing, budget);
+    // A semantic definition kill does not erase a newer physical device
+    // value. Only values with no tracked physical source acquire a host one.
+    const auto physical = unite(b.host_current,b.device_current,budget);
+    const auto host_sources = difference(missing,physical,budget);
+    auto host = unite(b.host_current, host_sources, budget);
     return {std::move(initialized), std::move(host)};
 }
 struct Prepared { bool device; Region initialized, current, opposite; };

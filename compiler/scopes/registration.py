@@ -45,15 +45,60 @@ def expected_descriptor_public(fact, rank):
             "definition_authority": False}}
 
 
+def _empty_registration(fact):
+    """The same literal NONE policy is used for registration and its preflight."""
+    return fact.get("initialized") == "none" and fact.get("source_sections") is None
+
+
+def fresh_undefined_read_guard(facts, required, parameters, *, context, query_plan,
+                              entry_guard, on_error, status="fort_status"):
+    """Reject only the already required coarse preflight of a fresh owner.
+
+    The caller has checked the original activation, descriptors and typed
+    preparation guards, and authenticates all slots as belonging to this
+    lexical owner. Context zero therefore retires even nonzero cached slots;
+    no current definitions can survive there. A borrowed live registration or
+    an inherited query must retain the ordinary runtime checks.
+
+    This is the exact NONE policy used by ``build_registration`` below, not
+    an inference about the original program's values. No reached admission or
+    unit effect precedes its required-whole preflight. Empty roots retain that
+    preflight because an empty whole read is valid.
+    """
+    if (not required or any(fact.get("requires_registered_handle") for fact in facts.values())):
+        return ()
+    lines = ["! Fresh owner required-whole read has no initial definitions.",
+             f"if ({context} == 0) then", f"if (.not. {query_plan}) then"]
+    for root in sorted(required):
+        fact = facts[root]
+        # The normal registration is still built and validates these facts.
+        # Its nonpristine branch always registers NONE, including section
+        # facts; a pristine literal NONE registration is empty as well.
+        condition = ".true." if _empty_registration(fact) else f".not. {entry_guard}"
+        lines += [f"if ({condition}) then",
+                  f"if (all(shape({parameters[root]}, kind=c_size_t) > 0_c_size_t)) then",
+                  f"{status} = FORT_SCOPE_UNINITIALIZED", *on_error, "endif", "endif"]
+    return tuple([*lines, "endif", "endif"])
+
+
 def build_registration(fact, rank, handle, prefix, key, layout, *, context="fort_context",
                        status="fort_status", on_error=("return",), parameters=None,
-                       logical_lower_bounds=None):
+                       logical_lower_bounds=None, entry_guard=None):
     """Consume compiler-owned source sections only at the original descriptor.
 
     The caller supplies an already guarded local layout and runs this code only
     while the resource handle is zero. No undefined registration/reset cycle
     occurs. External physical section facts retain their existing interpretation.
     """
+    if entry_guard is not None:
+        initial = build_registration(fact, rank, handle, prefix, key, layout, context=context,
+            status=status, on_error=on_error, parameters=parameters, logical_lower_bounds=logical_lower_bounds)
+        # A closed epoch has no initialized coverage to inherit. Only a
+        # separately authenticated reached read may subsequently admit values.
+        empty = build_registration({"initialized": "none"}, rank, handle, prefix, key, layout,
+            context=context, status=status, on_error=on_error)
+        return RegistrationCode(initial.specification,
+            (f"if ({entry_guard}) then", *initial.prepare, "else", *empty.prepare, "endif"))
     if not re.fullmatch(r"fort_[a-z0-9_]{1,24}", prefix) or not 1 <= rank <= 15:
         raise CompilationError("registration requires a bounded compiler-private name and array rank")
     initialized = fact.get("initialized")
@@ -82,7 +127,7 @@ def build_registration(fact, rank, handle, prefix, key, layout, *, context="fort
         count = f"{len(boxes)}_c_size_t"
     elif initialized in {"whole", "none"}:
         prepare += [f"{status} = fort_scope_register({context}, {key}, &",
-                    f"1_c_int64_t, {layout}, {int(initialized == 'whole')}_c_int, {handle})"]
+                    f"1_c_int64_t, {layout}, {int(not _empty_registration(fact))}_c_int, {handle})"]
         return RegistrationCode((), tuple(prepare))
     else:
         raise CompilationError("registration requires explicit initial definition coverage")

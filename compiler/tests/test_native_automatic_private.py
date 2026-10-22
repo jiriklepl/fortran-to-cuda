@@ -30,29 +30,50 @@ enddo
 call consumer""")
 
 
-def generated(tmp_path):
+def generated(tmp_path, *, scope_execution="reached"):
     return generate(tmp_path, source_text(), facts={"schema_version": 1, "participation": "serial",
-        "captures": {"argument::" + name: FACT for name in ("a", "b", "out")}})
+        "captures": {"argument::" + name: FACT for name in ("a", "b", "out")}},
+        scope_execution=scope_execution)
+
+
+def test_bounded_private_team_declines_numerical_owner_without_source_edits(tmp_path):
+    original, _, manifest = generated(tmp_path, scope_execution="bounded")
+    assert manifest["scope_count"] == 0
+    assert not manifest["scopes"]
+    assert not manifest["source_edits"]
+    assert not manifest["sources"]
+    assert not manifest["build_sources"]
+    assert any("closed numerical selection requires one admitted complete original team" in item["reason"]
+               for item in manifest["boundaries"])
+    assert original.read_text() == source_text()
 
 
 def test_dynamic_private_uses_original_bounds_without_storage_capture(tmp_path):
     original, output, manifest = generated(tmp_path)
     scope, = manifest["scopes"]
-    native, = [item for item in scope["native_operations"] if item["kind"] == "joined native OpenMP"]
+    step, = [item for item in scope["checked_execution_plan"]["procedures"]
+             if item["procedure"] == "original::step"]
+    native, = [item for unit in step["units"] for item in unit["operations"]["native_operations"]
+               if item["kind"] == "joined native OpenMP"]
     assert native["private_resources"] == ["original::step::i", "original::step::scratch"]
     assert native["sections"]["available"]
     assert set(native["resources"]) == {"argument::a", "argument::b"}
-    assert all(item["resource"] != "original::step::scratch" for item in scope["resources"])
+    assert all(item["resource"] != "original::step::scratch"
+               for item in scope["resource_bindings"]["resources"])
     private, = native["completion"]["original_private_arrays"]
     assert private["numerical_authority"] is False
+    assert private["resource"] == "original::step::scratch"
+    assert private["storage"] == "original automatic explicit-shape local array"
+    assert private["bounds"] == "original allocated descriptor; specification expressions are not re-evaluated"
     text = (output / manifest["sources"][str(original)]["replacement"]).read_text()
-    owner = text[text.index("subroutine " + scope["owner"]):text.index("end subroutine " + scope["owner"])]
-    assert ":: scratch(fort_private_bounds_" in owner
-    assert "scratch(-2:extent)" not in owner
-    compact = "".join(text.replace("&", "").split())
-    assert "lbound(scratch,1,kind=" in compact
-    assert "ubound(scratch,1,kind=" in compact
-    assert "private(i,scratch)" in owner.lower()
+    owner = re.search(r"(?ms)^subroutine step\(.*?^end subroutine\b", text).group()
+    compact = "".join(owner.lower().replace("&", "").split())
+    assert "real(8)::scratch(-2:extent)" in compact
+    assert compact.index("scratch(-2:extent)") < compact.index("extent=extent+7")
+    assert "fort_private_bounds_" not in compact
+    assert "lbound(scratch,1)" in compact
+    assert "ubound(scratch,1)" in compact
+    assert "private(i,scratch)" in compact
     assert original.read_text() == source_text()
 
 

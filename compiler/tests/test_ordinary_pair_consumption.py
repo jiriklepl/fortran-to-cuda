@@ -9,11 +9,11 @@ import pytest
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import walk
 
-from compiler.driver.options import CompilerOptions
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
 from compiler.frontend.numerical_effects import NumericalEffectProof
 from compiler.ir import CompilationError
-from compiler.offload.config import OffloadConfig
 from compiler.scopes.generation_transaction import GenerationTransaction
 from compiler.scopes.lexical import LexicalOwner
 from compiler.scopes.ordinary_consumption import _OrdinaryPairConsumption

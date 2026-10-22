@@ -186,11 +186,12 @@ def generated(tmp_path_factory):
         "register": [TOKEN, TOKEN, TOKEN, c.POINTER(Layout), c.c_int, c.POINTER(TOKEN)],
         "device_begin": [TOKEN, TOKEN, c.POINTER(Access), c.POINTER(c.c_void_p)],
         "host_begin": [TOKEN, TOKEN, c.POINTER(Access)],
-        "device_end": [TOKEN, TOKEN], "host_end": [TOKEN, TOKEN], "close": [TOKEN],
+        "device_end": [TOKEN, TOKEN], "host_end": [TOKEN, TOKEN], "close": [TOKEN], "wait": [TOKEN],
         "stats_get": [TOKEN, c.POINTER(Stats)],
     }
     for name, signature in signatures.items():
         getattr(lib, "fort_scope_" + name).argtypes = signature
+    lib.fort_scope_wait.restype = c.c_int
     for report in reports.values():
         shared = report["scoped"]
         function = getattr(lib, shared["entry"])
@@ -265,6 +266,7 @@ def test_installed_plan_executes_independent_gpu_entries_with_shared_contents(ge
     assert (decision.gpu_units, decision.cpu_units) == (2, 0)
     invoke(scope, reports, "producer", handles[:2], [n], 2)
     invoke(scope, reports, "consumer", handles, [n], 2)
+    scope.check(lib.fort_scope_wait(scope.handle))
     assert (scope.stats().uploads, scope.stats().downloads) == (1, 0)
     for handle in handles[1:]:
         scope.cpu_begin(handle, access(flags=1))
@@ -294,6 +296,7 @@ def test_independent_generated_entries_and_cpu_mirrors(generated, mode):
         handles.append(handle)
     invoke(scope, reports, "producer", handles[:2], [n], mode)
     invoke(scope, reports, "consumer", handles, [n], mode)
+    scope.check(lib.fort_scope_wait(scope.handle))
     before = scope.stats()
     assert before.uploads == int(mode == 1)
     assert before.downloads == 0
@@ -308,6 +311,7 @@ def test_independent_generated_entries_and_cpu_mirrors(generated, mode):
         b[i] *= 10
     scope.cpu_end(handles[1])
     invoke(scope, reports, "consumer", handles, [n], mode)
+    scope.check(lib.fort_scope_wait(scope.handle))
     stats = scope.stats()
     assert (stats.uploads, stats.downloads, stats.allocations) == ((2, 1, 3) if mode == 1 else (0, 0, 0))
     scope.close()
@@ -494,6 +498,9 @@ status,buffer=scope.register(array,[16])
 scope.check(status)
 n,flag=c.c_int(16),c.c_bool(False)
 scope.check(function(scope.handle,{mode},buffer,c.byref(n),c.byref(flag),c.cast(pointer,c.POINTER(c.{scalar_type}))))
+lib.fort_scope_wait.argtypes=[TOKEN]
+lib.fort_scope_wait.restype=c.c_int
+scope.check(lib.fort_scope_wait(scope.handle))
 assert scope.stats().launches=={int(mode == 1)}
 scope.close()
 assert list(array)==[8]*16
@@ -544,6 +551,7 @@ def test_fortran_generated_modules_with_changing_shapes(generated, mode):
     call check(fort_scope_register(context,3_c_int64_t,int(iteration,c_int64_t),layout,0_c_int,ho))
     call check(produce(context,execution_mode,ha,hb,n))
     call check(consume(context,execution_mode,ha,hb,ho,n))
+    call check(fort_scope_wait(context))
     call check(fort_scope_stats_get(context,stats))
     if (execution_mode==FORT_SCOPE_GPU) then
       if (stats%uploads/=1 .or. stats%downloads/=0 .or. stats%launches/=2) error stop 'transfer count'

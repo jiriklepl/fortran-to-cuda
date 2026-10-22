@@ -4,12 +4,12 @@ from hashlib import sha256
 
 import pytest
 
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.driver.options import CompilerOptions
 from compiler.driver.pipeline import prepare_function
 from compiler.emission.common.resources import read_scoped_runtime
 from compiler.emission.cuda.scoped import generate_scoped
 from compiler.frontend import lower_file
-from compiler.offload.config import OffloadConfig
 from compiler.offload.profile import SCOPED_BATCH_PAYLOADS, SCOPED_TRANSFER_COST_NAMES
 from compiler.scopes.source import form_source_scopes
 from compiler.tests.test_scoped_planning_entries import calibration

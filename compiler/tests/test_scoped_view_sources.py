@@ -179,7 +179,8 @@ def test_rank_reduced_companion_uses_distinct_abi_and_logical_rank_validation(tm
     assert current.report["borrowed_views"]["validation"] == "fort_scope_view_get_v2"
     assert all(parameter["passing"] == "root_view_v2" for parameter in current.report["array_parameters"])
     assert "fort_scope_view_v2" in current.fortran
-    assert ".rank != 2" in current.cuda and ".root.rank != 2" not in current.cuda
+    assert ".rank != 2" in current.cuda
+    assert ".root.rank != 2" not in current.cuda
     assert "fort_scope_view_get_v1" in sources["scoped_runtime.h"]
     assert "fort_scope_view_get_v2" in sources["scoped_runtime.h"]
 
@@ -345,6 +346,7 @@ def test_disjoint_writable_views_share_one_device_allocation(borrowed_library):
             expected[left] += 10+(i+1)+3*(j+1)
             expected[right] = 2*expected[right]+2*(i+1)-(j+1)
     scope.check(run(borrowed_library, "dual", scope, [first, second]))
+    scope.check(scope.lib.fort_scope_wait(scope.handle))
     stats = scope.stats()
     assert stats.allocations == 1
     assert stats.launches > 0
@@ -423,34 +425,58 @@ def test_overlapping_writable_views_fail_before_numerical_execution(borrowed_lib
 
 
 @pytest.mark.cuda
-def test_stale_view_is_recoverable_before_work_and_postwork_failure_poison_prevents_replay(borrowed_library):
+def test_stale_view_is_recoverable_before_work_and_postwork_failure_poison_prevents_replay(
+        borrowed_library, monkeypatch, capfd, tmp_path):
     runtime, reports, _ = borrowed_library
     assert reports["fail_late"]["parallel_regions"] == 2
-    scope = Scope(runtime)
-    values = (c.c_double * 24)(*range(24))
-    status, buffer = scope.register(values, [4, 6])
-    scope.check(status)
-    full = view(buffer, [0, 0], [4, 6])
-    stale = view(buffer, [0, 0], [4, 6], generation=2)
-    assert run(borrowed_library, "fail_late", scope, [stale], scalars=(7,)) == 2
-    assert scope.stats().allocations == scope.stats().launches == 0
-    assert list(values) == list(range(24))
-    # Keep a diagnostic pointer to initialized device storage before execution.
-    # After poisoning, inspect that storage directly without reopening access or
-    # publishing it to the application's host array.
-    pointer = c.c_void_p()
-    initialize = access(flags=1)
-    scope.check(runtime.fort_scope_device_begin(scope.handle, buffer, c.byref(initialize), c.byref(pointer)))
-    scope.check(runtime.fort_scope_device_end(scope.handle, buffer))
-    scope.check(runtime.fort_scope_wait(scope.handle))
-    assert run(borrowed_library, "fail_late", scope, [full], scalars=(7,)) == 6
-    observed = (c.c_double * 24)()
-    assert runtime.cudart.cudaDeviceSynchronize() == 0
-    assert runtime.cudart.cudaMemcpy(c.cast(observed, c.c_void_p), pointer, c.sizeof(observed), 2) == 0
-    assert list(observed) == [i+100 if i<4 else i for i in range(24)]
-    assert list(values) == list(range(24))
-    assert run(borrowed_library, "fail_late", scope, [full], scalars=(6,)) == 6
-    scope.check(runtime.fort_scope_abandon(scope.handle))
+    monkeypatch.setenv("FORT_RUNTIME_TRACE", "1")
+    for queue_enabled in (False, True):
+        monkeypatch.setenv("FORT_SCOPE_GRAPH_QUEUE", str(int(queue_enabled)))
+        scope = Scope(runtime)
+        values = (c.c_double * 24)(*range(24))
+        status, buffer = scope.register(values, [4, 6])
+        scope.check(status)
+        full = view(buffer, [0, 0], [4, 6])
+        stale = view(buffer, [0, 0], [4, 6], generation=2)
+        assert run(borrowed_library, "fail_late", scope, [stale], scalars=(7,)) == 2
+        assert scope.stats().allocations == scope.stats().launches == 0
+        assert list(values) == list(range(24))
+        # Keep a diagnostic pointer to initialized device storage before execution.
+        # After poisoning, inspect that storage directly without reopening access or
+        # publishing it to the application's host array.
+        pointer = c.c_void_p()
+        initialize = access(flags=1)
+        scope.check(runtime.fort_scope_device_begin(scope.handle, buffer, c.byref(initialize), c.byref(pointer)))
+        scope.check(runtime.fort_scope_device_end(scope.handle, buffer))
+        scope.check(runtime.fort_scope_wait(scope.handle))
+        prefix = "queue-" + str(int(queue_enabled))
+        initial = capfd.readouterr()
+        (tmp_path / (prefix+"-initial.stdout")).write_text(initial.out)
+        (tmp_path / (prefix+"-initial.stderr")).write_text(initial.err)
+        assert run(borrowed_library, "fail_late", scope, [full], scalars=(7,)) == 6
+        failed = capfd.readouterr()
+        (tmp_path / (prefix+"-failed.stdout")).write_text(failed.out)
+        (tmp_path / (prefix+"-failed.stderr")).write_text(failed.err)
+        assert failed.err.count("FORT_SCOPED queue_enqueue ") == 1
+        assert failed.err.count("FORT_SCOPED launch ") == int(not queue_enabled)
+        observed = (c.c_double * 24)()
+        assert runtime.cudart.cudaDeviceSynchronize() == 0
+        assert runtime.cudart.cudaMemcpy(c.cast(observed, c.c_void_p), pointer, c.sizeof(observed), 2) == 0
+        if queue_enabled:
+            # Accepted work remains queued when the later geometry guard fails.
+            assert list(observed) == list(range(24))
+        else:
+            # Immediate submission retains the original post-execution oracle.
+            assert list(observed) == [i+100 if i<4 else i for i in range(24)]
+        assert list(values) == list(range(24))
+        assert run(borrowed_library, "fail_late", scope, [full], scalars=(6,)) == 6
+        retried = capfd.readouterr()
+        (tmp_path / (prefix+"-retry.stdout")).write_text(retried.out)
+        (tmp_path / (prefix+"-retry.stderr")).write_text(retried.err)
+        assert "FORT_SCOPED queue_enqueue " not in retried.err
+        assert "FORT_SCOPED launch " not in retried.err
+        scope.check(runtime.fort_scope_abandon(scope.handle))
+
 
 
 if __name__ == "__main__":

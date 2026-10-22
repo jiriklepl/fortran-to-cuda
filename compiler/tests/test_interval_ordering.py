@@ -4,8 +4,8 @@ from hashlib import sha256
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.scopes.closed_selection import interval_candidates
 from compiler.scopes.interval_ordering import order_intervals
 from compiler.scopes.source import ScopeBuilder

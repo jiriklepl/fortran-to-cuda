@@ -81,4 +81,10 @@ def borrowed(owner, nodes, lines):
     first, last = statement_span(nodes[0])[0], statement_span(nodes[-1])[1]
     operation = source_id(owner.builder, "borrowed_call", span=(first, last))
     result = call_frame(owner.builder, owner.context, operation, lines)
+    from compiler.scopes.native_owner_hint import latch
+    native = latch(owner)
+    if native is not None:
+        # The owning native latch selects the exact original CALL before any
+        # rearm, eager actual registration, or diagnostic runtime frame.
+        result = [f"if ({native}) then", *owner.original(nodes).splitlines(), "else", *result, "endif"]
     return [f"if ({owner.control_guard}) then", *result, "else", *lines, "endif"] if owner.control_guard else result

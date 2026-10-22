@@ -261,7 +261,7 @@ def module_scope_binaries(tmp_path_factory):
         output = directory / label
         facts = directory / (label + "-captures.json")
         facts.write_text(json.dumps(_facts(original, label), indent=2) + "\n")
-        command = [sys.executable, "-m", "compiler", "--form-scopes", "--scope-facts", str(facts),
+        command = [sys.executable, "-m", "compiler.tests.support.reference_scopes", "--form-scopes", "--scope-facts", str(facts),
                    "--input", str(original), "--kernel", "step_team" if label == "team" else "step_serial",
                    "--memory-model", "scoped",
                    "--gpu-policy", "sections", "--host-threads", "4", "--json", "--output-dir", str(output)]

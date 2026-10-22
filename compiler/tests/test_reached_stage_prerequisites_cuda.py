@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
 from compiler.tests.test_source_scopes import FACT, run
@@ -234,10 +234,36 @@ def test_reached_stage_complete_arrays_halos_and_escape_once(stage_binary, disab
     (directory / (label+"-fields.bin")).write_bytes(actual)
     assert actual == expected
     launches = result.stderr.count("FORT_SCOPED launch ")
-    # Child work disables traps; the parent accumulation restores the
-    # original enabled trap and must execute coherently on the CPU. Each
-    # nonempty shape runs three children, then two before the opaque escape.
-    assert launches == (0 if disabled else 10)
+    # Restoring the original trap makes the first parent team decline its
+    # generated numerical path. It closes and disables this invocation's
+    # owner, so subsequent child calls use their original source directly.
+    # There is one GPU child for each nonempty shape and iteration.
+    assert launches == (0 if disabled else 4)
+    contexts = {}
+    for line in result.stderr.splitlines():
+        if not line.startswith("FORT_SCOPED ") or "provenance_version=1" not in line:
+            continue
+        event = line.split()[1]
+        context = re.search(r"\bcontext=(\d+)\b", line).group(1)
+        events = contexts.setdefault(context, [])
+        assert "close" not in events
+        events.append(event)
+    assert len(contexts) == 6
+    assert [events.count("launch") for events in contexts.values()] == (
+        [0, 0, 0, 0, 0, 0] if disabled else [0, 0, 1, 1, 1, 1])
+    for events in contexts.values():
+        assert events[0] == "create"
+        assert events[-1] == "close"
+        assert events.count("create") == 1
+        assert events.count("close") == 1
+    report = json.loads((directory / "manifest.json").read_text())
+    parent_fallback, = [record["id"] for record in report["runtime_provenance"]["records"]
+                        if record["kind"] == "boundary"
+                        and record.get("procedure") == "owner_lib::advance"
+                        and record.get("reason") == "owner cleanup or native fallback at the current source position"]
+    close_lines = [line for line in result.stderr.splitlines() if line.startswith("FORT_SCOPED close ")]
+    assert len(close_lines) == 6
+    assert all("boundary=" + parent_fallback in line for line in close_lines)
     uploaded = sum(map(int, re.findall(r"FORT_SCOPED upload .*bytes=(\d+)", result.stderr)))
     downloaded = sum(map(int, re.findall(r"FORT_SCOPED download .*bytes=(\d+)", result.stderr)))
     receipt = {"precision": precision, "disabled": disabled, "halting_mode": halting_mode,

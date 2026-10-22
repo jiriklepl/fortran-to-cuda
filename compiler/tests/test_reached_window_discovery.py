@@ -4,8 +4,8 @@ import json
 from copy import deepcopy
 from hashlib import sha256
 
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 from compiler.scopes.window_discovery import MAX_ATTEMPTS, discover_reached_window
 from compiler.tests.test_reached_window_owner import ENTRY, ROOTS, SOURCE
@@ -191,9 +191,18 @@ def test_failed_search_preserves_existing_fallback_artifacts(tmp_path, monkeypat
             # This interrupted path is outside complete-window calibration.
             # Its graph-sharing fingerprints may retain speculative history;
             # every public operation and generated artifact must still match.
-            plan.pop("execution_identity")
+            execution_identity = plan.pop("execution_identity")
             for procedure in plan["procedures"]:
                 procedure.pop("emission_identity")
+            applicability = scope.get("interval_applicability")
+            if applicability is not None:
+                assert applicability["plan_identity"] == identity
+                assert applicability["execution_identity"] == execution_identity
+                applicability_identity = applicability.pop("identity")
+                assert applicability_identity == sha256(json.dumps(
+                    applicability, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+                applicability.pop("plan_identity")
+                applicability.pop("execution_identity")
         return scopes
 
     assert comparable_scopes(actual_report) == comparable_scopes(control_report)

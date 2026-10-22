@@ -8,9 +8,10 @@ import json
 from copy import deepcopy
 from dataclasses import dataclass
 from hashlib import sha256
+from unittest.mock import patch
 
-from compiler.driver.options import CompilerOptions
-from compiler.offload.config import OffloadConfig
+from compiler._legacy.config import LegacyCompilerOptions as CompilerOptions
+from compiler._legacy.config import LegacyOffloadConfig as OffloadConfig
 from compiler.scopes.source import ScopeBuilder
 
 ENTRY = "amber_owner::advance"
@@ -120,8 +121,19 @@ def borrowed_team_fixture(directory, *, captures=None, **source_options):
 
 def emit_borrowed_team_fixture(directory, **options):
     paths, builder = borrowed_team_fixture(directory, **options)
-    outputs, report = builder.run()
+    outputs, report = run_borrowed_team_fixture(builder)
     return paths, outputs, report, builder
+
+
+def run_borrowed_team_fixture(builder):
+    """Exercise the retained coordinator proof independently of graph routing.
+
+    Public graph callers prefer original-body companions with parameterized
+    handles. These historical fixtures specifically validate the separate
+    borrowed-team worker and its original native alternative.
+    """
+    with patch("compiler.scopes.module_owner.borrow_module", return_value=False):
+        return builder.run()
 
 
 def borrowed_team_launch_counts(builder, report, *, rejected_actual=None):

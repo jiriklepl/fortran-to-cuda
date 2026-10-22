@@ -159,7 +159,8 @@ def test_costed_query_still_constructs_placement_footprints(tmp_path):
         'extern "C" int ' + emitted.report["planning"]["entry"], 1)[0]
     assert "append_box(" in helper
     assert "u.arrays.resize(" in helper
-    assert "offload::box_bytes(" in helper
+    assert "offload::footprint_bytes(d.arrays[a], d.units[0].arrays[a].upload, memory_known)" in helper
+    assert "offload::footprint_bytes(d.arrays[a], d.units[0].arrays[a].download, memory_known)" in helper
     assert emitted.report["planning"]["units"][0]["cost_footprints_prepared"]
 
 
