@@ -66,6 +66,9 @@ struct Inputs {
     size_t copy_pool_available_bytes=std::numeric_limits<size_t>::max();
     bool copy_pool_cold_available=true;
     uint64_t copy_pool_revision=0;
+    int copy_device=0;
+    bool copy_completion_priced=false;
+    fort_physical::compact::startup::State copy_startup;
     std::optional<fort_scope_team_costs> team_costs;
     // Separately budgeted scratch arenas have no payload/definition regions.
     // Their ordinary allocator retirement still precedes the terminal wait.
@@ -351,6 +354,7 @@ struct State {
     // operations. First use is conservative; native calls can replace it.
     size_t staging_capacity = 0;
     size_t compact_capacity = 0;
+    fort_physical::compact::startup::State copy_startup;
     bool ready = false, driver_initialized = false, pending = false;
     // A complete direct-copy prediction already includes one completion.
     // Preserve pending/read dependencies; consume this credit at one modeled
@@ -380,6 +384,8 @@ inline void discard_coherence(State &state) {
 inline State initial(const Inputs &input, const fort_scope_plan_costs &costs) {
     State s; s.resources = input.resources; s.ready = input.device_ready;
     s.compact_capacity=input.copy_pool_capacity;
+    s.copy_startup=input.copy_startup;
+    s.completion_already_priced=input.copy_completion_priced;
     s.driver_initialized = input.driver_initialized; s.pending = input.pending;
     s.warm_ranking = input.graph_mode;
     for (size_t k=0; k<s.resources.size(); ++k) {
@@ -536,7 +542,10 @@ inline void copy_region(State &s,Resource &b,const Region &parts,bool upload,
         s.compact_capacity>=plan.bytes && s.compact_capacity<=pool_available/2,
         !s.compact_capacity && input.copy_pool_cold_available};
     const auto &calibration=*input.copy_costs;
-    const auto price=compact::price(plan,calibration.copy,calibration.base,upload,s.pending&&!s.completion_already_priced,pool);
+    compact::startup::bind(s.copy_startup,calibration,input.copy_device);
+    const auto before=s.copy_startup;
+    const auto decision=compact::startup::choose(plan,calibration,upload,s.pending&&!s.completion_already_priced,pool,before);
+    const auto &price=decision.price;
     require(price.available,"physical_copy_estimate_unavailable");
     if(!price.selected) {
         // Allocation was already accounted above. Retain exact copy counters
@@ -545,11 +554,15 @@ inline void copy_region(State &s,Resource &b,const Region &parts,bool upload,
         direct(false);
         seconds(s.time,price.direct_seconds);
         s.completion_already_priced=true;
+        compact::startup::observe(s.copy_startup,before,decision);
         return;
     }
+    if(decision.seed)require(compact::startup::reserve(s.copy_startup,before,decision),"physical_copy_startup_race");
+    else compact::startup::ownership_changed(s.copy_startup);
     wait(s,costs);
     seconds(s.time,price.compact_path_seconds);
     s.compact_capacity=price.capacity;s.staging_capacity=0;
+    compact::startup::ownership_changed(s.copy_startup); // Completed lease becomes idle.
     auto &bytes=upload?s.count.upload_bytes:s.count.download_bytes;
     auto &copies=upload?s.count.uploads:s.count.downloads;
     bytes=add(bytes,plan.bytes);copies=add(copies,1);

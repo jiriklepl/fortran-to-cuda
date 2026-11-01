@@ -11,6 +11,9 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#ifndef FORT_COPY_STARTUP_HPP
+#include "copy_startup.hpp"
+#endif
 
 namespace fort_staging {
 constexpr std::size_t pinned_limit = 64ULL * 1024 * 1024;
@@ -98,6 +101,7 @@ struct Budget {
     std::condition_variable released;
     std::size_t reserved = 0, peak = 0, device_reserved = 0, device_peak = 0;
     std::uint64_t revision = 0;
+    fort_physical::compact::startup::State startup;
     std::unique_ptr<Slots> idle;
 };
 // One named inline singleton across generated CUDA units and the scoped object.
@@ -112,7 +116,8 @@ inline Slots::~Slots() {
     if (charged && status == cudaSuccess) {
         { std::lock_guard<std::mutex> lock(budget->mutex); budget->reserved -= 2 * capacity;
           if(role==Role::Compact)budget->device_reserved-=2*capacity;
-          ++budget->revision; }
+          ++budget->revision;
+          fort_physical::compact::startup::ownership_changed(budget->startup); }
         budget->released.notify_all();
     }
 }
@@ -120,6 +125,7 @@ struct Result {
     cudaError_t status = cudaSuccess;
     std::unique_ptr<Slots> slots;
     bool reused = false, exhausted = false, unpriced_idle = false;
+    bool startup_paid = false, stale_startup = false;
     std::size_t freed_devices = 0, evicted_devices = 0, allocated_devices = 0;
 };
 // mutex held; an idle pair is already complete. Never wait for active work here.
@@ -132,10 +138,13 @@ inline cudaError_t evict_idle(Budget &budget, std::size_t &freed_devices) {
     budget.idle->charged = false;
     budget.idle.reset();
     ++budget.revision;
+    fort_physical::compact::startup::ownership_changed(budget.startup);
     return cudaSuccess;
 }
 inline Result acquire(std::size_t bytes, Role role, bool blocking,
-                      std::size_t available_device_bytes=device_limit, bool reuse_or_empty_only=false) {
+                      std::size_t available_device_bytes=device_limit, bool reuse_or_empty_only=false,
+                      const fort_physical::compact::startup::State *startup_before=nullptr,
+                      const fort_physical::compact::startup::Offer *startup_offer=nullptr) {
     Result result;
     if (!bytes || bytes > pinned_limit / 2) { result.exhausted = true; return result; }
     const auto device_bytes=role==Role::Compact ? 2*bytes : 0;
@@ -147,11 +156,26 @@ inline Result acquire(std::size_t bytes, Role role, bool blocking,
     auto &budget = budget_state();
     {
         std::unique_lock<std::mutex> lock(budget.mutex);
+        // A seed must reserve the exact reviewed empty-cache generation and
+        // quota before CUDA allocation. Never hold this lock across CUDA work.
+        if(startup_before) {
+            using namespace fort_physical::compact;
+            if(!startup_offer || !startup_offer->seed || role!=Role::Compact || blocking ||
+               !reuse_or_empty_only || budget.idle || startup_offer->capacity!=bytes ||
+               startup_offer->bucket>=4 || bytes!=capacities[startup_offer->bucket] ||
+               startup_before->model.words[0]!=static_cast<std::uint64_t>(device) ||
+               budget.reserved>pinned_limit-2*bytes || budget.device_reserved>maximum_device_bytes-device_bytes ||
+               !startup::reserve(budget.startup,*startup_before,*startup_offer)) {
+                result.exhausted=true;result.stale_startup=true;return result;
+            }
+            result.startup_paid=true;
+        }
         for (;;) {
             if (budget.idle && budget.idle->device == device && budget.idle->role == role &&
                 budget.idle->capacity >= bytes &&
                 (role!=Role::Compact || budget.device_reserved<=maximum_device_bytes)) {
-                result.slots = std::move(budget.idle); result.reused = true; ++budget.revision; return result;
+                result.slots = std::move(budget.idle); result.reused = true; ++budget.revision;
+                fort_physical::compact::startup::ownership_changed(budget.startup);return result;
             }
             // Measured cold Compact acquisition covers an empty idle cache.
             // Another caller may install an incompatible pair after pricing.
@@ -170,6 +194,7 @@ inline Result acquire(std::size_t bytes, Role role, bool blocking,
         budget.device_reserved+=device_bytes;
         budget.device_peak=std::max(budget.device_peak,budget.device_reserved);
         ++budget.revision;
+        if(!result.startup_paid)fort_physical::compact::startup::ownership_changed(budget.startup);
     }
     try {
         result.slots = std::make_unique<Slots>(bytes, device, role, budget);
@@ -201,6 +226,7 @@ inline cudaError_t release(std::unique_ptr<Slots> slots, std::size_t &freed_devi
         if (status != cudaSuccess) return status;
         budget.idle = std::move(slots);
         ++budget.revision;
+        fort_physical::compact::startup::ownership_changed(budget.startup);
     }
     budget.released.notify_all();
     return cudaSuccess;
@@ -228,6 +254,7 @@ struct Snapshot {
     std::size_t pinned_reserved, device_reserved, idle_capacity;
     int idle_device;
     Role idle_role;
+    fort_physical::compact::startup::State startup;
 };
 // Idle storage may be evicted before acquisition; active and allocating
 // leases remain charged against both quotas regardless of the requesting domain.
@@ -243,7 +270,27 @@ inline Snapshot snapshot() {
     return {budget.revision,budget.reserved,budget.device_reserved,
             budget.idle ? budget.idle->capacity : 0,
             budget.idle ? budget.idle->device : -1,
-            budget.idle ? budget.idle->role : Role::Staging};
+            budget.idle ? budget.idle->role : Role::Staging,budget.startup};
+}
+// Metadata-only hooks; their callbacks cannot submit CUDA or wait. The exact
+// model is bound only by a reached operation, never by a speculative query.
+template<class F> inline Snapshot startup_snapshot(F &&bind) {
+    auto &budget=budget_state();std::lock_guard<std::mutex> lock(budget.mutex);
+    bind(budget.startup);
+    return {budget.revision,budget.reserved,budget.device_reserved,
+            budget.idle?budget.idle->capacity:0,budget.idle?budget.idle->device:-1,
+            budget.idle?budget.idle->role:Role::Staging,budget.startup};
+}
+inline bool observe_startup(const fort_physical::compact::startup::State &before,
+                            const fort_physical::compact::startup::Offer &offer,bool &changed) {
+    auto &budget=budget_state();std::lock_guard<std::mutex> lock(budget.mutex);
+    changed=!fort_physical::compact::startup::same(budget.startup,before);
+    return fort_physical::compact::startup::observe(budget.startup,before,offer);
+}
+inline void forget_startup(const fort_physical::compact::startup::Key &key) {
+    auto &budget=budget_state();std::lock_guard<std::mutex> lock(budget.mutex);
+    if(budget.startup.bound && budget.startup.model==key)
+        fort_physical::compact::startup::ownership_changed(budget.startup);
 }
 } // namespace fort_staging
 #endif

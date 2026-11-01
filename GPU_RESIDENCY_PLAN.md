@@ -6,13 +6,33 @@ The original proposal is preserved at
 `/tmp/fortran-residency-implementation-24/GPU_RESIDENCY_PLAN.original.md`.
 Historical reports and timing controls remain unchanged.
 
-The [current compiler selection](benchmarks/reports/gpu-residency-implementation-20261023/maintained-compiler-v2-20261101-addendum-01/README.md)
+The [committed compiler checkpoint selection](benchmarks/reports/gpu-residency-implementation-20261023/maintained-compiler-v2-20261101-addendum-01/README.md)
 has 11,868 passing latest distinct results after five test-only whole-file
 recoveries; its failed complete invocation remains recorded. The separate
 [companion gate](benchmarks/reports/gpu-residency-implementation-20261023/maintained-companions-v2-20261101-addendum-01/README.md)
 passes 4,202 cases with 29 declared optional skips. Production code is unchanged
 across the recoveries. Marked CUDA exclusions, focused device gates and pending
 application qualification are stated separately.
+These maintained results describe commit `db3791a` with runtime `9db3a6e8…`;
+they precede the subsequent startup-policy changes.
+
+The [startup-credit successor](benchmarks/reports/gpu-residency-implementation-20261023/compact-startup-addendum-20261101/README.md)
+is applied with fresh runtime `6d8484fe…` and profile `429150e1…`. Separate
+device gates pass 30 behavioral cases and five logging checks on their stated
+runtime bases. Bounded credit can seed the existing pool; each purchase retains
+its full cold cost. Modeled pricing stays separate from completed transfers.
+Source-task and source-submit costs remain unavailable. Fresh SGS generation
+passes. Fresh Convection generation declines at a single-association restriction
+for a source provider; checked per-call projection and application qualification
+are pending. No
+current application speedup or whole-maintained-suite result follows yet.
+
+The [kernel resource diagnosis](benchmarks/reports/kernel-resources-20261101/README.md)
+identifies small Filter grids and serial line processing in the previous
+application build. Its Nsight Compute attempt stopped on NVIDIA counter
+permission denial; ordinary CUDA remains available. No counters, new correctness
+qualification or performance sample were obtained. Block size and a proved
+parallel line mapping remain experiments, without a projected payoff.
 
 The [native conditional-call follow-up](benchmarks/reports/gpu-residency-implementation-20261023/native-if-call-retirement-20261101/README.md)
 proves the original `ComputeTDiff` IF and both OpenMP branches through the
@@ -28,7 +48,7 @@ gates. A single fresh calibration supplies six complete direct/cold/reuse models
 across 61 geometries. The shared process pool bounds idle storage separately from
 the domain's active field/scratch/workspace budget. Historical ELMM groups select
 no cold allocation, although many channel downloads qualify with a cached pair;
-generic startup amortization remains necessary. This is implementation and
+the startup-credit successor addresses that limitation. This is implementation and
 calibration evidence, with no application gain or full-current-suite claim.
 Structural source-submit pricing remains unavailable independently of these copy
 models. The previous residual model is superseded rather than kept as a second

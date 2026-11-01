@@ -216,7 +216,7 @@ int main(int argc,char **argv) {
 ''')
     binary = directory / "pool"
     built = subprocess.run([compiler, "-std=c++17", "-Wall", "-Wextra", "-Werror", "-pthread",
-                            "-D__CUDACC__", "-I"+str(directory), str(directory / "ordinary.cpp"),
+                            "-D__CUDACC__", "-I"+str(directory), "-I"+str(RUNTIME), str(directory / "ordinary.cpp"),
                             str(directory / "scoped.cpp"), "-o", str(binary)],
                            capture_output=True, text=True, timeout=60)
     assert built.returncode == 0, built.stderr

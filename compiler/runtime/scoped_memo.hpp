@@ -47,7 +47,7 @@ inline std::optional<Key> make_key(const planning::Inputs &in,const fort_scope_p
     if (!eligible(in))return std::nullopt;
     try {
         planning::detail::validate(in,c);
-        Key key;key.integer(1); // serialization version
+        Key key;key.integer(2); // Includes shared startup state and completion pricing.
         key.integer(planning::detail::frontier_limit);key.integer(planning::detail::candidate_limit);
         key.integer(coherence::rectangle_limit);key.integer(coherence::intersection_limit);
         key.integer(environment.size());for(auto item:environment)key.integer(item);
@@ -84,6 +84,13 @@ inline std::optional<Key> make_key(const planning::Inputs &in,const fort_scope_p
         key.integer(bool(in.copy_costs));key.integer(in.copy_pool_capacity);
         key.integer(in.copy_pool_active_device_bytes);key.integer(in.copy_pool_available_bytes);key.integer(in.copy_pool_cold_available);key.integer(in.copy_pool_revision);
         if(in.copy_costs) {
+            key.integer(in.copy_device);
+            key.integer(in.copy_completion_priced);
+            const auto &startup=in.copy_startup;
+            key.integer(startup.revision);key.integer(startup.generation);key.integer(startup.bound);key.integer(startup.disabled);
+            for(auto word:startup.model.words)key.integer(word);
+            for(auto value:startup.credit)key.real(value);
+            for(auto value:startup.cap)key.real(value);
             key.real(in.copy_costs->base.wait_seconds);
             const auto &t=in.copy_costs->copy;
             key.integer(t.version);key.integer(t.valid);
