@@ -140,11 +140,37 @@ end subroutine"""
     assert not analysis._numerical_completions
 
 
-@pytest.mark.parametrize("tail", ["call opaque(output)", "deallocate(output)", "output=1.0_8"])
+@pytest.mark.parametrize("tail", ["call opaque(output)", "deallocate(output)", "output=a"])
 def test_complete_original_child_rescan_cannot_hide_later_storage_effects(tmp_path, tail):
     _path, analysis, selected = fixture(tmp_path, tail=tail)
     with pytest.raises(CompilationError, match="unknown selected storage|whole allocatable"):
         prove(analysis, selected)
+
+
+def test_complete_child_rescan_retains_scalar_fill_without_allocation_or_execution_grants(tmp_path):
+    path, analysis, selected = fixture(tmp_path, tail="output=1.0_8")
+    original = path.read_bytes()
+    public = prove(analysis, selected).public()
+    assert public["schema_version"] == 24
+    fill, = public["native_intrinsic_descriptor_requirements"]
+    assert fill["intrinsic"] == "scalar_array_assignment"
+    assert fill["procedure"] == CHILD
+    assert fill["target"]["resource"] == ROOT
+    assert fill["rhs"] == {"type": "real", "kind": 8, "rank": 0}
+    assert fill["requires_original_allocated_array"]
+    assert fill["storage_writes"]
+    assert not fill["allocation_presence_proved"]
+    assert not fill["allocation_or_escape"]
+    assert not fill["execution_authorized"]
+    assert {CHILD, CHILD + "::gradient", CHILD + "::compose"} <= set(public["source_call_closure"])
+    join, = public["native_joined_descriptor_requirements"]
+    assert join["whole_original_group_scanned"]
+    assert join["retains_original_team_and_directives"]
+    assert not join["execution_authorized"]
+    assert not join["internal_cuts_authorized"]
+    assert not public["entry_definition_authority"]
+    assert not public["execution_authorized"]
+    assert path.read_bytes() == original
 
 
 def test_private_join_tokens_cannot_bless_original_summary_or_foreign_analysis(tmp_path):
@@ -167,24 +193,22 @@ def test_private_join_tokens_cannot_bless_original_summary_or_foreign_analysis(t
         proof.validate(analysis, ENTRY, selected)
 
 
-@pytest.mark.parametrize(("depth", "accepted"), [(8, True), (9, False)])
-def test_expression_limit_counts_calls_without_argument_container_wrappers(tmp_path, depth, accepted):
+@pytest.mark.parametrize("depth", [8, 9])
+def test_intrinsic_nesting_uses_source_traversal_not_procedure_call_depth(tmp_path, depth):
     expression = "x"
     for _ in range(depth):
         expression = "abs(" + expression + ")"
     _path, analysis, selected = fixture(tmp_path, helper="g(1,1)=" + expression)
-    if accepted:
-        assert prove(analysis, selected).public()["limits"]
-    else:
-        with pytest.raises(CompilationError, match="expression depth"):
-            prove(analysis, selected)
+    public = prove(analysis, selected).public()
+    assert public["source_traversal_entries"] > depth
+    assert not public["execution_authorized"]
     assert analysis.depth_limit == 8
 
 
 def test_parentheses_and_keyword_labels_do_not_spend_expression_depth(tmp_path):
     expression = "real(a=sqrt(max(1.0_8-x*cos(1.0_8+x),0.0_8)),kind=8)"
     _path, analysis, selected = fixture(tmp_path, helper="g(1,1)=" + "(" * 12 + expression + ")" * 12)
-    assert prove(analysis, selected).public()["schema_version"] == 5
+    assert prove(analysis, selected).public()["schema_version"] == 6
 
 
 def test_original_native_environment_calls_retain_all_thread_and_execution_requirements(tmp_path):

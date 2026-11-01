@@ -161,7 +161,7 @@ def node_profile_transport(nsys, directory):
     wrapper.write_text("#!/usr/bin/env python3\nimport os, sys\n"
         f"profiler = {profiler!r}\n"
         "arguments = sys.argv[1:]\n"
-        "if arguments[:1] == ['profile']:\n"
+        "if arguments[:1] == ['profile'] and '--cuda-graph-trace=node' not in arguments:\n"
         "    arguments.insert(1, '--cuda-graph-trace=node')\n"
         "os.execv(profiler, [profiler, *arguments])\n")
     wrapper.chmod(0o755)
@@ -392,7 +392,7 @@ def load_runtime_activity(activity):
 def graph_submission_evidence(log, manifests, counters):
     """Validate successful graph submissions without inventing direct launches."""
     fields = ("owner", "procedure", "segment", "operation", "implementation", "boundary")
-    operation_kinds = {"source_call", "borrowed_call", "numerical_segment", "native_operation"}
+    operation_kinds = {"source_call", "borrowed_call", "numerical_segment", "native_operation", "source_device_task"}
     registry = {record["id"]: record for manifest in manifests
                 for record in manifest.get("runtime_provenance", {}).get("records", [])}
     graph_events, direct_counts = [], {}
@@ -1332,8 +1332,10 @@ def run_comparison(args):
                 log, elapsed, metrics = profile_command(argv, directory / "profile", base, directory,
                                                         timeout=args.timeout, nsys=profile_tool)
                 if profile_transport:
-                    metrics["underlying_argv"] = [profile_transport["profiler"], "profile", "--cuda-graph-trace=node",
-                                                  *metrics.get("argv", [])[2:]]
+                    underlying = list(metrics.get("argv", [])[1:])
+                    if underlying[:1] == ["profile"] and "--cuda-graph-trace=node" not in underlying:
+                        underlying.insert(1, "--cuda-graph-trace=node")
+                    metrics["underlying_argv"] = [profile_transport["profiler"], *underlying]
                     metrics["cuda_graph_trace"] = "node"
                 profile = {"metrics": metrics, "diagnostic_wall_seconds": elapsed, "performance_sample": False,
                            "configuration": timing_configuration, "workload_phase": "timing"}

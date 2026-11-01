@@ -2,6 +2,7 @@
 #include "scoped_runtime.h"
 #include "staging.hpp"
 #include "section_copy.hpp"
+#include "section_batch_cost.hpp"
 #include <cuda_runtime.h>
 #include <omp.h>
 #include <algorithm>
@@ -38,6 +39,24 @@ static void scope_check(int status, const char *operation) {
 }
 #define CUDA(call) cuda_check((call), #call)
 #define SCOPE(call) scope_check((call), #call)
+// Match the compiler's graph owner lifecycle, including its caller-owned
+// domain. Private-context timings omit this metadata and cannot price it.
+static int resident_create(int device, fort_scope_t *out) {
+    fort_scope_domain_t domain = 0;
+    int status = fort_scope_domain_create_v1(device, &domain);
+    if (status) return status;
+    status = fort_scope_create_in_domain_v1(domain, out);
+    if (status) (void)fort_scope_domain_close_v1(domain);
+    return status;
+}
+static int resident_close(fort_scope_t context) {
+    fort_scope_domain_t domain = 0;
+    int status = fort_scope_domain_get_v1(context, &domain);
+    if (status) return status;
+    status = fort_scope_close(context);
+    if (status) return status;
+    return fort_scope_domain_close_v1(domain);
+}
 static double elapsed(clock_type::time_point start) {
     return std::chrono::duration<double>(clock_type::now() - start).count();
 }
@@ -124,6 +143,199 @@ static __attribute__((noinline)) void copy_rows(const fort_physical::CopyPlan &p
         std::cerr << "invalid offline physical packing plan\n";
         std::exit(2);
     }
+}
+
+// The same ordinal CopyPlans are rebuilt inside both complete-path clocks.
+// Views share one owned allocation; no application resource is registered.
+struct PhysicalView {
+    size_t base;
+    std::vector<size_t> extents,lower,upper;
+};
+struct PhysicalGeometry {
+    unsigned word,expected_layout;
+    size_t physical;
+    std::vector<PhysicalView> views;
+};
+struct PreparedPhysical {
+    std::vector<fort_physical::CopyOperation> operations;
+    fort_physical::compact::Plan plan;
+};
+static PreparedPhysical prepare_physical(const PhysicalGeometry &g) {
+    PreparedPhysical out;
+    for(const auto &v:g.views) {
+        const fort_physical::CopyPlan logical(g.word,v.extents,v.lower,v.upper);
+        if(!logical.valid || !logical.visit([&](fort_physical::CopyOperation o) {
+            o.offset=fort_physical::compact::add(v.base,o.offset);out.operations.push_back(o);return true;
+        }))throw std::runtime_error("invalid physical calibration ordinal view");
+    }
+    out.plan=fort_physical::compact::make_plan(out.operations,g.physical,fort_physical::compact::capacities[3]);
+    if(out.plan.word_bytes!=g.word || fort_physical::compact::layout_mask(out.plan)!=g.expected_layout)
+        throw std::runtime_error("physical calibration word/layout differs");
+    return out;
+}
+static std::vector<PhysicalGeometry> physical_geometries() {
+    struct Shape {size_t count,width,height,depth;};
+    const Shape shapes[3][10]={
+        {{2,1,1,1},{4,128,1,1},{49,64,1,1},{2,131072,1,1},{},{},{1,262144,1,1},{1,524288,1,1},{1,1048576,1,1},{1,2097152,1,1}},
+        {{2,1,8,1},{4,8,64,1},{49,128,32,1},{2,512,256,1},{},{}},
+        {{2,1,8,4},{4,8,16,16},{49,64,4,4},{2,256,64,64},{16,1,64,64},{64,1,8,8}}};
+    std::vector<PhysicalGeometry> result;
+    for(const unsigned word:{1u,4u,8u})for(unsigned kind=0;kind<3;++kind)for(const auto &s:shapes[kind]) {
+        if(!s.count || (s.count==1 && word!=8))continue;
+        const size_t pitch=s.width+(kind?64:0),height=s.height+(kind==2?2:0);
+        const size_t stride=(pitch*height*s.depth+64)*word;
+        PhysicalGeometry g{word,1u<<kind,word+s.count*stride,{}};
+        for(size_t i=0;i<s.count;++i)
+            g.views.push_back({word+i*stride,{pitch,height,s.depth},{0,0,0},{s.width,s.height,s.depth}});
+        result.push_back(std::move(g));
+    }
+    for(const unsigned word:{1u,4u,8u})for(const unsigned layout:{6u,7u})for(const bool large:{false,true}) {
+        const size_t groups=large?4:1,block=large?64:16,h=large?16:4,d=h;
+        const std::vector<size_t> extents{large?65u:17u,large?67u:19u,block*groups+1};
+        PhysicalGeometry g{word,layout,extents[0]*extents[1]*extents[2]*word,{}};
+        for(size_t group=0;group<groups;++group) {
+            const size_t z=group*block;
+            g.views.push_back({0,extents,{1,1,z+1},{2,1+h,z+1+d}});
+            g.views.push_back({0,extents,{3,1,z+d+2},{3+h,1+h,z+d+3}});
+            if(layout==7)g.views.push_back({0,extents,{1,h+2,z+d+4},{1+2*h,h+3,z+d+5}});
+        }
+        result.push_back(std::move(g));
+    }
+    // Thin disjoint columns have overlapping physical address spans. They
+    // exercise exact row-interval validation work, independently of payload.
+    for(const unsigned word:{1u,4u,8u}) {
+        const std::vector<size_t> extents{67,34,18};
+        PhysicalGeometry g{word,4,extents[0]*extents[1]*extents[2]*word,{}};
+        for(size_t column=0;column<32;++column)
+            g.views.push_back({0,extents,{1+2*column,1,1},{2+2*column,33,17}});
+        result.push_back(std::move(g));
+    }
+    return result;
+}
+static void describe_physical_copies() {
+    size_t records=0,batches=0,kernels=0,dmas=0;
+    const auto geometries=physical_geometries();
+    for(const auto &g:geometries) {
+        const auto p=prepare_physical(g);const auto n=p.operations.size();
+        const size_t compact=n>1?2:0;
+        records+=2*(1+compact);batches+=16*(1+compact);
+        kernels+=16*compact*p.plan.chunks.size();dmas+=16*(n+compact);
+        std::cout<<"{\"kind\":\"scoped_copy_geometry\",\"version\":2,\"word_bytes\":"<<g.word
+            <<",\"physical_bytes\":"<<g.physical<<",\"payload_bytes\":"<<p.plan.bytes<<",\"rows\":"<<p.plan.rows
+            <<",\"descriptor_work\":"<<p.plan.work<<",\"kernel_chunks\":"<<p.plan.chunks.size()
+            <<",\"layout_mask\":"<<g.expected_layout<<",\"operations\":[";
+        for(size_t i=0;i<n;++i) {const auto &o=p.operations[i];if(i)std::cout<<',';
+            std::cout<<'['<<o.offset<<','<<o.width<<','<<o.height<<','<<o.depth<<','<<o.pitch<<','<<o.physical_height<<']';}
+        std::cout<<"]}\n";
+    }
+    std::cout<<"{\"kind\":\"scoped_copy_protocol\",\"version\":2,\"geometries\":"<<geometries.size()
+        <<",\"records\":"<<records<<",\"verified_batches\":"<<batches<<",\"copy_kernel_launches\":"<<kernels
+        <<",\"transfer_dma_calls\":"<<dmas<<",\"excluded_warmups_per_path\":1,\"retained_rotated_rounds\":7}\n";
+}
+// One excluded warmup and seven rotated direct/cold/reuse rounds per geometry
+// and direction. Initialization, verification, cache trimming and reuse priming
+// are outside the path clock. Plan construction, actual pool acquisition/release,
+// pack/unpack, submissions and completion are inside it for the selected path.
+static void measure_physical_copies() {
+    namespace compact=fort_physical::compact;
+    auto trim=[] {size_t freed=0;CUDA(fort_staging::trim_cache(freed));};
+    cudaStream_t direct_stream=nullptr;CUDA(cudaStreamCreateWithFlags(&direct_stream,cudaStreamNonBlocking));
+    for(const auto &g:physical_geometries()) {
+        const auto reference=prepare_physical(g);const auto &ops=reference.operations;const auto &plan=reference.plan;
+        const size_t physical=g.physical;
+        std::ostringstream geometry;
+        geometry<<",\"operations\":[";
+        for(size_t i=0;i<ops.size();++i) {const auto &o=ops[i];if(i)geometry<<',';geometry<<'['<<o.offset<<','<<o.width<<','<<o.height<<','<<o.depth<<','<<o.pitch<<','<<o.physical_height<<']';}
+        geometry<<"],\"physical_bytes\":"<<physical<<",\"payload_bytes\":"<<plan.bytes<<",\"rows\":"<<plan.rows
+            <<",\"descriptor_work\":"<<plan.work<<",\"word_bytes\":"<<g.word<<",\"kernel_chunks\":"<<plan.chunks.size()
+            <<",\"layout_mask\":"<<g.expected_layout<<",\"pending\":false";
+        std::vector<unsigned char> storage(physical+32,0x5a),source(physical),expected(physical,0xa6),got(physical);
+        auto *host=storage.data()+16;
+        for(size_t i=0;i<physical;++i)source[i]=static_cast<unsigned char>((i*17+31)%251);
+        for(const auto &o:ops)for(size_t z=0;z<o.depth;++z)for(size_t y=0;y<o.height;++y) {
+            const auto offset=o.offset+z*o.pitch*o.physical_height+y*o.pitch;
+            std::memcpy(expected.data()+offset,source.data()+offset,o.width);
+        }
+        unsigned char *device=nullptr;CUDA(cudaMalloc(reinterpret_cast<void**>(&device),physical));
+        size_t requested=0;for(const auto size:compact::capacities)if(size>=plan.bytes) {requested=size;break;}
+        if(!requested)throw std::runtime_error("physical calibration capacity unavailable");
+        const unsigned methods=ops.size()>1?3:1;
+        for(const bool upload:{true,false}) {
+            std::vector<double> durations[3];
+            for(int round=-1;round<7;++round)for(unsigned ordinal=0;ordinal<methods;++ordinal) {
+                const unsigned method=(ordinal+unsigned(round+1))%methods; // direct, cold, reuse
+                trim();
+                if(method==2) {auto prime=fort_staging::acquire(requested,fort_staging::Role::Compact,false,std::numeric_limits<size_t>::max(),true);staging_check(prime);release_staging(std::move(prime.slots));}
+                std::memcpy(host,source.data(),physical);
+                if(!upload)std::memset(host,0xa6,physical);
+                if(upload)CUDA(cudaMemset(device,0xa6,physical));
+                else CUDA(cudaMemcpy(device,source.data(),physical,cudaMemcpyHostToDevice));
+                CUDA(cudaDeviceSynchronize());
+                const auto start=clock_type::now();
+                [&] {
+                    const auto prepared=prepare_physical(g); // Owned vectors + exact CopyPlan checks, timed on every path.
+                    if(method==0) {
+                        for(const auto &o:prepared.operations) {
+                            auto *to=(upload?device:host)+o.offset;auto *from=(upload?host:device)+o.offset;
+                            const auto direction=upload?cudaMemcpyHostToDevice:cudaMemcpyDeviceToHost;
+                            if(o.depth==1) {
+                                if(o.height==1 || o.pitch==o.width)CUDA(cudaMemcpyAsync(to,from,o.width*o.height,direction,direct_stream));
+                                else CUDA(cudaMemcpy2DAsync(to,o.pitch,from,o.pitch,o.width,o.height,direction,direct_stream));
+                            } else {
+                                cudaMemcpy3DParms p{};p.srcPtr=make_cudaPitchedPtr(from,o.pitch,o.pitch,o.physical_height);
+                                p.dstPtr=make_cudaPitchedPtr(to,o.pitch,o.pitch,o.physical_height);
+                                p.extent=make_cudaExtent(o.width,o.height,o.depth);p.kind=direction;CUDA(cudaMemcpy3DAsync(&p,direct_stream));
+                            }
+                        }
+                        CUDA(cudaStreamSynchronize(direct_stream));return;
+                    }
+                    auto lease=fort_staging::acquire(requested,fort_staging::Role::Compact,false,std::numeric_limits<size_t>::max(),true);staging_check(lease);
+                    if(lease.reused!=(method==2) || lease.slots->capacity!=requested)throw std::runtime_error("isolated compact pool state changed");
+                    auto &slot=lease.slots->slots[0];
+                    auto row_copy=[&](bool unpack) {
+                        size_t at=0;
+                        for(const auto &o:prepared.operations)for(size_t z=0;z<o.depth;++z)for(size_t y=0;y<o.height;++y) {
+                            auto *p=host+o.offset+z*o.pitch*o.physical_height+y*o.pitch;
+                            if(unpack)std::memcpy(p,slot.host+at,o.width);else std::memcpy(slot.host+at,p,o.width);at+=o.width;
+                        }
+                        if(at!=prepared.plan.bytes)throw std::runtime_error("physical calibration packing differs");
+                    };
+                    if(upload)row_copy(false);
+                    auto kernels=[&](bool scatter) {
+                        for(const auto &chunk:prepared.plan.chunks) {
+                            if(g.word==8) {if(scatter)compact::launch<uint64_t,true>(device,slot.device,chunk,slot.stream);else compact::launch<uint64_t,false>(device,slot.device,chunk,slot.stream);}
+                            else if(g.word==4) {if(scatter)compact::launch<uint32_t,true>(device,slot.device,chunk,slot.stream);else compact::launch<uint32_t,false>(device,slot.device,chunk,slot.stream);}
+                            else {if(scatter)compact::launch<unsigned char,true>(device,slot.device,chunk,slot.stream);else compact::launch<unsigned char,false>(device,slot.device,chunk,slot.stream);}
+                            CUDA(cudaGetLastError());
+                        }
+                    };
+                    slot.pending=true;
+                    if(!upload)kernels(false);
+                    CUDA(cudaMemcpyAsync(upload?slot.device:slot.host,upload?slot.host:slot.device,prepared.plan.bytes,
+                                         upload?cudaMemcpyHostToDevice:cudaMemcpyDeviceToHost,slot.stream));
+                    if(upload)kernels(true);
+                    CUDA(cudaEventRecord(slot.complete,slot.stream));CUDA(cudaEventSynchronize(slot.complete));slot.pending=false;
+                    if(!upload)row_copy(true);
+                    release_staging(std::move(lease.slots));
+                }();
+                const auto seconds=elapsed(start);
+                CUDA(cudaMemcpy(got.data(),device,physical,cudaMemcpyDeviceToHost));
+                if(got!=(upload?expected:source) || std::memcmp(host,upload?source.data():expected.data(),physical))
+                    throw std::runtime_error("physical calibration complete payload/canary verification failed");
+                for(size_t i=0;i<16;++i)if(storage[i]!=0x5a || storage[physical+16+i]!=0x5a)
+                    throw std::runtime_error("physical calibration host guard overwritten");
+                if(round>=0)durations[method].push_back(seconds);
+            }
+            for(unsigned method=0;method<methods;++method) {
+                const auto fields="\"kind\":\"scoped_copy\",\"version\":2,\"name\":"+quoted(method?"compact":"direct")+geometry.str()+
+                    ",\"direction\":"+quoted(upload?"h2d":"d2h")+",\"pool_state\":"+quoted(method==0?"none":method==1?"cold":"reuse")+
+                    ",\"capacity_bytes\":"+std::to_string(method?requested:0);
+                record(fields,durations[method]);
+            }
+        }
+        CUDA(cudaFree(device));
+    }
+    trim();CUDA(cudaStreamDestroy(direct_stream));
 }
 
 static void measure_staging() {
@@ -276,7 +488,7 @@ static void measure_planning(fort_scope_t context, fort_buffer_t buffer) {
 static void measure_batch_preparation(int device, const fort_scope_layout &layout) {
     fort_scope_t context = 0;
     fort_buffer_t buffer = 0;
-    SCOPE(fort_scope_create(device, &context));
+    SCOPE(resident_create(device, &context));
     SCOPE(fort_scope_set_transfers(context, FORT_SCOPE_TRANSFERS_PIPELINED));
     SCOPE(fort_scope_register(context, 1, 1, &layout, 1, &buffer));
     fort_scope_plan_costs base{};
@@ -355,10 +567,11 @@ static void measure_batch_preparation(int device, const fort_scope_layout &layou
             }
         }
     }
-    SCOPE(fort_scope_close(context));
+    SCOPE(resident_close(context));
 }
 
 int main(int argc, char **argv) {
+    if(argc==2 && std::string(argv[1])=="--describe-physical-copies") {describe_physical_copies();return 0;}
     if (argc == 3 && std::string(argv[1]) == "--cold-startup") {
         const int device = std::stoi(argv[2]);
         if (device < 0) return 2;
@@ -396,10 +609,10 @@ int main(int argc, char **argv) {
     const fort_scope_layout layout{3, CALIBRATION_PRECISION == 64 ? FORT_SCOPE_REAL64 : FORT_SCOPE_REAL32,
                                    sizeof(real), host.data(), extents, lower_bounds, 1};
     fort_scope_t temporary = 0;
-    cost("create_seconds", measure(512, [] {}, [&] { SCOPE(fort_scope_create(device, &temporary)); },
-                                   [&] { SCOPE(fort_scope_close(temporary)); }));
+    cost("create_seconds", measure(512, [] {}, [&] { SCOPE(resident_create(device, &temporary)); },
+                                   [&] { SCOPE(resident_close(temporary)); }));
     fort_scope_t context = 0;
-    SCOPE(fort_scope_create(device, &context));
+    SCOPE(resident_create(device, &context));
     fort_buffer_t buffer = 0;
     cost("register_seconds", measure(512, [] {},
          [&] { SCOPE(fort_scope_register(context, 1, 1, &layout, 1, &buffer)); },
@@ -417,10 +630,10 @@ int main(int argc, char **argv) {
     // A newly initialized source scope also owns mandatory stream/pool
     // destruction. Measure that full warm lifecycle, including close.
     cost("gpu_setup_seconds", measure(32, [&] {
-        SCOPE(fort_scope_create(device, &temporary));
+        SCOPE(resident_create(device, &temporary));
         SCOPE(fort_scope_gpu_enter(temporary, &previous, &stream_pointer));
         SCOPE(fort_scope_gpu_leave(temporary, previous));
-        SCOPE(fort_scope_close(temporary));
+        SCOPE(resident_close(temporary));
     }));
     SCOPE(fort_scope_gpu_enter(context, &previous, &stream_pointer));
     auto stream = reinterpret_cast<cudaStream_t>(stream_pointer);
@@ -468,7 +681,8 @@ int main(int argc, char **argv) {
     measure_planning(context, buffer);
     measure_staging();
     SCOPE(fort_scope_gpu_leave(context, previous));
-    SCOPE(fort_scope_close(context));
+    SCOPE(resident_close(context));
     measure_batch_preparation(device, layout);
+    measure_physical_copies();
     return 0;
 }

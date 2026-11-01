@@ -143,9 +143,9 @@ end module""")
         assert owner["module_coordinators"]
         assert "fort_child_context_" in text
     for block in text.split(MARKER)[1:]:
-        guard_text, registration = block.split("fort_status = fort_scope_create", 1)
+        guard_text, registration = block.split("fort_status = fort_scope_resident_create_v1", 1)
         assert "fort_status = FORT_SCOPE_UNINITIALIZED" in guard_text
-        assert "fort_scope_close(" in guard_text
+        assert "fort_scope_resident_close_v1(" in guard_text
         assert "= .false." in guard_text
         assert "exit fort_reached_" in guard_text
         assert "fort_scope_register(" in registration

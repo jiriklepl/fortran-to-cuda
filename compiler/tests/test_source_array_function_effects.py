@@ -46,7 +46,7 @@ def test_renamed_multifile_fixed_arrays_preserve_negative_bounds_and_authority(t
     analysis = fixture(tmp_path)
     summary = analysis.summarize("application::step")
     assert summary["complete"], summary["reasons"]
-    assert summary["summary_version"] == SOURCE_SUMMARY_VERSION == 22
+    assert summary["summary_version"] == SOURCE_SUMMARY_VERSION == 23
     requirement, = summary["native_function_requirements"]
     assert requirement["schema_version"] == SOURCE_FUNCTION_VERSION == 2
     assert requirement["fixed_arrays"] == [{"resource": "argument::a", "rank": 2,
@@ -361,9 +361,36 @@ def test_fixed_array_function_requires_exact_descriptor_token(tmp_path):
                       if type(node).__name__ == "Assignment_Stmt")
     graph = analysis.structure("application::step")
     selected = (graph.node_id(assignment),)
-    with pytest.raises(CompilationError, match="registered original readonly source-function proof"):
-        prove_descriptor_window(analysis, "application::step", selected, ("argument::store",))
+    # Lifetime-only storage projection is separate from the stronger native
+    # readonly function token issued by summarize below.
+    storage_proof = prove_descriptor_window(analysis, "application::step", selected, ("argument::store",))
+    state = storage_proof.public()
+    assert state["schema_version"] == 9
+    requirement, = state["native_storage_function_requirements"]
+    assert not analysis._native_functions
+    assert not state["execution_authorized"]
+    assert not state["entry_definition_authority"]
+    assert not state["gpu_legality_established"]
+    storage_token = analysis._storage_mutation_effects.pop(requirement["identity"])
+    with pytest.raises(CompilationError):
+        storage_proof.validate(analysis, "application::step", selected)
+    foreign = SourceEffects(analysis.inputs.paths)
+    foreign_expression = next(node for node in walk(foreign.routines["application::step"].execution)
+                              if type(node).__name__ in {"Part_Ref", "Function_Reference"}
+                              and str(node.items[0]).lower() == "combine")
+    foreign_token = foreign.storage_mutation_effects("application::step", expression=foreign_expression)
+    analysis._storage_mutation_effects[requirement["identity"]] = foreign_token
+    with pytest.raises(CompilationError, match="registered source projection"):
+        foreign_token.validate(analysis, "application::step")
+    with pytest.raises(CompilationError):
+        storage_proof.validate(analysis, "application::step", selected)
+    analysis._storage_mutation_effects[requirement["identity"]] = storage_token
+    assert storage_proof.validate(analysis, "application::step", selected) is storage_proof
     summary = analysis.summarize("application::step")
     assert summary["complete"], summary["reasons"]
     proof = prove_descriptor_window(analysis, "application::step", selected, ("argument::store",))
     assert proof.public()["native_source_function_requirements"][0]["callee"] == "shapes::contract"
+    native = proof.public()["native_source_function_requirements"][0]
+    analysis._native_functions.pop(native["proof_identity"])
+    with pytest.raises(CompilationError):
+        proof.validate(analysis, "application::step", selected)

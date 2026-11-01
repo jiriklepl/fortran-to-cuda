@@ -59,7 +59,7 @@ def test_lru_dirty_eviction_preserves_values_and_reloads_exactly(residency):
     scope.gpu(b, access(flags=1))
     scope.gpu_end(b)
     before = scope.stats()
-    scope.check(reserve(scope, other)[0])
+    scope.check(reserve(scope, other, b)[0])  # pin the clean mirror; dirty publication is necessary
     assert list(host_a) == [1100 + i for i in range(8)]
     assert scope.stats().download_bytes - before.download_bytes == 64
     observed = statistics(scope)
@@ -68,6 +68,38 @@ def test_lru_dirty_eviction_preserves_values_and_reloads_exactly(residency):
     assert list(device[:8]) == list(host_a)
     scope.gpu_end(a)
     assert scope.stats().allocated_bytes == scope.stats().peak_device_bytes == 128
+    scope.close()
+
+
+@pytest.mark.native
+def test_clean_replica_is_evicted_before_older_dirty_storage(residency):
+    scope = Scope(residency)
+    scope.check(residency.fort_scope_set_device_budget(scope.handle, 128))
+    host_a, a = register(scope, 1)
+    _, b = register(scope, 2)
+    _, other = register(scope, 3)
+    device = scope.gpu(a, access(flags=3))
+    for i in range(8):
+        device[i] += 1000
+    scope.gpu_end(a)
+    scope.gpu(b, access(flags=1))
+    scope.gpu_end(b)
+    before = scope.stats()
+    scope.check(reserve(scope, other)[0])
+    assert list(host_a) == [100 + i for i in range(8)]
+    assert scope.stats().download_bytes == before.download_bytes == 0
+    assert (statistics(scope).evictions, statistics(scope).dirty_evictions) == (1, 0)
+    allocations, uploads = scope.stats().allocations, scope.stats().upload_bytes
+    device = scope.gpu(a, access(flags=1))
+    assert list(device[:8]) == [1100 + i for i in range(8)]
+    scope.gpu_end(a)
+    assert (scope.stats().allocations, scope.stats().upload_bytes) == (allocations, uploads)
+    # When all eligible alternatives are pinned, the dirty replica must still
+    # publish exactly once before eviction; clean-first must not lose values.
+    scope.check(reserve(scope, b, other)[0])
+    assert list(host_a) == [1100 + i for i in range(8)]
+    assert scope.stats().download_bytes == 64
+    assert (statistics(scope).evictions, statistics(scope).dirty_evictions) == (2, 1)
     scope.close()
 
 

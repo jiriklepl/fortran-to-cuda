@@ -454,7 +454,9 @@ end program
 """)
     runtime_source = Path(__file__).resolve().parents[1] / "runtime" / "scoped_memory.f90"
     executable = tmp_path / "check_report"
-    built = subprocess.run([compiler, "-std=f2008", "-Wall", "-Wextra", "-Werror", str(runtime_source),
+    # This is a layout-only consumer; unused resident helpers require the CUDA runtime.
+    built = subprocess.run([compiler, "-std=f2008", "-Wall", "-Wextra", "-Werror",
+                            "-ffunction-sections", "-Wl,--gc-sections", str(runtime_source),
                             str(source), "-o", str(executable)], cwd=tmp_path, capture_output=True, text=True, timeout=30)
     assert built.returncode == 0, built.stderr
     checked = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)

@@ -124,10 +124,13 @@ def test_omitted_and_reordered_optional_calls_share_one_original_companion(tmp_p
     assert not owner["boundaries"]
     assert len(child["boundaries"]) == 1
     assert "opaque" in child["boundaries"][0]["reason"]
-    # The following statically omitted call retains the existing numerical
-    # liveness boundary. Companion argument admission does not relax it.
-    assert owner["gpu_leaves"] == ["renamed_client::step#region1", "shifted_leaf::adjust#region1"]
-    assert any("requires all original arguments" in item["reason"] for item in report["boundaries"])
+    # An omitted read-only optional scalar preserves the array effects, so
+    # both parent loops and the original child remain eligible. Only the
+    # opaque call closes ownership when its original guard is reached.
+    assert owner["gpu_leaves"] == ["renamed_client::step#region1", "renamed_client::step#region2",
+                                   "shifted_leaf::adjust#region1"]
+    assert report["boundaries"]
+    assert all("opaque" in item["reason"] for item in report["boundaries"])
     text = source_text(outputs)
     calls = companion_calls(text, child["entry"])
     assert len(calls) == 2
@@ -236,7 +239,8 @@ def test_other_optional_associations_remain_boundaries(tmp_path, declaration):
     assert report["scopes"]
     assert all(not scope.get("module_coordinators") for scope in report["scopes"])
     assert all(leaf.startswith(ENTRY + "#region") for scope in report["scopes"] for leaf in scope["gpu_leaves"])
-    assert any("requires all original arguments" in item["reason"] for item in report["boundaries"])
+    assert any("original module companion requires ordinary numeric arguments" in item["reason"]
+               for item in report["boundaries"])
     text = source_text(outputs)
     assert text.count(original_call) == 1
     assert not re.search(r"^\s*entry\s", text, flags=re.M)

@@ -727,16 +727,38 @@ end program
                     fortran={"compiler_version": version, "compiler_options": options,
                              "semantic_options": normalize_fortran_options(options)})
     assert len(identity["cpu_affinity"]) == base["cpu_threads"], "matching offline CPU placement required"
-    # Leave the observations and their applicability ranges unscaled. They
-    # exercise placement correctness and are never measured performance data.
-    calibration = profile_from_compute_measurements(base, observations,
-        calibration={"synthetic_correctness_only": True})
+    # This fixture tests the all-native branch, independently of measured
+    # host management costs. The shared synthetic observations model GPU
+    # compute at 0.05 times serial native cost; scale only those synthetic
+    # GPU durations to make its primitive and memory costs 100 times native.
+    # Keep the fit/holdout grid, repetitions and genuine base costs intact.
+    gpu_duration_scale = 2000
+    for observation in observations[1:]:
+        if observation["backend"] == "gpu":
+            for sample in observation["samples"]:
+                sample["elapsed_seconds"] *= gpu_duration_scale
+                sample["wall_seconds"] *= gpu_duration_scale
+    synthetic_ranking = {"version": 1, "purpose": "all_native_correctness",
+                         "gpu_duration_scale": gpu_duration_scale,
+                         "gpu_to_native_serial_compute_cost": 100}
+    # AUTO graph placement uses the generic hardware-rate path instead of
+    # the numerical-v2 rates. Give that path the same explicit test ranking.
+    synthetic_rate_overrides = {
+        "gpu_flops_per_second": base["rates"]["cpu_flops_per_second"] / 100,
+        "gpu_memory_bytes_per_second": base["rates"]["cpu_memory_bytes_per_second"] / 100,
+    }
+    synthetic_base = {**base, "rates": {**base["rates"], **synthetic_rate_overrides}}
+    synthetic_ranking["hardware_rate_overrides"] = synthetic_rate_overrides
+    calibration = profile_from_compute_measurements(synthetic_base, observations,
+        calibration={"synthetic_correctness_only": True,
+                     "synthetic_ranking": synthetic_ranking})
     assert {key: value for key, value in calibration.items() if key != "numerical"} == {
-        key: value for key, value in base.items() if key != "numerical"}
+        key: value for key, value in synthetic_base.items() if key != "numerical"}
     profile = directory / "synthetic-native-fallback-profile.json"
     profile.write_text(json.dumps(calibration, indent=2, sort_keys=True) + "\n")
     (directory / "synthetic-native-fallback-profile-evidence.json").write_text(json.dumps({
-        "schema_version": 1, "synthetic_calibration_for_correctness_only": True,
+        "schema_version": 2, "synthetic_calibration_for_correctness_only": True,
+        "synthetic_ranking": synthetic_ranking,
         "performance_samples": 0, "base_profile": {
             "path": str(supplied_profile), "sha256": sha256(supplied_profile.read_bytes()).hexdigest()},
         "profile": {"path": str(profile), "sha256": sha256(profile.read_bytes()).hexdigest()},

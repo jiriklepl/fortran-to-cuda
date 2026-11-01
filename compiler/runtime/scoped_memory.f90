@@ -58,6 +58,28 @@ module fort_scoped_memory
     integer(c_size_t) :: overwrite_count=0
     type(c_ptr) :: overwrites=c_null_ptr
   end type
+  type, bind(C), public :: fort_scope_external_binding_v1
+    integer(c_int64_t) :: buffer=0
+    integer(c_int32_t) :: element_type=0, rank=0
+    integer(c_size_t) :: element_bytes=0
+    type(fort_scope_access) :: access
+  end type
+  type, bind(C), public :: fort_scope_external_view_v1
+    integer(c_int64_t) :: buffer=0, generation=0
+    integer(c_int32_t) :: element_type=0, rank=0
+    integer(c_size_t) :: element_bytes=0, bytes=0
+    type(c_ptr) :: extents=c_null_ptr, strides=c_null_ptr, lower_bounds=c_null_ptr, device=c_null_ptr
+  end type
+  type, bind(C), public :: fort_scope_external_call_v1
+    integer(c_int32_t) :: version=1, reserved=0
+    type(c_ptr) :: bindings=c_null_ptr
+    integer(c_size_t) :: binding_count=0
+    integer(c_int64_t) :: workspace_lease=0
+    integer(c_size_t) :: workspace_bytes=0
+  end type
+  type, bind(C), public :: fort_scope_external_report_v1
+    integer(c_int32_t) :: version=1, status=0, started=0, committed=0
+  end type
   type, bind(C), public :: fort_scope_layout
     integer(c_int32_t) :: rank=0, element_type=0
     integer(c_size_t) :: element_bytes=0
@@ -224,6 +246,15 @@ module fort_scoped_memory
   end type
 
   public :: fort_scope_abi_version, fort_scope_error, fort_scope_create, fort_scope_register
+  public :: fort_scope_domain_create_v1, fort_scope_create_in_domain_v1, fort_scope_domain_get_v1
+  public :: fort_scope_domain_close_v1, fort_scope_domain_abandon_v1
+  public :: fort_scope_domain_stats_get_v1
+  public :: fort_scope_domain_device_get_v1, fort_scope_identity_swap_v1
+  public :: fort_scope_resident_create_v1, fort_scope_resident_close_v1
+  public :: fort_scope_domain_workspace_reserve_v1, fort_scope_domain_workspace_resize_v1
+  public :: fort_scope_domain_workspace_release_v1, fort_scope_external_execute_v1
+  public :: fort_scope_source_host_prepare_v1, fort_scope_source_host_start_v1
+  public :: fort_scope_source_host_complete_v1, fort_scope_source_host_cancel_v1
   public :: fort_scope_trace_set_v1, fort_scope_trace_restore_v1
   public :: fort_scope_native_hint_begin_v1, fort_scope_native_hint_finish_v1
   public :: fort_scope_register_sections, fort_scope_forget_definition
@@ -515,10 +546,107 @@ module fort_scoped_memory
       integer(c_int64_t), intent(out) :: context
       integer(c_int) :: status
     end function
+    function fort_scope_domain_create_v1(device, domain) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int), value :: device
+      integer(c_int64_t), intent(out) :: domain
+      integer(c_int) :: status
+    end function
+    function fort_scope_create_in_domain_v1(domain, context) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: domain
+      integer(c_int64_t), intent(out) :: context
+      integer(c_int) :: status
+    end function
+    function fort_scope_domain_get_v1(context, domain) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: context
+      integer(c_int64_t), intent(out) :: domain
+      integer(c_int) :: status
+    end function
+    function fort_scope_domain_close_v1(domain) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: domain
+      integer(c_int) :: status
+    end function
+    function fort_scope_domain_abandon_v1(domain) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: domain
+      integer(c_int) :: status
+    end function
+    function fort_scope_domain_stats_get_v1(domain, stats) bind(C) result(status)
+      import c_int, c_int64_t, fort_scope_stats
+      integer(c_int64_t), value :: domain
+      type(fort_scope_stats), intent(out) :: stats
+      integer(c_int) :: status
+    end function
+    function fort_scope_domain_device_get_v1(domain, device) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: domain
+      integer(c_int), intent(out) :: device
+      integer(c_int) :: status
+    end function
+    function fort_scope_identity_swap_v1(context, first, second, first_after, second_after, &
+                                         first_current, second_current) bind(C) result(status)
+      import c_int, c_int64_t, fort_scope_layout
+      integer(c_int64_t), value :: context, first, second
+      type(fort_scope_layout), intent(in) :: first_after, second_after
+      integer(c_int64_t), intent(out) :: first_current, second_current
+      integer(c_int) :: status
+    end function
+    function fort_scope_domain_workspace_reserve_v1(domain, bytes, lease) bind(C) result(status)
+      import c_int, c_int64_t, c_size_t
+      integer(c_int64_t), value :: domain
+      integer(c_size_t), value :: bytes
+      integer(c_int64_t), intent(out) :: lease
+      integer(c_int) :: status
+    end function
+    function fort_scope_domain_workspace_resize_v1(domain, lease, bytes) bind(C) result(status)
+      import c_int, c_int64_t, c_size_t
+      integer(c_int64_t), value :: domain, lease
+      integer(c_size_t), value :: bytes
+      integer(c_int) :: status
+    end function
+    function fort_scope_domain_workspace_release_v1(domain, lease) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: domain, lease
+      integer(c_int) :: status
+    end function
+    function fort_scope_external_execute_v1(context, call, worker, user, report) bind(C) result(status)
+      import c_int, c_int64_t, c_funptr, c_ptr, fort_scope_external_call_v1, fort_scope_external_report_v1
+      integer(c_int64_t), value :: context
+      type(fort_scope_external_call_v1), intent(in) :: call
+      type(c_funptr), value :: worker
+      type(c_ptr), value :: user
+      type(fort_scope_external_report_v1), intent(out) :: report
+      integer(c_int) :: status
+    end function
     function fort_scope_set_device_budget(context, bytes) bind(C) result(status)
       import c_int, c_int64_t, c_size_t
       integer(c_int64_t), value :: context
       integer(c_size_t), value :: bytes
+      integer(c_int) :: status
+    end function
+    function fort_scope_source_host_prepare_v1(context, call, token) bind(C) result(status)
+      import c_int, c_int64_t, fort_scope_external_call_v1
+      integer(c_int64_t), value :: context
+      type(fort_scope_external_call_v1), intent(in) :: call
+      integer(c_int64_t), intent(out) :: token
+      integer(c_int) :: status
+    end function
+    function fort_scope_source_host_start_v1(context, token) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: context, token
+      integer(c_int) :: status
+    end function
+    function fort_scope_source_host_complete_v1(context, token) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: context, token
+      integer(c_int) :: status
+    end function
+    function fort_scope_source_host_cancel_v1(context, token) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: context, token
       integer(c_int) :: status
     end function
     function fort_scope_register(context, identity, generation, layout, host_initialized, buffer) bind(C) result(status)
@@ -649,4 +777,33 @@ module fort_scoped_memory
       integer(c_int) :: status
     end function
   end interface
+contains
+  ! Owning source epochs create lazily. Checked children borrow their parent's
+  ! context; an unknown native cut or unmanaged return retires the whole domain.
+  function fort_scope_resident_create_v1(device, context) result(status)
+    integer(c_int), value :: device
+    integer(c_int64_t), intent(out) :: context
+    integer(c_int) :: status, cleanup
+    integer(c_int64_t) :: domain
+    context = 0
+    domain = 0
+    status = fort_scope_domain_create_v1(device, domain)
+    if (status /= FORT_SCOPE_OK) return
+    status = fort_scope_create_in_domain_v1(domain, context)
+    if (status /= FORT_SCOPE_OK) then
+      cleanup = fort_scope_domain_close_v1(domain)
+      if (cleanup /= FORT_SCOPE_OK) error stop 'unattached residency domain cleanup failed'
+    end if
+  end function
+
+  function fort_scope_resident_close_v1(context) result(status)
+    integer(c_int64_t), value :: context
+    integer(c_int) :: status
+    integer(c_int64_t) :: domain
+    status = fort_scope_domain_get_v1(context, domain)
+    if (status /= FORT_SCOPE_OK) return
+    status = fort_scope_close(context)
+    if (status /= FORT_SCOPE_OK) return
+    if (domain /= 0) status = fort_scope_domain_close_v1(domain)
+  end function
 end module fort_scoped_memory

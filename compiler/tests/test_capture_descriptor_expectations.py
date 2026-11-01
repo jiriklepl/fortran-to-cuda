@@ -116,10 +116,11 @@ def test_selected_descriptor_guard_cannot_use_stale_source_or_fact_authority(tmp
     proof = prove_reached_window(builder.analysis, builder.entry.qualified, selection, MODULE_ROOTS, builder.facts)
     if mutation == "source":
         path.write_text(path.read_text() + "! changed original source\n")
-        with GenerationTransaction(builder) as transaction:
-            owner = ReachedWindowOwner(transaction.builder, proof, selection)
-            with pytest.raises(CompilationError, match="source changed"):
-                owner.run()
+        with (
+            pytest.raises(CompilationError, match="source changed"),
+            GenerationTransaction(builder) as transaction,
+        ):
+            ReachedWindowOwner(transaction.builder, proof, selection).run()
     else:
         builder.facts["captures"][MODULE_ROOTS[0]]["expected_descriptor"]["extents"][0] = 13
         with pytest.raises(CompilationError):

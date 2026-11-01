@@ -13,7 +13,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 from compiler.analysis.task_dependencies import TaskGraphError, verify_task_graph
-from compiler.ir.task_graph import BranchRegion, ExecutionTarget, LoopRegion, Task, TaskGraph
+from compiler.ir.task_graph import BranchRegion, DeferredPlacement, ExecutionTarget, LoopRegion, Task, TaskGraph
 
 
 @dataclass(frozen=True)
@@ -37,18 +37,19 @@ class TransferEstimate:
 @dataclass(frozen=True)
 class ScheduledTask:
     task_id: str
-    target: ExecutionTarget
-    estimated_cost: float = 0.0
+    target: ExecutionTarget | None
+    estimated_cost: float | None = 0.0
     transfers: tuple[TransferEstimate, ...] = ()
     evictions: tuple[str, ...] = ()
     children: tuple[TaskSchedule, ...] = ()
+    deferred_placement: DeferredPlacement | None = None
 
 
 @dataclass(frozen=True)
 class ExecutionGroup:
     """Consecutive same-target work; grouping does not itself prove fusion."""
 
-    target: ExecutionTarget
+    target: ExecutionTarget | None
     task_ids: tuple[str, ...]
 
 
@@ -62,7 +63,9 @@ class TaskSchedule:
         return tuple(placement.task_id for placement in self.placements)
 
     @property
-    def estimated_cost(self) -> float:
+    def estimated_cost(self) -> float | None:
+        if any(placement.estimated_cost is None for placement in self.placements):
+            return None
         return sum(placement.estimated_cost for placement in self.placements)
 
     def public(self) -> dict:
@@ -71,7 +74,7 @@ class TaskSchedule:
             "placements": [
                 {
                     "task": placement.task_id,
-                    "target": placement.target.value,
+                    "target": placement.target.value if placement.target is not None else None,
                     "estimated_cost": placement.estimated_cost,
                     "transfers": [
                         {
@@ -84,17 +87,21 @@ class TaskSchedule:
                     ],
                     "evictions": list(placement.evictions),
                     "children": [child.public() for child in placement.children],
+                    **({"deferred_placement": placement.deferred_placement.public()}
+                       if placement.deferred_placement is not None else {}),
                 }
                 for placement in self.placements
             ],
-            "groups": [{"target": group.target.value, "tasks": list(group.task_ids)} for group in self.groups],
+            "groups": [{"target": group.target.value if group.target is not None else None,
+                        "tasks": list(group.task_ids)} for group in self.groups],
         }
 
 
 def _groups(placements: Iterable[ScheduledTask]) -> tuple[ExecutionGroup, ...]:
     groups: list[ExecutionGroup] = []
     for placement in placements:
-        if groups and groups[-1].target == placement.target and not placement.children:
+        if (groups and placement.target is not None and groups[-1].target == placement.target
+                and not placement.children):
             previous = groups.pop()
             groups.append(ExecutionGroup(placement.target, (*previous.task_ids, placement.task_id)))
         else:
@@ -102,7 +109,7 @@ def _groups(placements: Iterable[ScheduledTask]) -> tuple[ExecutionGroup, ...]:
     return tuple(groups)
 
 
-def verify_schedule(graph: TaskGraph, schedule: TaskSchedule) -> None:
+def _verify_schedule(graph: TaskGraph, schedule: TaskSchedule, *, incoming_uncertain=False) -> None:
     """Verify coverage, feasibility, dependencies, and unchanged control regions."""
     verify_task_graph(graph)
     if not isinstance(schedule, TaskSchedule):
@@ -114,12 +121,29 @@ def verify_schedule(graph: TaskGraph, schedule: TaskSchedule) -> None:
         if positions[edge.before] >= positions[edge.after]:
             raise TaskGraphError(f"Schedule violates {edge.kind.value} dependency {edge.before} -> {edge.after}")
     tasks = {task.id: task for task in graph.tasks}
+    original_positions = {task.id: index for index, task in enumerate(graph.tasks)}
+    remaining = set(tasks)
+    uncertain = incoming_uncertain
     for placement in schedule.placements:
         task = tasks[placement.task_id]
-        if not isinstance(placement.target, ExecutionTarget) or placement.target not in task.implementations:
+        if uncertain and placement.task_id != min(remaining, key=original_positions.__getitem__):
+            raise TaskGraphError("Unresolved runtime placement must retain remaining original source order")
+        remaining.remove(placement.task_id)
+        deferred = task.deferred_placement
+        if deferred is not None:
+            if (placement.target is not None or placement.deferred_placement is None
+                    or placement.deferred_placement.public() != deferred.public()
+                    or placement.estimated_cost is not None or placement.transfers or placement.evictions):
+                raise TaskGraphError("Runtime placement must retain its exact policy and unavailable estimate")
+            uncertain = True
+        elif (placement.deferred_placement is not None or not isinstance(placement.target, ExecutionTarget)
+              or placement.target not in task.implementations):
             raise TaskGraphError(f"Task {task.id} has no {placement.target} implementation")
-        if not math.isfinite(placement.estimated_cost) or placement.estimated_cost < 0:
+        if (placement.estimated_cost is not None
+                and (not math.isfinite(placement.estimated_cost) or placement.estimated_cost < 0)):
             raise TaskGraphError("Schedule contains invalid estimated cost")
+        if uncertain and (placement.estimated_cost is not None or placement.transfers or placement.evictions):
+            raise TaskGraphError("Unresolved runtime placement cannot grant later residency cost credit")
         if isinstance(task.structure, BranchRegion):
             children = task.structure.then_graph, task.structure.else_graph
         elif isinstance(task.structure, LoopRegion):
@@ -129,11 +153,22 @@ def verify_schedule(graph: TaskGraph, schedule: TaskSchedule) -> None:
         if len(children) != len(placement.children):
             raise TaskGraphError(f"Schedule changes the control structure of task {task.id}")
         for child_graph, child_schedule in zip(children, placement.children, strict=True):
-            verify_schedule(child_graph, child_schedule)
+            _verify_schedule(child_graph, child_schedule, incoming_uncertain=uncertain)
+        if any(child.estimated_cost is None for child in placement.children):
+            if placement.estimated_cost is not None:
+                raise TaskGraphError("Structured task cannot hide an unavailable child estimate")
+            uncertain = True
+        if placement.estimated_cost is None and not uncertain:
+            raise TaskGraphError("Unavailable estimate requires an unresolved runtime placement")
     if schedule.groups and tuple((group.target, group.task_ids) for group in schedule.groups) != tuple(
         (group.target, group.task_ids) for group in _groups(schedule.placements)
     ):
         raise TaskGraphError("Execution groups do not match the actual schedule")
+
+
+def verify_schedule(graph: TaskGraph, schedule: TaskSchedule) -> None:
+    """Verify complete placement and runtime bindings from a known graph entry."""
+    _verify_schedule(graph, schedule)
 
 
 @dataclass
@@ -144,9 +179,11 @@ class _State:
     valid: dict[str, set[ExecutionTarget]]
     allocated: set[str]
     previous: ExecutionTarget | None = None
+    uncertain: bool = False
 
     def copy(self) -> _State:
-        return _State({name: set(targets) for name, targets in self.valid.items()}, set(self.allocated), self.previous)
+        return _State({name: set(targets) for name, targets in self.valid.items()}, set(self.allocated),
+                      self.previous, self.uncertain)
 
 
 def _merge_states(states: tuple[_State, ...]) -> _State:
@@ -156,7 +193,7 @@ def _merge_states(states: tuple[_State, ...]) -> _State:
     }
     allocated = set().union(*(state.allocated for state in states))
     # After conditional execution a submission adjacency credit is not proved.
-    return _State(valid, allocated)
+    return _State(valid, allocated, uncertain=any(state.uncertain for state in states))
 
 
 def _all_tasks(graph: TaskGraph):
@@ -182,6 +219,7 @@ def schedule_tasks(
     launch_cost: float = 0.0,
     target_switch_cost: float = 0.0,
     preserve_source_order: bool = False,
+    group_search_budget: int = 64,
 ) -> TaskSchedule:
     """Greedily place ready tasks using execution, transfers, and live memory.
 
@@ -195,6 +233,11 @@ def schedule_tasks(
     and intersect guaranteed validity at the join; counted loops are costed as
     one body traversal while retaining their actual bounds and zero-trip path.
     These approximations affect profitability, never execution semantics.
+
+    Connected GPU proposals also compare a complete ready prefix with its
+    independently priced alternative. This can amortize the first upload over
+    several consumers. The budget bounds proposal evaluations per ready-list
+    decision; it never limits graph coverage, groups or storage lifetime.
     """
     verify_task_graph(graph)
     costs = dict(costs or {})
@@ -212,12 +255,16 @@ def schedule_tasks(
         raise ValueError("Resource sizes must be nonnegative integers")
     if memory_budget_bytes is not None and (not isinstance(memory_budget_bytes, int) or memory_budget_bytes < 0):
         raise ValueError("Device memory budget must be a nonnegative integer")
+    if type(group_search_budget) is not int or group_search_budget < 0:
+        raise ValueError("Group search budget must be a nonnegative integer")
     if any(
         not math.isfinite(value) or value < 0
         for value in (transfer_cost, transfer_byte_cost, launch_cost, target_switch_cost)
     ):
         raise ValueError("Scheduling overhead costs must be finite and nonnegative")
     for task in tasks:
+        if task.deferred_placement is not None and task.id in required:
+            raise TaskGraphError("Runtime-deferred policy cannot also have a static required target")
         if task.id in required and required[task.id] not in task.implementations:
             raise TaskGraphError(f"Required target cannot execute task {task.id}")
 
@@ -241,9 +288,13 @@ def schedule_tasks(
             predecessors[edge.after].add(edge.before)
         done: set[str] = set()
         placements = []
+        search_remaining = 0
 
-        def candidate(task: Task, target: ExecutionTarget) -> tuple[ScheduledTask, _State] | None:
-            after = state.copy()
+        def candidate(task: Task, target: ExecutionTarget, before: _State | None = None
+                      ) -> tuple[ScheduledTask, _State] | None:
+            if task.deferred_placement is not None:
+                raise TaskGraphError("Runtime-deferred task cannot be priced as a fixed physical target")
+            after = (state if before is None else before).copy()
             model = costs.get(task.id, TaskCost())
             estimate = model.cpu if target == ExecutionTarget.CPU else model.gpu + launch_cost
             if after.previous is not None and after.previous != target:
@@ -286,7 +337,8 @@ def schedule_tasks(
                             default=math.inf,
                         )
 
-                    for resource in sorted(victims, key=lambda name: (-next_use(name), name)):
+                    for resource in sorted(victims, key=lambda name: (
+                            ExecutionTarget.CPU not in after.valid.get(name, set()), -next_use(name), name)):
                         if occupied <= memory_budget_bytes:
                             break
                         ensure(resource, ExecutionTarget.CPU, "eviction")
@@ -313,21 +365,131 @@ def schedule_tasks(
                 then_schedule, then_state = execute(task.structure.then_graph, after)
                 else_schedule, else_state = execute(task.structure.else_graph, after)
                 children = then_schedule, else_schedule
-                estimate += max(child.estimated_cost for child in children)
+                if any(child.estimated_cost is None for child in children):
+                    estimate = None
+                else:
+                    estimate += max(child.estimated_cost for child in children)
                 after = _merge_states((then_state, else_state))
             elif isinstance(task.structure, LoopRegion):
                 body_schedule, body_state = execute(task.structure.body, after)
                 children = (body_schedule,)
-                estimate += body_schedule.estimated_cost
+                if body_schedule.estimated_cost is None:
+                    estimate = None
+                else:
+                    estimate += body_schedule.estimated_cost
                 after = _merge_states((after, body_state))
             after.previous = None if children else target
             return ScheduledTask(task.id, target, estimate, tuple(transfers), tuple(evictions), children), after
 
+        def unresolved(task):
+            """Retain source order without inventing physical replica/cost facts.
+
+            A runtime choice may evict any replica. Its actual accesses and
+            memory budget remain runtime responsibilities; clearing this cost
+            state emits no copy, eviction, publication or allocation operation.
+            """
+            after = state.copy()
+            after.uncertain = True
+            after.valid = {name: set() for name in after.valid}
+            after.allocated.clear()
+            after.previous = None
+            deferred = task.deferred_placement
+            target = None if deferred is not None else required.get(task.id, (
+                ExecutionTarget.CPU if ExecutionTarget.CPU in task.implementations else ExecutionTarget.GPU))
+            if target == ExecutionTarget.GPU and memory_budget_bytes is not None:
+                touched = task.effects.data_resources
+                if (any(name not in sizes for name in touched)
+                        or sum(sizes[name] for name in touched) > memory_budget_bytes):
+                    raise TaskGraphError("Required GPU working set cannot fit the known device memory budget")
+            children = ()
+            if isinstance(task.structure, BranchRegion):
+                left, left_state = execute(task.structure.then_graph, after)
+                right, right_state = execute(task.structure.else_graph, after)
+                children = left, right
+                after = _merge_states((left_state, right_state))
+            elif isinstance(task.structure, LoopRegion):
+                body, body_state = execute(task.structure.body, after)
+                children = (body,)
+                after = _merge_states((after, body_state))
+            return ScheduledTask(task.id, target, None, children=children, deferred_placement=deferred), after
+
+        def connected_group(task, placement, next_state):
+            """Price, then commit one dependency-valid connected GPU prefix.
+
+            Alternative states are private estimates. Neither search exhaustion
+            nor an unprofitable suffix removes work from the actual schedule.
+            Structured controls remain single tasks and keep their own schedules.
+            """
+            nonlocal search_remaining
+            if (not search_remaining or preserve_source_order or task.structure is not None
+                    or placement.estimated_cost is None or next_state.uncertain
+                    or task.effects.opaque or task.effects.lifetime_resources
+                    or ExecutionTarget.CPU not in task.implementations or task.id in required):
+                return (placement,), next_state, placement.estimated_cost
+            baseline = candidate(task, ExecutionTarget.CPU)
+            if baseline is None:
+                return (placement,), next_state, placement.estimated_cost
+            base_placement, base_state = baseline
+            base_total, gpu_total = base_placement.estimated_cost, placement.estimated_cost
+            first_difference = base_total - gpu_total
+            best = (placement,), next_state, placement.estimated_cost
+            selected = [placement]
+            selected_ids = {task.id}
+            connected = set(task.effects.data_resources)
+            while search_remaining:
+                frontier = [value for value in remaining.values()
+                            if value.id not in selected_ids and predecessors[value.id] <= done | selected_ids
+                            and value.deferred_placement is None
+                            and value.structure is None and not value.effects.opaque
+                            and not value.effects.lifetime_resources
+                            and ExecutionTarget.GPU in value.implementations
+                            and required.get(value.id, ExecutionTarget.GPU) == ExecutionTarget.GPU
+                            and connected & value.effects.data_resources]
+                proposals = []
+                # A small deterministic frontier preserves budget for deeper
+                # shared-read chains instead of spending it all on siblings.
+                for value in frontier[:4]:
+                    if not search_remaining:
+                        break
+                    search_remaining -= 1
+                    gpu = candidate(value, ExecutionTarget.GPU, next_state)
+                    targets = ((required[value.id],) if value.id in required else
+                               sorted(value.implementations, key=lambda item: item.value))
+                    alternatives = [item for target in targets
+                                    if (item := candidate(value, target, base_state)) is not None]
+                    if gpu is None or not alternatives:
+                        continue
+                    alternative = min(alternatives, key=lambda item: (
+                        item[0].estimated_cost, item[0].target.value))
+                    proposals.append(((gpu[0].estimated_cost - alternative[0].estimated_cost,
+                                       positions[value.id]), value, gpu, alternative))
+                if not proposals:
+                    break
+                _key, value, gpu, alternative = min(proposals, key=lambda item: item[0])
+                selected.append(gpu[0])
+                selected_ids.add(value.id)
+                connected.update(value.effects.data_resources)
+                next_state, base_state = gpu[1], alternative[1]
+                gpu_total += gpu[0].estimated_cost
+                base_total += alternative[0].estimated_cost
+                credit = base_total - gpu_total - first_difference
+                if credit > 0 and placement.estimated_cost - credit < best[2]:
+                    best = tuple(selected), next_state, placement.estimated_cost - credit
+            return best
+
         while remaining:
             ready = [task for task in remaining.values() if predecessors[task.id] <= done]
+            if state.uncertain or any(task.deferred_placement is not None for task in ready):
+                task = min(ready, key=lambda value: positions[value.id])
+                placement, state = unresolved(task)
+                placements.append(placement)
+                done.add(task.id)
+                del remaining[task.id]
+                continue
             if preserve_source_order:
                 ready = [min(ready, key=lambda task: positions[task.id])]
             choices = []
+            search_remaining = group_search_budget
             for task in ready:
                 targets = (
                     (required[task.id],)
@@ -338,18 +500,22 @@ def schedule_tasks(
                     proposal = candidate(task, target)
                     if proposal is not None:
                         placement, next_state = proposal
+                        selected, next_state, score = (connected_group(task, placement, next_state)
+                            if target == ExecutionTarget.GPU else ((placement,), next_state, placement.estimated_cost))
                         # Equal costs prefer the current submission target,
                         # then original order, then CPU for reproducibility.
-                        key = (placement.estimated_cost, target != state.previous, positions[task.id], target.value)
-                        choices.append((key, placement, next_state))
+                        key = (score if score is not None else math.inf,
+                               target != state.previous, positions[task.id], target.value)
+                        choices.append((key, selected, next_state))
             if not choices:
                 raise TaskGraphError("No ready implementation fits target constraints and device memory budget")
             _key, selected, state = min(choices, key=lambda item: item[0])
-            placements.append(selected)
-            done.add(selected.task_id)
-            del remaining[selected.task_id]
+            placements.extend(selected)
+            for placement in selected:
+                done.add(placement.task_id)
+                del remaining[placement.task_id]
         result = TaskSchedule(tuple(placements), _groups(placements))
-        verify_schedule(current, result)
+        _verify_schedule(current, result, incoming_uncertain=incoming.uncertain)
         return result, state
 
     result, _state = execute(graph, initial)

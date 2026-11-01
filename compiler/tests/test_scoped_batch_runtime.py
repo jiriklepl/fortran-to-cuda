@@ -561,7 +561,9 @@ print *, c_sizeof(costs), c_sizeof(binding), c_sizeof(unit), c_sizeof(batch), &
 end program
 """)
     target = tmp_path / "check"
-    subprocess.run([compiler, str(Path(__file__).resolve().parents[1] / "runtime/scoped_memory.f90"),
+    # This is a layout-only consumer; unused resident helpers require the CUDA runtime.
+    subprocess.run([compiler, "-ffunction-sections", "-Wl,--gc-sections",
+                    str(Path(__file__).resolve().parents[1] / "runtime/scoped_memory.f90"),
                     str(source), "-o", str(target)], cwd=tmp_path, check=True, capture_output=True, timeout=30)
     observed = [int(value) for value in subprocess.check_output([str(target)], text=True).split()]
     assert observed == [c.sizeof(kind) for kind in (BatchCosts, BatchBinding, Unit, Batch, View, Window, BatchReport)] + [-1]

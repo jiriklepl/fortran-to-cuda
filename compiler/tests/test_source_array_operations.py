@@ -47,7 +47,10 @@ def test_conformant_operations_are_proved_without_rebasing_logical_indices(tmp_p
     _, _, node, region, function, plan = extracted(tmp_path, statement)
     assert region.nodes == (node,)
     assert region.private_scalars == ()
-    assert "fort_array_lower_" in region.source
+    if statement in {"a=scale", "a=a*scale", "a=scale/real(size(a),8)"}:
+        assert not any(item.lower_bound_dimension is not None for item in region.parameters)
+    else:
+        assert "fort_array_lower_" in region.source
     assert region.runtime_guards
     assert len(plan.regions) == 1
     public = analyze_offload(function, plan)
@@ -99,6 +102,39 @@ def test_new_array_math_retains_native_ieee_environment_guard(tmp_path):
                                   "STATEMENT", "STATEMENT\ncall ieee_get_flag(ieee_invalid,seen)")
     with pytest.raises(CompilationError, match="source-observable"):
         extracted(tmp_path, "a=a*scale", observer)
+
+
+@pytest.mark.parametrize("statement", ["a=scale", "a=a*scale", "a=b*scale"])
+def test_whole_array_effects_retain_descriptor_origins_and_typed_guards(tmp_path, statement):
+    from compiler._legacy.config import LegacyCompilerOptions, LegacyOffloadConfig
+    from compiler.frontend.numerical_effects import prove_numerical_effects
+    from compiler.frontend.numerical_preparation import NumericalPreparationProvider, _prepare
+
+    analysis, routine, node, extraction, _, _ = extracted(tmp_path, statement)
+    provider = NumericalPreparationProvider(
+        analysis,
+        options=LegacyCompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="reached"),
+        config=LegacyOffloadConfig(policy="sections", scope_execution="reached"),
+        environment_root=routine.qualified,
+    )
+    prepared = _prepare(analysis, routine.qualified, (node,), provider,
+                        extraction=extraction, require_effects=False)
+    effects = prove_numerical_effects(analysis, routine.qualified, (node,), prepared)
+    assert set(extraction.runtime_guards) == {guard.runtime_expression for guard in effects.preconditions}
+    roles = {guard.role for guard in effects.preconditions}
+    assert "array_extent_range" in roles
+    assert ("array_shape_equal" in roles) == (statement == "a=b*scale")
+    target = next(item for item in effects.sections.resources if item.resource == "argument::a")
+    assert target.lower_bounds == (-3, -2)
+    assert target.overwrites
+    assert bool(target.reads) == (statement == "a=a*scale")
+    assert any(item.kind == "descriptor_read" and item.resource == "argument::a"
+               for item in target.dependencies)
+    if statement == "a=b*scale":
+        source = next(item for item in effects.sections.resources if item.resource == "argument::b")
+        assert source.lower_bounds == (-7, -6)
+        assert source.reads
+        assert not source.writes
 
 
 @pytest.mark.parametrize("statement", [

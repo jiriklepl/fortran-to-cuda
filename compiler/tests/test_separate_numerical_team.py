@@ -156,12 +156,28 @@ def test_separate_partition_does_not_expand_original_parallel_clause_support(tmp
         _source_partition(builder, selection)
 
 
-def test_separate_group_unit_budget_and_semicolon_source_boundary_are_enforced(tmp_path):
+@pytest.mark.parametrize("count", [33, 65])
+def test_large_separate_group_retains_every_original_worksharing_unit(tmp_path, count):
     loop = "!$omp do\ndo i=-3,n\nb(i)=a(i)\nenddo\n!$omp end do\n"
-    body = "!$omp parallel private(i)\n" + loop * 33 + "!$omp end parallel\n"
-    builder, selection = group_fixture(tmp_path / "many", SOURCE.replace(BODY, body))
-    with pytest.raises(CompilationError, match="source-unit budget exhausted"):
+    body = "!$omp parallel private(i)\n" + loop * count + "!$omp end parallel\n"
+    builder, selection = group_fixture(tmp_path, SOURCE.replace(BODY, body))
+    assert is_combined_group(builder, selection)
+    partition = _source_partition(builder, selection)
+    assert partition["unit_count"] == count
+    assert partition["body"] == loop * count
+    assert partition["source_sha256"] == sha256(body.encode()).hexdigest()
+
+
+def test_large_separate_group_cannot_hide_an_unsafe_tail(tmp_path):
+    loop = "!$omp do\ndo i=-3,n\nb(i)=a(i)\nenddo\n!$omp end do\n"
+    body = "!$omp parallel private(i)\n" + loop * 65 + "call unknown_tail(b)\n!$omp end parallel\n"
+    builder, selection = group_fixture(tmp_path, SOURCE.replace(BODY, body))
+    assert not is_combined_group(builder, selection)
+    with pytest.raises(CompilationError, match="only flat original worksharing"):
         _source_partition(builder, selection)
-    builder, selection = group_fixture(tmp_path / "semicolon", SOURCE.replace("enddo\n", "enddo; s=1\n", 1))
+
+
+def test_separate_group_semicolon_source_boundary_is_enforced(tmp_path):
+    builder, selection = group_fixture(tmp_path, SOURCE.replace("enddo\n", "enddo; s=1\n", 1))
     with pytest.raises(CompilationError):
         _source_partition(builder, selection)

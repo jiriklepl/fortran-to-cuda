@@ -166,10 +166,11 @@ def test_conditional_close_rejects_changed_original_authority_without_emission(t
     _point, _graph, parent = close_point(builder, proof)
     if mutation == "source":
         path.write_text(SINGLE_SOURCE + "\n! changed after registration\n")
-        with GenerationTransaction(builder) as transaction:
-            owner = ReachedWindowOwner(transaction.builder, proof, originals)
-            with pytest.raises(CompilationError, match="source changed"):
-                owner.run()
+        with (
+            pytest.raises(CompilationError, match="source changed"),
+            GenerationTransaction(builder) as transaction,
+        ):
+            ReachedWindowOwner(transaction.builder, proof, originals).run()
     elif mutation == "binding":
         with pytest.raises(CompilationError):
             builder.entry.scope.bindings["bad"] = copy(builder.entry.scope.bindings["bad"])

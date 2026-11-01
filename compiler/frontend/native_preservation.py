@@ -203,7 +203,8 @@ def prove_native_preservation(analysis, procedure, originals, demanded, *, conte
         analysis._native_preservation_registry_owner = analysis
     if value.identity in registry:
         return registry[value.identity].validate(analysis, procedure, originals, demanded)
-    if len(registry) >= analysis.procedure_limit:
+    from compiler.frontend.storage_mutation_effects import source_registry_budget
+    if len(registry) >= source_registry_budget(analysis):
         raise CompilationError("native preservation proof registry budget exhausted")
     registry[value.identity] = value
     try:

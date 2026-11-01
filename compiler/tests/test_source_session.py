@@ -11,6 +11,21 @@ from compiler.ir import CompilationError
 from compiler.tests.test_source_syntax_authority import fixture
 
 
+@pytest.mark.parametrize("foreign", ["object", "exact_session"])
+def test_unsealed_analysis_rejects_foreign_session_before_installing_it(tmp_path, foreign):
+    path, analysis, _routine = fixture(tmp_path)
+    if foreign == "exact_session":
+        other = SourceEffects([path])
+        other.seal_session()
+        value = other._source_session
+    else:
+        value = object()
+    with pytest.raises(CompilationError, match="SourceSession|original registry changed"):
+        analysis._source_session = value
+    assert getattr(analysis, "_source_session", None) is None
+    assert analysis.seal_session()
+
+
 @pytest.mark.parametrize("mutation", [
     lambda a, r: setattr(r.scope.bindings["a"], "kind", 4),
     lambda a, r: setattr(r, "arguments", ()),
@@ -74,13 +89,13 @@ def test_private_routine_overrides_authenticate_only_their_own_projection(tmp_pa
     assert projected.session_identity == identity
     local = copy(routine)
     local.arguments = ()
-    projected.routines[routine.qualified] = local
+    projected.project_routine(routine.qualified, local)
     assert projected._summary_authority()["role"] == "private_projection"
     assert analysis._summary_authority()["role"] == "source"
     with pytest.raises(CompilationError, match="original source-backed"):
         projected._require_original(routine.qualified)
     second = projected.private_projection()
-    second.routines[routine.qualified] = routine
+    second.project_routine(routine.qualified, routine)
     assert projected.routines[routine.qualified] is local
     assert second._require_original(routine.qualified) is routine
 
@@ -89,9 +104,9 @@ def test_private_routine_overrides_authenticate_only_their_own_projection(tmp_pa
 def test_equal_looking_replacement_registry_cannot_borrow_session_authority(tmp_path, name):
     _path, analysis, routine = fixture(tmp_path)
     analysis.seal_session()
-    setattr(analysis, name, dict(getattr(analysis, name)))
-    with pytest.raises(CompilationError, match="original registry changed"):
-        analysis._require_original(routine.qualified)
+    with pytest.raises(CompilationError, match="sealed original source registry is immutable"):
+        setattr(analysis, name, dict(getattr(analysis, name)))
+    assert analysis._require_original(routine.qualified) is routine
 
 
 def test_captured_text_is_used_until_live_publication_authentication(tmp_path):
@@ -199,7 +214,7 @@ def test_freezing_private_copies_does_not_grant_source_authority(tmp_path):
     local = copy(routine)
     local.arguments = ()
     GraphFreezer(owned_types=(Routine,), borrowed=(local.scope, local.execution)).freeze(local)
-    private.routines[routine.qualified] = local
+    private.project_routine(routine.qualified, local)
     assert private._routine_signature(local) != analysis._routine_signature(routine)
     assert private._summary_authority()["role"] == "private_projection"
     with pytest.raises(CompilationError, match="original source-backed"):
@@ -221,7 +236,7 @@ def test_scope_roles_bind_only_the_session_and_explicit_overrides(tmp_path):
     _validate_scope_roles(analysis, roles, {id(routine.scope)})
     projection = analysis.private_projection(routines=True)
     roles = _scope_roles(projection)
-    projection.routines[routine.qualified] = copy(routine)
+    projection.project_routine(routine.qualified, copy(routine))
     with pytest.raises(CompilationError, match="resolution authority changed"):
         _validate_scope_roles(projection, roles, {id(routine.scope)})
 

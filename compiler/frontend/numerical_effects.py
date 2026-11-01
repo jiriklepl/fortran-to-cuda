@@ -155,7 +155,15 @@ class _Mapper:
     def original(self, expression, binding, dimension):
         symbol = self.lowers.get((binding.root, dimension))
         if symbol is None:
-            raise CompilationError("numerical effect original array lower-bound parameter changed")
+            if self.prepared.extraction.operation_kind != "array_assignment":
+                raise CompilationError("numerical effect original array lower-bound parameter changed")
+            # Whole-array normalization does not evaluate a default-INTEGER
+            # lower bound. Recover original coordinates from the original
+            # descriptor, without narrowing it through an unused scalar ABI.
+            offset = self.bound(self.canonical(Binary("-", expression, Literal("1", ScalarType.INTEGER))))
+            lower = NativeBound("lbound", dimension=dimension, resource=binding.root,
+                                dependencies=(SourceDependency(binding.root, "descriptor_read", binding),))
+            return NativeBound("binary", operator="+", children=(lower, offset))
         expression = Binary("-", Binary("+", expression, Reference(symbol)), Literal("1", ScalarType.INTEGER))
         return self.bound(self.canonical(expression))
 
@@ -175,10 +183,36 @@ class _Mapper:
                                           self.bound(self.canonical(loop.upper)), step))
         return tuple(result)
 
+    def own_extent(self, bound, binding):
+        """Use only authenticated whole-array conformance on its true path.
+
+        A normalized RHS shares the target's iteration extent. Its physical
+        access can use its own descriptor only when an original typed shape
+        equality proves that extent. Other cross-descriptor bounds still
+        require a separate rendering contract.
+        """
+        self.tick()
+        if (bound.kind == "size" and bound.resource != binding.root
+                and self.prepared.extraction.operation_kind == "array_assignment"):
+            for guard in self.prepared.preconditions:
+                self.tick()
+                if guard.role != "array_shape_equal" or guard.activation_domains or len(guard.operands) != 2:
+                    continue
+                left, right = guard.operands
+                for source, replacement in ((left, right), (right, left)):
+                    if (source == bound and replacement.kind == "size" and replacement.resource == binding.root
+                            and replacement.dimension is not None and 1 <= replacement.dimension <= binding.rank):
+                        return NativeBound("size", dimension=replacement.dimension, resource=binding.root,
+                            dependencies=(SourceDependency(binding.root, "descriptor_read", binding),))
+        return replace(bound, children=tuple(self.own_extent(child, binding) for child in bound.children))
+
     def rectangles(self, boxes, unit, binding, node, iterations):
         if len(boxes) > RECTANGLE_LIMIT:
             raise CompilationError("numerical effect rectangle budget exhausted")
         result = []
+        iterations = tuple(NativeIteration(self.own_extent(item.lower, binding),
+                                          self.own_extent(item.upper, binding), item.step)
+                           for item in iterations)
         for box in boxes:
             self.tick()
             if box.active_units != (unit.index,):
@@ -192,8 +226,9 @@ class _Mapper:
                         or mapping.axis is not None and (not 0 <= mapping.axis < len(unit.region.loops)
                                                         or mapping.coefficient not in {-1, 1})):
                     raise NumericalEffectUnsupported("numerical effect physical axis is unsupported")
-                axes.append(NativeAxis(self.original(lower, binding, dimension),
-                                       self.original(upper, binding, dimension), mapping.axis is None))
+                axes.append(NativeAxis(self.own_extent(self.original(lower, binding, dimension), binding),
+                                       self.own_extent(self.original(upper, binding, dimension), binding),
+                                       mapping.axis is None))
             result.append(NativeRectangle(tuple(axes), node, iterations))
         return _unique(tuple(result))
 
@@ -373,7 +408,9 @@ def _derive(analysis, procedure, selection, prepared, consume):
               "input_definitions_authorized": False, "execution_authorized": False,
               "native_hook_authorized": False, "gpu_legality_established": False,
               "descriptor_lifetime_authorized": False, "alias_authorized": False,
-              "unconditional_return_definitions_authorized": False, "bounds_evaluated": False}
+              "unconditional_return_definitions_authorized": False, "bounds_evaluated": False,
+              **({"conditional_numerical_context_identity": prepared.conditional_context.identity}
+                 if prepared.conditional_context is not None else {})}
     return tuple(steps), sections, record
 
 
@@ -414,6 +451,8 @@ class NumericalEffectProof:
     def transfer(self, entry_rectangles=None, *, consume=None):
         """Definitions only on the original preparation-precondition-true path."""
         self.validate(self._analysis, self.procedure, self._selection, consume=consume)
+        if self._prepared.conditional_context is not None:
+            raise NumericalEffectUnsupported("conditional affine effects require their reached legal-domain guard; no generic definition transfer")
         return _transfer_steps(self.steps, {item.resource: item.rank for item in self.sections.resources},
                                entry_rectangles, joined=True,
                                operation_limit=self._analysis.operation_limit, consume=consume)

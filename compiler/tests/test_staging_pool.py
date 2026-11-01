@@ -110,6 +110,63 @@ int main(int argc,char **argv) {
         assert(fake::streams_drained==1 && fake::events_waited==0);
         return 0;
     }
+    if(argc>1 && std::strcmp(argv[1],"compact-budget")==0) {
+        const auto initial=snapshot();
+        auto a=acquire(1024,Role::Compact,false,2048);
+        assert(a.slots && !a.reused && usage().device_reserved==2048 && fake::device_bytes==2048);
+        const auto active=snapshot();assert(active.revision>initial.revision && active.idle_capacity==0);
+        auto missed=acquire(256,Role::Compact,false,2048);
+        assert(missed.exhausted && !missed.slots && usage().device_reserved==2048);
+        assert(release(std::move(a.slots),freed)==0);
+        const auto idle=snapshot();assert(idle.idle_capacity==1024 && idle.device_reserved==2048);
+        // A cached larger pair cannot silently exceed a tighter caller quota.
+        a=acquire(256,Role::Compact,false,512);
+        assert(a.slots && !a.reused && a.slots->capacity==256 && usage().device_reserved==512);
+        assert(fake::device_bytes==512 && fake::pinned==512);
+        assert(release(std::move(a.slots),freed)==0);
+        a=acquire(128,Role::Compact,false,512);
+        assert(a.reused && a.slots->capacity==256 && usage().device_reserved==512);
+        assert(release(std::move(a.slots),freed)==0);
+        assert(trim_cache(freed)==0 && !usage().device_reserved && !usage().reserved);
+        assert(usage().device_peak==2048 && fake::memory.empty());return 0;
+    }
+    if(argc>1 && std::strcmp(argv[1],"compact-no-eviction")==0) {
+        auto a=acquire(1024,Role::Staging,false);
+        const auto original=a.slots->slots[0].host;
+        assert(release(std::move(a.slots),freed)==0);
+        const auto before=snapshot();
+        auto b=acquire(256,Role::Compact,false,device_limit,true);
+        assert(b.exhausted && b.unpriced_idle && !b.slots && !b.freed_devices);
+        assert(snapshot().revision==before.revision && fake::memory.count(original));
+        assert(trim_cache(freed)==0);
+        b=acquire(256,Role::Compact,false,device_limit,true);
+        assert(b.slots && !b.reused);
+        assert(release(std::move(b.slots),freed)==0);
+        b=acquire(512,Role::Compact,false,device_limit,true);
+        assert(b.exhausted && b.unpriced_idle && !b.slots && usage().device_reserved==512);
+        b=acquire(128,Role::Compact,false,device_limit,true);
+        assert(b.slots && b.reused && b.slots->capacity==256);
+        assert(release(std::move(b.slots),freed)==0 && trim_cache(freed)==0);
+        assert(fake::memory.empty() && !usage().reserved && !usage().device_reserved);return 0;
+    }
+    if(argc>1 && std::strcmp(argv[1],"compact-undrained")==0) {
+        auto a=acquire(256,Role::Compact,false,512);
+        a.slots->slots[0].pending=true;fake::outstanding=true;fake::fail_drain=true;
+        fake::outstanding_host=a.slots->slots[0].host;a.slots.reset();
+        // The failed slot stays alive; the full reservation remains charged.
+        assert(fake::device_bytes==256 && fake::pinned==256 && usage().device_reserved==512);
+        assert(usage().reserved==512 && fake::memory.size()==2);return 0;
+    }
+    if(argc>1 && std::strcmp(argv[1],"compact-allocation-failures")==0) {
+        for(int point=1;point<=8;++point) {
+            fake::allocations=0;fake::fail_at=point;
+            auto a=acquire(1024,Role::Compact,false,2048);
+            assert(!a.slots && a.status==cudaErrorMemoryAllocation);
+            assert(!usage().device_reserved && !usage().reserved && !fake::device_bytes && !fake::pinned);
+            assert(fake::memory.empty() && !fake::handles);
+        }
+        return 0;
+    }
     // Every staging allocation stage rolls back partial resources/reservation.
     for(int point=1;point<=6;++point) {
         fake::allocations=0; fake::fail_at=point;
@@ -173,4 +230,10 @@ def test_shared_pool_roles_budget_reuse_and_unrecorded_event_drain(pool_program)
 
 def test_unproved_completion_retains_charged_dma_storage(pool_program):
     result = subprocess.run([str(pool_program), "undrained"], capture_output=True, text=True, timeout=20)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("mode", ["compact-budget", "compact-undrained", "compact-allocation-failures", "compact-no-eviction"])
+def test_compact_pool_accounts_idle_active_failed_and_partial_device_storage(pool_program, mode):
+    result = subprocess.run([str(pool_program), mode], capture_output=True, text=True, timeout=20)
     assert result.returncode == 0, result.stderr

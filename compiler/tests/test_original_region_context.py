@@ -342,7 +342,7 @@ def test_sealed_context_does_not_lend_cached_authority_to_other_sources(tmp_path
         selection = (selected_loop(other),)
     elif replacement == "projection":
         analysis.routines = ProjectedRoutines(analysis.routines)
-        analysis.routines[ENTRY] = copy(routine)
+        analysis.project_routine(ENTRY, copy(routine))
     else:
         analysis = other_analysis
     with pytest.raises(CompilationError):
@@ -363,7 +363,7 @@ def test_context_callbacks_cannot_replace_authenticated_registry_before_return(t
     def consume(amount):
         charged.append(amount)
         if len(charged) == 7:
-            analysis.routines[ENTRY] = copy(routine)
+            analysis.project_routine(ENTRY, copy(routine))
 
     with pytest.raises(CompilationError, match="original source-backed procedure authority"):
         original_region_context(routine, selection, analysis=analysis, consume=consume)

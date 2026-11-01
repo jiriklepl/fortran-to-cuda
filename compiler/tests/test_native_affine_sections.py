@@ -157,7 +157,8 @@ end function
     source = tmp_path / "check.f90"
     source.write_text(stub + checked + driver)
     binary = tmp_path / "check"
-    built = subprocess.run([fortran, "-std=f2018", "-fcheck=all", str(interface), str(source), "-o", str(binary)],
+    built = subprocess.run([fortran, "-std=f2018", "-fcheck=all", "-ffunction-sections", "-Wl,--gc-sections",
+                               str(interface), str(source), "-o", str(binary)],
                            cwd=tmp_path, capture_output=True, text=True, timeout=60)
     assert built.returncode == 0, built.stdout + built.stderr
     ran = subprocess.run([str(binary)], cwd=tmp_path, capture_output=True, text=True, timeout=60)

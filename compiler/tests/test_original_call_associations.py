@@ -11,7 +11,7 @@ from compiler.frontend.call_bindings import (
     resolve_source_call,
     resolve_source_function,
 )
-from compiler.frontend.resource_reachability import prove_resource_reachability
+from compiler.frontend.resource_reachability import VERSION, prove_resource_reachability
 from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 
@@ -69,7 +69,7 @@ def test_indexed_scalar_expression_and_rank_reduction_keep_original_evaluation(t
     with pytest.raises(CompilationError, match="array-element/section actual requires in-place mapping"):
         resolve_source_call(analysis, owner.scope, node)
     proof = prove_resource_reachability(analysis, owner.qualified, (node,), (analysis.modules["work"].bindings["dz"],))
-    assert proof.public()["schema_version"] == 4
+    assert proof.public()["schema_version"] == VERSION
     assert proof.public()["selection_covered"], proof.public()["barriers"]
     assert proof.public()["demanded_effects"][0]["may_access"] == ["read"]
 
@@ -109,7 +109,7 @@ def test_derived_array_matches_declaring_type_without_sibling_layout_capture(tmp
     with pytest.raises(CompilationError, match="fixed nonoptional scalar original storage"):
         resolve_source_call(analysis, owner.scope, node)
     proof = prove_resource_reachability(analysis, owner.qualified, (node,), (analysis.modules["work"].bindings["old"],))
-    assert proof.public()["schema_version"] == 4
+    assert proof.public()["schema_version"] == VERSION
     assert proof.public()["selection_covered"], proof.public()["barriers"]
     assert proof.public()["demanded_effects"][0]["may_access"] == ["read"]
     assert any(item.native.components and item.native.components[-1].name == "flux" for item in proof.obligations)

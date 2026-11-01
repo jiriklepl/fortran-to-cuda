@@ -230,10 +230,17 @@ def test_repeated_identical_child_reuses_original_body_variant(tmp_path):
     assert paths[0].read_text() == CHILD_SOURCE
 
 
-def test_original_child_source_mutation_invalidates_root_plan(tmp_path):
+def test_changed_child_source_rejects_publication_after_immutable_fact_validation(tmp_path):
     paths, builder, proof, originals = mapped_child_fixture(tmp_path)
-    paths[0].write_text(CHILD_SOURCE.replace("2.0_8*x(i)", "3.0_8*x(i)"))
     assert proof.validate(builder.analysis, ENTRY, originals) is proof
+    original_facts = proof.public()
+    changed = CHILD_SOURCE.replace("2.0_8*x(i)", "3.0_8*x(i)")
+    assert changed != CHILD_SOURCE
+    paths[0].write_text(changed)
+    # Retained plans consume the issued immutable source arena. Disk bytes are
+    # checked at publication, before source edits or build artifacts escape.
+    assert proof.validate(builder.analysis, ENTRY, originals) is proof
+    assert proof.public() == original_facts
     with pytest.raises(CompilationError, match="source|original|changed"):
         builder.finish()
     assert not builder.outputs

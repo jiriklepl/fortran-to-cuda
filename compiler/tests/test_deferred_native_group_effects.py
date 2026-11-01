@@ -140,7 +140,7 @@ def test_later_native_unit_retains_authenticated_predicate_requirements(tmp_path
     assert not any(operation["kind"] == "native_predicate" for operation in result["operations"])
 
 
-def test_read_and_write_rectangles_share_one_bounded_union(tmp_path):
+def test_read_and_write_rectangles_have_separate_bounded_unions(tmp_path):
     repeated = "b(100,j)=sum(b(200:200,j))"
     text = source(body=repeated)
     for index in range(96):
@@ -153,8 +153,47 @@ def test_read_and_write_rectangles_share_one_bounded_union(tmp_path):
     proof = analysis.joined_completion(ENTRY, group.original_nodes)
     assert summarize(analysis, ENTRY, group.original_nodes, proof)["complete"]
     sections = analysis.native_sections_for_nodes(ENTRY, group.original_nodes, completion=proof, capture_locals=True)
+    assert sections.available, sections.reason
+    resource, = sections.resources
+    assert resource.resource == "argument::b"
+    assert resource.rank == 2 and resource.lower_bounds == (-2, -1)
+    assert len(resource.reads) == len(resource.writes) == 17
+    assert resource.overwrites == ()
+    for boxes, indices in ((resource.reads, range(17)), (resource.writes, range(100, 117))):
+        assert [box.axes[0].lower.value for box in boxes] == list(indices)
+        for box in boxes:
+            first, second = box.axes
+            assert first.lower.kind == first.upper.kind == "literal"
+            assert first.lower.value == first.upper.value
+            assert second.lower.public() == {"kind": "literal", "value": 0}
+            assert second.upper.public() == {"kind": "literal", "value": 2}
+            assert not second.point
+            assert len(box.iterations) == 1
+            iteration, = box.iterations
+            assert iteration.public() == {"lower": {"kind": "literal", "value": 0},
+                                          "upper": {"kind": "literal", "value": 2}, "step": 1}
+    assert path.read_text() == text
+
+
+@pytest.mark.parametrize("effect", ["read", "write"])
+def test_one_native_group_effect_still_rejects_more_than_32_rectangles(tmp_path, effect):
+    repeated = "b(100,j)=sum(b(200:200,j))"
+    text = source(body=repeated)
+    for index in range(96):
+        read = index % 33 if effect == "read" else 0
+        write = 100 + index % 33 if effect == "write" else 100
+        text = text.replace(repeated, f"b({write},j)=sum(b({read}:{read},j))", 1)
+    path = tmp_path / "one_effect_over_budget.f90"
+    path.write_text(text)
+    analysis = SourceEffects([path])
+    group, = analysis.structure(ENTRY).native_groups.values()
+    proof = analysis.joined_completion(ENTRY, group.original_nodes)
+    assert summarize(analysis, ENTRY, group.original_nodes, proof)["complete"]
+    sections = analysis.native_sections_for_nodes(ENTRY, group.original_nodes, completion=proof, capture_locals=True)
     assert not sections.available
     assert "union exceeds bounded refinement" in sections.reason
+    assert sections.resources == ()
+    assert path.read_text() == text
 
 
 def test_group_members_or_copied_tokens_never_acquire_whole_native_authority(tmp_path):

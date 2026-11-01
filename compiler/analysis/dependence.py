@@ -138,6 +138,42 @@ class _Event:
     active: dict[Symbol, Affine]
 
 
+@dataclass(frozen=True)
+class _AffineRegionModel:
+    """Unaccepted original event model, never parallel-execution authority."""
+
+    region: ParallelRegion
+    events: tuple[_Event, ...]
+    reads: isl.UnionMap
+    writes: isl.UnionMap
+    schedule: isl.UnionMap
+    parallel: isl.UnionMap
+    conflicts: tuple[tuple[str, isl.UnionMap], ...]
+    physical_affine: bool
+
+    def require_unconditional(self):
+        same_iteration = self.parallel.apply_range(self.parallel.reverse())
+        for kind, relation in self.conflicts:
+            bad = relation.subtract(same_iteration)
+            if not bad.is_empty():
+                mapping = bad.get_map_list().get_at(0)
+                source = self.events[int(mapping.get_tuple_name(isl.dim_type.in_)[1:])]
+                sink = self.events[int(mapping.get_tuple_name(isl.dim_type.out)[1:])]
+                names = ", ".join(sorted({access.symbol.name for access in (
+                    *source.reads, *source.writes, *sink.reads, *sink.writes)}))
+                conservative = self.region.report.conservative
+                raise ParallelizationError(
+                    f"Cannot parallelize: {kind} {'possible ' if conservative else ''}loop-carried conflict involving {names}; "
+                    + ("conservative dependence model; " if conservative else "")
+                    + f"accesses at {source.origin.location} and {sink.origin.location}; "
+                    f"relation {mapping}; witness {mapping.wrap().sample_point()}",
+                    self.region.loops[0].location,
+                    witness=str(mapping.wrap().sample_point()),
+                    conservative=conservative,
+                )
+        return self.region
+
+
 def _resolve(expression: Expr, definitions: dict[Symbol, Expr]) -> Expr:
     if isinstance(expression, Reference):
         return definitions.get(expression.symbol, expression)
@@ -156,13 +192,19 @@ def _resolve(expression: Expr, definitions: dict[Symbol, Expr]) -> Expr:
     return expression
 
 
-def _region(
+def _region_model(
     region_id: int,
     loop: Loop,
     environment: dict[Symbol, Affine],
     defined: set[Symbol],
     later: Block,
-) -> ParallelRegion:
+    *,
+    context=None,
+    consume=None,
+) -> _AffineRegionModel:
+    context = isl.DEFAULT_CONTEXT if context is None else context
+    tick = (lambda: None) if consume is None else consume
+    tick()
     loops, body = _mapped_prefix(loop)
     assignments = tuple(_assignments(body))
     sequential = tuple(_all_loops(body))
@@ -183,6 +225,7 @@ def _region(
     events: list[_Event] = []
     axis_number = 0
     conservative = False
+    physical_affine = True
     parameters: set[str] = set()
     iterators: dict[Symbol, Affine] = {}
 
@@ -202,9 +245,14 @@ def _region(
                 captured.add(symbol)
 
     def affine_or_unknown(expression, values, active, location):
+        nonlocal physical_affine
+        if consume is not None:
+            for _node in walk_expr(expression):
+                tick()
         try:
             value = affine_expression(expression, values, active, location)
         except CompilationError:
+            physical_affine = False
             return None
         parameters.update(name for name, _ in value.terms if not name.startswith("q"))
         return value
@@ -285,6 +333,7 @@ def _region(
         definitions = dict(definitions)
         available = set(available)
         for index, statement in enumerate(block.statements):
+            tick()
             path = (*position, str(index))
             if isinstance(statement, Assignment):
                 check_reads(statement_reads(statement), available, statement.location)
@@ -408,9 +457,11 @@ def _region(
     visit(body, environment, {}, available, iterators, coordinates, conditions, order, order_conditions)
     specifications = []
     for index, event in enumerate(events):
+        tick()
         active = event.active
         for access_kind, accesses in (("read", event.reads), ("write", event.writes)):
             for access in accesses:
+                tick()
                 resolved = tuple(_resolve(expr, event.expressions) for expr in access.indices)
                 indices = tuple(
                     affine_or_unknown(expr, event.environment, active, event.origin.location) for expr in access.indices
@@ -433,7 +484,8 @@ def _region(
         return f"S{index}[{','.join(events[index].coordinates)}]"
 
     def union_map(parts):
-        return isl.UnionMap.read_from_str(isl.DEFAULT_CONTEXT, parameter_text + "{ " + "; ".join(parts) + " }")
+        tick()
+        return isl.UnionMap.read_from_str(context, parameter_text + "{ " + "; ".join(parts) + " }")
 
     # Non-affine coordinates are conservatively unconstrained. An identical
     # square of an affine expression is injective on a proven single-sign domain;
@@ -459,7 +511,7 @@ def _region(
             if len(axes) != 1:
                 break
             domain = isl.Set.read_from_str(
-                isl.DEFAULT_CONTEXT,
+                context,
                 parameter_text
                 + "{ ["
                 + ",".join(events[index].coordinates)
@@ -468,11 +520,11 @@ def _region(
                 + " }",
             )
             nonnegative = isl.Set.read_from_str(
-                isl.DEFAULT_CONTEXT,
+                context,
                 parameter_text + "{ [" + ",".join(events[index].coordinates) + f"] : ({value}) >= 0 }}",
             )
             nonpositive = isl.Set.read_from_str(
-                isl.DEFAULT_CONTEXT,
+                context,
                 parameter_text + "{ [" + ",".join(events[index].coordinates) + f"] : ({value}) <= 0 }}",
             )
             candidates.append((axes[0][0], domain.is_subset(nonnegative), domain.is_subset(nonpositive)))
@@ -512,25 +564,6 @@ def _region(
         [f"{instance(i)} -> P[{','.join(coordinates)}] : {event_domain(event)}" for i, event in enumerate(events)]
     )
     conflicts = ordered_conflicts(reads, writes, schedule)
-    same_iteration = parallel.apply_range(parallel.reverse())
-    for kind, relation in conflicts.items():
-        bad = relation.subtract(same_iteration)
-        if not bad.is_empty():
-            mapping = bad.get_map_list().get_at(0)
-            source = events[int(mapping.get_tuple_name(isl.dim_type.in_)[1:])]
-            sink = events[int(mapping.get_tuple_name(isl.dim_type.out)[1:])]
-            names = ", ".join(
-                sorted({access.symbol.name for access in (*source.reads, *source.writes, *sink.reads, *sink.writes)})
-            )
-            raise ParallelizationError(
-                f"Cannot parallelize: {kind} {'possible ' if conservative else ''}loop-carried conflict involving {names}; "
-                + ("conservative dependence model; " if conservative else "")
-                + f"accesses at {source.origin.location} and {sink.origin.location}; "
-                f"relation {mapping}; witness {mapping.wrap().sample_point()}",
-                loop.location,
-                witness=str(mapping.wrap().sample_point()),
-                conservative=conservative,
-            )
     domains = parallel.domain()
     report = RegionReport(
         str(domains),
@@ -549,7 +582,7 @@ def _region(
         if isinstance(node, ArrayAccess)
     )
     write_arrays = {access.symbol for event in events for access in event.writes}
-    return ParallelRegion(
+    region = ParallelRegion(
         region_id,
         loops,
         assignments,
@@ -560,6 +593,12 @@ def _region(
         tuple(sorted(read_arrays, key=lambda s: s.id)),
         tuple(sorted(write_arrays, key=lambda s: s.id)),
     )
+    return _AffineRegionModel(region, tuple(events), reads, writes, schedule, parallel,
+                              tuple(conflicts.items()), physical_affine and not conservative)
+
+
+def _region(region_id, loop, environment, defined, later):
+    return _region_model(region_id, loop, environment, defined, later).require_unconditional()
 
 
 def prove_region(region_id, loop, environment, defined, later):

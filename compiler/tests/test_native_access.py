@@ -132,7 +132,8 @@ end program
     source = tmp_path / "check.f90"
     source.write_text(stub + checked + driver)
     binary = tmp_path / "check"
-    result = subprocess.run([fortran, "-std=f2018", "-fcheck=all", str(interface), str(source), "-o", str(binary)],
+    result = subprocess.run([fortran, "-std=f2018", "-fcheck=all", "-ffunction-sections", "-Wl,--gc-sections",
+                               str(interface), str(source), "-o", str(binary)],
                             cwd=tmp_path, capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stdout + result.stderr
     executed = subprocess.run([str(binary)], cwd=tmp_path, capture_output=True, text=True, timeout=60)

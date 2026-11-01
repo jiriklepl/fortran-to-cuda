@@ -22,6 +22,21 @@ def _children(node):
     return getattr(node, "content", getattr(node, "items", ())) or ()
 
 
+def _original_call_control(selection):
+    """Recognize one CALL or its complete single-line IF; grant no authority.
+
+    Consumers must authenticate and retain the WHOLE original selection. The
+    returned action cannot replace its enclosing IF/predicate in a proof,
+    source edit, registry key or effect graph.
+    """
+    if not isinstance(selection, tuple) or len(selection) != 1:
+        return None
+    original = selection[0]
+    if _kind(original) == "If_Stmt":
+        original = original.items[1]
+    return original if _kind(original) == "Call_Stmt" else None
+
+
 @dataclass(frozen=True)
 class SourceDependency:
     resource: str
@@ -537,7 +552,10 @@ def _match_signature(declaration, signature):
 
 def _resolve_candidates(analysis, scope, call_node, associate, *, function=False):
     target, arguments = call_node.items
-    if _kind(target) not in ({"Name", "Type_Name"} if function else {"Name"}):
+    targets = {"Name", "Type_Name"} if function else {"Name"}
+    if function and _kind(call_node) == "Intrinsic_Function_Reference":
+        targets.add("Intrinsic_Name")
+    if _kind(target) not in targets:
         raise CompilationError("indirect calls are scope boundaries")
     original = tuple(_children(arguments))
     matches, errors = [], []
@@ -851,6 +869,19 @@ class _OriginalTypes:
             if storage is not None:
                 return storage
         items = _children(node)
+        if _kind(node) == "Array_Constructor" and _kind(node.items[1]) == "Ac_Value_List":
+            # Type association only: retain the original vector expression and
+            # its evaluation point. Implied DOs, explicit type specifications,
+            # nested arrays and mixed kinds require separate expression proof.
+            values = tuple(_children(node.items[1]))
+            if values:
+                typed = tuple(self.actual(scope, value, depth + 1) for value in values)
+                first = typed[0]
+                if (first.dtype in {"integer", "real", "logical"} and first.kind in {1, 4, 8}
+                        and not first.rank
+                        and all((value.dtype, value.kind, value.rank) == (first.dtype, first.kind, 0)
+                                for value in typed)):
+                    return OriginalActualType(first.dtype, first.kind, 1)
         if _kind(node) == "Parenthesis":
             typed = self.actual(scope, items[1], depth + 1)
             return OriginalActualType(typed.dtype, typed.kind, typed.rank, schema=typed.schema)
@@ -858,11 +889,14 @@ class _OriginalTypes:
             typed = self.actual(scope, items[1], depth + 1)
             if typed.dtype in {"integer", "real"} and typed.kind in {4, 8} and not typed.rank:
                 return OriginalActualType(typed.dtype, typed.kind, 0)
-        if len(items) == 3 and str(items[1]) in {"+", "-", "*", "/"}:
+        if len(items) == 3 and str(items[1]) in {"+", "-", "*", "/", "**"}:
+            from compiler.frontend.source_scalar_types import scalar_numeric_result
+
             left, right = (self.actual(scope, child, depth + 1) for child in (items[0], items[2]))
-            if ((left.dtype, left.kind, left.rank) == (right.dtype, right.kind, right.rank)
-                    and left.dtype in {"integer", "real"} and left.kind in {4, 8} and not left.rank):
-                return OriginalActualType(left.dtype, left.kind, 0)
+            signature = scalar_numeric_result(str(items[1]), (left.dtype, left.kind, left.rank),
+                                              (right.dtype, right.kind, right.rank))
+            if signature is not None:
+                return OriginalActualType(*signature)
         if _kind(node) in {"Int_Literal_Constant", "Real_Literal_Constant", "Logical_Literal_Constant"}:
             signature = self.analysis._signature(scope, node)
             if signature is not None and signature[1] is not None:
@@ -893,7 +927,7 @@ def _resolve_original_invocation(analysis, scope, original, *, function=False):
     from compiler.frontend.source_functions import _original, _scope_roles, _validate_resolution, _walk
 
     analysis.verify_source()
-    allowed = {"Part_Ref", "Function_Reference", "Structure_Constructor"} if function else {"Call_Stmt"}
+    allowed = {"Part_Ref", "Function_Reference", "Structure_Constructor", "Intrinsic_Function_Reference"} if function else {"Call_Stmt"}
     if _kind(original) not in allowed:
         raise CompilationError("original association requires the corresponding CALL or function syntax")
     existing = getattr(analysis, "_original_call_associations", {}).get((id(analysis), id(original)))

@@ -150,7 +150,8 @@ if(any(counts/={1 if expected else 0})) error stop 'count disagreement'
     source = tmp_path / "check.f90"
     source.write_text(stub + checked + driver)
     binary = tmp_path / "check"
-    compiled = subprocess.run([fortran, "-std=f2018", "-fcheck=all", str(interface), str(source), "-o", str(binary)],
+    compiled = subprocess.run([fortran, "-std=f2018", "-fcheck=all", "-ffunction-sections", "-Wl,--gc-sections",
+                               str(interface), str(source), "-o", str(binary)],
                               cwd=tmp_path, capture_output=True, text=True, timeout=60)
     assert compiled.returncode == 0, compiled.stdout + compiled.stderr
     executed = subprocess.run([str(binary)], cwd=tmp_path, capture_output=True, text=True, timeout=10)
@@ -200,7 +201,8 @@ end program
 """)
     interface = Path(__file__).resolve().parents[1] / "runtime" / "scoped_memory.f90"
     binary = tmp_path / "alias"
-    compiled = subprocess.run([fortran, "-std=f2018", "-fcheck=all", str(interface), str(source), "-o", str(binary)],
+    compiled = subprocess.run([fortran, "-std=f2018", "-fcheck=all", "-ffunction-sections", "-Wl,--gc-sections",
+                               str(interface), str(source), "-o", str(binary)],
                               cwd=tmp_path, capture_output=True, text=True, timeout=60)
     assert compiled.returncode == 0, compiled.stdout + compiled.stderr
     executed = subprocess.run([str(binary)], cwd=tmp_path, capture_output=True, text=True, timeout=10)

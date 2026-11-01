@@ -8,6 +8,7 @@ supplied by analysis, not inferred from argument INTENT or target feasibility.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -15,6 +16,23 @@ from enum import Enum
 class ExecutionTarget(str, Enum):
     CPU = "cpu"
     GPU = "gpu"
+
+
+@dataclass(frozen=True)
+class DeferredPlacement:
+    """A reached runtime policy binding, without source execution authority."""
+
+    policy: str
+    identity: str
+
+    def __post_init__(self):
+        if not isinstance(self.policy, str) or not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", self.policy):
+            raise ValueError("Deferred placement requires a named runtime policy")
+        if not isinstance(self.identity, str) or not re.fullmatch(r"[0-9a-f]{64}", self.identity):
+            raise ValueError("Deferred placement requires an exact policy identity")
+
+    def public(self):
+        return {"version": 1, "policy": self.policy, "identity": self.identity}
 
 
 @dataclass(frozen=True)
@@ -187,6 +205,7 @@ class Task:
     structure: BranchRegion | LoopRegion | None = None
     header_effects: TaskEffects = TaskEffects()
     payload: object = field(default=None, compare=False, hash=False, repr=False)
+    deferred_placement: DeferredPlacement | None = None
 
     def __post_init__(self):
         if not isinstance(self.id, str) or not self.id:
@@ -198,6 +217,11 @@ class Task:
         object.__setattr__(self, "predecessors", frozenset(self.predecessors))
         if self.structure is not None and targets != {ExecutionTarget.CPU}:
             raise ValueError("Structured control is executed by the host; child tasks retain their own targets")
+        if self.deferred_placement is not None and (
+            not isinstance(self.deferred_placement, DeferredPlacement) or len(targets) != 2
+            or self.structure is not None or not self.effects.ordered
+        ):
+            raise ValueError("Deferred placement requires both physical targets and original ordered execution")
 
 
 @dataclass(frozen=True)
@@ -225,9 +249,13 @@ class TaskGraph:
                 "may_writes": sorted({access.resource for access in task.effects.may_writes}),
                 "scalar_reads": sorted(task.effects.scalar_reads),
                 "scalar_writes": sorted(task.effects.scalar_writes),
+                "lifetime_resources": sorted(task.effects.lifetime_resources),
+                "metadata_reads": sorted(task.effects.metadata_reads),
                 "opaque": task.effects.opaque,
                 "ordered": task.effects.ordered,
             }
+            if task.deferred_placement is not None:
+                item["deferred_placement"] = task.deferred_placement.public()
             if isinstance(task.structure, BranchRegion):
                 predicate = task.structure.predicate
                 item["predicate"] = (

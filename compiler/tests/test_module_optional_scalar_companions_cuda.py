@@ -141,9 +141,10 @@ end subroutine
     assert set(companions) == {"renamed_child::adjust", "renamed_forward::forward"}
     assert len(companions["renamed_forward::forward"]["calls"]) == 2
     assert companions["renamed_child::adjust"]["boundaries"], "opaque work must end ownership on its original guard"
-    # A statically omitted helper actual retains the existing conservative
-    # producer liveness boundary. The child and downstream consumer still run.
-    assert len(owner["gpu_leaves"]) == (2 if omitted_middle else 3)
+    # Omission of a read-only optional scalar preserves both parent array
+    # loops and the child. Reached opaque work still closes the live owner.
+    assert owner["gpu_leaves"] == ["renamed_child::adjust#region1", "renamed_owner::step#region1",
+                                   "renamed_owner::step#region2"]
     fflags = [fc, "-O3", "-fopenmp", "-ffp-contract=off", "-fcheck=all", "-J", str(build), "-I", str(build)]
     objects, compiled = [], set()
 
@@ -263,7 +264,7 @@ end program
             assert "FORT_SCOPED upload " not in trace
             assert "FORT_SCOPED download " not in trace
         else:
-            expected = (2 if ordinal == 2 else 4) - int(omitted_middle)
+            expected = 2 if ordinal == 2 else 4
             assert trace.count("FORT_SCOPED launch ") == expected, observed.stderr
     direct = observed.stderr.split("BEGIN_NATIVE_ENTRY", 1)[1].split("END_NATIVE_ENTRY", 1)[0]
     assert "FORT_SCOPED launch " not in direct

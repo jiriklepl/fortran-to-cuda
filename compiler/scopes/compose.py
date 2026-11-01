@@ -2,7 +2,8 @@
 
 Composition merges original-coordinate edit ledgers, never applies a transform
 to a previous transform's source. Conflicting helpers require a shared compiler
-owner and are rejected; identical artifacts and declarations are shared.
+owner and are rejected; identical artifacts and TARGET-only declaration additions
+and explicit PUBLIC declarations of their generated ENTRY symbols are shared.
 """
 
 from __future__ import annotations
@@ -51,6 +52,16 @@ def _apply(source, edits):
         if last < first and any(begin < first <= end for begin, end in replacements):
             raise CompilationError("scope root insertion is inside another root's source replacement")
     for (first, last), values in sorted(grouped.items(), reverse=True):
+        if last < first and len(values) > 1:
+            from compiler.scopes.declaration_union import union_public_entries
+            merged = union_public_entries(values)
+            if merged is not None:
+                values = [merged]
+        if last >= first and len(values) > 1:
+            from compiler.scopes.declaration_union import union_targets
+            merged = union_targets("".join(lines[first - 1:last]), values)
+            if merged is not None:
+                values = [merged]
         if last >= previous or (last >= first and len(values) != 1):
             raise CompilationError("scope roots contain conflicting original source edits; use one shared owner")
         lines[first - 1 : last] = ["".join(values)]
@@ -142,7 +153,7 @@ def compose_graph_scopes(components):
         "scope_execution": "graph",
         "composition": {
             "schema_version": 1,
-            "source": "same original bytes; checked disjoint edit union",
+            "source": "same original bytes; checked disjoint edits, TARGET-only union and named generated ENTRY exports",
             "runtime": "one compiled memory authority; independent invocation contexts",
             "proof_scope": "component_manifests; original checked plans are not reissued under an aggregate entry",
             "components": [

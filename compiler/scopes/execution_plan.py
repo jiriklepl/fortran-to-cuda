@@ -16,7 +16,7 @@ from types import MappingProxyType, SimpleNamespace
 
 from compiler.ir import CompilationError
 
-VERSION = 1
+VERSION = 2
 _ISSUER = object()
 
 
@@ -147,9 +147,19 @@ def _registered_authorities(owner, owned_types):
     """
     from fparser.two.utils import Base
 
+    from compiler.frontend.allocation_epoch_eligibility import OriginalAllocationGate
+    from compiler.frontend.allocation_exchange import AllocationExchangeProof
+    from compiler.frontend.atomic_worksharing_team import AtomicWorksharingAlternative, AtomicWorksharingTeamProof
+    from compiler.frontend.conditional_numerical import ConditionalNumericalContext
     from compiler.frontend.descriptor_windows import DescriptorWindowProof
+    from compiler.frontend.descriptor_worksharing import OriginalWorksharingStorage
+    from compiler.frontend.device_tasks import ExternalDeviceTaskProof
+    from compiler.frontend.entry_preservation import PreservedEntryDefinitions
+    from compiler.frontend.local_allocatable_storage import OriginalLocalAllocationProof
+    from compiler.frontend.metadata_constructor import OriginalMetadataConstructorProof
+    from compiler.frontend.native_ancestor import NativeAncestorSelection
     from compiler.frontend.native_call_coordinates import NativeCallCoordinatesProof
-    from compiler.frontend.native_completion import NativeCompletionProof
+    from compiler.frontend.native_completion import NativeCompletionProof, NativeGraphCompletionProof
     from compiler.frontend.native_definitions import NativeDefinitionProof, NativeDefinitionStateProof
     from compiler.frontend.native_demand import SourceBoundNativeDemandEffects
     from compiler.frontend.native_environment import NativeEnvironmentProof, NativeLocalStateProof
@@ -160,23 +170,67 @@ def _registered_authorities(owner, owned_types):
     from compiler.frontend.numerical_effects import NumericalEffectProof
     from compiler.frontend.numerical_preparation import NumericalPreparationProvider, PreparedOriginalRegion
     from compiler.frontend.omp_reductions import OpenMPReductionProof
+    from compiler.frontend.opaque_library_state import OriginalOpaqueStateProof
     from compiler.frontend.reached_read_requirements import ReachedReadRequirementsProof
     from compiler.frontend.reached_windows import ReachedWindowProof
+    from compiler.frontend.readonly_allocatable_input import ReadonlyAllocatableInputProof
     from compiler.frontend.reductions import ReductionProof
+    from compiler.frontend.scalar_clock import OriginalScalarClockProof
     from compiler.frontend.selection_activation import SelectionActivationProof
+    from compiler.frontend.source_device_tasks import SourceDeviceTaskProof
     from compiler.frontend.source_effects import SourceEffects
     from compiler.frontend.source_functions import NativeSourceFunctionProof
+    from compiler.frontend.source_placement import SourcePlacement
+    from compiler.frontend.source_span_exit import OriginalSequenceExitProof
+    from compiler.frontend.storage_mutation_effects import StorageMutationEffects
     from compiler.frontend.structured_effects import StructuredSummary
+    from compiler.frontend.supported_path_storage import SupportedPathDescriptorComposition
+    from compiler.frontend.supported_paths import OriginalSupportedPathSelection
     from compiler.frontend.worksharing_completion import WorksharingCompletionProof, WorksharingNativeCompletionProof
+    from compiler.offload.source_task_pricing import SourceTaskPricing
+    from compiler.scopes.conditional_return import _ISSUER as return_issuer
+    from compiler.scopes.conditional_return import (
+        CheckedBorrowedCall,
+        ConditionalReturnProof,
+        ConditionalUnitDescriptorProof,
+    )
+    from compiler.scopes.graph_epochs import CallGroupStorageEpoch, GraphStorageEpoch
+    from compiler.scopes.hierarchical_regions import SelectedRoot
     from compiler.scopes.interval_draft import SourceIntervalDraft
     from compiler.scopes.lexical import OwnerEmission
     from compiler.scopes.resource_demand import IntervalResourceDemand
     from compiler.scopes.source import ScopeBuilder
+    from compiler.scopes.supported_paths import SupportedPathStorageEpoch
 
     registries = {
+        AllocationExchangeProof: "_allocation_exchange_proofs",
+        AtomicWorksharingTeamProof: "_atomic_worksharing_teams",
+        AtomicWorksharingAlternative: "_atomic_worksharing_alternatives",
+        ConditionalNumericalContext: "_conditional_numerical_contexts",
+        ExternalDeviceTaskProof: "_external_device_task_proofs",
+        OriginalOpaqueStateProof: "_opaque_library_state_proofs",
+        OriginalAllocationGate: "_allocation_gates",
+        OriginalSupportedPathSelection: "_supported_path_selections",
+        SupportedPathDescriptorComposition: "_supported_path_storage",
+        OriginalMetadataConstructorProof: "_metadata_constructor_proofs",
+        OriginalLocalAllocationProof: "_local_allocation_proofs",
+        ReadonlyAllocatableInputProof: "_readonly_allocatable_inputs",
+        NativeAncestorSelection: "_native_ancestor_selections",
+        ConditionalUnitDescriptorProof: "_conditional_unit_descriptors",
+        StorageMutationEffects: "_storage_mutation_effects",
+        OriginalSequenceExitProof: "_original_sequence_exits",
+        PreservedEntryDefinitions: "_entry_preservations",
+        OriginalScalarClockProof: "_scalar_clock_proofs",
+        SourceDeviceTaskProof: "_source_device_task_proofs",
+        # Retained issued costs are sealed inputs, never numerical execution
+        # or definition authority (the attachment makes those limits explicit).
+        SourceTaskPricing: "_source_task_pricings",
+        SourcePlacement: "_source_placements",
         DescriptorWindowProof: "_descriptor_window_proofs",
+        OriginalWorksharingStorage: "_original_worksharing_storage",
         NativeCallCoordinatesProof: "_native_definition_proofs",
         NativeCompletionProof: "_joined_completions",
+        NativeGraphCompletionProof: "_native_graph_completions",
         NativeDefinitionProof: "_native_definition_proofs",
         NativeDefinitionStateProof: "_native_definition_state_proofs",
         SourceBoundNativeDemandEffects: "_native_demand_effects",
@@ -214,7 +268,9 @@ def _registered_authorities(owner, owned_types):
             builders[id(value)] = value
             pending.append(value.analysis)
         elif (isinstance(value, (Base, OwnerEmission, StructuredSummary))
-              or type(value) in registries or type(value) in {IntervalResourceDemand, SourceIntervalDraft}
+              or type(value) in registries or type(value) in {
+                  IntervalResourceDemand, SourceIntervalDraft, GraphStorageEpoch, CallGroupStorageEpoch,
+                  SupportedPathStorageEpoch}
               or session is not None and session.contains(value)):
             continue
         elif isinstance(value, (dict, MappingProxyType)):
@@ -226,6 +282,36 @@ def _registered_authorities(owner, owned_types):
             pending.extend(vars(value).values() if hasattr(value, "__dict__") else
                            (getattr(value, part.name) for part in fields(value)))
     authorities = {id(member.graph): member.graph for member in owner.members.values()}
+    # Ordinary source-task call projections reuse exact checked CALL receipts.
+    # Register their existing issuer only after validating retained originals;
+    # this does not install a returned-domain/lifetime contract.
+    from compiler.frontend.immutable_graph import original_type
+
+    for member in owner.members.values():
+        for receipt in getattr(member, "source_companion_calls", ()):
+            if original_type(receipt) is not CheckedBorrowedCall:
+                raise CompilationError("execution plan requires its exact checked source CALL receipt")
+            receipt.validate(member)
+            authorities[id(return_issuer)] = return_issuer
+    returned = getattr(owner, "return_contract", None)
+    if returned is not None:
+        if type(returned) is not ConditionalReturnProof:
+            raise CompilationError("execution plan requires its issued conditional return coverage")
+        returned.validate()
+        authorities[id(returned)] = returned
+        authorities[id(return_issuer)] = return_issuer
+    selected_root = getattr(owner, "hierarchical_selection", None)
+    if selected_root is not None:
+        if type(selected_root) is not SelectedRoot or returned is None:
+            raise CompilationError("hierarchical root requires its issued checked return coverage")
+        selected_root.validate(owner)
+        authorities[id(selected_root)] = selected_root
+    epoch = getattr(owner, "position_epoch", None)
+    if epoch is not None:
+        if type(epoch) not in {GraphStorageEpoch, CallGroupStorageEpoch, SupportedPathStorageEpoch}:
+            raise CompilationError("execution plan requires its issued source-position allocation epoch")
+        epoch.validate()
+        authorities[id(epoch)] = epoch
     for builder in builders.values():
         for value in getattr(builder, "_interval_drafts", {}).values():
             if type(value) is SourceIntervalDraft and builder._interval_drafts.get(value.identity) is value:
@@ -243,7 +329,9 @@ def _registered_authorities(owner, owned_types):
         for graph in analysis._structures.values():
             if type(graph) is StructuredSummary:
                 authorities[id(graph)] = graph
-    return authorities, (*registries, StructuredSummary, IntervalResourceDemand, SourceIntervalDraft)
+    return authorities, (*registries, StructuredSummary, IntervalResourceDemand, SourceIntervalDraft, GraphStorageEpoch,
+                         CallGroupStorageEpoch, SupportedPathStorageEpoch,
+                         ConditionalReturnProof, SelectedRoot, type(return_issuer))
 
 
 def _seal_execution(owner):
@@ -488,7 +576,7 @@ def _proof_handoffs(owner, numerical):
     """
     from fparser.two.utils import Base
 
-    from compiler.frontend.immutable_graph import GraphFreezer
+    from compiler.frontend.immutable_graph import GraphFreezer, sealed
     from compiler.frontend.sealed_syntax import seal as seal_syntax
     from compiler.frontend.source_effects import SourceEffects
     from compiler.scopes.source_reads import validate_native_source_reads, validate_source_reads
@@ -528,6 +616,14 @@ def _proof_handoffs(owner, numerical):
     sessions = {id(analysis._source_session): analysis._source_session
                 for _proof, analysis, _registry in retained.values()}
     freezer = GraphFreezer(own_if=is_dataclass, borrowed_types=authority_types, borrow_if=borrowed)
+    # An earlier checked plan may already own a shared prepared extraction.
+    # Seed all its transitive immutable aliases before freezing separate proof
+    # fields such as completion/preconditions. Never detach those exact edges.
+    for proof, _analysis, _registry in retained.values():
+        for part in fields(proof):
+            value = getattr(proof, part.name)
+            if sealed(value) and not freezer._borrows(value):
+                freezer.adopt_sealed(value)
     result = []
     for proof, analysis, registry in retained.values():
         for part in fields(proof):
@@ -550,6 +646,7 @@ class CheckedExecutionPlan:
     _numerical_authorities: tuple
     _selection_prefixes: tuple
     _proof_handoffs: tuple
+    _storage_epoch: object
     _record: str
     _issuer: object
 
@@ -583,6 +680,14 @@ class CheckedExecutionPlan:
     def validate(self):
         """One emission checkpoint; never another discovery or proof search."""
         self._require_owner()
+        from compiler.scopes.native_ancestor import validate_member
+        for member in self.members:
+            validate_member(member)
+        from compiler.scopes.storage_admission import validate_emitted_storage
+        validate_emitted_storage(self.storage_epoch(), self)
+        epoch = getattr(self._owner, "position_epoch", None)
+        if epoch is not None:
+            epoch.validate_plan(self)
         self.exact_window_placement()
         configurations, fact_identities, analyses = {}, {}, {}
         for builder, analysis, routine, configuration, facts in self._contexts:
@@ -620,6 +725,15 @@ class CheckedExecutionPlan:
         if self.interval is not None:
             self.interval.validate(self)
         return self
+
+    def storage_epoch(self):
+        """Return the exact lifetime attachment, never imported diagnostics."""
+        self._require_owner()
+        from compiler.scopes.storage_epoch import StorageEpochProof
+
+        if type(self._storage_epoch) is not StorageEpochProof:
+            raise CompilationError("execution plan requires its issued storage epoch")
+        return self._storage_epoch
 
     def operations(self, member, ordinal):
         """Detached diagnostic view of exactly the planned operation tree."""
@@ -710,6 +824,8 @@ def build_execution_plan(owner):
         raise CompilationError("execution plan requires its original root procedure")
     emission_identities, numerical_authorities = _seal_execution(owner)
     proof_handoffs = _proof_handoffs(owner, numerical_authorities)
+    from compiler.scopes.storage_epoch import issue_storage_epoch
+    storage_epoch = issue_storage_epoch(owner, proof_handoffs=proof_handoffs)
     procedures = []
     for member in members:
         units = tuple(member.units)
@@ -720,7 +836,9 @@ def build_execution_plan(owner):
     facts = _digest(owner.builder.facts)
     invocations = _invocations(owner, members)
     record = {
-        "schema_version": VERSION,
+        "schema_version": (5 if getattr(owner, "supported_path_mode", False) else
+                           4 if getattr(owner, "local_exit", None) is not None else
+                           3 if getattr(owner, "return_contract", None) is not None else VERSION),
         "entry": owner.routine.qualified,
         "sources": dict(owner.builder.analysis.sources),
         "source_inputs_identity": _digest(owner.builder.analysis.inputs.identity()),
@@ -735,7 +853,11 @@ def build_execution_plan(owner):
             "order": ("dependency-verified task schedule within original control regions; source/effect provenance retained"
                       if owner.builder.config.scope_execution == "graph" else
                       "original source order within each procedure; original call sites and guards retained"),
-            "lifetime": ("original reached selection; fresh context per execution" if hasattr(owner, "interval_site") else
+            "lifetime": ("supported original source path; persistent eligibility veto; close at original sequence exit" if
+                         getattr(owner, "supported_path_mode", False) else
+                         "owner-local original call group; close at original sequence exit" if
+                         getattr(owner, "local_exit", None) is not None else
+                         "original reached selection; fresh context per execution" if hasattr(owner, "interval_site") else
                          "closed original numerical selection" if hasattr(owner, "closed_selection") else
                          "one-shot reached interval" if hasattr(owner, "window_proof") else "original invocation"),
             "guards": ("original control regions; motion preserves proved data, descriptor and observable dependencies"
@@ -749,6 +871,7 @@ def build_execution_plan(owner):
                           "coverage_required": ["entry", "native interruptions", "exit", "cleanup"]},
         },
         "cost_requirements": _cost_requirements(members),
+        "storage_epoch": storage_epoch.public(),
     }
     # The diagnostic record retains exact per-compilation proof identities.
     # The executable fingerprint binds the same immutable operation/control
@@ -764,6 +887,7 @@ def build_execution_plan(owner):
                         "emission_identity": emission_identities[member.routine.qualified]} for member in members],
         "resources": record["resources"], "numerical_invocations": invocations,
         "gpu_leaves": record["gpu_leaves"],
+        "storage_epoch_identity": storage_epoch.identity,
     })
     record["execution_identity"] = execution_identity
     identity = _digest(record)
@@ -775,9 +899,13 @@ def build_execution_plan(owner):
                                   tuple((member, member.emission.selection_prefix) for member in members
                                         if member.emission.selection_prefix is not None),
                                   proof_handoffs,
+                                  storage_epoch,
                                   _json(record), _ISSUER)
     # The only publication of authority occurs after the entire graph is sealed.
     object.__setattr__(owner, "execution_plan", result)
+    epoch = getattr(owner, "position_epoch", None)
+    if epoch is not None:
+        epoch.validate_plan(result)
     if owner.interval_draft is not None:
         owner.interval_draft.validate(result)
     # A native proof made against a prospective reached inventory must cover

@@ -1,6 +1,8 @@
 """Retain original serial counted control around reached operations."""
 
+import json
 from dataclasses import dataclass
+from hashlib import sha256
 
 from fparser.two.utils import walk
 
@@ -94,3 +96,93 @@ def reached_counted_body(builder, node):
         "reopen_after_boundary": False, "numerical_authority": False,
         "unsupported_reached_operation": "publish and disable before original continuation once",
     })
+
+
+def reached_retirement_entry(member, originals):
+    """An existing counted-header check, without evaluating or copying bounds.
+
+    This is a structural emission record, not a new effect or lifetime issuer.
+    The boundary retains its independent whole-original storage proof. Every
+    use derives this record again from the exact source and current analysis.
+    """
+    if len(originals) != 1 or _kind(originals[0]) != "Block_Nonlabel_Do_Construct":
+        raise CompilationError("reached retirement requires one original counted DO")
+    original = originals[0]
+    body = reached_counted_body(member.builder, original)
+    header = next(item for item in original.content if _kind(item) == "Nonlabel_Do_Stmt")
+    end = original.content[-1]
+    control = header.items[1].items[1]
+    iterator = control[0]
+    analysis, procedure = member.builder.analysis, member.routine.qualified
+    graph = analysis.structure(procedure)
+    header_id = graph.node_id(header, role="header")
+    proof = analysis.segment_summary(procedure, (header_id,), capture_locals=True)
+    binding = analysis._binding(analysis.source_scope_for(header, member.routine.scope), iterator)
+    if (binding is None or binding.rank or binding.dtype != "integer" or binding.kind not in {4, 8}
+            or binding.attributes & {"pointer", "allocatable", "volatile", "asynchronous", "optional", "value"}
+            or proof.get("native_function_requirements") or proof.get("native_predicate_requirements")
+            or not proof.get("native_completion", {}).get("available")):
+        raise CompilationError("reached retirement requires an ordinary original INTEGER iterator and call-free header")
+    for operation in proof["operations"]:
+        if (operation["kind"] in {"write", "overwrite"} and operation["resource"] != binding.root
+                or operation["kind"] not in {"read", "write", "overwrite", "descriptor_read"}
+                or operation["rank"] and operation["kind"] != "descriptor_read"):
+            raise CompilationError("reached retirement header may write only its original iterator")
+    for node in walk(header):
+        kind = _kind(node)
+        if kind in {"Part_Ref", "Function_Reference", "Structure_Constructor", "Data_Ref", "Proc_Component_Ref"}:
+            raise CompilationError("reached retirement header requires scalar names and SIZE-only metadata")
+        if kind == "Intrinsic_Function_Reference" and str(node.items[0]).lower() != "size":
+            raise CompilationError("reached retirement header requires SIZE-only metadata")
+        if kind == "Name":
+            source = analysis._binding(analysis.source_scope_for(node, member.routine.scope), node)
+            if source is not None and (source.attributes & {"pointer", "volatile", "asynchronous", "optional"}
+                    or not source.rank and (source.dtype != "integer" or source.kind not in {4, 8}
+                                           or "allocatable" in source.attributes)):
+                raise CompilationError("reached retirement header requires ordinary original scalar/descriptor declarations")
+    first, last = statement_span(original)
+    hfirst, hlast = statement_span(header)
+    end_first, _end_last = statement_span(end)
+    executable = [item for item in body.nodes if _kind(item) != "Comment"]
+    if (hfirst != first or hlast >= last or end_first <= hlast
+            or any(statement_span(item)[0] <= hlast for item in executable)):
+        raise CompilationError("reached retirement requires separate original header and body source lines")
+    source = "".join(member.lines[first-1:last])
+    header_source = "".join(member.lines[first-1:hlast])
+    body_source = "".join(member.lines[hlast:last])
+    if source != member.original(originals) or not header_source.endswith("\n"):
+        raise CompilationError("reached retirement lost its exact original source split")
+    selected_graph, selected = analysis._selected_source(procedure, originals)
+    if selected_graph is not graph or len(selected) != 1:
+        raise CompilationError("reached retirement requires its original whole-loop graph node")
+    record = {
+        "version": 1, "kind": "original_counted_body_retirement", "source_graph": graph.identity,
+        "selected_node_ids": list(selected), "header_node_id": header_id,
+        "header_summary_identity": proof["summary_identity"], "source_span": [first, last],
+        "header_span": [hfirst, hlast], "header_source_sha256": sha256(header_source.encode()).hexdigest(),
+        "body_source_sha256": sha256(body_source.encode()).hexdigest(),
+        "flag": "fort_loop_retire_" + sha256((procedure + "|" + selected[0]).encode()).hexdigest()[:12],
+        "context": member.context, "header_evaluation": "unchanged original counted DO exactly once",
+        "retirement": "once before the first original body statement", "empty_loop_preserves_domain": True,
+        "final_iterator": "unchanged original counted DO", "payload_access_authorized": False,
+        "motion_authorized": False,
+    }
+    record["identity"] = sha256(json.dumps(record, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+    return CountedBody(body.nodes, record)
+
+
+def render_retirement_entry(member, originals, entry, close):
+    """Keep the original DO and final iterator; close only on its first entry."""
+    current = reached_retirement_entry(member, originals)
+    if current.authority != entry.authority or any(a is not b for a, b in zip(current.nodes, entry.nodes, strict=True)):
+        raise CompilationError("reached retirement changed its original counted entry")
+    record = entry.authority
+    first, last = record["source_span"]
+    header_last = record["header_span"][1]
+    flag = record["flag"]
+    header = "".join(member.lines[first-1:header_last])
+    body = "".join(member.lines[header_last:last])
+    return ("block\nlogical :: " + flag + "\n" + flag + " = .true.\n" + header
+            + "if (" + flag + ") then\n" + flag + " = .false.\n"
+            + "\n".join(close) + "\nendif\n! fort original loop body " + flag + "\n"
+            + body + "end block\n")

@@ -6,6 +6,7 @@
 #include "scoped_runtime.h"
 #include "scoped_regions.hpp"
 #include "section_copy.hpp"
+#include "section_batch_cost.hpp"
 #include <cmath>
 #include <limits>
 #include <new>
@@ -60,7 +61,15 @@ struct Inputs {
     // to DIRECT. Residual evidence applies only to an actual direct request.
     bool direct_transfer_fit_applicable = true;
     std::optional<fort_scope_batch_costs> transfer_costs;
+    std::optional<fort_physical::compact::Pricing> copy_costs;
+    size_t copy_pool_capacity=0, copy_pool_active_device_bytes=0;
+    size_t copy_pool_available_bytes=std::numeric_limits<size_t>::max();
+    bool copy_pool_cold_available=true;
+    uint64_t copy_pool_revision=0;
     std::optional<fort_scope_team_costs> team_costs;
+    // Separately budgeted scratch arenas have no payload/definition regions.
+    // Their ordinary allocator retirement still precedes the terminal wait.
+    size_t terminal_reserved_allocations = 0;
 };
 struct Result {
     fort_scope_plan_decision decision{};
@@ -113,6 +122,8 @@ struct EvidenceEvent {
     const Region *preservation_reads = nullptr;
     const Box *rectangle = nullptr;
     uint64_t unit = 0, bytes = 0, copies = 0;
+    bool compact_copy=false;
+    uint64_t physical_operations=0, copy_kernels=0;
     size_t first = 0, last = 0;
     bool gpu = false, upload = false, accepted = false;
     double seconds = 0, counterfactual_seconds = 0, required_saving = 0;
@@ -339,7 +350,12 @@ struct State {
     // Short leases retain one cached pair between proved straight-line GPU
     // operations. First use is conservative; native calls can replace it.
     size_t staging_capacity = 0;
+    size_t compact_capacity = 0;
     bool ready = false, driver_initialized = false, pending = false;
+    // A complete direct-copy prediction already includes one completion.
+    // Preserve pending/read dependencies; consume this credit at one modeled
+    // wait, and discard it whenever new unpriced device work is queued.
+    bool completion_already_priced = false;
     bool warm_ranking = false;
     double cold_driver_startup_debt_seconds = 0;
     struct UploadReader { fort_buffer_t buffer; Region sections; uint64_t batch; };
@@ -363,6 +379,7 @@ inline void discard_coherence(State &state) {
 }
 inline State initial(const Inputs &input, const fort_scope_plan_costs &costs) {
     State s; s.resources = input.resources; s.ready = input.device_ready;
+    s.compact_capacity=input.copy_pool_capacity;
     s.driver_initialized = input.driver_initialized; s.pending = input.pending;
     s.warm_ranking = input.graph_mode;
     for (size_t k=0; k<s.resources.size(); ++k) {
@@ -383,9 +400,14 @@ inline State initial(const Inputs &input, const fort_scope_plan_costs &costs) {
         seconds(s.time, input.team_costs->owner_seconds + double(s.resources.size())*input.team_costs->descriptor_seconds);
     return s;
 }
+inline void charge_wait(State &s, const fort_scope_plan_costs &costs) {
+    if (!s.completion_already_priced) seconds(s.time, costs.wait_seconds);
+    s.completion_already_priced=false; s.count.waits=add(s.count.waits,1);
+}
+inline void queued_work(State &s) { s.pending=true; s.completion_already_priced=false; }
 inline void wait(State &s, const fort_scope_plan_costs &costs) {
     if (!s.pending) return;
-    seconds(s.time, costs.wait_seconds); s.count.waits = add(s.count.waits, 1); s.pending = false;
+    charge_wait(s,costs); s.pending = false;
     s.upload_readers.clear();
 }
 inline void initialize(State &s, const fort_scope_plan_costs &costs) {
@@ -397,6 +419,9 @@ inline void initialize(State &s, const fort_scope_plan_costs &costs) {
     seconds(s.time, costs.gpu_setup_seconds); s.ready = s.driver_initialized = true;
 }
 inline void copy(State &s, Resource &b, const Box &box, bool upload,
+                 const Inputs &input, const fort_scope_plan_costs &costs,
+                 const EvidenceSink *sink, uint64_t unit, const char *phase, bool charge_legacy_price);
+inline void copy_region(State &s, Resource &b, const Region &parts, bool upload,
                  const Inputs &input, const fort_scope_plan_costs &costs,
                  const EvidenceSink *sink, uint64_t unit, const char *phase);
 inline void allocate(State &s, Resource &b, const Inputs &input, const fort_scope_plan_costs &costs) {
@@ -411,28 +436,33 @@ inline void allocate(State &s, Resource &b, const Inputs &input, const fort_scop
         for (auto &candidate:s.resources) {
             if (!candidate.allocated || &candidate==&b ||
                 std::find(s.pinned.begin(),s.pinned.end(),candidate.handle)!=s.pinned.end()) continue;
-            if (!victim || std::pair(candidate.last_device_use,candidate.handle)<
-                           std::pair(victim->last_device_use,victim->handle)) victim=&candidate;
+            coherence::Budget candidate_budget, victim_budget;
+            const bool dirty=!coherence::difference(candidate.device_current,candidate.host_current,candidate_budget).empty();
+            const bool victim_dirty=victim && !coherence::difference(victim->device_current,victim->host_current,victim_budget).empty();
+            if (!victim || (dirty!=victim_dirty ? !dirty :
+                           std::pair(candidate.last_device_use,candidate.handle)<
+                           std::pair(victim->last_device_use,victim->handle))) victim=&candidate;
         }
         require(victim,"device_budget_exceeded");
         coherence::Budget budget;
         const auto dirty=coherence::difference(victim->device_current,victim->host_current,budget);
         auto host=coherence::unite(victim->host_current,dirty,budget);
-        for (const auto &box:dirty) copy(s,*victim,box,false,input,costs,nullptr,0,"eviction");
+        copy_region(s,*victim,dirty,false,input,costs,nullptr,0,"eviction");
         if (!dirty.empty()) wait(s,costs);
         victim->host_current=std::move(host); victim->device_current.clear();
         seconds(s.time,costs.release_seconds); victim->allocated=false;
         s.allocated-=victim->bytes;
-        if (input.asynchronous_release) s.pending=true;
+        if (input.asynchronous_release) queued_work(s);
     }
     require(s.allocated <= input.device_budget && b.bytes <= input.device_budget-s.allocated, "device_budget_exceeded");
-    initialize(s, costs); seconds(s.time, costs.allocation_seconds); b.allocated = true; s.pending = true;
+    initialize(s, costs); seconds(s.time, costs.allocation_seconds); b.allocated = true; queued_work(s);
     s.allocated = add(s.allocated, b.bytes); s.count.allocations = add(s.count.allocations, 1);
     s.count.peak_device_bytes = std::max<uint64_t>(s.count.peak_device_bytes, s.allocated);
 }
 inline void copy(State &s, Resource &b, const Box &box, bool upload,
                  const Inputs &input, const fort_scope_plan_costs &costs,
-                 const EvidenceSink *sink = nullptr, uint64_t unit = 0, const char *phase = "operation") {
+                 const EvidenceSink *sink = nullptr, uint64_t unit = 0, const char *phase = "operation",
+                 bool charge_legacy_price = true) {
     const fort_physical::CopyPlan plan(b.element_bytes, b.extents, box.lo, box.hi);
     require(plan.valid, "physical_transfer_overflow");
     if (!plan.bytes) return;
@@ -446,6 +476,7 @@ inline void copy(State &s, Resource &b, const Box &box, bool upload,
         const bool reused=s.staging_capacity>=batch_capacities[capacity_index];
         if (reused) while (capacity_index+1<FORT_SCOPE_BATCH_CAPACITIES && batch_capacities[capacity_index]<s.staging_capacity) ++capacity_index;
         else s.staging_capacity=batch_capacities[capacity_index];
+        s.compact_capacity=0;
         seconds(s.time, reused ? transfer.staging_reuse_seconds[capacity_index] : transfer.staging_cold_seconds[capacity_index]);
         calls = 0; uint64_t rows = 0;
         plan.visit([&](const fort_physical::CopyOperation &op) {
@@ -458,7 +489,7 @@ inline void copy(State &s, Resource &b, const Box &box, bool upload,
         seconds(s.time, double(calls)*(upload ? transfer.pinned_h2d_latency : transfer.pinned_d2h_latency) +
                         double(plan.bytes)/(upload ? transfer.pinned_h2d_bandwidth : transfer.pinned_d2h_bandwidth));
         seconds(s.time, double(calls)*(transfer.event_record_seconds+transfer.event_wait_seconds));
-    } else {
+    } else if (charge_legacy_price) {
         const double dma = double(plan.copies)*(upload ? costs.h2d_latency : costs.d2h_latency) +
                            double(plan.bytes)/(upload ? costs.h2d_bandwidth : costs.d2h_bandwidth);
         seconds(s.time, dma);
@@ -472,10 +503,67 @@ inline void copy(State &s, Resource &b, const Box &box, bool upload,
     auto &bytes = upload ? s.count.upload_bytes : s.count.download_bytes;
     auto &copies = upload ? s.count.uploads : s.count.downloads;
     bytes = add(bytes, plan.bytes); copies = add(copies, calls);
-    s.pending = input.transfer_mode != FORT_SCOPE_TRANSFERS_PINNED;
+    s.pending = input.transfer_mode != FORT_SCOPE_TRANSFERS_PINNED; s.completion_already_priced=false;
     if (upload && s.pending) {
         if (!s.active_upload_batch) s.active_upload_batch = ++s.upload_batch;
         s.upload_readers.push_back({b.handle,{box},s.active_upload_batch});
+    }
+}
+inline void copy_region(State &s,Resource &b,const Region &parts,bool upload,
+                       const Inputs &input,const fort_scope_plan_costs &costs,
+                       const EvidenceSink *sink,uint64_t unit,const char *phase) {
+    namespace compact=fort_physical::compact;
+    auto direct=[&](bool charge_legacy_price=true) {for(const auto &box:parts)copy(s,b,box,upload,input,costs,sink,unit,phase,charge_legacy_price);};
+    if(parts.empty() || input.transfer_mode!=FORT_SCOPE_TRANSFERS_AUTO || !input.copy_costs) {direct();return;}
+    compact::Plan plan;
+    try {
+        std::vector<fort_physical::CopyOperation> operations;
+        for(const auto &box:parts) {
+            const fort_physical::CopyPlan original(b.element_bytes,b.extents,box.lo,box.hi);
+            require(original.valid,"physical_transfer_overflow");
+            if(!original.visit([&](const auto &op) {
+                if(operations.size()==compact::operation_limit)return false;
+                operations.push_back(op);return true;
+            })) throw Unavailable{"physical_copy_estimate_unavailable"};
+        }
+        plan=compact::make_plan(operations,b.bytes,std::numeric_limits<size_t>::max());
+    } catch(const compact::Ineligible &) {throw Unavailable{"physical_copy_estimate_unavailable"};}
+    allocate(s,b,input,costs);
+    const auto available=s.allocated>input.device_budget || input.copy_pool_active_device_bytes>input.device_budget-s.allocated
+        ? 0 : input.device_budget-s.allocated-input.copy_pool_active_device_bytes;
+    const auto pool_available=std::min(available,input.copy_pool_available_bytes);
+    const compact::PoolState pool{s.compact_capacity,pool_available,
+        s.compact_capacity>=plan.bytes && s.compact_capacity<=pool_available/2,
+        !s.compact_capacity && input.copy_pool_cold_available};
+    const auto &calibration=*input.copy_costs;
+    const auto price=compact::price(plan,calibration.copy,calibration.base,upload,s.pending&&!s.completion_already_priced,pool);
+    require(price.available,"physical_copy_estimate_unavailable");
+    if(!price.selected) {
+        // Allocation was already accounted above. Retain exact copy counters
+        // and dependencies without evaluating an unused legacy price. V2
+        // empirical errors do not feed legacy contiguous-fit dispersion.
+        direct(false);
+        seconds(s.time,price.direct_seconds);
+        s.completion_already_priced=true;
+        return;
+    }
+    wait(s,costs);
+    seconds(s.time,price.compact_path_seconds);
+    s.compact_capacity=price.capacity;s.staging_capacity=0;
+    auto &bytes=upload?s.count.upload_bytes:s.count.download_bytes;
+    auto &copies=upload?s.count.uploads:s.count.downloads;
+    bytes=add(bytes,plan.bytes);copies=add(copies,1);
+    s.count.peak_device_bytes=std::max<uint64_t>(s.count.peak_device_bytes,add(s.allocated,price.workspace_bytes));
+    if(sink) {
+        bool first=true;
+        for(const auto &box:parts) {
+            const fort_physical::CopyPlan original(b.element_bytes,b.extents,box.lo,box.hi);
+            if(!original.bytes)continue;
+            EvidenceEvent event;event.event="copy";event.phase=phase;event.resource=&b;event.rectangle=&box;
+            event.unit=unit;event.upload=upload;event.bytes=original.bytes;event.copies=first?1:0;
+            event.compact_copy=true;event.physical_operations=first?price.operations:0;event.copy_kernels=first?price.chunks:0;
+            (*sink)(event);first=false;
+        }
     }
 }
 inline void ensure(State &s, Resource &b, const Region &requested, bool device,
@@ -487,7 +575,7 @@ inline void ensure(State &s, Resource &b, const Region &requested, bool device,
     auto &current = device ? b.device_current : b.host_current;
     auto missing = coherence::difference(requested, current, budget);
     auto updated = coherence::unite(current, missing, budget);
-    for (const auto &box : missing) copy(s, b, box, device, input, costs, sink, unit, phase);
+    copy_region(s,b,missing,device,input,costs,sink,unit,phase);
     current = std::move(updated);
 }
 inline void execute(State &s, const Operation &op, bool gpu,
@@ -558,7 +646,7 @@ inline void execute(State &s, const Operation &op, bool gpu,
             }
         }
         if (required_batch) {
-            seconds(s.time,costs.wait_seconds); s.count.waits=add(s.count.waits,1);
+            charge_wait(s,costs);
             s.upload_readers.erase(std::remove_if(s.upload_readers.begin(),s.upload_readers.end(),
                 [&](const auto &reader) { return reader.batch<=required_batch; }),s.upload_readers.end());
             // Upload events precede their kernels. Their completion does not
@@ -573,7 +661,7 @@ inline void execute(State &s, const Operation &op, bool gpu,
     }
     if (gpu) {
         if (!gpu_launch_included(op)) seconds(s.time, costs.launch_enqueue_seconds);
-        s.count.launches = add(s.count.launches, 1); s.pending = true;
+        s.count.launches = add(s.count.launches, 1); queued_work(s);
     }
     for (size_t k=0; k<op.bindings.size(); ++k) {
         auto &b = s.resources[s.index.at(op.bindings[k].buffer)]; auto &p = prepared[k];
@@ -595,14 +683,18 @@ inline void close(State &s, const Inputs &input, const fort_scope_plan_costs &co
         const auto physical=coherence::unite(b.host_current,b.device_current,budget);
         const auto missing=coherence::difference(physical,b.host_current,budget);
         auto updated=coherence::unite(b.host_current,missing,budget);
-        for(const auto &box:missing) copy(s,b,box,false,input,costs,sink,0,"scope_close");
+        copy_region(s,b,missing,false,input,costs,sink,0,"scope_close");
         b.host_current=std::move(updated);
         if (!input.asynchronous_release) wait(s, costs);
     }
     for (auto &b : s.resources) if (b.allocated) {
         seconds(s.time, costs.release_seconds); b.allocated = false;
         s.allocated -= b.bytes;
-        if (input.asynchronous_release) s.pending = true;
+        if (input.asynchronous_release) queued_work(s);
+    }
+    for (size_t k=0; k<input.terminal_reserved_allocations; ++k) {
+        seconds(s.time,costs.release_seconds);
+        if (input.asynchronous_release) queued_work(s);
     }
     wait(s, costs);
 }
@@ -612,6 +704,7 @@ inline void finish(State &s, const Inputs &input, const fort_scope_plan_costs &c
     s.execution_time = s.time;
     const auto count = s.count;
     for (const auto &resource : s.resources) if (resource.allocated) ++s.terminal.releases;
+    s.terminal.releases=add(s.terminal.releases,input.terminal_reserved_allocations);
     // Continuation evidence describes executed prefix operations only. Projected
     // close costs appear separately in the decision/report, never as transfers.
     close(s, input, costs, work, input.continuation ? nullptr : sink);

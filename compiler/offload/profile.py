@@ -296,8 +296,26 @@ def validate_profile(
                         _number(item, f"scoped.transfers.costs.{name}[{index}]")
                 else:
                     _number(value, f"scoped.transfers.costs.{name}", zero=name.endswith("row_seconds"))
+        if "physical_copies" in scoped:
+            from .physical_copy_costs import PhysicalCopyCostError, validate_physical_copy_costs
+            try:
+                validate_physical_copy_costs(profile)
+            except PhysicalCopyCostError as error:
+                raise ProfileError(str(error)) from error
     if scoped_runtime_id is not None:
         scoped_costs(profile, scoped_runtime_id)
+    if "source_tasks" in profile:
+        from .source_protocol import validate_source_costs
+        try:
+            validate_source_costs(profile, profile.get("scoped", {}).get("runtime_id"))
+        except ValueError as error:
+            raise ProfileError(str(error)) from error
+    if "source_submit_model" in profile:
+        from .source_submit_model import validate_model
+        try:
+            validate_model(profile["source_submit_model"], profile, profile.get("scoped", {}).get("runtime_id"))
+        except ValueError as error:
+            raise ProfileError(str(error)) from error
     return profile
 
 
@@ -327,6 +345,16 @@ def scoped_transfer_costs(profile: dict, runtime_id: str) -> dict:
     if not isinstance(transfers, dict):
         raise ProfileError("hardware profile has no scoped transfer calibration")
     return transfers["costs"]
+
+
+def scoped_physical_copy_costs(profile: dict, runtime_id: str) -> dict:
+    """Require complete-path predictions for this exact runtime."""
+    from .physical_copy_costs import PhysicalCopyCostError, validate_physical_copy_costs
+    scoped_costs(profile, runtime_id)
+    try:
+        return validate_physical_copy_costs(profile)
+    except PhysicalCopyCostError as error:
+        raise ProfileError(str(error)) from error
 
 
 def scoped_collective_costs(profile: dict, runtime_id: str, *, cpu_threads: int | None = None) -> dict:

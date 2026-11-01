@@ -9,6 +9,7 @@ from hashlib import sha256
 
 from fparser.two.utils import walk
 
+from compiler.frontend.call_bindings import _original_call_control
 from compiler.frontend.structured_effects import _freeze, _thaw
 from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.integers import integer_literal
@@ -25,8 +26,10 @@ def _children(node):
 
 
 def _directive(node):
+    if _kind(node) != "Comment":
+        return None
     text = str(node).lstrip().lower()
-    return text[5:].strip() if _kind(node) == "Comment" and text.startswith("!$omp") else None
+    return text[5:].strip() if text.startswith("!$omp") else None
 
 
 @dataclass(frozen=True)
@@ -56,7 +59,7 @@ class NativeCompletionProof:
 
 
 def _joined_completion_facts(analysis, procedure, selected, *, call_completion=None, worksharing=None,
-                             graph_pointers=None):
+                             graph_pointers=None, uniform_sites=None, retirement_schedules=False, native_lifetime=None, section_units=None):
     """Verify one original group; serialized facts cannot grant a token.
 
     The retained native source supplies its original team, private storage,
@@ -75,7 +78,7 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                        if any(_kind(node) != "Comment" for node in graph.source_nodes(identity)))
     private, explicit_private, written, peeled, uniform_reads = set(), set(), set(), {}, {}
     section_count = 0
-    environment = {}
+    environment, terminals = {}, {}
     private_arrays = {}
 
     def content(node):
@@ -122,7 +125,9 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                 target = node.items[0]
                 if _kind(target) == "Part_Ref":
                     target = target.items[0]
-                binding = analysis._binding(analysis.source_scope_for(node, routine.scope), target)
+                field = native_lifetime.field(routine, target) if native_lifetime is not None else None
+                binding = field.binding if field is not None else analysis._binding(
+                    analysis.source_scope_for(node, routine.scope), target)
                 if binding is not None:
                     written.add(binding.root)
             elif _kind(node) == "Loop_Control" and node.items[1] is not None:
@@ -141,7 +146,14 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                     environment[id(node)] = proof
                     written.update(proof.written_roots)
                 else:
-                    written.update(call_completion(node))
+                    completed = call_completion(node)
+                    from compiler.frontend.resource_reachability import NativeTerminatingCall
+                    if type(completed) is NativeTerminatingCall:
+                        if completed.procedure != procedure or completed.original is not node:
+                            raise CompilationError("native terminal completion changed its original call position")
+                        terminals[id(node)] = completed.validate(analysis)
+                    else:
+                        written.update(completed)
 
     def local_private(binding):
         if graph_pointers is not None and any(pointer.binding is binding for pointer in graph_pointers):
@@ -174,7 +186,8 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                     raise CompilationError("unsupported native OpenMP COLLAPSE")
             elif kind == "schedule":
                 guided = graph_pointers is not None and re.fullmatch(r"guided(?:\s*,\s*[1-9][0-9]*)?", values)
-                if values not in {"static", "runtime"} and not guided:
+                unchanged = retirement_schedules and re.fullmatch(r"(?:static|dynamic|guided)(?:\s*,\s*[1-9][0-9]*)?", values)
+                if values not in {"static", "runtime"} and not guided and not unchanged:
                     raise CompilationError("unsupported native OpenMP SCHEDULE")
             else:
                 for name in values.split(","):
@@ -305,6 +318,7 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
         uniform_reads[key] = fact
         if len(uniform_reads) > analysis.operation_limit:
             raise CompilationError("uniform array condition resource budget exhausted")
+        return fact
 
     def uniform(header, *, guarded):
         condition = header.items[0]
@@ -325,13 +339,20 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                         or analysis._candidates(scope, name) or analysis._unknown_exports(scope)):
                     raise CompilationError("joined native OpenMP condition requires uniform scalar or descriptor reads")
         from compiler.frontend.component_bindings import references
+        points = []
         for binding, reference in references(analysis, scope, condition):
             if binding.root in private or binding.root in written:
                 raise CompilationError("joined native OpenMP condition is private or changes inside the complete region")
             if binding.rank and _kind(reference) in {"Part_Ref", "Data_Ref"}:
-                uniform_array(binding, reference, scope, guarded=guarded, compound=compound)
+                fact = uniform_array(binding, reference, scope, guarded=guarded, compound=compound)
+                if fact not in points:
+                    points.append(fact)
             if binding.attributes & {"pointer", "optional", "volatile", "asynchronous"}:
                 raise CompilationError("joined native OpenMP condition association or observation is uncertain")
+        if uniform_sites is not None:
+            if len(uniform_sites) >= analysis.operation_limit:
+                raise CompilationError("uniform condition site inventory budget exhausted")
+            uniform_sites.append((header, tuple(points)))
 
     def check_loop(loop):
         normalize((loop,))
@@ -397,7 +418,8 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                 continue
             if directive == "sections":
                 from compiler.frontend.native_group_structure import original_section_loops
-                loops, index = original_section_loops(items, index, limit=analysis.operation_limit)
+                loops, index = original_section_loops(items, index, limit=analysis.operation_limit,
+                                                     inventory=section_units)
                 for loop in loops:
                     check_section_loop(loop)
                 section_count += len(loops)
@@ -465,6 +487,11 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                       native_environment_operations=[proof.public() for proof in environment.values()],
                       native_only=True, internal_cuts_authorized=False,
                       requires_completed_device_work=True, gpu_legality_established=False)
+    if terminals:
+        record.update(completion_scope="normal return only", termination_paths_return=False,
+                      original_terminal_calls=[item.public() for item in terminals.values()],
+                      original_order_and_branch_required=True, motion_authorized=False,
+                      internal_cuts_authorized=False, gpu_legality_established=False)
     return graph, identities, executable, tuple(sorted(private)), record
 
 
@@ -497,6 +524,8 @@ class NativeGraphCompletionProof:
     _structure: object = field(repr=False, compare=False)
     _analysis: object = field(repr=False, compare=False)
     _issuer: object = field(repr=False, compare=False)
+    _call_storage: object = field(default=None, repr=False, compare=False)
+    _call_joins: tuple = field(default=(), repr=False, compare=False)
 
     def validate(self, analysis, procedure, selected):
         if (self._issuer is not _GRAPH_COMPLETION_ISSUER or analysis is not self._analysis
@@ -505,12 +534,28 @@ class NativeGraphCompletionProof:
                 or analysis.structure(procedure) is not self._structure):
             raise CompilationError("native graph completion requires exact registered source and graph authority")
         self._graph.validate(analysis, self._graph.procedure, self._graph._selection)
-        if not self._graph.completion_eligible:
+        if self._call_storage is not None:
+            if self._record.get("storage_identity") != self._call_storage.identity:
+                raise CompilationError("native call retirement changed its independent storage proof")
+            _require_native_call_retirement(analysis, self._graph, self._call_storage)
+            expected = tuple((item["procedure"], tuple(item["selected_node_ids"]),
+                              item["ordinary_completion"]["proof_identity"])
+                             for item in self._record["original_groups"] if "ordinary_completion" in item)
+            retained = {(name, tuple(ids)): proof for template in self._graph.templates
+                        for name, ids, proof in template.completion}
+            if tuple((name, tuple(ids), proof.identity) for name, ids, proof in self._call_joins) != expected:
+                raise CompilationError("native call retirement lost its original group completion receipts")
+            for name, identities, proof in self._call_joins:
+                if retained.get((name, tuple(identities))) is not proof:
+                    raise CompilationError("native call retirement replaced a graph-owned completion receipt")
+                proof.validate(analysis, name, identities)
+        elif not self._graph.completion_eligible:
             raise CompilationError("native graph has unresolved effect or association barriers")
         return self
 
     def public(self):
-        return {"schema_version": 1, "proof_identity": self.identity, "procedure": self.procedure,
+        return {"schema_version": 3 if self._call_storage is not None else 2,
+                "proof_identity": self.identity, "procedure": self.procedure,
                 "native_graph_identity": self._graph.identity, **_thaw(self._record)}
 
 
@@ -528,10 +573,22 @@ def prove_graph_joined_completion(analysis, procedure, selected, native_graph):
         key = obligation.procedure, tuple(map(id, obligation.originals))
         checked[key] = _graph_joined_facts(analysis, obligation.procedure, obligation.originals, native_graph)
     key = procedure, tuple(map(id, selected))
+    ordinary = None
     if key not in checked:
-        raise CompilationError("joined group is absent from the complete native graph's obligations")
+        _structure, identities = analysis._selected_source(procedure, selected)
+        retained = [proof for template in native_graph.templates for name, original_ids, proof in template.completion
+                    if name == procedure and tuple(original_ids) == identities]
+        if len(retained) != 1 or type(retained[0]) is not NativeCompletionProof:
+            raise CompilationError("joined group is absent from the complete native graph's obligations")
+        ordinary = retained[0].validate(analysis, procedure, identities)
+        # A previously proved ordinary join is retained independently in the
+        # same graph. Verify the full graph-owned structure as for a deferred
+        # group; absence of an obligation never supplies completion evidence.
+        checked[key] = _graph_joined_facts(analysis, procedure, selected, native_graph)
     structure, identities, record = checked[key]
-    identity = sha256(json.dumps({"version": 1, "native_graph": native_graph.identity,
+    if ordinary is not None:
+        record["retained_ordinary_completion_identity"] = ordinary.identity
+    identity = sha256(json.dumps({"version": 2, "native_graph": native_graph.identity,
                                   "procedure": procedure, "selected": identities, "record": record},
                                  sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     registry = getattr(analysis, "_native_graph_completions", None)
@@ -547,20 +604,31 @@ def prove_graph_joined_completion(analysis, procedure, selected, native_graph):
     return proof.validate(analysis, procedure, identities)
 
 
-def _graph_joined_facts(analysis, procedure, selected, native_graph):
+def _graph_joined_facts(analysis, procedure, selected, native_graph, *, retirement_storage=None):
     template = next((item for item in native_graph.templates if item.procedure == procedure), None)
     if template is None:
         raise CompilationError("joined native procedure is absent from the effect graph")
-    # The extension retains one complete combined team. Broader parallel bodies
-    # continue to require their existing uniform-control/completion authority.
+    # Whole-call retirement has already published and destroyed the domain.
+    # Its original plain team may keep native worksharing schedules through the
+    # enclosing join; ordinary payload consumers retain their stronger limit.
+    if retirement_storage is not None:
+        _require_native_call_retirement(analysis, native_graph, retirement_storage)
     directives = [_directive(node) for original in selected for node in walk(original)
                   if _directive(node) is not None]
-    if not directives or not re.match(r"parallel\s+do(?:\s|$)", directives[0]):
+    opening = r"parallel(?:\s|$)" if retirement_storage is not None else r"parallel\s+do(?:\s|$)"
+    if not directives or not re.match(opening, directives[0]):
         raise CompilationError("graph-owned native completion requires one complete original PARALLEL DO")
     calls = {id(instance.call.edge.original): instance.call.edge
              for instance in native_graph.instances if instance.call is not None}
 
+    terminals = {id(item.original): item for _ordinal, item in native_graph.terminal_calls}
+
     def complete_call(node):
+        terminal = terminals.get(id(node))
+        if terminal is not None:
+            if terminal.procedure != procedure:
+                raise CompilationError("native terminal belongs to another original procedure")
+            return terminal.validate(analysis)
         edge = calls.get(id(node))
         if edge is None or edge.caller != procedure:
             raise CompilationError("native joined call is absent from the complete instantiated graph")
@@ -571,11 +639,179 @@ def _graph_joined_facts(analysis, procedure, selected, native_graph):
 
     selected_nodes = {id(node) for original in selected for node in walk(original)}
     pointers = tuple(item for item in template.confined_pointers if id(item.loop) in selected_nodes)
+    lifetime = None
+    if retirement_storage is not None and retirement_storage._native_graph is not None:
+        from compiler.frontend.native_lifetime_context import NativeLifetimeContext
+        lifetime = NativeLifetimeContext(analysis, native_graph)
     structure, identities, _executable, private, record = _joined_completion_facts(
-        analysis, procedure, selected, call_completion=complete_call, graph_pointers=pointers)
+        analysis, procedure, selected, call_completion=complete_call, graph_pointers=pointers,
+        retirement_schedules=retirement_storage is not None, native_lifetime=lifetime)
     if any(pointer.binding.root not in private for pointer in pointers):
         raise CompilationError("confined native pointer requires explicit original PRIVATE descriptor storage")
     record.update(native_only=True, internal_cuts_authorized=False, gpu_legality_established=False,
-                  effect_graph_required=True, private_pointer_descriptors=[item.binding.root for item in pointers],
+                  effect_graph_required=True, completion_scope="normal return only",
+                  termination_paths_return=False, motion_authorized=False,
+                  original_observable_terminal_instances=[{"instance": ordinal, **item.public()}
+                      for ordinal, item in native_graph.terminal_calls],
+                  private_pointer_descriptors=[item.binding.root for item in pointers],
                   private_pointer_payload_authority=False)
     return structure, identities, record
+
+
+def _native_call_groups(native):
+    from compiler.frontend.resource_reachability import NativeEffectNode, NativePresenceConditional
+
+    groups = {}
+    for template in native.templates:
+        pending = list(template.nodes)
+        while pending:
+            node = pending.pop()
+            if isinstance(node, NativeEffectNode):
+                if node.kind == "joined_group":
+                    groups[template.procedure, tuple(map(id, node.original))] = tuple(node.original)
+                pending.extend(node.items)
+            elif isinstance(node, NativePresenceConditional):
+                pending.extend((*node.present, *node.absent))
+    return tuple((name, originals) for (name, _ids), originals in groups.items())
+
+
+def native_call_storage_structures(analysis, native):
+    """Existing callees of one whole original CALL or single-line IF CALL."""
+    from compiler.frontend.descriptor_teams import prove_descriptor_team
+    from compiler.frontend.resource_reachability import NativeEffectGraph
+
+    if type(native) is not NativeEffectGraph:
+        raise CompilationError("native call retirement requires its issued original effect graph")
+    native.validate(analysis, native.procedure, native._selection)
+    if (_original_call_control(native._selection) is None
+            or not native.retirement_effects_eligible):
+        raise CompilationError("native call retirement has unresolved original effects or selection")
+    result = []
+    lifetime = None
+    if any(template.confined_pointers for template in native.templates):
+        from compiler.frontend.native_lifetime_context import NativeLifetimeContext
+        lifetime = NativeLifetimeContext(analysis, native)
+    for name, originals in _native_call_groups(native):
+        if name not in analysis.routines or name == native.procedure:
+            raise CompilationError("native call team requires an original complete subroutine callee")
+        result.append(prove_descriptor_team(analysis, name, originals,
+            native_graph=native if lifetime is not None and lifetime.team_bindings(name, originals) else None))
+    for template in native.templates:
+        result.extend(template.worksharing)
+    return tuple({id(proof): proof for proof in result}.values())
+
+
+def _require_native_call_retirement(analysis, native, storage):
+    from compiler.frontend.resource_reachability import NativeAllocationObligation, NativeWorksharingObligation
+    from compiler.frontend.storage_mutation_effects import StorageMutationEffects, _resource
+
+    native.validate(analysis, native.procedure, native._selection)
+    if (_original_call_control(native._selection) is None
+            or not native.retirement_effects_eligible or type(storage) is not StorageMutationEffects):
+        raise CompilationError("native call retirement requires exact independent graph and storage authority")
+    storage.validate(analysis, native.procedure, selection=native._selection)
+    record = storage._record
+    if not record["complete"] or record["escapes"] or type(storage._joined_storage) is not tuple:
+        raise CompilationError("native call retirement requires complete nonescaping original callee storage")
+    if storage._native_graph is not None and storage._native_graph is not native:
+        raise CompilationError("native retirement changed its independent lifetime graph")
+    structures = storage._joined_storage
+    from compiler.frontend.descriptor_teams import DescriptorTeamProof
+
+    for proof in structures:
+        if type(proof) is DescriptorTeamProof:
+            proof.validate(analysis, proof.procedure, proof.selected_node_ids)
+            if proof._native_graph is not None and proof._native_graph is not native:
+                raise CompilationError("native retirement changed its confined-pointer team graph")
+        else:
+            proof.validate(analysis, proof._routine)
+    groups = _native_call_groups(native)
+    expected_teams = {(name, analysis._selected_source(name, originals)[1]) for name, originals in groups}
+    actual_teams = {(proof.procedure, tuple(proof.selected_node_ids)) for proof in structures
+                    if type(proof) is DescriptorTeamProof}
+    if actual_teams != expected_teams:
+        raise CompilationError("native call retirement lost exact original group storage coverage")
+    grouped_nodes = {}
+    for name, originals in groups:
+        grouped_nodes.setdefault(name, set()).update(id(node) for original in originals for node in walk(original))
+    for ordinal, obligation in native.lifetime_obligations:
+        if isinstance(obligation, NativeAllocationObligation):
+            if (_kind(obligation.original) != "Assignment_Stmt"
+                    or obligation.original.items[0] is not obligation.target
+                    or not any(member["procedure"] == obligation.procedure and any(
+                        event["kind"] == "whole allocatable assignment may replace storage"
+                        and event["resource"] == _resource(obligation.binding)
+                        and event["original_source"] == str(obligation.original)
+                        for event in member["mutations"]) for member in record["closure"])):
+                raise CompilationError("native allocation obligation lacks its exact original storage mutation")
+        elif isinstance(obligation, NativeWorksharingObligation):
+            if not any(proof is obligation.proof for proof in structures):
+                raise CompilationError("native orphan obligation lost its exact whole-callee structure")
+            obligation.proof.checkpoint()
+            instance = native.instances[ordinal]
+            if instance.template._selection is not None or instance.template._routine is not obligation.proof._routine:
+                raise CompilationError("native orphan completion requires the whole original callee")
+            while instance.call is not None:
+                edge = instance.call.edge
+                if id(edge.original) in grouped_nodes.get(edge.caller, ()):
+                    raise CompilationError("orphan worksharing reached through a team requires independent participation")
+                instance = native.instances[instance.parent]
+        else:
+            raise CompilationError("native call retirement contains an unknown lifetime obligation")
+
+
+def prove_native_call_retirement(analysis, procedure, selected, native, storage):
+    """Normal return of one unchanged CALL/control after complete domain retirement.
+
+    Allocation mutations remain explicit. This proof lends neither stable
+    storage nor payload access to ordinary native units. A selected IF keeps
+    its original predicate, effects, action and source identity throughout.
+    """
+    _require_native_call_retirement(analysis, native, storage)
+    structure, identities = analysis._selected_source(procedure, selected)
+    if (procedure != native.procedure or len(selected) != len(native._selection)
+            or any(a is not b for a, b in zip(selected, native._selection, strict=True))):
+        raise CompilationError("native call retirement changed its original caller selection")
+    joins, group_records = [], []
+    for name, originals in _native_call_groups(native):
+        _graph, selected_ids = analysis._selected_source(name, originals)
+        ordinary = [proof for template in native.templates for owner, ids, proof in template.completion
+                    if owner == name and ids == selected_ids]
+        if len(ordinary) == 1:
+            proof = ordinary[0].validate(analysis, name, selected_ids)
+            joins.append((name, selected_ids, proof))
+            group_records.append({"procedure": name, "selected_node_ids": list(selected_ids),
+                                  "ordinary_completion": proof.public()})
+        elif ordinary:
+            raise CompilationError("native call retirement has ambiguous original group completion")
+        else:
+            _graph, checked_ids, facts = _graph_joined_facts(analysis, name, originals, native, retirement_storage=storage)
+            if checked_ids != selected_ids:
+                raise CompilationError("native call retirement changed a complete original group")
+            group_records.append({"procedure": name, "selected_node_ids": list(selected_ids),
+                                  "graph_completion": facts})
+    record = {"kind": "whole_original_native_call_retirement", "available": True,
+              "caller_contract": "serial_source_scope", "requires_serial_caller": True,
+              "requires_completed_device_work": True, "requires_domain_retirement": True,
+              "completion_scope": "normal return only", "termination_paths_return": False,
+              "motion_authorized": False, "internal_cuts_authorized": False,
+              "gpu_legality_established": False, "payload_access_authorized": False,
+              "stable_storage_authorized": False, "original_call_unchanged": True,
+              "storage_identity": storage.identity, "original_groups": group_records,
+              "discharged_lifetime_obligations": [{"instance": ordinal, **item.public()}
+                  for ordinal, item in native.lifetime_obligations],
+              "original_observable_terminal_instances": [{"instance": ordinal, **item.public()}
+                  for ordinal, item in native.terminal_calls]}
+    identity = sha256(json.dumps({"version": 4, "procedure": procedure, "selected": identities,
+        "native_graph": native.identity, "record": record}, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    registry = getattr(analysis, "_native_graph_completions", None)
+    if registry is None:
+        registry = analysis._native_graph_completions = {}
+    if identity in registry:
+        return registry[identity].validate(analysis, procedure, identities)
+    if len(registry) >= analysis.procedure_limit:
+        raise CompilationError("native graph completion proof registry budget exhausted")
+    proof = NativeGraphCompletionProof(procedure, identity, identities, _freeze(record), native, structure,
+        analysis, _GRAPH_COMPLETION_ISSUER, storage, tuple(joins))
+    registry[identity] = proof
+    return proof.validate(analysis, procedure, identities)

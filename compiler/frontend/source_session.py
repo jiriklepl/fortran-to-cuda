@@ -1,11 +1,11 @@
 """One authenticated, immutable source graph shared by compilation projections.
 
-Only original declaration/syntax state is sealed. Effect caches and private
-routine projections remain explicit mutable state on SourceEffects. A session
-query authenticates graph identities; publication authenticates live files.
+Original declaration/syntax state and persistent projection values are sealed.
+Effect caches, context interning and generated handles are separate work state.
+A session query authenticates graph identities; publication authenticates files.
 """
 import json
-from collections.abc import MutableMapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256
 from types import MappingProxyType
@@ -15,26 +15,29 @@ from compiler.frontend.sealed_syntax import sealed as syntax_sealed
 from compiler.ir import CompilationError
 
 
-class ProjectedRoutines(MutableMapping):
-    """Small explicit override map over one immutable original registry."""
+class ProjectedRoutines(Mapping):
+    """Persistent private routine selection over one immutable original registry."""
     __slots__ = ("base", "_overrides")
 
     def __init__(self, base, overrides=()):
         object.__setattr__(self, "base", base)
-        object.__setattr__(self, "_overrides", dict(overrides))
+        object.__setattr__(self, "_overrides", MappingProxyType(dict(overrides)))
 
     def __setattr__(self, name, value):
         raise CompilationError("private projection registry identity is immutable")
 
     @property
     def overrides(self):
-        return MappingProxyType(self._overrides)
+        return self._overrides
 
     def __getitem__(self, key):
         return self._overrides[key] if key in self._overrides else self.base[key]
 
     def __setitem__(self, key, value):
-        self._overrides[key] = value
+        raise CompilationError("routine projection is immutable; use project_routine")
+
+    def with_override(self, key, value):
+        return ProjectedRoutines(self.base, {**self._overrides, key: value})
 
     def __delitem__(self, key):
         raise CompilationError("private projections cannot remove original source roles")
@@ -47,15 +50,41 @@ class ProjectedRoutines(MutableMapping):
         return len(self.base) + len(self._overrides.keys() - self.base.keys())
 
     def __copy__(self):
-        return ProjectedRoutines(self.base, self._overrides)
+        return self
 
 
 # Authoritative roots, distinct from mutable caches/proof token registries.
 _ROOTS = ("inputs", "sources", "modules", "routines", "functions", "numerical_helpers",
-          "kind_expressions", "_source_scopes", "_associate_scopes", "_source_roles",
+          "kind_expressions", "_source_scopes", "_associate_scopes", "_block_scopes", "_block_scope_roles", "_source_roles",
           "_numerical_roles", "_source_module_roles", "_source_module_bindings",
           "_source_object_scopes", "_source_function_scopes", "_source_provenance",
           "_source_object_calls", "_source_syntax")
+
+
+class _ContextIndex:
+    """Issuer work state, distinct from the immutable semantic source maps."""
+    __slots__ = ("_by_key", "_roles")
+
+    def __init__(self):
+        object.__setattr__(self, "_by_key", {})
+        object.__setattr__(self, "_roles", {})
+
+    def __setattr__(self, name, value):
+        raise CompilationError("source context index ownership is immutable")
+
+    def get(self, key):
+        return self._by_key.get(key)
+
+    def register(self, key, context):
+        if key in self._by_key:
+            raise CompilationError("source context is already interned")
+        self._by_key[key] = context
+
+    def register_role(self, routine):
+        self._roles[id(routine)] = routine
+
+    def owns_role(self, routine):
+        return self._roles.get(id(routine)) is routine
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +93,10 @@ class SourceSession:
     roots: object
     objects: object
     _execution_nodes: object
+    _execution_membership: object
+    _specification_comments: object
+    _lexical_parents: object
+    _contexts: object
 
     @classmethod
     def create(cls, analysis):
@@ -71,9 +104,10 @@ class SourceSession:
 
         from compiler.frontend.component_bindings import AssociationScope, ComponentAccess, ComponentSchema
         from compiler.frontend.lowering import _KindScope
-        from compiler.frontend.source_effects import Binding, Routine, Scope
+        from compiler.frontend.source_effects import Binding, Routine, Scope, _kind, _part
         from compiler.frontend.source_functions import _validate_scope
         from compiler.frontend.source_inputs import SourceInputs
+        from compiler.frontend.source_membership import ExecutionMembership
         from compiler.frontend.source_objects import _members, _TypeBuilder
         from compiler.frontend.source_syntax import SourceSyntaxSnapshot, _Group, _Layout, _Node, _Sequence
 
@@ -94,7 +128,7 @@ class SourceSession:
         authority = analysis._summary_authority()
         if authority["role"] != "source":
             raise CompilationError("cannot seal a private or changed source graph")
-        identity = sha256(json.dumps({"source_session_version": 1, "authority": authority},
+        identity = sha256(json.dumps({"source_session_version": 2, "authority": authority},
                                      sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         analysis._source_syntax = analysis._source_syntax.seal()
         analysis.inputs.verify_live()
@@ -109,10 +143,65 @@ class SourceSession:
         # The syntax snapshot already bounded and authenticated these trees.
         # Keep exact per-routine membership beside that immutable authority;
         # consumers need not format or walk a whole procedure for every node.
-        execution_nodes = {name: MappingProxyType({id(node): node for node in walk(routine.execution)})
-                           for name, routine in roots["routines"].items()}
+        execution_membership = {name: ExecutionMembership.create(routine.execution)
+                                for name, routine in roots["routines"].items()}
+        execution_nodes = {name: membership.nodes for name, membership in execution_membership.items()}
+        # Repeated participation queries need specification comments only.
+        # Index immutable original syntax, without resolving directives or
+        # changing when an unrelated malformed directive is diagnosed.
+        scopes = (*roots["modules"].values(), *(routine.scope for routine in roots["routines"].values()))
+        specification_comments = {
+            id(scope.node): (scope.node, tuple(node for node in walk(_part(scope.node, "Specification_Part"))
+                                               if _kind(node) == "Comment"))
+            for scope in scopes
+        }
+        parents = {}
+        pending, visited = [scope.node for scope in scopes], set()
+        while pending:
+            node = pending.pop()
+            if id(node) in visited:
+                continue
+            visited.add(id(node))
+            if isinstance(node, (tuple, list)):
+                pending.extend(node)
+            elif hasattr(node, "items") or hasattr(node, "content"):
+                parents[id(node)] = (node, getattr(node, "parent", None))
+                pending.extend(getattr(node, "content", getattr(node, "items", ())) or ())
         return cls(identity, MappingProxyType(roots), MappingProxyType(freezer.objects),
-                   MappingProxyType(execution_nodes))
+                   MappingProxyType(execution_nodes), MappingProxyType(execution_membership),
+                   MappingProxyType(specification_comments), MappingProxyType(parents), _ContextIndex())
+
+    def authority_context(self, identity, policy, authority, fields_key):
+        from compiler.frontend.authority_context import SourceAuthorityContext
+        from compiler.frontend.proof_arena import DerivationArena
+
+        context = self._contexts.get(identity)
+        if context is None:
+            context = SourceAuthorityContext(identity, self, MappingProxyType(dict(policy)), authority, fields_key)
+            object.__setattr__(context, "_arena", DerivationArena(context))
+            self._contexts.register(identity, context)
+        return context
+
+    def owns_context(self, context):
+        return self._contexts.get(context._intern_key) is context
+
+    def _register_projection(self, routine):
+        self._contexts.register_role(routine)
+
+    def owns_projection(self, routine):
+        return self.contains(routine) or self._contexts.owns_role(routine)
+
+    def original_node(self, identity):
+        found = self._lexical_parents.get(identity)
+        if found is None:
+            raise CompilationError("source capability refers to a foreign original node")
+        return found[0]
+
+    def lexical_parent(self, node):
+        found = self._lexical_parents.get(id(node))
+        if found is None or found[0] is not node:
+            raise CompilationError("lexical parent requires an original source node")
+        return found[1]
 
     def verify(self, analysis):
         for name, expected in self.roots.items():
@@ -129,6 +218,16 @@ class SourceSession:
         if self.routine(analysis, routine.qualified) is not routine:
             raise CompilationError("original execution membership requires its exact source routine")
         return self._execution_nodes[routine.qualified]
+
+    def specification_comments(self, analysis):
+        """Exact original syntax only; foreign projection nodes need a fresh walk."""
+        self.verify(analysis)
+        return self._specification_comments
+
+    def execution_overlaps(self, analysis, routine, selections):
+        if self.routine(analysis, routine.qualified) is not routine:
+            raise CompilationError("original execution membership requires its exact source routine")
+        return self._execution_membership[routine.qualified].overlaps(selections)
 
     def routine(self, analysis, name, *, function=False):
         self.verify(analysis)

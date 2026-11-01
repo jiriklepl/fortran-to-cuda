@@ -266,7 +266,11 @@ end function
     source = tmp_path / "check.f90"
     source.write_text(stub + generated)
     binary = tmp_path / "check"
-    compiled = subprocess.run([fortran, "-std=f2018", "-fcheck=all", str(interface), str(source), "-o", str(binary)],
+    # This standalone inspector only uses interface types and its exact layout
+    # stub. Discard unrelated owning-domain module bodies rather than linking
+    # or faking their runtime implementation.
+    compiled = subprocess.run([fortran, "-std=f2018", "-fcheck=all", "-ffunction-sections", "-Wl,--gc-sections",
+                               str(interface), str(source), "-o", str(binary)],
                               cwd=tmp_path, capture_output=True, text=True, timeout=60)
     assert compiled.returncode == 0, compiled.stdout + compiled.stderr
     executed = subprocess.run([str(binary)], cwd=tmp_path, capture_output=True, text=True, timeout=60)

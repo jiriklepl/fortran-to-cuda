@@ -62,7 +62,7 @@ def test_large_sequence_spends_per_unit_and_aggregate_resolution_budgets(tmp_pat
         _validate_resolution(analysis, analysis.routines[ENTRY].scope, _walk(originals))
     record = prove(analysis, selected).public()
     resolution = record["resolution_validation"]
-    assert record["schema_version"] == 5
+    assert record["schema_version"] == 6
     assert record["source_operations"] == 140
     assert resolution["units"] == 140
     assert resolution["lookup_transitions"] > 256
@@ -119,11 +119,15 @@ def test_aggregate_scan_counter_includes_syntax_and_lookup_transitions(tmp_path)
 
 
 def test_descriptor_operation_cap_remains_aggregate_across_child_calls(tmp_path):
+    """The old cap now counts full source; only unit/scan bounds limit work."""
     child = "subroutine increment(a)\nreal(8),intent(inout)::a(:)\na(1)=a(1)+1.0_8\nend subroutine"
     analysis, selected, _, _ = fixture(tmp_path, "\n".join("call increment(a)" for _ in range(8)),
                                         children=child, operations=8)
-    with pytest.raises(CompilationError, match="source operation budget exhausted"):
-        prove(analysis, selected)
+    public = prove(analysis, selected).public()
+    assert public["source_operations"] == 9
+    assert analysis.operation_limit == 8
+    assert public["resolution_validation"]["per_unit_lookup_limit"] == 8
+    assert public["resolution_validation"]["aggregate_source_scan_limit"] == 65536
 
 
 @pytest.mark.parametrize(("levels", "accepted"), [(6, True), (8, False)])

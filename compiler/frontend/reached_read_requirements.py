@@ -29,15 +29,40 @@ class ReachedReadRequirementsUnsupported(CompilationError):
 def _native_read_selection(analysis, procedure, selection):
     """An original assignment reads its RHS before changing its target.
 
-    A union of conditional/loop accesses is not a must-read set. Keep those
-    operations on their existing definition path. Function arguments can also
-    be conditionally consumed; only descriptor inquiries are admitted here.
+    A perfect counted nest with a single scalar assignment also reads every
+    described array point. Its exact guarded geometry and invariant bounds are
+    established separately by NativeDefinitionProof. Conditional unions and
+    array-writing loops do not establish entry reads here. Function arguments
+    can be conditionally consumed; only descriptor inquiries are admitted.
     """
     from compiler.ir.intrinsics import ARRAY_INQUIRIES, MODEL_INQUIRIES
 
     analysis._selected_source(procedure, selection)
-    if len(selection) != 1 or type(selection[0]).__name__ != "Assignment_Stmt":
+    if len(selection) != 1:
         return False
+    assignment = selection[0]
+    counted = False
+    while type(assignment).__name__ == "Block_Nonlabel_Do_Construct":
+        contents = tuple(item for item in assignment.content if type(item).__name__ != "Comment")
+        if (len(contents) != 3 or type(contents[0]).__name__ != "Nonlabel_Do_Stmt"
+                or type(contents[-1]).__name__ != "End_Do_Stmt"):
+            return False
+        control = contents[0].items[1]
+        if control is None or control.items[1] is None:
+            return False
+        counted = True
+        assignment = contents[1]
+    if type(assignment).__name__ != "Assignment_Stmt":
+        return False
+    if counted:
+        target = assignment.items[0]
+        if type(target).__name__ != "Name":
+            return False
+        routine = analysis.routines[procedure]
+        binding = analysis._binding(analysis.source_scope_for(assignment, routine.scope), target)
+        if (binding is None or binding.rank or binding.attributes &
+                {"pointer", "target", "optional", "volatile", "asynchronous"}):
+            return False
     for node in walk(selection[0]):
         kind = type(node).__name__
         if (isinstance(node, str) and node.lower() in {".and.", ".or."}
@@ -48,7 +73,7 @@ def _native_read_selection(analysis, procedure, selection):
     return True
 
 
-def prove_native_read_requirements(analysis, procedure, selection, *, completion=None):
+def prove_native_read_requirements(analysis, procedure, selection, *, completion=None, descriptor_window=None):
     """Retain existing original-source authority for exact reached reads.
 
     Assignment authority and unchanged native-team completion share this
@@ -61,7 +86,7 @@ def prove_native_read_requirements(analysis, procedure, selection, *, completion
         return completion if sections.available else None
     if not _native_read_selection(analysis, procedure, selection):
         return None
-    proof = prove_native_definitions(analysis, procedure, selection)
+    proof = prove_native_definitions(analysis, procedure, selection, descriptor_window=descriptor_window)
     return proof if any(step.sections and any(item.reads for item in step.sections.resources)
                         for step in proof.steps) else None
 
@@ -77,11 +102,12 @@ def native_read_sections(analysis, procedure, selection, proof):
             raise CompilationError("native original entry reads unavailable: " + str(sections.reason))
         return sections
     if type(proof) is not NativeDefinitionProof or not _native_read_selection(analysis, procedure, selection):
-        raise CompilationError("native reached reads require exact original assignment authority")
+        raise CompilationError("native reached reads require exact original assignment or read-only counted-nest authority")
     proof.validate(analysis, procedure, selection)
     # Derive from authenticated source instead of consuming mutable detached
     # summaries or trusting a caller-supplied section/payload replacement.
-    sections = analysis.native_sections_for_nodes(procedure, selection, capture_locals=True)
+    sections = analysis.native_sections_for_nodes(procedure, selection, capture_locals=True,
+                                                  descriptor_window=proof._descriptor_window)
     if not sections.available:
         raise CompilationError("native reached read sections are unavailable")
     return replace(sections, resources=tuple(replace(item, writes=(), overwrites=())
@@ -108,7 +134,7 @@ class ReachedReadUnit:
         return {"unit_index": self.index, "sections": self.sections.public()}
 
 
-def _upward_reads(unit, mapper):
+def _upward_reads(unit, mapper, *, conditional=False):
     """Use the same affine mapper as physical analysis, retaining source order."""
     definitions, written, reads, writes = {}, set(), {}, {}
     iterators = {loop.iterator: index for index, loop in enumerate(unit.region.loops)}
@@ -153,7 +179,7 @@ def _upward_reads(unit, mapper):
     # multiple target mappings need a separate dependence proof.
     for symbol in reads.keys() & writes.keys():
         mappings = {box.axes for box in (*reads[symbol], *writes[symbol])}
-        if len(mappings) != 1:
+        if len(mappings) != 1 and not conditional:
             raise ReachedReadRequirementsUnsupported(
                 "reached read/write storage requires identical per-iteration self-update mappings")
     return {symbol: _merge_boxes(boxes) for symbol, boxes in reads.items()}, set(writes)
@@ -162,9 +188,13 @@ def _upward_reads(unit, mapper):
 def _derive(analysis, procedure, selection, prepared, consume):
     physical = prove_numerical_effects(analysis, procedure, selection, prepared, consume=consume)
     mapper = _Mapper(analysis, analysis.routines[procedure], prepared, consume)
+    conditional = prepared.conditional_context
+    if conditional is not None:
+        conditional.validate(prepared._provider)
+        conditional.domain(prepared.completion_proof)
     units, accesses, accumulated = [], [], {}
     for unit in prepared.offload.units:
-        upward, written = _upward_reads(unit, mapper)
+        upward, written = _upward_reads(unit, mapper, conditional=conditional is not None)
         accesses.append((set(upward), written))
         resources = []
         iterations = mapper.iterations(unit)
@@ -194,7 +224,7 @@ def _derive(analysis, procedure, selection, prepared, consume):
     for index, (reads, writes) in enumerate(accesses):
         for other_reads, other_writes in accesses[index + 1:]:
             mapper.tick()
-            if writes & (other_reads | other_writes) or other_writes & reads:
+            if conditional is None and (writes & (other_reads | other_writes) or other_writes & reads):
                 raise ReachedReadRequirementsUnsupported(
                     "reached joined units require independent array reads and writes at group entry")
     sections = NativeSections(True, resources=tuple(accumulated[root] for root in sorted(accumulated)))
@@ -209,7 +239,9 @@ def _derive(analysis, procedure, selection, prepared, consume):
               "joined_reads": "independent units share the original group-entry snapshot",
               "prefix_definitions_authorized": False, "capture_authorized": False,
               "descriptor_lifetime_authorized": False, "alias_authorized": False,
-              "execution_authorized": False, "bounds_evaluated": False}
+              "execution_authorized": False, "bounds_evaluated": False,
+              **({"conditional_numerical_context_identity": conditional.identity,
+                  "read_admission_requires_same_conditional_guard": True} if conditional is not None else {})}
     return tuple(units), sections, _thaw(_freeze(record))
 
 

@@ -77,7 +77,7 @@ def test_exact_readonly_prefix_delays_create_and_preserves_active_context_protoc
         raw, managed = text[start:].split("else\n", 1)
         assert assignment in raw
         assert "fort_scope" not in raw.split("then\n", 1)[1]
-        assert "fort_scope_create" in managed
+        assert "fort_scope_resident_create_v1" in managed
         assert "fort_scope_plan_validate" in managed
         assert "fort_scope_access_begin_v1" in managed
     numerical = [item for item in owner["planning_segments"] if item["gpu_leaves"]]
@@ -211,6 +211,12 @@ interface
 integer(c_int) function prefix_contexts() bind(C)
 import c_int
 end function
+integer(c_int) function prefix_domains() bind(C)
+import c_int
+end function
+integer(c_int) function prefix_domain_closes() bind(C)
+import c_int
+end function
 end interface
 #endif
 allocate(a(-2:4),b(5:11))
@@ -231,6 +237,8 @@ write(unit)seen,a,b
 enddo
 #ifdef FORT_CANDIDATE
 if(prefix_contexts()/=CREATES) error stop 'wrong owning or borrowed context path'
+if(prefix_domains()/=CREATES) error stop 'wrong owning or borrowed domain path'
+if(prefix_domain_closes()/=CREATES) error stop 'owning domain lifetime not retired'
 #endif
 close(unit)
 print *, 'fresh metadata and zero-trip source preserved'
@@ -274,19 +282,32 @@ end program
     assert configurations
     assert set(configurations) <= names
     stubs = build / "unreached.cpp"
-    create = ('++contexts; return __real_fort_scope_create(device,out);'
+    create = ('++contexts; return __real_fort_scope_create_in_domain_v1(domain,out);'
               if case == "borrowed" else 'std::abort();')
+    create_domain = ('++domains; return __real_fort_scope_domain_create_v1(device,out);'
+                     if case == "borrowed" else 'std::abort();')
     stubs.write_text('#include <cstdlib>\n#include "scoped_runtime.h"\n'
         + '#define FORT_SHARED_CHECK(expression) do { int status=(expression); if(status) return status; } while(0)\n'
         + '\n'.join(configurations.values()) + '\n' + '\n'.join(
         f'extern "C" int {name}(...) {{ std::abort(); }}' for name in sorted(names - configurations.keys()))
-        + '\nstatic int contexts=0;\nextern "C" int prefix_contexts(){return contexts;}\n'
-        + 'extern "C" int __real_fort_scope_create(int,fort_scope_t*);\n'
-        + 'extern "C" int __wrap_fort_scope_create(int device,fort_scope_t*out){' + create + '}\n')
+        + '\nstatic int contexts=0,domains=0,domain_closes=0;\nextern "C" int prefix_contexts(){return contexts;}\n'
+        + 'extern "C" int prefix_domains(){return domains;}\n'
+        + 'extern "C" int prefix_domain_closes(){return domain_closes;}\n'
+        + 'extern "C" int __real_fort_scope_create_in_domain_v1(fort_scope_domain_t,fort_scope_t*);\n'
+        + 'extern "C" int __wrap_fort_scope_create_in_domain_v1(fort_scope_domain_t domain,fort_scope_t*out){'
+        + create + '}\n'
+        + 'extern "C" int __real_fort_scope_domain_create_v1(int,fort_scope_domain_t*);\n'
+        + 'extern "C" int __wrap_fort_scope_domain_create_v1(int device,fort_scope_domain_t*out){'
+        + create_domain + '}\n'
+        + 'extern "C" int __real_fort_scope_domain_close_v1(fort_scope_domain_t);\n'
+        + 'extern "C" int __wrap_fort_scope_domain_close_v1(fort_scope_domain_t domain){'
+        + '++domain_closes;return __real_fort_scope_domain_close_v1(domain);}\n')
     stubs_object = build / "unreached.o"
     run([cxx, "-O2", "-c", stubs, "-o", stubs_object])
     candidate = build / "candidate"
-    run([*flags, "-DFORT_CANDIDATE", driver, *objects, runtime, stubs_object, "-lstdc++", "-Wl,--wrap=fort_scope_create",
+    run([*flags, "-DFORT_CANDIDATE", driver, *objects, runtime, stubs_object, "-lstdc++",
+         "-Wl,--wrap=fort_scope_create_in_domain_v1", "-Wl,--wrap=fort_scope_domain_create_v1",
+         "-Wl,--wrap=fort_scope_domain_close_v1",
          "-o", candidate])
     result = run([candidate])
     assert result.stdout == reference.stdout

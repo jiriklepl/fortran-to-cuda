@@ -139,7 +139,8 @@ def test_shared_partial_write_correction_matches_original_complete_field_once(tm
     source.write_text(generated)
     binary = tmp_path / "correction"
     result = subprocess.run(
-        [fortran, "-std=f2018", "-fcheck=all", str(interface), str(tmp_path / "renamed.f90"),
+        [fortran, "-std=f2018", "-fcheck=all", "-ffunction-sections", "-Wl,--gc-sections",
+         str(interface), str(tmp_path / "renamed.f90"),
          str(source), "-o", str(binary)],
         cwd=tmp_path, capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stdout + result.stderr

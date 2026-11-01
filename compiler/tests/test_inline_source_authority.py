@@ -172,7 +172,7 @@ def test_session_membership_rejects_foreign_original_and_routine_projection(tmp_
     with pytest.raises(CompilationError, match="source selection"):
         builder.inline.original_selection(copy.copy(originals[0]))
     private = builder.analysis.private_projection(routines=True)
-    private.routines[builder.entry.qualified] = copy.copy(builder.entry)
+    private.project_routine(builder.entry.qualified, copy.copy(builder.entry))
     builder.analysis = private
     with pytest.raises(CompilationError, match="original source-backed"):
         builder.inline.original_selection(originals)

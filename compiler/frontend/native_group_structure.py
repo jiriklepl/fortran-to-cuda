@@ -28,8 +28,10 @@ def _children(node):
 
 
 def directive(node):
+    if _kind(node) != "Comment":
+        return None
     text = str(node).lstrip().lower()
-    return text[5:].strip() if _kind(node) == "Comment" and text.startswith("!$omp") else None
+    return text[5:].strip() if text.startswith("!$omp") else None
 
 
 @dataclass
@@ -95,7 +97,7 @@ def original_sequence(items, peeled, scan=None):
     return tuple(result)
 
 
-def original_section_loops(items, index, *, visit=None, limit=256):
+def original_section_loops(items, index, *, visit=None, limit=256, inventory=None):
     """Select complete explicit SECTION bodies, retaining their original DOs.
 
     The caller must expose attached original directives first. This narrow
@@ -104,7 +106,8 @@ def original_section_loops(items, index, *, visit=None, limit=256):
     """
     if directive(items[index]) != "sections":
         raise CompilationError("native SECTIONS requires a plain original SECTIONS directive")
-    loops, index = [], index + 1
+    opening = items[index]
+    loops, markers, index = [], [], index + 1
     while index < len(items):
         if visit is not None:
             visit()
@@ -115,9 +118,12 @@ def original_section_loops(items, index, *, visit=None, limit=256):
         if text in {"end sections", "end sections nowait"}:
             if not loops:
                 raise CompilationError("native SECTIONS requires at least one explicit SECTION body")
+            if inventory is not None:
+                inventory.extend((marker, loop, node, opening) for marker, loop in zip(markers, loops, strict=True))
             return tuple(loops), index + 1
         if text != "section":
             raise CompilationError("native SECTIONS requires explicit SECTION and one complete counted DO body")
+        marker = node
         index += 1
         while index < len(items) and _kind(items[index]) == "Comment" and directive(items[index]) is None:
             if visit is not None:
@@ -128,6 +134,7 @@ def original_section_loops(items, index, *, visit=None, limit=256):
         if len(loops) >= limit:
             raise CompilationError("native SECTION source-unit budget exhausted")
         loops.append(items[index])
+        markers.append(marker)
         index += 1
     raise CompilationError("native SECTIONS requires a matching original END SECTIONS")
 

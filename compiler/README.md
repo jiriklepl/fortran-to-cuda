@@ -122,6 +122,23 @@ the original procedure. Generated projections still require their registered
 identity, text and source span; copied or foreign nodes cannot borrow original
 authority. Final publication continues to check the live source files.
 
+Descriptor windows, joined-team storage and complete storage-mutation closures
+use the existing `SourceSession` → `SourceAuthorityContext` → `DerivationArena`
+path. A complete source scan issues one immutable fact for its exact original
+query and explicit prerequisites. Consumers authenticate the issued handle,
+context, payload and consumed registry entries instead of rescanning transitive
+callees. Public source records and their identities are fixed at issuance;
+resource lookup copies only the requested resource subtree.
+
+Supported policy or projection changes retire the old context. Generation
+forks retain parent facts, while rollback discards branch-local handles;
+replacing or removing a consumed prerequisite rejects. Unrelated registry
+growth is allowed. Live files are checked at issuance and artifact publication.
+Original source objects are sealed: arbitrary Python monkeypatching or bypassing
+immutability with `object.__setattr__` is not an application transformation.
+Unsealed standalone diagnostic analyses retain fresh semantic validation. These
+facts grant no runtime allocation, payload, completion or lifetime authority.
+
 Package entry points remain `compiler.frontend.lower_file`,
 `compiler.analysis.build_execution_plan`, and `compiler.emission.generate_sources`.
 `compiler.driver.pipeline.prepare_function(function, *, options=CompilerOptions())`
@@ -751,6 +768,16 @@ scalar dependencies, storage lifetimes and observable order. Checked independent
 CPU work can move past GPU work within the same procedure and control region so
 supported kernels become adjacent. Conditions,
 loops, trapping arithmetic and observable operations retain their required order.
+
+A checked selection of an original caller can retain one domain across its
+checked GPU children and intervening native operations. The domain opens lazily
+at the first reached managed operation, so zero-trip paths do not inspect
+unallocated descriptors. The compiler authenticates the complete selected child
+and storage-lifetime inventory before replacing a context cut. Exact original
+scalar record-component associations retain their object, selector, type schema
+and declaration; unrelated allocatable fields do not prevent fixed numeric field
+reads. Unproved lifetime changes still publish and close the epoch. This support
+does not establish retention across allocation exchanges or the full ELMM RK loop.
 
 Native operations use the same registered storage and access hooks as numerical
 GPU tasks. A transfer adds a current mirror; it does not consume the source copy.
@@ -1513,6 +1540,19 @@ indirect GPU scatter remain unsupported. This analysis has a separate summary id
 from numerical eligibility, including when it is used only to check scalar
 liveness after a candidate loop.
 
+Adjacent references with identical metadata selectors and loop bounds can reuse
+one exact footprint when their coordinates differ only by constant additions
+or subtractions. A local scratch list holds at most 32 rectangles; it survives
+only that reached preparation and is never shared between resources or calls.
+Each original integer intermediate and target bound remains checked, including
+canceled offsets. Reused references still consume their complete logical step
+budget, including entered outer loops with empty children. Unsupported recipes
+use the ordinary point inspector. Normalizing before translation can change
+which cases fit the conservative rectangle budget, but cannot add uncovered
+cells, enlarge the runtime list limit, or replay executed work. Identical
+ordered read/write footprints also share retained section storage while charging
+both directions. No configuration option or persistent metadata cache is added.
+
 An incompletely supported module child can use one additive original-body
 `ENTRY` companion. It shares the context control and canonical resource handles;
 normal callers retain the native ABI and never read absent control arguments.
@@ -1610,6 +1650,14 @@ from its guarded original allocation descriptor. Reached parent operations use
 the original dummy descriptor for dynamic specification bounds, rather than
 reevaluating a scalar that may already have changed. These proofs neither assert
 allocation/presence nor define unwritten array sections.
+
+Ordinary native IF branches also contribute bounded unions of possible reads
+and writes, without overwrite claims for conditional stores. Physical bound
+preparation can follow a unique local INTEGER name copy in the original entry
+prefix when its external source remains unchanged throughout the body. It
+rejects potentially aliased or volatile sources, reassignment and iterator
+reuse. The original copy and branches still execute in place; this refinement
+supplies neither logical definitions nor allocation-lifetime authority.
 
 A complete original native OpenMP region can supply a compiler-owned completion
 token. The token retains the original team, worksharing directives, private
@@ -1917,6 +1965,12 @@ are supported. Unknown calls, allocation replacement and uncertain associations
 inside the interval reject. `segment_summary(..., descriptor_window=proof)` may
 consume that registered token in an isolated projection; the ordinary
 whole-procedure descriptor proof remains unchanged.
+`SourceEffects` derives its default procedure capacity from the complete original
+parser inventory, including external functions and program units. It does not
+stop at 64 distinct callees or reuse one lookup budget as a whole-interval
+function-request limit. Explicit `procedures=N` remains a diagnostic cap;
+the default depth of eight and per-unit lookup budgets remain independent.
+The larger default can retain more compiler metadata in bounded registries.
 Version 2 also checks original fixed numeric object schemas and exact source-call
 object mappings. Existing registered whole-group completion tokens may
 authenticate original OpenMP directives; the complete descriptor/escape scan
@@ -2156,7 +2210,43 @@ native proof. This can preserve a reached path with a conservative native
 boundary; it grants no GPU metadata capture. Source, token, budget and other
 component failures remain fatal. Explicit native metadata proofs are unchanged.
 
-Supported groups are a combined `PARALLEL DO`, or one flat `PARALLEL` containing
+An original combined `PARALLEL DO` can also execute a complete private line
+snapshot followed by its serial consumer. The compiler proves that transverse
+iterations own disjoint lines, preserves the snapshot before every original
+consumer operation, and supports each physical line direction. Reached checks
+validate scratch extent, original bounds, integer arithmetic, addresses and
+allocation budget before submission. Zero-trip paths leave later descriptors
+untouched; an unsupported case retains the complete original native team.
+This path uses the existing source-task, scratch and coherence interfaces.
+Repeated calls share canonical field handles, and reading an unchanged mask
+does not invalidate its device replica.
+
+The same original line worker can receive different whole arrays through checked
+helper calls. Each invocation forwards its actual canonical allocation handle,
+storage identity and physical layout. The task graph conservatively includes all
+possible field roots from the original call graph, with no extra overwrite or
+definition credit. A per-field closure avoids enumerating combinations of call
+paths. Runtime access transactions still validate each reached invocation. This
+extension applies to direct, unpriced original line tasks; its strict manifest
+record binds every original call and registration slot.
+
+Original straight-line scalar setup and checked constant scalar call arguments
+can establish readability at the reached task. Every original call association
+must qualify, including guarded calls; a later unknown or mutable actual rejects
+the proof. This establishes no constant specialization: predicates, argument
+values and the complete original setup remain in source order.
+
+The existing atomic conditional worksharing-DO path also accepts fixed rank-one
+INTEGER4 array points in host predicates. Each reached predicate acquires only
+its original point reads before evaluation, preserving other valid replicas.
+Nested and ELSE-IF conditions retain their original reachability; inactive
+points are neither admitted nor read. All original alternative work is prepared
+before its first GPU submission. Safe pre-execution decline closes coherently
+and runs the original team once; fatal acquisition or execution errors abort.
+This path uses version 2 source-task records and remains explicit-sections-only;
+it adds no SECTIONS, cross-unit dependence or private-state support.
+
+Supported numerical groups are a combined `PARALLEL DO`, or one flat `PARALLEL` containing
 up to 32 complete numerical worksharing `DO` units. The latter preserves every
 original worksharing directive, barrier and `END DO NOWAIT` in the native
 alternative. Generated units execute in their proved order. Whole-group read
@@ -2227,6 +2317,14 @@ root names do not establish physical disjointness. Checked original bounds guard
 the index before borrowed associations. Neither check moves above the original
 condition. Public `original_scalar_elements`, `scalar_element_closure` and the
 opaque alias-reservation role distinguish these obligations from managed data.
+Checked hierarchical children reuse that exact coordinate witness and retain it
+on their original CALL receipt. The emitted call-site record binds the selector,
+source graph and opaque reservation to that use; the paired manifest reader
+checks the same association. Closure version 2 follows the original typed generic
+target and retains its registered nested CALL receipts through publication.
+Lexical nesting does not consume call depth; bounded source visits, statements,
+procedures and actual recursion still apply. Host writes to an opaque backing
+table retain the existing retirement boundary.
 Source summary version 20, structured-effect version 7 and reached-window version
 14 invalidate previous association representations and dependent cache entries.
 
@@ -2394,9 +2492,11 @@ and resolved callees without first materializing complete effect summaries.
 Its parameterized native-effect graph scans each selected root or complete
 callee body once, then instantiates the original call associations separately.
 Repeated helper calls retain distinct actual resources, controls and barriers.
-The existing 256-operation limit now bounds unique source statements and call
-instances separately; bounded source visits, substitution work, depth and
-procedure count remain enforced. This changes accounting, not the limit values.
+The source statement/node budgets apply separately to each original template;
+combining checked routines does not reapply one routine's budget to the whole
+graph. Aggregate bounds derive from the actual template count. Call instances,
+substitution work, depth and procedure count remain bounded. An incomplete
+query declines without publishing a truncated graph as complete.
 Reusing a template does not discharge pointer, completion, alias or section
 requirements, and the public graph cannot authorize execution.
 It records may-accesses, source-call associations, unsupported operations and
@@ -2406,6 +2506,18 @@ Distinct names do not prove nonaliasing; unresolved calls, pointer association,
 implicit calls and completion remain barriers. Demanded effects are incomplete
 when any barrier remains. Source, namespace, binding and declaration authority
 is rechecked before publication; returned JSON cannot authorize execution.
+
+`prove_native_effect_graph` builds that same registered graph without inventing
+a storage demand. Callee-local DO, EXIT and CYCLE retain their original targets
+and all conservative effects; they grant no motion or termination guarantee.
+Native intrinsic reads require original name resolution, including shadowing.
+Proved diagnostic WRITE/STOP calls remain typed observable terminal nodes.
+Graph-owned joined completion applies only to normal return. A checked boundary
+can compose it with a separate exact descriptor-team proof and complete storage
+projection for the same original group. Every link is validated again before
+sealing and publication. Payload access, alias separation and initialized values
+still require their independent contracts; the original native group executes
+at its original retirement point.
 
 These explicit preflight demands are procedure-local observations, not a
 discovered complete interval inventory. Resource-budget exhaustion marks that
@@ -2494,6 +2606,25 @@ Effect completeness is separate from scope legality and GPU eligibility. The
 analysis does not rewrite calls or evaluate guards/bounds. Compiler source scope
 generation consumes these facts; adapters must not turn source strings into
 coherence hooks or placement decisions themselves.
+
+Version 2 external device-task contracts can additionally carry an
+`entry_read_requirements` reference (`path` and SHA-256) to a reviewed library
+contract. This optional version 1 record states unconditional original reads
+before writes under the accepted metadata query and physical-layout predicates.
+It binds the configured source inputs, original task, provider implementation
+artifacts and query, exact read regions, and descriptor-size equalities for
+every physical array axis. A provider's may-read effects or an `INTENT(IN)`
+declaration alone cannot establish these requirements. The compiler and package
+reader reject changes to any of these bindings.
+
+At the reached original call, generated code checks the metadata and layouts,
+creates the provider successfully, then admits only missing required reads
+through the existing coherence runtime. This preserves a current device copy
+and does not mark halos or unrelated regions initialized. Original output
+definition kills follow admission, before the external access transaction.
+Rejected preconditions retain the native call; a failure after submission must
+not replay it. This contract supplies neither alias nor lifetime evidence, and
+calls without it retain their previous generated records and behavior.
 
 ### Ordinary CUDA allocation reuse
 

@@ -273,12 +273,19 @@ def test_registered_single_if_rejects_changed_original_authority(tmp_path, mutat
     path, builder, proof, originals = preowner_window_fixture(tmp_path, source)
     _graph, parent = original_if(builder, conditional_point(proof))
     if mutation == "file":
+        assert proof.validate(builder.analysis, ENTRY, originals) is proof
+        original_facts = proof.public()
         path.write_text(source + "\n! changed after registration\n")
         assert proof.validate(builder.analysis, ENTRY, originals) is proof
-        with GenerationTransaction(builder) as transaction:
-            owner = ReachedWindowOwner(transaction.builder, proof, originals)
-            with pytest.raises(CompilationError, match="source changed"):
-                owner.run()
+        assert proof.public() == original_facts
+        with (
+            pytest.raises(CompilationError, match="source changed"),
+            GenerationTransaction(builder) as transaction,
+        ):
+            ReachedWindowOwner(transaction.builder, proof, originals).run()
+            transaction.builder.finish()
+        with pytest.raises(CompilationError, match="source changed"):
+            builder.finish()
     elif mutation == "binding":
         with pytest.raises(CompilationError):
             builder.entry.scope.bindings["bad"] = copy(builder.entry.scope.bindings["bad"])

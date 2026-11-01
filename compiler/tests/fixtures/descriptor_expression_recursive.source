@@ -1,0 +1,101 @@
+# Exact recursive classifier oracle preserved before iterative traversal.
+_EXPRESSION_CONTAINERS = {"Actual_Arg_Spec_List", "Section_Subscript_List", "Actual_Arg_Spec", "Parenthesis"}
+
+def expression(self, routine, node, depth=0, *, descriptor=False):
+    self.tick()
+    if not isinstance(node, (Base, tuple, list)):
+        return
+    if depth > self.analysis.depth_limit:
+        raise DescriptorWindowUnsupported("descriptor window expression depth exhausted")
+    kind = _kind(node)
+    child_depth = depth if isinstance(node, (tuple, list)) or kind in _EXPRESSION_CONTAINERS else depth + 1
+    scope = self.analysis.source_scope_for(node, routine.scope)
+    if (kind in {"Proc_Component_Ref", "Coindexed_Named_Object"}
+            or kind.startswith("Defined_") and kind.endswith("_Op")):
+        raise DescriptorWindowUnsupported("descriptor window association/operator effects require separate authority")
+    if kind == "Data_Ref":
+        if _kind(node.items[0]) == "Part_Ref":
+            from compiler.frontend.native_metadata import access as metadata_access
+
+            access = metadata_access(self.analysis, scope, node)
+            self.metadata_object(access.root_binding, access)
+        else:
+            access = component_access(self.analysis, scope, node)
+            self.fixed_object(access.root_binding)
+        if access.binding.dtype not in {"real", "integer", "logical"}:
+            raise DescriptorWindowUnsupported("descriptor window whole-object effects require separate authority")
+        for index in access.indices:
+            self.expression(routine, index, depth + 1)
+        return
+    if kind == "Actual_Arg_Spec":
+        self.expression(routine, node.items[1], child_depth, descriptor=descriptor)
+        return
+    if kind == "Name":
+        binding = self.analysis._binding(scope, node)
+        if binding is not None and binding.dtype.startswith("type(") and descriptor:
+            self.metadata_object(binding)
+            return
+        if (binding is None or binding.attributes & _UNSAFE and not self.optional_scalar(routine, binding)
+                or binding.dtype.startswith("type(")):
+            raise DescriptorWindowUnsupported("descriptor window original expression storage is unproved: " + str(node))
+        return
+    if kind in {"Part_Ref", "Function_Reference", "Intrinsic_Function_Reference", "Structure_Constructor"}:
+        name, args = node.items
+        binding = self.analysis._binding(scope, name)
+        predicates = [proof for proof in self.analysis._native_predicates.values()
+                      if isinstance(proof, NativePredicateProof) and proof.procedure == routine.qualified
+                      and proof._expression is node]
+        if predicates:
+            if len(predicates) != 1:
+                raise CompilationError("descriptor window requires unique registered original native predicate proof")
+            proof = predicates[0].validate(self.analysis, routine.qualified, node)
+            self.predicates[proof.identity] = proof.public()
+            for actual in proof.actuals:
+                self.expression(routine, actual, depth + 1)
+            return
+        if kind == "Part_Ref" and binding is not None and binding.rank:
+            self.expression(routine, name, depth + 1)
+            self.expression(routine, args, depth + 1)
+            return
+        candidates = self.analysis._candidates(scope, name)
+        if candidates:
+            proofs = [proof for proof in self.analysis._native_functions.values()
+                      if proof.procedure == routine.qualified and proof._expression is node]
+            metadata = False
+            if not proofs:
+                from compiler.frontend.source_functions import DescriptorSourceFunctionProof, _origin
+
+                proofs = [proof for proof in _origin(self.analysis)._descriptor_functions.values()
+                          if isinstance(proof, DescriptorSourceFunctionProof)
+                          and proof.procedure == routine.qualified and proof._expression is node]
+                metadata = True
+            if len(proofs) != 1:
+                if (not proofs and len(self.active) >= 2
+                        and any(frame[4] in {"bare", "while"} for frame in self.loop_frames)):
+                    raise _DescriptorFunctionRequired(routine.qualified, node)
+                raise DescriptorWindowUnsupported("descriptor window requires registered original readonly source-function proof")
+            proof = proofs[0].validate(self.analysis, routine.qualified, node,
+                                       resolution_tick=self.resolution_tick)
+            (self.descriptor_functions if metadata else self.functions)[proof.identity] = proof.public()
+            for mapping in proof.resolved.mappings:
+                self.expression(routine, mapping.actual, depth + 1)
+            return
+        if kind == "Intrinsic_Function_Reference" and str(name).lower() == "norm2":
+            from compiler.frontend.descriptor_intrinsics import norm2_descriptor_effects
+
+            actuals = self.native_intrinsic(routine, node, norm2_descriptor_effects)
+            for actual in actuals:
+                self.expression(routine, actual, depth + 1)
+            return
+        if (kind != "Intrinsic_Function_Reference" or binding is not None
+                or self.analysis._unknown_exports(scope) or str(name).lower() not in _INTRINSICS):
+            raise DescriptorWindowUnsupported("descriptor window unknown function/escape effects: " + str(name))
+        if str(name).lower() in ARRAY_INQUIRIES | {"allocated", "present"}:
+            for index, argument in enumerate(_children(args)):
+                self.expression(routine, argument, depth + 1, descriptor=index == 0)
+        else:
+            self.expression(routine, args, depth + 1)
+        return
+    for child in _children(node):
+        self.expression(routine, child, child_depth)
+

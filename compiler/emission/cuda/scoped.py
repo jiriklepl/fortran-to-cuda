@@ -44,6 +44,7 @@ from compiler.offload.profile import (
     compiler_identity,
     scoped_collective_costs,
     scoped_costs,
+    scoped_physical_copy_costs,
     scoped_transfer_costs,
     validate_profile,
 )
@@ -223,6 +224,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
     profile_reason = config.profile_reason
     costs = None
     transfer_costs = None
+    physical_copy_costs = None
     transfer_profile_reason = "hardware profile is missing"
     team_costs = None
     if config.profile is None:
@@ -235,6 +237,11 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                              scoped_runtime_id=runtime_id)
             compiler_identity(config.profile)
             costs = scoped_costs(config.profile, runtime_id)
+            if config.scope_transfers == "auto":
+                try:
+                    physical_copy_costs = scoped_physical_copy_costs(config.profile, runtime_id)
+                except ProfileError:
+                    pass  # Missing complete-path observations retain direct copies.
             try:
                 transfer_costs = scoped_transfer_costs(config.profile, runtime_id)
                 transfer_profile_reason = None
@@ -277,13 +284,32 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         # copy geometry. Planning v1 has no complete calibrated model for it.
         costs = None
         profile_reason = "transfer_estimates_unavailable"
+    if costs is None:
+        physical_copy_costs = None
+    copy_setup = []
+    if physical_copy_costs is not None:
+        transfer_reason = None
+        from compiler.emission.cuda.batch import base_cost_lines, physical_copy_cost_lines
+        copy_configure_name = c_name + "_configure_copy_v2"
+        lines += [f"static int {copy_configure_name}(fort_scope_t fort_context) {{",
+                  *indent(base_cost_lines(config.profile, costs)),
+                  *indent(physical_copy_cost_lines(physical_copy_costs)),
+                  "    const auto profile = " + profile_expression(config.profile) + ";",
+                  "    return fort_scope_set_copy_costs_v2(fort_context, &copy_costs, &costs, scoped_host_compatible(profile));", "}"]
+        copy_setup = [f"    FORT_SHARED_CHECK({copy_configure_name}(fort_context));"]
     if transfer_costs is None or config.scope_transfers in {"direct", "coalesced"}:
+        if copy_setup:
+            transfer_setup = [f"    FORT_SHARED_CHECK(fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]}));",
+                              *copy_setup,
+                              f"    return {team_configure_name}(fort_context);" if config.collective else "    return FORT_SCOPE_OK;"]
+        else:
+            transfer_setup = ([f"    FORT_SHARED_CHECK(fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]}));",
+                               f"    return {team_configure_name}(fort_context);"] if config.collective else
+                              [f"    return fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]});"])
         lines += [f'extern "C" int {configure_name}(fort_scope_t fort_context) {{',
                   *(["    FORT_SHARED_CHECK(fort_scope_task_graph_enable_v1(fort_context));"]
                     if config.scope_execution == "graph" else []),
-                  *(([f"    FORT_SHARED_CHECK(fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]}));",
-                       f"    return {team_configure_name}(fort_context);"]) if config.collective else
-                    [f"    return fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]});"]), "}"]
+                  *transfer_setup, "}"]
     else:
         from compiler.emission.cuda.batch import transfer_cost_lines
         lines += [f'extern "C" int {configure_name}(fort_scope_t fort_context) {{',
@@ -291,6 +317,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                     if config.scope_execution == "graph" else []),
                   f"    if (const int status = fort_scope_set_transfers(fort_context, {transfer_modes[config.scope_transfers]})) return status;",
                   *indent(transfer_cost_lines(config.profile, transfer_costs)),
+                  *copy_setup,
                   "    const auto profile = " + profile_expression(config.profile) + ";",
                   *((["    FORT_SHARED_CHECK(fort_scope_set_transfer_costs_v1(fort_context, &transfer_costs, scoped_host_compatible(profile)));",
                        f"    return {team_configure_name}(fort_context);"]) if config.collective else
@@ -1118,7 +1145,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
             "generated_cpu_fallback": "does not replace the original source for unsupported environments",
         },
         "transfer_configuration": {"abi_version": 1, "requested": config.scope_transfers,
-                                   "selected": ("runtime" if config.scope_transfers == "coalesced" else
+                                   "selected": ("runtime" if config.scope_transfers == "coalesced" or physical_copy_costs is not None else
                                                 "pinned" if config.scope_transfers == "pinned" else "direct"),
                                    "reason": transfer_reason, "available_modes": ["direct", "pinned", "coalesced"],
                                    "entry": configure_name, "fortran_procedure": "configure",
@@ -1128,6 +1155,11 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
                                    "budget_scope": "process-wide including cached staging",
                                    "resource_fallback": "direct before this copy is enqueued; numerical work is never replayed",
                                    "runtime_stats": "fort_scope_transfer_stats_get_v1",
+                                   "physical_copy_calibration": {
+                                       "abi_version": 2, "available": physical_copy_costs is not None,
+                                       "selection": "AUTO selects supported complete Compact predictions below half the direct prediction",
+                                       "missing_evidence": "direct physical copies",
+                                   },
                                    "coalesced": {
                                        "experimental": True, "direction": "upload only; outputs remain exact",
                                        "minimum_physical_copies": 2, "maximum_extra_bytes_fraction": 0.125,

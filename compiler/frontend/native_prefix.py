@@ -34,7 +34,10 @@ _CACHES = ("summaries", "_closures", "_structures", "_segments", "_descriptor_pr
            "_native_environment_states", "_native_predicates", "_native_functions",
            "_native_prefix_proofs", "_native_definition_proofs", "_native_definition_state_proofs",
            "_native_preservation_proofs", "_selection_activation_proofs", "_reached_read_requirements_proofs",
-           "_numerical_effect_proofs",
+           "_numerical_effect_proofs", "_original_sequence_exits", "_original_reached_positions", "_entry_preservations",
+           "_library_storage_calls", "_opaque_library_state_proofs", "_metadata_constructor_proofs",
+           "_descriptor_blocks", "_descriptor_team_proofs", "_local_allocation_proofs",
+           "_native_effect_templates", "_native_effect_graphs", "_resource_reachability_proofs", "_native_demand_effects",
            "_numerical_preparations", "_numerical_preparation_providers",
            "_ordered_worksharing_inventories", "_prepared_worksharing_inventories")
 
@@ -101,6 +104,10 @@ def _fork(analysis, roots):
     for name in _CACHES:
         setattr(result, name, {})
     result._native_preservation_registry_owner = None
+    result._original_reached_positions_owner = None
+    result._library_storage_calls_owner = None
+    result._entry_preservations_owner = None
+    result._descriptor_blocks_owner = None
     result._selection_activation_registry_owner = None
     result._reached_read_requirements_proofs_owner = result
     result.contracts = copy.deepcopy(analysis.contracts)

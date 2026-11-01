@@ -235,7 +235,7 @@ def parse_scoped_measurements(text: str) -> list[dict]:
         except ValueError as error:
             raise CalibrationError("scoped benchmark emitted a non-JSON measurement") from error
         if not isinstance(record, dict) or record.get("kind") not in {
-            "device", "scoped_cost", "scoped_allocation", "scoped_planning", "scoped_transfer",
+            "device", "scoped_cost", "scoped_allocation", "scoped_planning", "scoped_transfer", "scoped_copy",
         }:
             raise CalibrationError("scoped benchmark emitted an unknown measurement kind")
         if record["kind"] != "device":
@@ -275,9 +275,13 @@ def profile_with_scoped_measurements(
     allocations: dict[str, list[tuple[int, float]]] = {"allocation_seconds": [], "release_seconds": []}
     planning = []
     transfer_records = []
+    physical_copy_records = []
     for record in records:
         kind, name = record["kind"], record.get("name")
         if kind == "device":
+            continue
+        if kind == "scoped_copy":
+            physical_copy_records.append(record)
             continue
         if kind == "scoped_transfer":
             transfer_records.append(record)
@@ -310,6 +314,10 @@ def profile_with_scoped_measurements(
         costs[name] = max(duration for _, duration in measurements)
     costs["planning_operation_seconds"] = max(planning)
     result = dict(profile)
+    # Replacing runtime costs cannot retain source-submit evidence measured on
+    # another runtime. Refresh provenance already binds the immutable base.
+    if result.get("source_tasks", {}).get("runtime_id") != runtime_id:
+        result.pop("source_tasks", None)
     result["scoped"] = {
         "schema_version": 1, "runtime_id": runtime_id,
         "created_utc": datetime.now(timezone.utc).isoformat(),
@@ -335,6 +343,15 @@ def profile_with_scoped_measurements(
     }
     if transfer_records:
         result["scoped"]["transfers"] = scoped_transfers_from_measurements(transfer_records)
+    if physical_copy_records:
+        from .physical_copy_costs import PhysicalCopyCostError
+        from .physical_copy_fit import PhysicalCopyFitUnavailable, physical_copies_from_measurements
+        try:
+            result["scoped"]["physical_copies"] = physical_copies_from_measurements(physical_copy_records, result)
+        except PhysicalCopyFitUnavailable as error:
+            result["scoped"]["physical_copy_fit"] = {"available": False, "reason": str(error)}
+        except PhysicalCopyCostError as error:
+            raise CalibrationError(str(error)) from error
     try:
         return validate_profile(result, scoped_runtime_id=runtime_id)
     except ProfileError as error:
@@ -570,6 +587,15 @@ def calibrate(args: argparse.Namespace) -> dict:
             profile = calibrate_collective(profile, args, directory, nvcc, host, run=_run, tool=_tool)
         except ValueError as error:
             raise CalibrationError(str(error)) from error
+    if getattr(args, "source_task_costs", False):
+        if not getattr(args, "scoped_costs", False):
+            raise CalibrationError("--source-task-costs requires --scoped-costs")
+        from .source_protocol import calibrate_source_protocol
+        print("Measuring source transactions, scratch leases and original teams...", file=sys.stderr, flush=True)
+        try:
+            profile = calibrate_source_protocol(profile, args, directory, nvcc, host, run=_run, tool=_tool)
+        except ValueError as error:
+            raise CalibrationError(str(error)) from error
     if getattr(args, "numerical_costs", False):
         from .numerical_calibration import NumericalCalibrationError, calibrate_numerical, calibrate_numerical_v2
         print("Measuring independent numerical families and backends...", file=sys.stderr, flush=True)
@@ -617,6 +643,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="refresh scoped costs only, preserving base rates after hardware/toolchain verification; requires --scoped-costs")
     parser.add_argument("--collective-costs", action="store_true",
                         help="also measure the actual generated persistent-team protocol; requires --scoped-costs")
+    parser.add_argument("--source-task-costs", action="store_true",
+                        help="also measure bounded source-submit, scratch and original-team protocols; requires --scoped-costs")
+    parser.add_argument("--source-submit-model", action="store_true",
+                        help="qualify the fixed-ABI nonnegative binding/launch submit model; requires --source-task-costs")
     parser.add_argument("--numerical-costs", action="store_true",
                         help="also validate generic numerical costs for native Fortran, generated CPU and GPU")
     parser.add_argument("--numerical-version", type=int, choices=(1, 2, 3), default=2,
@@ -633,6 +663,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--refresh-scoped requires --scoped-costs")
     if args.collective_costs and (not args.scoped_costs or args.threads > 256):
         parser.error("--collective-costs requires --scoped-costs and at most 256 threads")
+    if args.source_task_costs and (not args.scoped_costs or args.threads > 256):
+        parser.error("--source-task-costs requires --scoped-costs and at most 256 threads")
+    if args.source_submit_model and not args.source_task_costs:
+        parser.error("--source-submit-model requires --source-task-costs")
     try:
         calibrate(args)
     except (CalibrationError, OSError) as error:

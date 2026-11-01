@@ -262,7 +262,7 @@ def test_unknown_reached_call_closes_epoch_and_reopens_without_entry_definition_
     text = outputs[report["sources"][str(path)]["replacement"]]
     assert text.count("call unknown(x)") == 1
     before = text[: text.index("call unknown(x)")]
-    assert "fort_scope_close(" in before
+    assert "fort_scope_resident_close_v1(" in before
     assert "= .false." in before
     assert text.count("a(i)=b(i)+1.0_8") == 1
     assert "fort_scope_admit_source_reads_v1" in text[text.index("call unknown(x)"):]
@@ -419,6 +419,23 @@ def test_reusable_helper_binds_each_call_to_its_original_actual_handle(tmp_path,
     assert len(owner["graph_execution"]["procedures"]) == (3 if nested else 2)
 
 
+def test_module_entry_retains_one_original_saved_scalar_without_copying_state(tmp_path):
+    source = reusable_helper_source(False).replace("integer::i\ndo i=1,n", "integer::i\ninteger,save::visits=0\n"
+                                                   "visits=visits+1\ndo i=1,n")
+    source = source.replace("field(i)=field(i)+1", "field(i)=field(i)+real(visits,8)")
+    path, outputs, report = emit(tmp_path, source)
+    owner, = report["scopes"]
+    assert not owner["boundaries"]
+    child, = owner["module_coordinators"]
+    state, = child["saved_scalar_storage"]
+    assert state["resource"] == "graph_fixture::leaf::visits"
+    assert state["gpu_write_authorized"] is False
+    generated = outputs[report["sources"][str(path)]["replacement"]]
+    assert generated.count("integer,save::visits=0") == 1
+    assert generated.count("visits=visits+1") == 1
+    assert generated.lower().count("entry " + child["entry"]) == 1
+
+
 def test_checked_helper_program_is_serialized_once_for_all_procedure_identities(tmp_path, monkeypatch):
     from compiler.scopes import execution_plan
 
@@ -463,7 +480,7 @@ def test_exception_observer_scan_reuses_only_the_exact_immutable_source_session(
     assert regions._exception_observers(analysis) == ()
     assert len(scans) == first
     projection = analysis.private_projection(routines=True)
-    projection.routines["graph_fixture::advance"] = copy(analysis.routines["graph_fixture::advance"])
+    projection.project_routine("graph_fixture::advance", copy(analysis.routines["graph_fixture::advance"]))
     assert regions._exception_observers(projection) == ()
     assert len(scans) > first
 

@@ -158,13 +158,17 @@ def test_valid_native_team_retains_its_declined_numerical_route_without_a_bounda
     decline["reason"] = "modified public diagnostic"
     assert owner.numerical_team_declines[0]["reason"] == reason
     # Serialization has its own shared cap and never removes native units.
-    builder.analysis.operation_limit = 0
+    with pytest.raises(CompilationError, match="budgets require positive exact integers"):
+        builder.analysis.operation_limit = 0
+    builder.analysis.operation_limit = 1
     limited = lexical_attempt_diagnostics(
         builder, owner, outcome="no_numerical_leaves", scope_count_before=0,
         inline_before={"attempts": 0, "operations": 0}, finalize=False)
     assert limited["numerical_team_decline_count"] == 2
-    assert limited["numerical_team_decline_limit"] == 0
-    assert limited["numerical_team_declines"] == []
+    assert limited["numerical_team_decline_limit"] == 1
+    retained, = limited["numerical_team_declines"]
+    assert retained["reason"] == reason
+    assert retained["route"] == "whole_numerical_team"
     assert limited["numerical_team_declines_truncated"]
     assert len(owner.units) == 1
 

@@ -14,11 +14,12 @@ from copy import copy, deepcopy
 from dataclasses import dataclass, field
 from hashlib import sha256
 from pathlib import Path
+from weakref import WeakValueDictionary
 
-from fparser.two.utils import walk
+from fparser.two.utils import Base, walk
 
 from compiler.frontend.call_bindings import resolve_source_call
-from compiler.frontend.lowering import _KindScope
+from compiler.frontend.lowering import INTRINSIC_KIND_VERSION, _intrinsic_kind_imports, _KindScope
 from compiler.frontend.native_sections import analyze_native_sections
 from compiler.frontend.source_inputs import SourceInputs
 from compiler.frontend.source_syntax import SourceSyntaxSnapshot
@@ -27,7 +28,9 @@ from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
 # Bump when source-effect, call-composition or summary semantics change.
-SOURCE_SUMMARY_VERSION = 22
+SOURCE_SUMMARY_VERSION = 23
+SOURCE_GENERIC_INTERFACE_VERSION = 2
+SOURCE_CLOSURE_BOUND_VERSION = 1
 _DEFAULT_SUMMARY_CACHE = SummaryCache()
 
 
@@ -318,27 +321,142 @@ class _Closure:
 
 
 class SourceEffects:
-    def __init__(self, paths, *, contracts=None, depth=8, procedures=64, operations=256, analysis_sources=None,
-                 summary_cache=None):
-        if min(depth, procedures, operations) < 1:
+    def __getattribute__(self, name):
+        value = object.__getattribute__(self, name)
+        if name == "__dict__" and value.get("_source_session") is not None:
+            from types import MappingProxyType
+            return MappingProxyType(value)
+        return value
+
+    def __getstate__(self):
+        return dict(object.__getattribute__(self, "__dict__"))
+
+    def _replace_generation_work_state(self, state):
+        """Internal transaction install; ordinary source writes stay rejected."""
+        current = object.__getattribute__(self, "__dict__")
+        session = current.get("_source_session")
+        if state.get("_source_session") is not session:
+            raise CompilationError("generation rollback cannot replace the original source session")
+        if session is not None:
+            from compiler.frontend.source_session import ProjectedRoutines
+            for name, root in session.roots.items():
+                value = state.get(name)
+                if value is not root and not (name == "routines" and type(value) is ProjectedRoutines
+                                               and value.base is root):
+                    raise CompilationError("generation work state changed original source authority: " + name)
+        context = state.get("_source_authority_context")
+        if context is not None:
+            from compiler.frontend.authority_context import SourceAuthorityContext
+            if type(context) is not SourceAuthorityContext:
+                raise CompilationError("generation work state contains a foreign source context")
+            context.require_work_state(state)
+        current.clear()
+        current.update(state)
+
+    def __setattr__(self, name, value):
+        from compiler.frontend.authority_context import CONTEXT_FIELDS, normalize_context_field
+
+        if name == "_source_session" and value is not None:
+            from compiler.frontend.source_session import SourceSession
+
+            if type(value) is not SourceSession:
+                raise CompilationError("source context requires an original SourceSession")
+            value.verify(self)
+        state = vars(self)
+        session = state.get("_source_session")
+        if session is not None:
+            if name in {"__dict__", "_source_session", "_source_authority_context", "_source_derivation_arena"}:
+                raise CompilationError("source context ownership is immutable: " + name)
+            if state.get("_source_authority_reader") and (name in CONTEXT_FIELDS or name in session.roots):
+                raise CompilationError("source authority reader is immutable: " + name)
+            if name in session.roots and state.get(name) is not value:
+                from compiler.frontend.source_session import ProjectedRoutines
+                if not (name == "routines" and type(value) is ProjectedRoutines
+                        and value.base is session.roots["routines"]
+                        and all(type(key) is str and session.owns_projection(role)
+                                for key, role in value.overrides.items())):
+                    raise CompilationError("sealed original source registry is immutable: " + name)
+            if name in CONTEXT_FIELDS:
+                value = normalize_context_field(name, value)
+            if name in CONTEXT_FIELDS:
+                object.__setattr__(self, "_source_authority_context", None)
+        object.__setattr__(self, name, value)
+
+    def __delattr__(self, name):
+        from compiler.frontend.authority_context import CONTEXT_FIELDS
+        session = getattr(self, "_source_session", None)
+        if session is not None and (name in CONTEXT_FIELDS or name in session.roots or name in {
+                "_source_session", "_source_authority_context", "_source_derivation_arena"}):
+            raise CompilationError("sealed source/context attributes cannot be deleted: " + name)
+        object.__delattr__(self, name)
+
+    def source_authority_context(self):
+        from compiler.frontend.authority_context import context_for
+        return context_for(self)
+
+    def project_routine(self, name, routine):
+        """Install an owned immutable projection, creating another context."""
+        session = getattr(self, "_source_session", None)
+        if session is None:
+            self.routines[name] = routine
+            return routine
+        from compiler.frontend.component_bindings import AssociationScope, ComponentAccess, ComponentSchema
+        from compiler.frontend.immutable_graph import GraphFreezer
+        from compiler.frontend.lowering import _KindScope
+        from compiler.frontend.sealed_syntax import seal, sealed
+        from compiler.frontend.source_session import ProjectedRoutines
+
+        if not session.contains(routine):
+            seal((routine.scope.node, routine.execution))
+            GraphFreezer(owned_types=(Binding, Scope, Routine, _KindScope, ComponentSchema,
+                                      ComponentAccess, AssociationScope),
+                         borrow_if=lambda value: session.contains(value) or sealed(value)).freeze(routine)
+        session._register_projection(routine)
+        registry = self.routines
+        if type(registry) is not ProjectedRoutines:
+            registry = ProjectedRoutines(session.roots["routines"])
+        self.routines = registry.with_override(name, routine)
+        return routine
+
+    def project_specification(self, routine, specification):
+        """Replace a private projection, retaining the previous immutable value."""
+        draft = copy(routine)
+        draft.scope = copy(routine.scope)
+        draft.scope.node = copy(routine.scope.node)
+        draft.scope.node.content = ([specification] if specification is not None else []) + [draft.execution]
+        self.project_routine(routine.qualified, draft)
+        if getattr(self, "_descriptor_window_projection", None) is not None:
+            self._descriptor_window_projection = (
+                draft, draft.execution, str(draft.execution), self._routine_signature(draft))
+        return draft
+
+    def __init__(self, paths, *, contracts=None, depth=8, procedures=None, operations=256, analysis_sources=None,
+                 summary_cache=None, program_roots=()):
+        if min(depth, operations) < 1 or (procedures is not None and procedures < 1):
             raise CompilationError("source effect budgets must be positive")
-        self.depth_limit, self.procedure_limit, self.operation_limit = depth, procedures, operations
+        self.depth_limit, self.procedure_limit, self.operation_limit = depth, procedures if procedures is not None else 1, operations
         self.modules, self.routines, self.summaries = {}, {}, {}
         self.functions = set()
         self.numerical_helpers = {}
         self._closures = {}
         self._native_sections = {}
         self._structures, self._segments, self._descriptor_proofs = {}, {}, {}
+        # Active source contracts retain exact graph objects. Bounded strong
+        # cache eviction must not mint a second identity for those contracts;
+        # unreferenced graphs can still disappear with their cache entries.
+        self._live_structures = WeakValueDictionary()
         self._joined_completions = {}
         self._native_environments, self._native_environment_states = {}, {}
         self._native_predicates = {}
         self._native_functions = {}
+        self._descriptor_functions = {}
         self._numerical_completions = {}
         self._worksharing_completions = {}
         self._worksharing_native_completions = {}
         self._reduction_proofs, self._reduction_candidates = {}, {}
         self._omp_reduction_proofs = {}
-        self._source_scopes, self._associate_scopes = {}, {}
+        self._source_scopes, self._associate_scopes, self._block_scopes = {}, {}, {}
+        self._block_scope_roles = {}
         self._analysis_started = False
         self._stable_module_allocatables = frozenset()
         self._allocation_authorizations = {}
@@ -356,11 +474,18 @@ class SourceEffects:
         self._cache_started = self._summary_cache.stats
         self._cache_rejections = 0
         self._closure_authority = None
-        external_nodes = []
+        if (type(program_roots) is not tuple or any(type(name) is not str or not name.startswith("$program::")
+                or not re.fullmatch(r"[a-z][a-z0-9_]*", name.removeprefix("$program::")) for name in program_roots)):
+            raise CompilationError("program metadata requires exact named original program roots")
+        external_nodes, program_nodes = [], []
+        source_nodes = 0
         for filename in self.inputs.paths:
             tree = self.inputs.parse(filename)
             for node in _children(tree):
-                if _kind(node) == "Subroutine_Subprogram":
+                if (_kind(node) == "Main_Program" and _part(node, "Program_Stmt") is not None
+                        and "$program::" + str(_part(node, "Program_Stmt").items[1]).lower() in program_roots):
+                    program_nodes.append((filename, node))
+                elif _kind(node) == "Subroutine_Subprogram":
                     external_nodes.append((filename, node))
                 elif _kind(node) == "Function_Subprogram":
                     name = "$external::" + str(_part(node, "Function_Stmt").items[1]).lower()
@@ -368,12 +493,19 @@ class SourceEffects:
                         raise CompilationError("duplicate external source procedure " + name)
                     self.functions.add(name)
             for node in walk(tree):
+                source_nodes += isinstance(node, Base)
                 if _kind(node) != "Module":
                     continue
                 module = str(_part(node, "Module_Stmt").items[1]).lower()
                 if module in self.modules:
                     raise CompilationError(f"duplicate source module {module}")
                 self.modules[module] = Scope(module, filename, node)
+        if procedures is None:
+            # One bound covers all original callees, declarations and exact
+            # factory callsites, including unregistered external/program
+            # units. Reuse the complete parser walk already required above.
+            # Explicit procedure caps remain independent diagnostic limits.
+            self.procedure_limit = max(1, source_nodes)
         for scope in self.modules.values():
             scope.issues = self._specification(scope)
             if scope.module == "argument":
@@ -388,16 +520,31 @@ class SourceEffects:
                 self._register_routine(scope, node)
         for filename, node in external_nodes:
             self._register_routine(Scope("$external", filename, node), node, source_kind="external")
-        for scope in self.modules.values():
-            self._import_kinds(scope)
-        for routine in self.routines.values():
-            self._import_kinds(routine.scope)
-        for routine in self.numerical_helpers.values():
-            self._import_kinds(routine.scope)
+        for filename, node in program_nodes:
+            self._register_program(filename, node)
+        # Declarations/imports are now complete. These lookup results depend
+        # only on that graph, never on the kind values populated below. Keep
+        # them local to this pass; later lexical scopes start fresh.
+        kind_import_lookups = ({}, {}, {}, {}, {})
+        try:
+            for scope in self.modules.values():
+                self._import_kinds(scope, _lookups=kind_import_lookups)
+            for routine in self.routines.values():
+                self._import_kinds(routine.scope, _lookups=kind_import_lookups)
+            for routine in self.numerical_helpers.values():
+                self._import_kinds(routine.scope, _lookups=kind_import_lookups)
+        finally:
+            for lookup in kind_import_lookups:
+                lookup.clear()
         for binding, scope, selector in self.kind_expressions:
             # An unresolved kind cannot select a generic overload.
-            with suppress(CompilationError):
+            try:
                 binding.kind = scope.kinds.integer(selector, SourceLocation(str(scope.path)))
+            except CompilationError:
+                # The initial local specification may have resolved a direct
+                # intrinsic export before the complete module import graph
+                # exposed a conflict. Never retain that provisional width.
+                binding.kind = None
         self._source_roles = {name: (routine.execution, self._routine_signature(routine), str(routine.execution))
                               for name, routine in self.routines.items()}
         self._numerical_roles = {name: (routine.scope.node, self._routine_signature(routine), str(routine.scope.node))
@@ -438,6 +585,10 @@ class SourceEffects:
         """Own the original graph once; keep projections and proof caches private."""
         from compiler.frontend.source_session import SourceSession
         if getattr(self, "_source_session", None) is None:
+            from compiler.frontend.authority_context import CONTEXT_FIELDS, normalize_context_field
+            for name in CONTEXT_FIELDS:
+                if name != "routines" and hasattr(self, name):
+                    object.__setattr__(self, name, normalize_context_field(name, getattr(self, name)))
             self._source_session = SourceSession.create(self)
         self._source_session.verify(self)
         return self._source_session.identity
@@ -470,6 +621,31 @@ class SourceEffects:
         """
         from compiler.frontend.source_session import ProjectedRoutines
         result = copy(self)
+        from compiler.frontend.authority_context import fork_derivations
+        fork_derivations(result)
+        object.__setattr__(result, "_source_authority_reader", False)
+        object.__setattr__(result, "_source_authority_context", None)
+        result._local_allocation_proofs = {}
+        result._local_allocation_context = None
+        result._original_sequence_exits = {}
+        result._original_reached_positions = {}
+        result._original_reached_positions_owner = None
+        result._library_storage_calls = {}
+        result._library_storage_calls_owner = None
+        result._opaque_library_state_proofs = {}
+        result._metadata_constructor_proofs = {}
+        result._entry_preservations = {}
+        result._entry_preservations_owner = None
+        result._descriptor_blocks = {}
+        result._descriptor_blocks_owner = None
+        result._descriptor_team_proofs = {}
+        result._descriptor_terminating_calls = {}
+        result._owned_record_regions = {}
+        result._owned_record_regions_owner = None
+        result._original_worksharing_storage = {}
+        result._original_worksharing_storage_owner = None
+        result._original_worksharing_storage_receipts = {}
+        result._descriptor_functions = dict(self._descriptor_functions)
         session = getattr(self, "_source_session", None)
         if session is not None:
             session.verify(self)
@@ -480,6 +656,19 @@ class SourceEffects:
         elif routines:
             result.routines = dict(self.routines)
         return result
+
+    def descriptor_source_function_call(self, procedure, expression):
+        """Issue separate original readonly tokens; never change effect summaries."""
+        from compiler.frontend.source_functions import descriptor_source_function_call
+
+        return descriptor_source_function_call(self, procedure, expression)
+
+    def storage_mutation_effects(self, procedure, *, expression=None, selection=None, joined_storage=None):
+        """Original descriptor mutation/escape projection, never payload effects."""
+        from compiler.frontend.structured_effects import storage_mutation_effects
+
+        return storage_mutation_effects(self, procedure, expression=expression, selection=selection,
+                                        joined_storage=joined_storage)
 
     def _register_routine(self, parent, node, *, source_kind="module"):
         _attach_execution_directives(node)
@@ -497,6 +686,35 @@ class SourceEffects:
         self.routines[qualified] = routine
         self.numerical_helpers[qualified] = routine
         self._register_internal(child, node)
+
+    def _register_program(self, filename, node):
+        """Retain an original named main frame for metadata and call ownership."""
+        statement = _part(node, "Program_Stmt")
+        ending = _part(node, "End_Program_Stmt")
+        # Optional ownership metadata must not reject an unrelated legal main
+        # frame that this first named-program slice cannot authenticate.
+        if statement is None or ending is None:
+            return
+        name = str(statement.items[1]).lower()
+        if ending.items[1] is not None and str(ending.items[1]).lower() != name:
+            return
+        _attach_execution_directives(node)
+        qualified = "$program::" + name
+        if qualified in self.routines or qualified in self.functions:
+            raise CompilationError("duplicate original program source " + qualified)
+        scope = Scope("$program", filename, node)
+        scope.qualified = qualified
+        issues = self._specification(scope, (), qualified)
+        # Main-program variables have SAVE duration; this supplies neither
+        # allocation presence nor an initial payload definition.
+        for binding in scope.bindings.values():
+            if "parameter" not in binding.attributes:
+                binding.attributes |= {"save"}
+        issues.append("original program frame supplies metadata/ownership only; no numerical or execution authority")
+        routine = Routine(scope, (), _part(node, "Execution_Part"), qualified, issues, "program")
+        self.routines[qualified] = routine
+        self.numerical_helpers[qualified] = routine
+        self._register_internal(scope, node)
 
     def _register_function(self, parent, node):
         _attach_execution_directives(node)
@@ -583,10 +801,47 @@ class SourceEffects:
                                                    for name, binding in routine.scope.bindings.items()}})
 
     def _summary_authority(self, *, _syntax=None):
-        from compiler.frontend.descriptor_windows import DESCRIPTOR_WINDOW_VERSION
+        from compiler.frontend.descriptor_associations import DESCRIPTOR_WINDOW_ASSOCIATION_VERSION
+        from compiler.frontend.descriptor_block_storage import DESCRIPTOR_WINDOW_JOINED_BLOCK_VERSION
+        from compiler.frontend.descriptor_blocks import DESCRIPTOR_WINDOW_BLOCK_VERSION
+        from compiler.frontend.descriptor_record_calls import DESCRIPTOR_WINDOW_RECORD_REGION_VERSION
+        from compiler.frontend.descriptor_scalar_fill import DESCRIPTOR_WINDOW_SCALAR_FILL_VERSION
+        from compiler.frontend.descriptor_storage_groups import DESCRIPTOR_WINDOW_STORAGE_GROUP_VERSION
+        from compiler.frontend.descriptor_teams import (
+            DESCRIPTOR_TEAM_IMPLICIT_WORKSHARING_VERSION,
+            DESCRIPTOR_TEAM_VERSION,
+            DESCRIPTOR_WINDOW_IMPLICIT_WORKSHARING_VERSION,
+            DESCRIPTOR_WINDOW_MASTER_VERSION,
+        )
+        from compiler.frontend.descriptor_windows import (
+            DESCRIPTOR_WINDOW_BORROWED_ARRAY_VERSION,
+            DESCRIPTOR_WINDOW_COMPONENT_READ_VERSION,
+            DESCRIPTOR_WINDOW_FIXED_MODULE_VERSION,
+            DESCRIPTOR_WINDOW_MATRIX_INTRINSIC_VERSION,
+            DESCRIPTOR_WINDOW_PRIVATE_ALLOCATION_VERSION,
+            DESCRIPTOR_WINDOW_READONLY_RECORD_VERSION,
+            DESCRIPTOR_WINDOW_SCALAR_CLOCK_VERSION,
+            DESCRIPTOR_WINDOW_VERSION,
+        )
+        from compiler.frontend.descriptor_worksharing import DESCRIPTOR_WINDOW_ORIGINAL_WORKSHARING_VERSION
+        from compiler.frontend.immutable_graph import _thaw
+        from compiler.frontend.library_storage_calls import DESCRIPTOR_WINDOW_LIBRARY_STORAGE_VERSION
         from compiler.frontend.native_intrinsics import NATIVE_PREDICATE_VERSION
         from compiler.frontend.source_functions import SOURCE_FUNCTION_VERSION, resolution_changes
         from compiler.frontend.source_objects import SOURCE_OBJECT_VERSION
+        from compiler.frontend.source_scalar_types import SOURCE_SCALAR_OPERATOR_VERSION
+        from compiler.frontend.storage_component_reads import STORAGE_COMPONENT_READ_POSITION_VERSION
+        from compiler.frontend.storage_mutation_effects import (
+            STORAGE_ASSIGNMENT_APPLICABILITY_VERSION,
+            STORAGE_ENCLOSING_LEXICAL_CONTEXT_VERSION,
+            STORAGE_FIXED_ARRAY_RESULT_VERSION,
+            STORAGE_NATIVE_CALL_STRUCTURES_VERSION,
+            STORAGE_NATIVE_LIFETIME_CONTEXT_VERSION,
+            STORAGE_READONLY_RECORD_VERSION,
+            STORAGE_RECORD_ARRAY_READ_VERSION,
+            STORAGE_SELECT_CASE_VERSION,
+            STORAGE_TERMINATING_CALL_VERSION,
+        )
         from compiler.frontend.structured_effects import STRUCTURED_EFFECT_VERSION
         syntax = _syntax if _syntax is not None else self._source_syntax.checkpoint()
         session = getattr(self, "_source_session", None)
@@ -613,16 +868,49 @@ class SourceEffects:
             projections.extend(resolution_changes(self))
         window = getattr(self, "_selected_descriptor_window", None)
         return {"summary_version": SOURCE_SUMMARY_VERSION,
+                "generic_interface_version": SOURCE_GENERIC_INTERFACE_VERSION,
+                "source_closure_bound_version": SOURCE_CLOSURE_BOUND_VERSION,
+                "intrinsic_kind_version": INTRINSIC_KIND_VERSION,
+                "source_scalar_operator_version": SOURCE_SCALAR_OPERATOR_VERSION,
+                "storage_enclosing_lexical_context_version": STORAGE_ENCLOSING_LEXICAL_CONTEXT_VERSION,
+                "storage_fixed_array_result_version": STORAGE_FIXED_ARRAY_RESULT_VERSION,
+                "storage_terminating_call_version": STORAGE_TERMINATING_CALL_VERSION,
+                "storage_select_case_version": STORAGE_SELECT_CASE_VERSION,
+                "storage_readonly_record_version": STORAGE_READONLY_RECORD_VERSION,
+                "storage_assignment_applicability_version": STORAGE_ASSIGNMENT_APPLICABILITY_VERSION,
+                "storage_record_array_read_version": STORAGE_RECORD_ARRAY_READ_VERSION,
+                "storage_component_read_position_version": STORAGE_COMPONENT_READ_POSITION_VERSION,
+                "storage_native_call_structures_version": STORAGE_NATIVE_CALL_STRUCTURES_VERSION,
+                "storage_native_lifetime_context_version": STORAGE_NATIVE_LIFETIME_CONTEXT_VERSION,
                 "sources": ({"compilation_session_v1": session.identity} if session else self.inputs.identity()),
                 "structured_version": STRUCTURED_EFFECT_VERSION,
                 "descriptor_window_version": DESCRIPTOR_WINDOW_VERSION,
+                "descriptor_window_readonly_record_version": DESCRIPTOR_WINDOW_READONLY_RECORD_VERSION,
+                "descriptor_window_borrowed_array_version": DESCRIPTOR_WINDOW_BORROWED_ARRAY_VERSION,
+                "descriptor_window_fixed_module_version": DESCRIPTOR_WINDOW_FIXED_MODULE_VERSION,
+                "descriptor_window_scalar_clock_version": DESCRIPTOR_WINDOW_SCALAR_CLOCK_VERSION,
+                "descriptor_window_storage_group_version": DESCRIPTOR_WINDOW_STORAGE_GROUP_VERSION,
+                "descriptor_window_library_storage_version": DESCRIPTOR_WINDOW_LIBRARY_STORAGE_VERSION,
+                "descriptor_window_association_version": DESCRIPTOR_WINDOW_ASSOCIATION_VERSION,
+                "descriptor_window_block_version": DESCRIPTOR_WINDOW_BLOCK_VERSION,
+                "descriptor_window_component_read_version": DESCRIPTOR_WINDOW_COMPONENT_READ_VERSION,
+                "descriptor_window_matrix_intrinsic_version": DESCRIPTOR_WINDOW_MATRIX_INTRINSIC_VERSION,
+                "descriptor_window_private_allocation_version": DESCRIPTOR_WINDOW_PRIVATE_ALLOCATION_VERSION,
+                "descriptor_window_master_version": DESCRIPTOR_WINDOW_MASTER_VERSION,
+                "descriptor_window_joined_block_version": DESCRIPTOR_WINDOW_JOINED_BLOCK_VERSION,
+                "descriptor_team_version": DESCRIPTOR_TEAM_VERSION,
+                "descriptor_team_implicit_worksharing_version": DESCRIPTOR_TEAM_IMPLICIT_WORKSHARING_VERSION,
+                "descriptor_window_implicit_worksharing_version": DESCRIPTOR_WINDOW_IMPLICIT_WORKSHARING_VERSION,
+                "descriptor_window_original_worksharing_version": DESCRIPTOR_WINDOW_ORIGINAL_WORKSHARING_VERSION,
+                "descriptor_window_scalar_fill_version": DESCRIPTOR_WINDOW_SCALAR_FILL_VERSION,
+                "descriptor_window_record_region_version": DESCRIPTOR_WINDOW_RECORD_REGION_VERSION,
                 "selected_descriptor_window": ({"procedure": window[1], "selected_node_ids": list(window[2]),
                                                 "proof_identity": window[3].identity} if window is not None else None),
                 "source_object_version": SOURCE_OBJECT_VERSION,
                 "native_predicate_version": NATIVE_PREDICATE_VERSION,
                 "source_function_version": SOURCE_FUNCTION_VERSION,
                 "native_metadata_version": 1 if getattr(self, '_native_metadata', False) else None,
-                "contracts": self.contracts, "capture_authorizations": self._allocation_authorizations,
+                "contracts": _thaw(self.contracts), "capture_authorizations": _thaw(self._allocation_authorizations),
                 "stable_module_allocatables": sorted(self.stable_module_allocatables),
                 "budgets": {"depth": self.depth_limit, "procedures": self.procedure_limit,
                             "operations": self.operation_limit},
@@ -713,7 +1001,7 @@ class SourceEffects:
                 if (summary is None or not summary["complete"] or summary.get("native_predicate_requirements")
                         or summary.get("native_function_requirements")
                         or summary.get("source_kind") in {"function", "internal_function"}
-                        or any(operation["kind"] == "native_environment"
+                        or any(operation["kind"] in {"native_environment", "native_metadata_constructor"}
                                or (operation["kind"] == "call" and any(mapping.get("source_object")
                                    for mapping in operation.get("resource_mappings", ())))
                                for operation in summary["operations"])):
@@ -766,20 +1054,144 @@ class SourceEffects:
         self._stable_module_allocatables = frozenset(roots)
         self._allocation_authorizations = authorizations
 
-    def _import_kinds(self, scope, active=frozenset()):
+    def _import_kinds(self, scope, active=frozenset(), *, _lookups=None):
+        if _lookups is None:
+            lookups = ({}, {}, {}, {}, {})
+            try:
+                return self._import_kinds(scope, active, _lookups=lookups)
+            finally:
+                for lookup in lookups:
+                    lookup.clear()
         if id(scope) in active:
             return
         active = active | {id(scope)}
         imported = []
+        # No completed-scope/kind-value memo: recursive imports retain their
+        # original order and active-cycle behavior. Only immutable declaration
+        # lookups are shared within this synchronous import transaction.
+        direct_cache, export_cache, intrinsic_cache, binding_cache, selector_cache = _lookups
+        lookups = direct_cache, export_cache, intrinsic_cache, binding_cache, selector_cache
+
+        def selectors(target):
+            # Index declaration ownership once, without evaluating or walking
+            # another scope's expressions. Name traversal stays lazy and in
+            # the original first-demand order for each exact owner.
+            if None not in selector_cache:
+                owners = {}
+                for _binding, owner, expression in self.kind_expressions:
+                    owners.setdefault(id(owner), (owner, []))[1].append(expression)
+                selector_cache[None] = owners
+            key = id(target)
+            if key not in selector_cache:
+                owner = selector_cache[None].get(key)
+                expressions = () if owner is None else owner[1]
+                names = frozenset(str(node).lower() for expression in expressions
+                                  for node in walk(expression) if _kind(node) == "Name")
+                selector_cache[key] = target, names
+            return selector_cache[key][1]
+
+        def root_binding(target, name):
+            # Only complete roots (empty visited set) are reusable. Recursive
+            # _binding frames can depend on the active declaration path.
+            key = id(target), name
+            if key not in binding_cache:
+                binding_cache[key] = target, self._binding(target, name)
+            return binding_cache[key][1]
+
+        def direct_kinds(target):
+            key = id(target)
+            if key in direct_cache:
+                return direct_cache[key][1]
+            result = {}
+            for node in _children(_part(target.node, "Specification_Part")):
+                for name, identity in _intrinsic_kind_imports(node).items():
+                    result.setdefault(name, set()).add(identity)
+            direct_cache[key] = target, result
+            return result
+
+        def intrinsic_export(start, name):
+            lookup_key = id(start), name
+            if lookup_key in intrinsic_cache:
+                return intrinsic_cache[lookup_key][1]
+            # Intrinsic kinds have no ordinary storage Binding. Follow their
+            # exact original module exports without inventing a PARAMETER or
+            # selecting one of several distinct/unknown declarations.
+            def resolve(owner, spelling):
+                binding = owner.bindings.get(spelling)
+                if binding is not None:
+                    return {("binding", id(binding))}, False
+                if (spelling in owner.ambiguous_imports or spelling in owner.procedures or spelling in owner.generics
+                        or spelling in owner.externals or spelling in owner.procedure_arguments):
+                    return set(), True
+                identities = {("intrinsic", *item) for item in direct_kinds(owner).get(spelling, ())}
+                blocked = False
+                explicit = owner.imports.get(spelling)
+                sources = ([explicit] if explicit is not None else []) + [
+                    (module, spelling) for module in owner.wildcards
+                    if spelling not in owner.wildcard_exclusions.get(module, ())]
+                for module, remote in sources:
+                    target = self.modules.get(module)
+                    if target is None:
+                        blocked = True
+                    elif self._exported(target, remote):
+                        child, invalid = yield target, remote
+                        identities.update(child)
+                        blocked |= invalid
+                    elif explicit == (module, remote):
+                        blocked = True
+                # A USE-associated entity shadows a host-associated entity.
+                # Consult the host only after proving no local entity exists.
+                if not identities and not blocked and owner.parent is not None:
+                    return (yield owner.parent, spelling)
+                return identities, blocked
+
+            key = (id(start), name)
+            frames, active, completed, returned = [(key, resolve(start, name))], {key}, {}, None
+            while frames:
+                current, frame = frames[-1]
+                try:
+                    owner, spelling = frame.send(returned)
+                except StopIteration as done:
+                    returned = completed[current] = done.value
+                    active.remove(current)
+                    frames.pop()
+                    continue
+                child = (id(owner), spelling)
+                if child in active:
+                    returned = set(), True
+                elif child in completed:
+                    returned = completed[child]
+                else:
+                    active.add(child)
+                    frames.append((child, resolve(owner, spelling)))
+                    returned = None
+            identities, blocked = returned
+            if blocked or len(identities) > 1:
+                result = None, True
+            else:
+                identity = next(iter(identities), ())
+                result = (identity[3] if identity and identity[0] == "intrinsic" else None), False
+            # Save only the final root result. DFS subframes can depend on
+            # active ancestors; sharing them would change cycle rejection.
+            intrinsic_cache[lookup_key] = start, result
+            return result
 
         def exports(module, visited=frozenset()):
+            lookup_key = module, visited
+            if lookup_key in export_cache:
+                return export_cache[lookup_key]
             target = self.modules.get(module)
             if target is None or module in visited:
                 return set()
-            names = set(target.bindings) | set(target.imports)
+            names = set(target.bindings) | set(target.imports) | set(direct_kinds(target))
             for parent in target.wildcards:
                 names.update(exports(parent, visited | {module}))
-            return {name for name in names if self._exported(target, name)}
+            result = {name for name in names if self._exported(target, name)}
+            # Cyclic/diamond export paths can have many distinct visited
+            # sets. This is an optimization budget, never an analysis limit.
+            if len(export_cache) < 4096:
+                export_cache[lookup_key] = result
+            return result
 
         for local, (module, remote) in scope.imports.items():
             imported.append((local, module, remote))
@@ -787,19 +1199,30 @@ class SourceEffects:
             target = self.modules.get(module)
             if target:
                 imported += [(name, module, name) for name in sorted(exports(module))]
-        for local, module, remote in imported:
-            target = self.modules.get(module)
-            if target is None or not self._exported(target,remote):
-                continue
+        candidates = set(direct_kinds(scope)) | selectors(scope)
+        for local, module, remote in [*((name, None, None) for name in sorted(candidates)), *imported]:
+            if module is not None:
+                target = self.modules.get(module)
+                if target is None or not self._exported(target,remote):
+                    continue
             # Resolve the complete local import set. Choosing one declaration
             # here would silently price/lower an ambiguous imported kind.
-            binding = self._binding(scope, local)
-            if binding is None or binding.dtype != "integer" or binding.rank or "parameter" not in binding.attributes:
+            intrinsic, conflict = intrinsic_export(scope, local)
+            if conflict:
+                if local not in scope.bindings:
+                    scope.kinds.values[local] = None
+                continue
+            binding = root_binding(scope, local)
+            if binding is None:
+                if intrinsic is not None:
+                    scope.kinds.values[local] = intrinsic
+                continue
+            if binding.dtype != "integer" or binding.rank or "parameter" not in binding.attributes:
                 continue
             owner = self.modules.get(binding.root.split("::",1)[0])
             if owner is None:
                 continue
-            self._import_kinds(owner, active)
+            self._import_kinds(owner, active, _lookups=lookups)
             try:
                 value = owner.kinds.integer(binding.name, SourceLocation(str(owner.path)))
             except CompilationError:
@@ -873,13 +1296,29 @@ class SourceEffects:
                     scope.unresolved_imports.append(module)
             elif name == "Interface_Block":
                 start = _part(node, "Interface_Stmt")
-                generic = str(start.items[0]).lower() if start.items[0] is not None else None
+                abstract = start.items[0] == "ABSTRACT"
+                generic = str(start.items[0]).lower() if start.items[0] is not None and not abstract else None
                 members = []
                 for item in _children(node):
                     if _kind(item) == "Procedure_Stmt":
                         members += [(scope.module, str(p).lower()) for p in item.items[0].items]
-                if generic and members:
-                    scope.generics[generic] = members
+                if abstract and all(_kind(item) in {
+                        "Interface_Stmt", "End_Interface_Stmt", "Subroutine_Body", "Function_Body", "Comment"}
+                        for item in _children(node)):
+                    # An abstract interface executes nothing and supplies no
+                    # callable implementation. Keep its identifiers in the
+                    # existing unresolved-procedure namespace: they shadow
+                    # intrinsics/source targets, including through USE renames,
+                    # without granting direct or dummy-procedure dispatch.
+                    for item in _children(node):
+                        header = (_part(item, "Subroutine_Stmt") if _kind(item) == "Subroutine_Body"
+                                  else _part(item, "Function_Stmt") if _kind(item) == "Function_Body" else None)
+                        if header is not None:
+                            scope.procedure_arguments.add(str(header.items[1]).lower())
+                elif generic and members:
+                    # Separate original interface blocks contribute to one
+                    # generic; later blocks must not hide earlier specifics.
+                    scope.generics.setdefault(generic, []).extend(members)
                 elif generic is None and all(_kind(item) in {
                         "Interface_Stmt", "End_Interface_Stmt", "Subroutine_Body", "Function_Body", "Comment"}
                         for item in _children(node)):
@@ -1023,8 +1462,13 @@ class SourceEffects:
         key = (scope.module, id(scope), name)
         if key in visited:
             return []
-        if name in scope.bindings or name in scope.procedure_arguments:
+        if name in scope.bindings:
             return []
+        if name in scope.procedure_arguments:
+            # Propagate a noncallable/unresolved declaration through USE and
+            # reexports. An empty result would permit a caller to fall back to
+            # a same-spelling host or external implementation accidentally.
+            return ["$unresolved_procedure::" + getattr(scope, "qualified", scope.module) + "::" + name]
         if name in scope.intrinsic_procedures:
             return [scope.intrinsic_procedures[name]]
         if name.startswith("ieee_") and scope.intrinsic_wildcards:
@@ -1118,17 +1562,12 @@ class SourceEffects:
             child = self._signature(scope, items[1], _depth + 1)
             return child if child in {("integer", 4, 0), ("integer", 8, 0),
                                       ("real", 4, 0), ("real", 8, 0)} else None
-        if len(items) == 3 and str(items[1]) in {"+", "-", "*", "/"}:
+        if len(items) == 3 and str(items[1]) in {"+", "-", "*", "/", "**"}:
+            from compiler.frontend.source_scalar_types import scalar_numeric_result
+
             left = self._signature(scope, items[0], _depth + 1)
             right = self._signature(scope, items[2], _depth + 1)
-            supported = {("integer", 4, 0), ("integer", 8, 0), ("real", 4, 0), ("real", 8, 0)}
-            if left not in supported or right not in supported:
-                return None
-            # For supported ordinary numeric kinds, mixed integer arithmetic
-            # uses the wider integer kind. A real operand determines real
-            # result kind independently of the integer operand's width.
-            reals = [value[1] for value in (left, right) if value[0] == "real"]
-            return ("real", max(reals), 0) if reals else ("integer", max(left[1], right[1]), 0)
+            return scalar_numeric_result(str(items[1]), left, right)
         if _kind(node) in {"Int_Literal_Constant", "Real_Literal_Constant", "Logical_Literal_Constant"}:
             dtype = {"Int_Literal_Constant": "integer", "Real_Literal_Constant": "real",
                      "Logical_Literal_Constant": "logical"}[_kind(node)]
@@ -1547,6 +1986,20 @@ class SourceEffects:
             if _kind(target) != "Name":
                 reasons.append(f"indirect call effects unavailable: {target}")
                 return
+            from compiler.frontend.scalar_clock import is_system_clock, original_scalar_clock
+            try:
+                clock = is_system_clock(self, scope, node)
+                proof = original_scalar_clock(self, requested, node) if clock else None
+            except CompilationError as error:
+                reasons.append(str(error))
+                emit({"kind": "boundary", "call": str(node), "guard": guard, "reason": reasons[-1]})
+                return
+            if proof is not None:
+                emit({"kind": "native_scalar_clock", "proof_identity": proof.identity, "proof": proof.public(),
+                      "guard": guard, "source_access": str(node)})
+                for output in proof.public()["outputs"].values():
+                    effect(self._binding(scope, output["name"]), "overwrite", guard, output["name"])
+                return
             actuals = tuple(_children(actuals))
             candidates = self._candidates(scope, target)
             from compiler.frontend.native_environment import intrinsic_export
@@ -1726,6 +2179,26 @@ class SourceEffects:
                 scope = self.source_scope_for(node, routine.scope)
                 if kind == "Assignment_Stmt":
                     target, _, value = node.items
+                    try:
+                        receiver = self._binding(scope, target) if _kind(target) == "Name" else None
+                        constructor = (self.metadata_constructor(requested, node)
+                                       if receiver is not None and receiver.dtype.startswith("type(") else None)
+                    except CompilationError as error:
+                        reasons.append(str(error))
+                        emit({"kind": "boundary", "guard": guard, "source_access": str(node),
+                              "reason": str(error)})
+                        continue
+                    if constructor is not None:
+                        public = constructor.public()
+                        emit({"kind": "native_metadata_constructor", "proof_identity": constructor.identity,
+                              "proof": public, "guard": guard, "source_access": str(node)})
+                        origin = constructor._analysis
+                        originals = {binding.root: binding for name in walk(value)
+                                     if _kind(name) == "Name"
+                                     and (binding := origin._binding(origin.source_scope_for(name, constructor._routine.scope), name)) is not None}
+                        for read in public["metadata_reads"]:
+                            effect(originals[read["resource"]], "read", guard, str(value))
+                        continue
                     expression(value, guard)
                     if _kind(target) == "Name":
                         binding = self._binding(scope, target)
@@ -2091,6 +2564,59 @@ class SourceEffects:
         from compiler.frontend.component_bindings import source_scope_for
         return source_scope_for(self, node, default)
 
+    def metadata_constructor(self, requested, assignment):
+        """Find only an exact constructor of an explicitly contracted receiver.
+
+        Native projections borrow the original source owner, never a copied
+        constructor or parsed public record. No arbitrary derived assignment
+        becomes harmless merely because its spelling resembles a factory.
+        """
+        if (_kind(assignment) != "Assignment_Stmt" or _kind(assignment.items[0]) != "Name"
+                or getattr(assignment, "item", None) is None):
+            return None
+        origin, seen = self, set()
+        while getattr(origin, "_descriptor_source", None) is not None:
+            if id(origin) in seen:
+                raise CompilationError("metadata constructor source projection is cyclic")
+            seen.add(id(origin))
+            origin = origin._descriptor_source
+        routine = origin._require_original(requested)
+        receiver = origin._binding(routine.scope, assignment.items[0])
+        if receiver is None or not receiver.dtype.startswith("type("):
+            return None
+        caller = origin.contracts.get(requested, {})
+        if not isinstance(caller, dict) or "device_tasks" not in caller:
+            return None
+        span = list(getattr(assignment.item, "fort_original_span", assignment.item.span))
+        tasks = caller["device_tasks"]
+        if not isinstance(tasks, list):
+            raise CompilationError("external device tasks must be an explicit caller list")
+        claimed = []
+        for task in tasks:
+            if not isinstance(task, dict) or task.get("version") != 2:
+                continue
+            arguments = task.get("opaque_arguments", ())
+            if not isinstance(arguments, (list, tuple)):
+                raise CompilationError("external opaque arguments must be an explicit original argument list")
+            if any(isinstance(item, dict) and isinstance(item.get("constructor"), dict)
+                   and item["constructor"].get("span") == span for item in arguments):
+                claimed.append(task)
+        if not claimed:
+            return None
+        from compiler.frontend.device_tasks import external_device_task
+        from compiler.frontend.metadata_constructor import original_metadata_constructor
+        for call in walk(routine.execution):
+            if _kind(call) != "Call_Stmt":
+                continue
+            proof = external_device_task(origin, routine, call)
+            if proof is None:
+                continue
+            for public in proof.public()["source_effects"].get("opaque_state", ()):
+                if public["resource"] == receiver.root and public["constructor"]["span"] == span:
+                    opaque = origin._opaque_library_state_proofs[public["identity"]]
+                    return original_metadata_constructor(origin, routine, assignment, opaque)
+        raise CompilationError("metadata constructor lacks its exact original contracted receiver use")
+
     def _require_original_global(self, *, _syntax=None):
         """Check shared original files, provenance and module syntax freshly."""
         self.verify_source()
@@ -2138,9 +2664,12 @@ class SourceEffects:
         digest = sha256(_canonical(authority).encode()).hexdigest()
         key = requested, digest
         if key not in self._structures:
-            graph, store = self._structure_candidate(requested, routine, authority, digest)
-            if store is not None:
-                self._summary_cache.store(*store)
+            graph = self._live_structures.get(key)
+            if graph is None:
+                graph, store = self._structure_candidate(requested, routine, authority, digest)
+                if store is not None:
+                    self._summary_cache.store(*store)
+                self._live_structures[key] = graph
             if len(self._structures) >= self.procedure_limit:
                 self._structures.pop(next(iter(self._structures)))
             self._structures[key] = graph
@@ -2200,7 +2729,9 @@ class SourceEffects:
                     # structure() authenticated this exact routine above.
                     # One selection may contain many documentation comments;
                     # none needs another global source/AST validation pass.
-                    original_node_ids = {id(node) for node in walk(self.routines[requested].execution)}
+                    session = getattr(self, "_source_session", None)
+                    original_node_ids = (session.execution_nodes(self, self.routines[requested]) if session is not None
+                                         else {id(node) for node in walk(self.routines[requested].execution)})
                 if id(item) not in original_node_ids:
                     raise CompilationError("selected comment lacks original source authority")
                 continue
@@ -2230,13 +2761,20 @@ class SourceEffects:
             positions = {identity: index for index, identity in enumerate(graph.nodes)}
             if len({graph.nodes[identity].guard for identity in identities}) != 1:
                 raise CompilationError("selected effects must form one reached guarded segment")
-            owned = set()
-            for identity in identities:
-                subtree = {id(item) for node in graph.source_nodes(identity) for item in walk(node)
-                           if hasattr(item, "items") or hasattr(item, "content")}
-                if owned & subtree:
-                    raise CompilationError("selected source effect subtrees overlap")
-                owned.update(subtree)
+            session = getattr(self, "_source_session", None)
+            overlaps = (session.execution_overlaps(self, self.routines[requested],
+                        (graph.source_nodes(identity) for identity in identities)) if session is not None else None)
+            if overlaps is None:
+                owned = set()
+                for identity in identities:
+                    subtree = {id(item) for node in graph.source_nodes(identity) for item in walk(node)
+                               if hasattr(item, "items") or hasattr(item, "content")}
+                    if owned & subtree:
+                        overlaps = True
+                        break
+                    owned.update(subtree)
+            if overlaps:
+                raise CompilationError("selected source effect subtrees overlap")
             if [positions[identity] for identity in identities] != sorted(positions[identity] for identity in identities):
                 raise CompilationError("selected effect nodes must retain original source order")
         return graph, tuple(identities)
@@ -2254,11 +2792,12 @@ class SourceEffects:
         analysis = self.private_projection(routines=True)
         analysis.summaries, analysis._closures, analysis._native_sections = {}, {}, {}
         analysis._structures, analysis._segments, analysis._descriptor_proofs = {}, {}, {}
+        analysis._live_structures = WeakValueDictionary()
         analysis._descriptor_source = (getattr(self, "_descriptor_source", self)
                                        if getattr(self, "_selected_descriptor_window", None) is not None
                                        and descriptor_window is None else self)
-        analysis.__dict__.pop("_selected_descriptor_window", None)
-        analysis.__dict__.pop("_descriptor_window_projection", None)
+        analysis._selected_descriptor_window = None
+        analysis._descriptor_window_projection = None
         if descriptor_window is not None:
             analysis._selected_descriptor_window = self, requested, identities, descriptor_window
         routine = copy(original)
@@ -2315,7 +2854,7 @@ class SourceEffects:
         if capture_locals:
             routine.arguments = tuple(name for name, binding in routine.scope.bindings.items()
                                       if not name.startswith("fort_effect_") and "allocatable" not in binding.attributes)
-        analysis.routines[requested] = routine
+        analysis.project_routine(requested, routine)
         if descriptor_window is not None:
             analysis._descriptor_window_projection = (
                 routine, routine.execution, str(routine.execution), analysis._routine_signature(routine))
@@ -2568,7 +3107,7 @@ class SourceEffects:
         # The section analyzer needs original descriptor declarations even
         # though this inner operation does not execute their entry expressions.
         specification = _part(self.routines[requested].scope.node, "Specification_Part")
-        routine.scope.node.content = ([specification] if specification is not None else []) + [routine.execution]
+        routine = analysis.project_specification(routine, specification)
         analysis._native_sections_include_entry = bool(include_entry)
         analysis._native_sections_completion = completion
         sections = analyze_native_sections(analysis, routine)
@@ -2619,7 +3158,7 @@ class SourceEffects:
             analysis, routine, _guard = self._segment_projection(requested, unit.selected_node_ids,
                 capture_locals=True, _graph=unit.structure)
             specification = _part(self.routines[requested].scope.node, "Specification_Part")
-            routine.scope.node.content = ([specification] if specification is not None else []) + [routine.execution]
+            routine = analysis.project_specification(routine, specification)
             analysis._native_sections_include_entry = False
             analysis._native_sections_completion = completion
             sections = analyze_native_sections(analysis, routine)
@@ -2653,15 +3192,17 @@ class SourceEffects:
                             return NativeSections(False, "native group rectangle union exceeds bounded refinement")
                         merged[label] = tuple(unique.values())
                     resources[resource.resource] = replace(previous, **merged)
-                resource = resources[resource.resource]
-                if (len(resources) > self.operation_limit or
-                        len({box_identity(box) for box in (*resource.reads, *resource.writes)}) > RECTANGLE_LIMIT):
+                # The access emitter and runtime bound each effect list
+                # separately; disjoint read and write unions may both fit.
+                # Their runtime normalization/fragmentation checks still apply.
+                if len(resources) > self.operation_limit:
                     return NativeSections(False, "native group section union exceeds bounded refinement")
         return NativeSections(True, resources=tuple(resources[key] for key in sorted(resources)))
 
     def _validate_descriptor_window(self, requested, identities, proof):
         from compiler.frontend.descriptor_windows import DescriptorWindowProof
-        if not isinstance(proof, DescriptorWindowProof):
+        from compiler.scopes.conditional_return import ConditionalUnitDescriptorProof
+        if not isinstance(proof, (DescriptorWindowProof, ConditionalUnitDescriptorProof)):
             raise CompilationError("selected descriptor effects require a registered original window proof")
         return proof.validate(self, requested, identities)
 
@@ -2689,7 +3230,11 @@ class SourceEffects:
     def window_module_allocatables(self, requested):
         """Exact private descriptor capability; never global capture admission."""
         proof = self._window_descriptor_proof(requested)
-        return frozenset(proof.module_roots) if proof is not None else frozenset()
+        # Fixed module arrays can have a distinct selected-storage proof, but
+        # must never masquerade as an allocation-lifetime authorization.
+        return (frozenset(root for root in proof.module_roots
+                          if "allocatable" in self._source_module_bindings[root][0].attributes)
+                if proof is not None else frozenset())
 
     def descriptor_stability(self, requested):
         from compiler.frontend.source_functions import _scope_roles, _validate_scope, _validate_scope_roles
@@ -2702,8 +3247,12 @@ class SourceEffects:
             return {"procedure": procedure, "structured_identity": result["structured_identity"],
                     "analysis_identity": result["analysis_identity"], "complete": True,
                     "resources": result["resources"], "descriptor_window_identity": proof.identity,
-                    "requirements": ["registered exact original source window", "close before excluded tail",
-                                     "independent entry/prefix definitions and runtime descriptor/alias guards"]}
+                    "requirements": (["registered exact original native unit storage projection",
+                                      "sealed exhaustive conditional-return contract; reached retirement before unknown effects",
+                                      "independent native effects and runtime descriptor/alias guards"]
+                                     if result.get("kind") == "checked_native_unit_descriptor_projection" else
+                                     ["registered exact original source window", "close before excluded tail",
+                                      "independent entry/prefix definitions and runtime descriptor/alias guards"])}
         if hasattr(self, "_descriptor_source"):
             result = self._descriptor_source.descriptor_stability(requested)
             if proof is not None and proof.module_roots:
@@ -2743,6 +3292,8 @@ class SourceEffects:
                 namespace(routine.scope)
                 graph = self._structures.get((name, digest))
                 if graph is None:
+                    graph = self._live_structures.get((name, digest))
+                if graph is None:
                     graph, store = self._structure_candidate(name, routine, authority, digest)
                     if store is not None:
                         stores.append(store)
@@ -2775,6 +3326,7 @@ class SourceEffects:
             self._summary_cache.store(*store)
         for name, local_graph in graphs.items():
             key = name, digest
+            self._live_structures[key] = local_graph
             if key not in self._structures:
                 if len(self._structures) >= self.procedure_limit:
                     self._structures.pop(next(iter(self._structures)))
