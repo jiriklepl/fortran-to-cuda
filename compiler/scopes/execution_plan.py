@@ -193,6 +193,7 @@ def _registered_authorities(owner, owned_types):
         CheckedBorrowedCall,
         ConditionalReturnProof,
         ConditionalUnitDescriptorProof,
+        SameFamilyNativeCallLifecycle,
     )
     from compiler.scopes.graph_epochs import CallGroupStorageEpoch, GraphStorageEpoch
     from compiler.scopes.hierarchical_regions import SelectedRoot
@@ -270,7 +271,7 @@ def _registered_authorities(owner, owned_types):
         elif (isinstance(value, (Base, OwnerEmission, StructuredSummary))
               or type(value) in registries or type(value) in {
                   IntervalResourceDemand, SourceIntervalDraft, GraphStorageEpoch, CallGroupStorageEpoch,
-                  SupportedPathStorageEpoch}
+                  SupportedPathStorageEpoch, SameFamilyNativeCallLifecycle}
               or session is not None and session.contains(value)):
             continue
         elif isinstance(value, (dict, MappingProxyType)):
@@ -300,6 +301,12 @@ def _registered_authorities(owner, owned_types):
         returned.validate()
         authorities[id(returned)] = returned
         authorities[id(return_issuer)] = return_issuer
+    for member in owner.members.values():
+        for _first,_last,patch in member.patches:
+            lifecycle = getattr(patch,"lifecycle",None)
+            if type(lifecycle) is SameFamilyNativeCallLifecycle:
+                lifecycle.validate()
+                authorities[id(lifecycle)] = lifecycle
     selected_root = getattr(owner, "hierarchical_selection", None)
     if selected_root is not None:
         if type(selected_root) is not SelectedRoot or returned is None:
@@ -331,7 +338,7 @@ def _registered_authorities(owner, owned_types):
                 authorities[id(graph)] = graph
     return authorities, (*registries, StructuredSummary, IntervalResourceDemand, SourceIntervalDraft, GraphStorageEpoch,
                          CallGroupStorageEpoch, SupportedPathStorageEpoch,
-                         ConditionalReturnProof, SelectedRoot, type(return_issuer))
+                         ConditionalReturnProof, SameFamilyNativeCallLifecycle, SelectedRoot, type(return_issuer))
 
 
 def _seal_execution(owner):

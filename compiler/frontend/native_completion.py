@@ -605,6 +605,7 @@ def prove_graph_joined_completion(analysis, procedure, selected, native_graph):
 
 
 def _graph_joined_facts(analysis, procedure, selected, native_graph, *, retirement_storage=None):
+    native_graph.validate(analysis, native_graph.procedure, native_graph._selection)
     template = next((item for item in native_graph.templates if item.procedure == procedure), None)
     if template is None:
         raise CompilationError("joined native procedure is absent from the effect graph")
@@ -659,6 +660,7 @@ def _graph_joined_facts(analysis, procedure, selected, native_graph, *, retireme
 
 
 def _native_call_groups(native):
+    native.validate(native._analysis, native.procedure, native._selection)
     from compiler.frontend.resource_reachability import NativeEffectNode, NativePresenceConditional
 
     groups = {}

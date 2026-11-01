@@ -229,6 +229,7 @@ class ConditionalReturnDraft:
         self.selected_root = selected_root
         self._selected_root_receipt = selected_root
         self._consumers = []
+        self._native_preservations = {}
 
     def selection_identity(self):
         self.validate()
@@ -290,12 +291,141 @@ def prepare_selected(owner, selected_root):
     owner.builder._conditional_return_draft.validate()
 
 
+
+@dataclass(frozen=True)
+class SameFamilyNativeCallLifecycle:
+    """Retirement route, conditional on the unchanged first-admission rely."""
+    identity: str
+    _member: object = field(repr=False, compare=False)
+    _draft: object = field(repr=False, compare=False)
+    _view: object = field(repr=False, compare=False)
+    _originals: tuple = field(repr=False, compare=False)
+    _facts: str = field(repr=False, compare=False)
+    _entry: str = field(repr=False, compare=False)
+    _record: str = field(repr=False, compare=False)
+    _issuer: object = field(repr=False, compare=False)
+
+    def public(self):
+        return {"identity": self.identity, **json.loads(self._record)}
+
+    def validate(self, analysis=None, procedure=None):
+        member, draft = self._member, self._draft.validate()
+        analysis = member.builder.analysis if analysis is None else analysis
+        procedure = member.routine.qualified if procedure is None else procedure
+        if (self._issuer is not _ISSUER or analysis is not member.builder.analysis
+                or procedure != member.routine.qualified or draft.owner is not member.owner
+                or getattr(member.owner.builder,"provider_only_lifetime",None) is not None
+                or draft._native_preservations.get(self.identity) is not self
+                or _encoded(member.owner.builder.facts) != self._facts
+                or _encoded(_entry_exit(member)) != self._entry):
+            raise CompilationError("same-family CALL changed its original admission/capture/entry contract")
+        self._view.validate(analysis, procedure, self._originals)
+        if not self._view.public()["available"]:
+            raise CompilationError("same-family CALL has an unproved descriptor/publication/completion effect")
+        record = _native_call_preservation_record(member, self._originals, self._view)
+        if _encoded(record) != self._record or _hash(record) != self.identity:
+            raise CompilationError("same-family CALL lost its exact selected-window preservation route")
+        # Current/future numerical registrations retain their own checked facts;
+        # this route grants none of their lifetime/layout/alias/read authority.
+        if not set(record["writable_actual_families"]) <= set(member.owner.resources):
+            raise CompilationError("same-family CALL writable actual is outside the inherited managed family")
+        for binding, _slot in member.owner.resources.values():
+            fact = member.owner.builder.capture_fact(binding)
+            draft.capture(binding, fact)
+        return self
+
+
+
+def _native_call_writable_families(member, originals, view):
+    """Original lexical associations to existing captures, never field geometry."""
+    from compiler.frontend.resource_reachability import _host_arrange, _original
+    graph = view._graph
+    if len(graph.host_instances)<2 or graph.host_instances[1].call.original is not originals[0]:
+        raise CompilationError("same-family CALL lost its original outer lexical association")
+    edge = graph.host_instances[1].call
+    callee = _original(member.builder.analysis, graph.host_instances[1].procedure)
+    families=set()
+    for name,actual in _host_arrange(edge,callee):
+        declaration=callee.scope.bindings.get(name)
+        if declaration is None or declaration.intent=="in" or actual is None:
+            continue  # Fixed procedure actuals have their own exact closure; absence is not storage.
+        if declaration.dtype not in {"real","integer","logical"} or _kind(actual) not in {"Name","Part_Ref"}:
+            raise CompilationError("same-family CALL writable actual requires an existing primitive capture")
+        base=actual.items[0] if _kind(actual)=="Part_Ref" else actual
+        binding=member.builder.analysis._binding(edge.scope,base)
+        if binding is None:
+            raise CompilationError("same-family CALL writable original binding is unavailable")
+        binding=member.canonical(binding)
+        fact=member.owner.builder.capture_fact(binding)
+        member.owner.builder._conditional_return_draft.capture(binding,fact)
+        families.add(binding.root)
+    return sorted(families)
+
+
+def _native_call_preservation_record(member, originals, view):
+    draft = member.owner.builder._conditional_return_draft.validate()
+    graph, selected = member.builder.analysis._selected_source(member.routine.qualified, originals)
+    first, last = statement_span(originals[0])
+    return {"version": 2, "kind": "same_family_native_call_retirement", "procedure": member.routine.qualified,
+            "source_graph": graph.identity, "selected_node_ids": list(selected),
+            "source_span": [first,last], "original_source": member.original(originals), "original_source_sha256": sha256(member.original(originals).encode()).hexdigest(),
+            "original_call": str(originals[0]), "completion_identity": view.identity,
+            "native_graph_identity": view._graph.identity,
+            "selection_identity": draft.selection_identity(),
+            "capture_facts_identity": _hash(member.owner.builder.facts),
+            "entry_exit_identity": _hash(_entry_exit(member)),
+            "writable_actual_families": _native_call_writable_families(member, originals, view),
+            "entry_rely": "same conditional allocation-family access exclusion as first checked activation",
+            "retirement": "full owning domain before untouched original CALL; next activation remains fresh NONE",
+            "completion_scope": "normal return only", "no_imports_or_publication": True,
+            "initial_quiescence_authorized": False, "payload_access_authorized": False,
+            "stable_storage_authorized": False, "entry_definition_authority": False,
+            "alias_authority": False, "motion_authorized": False, "cross_cut_replica_retention_authorized": False}
+
+
+def _preserved_native_call(member, originals):
+    # A provider-only close may keep its domain alive; this role requires the
+    # existing resident close to retire the complete owning allocation family.
+    if getattr(member.owner.builder,"provider_only_lifetime",None) is not None:
+        return None
+    if (len(originals) != 1 or _kind(originals[0]) != "Call_Stmt"
+            or getattr(getattr(originals[0],"item",None),"label",None) is not None):
+        return None
+    from compiler.frontend.resource_reachability import prove_native_effect_graph
+    native = prove_native_effect_graph(member.builder.analysis, member.routine.qualified, originals, project_payload=False)
+    view = native.same_family_call_view()
+    if not view.public()["available"]:
+        return None
+    draft = member.owner.builder._conditional_return_draft.validate()
+    record = _native_call_preservation_record(member, originals, view)
+    identity = _hash(record)
+    cached = draft._native_preservations.get(identity)
+    if cached is not None:
+        return cached  # Prospective until exhaustive returned-owner coverage validates every managed family.
+    if len(draft._native_preservations) >= source_registry_budget(member.builder.analysis):
+        raise CompilationError("same-family retirement route budget exhausted")
+    proof = SameFamilyNativeCallLifecycle(identity,member,draft,view,originals,
+        _encoded(member.owner.builder.facts),_encoded(_entry_exit(member)),_encoded(record),_ISSUER)
+    draft._native_preservations[identity] = proof
+    return proof  # The existing exhaustive coverage/patch consumer is the admission gate.
+
+
 def boundary_lifecycle(member, originals, *, diagnostic=None):
     """Classify a cut without granting permission to execute its payload."""
     if getattr(member.owner.builder, "_conditional_return_draft", None) is None:
         return None, None
     analysis, procedure = member.builder.analysis, member.routine.qualified
     completion, team = None, None
+    try:
+        preserved = _preserved_native_call(member, originals)
+        if preserved is not None:
+            analysis.verify_publication()
+            if diagnostic is not None:
+                diagnostic.update(classification="same_family_native_call_preservation", preservation_identity=preserved.identity)
+            return preserved, None
+    except CompilationError as error:
+        if diagnostic is not None:
+            diagnostic["same_family_preservation_decline"] = str(error)
     try:
         graph, selected = analysis._selected_source(procedure, originals)
         from compiler.frontend.native_group_structure import NativeGroupCandidate, grouped_original_sequence
@@ -537,7 +667,9 @@ def _coverage(member):
                 patch.lifecycle.validate()
             mark(patch.originals, "reached_retirement", lifetime=("proved_lifecycle" if patch.lifecycle else
                  "unproved_lifetime_or_escape"), rearm_allowed=patch.lifecycle is not None,
-                 **({"loop_entry": dict(patch.counted_entry.authority)} if patch.counted_entry is not None else {}))
+                 **({"loop_entry": dict(patch.counted_entry.authority)} if patch.counted_entry is not None else {}),
+                 **({"call_preservation": patch.lifecycle.public()}
+                    if type(patch.lifecycle) is SameFamilyNativeCallLifecycle else {}))
     for call in member.return_calls:
         call.validate(member)
         forward = dict(call.handle_bindings)
@@ -589,7 +721,11 @@ def _record(owner):
     if draft.owner is not owner:
         raise CompilationError("returned-domain proof changed its exact issuing owner")
     selected_root = draft.selected_root
-    return {"version": 2 if selected_root is not None else 1,
+    preservation = any(type(patch.lifecycle) is SameFamilyNativeCallLifecycle
+                       for member in owner.members.values() for _first,_last,patch in member.patches
+                       if hasattr(patch,"lifecycle"))
+    return {"version": 3 if preservation else 2 if selected_root is not None else 1,
+            **({"native_call_preservation_policy_version": 2} if preservation else {}),
             "kind": "checked_conditional_return", "entry": owner.routine.qualified,
             "source_inputs": owner.builder.analysis.inputs.identity(),
             "selection_identity": draft.selection_identity(),

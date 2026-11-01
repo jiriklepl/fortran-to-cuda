@@ -96,7 +96,7 @@ def _profile_identity(profile, budget):
     budget.tick()
     try:
         encoder = json.JSONEncoder(sort_keys=True, separators=(",", ":"), allow_nan=False)
-        for chunk in encoder.iterencode(profile):
+        for chunk in encoder.iterencode(profile, _one_shot=True):
             encoded = chunk.encode("ascii")
             size += len(encoded)
             if size > _PROFILE_TEXT_LIMIT:
