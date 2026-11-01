@@ -1,4 +1,5 @@
 """Finite real-CUDA controls for an unchanged same-family native CALL."""
+
 import json
 import re
 import shutil
@@ -10,12 +11,12 @@ from compiler.scopes.conditional_return import SameFamilyNativeCallLifecycle
 from compiler.scopes.lexical import LexicalBoundaryPatch
 from compiler.tests import test_graph_storage_epochs_cuda as base
 from compiler.tests.test_hierarchical_child_regions import fixture
-from compiler.tests.test_hierarchical_child_regions_cuda import FAILURE,copy_bytes,events_in,procedure
+from compiler.tests.test_hierarchical_child_regions_cuda import FAILURE, copy_bytes, events_in, procedure
 from compiler.tests.test_joined_boundary_lifecycle_cuda import environment
-from compiler.tests.test_same_family_native_call import source_fixture,WORKER
+from compiler.tests.test_same_family_native_call import WORKER, source_fixture
 
-CALL='call native_worker(right,left,n,scale1,scale2,scale3)'
-NATIVE='''subroutine native_worker(values,readonly,n,f1,f2,f3)
+CALL = "call native_worker(right,left,n,scale1,scale2,scale3)"
+NATIVE = """subroutine native_worker(values,readonly,n,f1,f2,f3)
 integer,intent(in)::n
 real(8),intent(inout)::values(:)
 real(8),intent(in)::readonly(:)
@@ -41,63 +42,101 @@ pure real(8) function scale3(i)
 integer,intent(in)::i
 scale3=3.0_8*left(i+1)
 end function
-'''
+"""
 
 
 def source():
-    return (source_fixture().replace(WORKER,NATIVE)
-        .replace('call native_worker(left,right,n,scale)',CALL)
-        .replace('real(8),intent(out)::b(:)','real(8),intent(inout)::b(:)')
-        .replace('real(8),intent(out)::a(:)','real(8),intent(inout)::a(:)')
-        .replace('b(i)=real(i,8)','b(i+2)=real(i,8)')
-        .replace('a(i)=2.0_8*b(i)','a(i+2)=2.0_8*b(i+2)')
-        .replace('observed=0.0_8\ndo i=1,n\nobserved=observed+right(lbound(right,1)+i-1)\nenddo\n','')
-        .replace('allocate(left(-3:n-4),right(2:n+1))','allocate(left(2:n+5),right(2:n+5))')
-        .replace('left=0\nright=0','left=1\nright=-99')
-        .replace('integer::stage\n','integer::stage\nif(n<0)return\n'))
+    return (
+        source_fixture()
+        .replace(WORKER, NATIVE)
+        .replace("call native_worker(left,right,n,scale)", CALL)
+        .replace("real(8),intent(out)::b(:)", "real(8),intent(inout)::b(:)")
+        .replace("real(8),intent(out)::a(:)", "real(8),intent(inout)::a(:)")
+        .replace("b(i)=real(i,8)", "b(i+2)=real(i,8)")
+        .replace("a(i)=2.0_8*b(i)", "a(i+2)=2.0_8*b(i+2)")
+        .replace("observed=0.0_8\ndo i=1,n\nobserved=observed+right(lbound(right,1)+i-1)\nenddo\n", "")
+        .replace("allocate(left(-3:n-4),right(2:n+1))", "allocate(left(2:n+5),right(2:n+5))")
+        .replace("left=0\nright=0", "left=1\nright=-99")
+        .replace("integer::stage\n", "integer::stage\nif(n<0)return\n")
+    )
 
 
 def sealed_emission(directory):
     from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
     from elmm_pipeline.local_adapter import _scope_package_build
-    original,builder=fixture(directory,source())
-    outputs,report=builder.run()
-    assert report['scope_count']==1,report.get('graph_owner_attempt')
-    owner=builder._conditional_return_draft.validate().owner
-    selected=[(member,patch)for member in owner.members.values()for _first,_last,patch in member.patches
-              if isinstance(patch,LexicalBoundaryPatch)and type(patch.lifecycle)is SameFamilyNativeCallLifecycle
-              and 'native_worker'in str(patch.originals[0]).lower()]
-    assert len(selected)==1
-    member,patch=selected[0]
-    assert patch.validate(member,require_source=True)is patch
-    assert patch.completion is None and patch.conditional_guard is None
-    assert patch.lifecycle._view.public()['available']
-    assert len([i for i in patch.lifecycle._view._graph.host_instances if i.procedure.endswith(('scale1','scale2','scale3'))])==3
-    outputs=dict(outputs)
-    transformed=outputs[report['sources'][str(original)]['replacement']]
-    assert NATIVE in transformed and transformed.count(CALL)==1
-    scope,=report['scopes']
-    assert {name.split('#')[0]for name in scope['gpu_leaves']}=={'hierarchical::producer','hierarchical::consumer'}
-    assert {row['resource']for row in scope['checked_execution_plan']['resources']}=={'hierarchical::left','hierarchical::right'}
-    assert scope['checked_execution_plan']['storage_epoch']['return_contract']['version']==3
-    for binding,_slot in owner.resources.values():assert builder.capture(binding)['initialized']=='none'
+
+    original, builder = fixture(directory, source())
+    outputs, report = builder.run()
+    assert report["scope_count"] == 1, report.get("graph_owner_attempt")
+    owner = builder._conditional_return_draft.validate().owner
+    selected = [
+        (member, patch)
+        for member in owner.members.values()
+        for _first, _last, patch in member.patches
+        if isinstance(patch, LexicalBoundaryPatch)
+        and type(patch.lifecycle) is SameFamilyNativeCallLifecycle
+        and "native_worker" in str(patch.originals[0]).lower()
+    ]
+    assert len(selected) == 1
+    member, patch = selected[0]
+    assert patch.validate(member, require_source=True) is patch
+    assert patch.completion is None
+    assert patch.conditional_guard is None
+    assert patch.lifecycle._view.public()["available"]
+    assert (
+        len(
+            [
+                i
+                for i in patch.lifecycle._view._graph.host_instances
+                if i.procedure.endswith(("scale1", "scale2", "scale3"))
+            ]
+        )
+        == 3
+    )
+    outputs = dict(outputs)
+    transformed = outputs[report["sources"][str(original)]["replacement"]]
+    assert NATIVE in transformed
+    assert transformed.count(CALL) == 1
+    (scope,) = report["scopes"]
+    assert {name.split("#")[0] for name in scope["gpu_leaves"]} == {"hierarchical::producer", "hierarchical::consumer"}
+    assert {row["resource"] for row in scope["checked_execution_plan"]["resources"]} == {
+        "hierarchical::left",
+        "hierarchical::right",
+    }
+    assert scope["checked_execution_plan"]["storage_epoch"]["return_contract"]["version"] == 3
+    for binding, _slot in owner.resources.values():
+        assert builder.capture(binding)["initialized"] == "none"
     validate_checked_execution_plans(report)
-    package=directory/'source-package';package.mkdir()
-    for name,text in outputs.items():
-        path=package/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(text)
-    manifest=json.loads((package/'scope-manifest.json').read_text())
-    _scope_package_build({'artifact_root':str(package),'scope_manifest':manifest,'tool':'local','memory_model':'scoped'})
+    package = directory / "source-package"
+    package.mkdir()
+    for name, text in outputs.items():
+        path = package / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    manifest = json.loads((package / "scope-manifest.json").read_text())
+    _scope_package_build(
+        {"artifact_root": str(package), "scope_manifest": manifest, "tool": "local", "memory_model": "scoped"}
+    )
     assert builder.finish()
-    (directory/'same-family-proof.json').write_text(json.dumps({'retirement':patch.lifecycle.public(),
-        'structural_preservation':patch.lifecycle._view.public(),'original_native':NATIVE},indent=2)+'\n')
-    return original,outputs,manifest
+    (directory / "same-family-proof.json").write_text(
+        json.dumps(
+            {
+                "retirement": patch.lifecycle.public(),
+                "structural_preservation": patch.lifecycle._view.public(),
+                "original_native": NATIVE,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    return original, outputs, manifest
 
 
 def test_component_source_retains_original_call_callbacks_and_fresh_read_admission(tmp_path):
     sealed_emission(tmp_path)
 
 
-DRIVER='''program exercise
+DRIVER = """program exercise
 use hierarchical
 use iso_fortran_env,only:error_unit
 implicit none
@@ -171,67 +210,82 @@ enddo
 enddo
 print *, 'SAME_FAMILY_NATIVE_CALLBACK_FIELDS_HALOS_AND_BOUNDS_OK'
 end program
-'''
+"""
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def binaries(tmp_path_factory):
-    with pytest.MonkeyPatch.context()as patch:
-        patch.setattr(base,'emit',sealed_emission);patch.setattr(base,'DRIVER',DRIVER)
-        directory,candidate,native=base.epoch_binaries.__wrapped__(tmp_path_factory)
-    manifest=json.loads((directory/'scope-manifest.json').read_text())
-    provenance={row['id']:row for row in manifest['runtime_provenance']['records']}
-    wrapper=directory/'retirement-failure.cpp';wrapper.write_text(FAILURE)
-    obj=directory/'retirement-failure.o';host=shutil.which('g++-14')or shutil.which('g++')
-    base.checked([host,'-std=c++17','-c',str(wrapper),'-o',str(obj)],directory,'compile-failure')
-    command=json.loads((directory/'link-candidate.command.json').read_text());fault=directory/'fault-candidate'
-    command[command.index('-o')+1]=str(fault)
-    base.checked([*command,str(obj),'-Wl,--wrap=fort_scope_domain_close_v1'],directory,'link-failure')
-    return directory,candidate,native,fault,provenance
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(base, "emit", sealed_emission)
+        patch.setattr(base, "DRIVER", DRIVER)
+        directory, candidate, native = base.epoch_binaries.__wrapped__(tmp_path_factory)
+    manifest = json.loads((directory / "scope-manifest.json").read_text())
+    provenance = {row["id"]: row for row in manifest["runtime_provenance"]["records"]}
+    wrapper = directory / "retirement-failure.cpp"
+    wrapper.write_text(FAILURE)
+    obj = directory / "retirement-failure.o"
+    host = shutil.which("g++-14") or shutil.which("g++")
+    base.checked([host, "-std=c++17", "-c", str(wrapper), "-o", str(obj)], directory, "compile-failure")
+    command = json.loads((directory / "link-candidate.command.json").read_text())
+    fault = directory / "fault-candidate"
+    command[command.index("-o") + 1] = str(fault)
+    base.checked([*command, str(obj), "-Wl,--wrap=fort_scope_domain_close_v1"], directory, "link-failure")
+    return directory, candidate, native, fault, provenance
 
 
 @pytest.mark.cuda
-@pytest.mark.parametrize('mode',['traced','untraced','hidden'])
-def test_original_native_call_publishes_then_rearms_real_children(binaries,mode):
-    directory,candidate,native,_fault,provenance=binaries
-    env=environment(mode)
-    reference=base.checked([str(native)],directory,mode+'-native',env)
-    result=base.checked([str(candidate)],directory,mode+'-candidate',env)
-    assert result.stdout==reference.stdout
-    assert 'SAME_FAMILY_NATIVE_CALLBACK_FIELDS_HALOS_AND_BOUNDS_OK'in result.stdout
-    if mode=='untraced':
-        assert 'FORT_SCOPED 'not in result.stderr
+@pytest.mark.parametrize("mode", ["traced", "untraced", "hidden"])
+def test_original_native_call_publishes_then_rearms_real_children(binaries, mode):
+    directory, candidate, native, _fault, provenance = binaries
+    env = environment(mode)
+    reference = base.checked([str(native)], directory, mode + "-native", env)
+    result = base.checked([str(candidate)], directory, mode + "-candidate", env)
+    assert result.stdout == reference.stdout
+    assert "SAME_FAMILY_NATIVE_CALLBACK_FIELDS_HALOS_AND_BOUNDS_OK" in result.stdout
+    if mode == "untraced":
+        assert "FORT_SCOPED " not in result.stderr
         return
-    for name in ['COLD','ZERO']:
-        text,=re.findall('FAMILY_'+name+'_BEGIN\n(.*?)FAMILY_'+name+'_END',result.stderr,re.S)
-        assert not any(e['kind']in{'domain_create','register','launch'}for e in events_in(text))
-    cases=re.findall(r'FAMILY_CASE_BEGIN (-?\d+) (\d+)\n(.*?)FAMILY_CASE_END \1 \2',result.stderr,re.S)
-    assert len(cases)==9
-    ledger=[]
-    for record_mode,width,text in cases:
-        events=events_in(text);n=int(width)
-        launches=[i for i,e in enumerate(events)if e['kind']=='launch']
-        ledger.append({'record_mode':int(record_mode),'n':n,'events':events})
-        if mode=='hidden':
-            assert not launches and copy_bytes(events,'upload')==copy_bytes(events,'download')==0
+    for name in ["COLD", "ZERO"]:
+        (text,) = re.findall("FAMILY_" + name + "_BEGIN\n(.*?)FAMILY_" + name + "_END", result.stderr, re.S)
+        assert not any(e["kind"] in {"domain_create", "register", "launch"} for e in events_in(text))
+    cases = re.findall(r"FAMILY_CASE_BEGIN (-?\d+) (\d+)\n(.*?)FAMILY_CASE_END \1 \2", result.stderr, re.S)
+    assert len(cases) == 9
+    ledger = []
+    for record_mode, width, text in cases:
+        events = events_in(text)
+        n = int(width)
+        launches = [i for i, e in enumerate(events) if e["kind"] == "launch"]
+        ledger.append({"record_mode": int(record_mode), "n": n, "events": events})
+        if mode == "hidden":
+            assert not launches
+            assert copy_bytes(events, "upload") == copy_bytes(events, "download") == 0
             continue
-        assert [procedure(events[i],provenance)for i in launches]==['hierarchical::producer','hierarchical::consumer']
-        first,last=launches;between=events[first+1:last]
+        assert [procedure(events[i], provenance) for i in launches] == [
+            "hierarchical::producer",
+            "hierarchical::consumer",
+        ]
+        first, last = launches
+        between = events[first + 1 : last]
         # Whole CALL is the first slice: even an empty native loop retires.
-        assert events[first]['domain']!=events[last]['domain']
-        assert sum(e['kind']=='domain_retire'for e in between)==1
-        assert copy_bytes(between,'download')==8*n and copy_bytes(between,'upload')==8*n
-    (directory/(mode+'-ledger.json')).write_text(json.dumps(ledger,indent=2)+'\n')
+        assert events[first]["domain"] != events[last]["domain"]
+        assert sum(e["kind"] == "domain_retire" for e in between) == 1
+        assert copy_bytes(between, "download") == 8 * n
+        assert copy_bytes(between, "upload") == 8 * n
+    (directory / (mode + "-ledger.json")).write_text(json.dumps(ledger, indent=2) + "\n")
 
 
 @pytest.mark.cuda
 def test_post_submission_close_failure_stops_before_native_call_or_replay(binaries):
-    directory,_candidate,_native,fault,provenance=binaries
-    result=subprocess.run([str(fault),'fault'],cwd=directory,env=environment('traced'),capture_output=True,text=True,timeout=30)
-    (directory/'failure-candidate.stdout').write_text(result.stdout)
-    (directory/'failure-candidate.stderr').write_text(result.stderr)
-    assert result.returncode!=0
-    assert result.stderr.count('HIER_TEST_POST_SUBMISSION_RETIREMENT_ERROR')==1
-    assert 'lexical owner publication failed'in result.stderr
-    assert 'failed retirement returned'not in result.stderr
-    assert [procedure(e,provenance)for e in events_in(result.stderr)if e['kind']=='launch']==['hierarchical::producer']
+    directory, _candidate, _native, fault, provenance = binaries
+    result = subprocess.run(
+        [str(fault), "fault"], cwd=directory, env=environment("traced"), capture_output=True, text=True, timeout=30
+    )
+    (directory / "failure-candidate.stdout").write_text(result.stdout)
+    (directory / "failure-candidate.stderr").write_text(result.stderr)
+    assert result.returncode != 0
+    assert result.stderr.count("HIER_TEST_POST_SUBMISSION_RETIREMENT_ERROR") == 1
+    assert "lexical owner publication failed" in result.stderr
+    assert "failed retirement returned" not in result.stderr
+    assert [procedure(e, provenance) for e in events_in(result.stderr) if e["kind"] == "launch"] == [
+        "hierarchical::producer"
+    ]

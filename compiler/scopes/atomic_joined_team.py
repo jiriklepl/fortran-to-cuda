@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from hashlib import sha256
 from importlib.resources import files
 
-from compiler.emission.cuda.atomic_team_provider import emit_atomic_team_provider
+from compiler.emission.cuda.atomic_team_provider import AtomicTeamProvider, emit_atomic_team_provider
 from compiler.frontend.atomic_worksharing_team import atomic_worksharing_alternatives, prove_atomic_worksharing_team
+from compiler.frontend.immutable_graph import original_type
 from compiler.frontend.numerical_effects import prove_numerical_effects
 from compiler.frontend.numerical_preparation import NumericalPreparationProvider
 from compiler.frontend.reached_read_requirements import prove_reached_read_requirements
@@ -23,10 +24,13 @@ class AtomicAlternative:
     prepared: object
     effects: object
     reads: object
+    artifact: AtomicTeamProvider
     registration: tuple
 
     def provider(self):
-        return emit_atomic_team_provider(self.source, self.prepared, self.effects, self.reads)
+        if original_type(self.artifact) is not AtomicTeamProvider:
+            raise CompilationError("atomic alternative requires its typed generated provider artifact")
+        return self.artifact.validate(self.source, self.prepared, self.effects, self.reads)
 
 
 def _provider_record(provider):
@@ -82,7 +86,7 @@ class AtomicJoinedTeamPatch(SourceDevicePatch):
 
         imports = ["use iso_c_binding", "use fort_scoped_memory"]
         specification = ["integer :: fort_atomic_variant", "integer(c_int) :: fort_atomic_status, fort_status",
-                         "logical :: fort_atomic_done, fort_atomic_can",
+                         "logical :: fort_atomic_done, fort_atomic_can, fort_atomic_empty",
                          "type(fort_scope_external_report_v1) :: fort_atomic_report"]
         selection_block = "fort_atomic_select"
         conditions = {}
@@ -147,12 +151,15 @@ class AtomicJoinedTeamPatch(SourceDevicePatch):
             return branches(first["branches"])
         operation = source_id(member.builder, "source_device_task", span=(self.first, self.last),
                               proof_identity=self.proof.identity)
-        lines = ["fort_atomic_done = .false.", f"if ({member.enabled}) then",
+        lines = ["fort_atomic_done = .false.", "fort_atomic_empty = .false.", f"if ({member.enabled}) then",
                  selection_block + ": block",
                  *select(public["tree"]), "select case(fort_atomic_variant)"]
         for index, item in enumerate(self.alternatives):
             if item is None:
-                continue  # Empty original paths retain the complete native team.
+                # The exact selected path has no reached payload work. Keep
+                # replicas while executing its complete original native team.
+                lines += ["case(" + str(index) + ")", "fort_atomic_empty = .true."]
+                continue
             provider = item.provider()
             for name, text in ((provider.entry + ".cu", provider.cuda_source),
                                (provider.module + ".f90", provider.fortran_source)):
@@ -217,7 +224,7 @@ class AtomicJoinedTeamPatch(SourceDevicePatch):
                       "    fort_atomic_status/=FORT_SCOPE_RESOURCE .and. fort_atomic_status/=FORT_SCOPE_BOUNDARY .and. &",
                       "    fort_atomic_status/=FORT_SCOPE_UNINITIALIZED .and. fort_atomic_status/=FORT_SCOPE_PLAN_MISMATCH) &",
                       "error stop 'atomic original team failed fatally'", "endif", "end block " + block]
-        lines += ["end select", "end block " + selection_block, "if (.not. fort_atomic_done) then",
+        lines += ["end select", "end block " + selection_block, "if (.not. fort_atomic_done .and. .not. fort_atomic_empty) then",
                   *member.close(prework=True, reason="atomic original team declined before complete alternative",
                                 span=(self.first, self.last)), "endif", "endif",
                   "if (.not. fort_atomic_done) then", *member.original(self.nodes).splitlines(), "endif"]
@@ -262,8 +269,8 @@ def admit_atomic_joined_team(member, nodes):
         prepared = policy.prepare_atomic_alternative(source, conditional_context=conditional_context)
         effects = prove_numerical_effects(member.builder.analysis, member.routine.qualified, originals, prepared)
         reads = prove_reached_read_requirements(member.builder.analysis, member.routine.qualified, originals, prepared)
-        emit_atomic_team_provider(source, prepared, effects, reads)
-        alternatives.append(AtomicAlternative(source, prepared, effects, reads, ()))
+        artifact = emit_atomic_team_provider(source, prepared, effects, reads)
+        alternatives.append(AtomicAlternative(source, prepared, effects, reads, artifact, ()))
     for binding, _written in team.fields:
         member.builder.capture(binding)
     by_root = {binding.root: binding for binding, _written in team.fields}
@@ -280,7 +287,7 @@ def admit_atomic_joined_team(member, nodes):
         fields = item.provider().fields
         registration = register_original_actuals(member, tuple(OriginalActual(binding,
             member.builder.visible(member.routine, binding.root)) for binding in fields))
-        alternatives[index] = AtomicAlternative(item.source, item.prepared, item.effects, item.reads, tuple(registration))
+        alternatives[index] = replace(item, registration=tuple(registration))
     first, last = statement_span(originals[0])[0], statement_span(originals[-1])[1]
     patch = AtomicJoinedTeamPatch(team, originals, (), first, last, alternatives=tuple(alternatives),
                                  predicate_registration=tuple(predicates))
