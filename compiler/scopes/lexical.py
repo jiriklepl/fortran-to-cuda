@@ -181,6 +181,8 @@ class LexicalBoundaryPatch:
     counted_entry: object = None
 
     def validate(self, member, *, require_source=False):
+        if not self.originals:
+            raise CompilationError("lexical boundary requires its nonempty original selection")
         span = statement_span(self.originals[0])[0], statement_span(self.originals[-1])[1]
         if span != (self.first, self.last) or member.original(self.originals) != self.original_source:
             raise CompilationError("lexical boundary lost its original source position")
@@ -193,7 +195,18 @@ class LexicalBoundaryPatch:
                 or str(self.originals[0].items[0]) != self.conditional_guard
                 or condition_fragment(member.builder, self.originals[0]).effects):
             raise CompilationError("lexical boundary changed its original conditional close")
-        if self.lifecycle is not None:
+        from compiler.scopes.conditional_return import SameFamilyNativeCallLifecycle
+        if type(self.lifecycle) is SameFamilyNativeCallLifecycle:
+            if (self.completion is not None or self.conditional_guard is not None or self.counted_entry is not None
+                    or self.lifecycle._member is not member
+                    or len(self.originals) != len(self.lifecycle._originals)
+                    or any(a is not b for a,b in zip(self.originals,self.lifecycle._originals,strict=True))):
+                raise CompilationError("same-family retirement changed its whole original CALL/control")
+            self.lifecycle.validate(member.builder.analysis, member.routine.qualified)
+        elif self.lifecycle is not None:
+            from compiler.frontend.storage_mutation_effects import StorageMutationEffects
+            if type(self.lifecycle) is not StorageMutationEffects:
+                raise CompilationError("lexical boundary requires an issued storage or same-family retirement role")
             self.lifecycle.validate(member.builder.analysis, member.routine.qualified)
             record = self.lifecycle.public()
             graph, selected = member.builder.analysis._selected_source(member.routine.qualified, self.originals)
@@ -662,7 +675,7 @@ class LexicalOwner:
             except CompilationError:
                 pass
         originals = self.builder.inline.original_selection(tuple(nodes))
-        from compiler.scopes.conditional_return import boundary_lifecycle
+        from compiler.scopes.conditional_return import boundary_lifecycle, SameFamilyNativeCallLifecycle
         diagnostic = {} if self is self.owner and hasattr(self, "retention_allowed") else None
         lifecycle, completion = boundary_lifecycle(self, originals, diagnostic=diagnostic)
         counted_entry = None
@@ -682,7 +695,8 @@ class LexicalOwner:
                                 **({"lifecycle": "proved_lifecycle" if lifecycle is not None else
                                                    "unproved_lifetime_or_escape"}
                                    if hasattr(self, "retention_allowed") else {}),
-                                **({"loop_entry": dict(counted_entry.authority)} if counted_entry is not None else {})})
+                                **({"loop_entry": dict(counted_entry.authority)} if counted_entry is not None else {}),
+                                **({"call_preservation": lifecycle.public()} if type(lifecycle) is SameFamilyNativeCallLifecycle else {})})
         replacement = LexicalBoundaryPatch(originals, first, last, reason, reached_guard,
                                            self.original(nodes), lifecycle, completion, counted_entry)
         self.patches.append((first, last, replacement))

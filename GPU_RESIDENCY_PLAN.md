@@ -6,6 +6,15 @@ The original proposal is preserved at
 `/tmp/fortran-residency-implementation-24/GPU_RESIDENCY_PLAN.original.md`.
 Historical reports and timing controls remain unchanged.
 
+The [current compiler V3 selection](benchmarks/reports/gpu-residency-implementation-20261023/maintained-compiler-v3-20261101-addendum-01/README.md)
+passes all 11,995 selected cases in one complete invocation, without failures,
+errors, skips or recoveries. Its [companion selection](benchmarks/reports/gpu-residency-implementation-20261023/maintained-companions-v3-20261101-addendum-01/README.md)
+passes 4,333 cases with 29 declared optional skips. Both qualify the applied
+SECTION projection, encoder and native CALL composition with runtime `6d8484fe…`
+and profile `429150e1…`. Marked CUDA exclusions and focused device gates remain
+separate. Private proof/provider reuse, empty-path retention and line-default
+changes are excluded; no new application or performance milestone follows.
+
 The [committed compiler checkpoint selection](benchmarks/reports/gpu-residency-implementation-20261023/maintained-compiler-v2-20261101-addendum-01/README.md)
 has 11,868 passing latest distinct results after five test-only whole-file
 recoveries; its failed complete invocation remains recorded. The separate
@@ -22,10 +31,49 @@ device gates pass 30 behavioral cases and five logging checks on their stated
 runtime bases. Bounded credit can seed the existing pool; each purchase retains
 its full cold cost. Modeled pricing stays separate from completed transfers.
 Source-task and source-submit costs remain unavailable. Fresh SGS generation
-passes. Fresh Convection generation declines at a single-association restriction
-for a source provider; checked per-call projection and application qualification
-are pending. No
-current application speedup or whole-maintained-suite result follows yet.
+passes. The initial fresh Convection attempt declined at a single-association
+restriction; the qualified per-call projection below addresses that restriction.
+Fresh regeneration and application qualification are pending. No
+current application speedup follows; the current maintained gate is recorded above.
+
+The [SECTION call-projection follow-up](benchmarks/reports/gpu-residency-implementation-20261023/section-call-projection-20261101/README.md)
+is applied after 473 distinct CPU cases and three CUDA modes pass. The original
+periodic helper's three field associations now use the existing checked CALL DAG;
+graph effects include every possible allocation without granting definitions or
+alias authority. Initial uploads of separate readonly inputs remain necessary;
+the repeated first call transfers no payload. The packet retains the original
+overbroad trace-test failure and its stronger per-allocation recovery. Independent
+SGS/Convection regeneration is underway; shared-parent integration remains separate.
+
+The [compiler-profile follow-up](benchmarks/reports/gpu-residency-implementation-20261023/profile-identity-fastpath-20261101/README.md)
+preserves the subsequent 1,500-second Convection timeout as incomplete compilation.
+A bounded profile identifies repeated calibration JSON serialization as a major
+cost. The applied C-encoder fast path preserves canonical bytes, both fresh
+digests and mutation checks, with 115 CPU cases passing. The next normal
+Convection attempt also reaches 1,500 seconds without artifacts. A second bounded
+profile confirms lower hashing cost and identifies repeated atomic proof
+derivation and provider generation as further costs. An independent reuse change
+is private; no application result follows from either profile or helper timing.
+
+The [line geometry experiment](benchmarks/reports/gpu-residency-implementation-20261023/line-geometry-experiment-20261101/README.md)
+validates all 1,728 component rows and 2,592 launches. For three mask patterns,
+128 threads with a 16 MiB batching target reduces summed twelve-call host medians
+from 9.321/10.092/3.237 ms to 5.017/5.899/2.464 ms, with seven paired wins each.
+Actual scratch is 4.39–4.59 MB. Kernel bodies are unchanged; event intervals include
+host submission gaps. The clean default remains private pending qualification
+and application measurements.
+
+The [native CALL preservation slice](benchmarks/reports/gpu-residency-implementation-20261023/native-call-preservation-20261101/README.md)
+and [combined SECTION follow-up](benchmarks/reports/gpu-residency-implementation-20261023/native-section-composition-20261101/README.md)
+are now applied. A separate structural view of the existing graph proves normal
+return without imports, publication or hidden lifetime changes; it preserves the
+same conditional access precondition as first admission and grants no payload or
+definition authority. The original ResistanceForce source closure passes. Device
+gates verify full retirement/fresh rearm and failure without replay. Exact-site
+CALL validation fixes canonical-versus-local slots and repeated-site ambiguity.
+Active combined paths retain the new working domain across three SECTION calls;
+inactive paths still create three empty metadata-only domains. Broad current
+regression now passes as recorded above; an actual shared ELMM parent remains pending.
 
 The [kernel resource diagnosis](benchmarks/reports/kernel-resources-20261101/README.md)
 identifies small Filter grids and serial line processing in the previous

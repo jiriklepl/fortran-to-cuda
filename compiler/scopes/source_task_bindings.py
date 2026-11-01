@@ -1,4 +1,4 @@
-"""Link source line tasks to existing checked per-call allocation forwarding.
+"""Link supported source tasks to checked per-call allocation forwarding.
 
 This is a projection of CheckedBorrowedCall receipts, not another call-proof
 issuer. It adds no source, layout, definition, alias or lifetime authority.
@@ -10,6 +10,7 @@ import json
 import re
 from hashlib import sha256
 
+from compiler.frontend.atomic_worksharing_team import AtomicWorksharingTeamProof
 from compiler.frontend.immutable_graph import original_type
 from compiler.frontend.line_snapshot_team import OriginalLineSnapshotTeamProof
 from compiler.ir import CompilationError
@@ -25,21 +26,26 @@ def _digest(record):
     return sha256(json.dumps(record, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
 
 
+def _projectable(task):
+    """Only existing direct, unpriced line or atomic whole-team execution."""
+    return (
+        (type(getattr(task.proof, "team", None)) is OriginalLineSnapshotTeamProof
+         or type(task.proof) is AtomicWorksharingTeamProof)
+        and task._transport == "direct"
+        and task.pricing is None
+        and task.placement is None
+    )
+
+
 def needs_call_receipt(member):
-    """Retain only paths that actually contain the supported source line work."""
+    """Retain only paths that actually contain supported source work."""
     pending, seen = [member], set()
     while pending:
         current = pending.pop()
         if id(current) in seen:
             continue
         seen.add(id(current))
-        if any(
-            type(getattr(task.proof, "team", None)) is OriginalLineSnapshotTeamProof
-            and task._transport == "direct"
-            and task.pricing is None
-            and task.placement is None
-            for task in current.source_device_tasks
-        ):
+        if any(_projectable(task) for task in current.source_device_tasks):
             return True
         for receipt in getattr(current, "source_companion_calls", ()):
             if original_type(receipt) is not CheckedBorrowedCall:
@@ -119,12 +125,7 @@ def _field_roots(nodes, edges, procedure, field_slots):
 
 def call_projection(member, task):
     """Revalidate the complete original companion DAG before publishing it."""
-    if (
-        type(getattr(task.proof, "team", None)) is not OriginalLineSnapshotTeamProof
-        or task._transport != "direct"
-        or task.pricing is not None
-        or task.placement is not None
-    ):
+    if not _projectable(task):
         return None
     from compiler.scopes.module_owner import ModuleOwner
 
@@ -152,7 +153,7 @@ def call_projection(member, task):
         if parameterized and original_type(current) is not ModuleOwner:
             _fail("requires an existing parameterized module companion")
         if parameterized:
-            for root, (binding, slot) in current.resources.items():
+            for _root, (binding, slot) in current.resources.items():
                 canonical = current.canonical(binding).root
                 formals = [formal for formal, actual in current.canonical_bindings.items() if actual.root == canonical]
                 expected_root = formals[0] if len(formals) == 1 else canonical
@@ -172,11 +173,11 @@ def call_projection(member, task):
         nodes[name] = node
         if not parameterized:
             canonical = {}
-            for root, (binding, slot) in current.resources.items():
+            for _root, (binding, slot) in current.resources.items():
                 original = current.canonical(binding).root
                 if original not in owner.resources or owner.resources[original][1] != slot:
                     _fail("terminal namespace differs from owning registrations")
-                canonical[root] = original
+                canonical[_root] = original
             node["owner_resources"] = canonical
         else:
             sites = tuple(current.call_sites)

@@ -55,6 +55,12 @@ class AtomicJoinedTeamPatch(SourceDevicePatch):
                                        for binding, _ in self.proof.fields}},
             "definitions_authorized": False, "placement_authorized": False, "motion_authorized": False,
             "pricing": "unpriced; explicit sections only"}
+        from compiler.scopes.source_task_bindings import call_projection
+
+        projection = call_projection(member, self)
+        if projection is not None:
+            record["version"] = 4
+            record["execution_binding"]["call_projection"] = projection
         return {"identity": sha256(json.dumps(record, sort_keys=True, separators=(",", ":")).encode()).hexdigest(), **record}
 
     def render(self, member):
@@ -65,6 +71,9 @@ class AtomicJoinedTeamPatch(SourceDevicePatch):
         # providers must be published with their owning compilation artifacts.
         outputs = member.owner.builder.outputs
         self.proof.validate(member.builder.analysis, member.routine, self.nodes)
+        from compiler.scopes.source_task_bindings import call_projection
+
+        call_projection(member, self)
         if (statement_span(self.nodes[0])[0], statement_span(self.nodes[-1])[1]) != (self.first, self.last):
             raise CompilationError("atomic team moved from its complete original source span")
         public = self.proof.public()
