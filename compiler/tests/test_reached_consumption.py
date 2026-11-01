@@ -332,16 +332,20 @@ def test_fresh_source_authority_keeps_identical_numerical_workers_and_private_pu
     second = EmittedNumericalText.capture(paths, outputs, report)
     assert first_owner.builder.analysis is not second_owner.builder.analysis
     assert first_owner.window_proof is not second_owner.window_proof
-    assert first_owner.window_proof.identity != second_owner.window_proof.identity
+    assert first_owner.window_proof.identity == second_owner.window_proof.identity
+    for foreign, owner in ((first_owner.window_proof, second_owner),
+                           (second_owner.window_proof, first_owner)):
+        with pytest.raises(CompilationError):
+            foreign.validate(owner.builder.analysis, owner.routine.qualified, owner.window_originals)
     assert first.original_sources == second.original_sources
     first_outputs, second_outputs = dict(first.artifacts), dict(second.artifacts)
     assert first_outputs.keys() == second_outputs.keys()
     first_manifest, second_manifest = first.manifest(), second.manifest()
     replacements = {source["replacement"] for source in first_manifest["sources"].values()}
     assert replacements == {source["replacement"] for source in second_manifest["sources"].values()}
-    # Exact source-object identities are deliberately different across fresh
-    # analyses. They remain visible in owner/trace source and the manifest;
-    # every other artifact, including numerical workers, must be byte equal.
+    # Issued source handles remain analysis-specific even when their portable
+    # content digests agree. Numerical workers retain their independent
+    # deterministic byte contract; manifest dictionaries remain private copies.
     identity_artifacts = {"scope-manifest.json", *replacements}
     for name in first_outputs.keys() - identity_artifacts:
         assert first_outputs[name] == second_outputs[name], name
@@ -354,4 +358,4 @@ def test_fresh_source_authority_keeps_identical_numerical_workers_and_private_pu
     assert first.manifest() == first_manifest
     assert second.manifest() == second_manifest
     assert (first_manifest["scopes"][0]["reached_window"]["proof_identity"]
-            != second_manifest["scopes"][0]["reached_window"]["proof_identity"])
+            == second_manifest["scopes"][0]["reached_window"]["proof_identity"])

@@ -2,7 +2,8 @@
 
 Generated projections use ordinary mutable parser classes. Copying an original
 node explicitly returns such a projection; it does not inherit source authority.
-Parser reader caches and parent backreferences are not source syntax.
+Lexical parents are sealed source edges. Reader caches remain external to
+semantic authority; source provenance and the reader attachment are immutable.
 """
 
 from copy import deepcopy
@@ -82,14 +83,11 @@ def _getstate(self):
 
 
 def _node_setattr(self, name, value):
-    if name == "parent":
-        object.__setattr__(self, name, value)
-        return
     raise ImmutableGraphMutation("original compilation-session syntax is immutable: " + name)
 
 
 def _item_setattr(self, name, value):
-    if name not in _ITEM_FIELDS and name not in {"__dict__", "__class__"}:
+    if name not in _ITEM_FIELDS and name not in {"__dict__", "__class__", "reader"}:
         object.__setattr__(self, name, value)
         return
     raise ImmutableGraphMutation("original compilation-session provenance is immutable: " + name)
@@ -152,6 +150,9 @@ def seal(roots):
                     object.__setattr__(item, name, freeze_value(getattr(item, name)))
             object.__setattr__(item, "__class__", _sealed_type(type(item), item=True))
         object.__setattr__(node, "__class__", _sealed_type(type(node)))
+        parent = getattr(node, "parent", None)
+        if isinstance(parent, Base):
+            freeze_node(parent)
 
     for root in roots:
         if root is not None:

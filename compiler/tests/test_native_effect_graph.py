@@ -254,12 +254,69 @@ def test_joined_completion_and_pointer_barriers_survive_template_sharing(tmp_pat
     proof.validate(analysis, "work::owner", selected, demands)
 
 
-def test_template_registry_keeps_existing_procedure_bound(tmp_path):
+def test_independent_windows_share_templates_under_their_own_procedure_bound(tmp_path):
     _path, analysis, selected, demands = setup(tmp_path, procedures=3)
-    prove(analysis, (selected[0],), demands)
-    assert len(analysis._native_effect_templates) == 3
-    with pytest.raises(reachability.ResourceReachabilityBudgetExceeded, match="template registry"):
-        prove(analysis, (selected[1],), demands)
+    first = prove(analysis, (selected[0],), demands)
+    registry = analysis._native_effect_templates
+    assert len(registry) == 3
+    second = prove(analysis, (selected[1],), demands)
+    assert analysis._native_effect_templates is registry
+    assert len(registry) == 4 > analysis.procedure_limit
+    for proof in (first, second):
+        assert proof.public()["selection_covered"], proof.public()["barriers"]
+        assert dict(proof.native_graph.source_work)["procedures"] == analysis.procedure_limit
+        assert len(proof.native_graph.templates) == 3
+    original_templates = {item.procedure: item for item in first.native_graph.templates}
+    later_templates = {item.procedure: item for item in second.native_graph.templates}
+    assert original_templates["work::owner"] is not later_templates["work::owner"]
+    assert all(original_templates[name] is later_templates[name] for name in ("work::middle", "work::leaf"))
+    assert first.validate(analysis, "work::owner", (selected[0],), demands) is first
+    assert second.validate(analysis, "work::owner", (selected[1],), demands) is second
+
+
+def test_each_original_window_still_enforces_its_complete_call_closure_bound(tmp_path):
+    _path, analysis, selected, demands = setup(tmp_path, procedures=2)
+    with pytest.raises(reachability.ResourceReachabilityBudgetExceeded, match="procedure budget exhausted"):
+        prove(analysis, (selected[0],), demands)
+    assert not getattr(analysis, "_native_effect_graphs", {})
+    assert not getattr(analysis, "_resource_reachability_proofs", {})
+
+
+@pytest.mark.parametrize("sealed", [False, True])
+def test_source_sized_template_registry_has_a_real_last_slot_and_exhaustion(tmp_path, sealed):
+    from compiler.frontend.storage_mutation_effects import source_registry_budget
+
+    _path, analysis, selected, demands = setup(tmp_path, procedures=3, seal=sealed)
+    first = prove(analysis, (selected[0],), demands)
+    registry = analysis._native_effect_templates
+    budget = source_registry_budget(analysis)
+    assert budget > len(registry) >= analysis.procedure_limit
+    # Test-only saturation: these keys are not new issued source templates.
+    # They retain one genuine object while exercising the actual source-sized
+    # allocation guard without tens of thousands of source rescans.
+    retained = first.native_graph.templates[0]
+    registry.update((("test-only-saturation", index), retained)
+                    for index in range(budget - 1 - len(registry)))
+    assert len(registry) == budget - 1
+    second = prove(analysis, (selected[1],), demands)
+    assert second.public()["selection_covered"], second.public()["barriers"]
+    assert len(registry) == budget
+    unseen_key = reachability._template_key(analysis, "work::owner", selected)
+    assert unseen_key not in registry
+    graph_registry = analysis._native_effect_graphs
+    proof_registry = analysis._resource_reachability_proofs
+    graph_keys, proof_keys = tuple(graph_registry), tuple(proof_registry)
+    with pytest.raises(reachability.ResourceReachabilityBudgetExceeded, match="template registry budget exhausted"):
+        prove(analysis, selected, demands)
+    assert analysis._native_effect_templates is registry
+    assert len(registry) == budget
+    assert unseen_key not in registry
+    assert analysis._native_effect_graphs is graph_registry
+    assert analysis._resource_reachability_proofs is proof_registry
+    assert tuple(graph_registry) == graph_keys
+    assert tuple(proof_registry) == proof_keys
+    assert first.validate(analysis, "work::owner", (selected[0],), demands) is first
+    assert second.validate(analysis, "work::owner", (selected[1],), demands) is second
 
 
 def test_instantiation_budget_includes_repeated_effect_work(tmp_path, monkeypatch):

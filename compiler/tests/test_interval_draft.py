@@ -449,7 +449,14 @@ def test_native_context_rejects_stale_source_authority(tmp_path, mutation):
     elif mutation == "configuration":
         builder.config = replace(builder.config, host_threads=2)
     elif mutation == "source_registry":
-        builder.analysis.routines = dict(builder.analysis.routines)
+        original_registry = builder.analysis.routines
+        replacement = dict(original_registry)
+        with pytest.raises(CompilationError, match="original source registry is immutable"):
+            builder.analysis.routines = replacement
+        assert builder.analysis.routines is original_registry
+        context.validate(builder.analysis, builder.entry.qualified, (original,))
+        # Preserve the consumer rejection as an explicit internal fault test.
+        object.__setattr__(builder.analysis, "routines", replacement)
     else:
         edge = next(edge for edge in draft.edges if edge.association is not None)
         member = draft.members[edge.callee]
@@ -470,7 +477,14 @@ def test_source_route_rejects_stale_compilation_context(tmp_path, mutation):
     elif mutation == "configuration":
         builder.config = replace(builder.config, host_threads=2)
     else:
-        builder.analysis.routines = dict(builder.analysis.routines)
+        original_registry = builder.analysis.routines
+        replacement = dict(original_registry)
+        with pytest.raises(CompilationError, match="original source registry is immutable"):
+            builder.analysis.routines = replacement
+        assert builder.analysis.routines is original_registry
+        assert draft.call_route(draft.call_routes[0].original) is draft.call_routes[0]
+        # Preserve the consumer rejection as an explicit internal fault test.
+        object.__setattr__(builder.analysis, "routines", replacement)
     with pytest.raises(CompilationError):
         draft.call_route(draft.call_routes[0].original)
 

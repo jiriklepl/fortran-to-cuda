@@ -16,6 +16,8 @@ from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.integers import integer_literal
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
+# Each read/may-write/must-overwrite list has this bound in the access ABI.
+# Distinct input and output regions do not share a single rectangle allowance.
 RECTANGLE_LIMIT = 32
 
 
@@ -214,6 +216,9 @@ def _analyze_native_accesses(analysis, routine, *, logical):
     location = SourceLocation(str(routine.scope.path))
     loops = {}
     scalar_writes = set()
+    scalar_write_counts = {}
+    iterator_roots = set()
+    stable_scalar_copies = {}
     operation_count = 0
     completion = getattr(analysis, "_native_sections_completion", None)
     private_roots = set(completion.private_roots) if completion is not None else set()
@@ -295,7 +300,10 @@ def _analyze_native_accesses(analysis, routine, *, logical):
         except CompilationError:
             pass
         kind, items = _kind(node), _children(node)
-        if kind == "Parenthesis":
+        scalar = analysis._binding(scope_for(node), node) if kind == "Name" else None
+        if not logical and scalar is not None and scalar.root in stable_scalar_copies:
+            result = stable_scalar_copies[scalar.root]
+        elif kind == "Parenthesis":
             child = typed(items[1], binding, dimension, declaration=declaration)
             result = NativeBound("parenthesis", children=(child,), dependencies=child.dependencies)
         elif len(items) == 2 and str(items[0]) in {"+", "-"}:
@@ -520,7 +528,7 @@ def _analyze_native_accesses(analysis, routine, *, logical):
         for box in rectangles(node, binding, indices):
             if box not in entry[action]:
                 entry[action].append(box)
-        if len(set((*entry["reads"], *entry["writes"], *entry["overwrites"]))) > RECTANGLE_LIMIT:
+        if len(entry[action]) > RECTANGLE_LIMIT:
             raise CompilationError("native section rectangle budget exceeded: " + binding.root)
 
     def expression(node):
@@ -622,8 +630,8 @@ def _analyze_native_accesses(analysis, routine, *, logical):
                 loops[iterator.root] = NativeIteration(start, stop, step), values
                 statements(body[1:-1], conditional)
                 del loops[iterator.root]
-            elif kind in {"If_Construct", "If_Stmt"} and completion is not None:
-                # Keep complete joined teams intact. Potential effects from
+            elif kind in {"If_Construct", "If_Stmt"}:
+                # Keep complete native control flow intact. Potential effects from
                 # alternate arms form exact bounded unions, but are not must
                 # writes: native host_begin must preserve every untouched
                 # possibility before host_end may publish that union.
@@ -654,6 +662,12 @@ def _analyze_native_accesses(analysis, routine, *, logical):
                     binding = analysis._binding(scope_for(target), target)
                     if binding is not None and not binding.rank:
                         scalar_writes.add(binding.root)
+                        scalar_write_counts[binding.root] = scalar_write_counts.get(binding.root, 0) + 1
+            elif _kind(node) == "Loop_Control" and node.items[1] is not None:
+                binding = analysis._binding(scope_for(node), node.items[1][0])
+                if binding is not None:
+                    scalar_writes.add(binding.root)
+                    iterator_roots.add(binding.root)
         specification = next((node for node in _children(routine.scope.node)
                               if _kind(node) == "Specification_Part"), None)
         for declaration in () if logical else _children(specification):
@@ -684,6 +698,34 @@ def _analyze_native_accesses(analysis, routine, *, logical):
         nodes = [node for node in _children(routine.execution) if _kind(node) != "Comment"]
         if not nodes:
             raise CompilationError("native section refinement requires assignment-only affine DO leaves")
+        # Only original entry-prefix name copies may replace a bound's local
+        # spelling. The whole body inventory above rejects a changed source;
+        # statements below still execute and validate the original copy.
+        # This is physical coordinate preparation only. Logical read/definition
+        # obligations retain their original expressions and separate authority.
+        if not logical:
+            for statement in nodes:
+                if _kind(statement) != "Assignment_Stmt":
+                    break
+                target, _, value = statement.items
+                if _kind(target) != "Name" or _kind(value) != "Name":
+                    break
+                destination = analysis._binding(scope_for(target), target)
+                origin = analysis._binding(scope_for(value), value)
+                if (destination is None or origin is None or destination.rank or origin.rank
+                        or destination.dtype != "integer" or origin.dtype != "integer"
+                        or destination.kind not in {4, 8} or destination.kind != origin.kind
+                        or external(destination) or not external(origin)
+                        or destination.attributes & {"save", "target", "pointer", "allocatable", "volatile", "asynchronous"}
+                        or origin.attributes & {"target", "pointer", "allocatable", "volatile", "asynchronous", "optional"}
+                        or origin.intent == "out" or origin.root in scalar_writes
+                        or destination.root in iterator_roots
+                        or scalar_write_counts.get(destination.root) != 1
+                        or analysis.resource_identity_boundary(origin)):
+                    break
+                stable_scalar_copies[destination.root] = NativeBound(
+                    "scalar", resource=origin.root,
+                    dependencies=(SourceDependency(origin.root, "scalar_read", origin),))
         statements(nodes)
         for entry in resources.values():
             if not logical and entry["explicit_extents"] and (entry["writes"] or entry["overwrites"]):

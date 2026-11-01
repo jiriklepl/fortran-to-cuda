@@ -252,7 +252,8 @@ def native_hint_binary(tmp_path_factory):
 def test_native_owner_hint_metadata_and_generation_contract(native_hint_binary, mode):
     result = subprocess.run([str(native_hint_binary), mode], capture_output=True, text=True,
                             env={**os.environ, "FORT_RUNTIME_TRACE": "1", "OMP_NUM_THREADS": "4",
-                                 **({"OMP_PLACES": "cores"} if mode == "allocation" else {})}, timeout=20)
+                                 **({"OMP_PLACES": "cores", "OMP_PROC_BIND": "spread"}
+                                    if mode == "allocation" else {})}, timeout=20)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "native metadata hint checked" in result.stdout
     events = [json.loads(line.removeprefix("FORT_SCOPED native_hint "))

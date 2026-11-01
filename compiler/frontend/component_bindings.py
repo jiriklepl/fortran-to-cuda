@@ -8,17 +8,21 @@ and expression selectors deliberately retain an explicit source boundary.
 
 from __future__ import annotations
 
+import re
 from copy import copy
 from dataclasses import dataclass, field
-import re
 
-from fparser.two.utils import Base
+from fparser.two.utils import Base, walk
 
 from compiler.ir import CompilationError, SourceLocation
 
 
 class ComponentAccessUnsupported(CompilationError):
     """A selector syntax support limit, never source or budget authority."""
+
+
+class ComponentStorageUnsupported(CompilationError):
+    """Fixed payload layout is unavailable; no storage-read proof is implied."""
 
 
 def _kind(node):
@@ -157,7 +161,7 @@ def _field_binding(analysis, scope, parent, member, node, *, consumer_scope=None
     if (schema.private or "private" in flags) and (consumer_scope or scope).module != schema.scope.module:
         raise CompilationError("source component is private in its defining module: " + member)
     if flags & {"pointer", "allocatable", "volatile", "asynchronous"}:
-        raise CompilationError("source component association or lifetime is uncertain: " + member)
+        raise ComponentStorageUnsupported("source component association or lifetime is uncertain: " + member)
     if _kind(dtype) == "Intrinsic_Type_Spec":
         base, selector = dtype.items
         base = str(base).lower()
@@ -259,9 +263,35 @@ def register_associates(analysis, routine):
 
     if not hasattr(analysis, "_source_scopes"):
         analysis._source_scopes, analysis._associate_scopes = {}, {}
+    if not hasattr(analysis, "_block_scopes"):
+        analysis._block_scopes = {}
+    if not hasattr(analysis, "_block_scope_roles"):
+        analysis._block_scope_roles = {}
 
     def visit(node, scope, path):
         analysis._source_scopes[id(node)] = scope
+        if _kind(node) == "Block_Construct":
+            child = Scope(scope.module, scope.path, node, scope)
+            child.qualified = routine.qualified + "$block:" + ".".join(map(str, path))
+            start = len(analysis.kind_expressions)
+            child.issues = analysis._specification(child, qualified=child.qualified)
+            analysis._import_kinds(child)
+            for binding, owner, selector in analysis.kind_expressions[start:]:
+                try:
+                    binding.kind = owner.kinds.integer(selector, SourceLocation(str(owner.path)))
+                except CompilationError:
+                    binding.kind = None
+            analysis._block_scopes[id(node)] = child
+            entered = False
+            for index, item in enumerate(_children(node)):
+                if _kind(item) == "Block_Stmt":
+                    visit(item, scope, (*path, index))
+                    entered = True
+                else:
+                    visit(item, child if entered else scope, (*path, index))
+            analysis._block_scope_roles[id(node)] = (child, node, scope,
+                tuple((item, analysis._source_scopes[id(item)]) for item in walk(node) if isinstance(item, Base)))
+            return
         if _kind(node) == "Associate_Construct":
             header = next((item for item in _children(node) if _kind(item) == "Associate_Stmt"), None)
             child = Scope(scope.module, scope.path, node, scope, kinds=scope.kinds)

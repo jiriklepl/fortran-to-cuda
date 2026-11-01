@@ -6,6 +6,7 @@ arguments to their actual storage identities before any dependence analysis.
 
 from __future__ import annotations
 
+from copy import copy
 from dataclasses import dataclass, replace
 from io import StringIO
 from pathlib import Path
@@ -47,6 +48,36 @@ from compiler.ir.intrinsics import (
     intrinsic_type,
     model_inquiry,
 )
+
+# Supported target ABI values for the standard intrinsic kind exports. Keep
+# source-effect authority distinct when this declaration resolver changes.
+INTRINSIC_KIND_VERSION = 3
+
+
+def _intrinsic_kind_imports(node):
+    """Canonical standard kind exports of one unchanged original USE."""
+    if type(node).__name__ != "Use_Stmt":
+        return {}
+    nature, _, module, only, names = node.items
+    module = str(module).lower()
+    available = _KindScope.intrinsic_kinds.get(module, {})
+    if not available or str(nature).upper() == "NON_INTRINSIC":
+        return {}
+    selected = {} if str(only).upper().replace(" ", "") == ",ONLY:" else dict(available)
+    for name in getattr(names, "items", ()):
+        if type(name).__name__ == "Rename":
+            local, remote = str(name.items[1]).lower(), str(name.items[2]).lower()
+            selected.pop(remote, None)
+        else:
+            local = remote = str(name).lower()
+        if remote in available:
+            selected[local] = available[remote]
+    identities = {}
+    for local, width in selected.items():
+        remote = next((str(name.items[2]).lower() for name in getattr(names, "items", ())
+                       if type(name).__name__ == "Rename" and str(name.items[1]).lower() == local), local)
+        identities[local] = (module, remote, width)
+    return identities
 
 
 @dataclass(frozen=True)
@@ -158,27 +189,15 @@ class _KindScope:
     mean double precision.
     """
 
-    intrinsic_kinds = {"iso_fortran_env": {"real32": 4, "real64": 8}, "iso_c_binding": {"c_float": 4, "c_double": 8}}
+    intrinsic_kinds = {"iso_fortran_env": {"int32": 4, "int64": 8, "real32": 4, "real64": 8},
+                       "iso_c_binding": {"c_float": 4, "c_double": 8}}
 
     def __init__(self, specification: Any | None = None, parent: _KindScope | None = None):
         self.parent = parent
         self.values: dict[str, Any] = {}
         for node in getattr(specification, "content", ()):
             if type(node).__name__ == "Use_Stmt":
-                nature, _, module, only, names = node.items
-                available = self.intrinsic_kinds.get(str(module).lower(), {})
-                if not available or str(nature).upper() == "NON_INTRINSIC":
-                    continue
-                if names is None:
-                    self.values.update(available)
-                elif str(only).upper().replace(" ", "") == ",ONLY:":
-                    for name in names.items:
-                        if type(name).__name__ == "Rename":
-                            local, remote = str(name.items[1]).lower(), str(name.items[2]).lower()
-                        else:
-                            local = remote = str(name).lower()
-                        if remote in available:
-                            self.values[local] = available[remote]
+                self.values.update((name, item[2]) for name, item in _intrinsic_kind_imports(node).items())
             elif type(node).__name__ == "Type_Declaration_Stmt":
                 dtype, attributes, entities = node.items
                 parameter = any(str(item).upper() == "PARAMETER" for item in getattr(attributes, "items", ()))
@@ -271,6 +290,9 @@ class _Lowerer:
         self.vector_elements = 0
         self.constant_initialization = False
         self.requires_numerical_environment = False
+        # Installed only by the exact source-issued line-snapshot entry below.
+        # Ordinary fixed vectors retain their existing constant-index contract.
+        self.line_constant_lookups = {}
 
     def location(self, node: Any, stack: tuple[str, ...] = ()) -> SourceLocation:
         for child in walk(node):
@@ -787,6 +809,7 @@ class _Lowerer:
                 private_index = any(
                     type(access).__name__ == "Part_Ref"
                     and isinstance(bindings.get(str(access.items[0]).lower()), (_PrivateArray, _ConstantArray))
+                    and id(access) not in self.line_constant_lookups
                     and any(type(name).__name__ == "Name" and str(name).lower() == str(iterator_node).lower()
                             for name in walk(access.items[1]))
                     for child in loop_nodes[1:-1] for access in walk(child)
@@ -1372,6 +1395,33 @@ class _Lowerer:
             if isinstance(symbol, (_PrivateArray, _ConstantArray)):
                 constants = tuple(constant_integer(index, location) for index in indices)
                 if any(index is None for index in constants):
+                    if isinstance(symbol, _ConstantArray) and id(node) in self.line_constant_lookups:
+                        authorized, obligation = self.line_constant_lookups[id(node)]
+                        if authorized is not node or len(indices) != 1:
+                            raise CompilationError("line constant lookup lost its exact source occurrence", location)
+                        start, stop = obligation.index_bounds
+                        lower, upper = symbol.bounds[0]
+                        if symbol.rank != 1 or not lower <= start <= stop <= upper or stop - start >= 256:
+                            raise CompilationError("line constant lookup exceeds its original vector bounds", location)
+                        index_symbol = self.new_symbol(_Declaration(
+                            "fort_line_constant_index", ScalarType.INTEGER, 0, None, location,
+                            "fort_line_constant_index"))
+                        value_symbol = self.new_symbol(_Declaration(
+                            "fort_line_constant_value", symbol.dtype, 0, None, location,
+                            "fort_line_constant_value"))
+                        self.pending.append(Assignment(Reference(index_symbol), indices[0], location))
+                        # The exact source relation proves membership. Keep the
+                        # selected initializer in its branch: MERGE would eagerly
+                        # evaluate both expression arguments in the current ABI.
+                        selected = Block((Assignment(Reference(value_symbol), symbol.element((stop,), location),
+                                                     location),))
+                        for index in range(stop - 1, start - 1, -1):
+                            selected = Block((If(
+                                Binary("==", Reference(index_symbol), Literal(str(index), ScalarType.INTEGER)),
+                                Block((Assignment(Reference(value_symbol), symbol.element((index,), location),
+                                                  location),)), selected, location),))
+                        self.pending.extend(selected.statements)
+                        return Reference(value_symbol)
                     raise CompilationError("private fixed array accesses require constant subscripts", location)
                 value = symbol.element(constants, location)
                 return Reference(value) if isinstance(symbol, _PrivateArray) else value
@@ -1560,3 +1610,499 @@ def discover_file(path: str | Path, *, require_markers: bool = False) -> tuple[P
             )
         )
     return tuple(candidates)
+
+
+@dataclass(frozen=True)
+class LoweredTilePrivate:
+    """Typed original tile work, before storage admission or placement.
+
+    Lower-bound inputs describe external arrays at the original reached point.
+    Scratch keeps its original indices; the scratch emitter rebases them using
+    snapshots of the actual automatic-array descriptor, without evaluating its
+    specification expressions again.
+    """
+
+    region: Any
+    bindings: tuple[tuple[Any, Symbol], ...]
+    lower_bounds: tuple[tuple[Any, int, Symbol], ...]
+    addressing: Any
+    immutable_constants: tuple[str, ...]
+    requires_numerical_environment: bool
+    line_snapshot_contract: Any = None
+
+
+def lower_tile_private(proof, *, region_id: int = 0) -> LoweredTilePrivate:
+    """Lower an issued tile proof through the ordinary expression frontend.
+
+    This entry accepts no substitute source or caller-authored expression IR.
+    It preserves the producer and consumer loops, branches, conversions and
+    evaluation count. Indexed scratch bypasses fixed-array scalarization only
+    for the exact arrays covered by the original source proof. The result does
+    not authorize an allocation, initialized value, alias or GPU placement.
+    """
+    from compiler.frontend.component_bindings import references
+    from compiler.frontend.line_snapshot import OriginalLineSnapshotProof
+    from compiler.frontend.source_effects import _kind
+    from compiler.frontend.tile_private import TilePrivateProof, _private_group
+    from compiler.ir.plan import RegionAddressing
+    from compiler.ir.tile_private import TilePrivateRegion
+    from compiler.scopes.constant_parameters import outline_constants
+    from compiler.scopes.regions import _fixed_shape
+    if type(proof) is OriginalLineSnapshotProof:
+        return lower_line_snapshot(proof, region_id=region_id)
+
+    if type(proof) is not TilePrivateProof or type(region_id) is not int or region_id < 0:
+        raise CompilationError("tile lowering requires its exact original proof and a nonnegative region ID")
+    proof.validate()
+    analysis, original, node = proof._analysis, proof._routine, proof._node
+    private_names, _owner_span = _private_group(analysis, original, node)
+    location = SourceLocation(str(original.scope.path))
+    used = {}
+    for binding, _ in references(analysis, original.scope, node):
+        previous = used.setdefault(binding.name, binding)
+        if previous is not binding:
+            raise CompilationError("tile lowering requires unambiguous original storage names", location)
+        if hasattr(binding, "component_object"):
+            raise CompilationError("tile lowering requires ordinary numeric storage", location)
+    scratch = {value.name: value for value in proof.bindings}
+    writes = set()
+    for value in walk(node):
+        if _kind(value) == "Assignment_Stmt":
+            lhs = value.items[0]
+            writes.add(str(lhs.items[0] if _kind(lhs) == "Part_Ref" else lhs).lower())
+        elif _kind(value) == "Nonlabel_Do_Stmt":
+            writes.add(str(value.items[1].items[1][0]).lower())
+        elif _kind(value) == "Intrinsic_Function_Reference":
+            # The ordinary assumed-shape inquiry frontend has one-based dummy
+            # bounds. Do not silently apply that convention to original arrays.
+            if str(value.items[0]).lower() in {"lbound", "ubound", "size"}:
+                raise CompilationError("tile array inquiries need original descriptor lowering", location)
+    types = {("integer", 4): ScalarType.INTEGER, ("logical", 1): ScalarType.LOGICAL,
+             ("real", 4): ScalarType.REAL32, ("real", 8): ScalarType.REAL}
+    lowerer = _Lowerer(original.scope.path)
+    constants = outline_constants(analysis, original,
+        (binding for binding in used.values() if binding.rank and "parameter" in binding.attributes),
+        set(used), _fixed_shape)
+    if constants.scalar_captures:
+        raise CompilationError("tile constant vectors require a completely immutable declaration closure", location)
+    declarations, symbols, captures = [], {}, []
+    source_bindings = []
+    for name, binding in sorted(used.items()):
+        if binding.root in constants.names:
+            continue
+        dtype = types.get((binding.dtype, binding.kind))
+        if dtype is None or binding.attributes & {"pointer", "optional", "volatile", "asynchronous", "value"}:
+            raise CompilationError("unsupported original tile storage: " + binding.root, location)
+        if name in writes and binding.intent == "in":
+            raise CompilationError("tile cannot write original INTENT(IN) storage: " + binding.root, location)
+        private = name in scratch or not binding.rank and (name in writes or name in private_names)
+        intent = None if private else ("inout" if name in writes else "in")
+        declaration = _Declaration(name, dtype, binding.rank, intent, location, name)
+        declarations.append(declaration)
+        symbol = lowerer.new_symbol(declaration, parameter=not private)
+        symbols[name] = symbol
+        source_bindings.append((binding, symbol))
+        if not private:
+            captures.append(symbol)
+    from fparser.two import Fortran2003 as F
+    for declaration in constants.declarations:
+        lowered = lowerer.declaration(F.Type_Declaration_Stmt(declaration), set(), original.scope.kinds)
+        if any(not item.rank for item in lowered):
+            raise CompilationError("tile constant vectors require bounded vector declarations without scalar temporaries", location)
+        declarations.extend(lowered)
+    if any(symbols.get(name) is None or used[name] is not binding for name, binding in scratch.items()):
+        raise CompilationError("tile lowering lost its exact original private arrays", location)
+    # All symbols are already issued here. Supplying them as bindings keeps the
+    # ordinary inline frontend from replacing indexed scratch by fixed scalars.
+    def constants_only(value):
+        if isinstance(value, (tuple, list)):
+            return type(value)(constants_only(child) for child in value)
+        if _kind(value) == "Name":
+            binding = analysis._binding(original.scope, value)
+            if binding is not None and binding.root in constants.names:
+                return F.Name(constants.names[binding.root])
+        if not hasattr(value, "items") and not hasattr(value, "content"):
+            return value
+        result = copy(value)
+        for attribute in ("content", "items"):
+            if hasattr(value, attribute):
+                setattr(result, attribute, constants_only(getattr(value, attribute)))
+        return result
+
+    module, name = original.qualified.split("::", 1)
+    routine = _Routine(name, module, tuple(x.name for x in captures), tuple(declarations), (constants_only(node),),
+                       location, original.scope.kinds, (module, name))
+    lowerer.routines[routine.key] = routine
+    lowerer.parents[routine.key] = None
+    body = lowerer.inline(routine, symbols, (), (), frozenset())
+    from compiler.analysis.effects import upward_reads
+    undefined = {s for s in upward_reads(body) if not s.rank and s not in captures}
+    if undefined:
+        raise CompilationError("tile private scalars lack an original local definition: "
+                               + ", ".join(sorted(s.name for s in undefined)), location)
+    outer = []
+    current = body
+    for _axis in proof.public()["axes"]:
+        if len(current.statements) != 1 or not isinstance(current.statements[0], Loop):
+            raise CompilationError("tile lowering changed an original outer loop", location)
+        loop = current.statements[0]
+        outer.append(loop)
+        current = loop.body
+    if len(current.statements) != 2 or any(not isinstance(x, Loop) for x in current.statements):
+        raise CompilationError("tile lowering changed the original phase order", location)
+    lower_bounds, addressing, expression, block = _private_original_addressing(
+        lowerer, symbols, source_bindings, captures, {symbols[x] for x in scratch}, location)
+    outer = tuple(replace(loop, lower=expression(loop.lower), upper=expression(loop.upper),
+                          step=loop.step if type(loop.step) is int else expression(loop.step)) for loop in outer)
+    parameters = tuple(captures)
+    region = TilePrivateRegion(region_id, parameters,
+        tuple(x for x in lowerer.symbols if x not in parameters and x not in {symbols[n] for n in scratch}),
+        tuple(symbols[n] for n in sorted(scratch)), outer,
+        block(Block((current.statements[0],))), block(Block((current.statements[1],))), proof)
+    proof.validate()
+    return LoweredTilePrivate(region, tuple(source_bindings), tuple(lower_bounds),
+                             RegionAddressing(tuple(addressing), (), ()), constants.resources,
+                             lowerer.requires_numerical_environment)
+
+
+def _private_original_addressing(lowerer, symbols, source_bindings, captures, scratch_symbols, location):
+    """One external descriptor-rebase path for issued tile and line work."""
+    from compiler.ir.plan import SubscriptDecision
+
+    occupied = set(symbols)
+    lower_bounds = []
+    for binding, symbol in source_bindings:
+        if symbol.rank and symbol not in scratch_symbols:
+            for axis in range(1, symbol.rank + 1):
+                spelling = f"fort_tile_original_lb_{symbol.id}_{axis}"
+                if spelling in occupied:
+                    raise CompilationError("tile lower-bound namespace conflicts with original source", location)
+                occupied.add(spelling)
+                lower = lowerer.new_symbol(_Declaration(spelling, ScalarType.INTEGER, 0, "in", location, spelling),
+                                           parameter=True)
+                lower_bounds.append((binding, axis, lower))
+                captures.append(lower)
+    rebases = {(symbols[binding.name], axis - 1): lower for binding, axis, lower in lower_bounds}
+    addressing = []
+
+    def expression(value):
+        if isinstance(value, ArrayAccess):
+            indices = tuple(expression(index) for index in value.indices)
+            shifted = []
+            for axis, index in enumerate(indices):
+                if (value.symbol, axis) in rebases:
+                    index = Binary("+", Binary("-", index, Reference(rebases[value.symbol, axis])),
+                                   Literal("1", ScalarType.INTEGER))
+                    addressing.append(SubscriptDecision(index, "wide", None, "original tile external descriptor rebase"))
+                shifted.append(index)
+            indices = tuple(shifted)
+            return replace(value, indices=indices)
+        if isinstance(value, Binary):
+            return replace(value, left=expression(value.left), right=expression(value.right))
+        if isinstance(value, Unary):
+            return replace(value, operand=expression(value.operand))
+        if isinstance(value, IntrinsicCall):
+            return replace(value, arguments=tuple(expression(x) for x in value.arguments))
+        return value
+
+    def block(value):
+        result = []
+        for statement in value.statements:
+            if isinstance(statement, Assignment):
+                result.append(replace(statement, target=expression(statement.target), value=expression(statement.value)))
+            elif isinstance(statement, Loop):
+                result.append(replace(statement, lower=expression(statement.lower), upper=expression(statement.upper),
+                                      step=statement.step if type(statement.step) is int else expression(statement.step),
+                                      body=block(statement.body)))
+            elif isinstance(statement, If):
+                result.append(replace(statement, condition=expression(statement.condition),
+                                      then_body=block(statement.then_body), else_body=block(statement.else_body)))
+            else:
+                raise CompilationError("tile lowering produced unsupported ordered work", location)
+        return Block(tuple(result))
+
+    return lower_bounds, addressing, expression, block
+
+
+@dataclass(frozen=True)
+class LineConstantLookupObligation:
+    """Source-bound prework requirements; these do not authorize execution."""
+
+    original_access: Any
+    original_loops: tuple[Any, ...]
+    array_binding: Any
+    index_bounds: tuple[int, int]
+
+    def public(self):
+        from compiler.frontend.tile_private import _loop
+        return {
+            "constant_resource": self.array_binding.root,
+            "original_access": str(self.original_access),
+            "proved_index_interval": list(self.index_bounds),
+            "original_loop_domains": [
+                {"iterator": name, "lower": str(bounds[0]), "upper": str(bounds[1]),
+                 "step": 1, "terminal": "original lower + original trip count"}
+                for name, bounds in (_loop(node) for node in self.original_loops)],
+            "required_prework": "check every reached original INTEGER expression subtree, iteration value and terminal value; preserve zero-trip reachability",
+            "integer_expression": str(self.original_access.items[1].items[0]),
+            "execution_authorized": False,
+        }
+
+
+@dataclass(frozen=True)
+class LoweredLineSnapshotConsumer:
+    """Original ordered work and control IR, without storage or launch authority.
+
+    External indices retain their original logical coordinates. The complete
+    original snapshot producer is deliberately not emitted here; the provider
+    must construct its exact descriptor-based copy before this consumer and
+    discharge the proof's obligations and every constant-lookup obligation.
+    """
+
+    proof: Any
+    outer_loops: tuple[Loop, ...]
+    consumer: Block
+    symbols: tuple[Symbol, ...]
+    parameters: tuple[Symbol, ...]
+    bindings: tuple[tuple[Any, Symbol], ...]
+    scratch: Symbol
+    immutable_constants: tuple[str, ...]
+    lookup_obligations: tuple[LineConstantLookupObligation, ...]
+    requires_numerical_environment: bool
+
+
+def _line_constant_lookup_obligations(proof):
+    """Derive a bounded relation only from this issuer's original loop ASTs."""
+    from compiler.frontend.source_effects import _children
+    from compiler.frontend.tile_private import _linear, _loop
+
+    result = []
+    for node, binding, loops in proof.constant_accesses:
+        indices = tuple(_children(node.items[1]))
+        if binding.rank != 1 or len(indices) != 1:
+            raise CompilationError("line constant lookup requires an original rank-one vector")
+        constant, terms = _linear(indices[0])
+        if not terms:
+            continue
+        if not loops:
+            raise CompilationError("line constant lookup requires an enclosing original loop")
+        iterator, bounds = _loop(loops[-1])
+        origins = {name: coefficient for name, coefficient in terms.items() if name != iterator}
+        if terms.get(iterator) != 1 or len(origins) != 1 or next(iter(origins.values())) != -1:
+            raise CompilationError("line constant lookup requires iterator minus its unchanged original origin")
+        origin = next(iter(origins))
+        if origin not in {_loop(parent)[0] for parent in loops[:-1]}:
+            raise CompilationError("line constant lookup origin must be an active enclosing iterator")
+        lower, lower_terms = _linear(bounds[0])
+        upper, upper_terms = _linear(bounds[1])
+        if (lower_terms != {origin: 1} or upper_terms != {origin: 1}
+                or len(bounds) == 3 and _linear(bounds[2]) != (1, {})):
+            raise CompilationError("line constant lookup requires a translated bounded unit-stride loop")
+        start, stop = lower + constant, upper + constant
+        for value in (start, stop):
+            integer_literal(str(value))
+        if not 0 <= stop - start < 256:
+            raise CompilationError("line constant lookup requires one to 256 reachable constant elements")
+        result.append(LineConstantLookupObligation(node, loops, binding, (start, stop)))
+        if len(result) > 256:
+            raise CompilationError("line constant lookup exceeds its source-occurrence budget")
+
+    return tuple(result)
+
+
+def lower_line_snapshot_consumer(proof) -> LoweredLineSnapshotConsumer:
+    """Lower exact issued line control/consumer work, keeping serial DO loops.
+
+    No caller-provided range map, declaration, substitute AST or ready-to-execute
+    region is accepted. All integer, snapshot, alias and storage obligations
+    remain explicit prework requirements. Ordinary frontend behavior is unchanged.
+    """
+    from fparser.two import Fortran2003 as F
+
+    from compiler.frontend.component_bindings import references
+    from compiler.frontend.line_snapshot import OriginalLineSnapshotProof
+    from compiler.frontend.source_effects import _kind
+    from compiler.scopes.constant_parameters import outline_constants
+    from compiler.scopes.regions import _fixed_shape
+
+    if type(proof) is not OriginalLineSnapshotProof:
+        raise CompilationError("line lowering requires its exact original source-issued proof")
+    proof.validate()
+    analysis, original = proof._analysis, proof._routine
+    location = SourceLocation(str(original.scope.path))
+    obligations = _line_constant_lookup_obligations(proof)
+    authorized = {id(item.original_access): item for item in obligations}
+    used = {}
+    for binding, _ in references(analysis, original.scope, proof._node):
+        previous = used.setdefault(binding.name, binding)
+        if previous is not binding or hasattr(binding, "component_object"):
+            raise CompilationError("line lowering requires unambiguous original ordinary storage", location)
+    constants = outline_constants(analysis, original,
+        (binding for binding in used.values() if binding.rank and "parameter" in binding.attributes),
+        set(used), _fixed_shape)
+    if constants.scalar_captures:
+        raise CompilationError("line constants require a completely immutable declaration closure", location)
+    private = {item["resource"] for item in proof.public()["private_scalars"]}
+    private.add(proof.scratch_binding.root)
+    written = {binding.root for binding, writing in proof.fields if writing}
+    types = {("integer", 4): ScalarType.INTEGER, ("logical", 1): ScalarType.LOGICAL,
+             ("real", 4): ScalarType.REAL32, ("real", 8): ScalarType.REAL}
+    lowerer = _Lowerer(original.scope.path)
+    declarations, symbols, captures, source_bindings = [], {}, [], []
+    for name, binding in sorted(used.items()):
+        if binding.root in constants.names:
+            continue
+        dtype = types.get((binding.dtype, binding.kind))
+        if dtype is None or binding.attributes & {"pointer", "optional", "volatile", "asynchronous", "value"}:
+            raise CompilationError("unsupported original line storage: " + binding.root, location)
+        local = binding.root in private
+        intent = None if local else ("inout" if binding.root in written else "in")
+        declaration = _Declaration(name, dtype, binding.rank, intent, location, name)
+        declarations.append(declaration)
+        symbol = lowerer.new_symbol(declaration, parameter=not local)
+        symbols[name] = symbol
+        source_bindings.append((binding, symbol))
+        if not local:
+            captures.append(symbol)
+    for text in constants.declarations:
+        declarations.extend(lowerer.declaration(F.Type_Declaration_Stmt(text), set(), original.scope.kinds))
+    renamed_occurrences = {}
+
+    def original_clone(value):
+        if isinstance(value, (tuple, list)):
+            return type(value)(original_clone(child) for child in value if child is not proof._producer)
+        if _kind(value) == "Name":
+            binding = analysis._binding(analysis.source_scope_for(value, original.scope), value)
+            if binding is not None and binding.root in constants.names:
+                return F.Name(constants.names[binding.root])
+        if not hasattr(value, "items") and not hasattr(value, "content"):
+            return value
+        result = copy(value)
+        for attribute in ("content", "items"):
+            if hasattr(value, attribute):
+                setattr(result, attribute, original_clone(getattr(value, attribute)))
+        if id(value) in authorized:
+            obligation = authorized[id(value)]
+            if obligation.original_access is not value:
+                raise CompilationError("line constant lookup source occurrence changed", location)
+            renamed_occurrences[id(result)] = (result, obligation)
+        return result
+
+    ordered = original_clone(proof._node)
+    if len(renamed_occurrences) != len(obligations):
+        raise CompilationError("line constant lookup lost original occurrence authority", location)
+    lowerer.line_constant_lookups = renamed_occurrences
+    module, name = original.qualified.split("::", 1)
+    routine = _Routine(name, module, tuple(x.name for x in captures), tuple(declarations), (ordered,),
+                       location, original.scope.kinds, (module, name))
+    lowerer.routines[routine.key] = routine
+    lowerer.parents[routine.key] = None
+    body = lowerer.inline(routine, symbols, (), (), frozenset())
+    from compiler.analysis.effects import upward_reads
+    undefined = {s for s in upward_reads(body) if not s.rank and s not in captures}
+    if undefined:
+        raise CompilationError("line private scalars lack an original local definition: "
+                               + ", ".join(sorted(s.name for s in undefined)), location)
+    outer, current = [], body
+    for _original_loop in proof.transverse_loops:
+        if len(current.statements) != 1 or not isinstance(current.statements[0], Loop):
+            raise CompilationError("line lowering changed the original outer loop controls", location)
+        loop, = current.statements
+        outer.append(loop)
+        current = loop.body
+    if len(current.statements) != 1 or not isinstance(current.statements[0], Loop):
+        raise CompilationError("line lowering changed the original serial consumer", location)
+    proof.validate()
+    return LoweredLineSnapshotConsumer(proof, tuple(outer), current, tuple(lowerer.symbols), tuple(captures),
+        tuple(source_bindings), symbols[proof.scratch_binding.name], constants.resources, obligations,
+        lowerer.requires_numerical_environment)
+
+
+@dataclass(frozen=True)
+class LineSnapshotContract:
+    """Required reached metadata checks for the exact original line producer.
+
+    This object records obligations, not successful prework. A provider must
+    check descriptors, initialized reads, physical aliases and every original
+    integer/lookup expression before a source transaction may execute.
+    """
+    proof: Any
+    scratch_lower: int
+    line_axis: int
+    lookup_obligations: tuple[LineConstantLookupObligation, ...]
+
+    def public(self):
+        return {"kind": "original_line_snapshot_prework", "source_identity": self.proof.identity,
+                "scratch_lower": self.scratch_lower, "source_line_axis": self.line_axis,
+                "shape": "original scratch extent equals original source line extent",
+                "copy": "ordinal original Fortran element order; descriptor-origin rebasing",
+                "lookup_obligations": [item.public() for item in self.lookup_obligations],
+                "required": ["positive transverse domains before descriptor operands",
+                             "original source/scratch bounds and shape conformance",
+                             "every reached original INTEGER subtree, induction and terminal value",
+                             "scratch producer coverage and external read initialization",
+                             "physical aliases and bounded same-stream scratch lifetime"],
+                "execution_authorized": False}
+
+
+def lower_line_snapshot(proof, *, region_id: int = 0) -> LoweredTilePrivate:
+    """Lower a distinct original line proof using the existing ordered scratch IR.
+
+    Only its exact whole-vector assignment becomes an ordinal descriptor copy.
+    Original serial consumer loops/branches/arithmetic remain ordinary frontend
+    IR. The first slice requires a constant original private lower bound; its
+    upper bound is a reached descriptor extent, never a reevaluated declaration.
+    """
+    from compiler.frontend.line_snapshot import OriginalLineSnapshotProof
+    from compiler.ir.plan import RegionAddressing
+    from compiler.ir.tile_private import TilePrivateRegion
+    from compiler.scopes.segments import statement_span
+
+    if type(proof) is not OriginalLineSnapshotProof or type(region_id) is not int or region_id < 0:
+        raise CompilationError("line lowering requires its exact original proof and nonnegative region ID")
+    proof.validate()
+    consumer = lower_line_snapshot_consumer(proof)
+    original = proof._routine
+    location = SourceLocation(str(original.scope.path), statement_span(proof._producer)[0])
+    shape = proof.scratch_binding.shape_nodes[0]
+    try:
+        scratch_lower = 1 if shape.items[0] is None else original.scope.kinds.integer(shape.items[0], location)
+        integer_literal(str(scratch_lower), location)
+    except CompilationError as error:
+        raise CompilationError("line first slice requires an original constant private lower bound", location) from error
+    symbols = {binding.name: symbol for binding, symbol in consumer.bindings}
+    spelling = "fort_line_snapshot_ordinal"
+    if spelling in symbols:
+        raise CompilationError("line producer coordinate namespace conflicts with original source", location)
+    lowerer = _Lowerer(original.scope.path)
+    lowerer.symbols = list(consumer.symbols)
+    ordinal = lowerer.new_symbol(_Declaration(spelling, ScalarType.INTEGER, 0, None, location, spelling))
+    captures = list(consumer.parameters)
+    scratch = consumer.scratch
+    lower_bounds, addressing, expression, block = _private_original_addressing(
+        lowerer, symbols, consumer.bindings, captures, {scratch}, location)
+    source = symbols[proof.source_binding.name]
+    source_lowers = {(binding.root, axis): value for binding, axis, value in lower_bounds}
+    line_axis = proof.public()["line_axis"]
+    fixed = proof.public()["snapshot"]["fixed_coordinates"]
+    coordinates = tuple(
+        Binary("+", Reference(source_lowers[proof.source_binding.root, axis]), Reference(ordinal))
+        if axis == line_axis else Reference(symbols[fixed[str(axis)].lower()])
+        for axis in range(1, source.rank + 1))
+    producer = Block((Loop(ordinal, Literal("0", ScalarType.INTEGER),
+        Binary("-", Size(scratch, 1), Literal("1", ScalarType.INTEGER)),
+        Block((Assignment(ArrayAccess(scratch, (Binary("+", Literal(str(scratch_lower), ScalarType.INTEGER),
+                                                       Reference(ordinal)),)),
+                          ArrayAccess(source, coordinates), location),)), location),))
+    outer = tuple(replace(loop, lower=expression(loop.lower), upper=expression(loop.upper),
+                          step=loop.step if type(loop.step) is int else expression(loop.step))
+                  for loop in consumer.outer_loops)
+    parameters = tuple(captures)
+    region = TilePrivateRegion(region_id, parameters,
+        tuple(x for x in lowerer.symbols if x not in parameters and x is not scratch), (scratch,), outer,
+        block(producer), block(consumer.consumer), proof)
+    contract = LineSnapshotContract(proof, scratch_lower, line_axis, consumer.lookup_obligations)
+    proof.validate()
+    return LoweredTilePrivate(region, consumer.bindings, tuple(lower_bounds),
+        RegionAddressing(tuple(addressing), (), ()), consumer.immutable_constants,
+        consumer.requires_numerical_environment, contract)

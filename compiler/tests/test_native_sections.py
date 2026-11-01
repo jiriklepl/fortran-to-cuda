@@ -74,7 +74,6 @@ def test_same_array_literal_dimension_inquiries_are_typed_bounds(tmp_path):
     ("a(-2:n:2,:)=7", "bounded constant endpoints"),
     ("a(-2:2:0,:)=7", "nonzero constant stride"),
     ("a(2147483648,:)=7", "literal is out of range"),
-    ("if(n>0) a(-2,:)=7", "assignment-only affine DO"),
     ("do i=1,n,2\na(i,:)=7\nenddo", "bounded constant endpoints"),
     ("do i=1,n\na(i,i)=7\nenddo", "independent rectangular iterator axes"),
     ("call other(a)", "assignment-only affine DO"),

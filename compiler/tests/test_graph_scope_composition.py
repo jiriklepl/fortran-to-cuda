@@ -62,6 +62,10 @@ def test_composed_roots_compile_one_shared_original_source(tmp_path, components)
     assert report["entry"] == ["graph_roots::first", "graph_roots::second"]
     assert len([item for item in report["build_sources"] if item["role"] == "original_source"]) == 1
     assert len([item for item in report["build_sources"] if item["path"] == "scoped_runtime.cu"]) == 1
+    _compile_fortran(tmp_path, outputs, report)
+
+
+def _compile_fortran(tmp_path, outputs, report):
     for name, text in outputs.items():
         path = tmp_path / "composed" / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -108,3 +112,67 @@ def test_composition_rejects_conflicting_original_spans(insert):
     ]
     with pytest.raises(CompilationError, match="inside|overlap"):
         _apply("a\nb\nc\nd\ne\nf\n", edits)
+
+
+@pytest.mark.native
+@pytest.mark.parametrize("different_resource_order", [False, True])
+@pytest.mark.parametrize("extra_helper", [False, True])
+def test_parameterized_helper_preserves_live_owner_and_composes_between_roots(tmp_path, different_resource_order, extra_helper):
+    path = tmp_path / "shared.f90"
+    root = """subroutine ROOT(a,n)
+real(8),intent(inout)::a(:)
+integer,intent(in)::n
+integer::i
+call adjust(a,n)
+do i=1,n
+a(i)=a(i)+2.0_8
+enddo
+end subroutine
+"""
+    first, second = (root.replace("ROOT", name) for name in ("first", "second"))
+    if different_resource_order:
+        extra = "do i=1,n\nb(i)=b(i)+1.0_8\nenddo\n"
+        first = first.replace("(a,n)", "(a,b,n)", 1).replace("::a(:)", "::a(:),b(:)")
+        second = second.replace("(a,n)", "(a,b,n)", 1).replace("::a(:)", "::a(:),b(:)")
+        first = first.replace("call adjust(a,n)", "call adjust(a,n)\n"+extra)
+        second = second.replace("call adjust(a,n)", extra+"call adjust(a,n)")
+    if extra_helper:
+        first = first.replace("call adjust(a,n)", "call adjust(a,n)\ncall shift(a,n)")
+    helper = """subroutine adjust(x,n)
+real(8),intent(inout)::x(:)
+integer,intent(in)::n
+integer::i
+do i=1,n
+x(i)=3.0_8*x(i)
+enddo
+end subroutine
+"""
+    if extra_helper:
+        helper += helper.replace("adjust(x,n)", "shift(x,n)").replace("3.0_8*x(i)", "x(i)+1.0_8")
+    path.write_text("module shared_roots\ncontains\n" + first + second + helper + "end module\n")
+    facts = {"schema_version": 1, "participation": "serial",
+             "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
+             "captures": {"argument::a": {"storage": "stable", "initialized": "whole",
+                                          "escapes": False, "allocation_changes": False}}}
+    if different_resource_order:
+        facts["captures"]["argument::b"] = dict(facts["captures"]["argument::a"])
+    options = CompilerOptions(gpu_policy="sections", memory_model="scoped", scope_execution="graph")
+    components = [form_source_scopes([path], "shared_roots::" + entry, facts=facts, options=options,
+                  config=OffloadConfig(policy="sections", scope_execution="graph")) for entry in ("first", "second")]
+    helper_first = path.read_text().splitlines().index("subroutine adjust(x,n)") + 1
+    helper_last = helper_first + helper.splitlines().index("end subroutine")
+    helper_edits = []
+    for _outputs, report in components:
+        assert report["scopes"][0]["module_coordinators"][0]["procedure"] == "shared_roots::adjust"
+        edits = [edit for edit in report["source_edits"] if helper_first <= edit["first_line"] <= helper_last]
+        assert edits
+        helper_edits.append(edits)
+        owner, = [record["id"] for record in report["runtime_provenance"]["records"]
+                  if record["kind"] == "owner" and record["procedure"] == report["entry"]]
+        assert all(owner not in edit["replacement"] for edit in edits)
+    assert helper_edits[0] == helper_edits[1]
+    outputs, report = compose_graph_scopes(components)
+    assert report["scope_count"] == 2
+    replacement = outputs[report["sources"][str(path)]["replacement"]]
+    assert replacement.count("entry fort_scope_entry_") == 1 + extra_helper
+    _compile_fortran(tmp_path, outputs, report)

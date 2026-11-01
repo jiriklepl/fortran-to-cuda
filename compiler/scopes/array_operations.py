@@ -12,12 +12,19 @@ from hashlib import sha256
 from fparser.two import Fortran2003 as F
 from fparser.two.utils import Base, walk
 
-from compiler.frontend.call_bindings import _bound
+from compiler.frontend.call_bindings import SourceDependency, _bound
 from compiler.frontend.component_bindings import component_access, source_scope_for
+from compiler.frontend.native_sections import NativeBound
 from compiler.frontend.source_effects import _children, _kind
 from compiler.ir import CompilationError, SourceLocation
 from compiler.scopes.numerical import Parameter
-from compiler.scopes.regions import RegionExtraction, _exception_observers, _validate_real_varargs, allocation_guard
+from compiler.scopes.regions import (
+    OriginalNumericalPrecondition,
+    RegionExtraction,
+    _exception_observers,
+    _validate_real_varargs,
+    allocation_guard,
+)
 from compiler.scopes.segments import fortran_lines, statement_span
 
 
@@ -26,6 +33,8 @@ class _Selector:
     binding: object
     axes: tuple
     extents: tuple[str, ...]
+    whole: bool = False
+    extent_bounds: tuple = ()
 
 
 def extract_array_operation(analysis, routine, node, *, preceding=(), following=()):
@@ -47,7 +56,7 @@ def extract_array_operation(analysis, routine, node, *, preceding=(), following=
     if observers := _exception_observers(analysis):
         raise CompilationError("source-observable floating-point exception flags prevent GPU array operation: "
                                + "; ".join(observers))
-    bindings, names, lower_names, guards = {}, {}, {}, []
+    bindings, names, lower_names, guards, preconditions = {}, {}, {}, [], []
     min64 = "(-2147483647_c_int64_t - 1_c_int64_t)"
     max64 = "2147483647_c_int64_t"
 
@@ -123,6 +132,24 @@ def extract_array_operation(analysis, routine, node, *, preceding=(), following=
                    else access.indices if access is not None and access.indices else (None,) * binding.rank)
         if len(indices) != binding.rank:
             raise CompilationError("array operation selector rank is inconsistent")
+        if all(index is None or _kind(index) == "Subscript_Triplet" and all(
+                part is None for part in index.items) for index in indices):
+            # Whole arrays need no logical endpoint/rebase arithmetic. The
+            # synthetic worker is one-based; exact physical effects restore
+            # the original lower bounds through the retained descriptor map.
+            extents, bounds = [], []
+            for axis in range(1, binding.rank + 1):
+                wide = f"size({binding.name},{axis},kind=c_int64_t)"
+                predicate = f"{wide} <= {max64}"
+                extent = NativeBound("size", dimension=axis, resource=binding.root,
+                                     dependencies=(SourceDependency(binding.root, "descriptor_read", binding),))
+                guards.append(predicate)
+                preconditions.append(OriginalNumericalPrecondition("array_extent_range", (extent,),
+                                      _source_nodes=(reference,), _runtime_expression=predicate))
+                extents.append((f"size({names[binding.root]},{axis})", wide))
+                bounds.append(extent)
+            return _Selector(binding, tuple((lower_names[binding.root,i + 1], 1, i) for i in range(binding.rank)),
+                             tuple(extents), True, tuple(bounds))
         axes, extents = [], []
         for axis, index in enumerate(indices, 1):
             if index is None or _kind(index) == "Subscript_Triplet":
@@ -175,10 +202,20 @@ def extract_array_operation(analysis, routine, node, *, preceding=(), following=
         if selection.extents:
             if len(selection.extents) != len(output.extents):
                 raise CompilationError("array expression ranks do not conform")
-            guards.extend(f"{right[1]} == {left[1]}" for left, right in
-                          zip(output.extents, selection.extents, strict=True))
+            for axis, (left, right) in enumerate(zip(output.extents, selection.extents, strict=True)):
+                if left == right:
+                    continue
+                predicate = f"{right[1]} == {left[1]}"
+                guards.append(predicate)
+                if output.whole and selection.whole:
+                    preconditions.append(OriginalNumericalPrecondition("array_shape_equal",
+                        (selection.extent_bounds[axis], output.extent_bounds[axis]),
+                        _source_nodes=(node,), _runtime_expression=predicate))
         indices = []
         for axis, (coordinate, stride, ordinal) in enumerate(selection.axes, 1):
+            if selection.whole:
+                indices.append(iterators[ordinal])
+                continue
             logical = coordinate if stride is None else f"({coordinate}+({iterators[ordinal]}-1)*({stride}))"
             # A nonempty array dimension and its worker offset both fit the
             # existing INTEGER ABI; rebasing still needs an explicit check.
@@ -242,6 +279,12 @@ def extract_array_operation(analysis, routine, node, *, preceding=(), following=
         return result
 
     assignment = str(element(output)) + " = " + str(expression(value))
+    # Do not add unused by-value descriptor scalars to the numerical ABI.
+    # The effects proof maps one-based whole-array indices back through the
+    # original descriptor directly; section arithmetic retains its operands.
+    used_names = {str(item).lower() for item in walk(F.Assignment_Stmt(assignment), F.Name)}
+    for extent in output.extents:
+        used_names.update(str(item).lower() for item in walk(F.Expr(extent[0]), F.Name))
     if len(bindings) > 64:
         raise CompilationError("array operation capture budget exceeded")
     for intrinsic in ("int", "lbound", "ubound", "size", "max"):
@@ -256,6 +299,8 @@ def extract_array_operation(analysis, routine, node, *, preceding=(), following=
         declarations.append(f"{dtype},intent({intent}) :: {names[root]}{shape}")
         parameters.append(Parameter(names[root], root, binding.rank))
         for axis in range(1, binding.rank + 1):
+            if lower_names[root,axis].lower() not in used_names:
+                continue
             parameters.append(Parameter(lower_names[root,axis], root, 0, axis, True))
             declarations.append(f"integer,intent(in) :: {lower_names[root,axis]}")
         if "allocatable" in binding.attributes and root.startswith(routine.qualified + "::"):
@@ -275,4 +320,5 @@ def extract_array_operation(analysis, routine, node, *, preceding=(), following=
                             {"available": True, "caller_contract": "serial_source_scope",
                              "reason": "original conformant array assignment completes before continuation"},
                             runtime_guards=tuple(dict.fromkeys(guards)), operation_kind="array_assignment",
+                            preconditions=tuple({item.runtime_expression: item for item in preconditions}.values()),
                             numerical_environment_required=any(binding.dtype == "real" for binding in bindings.values()))

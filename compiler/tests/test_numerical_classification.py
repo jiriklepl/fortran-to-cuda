@@ -128,7 +128,7 @@ def test_generated_sources_equal_independently_fresh_dependent_demands(subject, 
 @pytest.mark.parametrize("change", ["execution", "file", "contracts", "config", "options"])
 def test_mid_classification_mutation_is_hard_and_cannot_adopt_generated_artifacts(subject, monkeypatch, change):
     path, builder = subject
-    builder.analysis.contracts["unused_external"] = {"identity": "original"}
+    builder.analysis.contracts = {"unused_external": {"identity": "original"}}
     assignment, = walk(builder.analysis.routines[ENTRY].execution, F.Assignment_Stmt)
     original_generate = source.generate_sources
     generated = []
@@ -141,7 +141,7 @@ def test_mid_classification_mutation_is_hard_and_cannot_adopt_generated_artifact
         elif change == "file":
             path.write_text(SOURCE + "! source changed during classification\n")
         elif change == "contracts":
-            builder.analysis.contracts["unused_external"]["identity"] = "changed"
+            builder.analysis.contracts = {"unused_external": {"identity": "changed"}}
         elif change == "config":
             builder.config = replace(builder.config, host_threads=builder.config.host_threads + 1)
         else:
@@ -169,10 +169,10 @@ def private_execution(builder):
     analysis = builder.analysis.private_projection(routines=True)
     routine = copy(analysis.routines[ENTRY])
     routine.execution = deepcopy(routine.execution)
-    analysis.routines[ENTRY] = routine
-    builder.analysis = analysis
     assignment, = walk(routine.execution, F.Assignment_Stmt)
     assignment.items = (*assignment.items[:2], assignment.items[0])
+    analysis.project_routine(ENTRY, routine)
+    builder.analysis = analysis
 
 
 def test_helpers_keep_explicit_private_projection_semantics(subject, monkeypatch):

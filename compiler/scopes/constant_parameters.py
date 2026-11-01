@@ -32,7 +32,7 @@ class _UnsupportedInitializer(CompilationError):
     """An original initializer is outside the outlined constant language."""
 
 
-def outline_constants(analysis, routine, bindings, occupied, fixed_shape):
+def outline_constants(analysis, routine, bindings, occupied, fixed_shape, *, capture_scalar_parameters=False):
     """Resolve a bounded declaration closure through original lexical imports."""
     selected = []
     for binding in bindings:
@@ -170,7 +170,32 @@ def outline_constants(analysis, routine, bindings, occupied, fixed_shape):
             result.items = normalize(value.items, scope, depth)
         return result
 
+    def capture(binding):
+        from compiler.scopes.numerical import resource_binding
+
+        if (binding.rank or "parameter" not in binding.attributes
+                or (binding.dtype, binding.kind) not in {("integer", 4), ("real", 4), ("real", 8)}):
+            raise CompilationError("inline scalar PARAMETER requires its supported original numeric type")
+        try:
+            visible = resource_binding(analysis, routine, binding.root)
+        except CompilationError as error:
+            raise CompilationError("inline scalar PARAMETER is unavailable in the original owner: "
+                                   + binding.root) from error
+        if visible is not binding:
+            raise CompilationError("inline scalar PARAMETER requires its original visible binding") from None
+        scope, initializer = declaration(binding)
+        captures.append(binding)
+        capture_authority.append(binding.root + "\0" + str(initializer) + "\0"
+                                 + analysis.sources[str(scope.path)])
+
     for binding in sorted(selected, key=lambda item: item.root):
+        if capture_scalar_parameters and not binding.rank:
+            # The original Fortran compiler has already materialized this
+            # immutable value. A flat atomic alternative passes it read-only
+            # through the established scalar ABI; it never re-evaluates a
+            # PARAMETER expression as a leading executable HostBlock.
+            capture(binding)
+            continue
         previous_names, previous_ordered = dict(names), list(ordered)
         previous_active, previous_occupied = set(active), set(occupied)
         try:
@@ -187,19 +212,7 @@ def outline_constants(analysis, routine, bindings, occupied, fixed_shape):
             active.update(previous_active)
             occupied.clear()
             occupied.update(previous_occupied)
-            from compiler.scopes.numerical import resource_binding
-
-            try:
-                visible = resource_binding(analysis, routine, binding.root)
-            except CompilationError as error:
-                raise CompilationError("inline scalar PARAMETER is unavailable in the original owner: "
-                                       + binding.root) from error
-            if visible is not binding:
-                raise CompilationError("inline scalar PARAMETER requires its original visible binding") from None
-            scope, initializer = declaration(binding)
-            captures.append(binding)
-            capture_authority.append(binding.root + "\0" + str(initializer) + "\0"
-                                     + analysis.sources[str(scope.path)])
+            capture(binding)
     # Include original dependency files and normalized declarations: configured
     # initializers can differ even when their original edit target is unchanged.
     authority = "\0".join([*(root + "\0" + text for root, text in ordered), *capture_authority])

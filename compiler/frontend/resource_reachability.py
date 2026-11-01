@@ -28,7 +28,7 @@ from compiler.frontend.source_objects import _members, _TypeBuilder
 from compiler.ir import CompilationError
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
-VERSION = 4
+VERSION = 9
 
 
 class ResourceReachabilityBudgetExceeded(CompilationError):
@@ -37,7 +37,7 @@ class ResourceReachabilityBudgetExceeded(CompilationError):
 
 _ISSUER = object()
 _INTRINSICS = frozenset(INTRINSICS) | ARRAY_INQUIRIES | MODEL_INQUIRIES | {
-    "allocated", "present", "sum", "product", "any", "all", "count", "minval", "maxval", "dot_product"}
+    "allocated", "present", "sum", "product", "any", "all", "count", "minval", "maxval", "dot_product", "norm2", "matmul", "transpose"}
 
 
 def _kind(node):
@@ -150,6 +150,28 @@ class SourceCallEdge:
 
 
 @dataclass(frozen=True)
+class NativeTerminatingCall:
+    """One original observable, nonreturning call with issued source evidence."""
+    procedure: str
+    original: object = field(repr=False, compare=False)
+    proof: object = field(repr=False, compare=False)
+
+    def validate(self, analysis):
+        from compiler.frontend.descriptor_termination import DescriptorTerminatingCallProof
+        if type(self.proof) is not DescriptorTerminatingCallProof:
+            raise CompilationError("native terminal requires its issued original termination proof")
+        self.proof.validate(analysis, self.procedure, self.original)
+        self.proof.require_attachments()
+        return self
+
+    def public(self):
+        return {"kind": "original_observable_terminal_call", "procedure": self.procedure,
+                "source": str(self.original), "termination": self.proof.public(),
+                "returns_to_caller": False, "original_order_and_branch_required": True,
+                "motion_authority": False, "internal_cut_authority": False}
+
+
+@dataclass(frozen=True)
 class NativeTemplateCall:
     edge: SourceCallEdge
     associations: tuple = field(repr=False, compare=False)
@@ -215,6 +237,34 @@ class NativeDeferredCompletion:
 
 
 @dataclass(frozen=True)
+class NativeAllocationObligation:
+    """An original numeric allocation assignment, never stable payload access."""
+    procedure: str
+    original: object = field(repr=False, compare=False)
+    target: object = field(repr=False, compare=False)
+    binding: Binding = field(repr=False, compare=False)
+
+    def public(self):
+        return {"kind": "native_allocation_assignment_obligation", "procedure": self.procedure,
+                "source": str(self.original), "target": str(self.target), "resource": self.binding.root,
+                "storage_mutation_proof_required": True, "payload_access_authorized": False}
+
+
+@dataclass(frozen=True)
+class NativeWorksharingObligation:
+    """Exact whole-callee orphan structure; participation remains an obligation."""
+    procedure: str
+    original: object = field(repr=False, compare=False)
+    proof: object = field(repr=False, compare=False)
+
+    def public(self):
+        return {"kind": "native_orphan_worksharing_obligation", "procedure": self.procedure,
+                "source": str(self.original), "structure_identity": self.proof.identity,
+                "whole_original_callee_required": True, "serial_caller_required": True,
+                "completion_authorized": False, "payload_access_authorized": False}
+
+
+@dataclass(frozen=True)
 class NativeEffectNode:
     """Original control/statement topology with local, parameterized effects."""
     kind: str
@@ -236,6 +286,7 @@ class NativeEffectTemplate:
     identity: str
     nodes: tuple[NativeEffectNode, ...]
     calls: tuple[NativeTemplateCall, ...]
+    terminations: tuple[NativeTerminatingCall, ...]
     completion: tuple = field(repr=False, compare=False)
     confined_pointers: tuple[ConfinedNativePointer, ...]
     source_work: tuple
@@ -246,6 +297,7 @@ class NativeEffectTemplate:
     _schemas: tuple = field(repr=False, compare=False)
     _limits: tuple = field(repr=False, compare=False)
     _issuer: object = field(repr=False, compare=False)
+    worksharing: tuple = field(default=(), repr=False, compare=False)
 
     def validate(self, analysis):
         if (self._issuer is not _ISSUER or analysis is not self._analysis
@@ -260,8 +312,14 @@ class NativeEffectTemplate:
             _authenticate_schema(analysis, schema)
         for call in self.calls:
             call.edge.resolved.validate(analysis, call.edge.resolved._scope, call.edge.original)
+        for terminal in self.terminations:
+            terminal.validate(analysis)
         for name, selected, proof in self.completion:
             proof.validate(analysis, name, selected)
+        for proof in self.worksharing:
+            if proof._analysis is not analysis or proof._routine is not self._routine or self._selection is not None:
+                raise CompilationError("native orphan structure requires its complete original callee")
+            proof.checkpoint()
         return self
 
     def public(self):
@@ -269,7 +327,8 @@ class NativeEffectTemplate:
                 "scope": "complete callee" if self._selection is None else "exact original root selection",
                 "nodes": [node.public() for node in self.nodes], "source_work": dict(self.source_work),
                 "confined_pointers": [item.public() for item in self.confined_pointers],
-                "completion_identities": [proof.identity for _name, _selected, proof in self.completion]}
+                "completion_identities": [proof.identity for _name, _selected, proof in self.completion],
+                "original_worksharing_requirements": [proof.public() for proof in self.worksharing]}
 
 
 @dataclass(frozen=True)
@@ -296,11 +355,14 @@ class NativeEffectGraph:
     instantiation_work: tuple
     completion_eligible: bool
     deferred_completion: tuple[NativeDeferredCompletion, ...]
+    terminal_calls: tuple
     _analysis: object = field(repr=False, compare=False)
     _selection: tuple = field(repr=False, compare=False)
     _source_identity: str = field(repr=False, compare=False)
     _limits: tuple = field(repr=False, compare=False)
     _issuer: object = field(repr=False, compare=False)
+    retirement_effects_eligible: bool = False
+    lifetime_obligations: tuple = field(default=(), repr=False, compare=False)
 
     def validate(self, analysis, procedure, original_selection):
         if (self._issuer is not _ISSUER or analysis is not self._analysis or procedure != self.procedure
@@ -315,23 +377,35 @@ class NativeEffectGraph:
         return self
 
     def public(self):
-        return {"schema_version": 1, "identity": self.identity, "procedure": self.procedure,
+        templates = len(self.templates)
+        return {"schema_version": 4, "identity": self.identity, "procedure": self.procedure,
                 "source_identity": json.loads(self._source_identity),
                 "templates": [template.public() for template in self.templates],
                 "instances": [instance.public() for instance in self.instances],
                 "source_work": dict(self.source_work), "instantiation_work": dict(self.instantiation_work),
                 "effect_and_association_barriers_absent": self.completion_eligible,
+                "retirement_effect_barriers_absent": self.retirement_effects_eligible,
+                "retirement_lifetime_obligations": [{"instance": ordinal, **item.public()}
+                    for ordinal, item in self.lifetime_obligations],
                 "joined_completion_obligations": [item.public() for item in self.deferred_completion],
-                "counting": "unique template source statements and call instances have separate existing operation bounds",
+                "terminal_calls": [{"instance": ordinal, **item.public()} for ordinal, item in self.terminal_calls],
+                "completion_scope": "normal return only; original diagnostics and termination remain observable",
+                "motion_authority": False, "internal_cut_authority": False,
+                "counting": "each unique original template is bounded separately; root selections and complete callees remain distinct",
                 "limits": {"depth": self._limits[0], "procedures": self._limits[1],
-                           "source_statements": self._limits[2], "call_instances": self._limits[2],
-                           "source_nodes": self._limits[3], "substitution_and_obligation_steps": self._limits[3]},
+                           "unique_templates": templates,
+                           "per_template": {"source_statements": self._limits[2], "source_nodes": self._limits[3]},
+                           "aggregate": {"source_statements": templates * self._limits[2],
+                                         "source_nodes": templates * self._limits[3]},
+                           "call_instances": self._limits[2],
+                           "substitution_and_obligation_steps": self._limits[3],
+                           "source_policy_version": self._limits[4]},
                 "workload_key_authority": False, "execution_authority": False,
                 "alias_authority": False, "cost_authority": False}
 
 
 def _limits(analysis):
-    return analysis.depth_limit, analysis.procedure_limit, analysis.operation_limit, NATIVE_GROUP_SCAN_LIMIT
+    return analysis.depth_limit, analysis.procedure_limit, analysis.operation_limit, NATIVE_GROUP_SCAN_LIMIT, VERSION
 
 
 def _template_key(analysis, name, selection):
@@ -383,7 +457,7 @@ class ResourceReachabilityProof:
                 or any(left is not right for left, right in zip(demanded, self.demanded, strict=True))
                 or getattr(analysis, "_resource_reachability_proofs", {}).get(self.identity) is not self):
             raise CompilationError("resource reachability lacks exact registered source and demand authority")
-        if self._limits != (analysis.depth_limit, analysis.procedure_limit, analysis.operation_limit, NATIVE_GROUP_SCAN_LIMIT):
+        if self._limits != _limits(analysis):
             raise CompilationError("resource reachability proof budgets changed")
         analysis.verify_source()
         self.native_graph.validate(analysis, procedure, original_selection)
@@ -430,9 +504,95 @@ class _Scan:
         self.active = []
         self.specifications = set()
         self.nodes, self.frames = [], []
-        self.template_calls = []
+        self.template_calls, self.terminal_calls = [], []
         self.confined_pointers = {}
         self.joined_depth = 0
+        self.local_loops = []
+        self.intrinsic_declarations = {}
+        self.worksharing = {}
+
+    def explicit_intrinsics(self, scope):
+        """Read exact original declarations absent from the ordinary name map."""
+        self.scope(scope)
+        if id(scope) not in self.intrinsic_declarations:
+            names = set()
+            specification = next((node for node in _children(scope.node)
+                                  if _kind(node) == "Specification_Part"), None)
+            # A nested INTERFACE body has its own lexical specification. Its
+            # declarations cannot establish an intrinsic in this scope.
+            for node in _children(specification):
+                self.tick()
+                if _kind(node) == "Intrinsic_Stmt":
+                    names.update(str(item).lower() for item in _children(node.items[-1]))
+                elif (_kind(node) == "Type_Declaration_Stmt"
+                      and any(str(item).lower() == "intrinsic" for item in _children(node.items[1]))):
+                    names.update(str(item.items[0]).lower() for item in _children(node.items[2]))
+            self.intrinsic_declarations[id(scope)] = names
+        return self.intrinsic_declarations[id(scope)]
+
+    def original_intrinsic(self, scope, name):
+        """Resolve native read effects without trusting intrinsic spellings.
+
+        Explicit local INTRINSIC declarations shadow host names. Otherwise the
+        existing closed-name lookup retains all consulted scopes and rejects
+        unresolved EXTERNAL, generic and imported alternatives. A data Binding
+        alone cannot authorize a typed host/USE intrinsic across a nearer
+        procedure declaration; those forms remain conservative.
+        """
+        spelling = str(name).lower()
+        owner, declared = scope, spelling
+        if owner is not None and declared in self.explicit_intrinsics(owner):
+            local = owner.bindings.get(declared)
+            if (declared in _INTRINSICS
+                    and declared not in owner.externals | owner.procedure_arguments
+                    and declared not in owner.procedures and declared not in owner.generics
+                    and declared not in owner.imports and declared not in owner.ambiguous_imports
+                    and (local is None or not local.rank and local.intent is None
+                         and not local.attributes - {"intrinsic", "public", "private"})):
+                return declared
+            return None
+        if spelling not in _INTRINSICS:
+            return None
+        from compiler.frontend.source_functions import original_name_absent
+        return spelling if original_name_absent(
+            self.analysis, scope, spelling, _scope_validator=self.scope) else None
+
+    def local_loop(self, children, *, called):
+        """Retain a complete callee-local target, not a termination proof.
+
+        If the unchanged callee returns, its ordinary local loop has already
+        completed. EXIT/CYCLE to that loop cannot bypass its caller's join.
+        Root selections, concurrent controls and enclosing joined teams cannot
+        borrow this rule. The original body and every possible effect remain
+        in the graph, including statements after a conditional transfer.
+        """
+        body = tuple(node for node in children if _kind(node) != "Comment")
+        if (len(body) < 2 or _kind(body[0]) != "Nonlabel_Do_Stmt"
+                or _kind(body[-1]) != "End_Do_Stmt"):
+            return None, None, False
+        header, ending = body[0], body[-1]
+        name = getattr(getattr(header, "item", None), "name", None)
+        name = str(name).lower() if name is not None else None
+        end_name = ending.items[1]
+        end_name = str(end_name).lower() if end_name is not None else None
+        control = header.items[1]
+        ordinary = control is None
+        if control is not None and _kind(control) == "Loop_Control":
+            parts = _children(control)
+            ordinary = (len(parts) in {3, 4} and parts[2] in {None, ","}
+                        and (len(parts) == 3 or parts[3] is None)
+                        and (parts[0] is None) != (parts[1] is None))
+        unique = name is None or not any(item[1] == name for item in self.local_loops)
+        return header, name, bool(called and not self.joined_depth and ordinary
+                                 and end_name == name and unique)
+
+    def local_transfer(self, routine, node, *, called):
+        target_name = node.items[1]
+        targets = ([item for item in self.local_loops if item[1] == str(target_name).lower()]
+                   if target_name is not None else self.local_loops[-1:])
+        if (not called or self.joined_depth or len(targets) != 1 or not targets[0][2]):
+            self.barrier("control", routine, node,
+                         "EXIT/CYCLE requires its complete original callee-local ordinary loop target")
 
     def record(self, item):
         (self.frames[-1] if self.frames else self.nodes).append(item)
@@ -628,7 +788,7 @@ class _Scan:
             components.append(StorageComponent(name, current_dtype, len(_children(shape)), flags, schema, entity))
         return StoragePath(path.binding, tuple(components)), binding
 
-    def access(self, routine, node, mapping, action):
+    def access(self, routine, node, mapping, action, *, assignment=None):
         scope = self.scope(self.analysis.source_scope_for(node, routine.scope))
         if _kind(node) == "Name":
             binding = self.analysis._binding(scope, node)
@@ -655,7 +815,12 @@ class _Scan:
         terminal_attributes = path.components[-1].attributes if path.components else path.binding.attributes
         whole = _kind(node) == "Name" or _kind(node) == "Data_Ref" and _kind(node.items[-1]) == "Name"
         if action == "write" and "allocatable" in terminal_attributes and whole:
-            self.barrier("allocation", routine, node, "whole allocatable assignment may reallocate original storage")
+            if (_kind(node) == "Name" and _kind(assignment) == "Assignment_Stmt"
+                    and assignment.items[0] is node and binding.dtype in {"integer", "real", "logical"}
+                    and not path.components and not binding.attributes & {"pointer", "target", "volatile", "asynchronous"}):
+                self.record(NativeAllocationObligation(routine.qualified, assignment, node, binding))
+            else:
+                self.barrier("allocation", routine, node, "whole allocatable assignment may reallocate original storage")
         parts = node.items if _kind(node) == "Data_Ref" else (node,)
         for part in parts:
             if _kind(part) == "Part_Ref":
@@ -669,18 +834,23 @@ class _Scan:
         kind = _kind(node)
         if kind.endswith("Literal_Constant"):
             return
-        if kind in {"Name", "Data_Ref"} or kind == "Part_Ref" and self.analysis._binding(self.analysis.source_scope_for(node, routine.scope), node.items[0]) is not None:
+        reference_binding = (self.analysis._binding(self.analysis.source_scope_for(node, routine.scope), node.items[0])
+                             if kind == "Part_Ref" else None)
+        if kind in {"Name", "Data_Ref"} or reference_binding is not None and reference_binding.rank:
             self.access(routine, node, mapping, action)
         elif kind in {"Intrinsic_Function_Reference", "Function_Reference", "Part_Ref", "Structure_Constructor"}:
             name, args = node.items
             scope = self.scope(self.analysis.source_scope_for(node, routine.scope))
-            spelling = str(name).lower()
-            if (spelling in _INTRINSICS and not self.analysis._binding(scope, name)
-                    and not self.analysis._candidates(scope, name) and not self.analysis._unknown_exports(scope)):
+            try:
+                intrinsic = self.original_intrinsic(scope, name)
+            except CompilationError as error:
+                self.barrier("call", routine, node, str(error))
+                return
+            if intrinsic is not None:
                 for index, argument in enumerate(_children(args)):
                     if _kind(argument) == "Actual_Arg_Spec":
                         argument = argument.items[1]
-                    inquiry = index == 0 and spelling in ARRAY_INQUIRIES | MODEL_INQUIRIES | {"allocated", "present"}
+                    inquiry = index == 0 and intrinsic in ARRAY_INQUIRIES | MODEL_INQUIRIES | {"allocated", "present"}
                     self.expression(routine, argument, mapping, "descriptor" if inquiry else "read")
             else:
                 self.call(routine, node, mapping, function=True)
@@ -690,10 +860,37 @@ class _Scan:
                         "Level_2_Unary_Expr", "Level_3_Expr", "Level_4_Expr", "Add_Operand", "Mult_Operand",
                         "And_Operand", "Or_Operand", "Equiv_Operand", "Subscript_Triplet", "Loop_Control",
                         "Explicit_Shape_Spec", "Assumed_Shape_Spec", "Assumed_Size_Spec", "Deferred_Shape_Spec",
-                        "Array_Constructor", "Ac_Value_List", "Section_Subscript_List", "Return_Stmt"}):
+                        "Array_Constructor", "Ac_Value_List", "Section_Subscript_List", "Return_Stmt",
+                        "Case_Selector", "Case_Value_Range_List", "Case_Value_Range"}):
                 self.barrier("expression", routine, node, "expression requires separate implicit-call or storage authority")
             for child in _children(node):
                 self.expression(routine, child, mapping, action)
+
+    def terminating_call(self, routine, node, mapping):
+        from compiler.frontend.descriptor_termination import (
+            DescriptorTerminationUnsupported,
+            prove_descriptor_termination,
+        )
+        try:
+            proof = prove_descriptor_termination(self.analysis, routine.qualified, node,
+                                                 tick=self.tick, resolution_tick=lambda *_args: self.tick())
+        except OriginalCallBudgetExceeded as error:
+            raise ResourceReachabilityBudgetExceeded(str(error)) from error
+        except DescriptorTerminationUnsupported:
+            return False
+        terminal = NativeTerminatingCall(routine.qualified, node, proof).validate(self.analysis)
+        # The issuer covers the complete diagnostic/STOP body and rejects all
+        # hidden calls, writes, local state and lifetime actions. Only numeric
+        # original actual reads need projection into this caller's graph.
+        for argument in _children(node.items[1]):
+            if _kind(argument) == "Actual_Arg_Spec":
+                argument = argument.items[1]
+            self.expression(routine, argument, mapping)
+        for statement in _children(proof._callee.execution):
+            self.tick(statement=_kind(statement).endswith("_Stmt"))
+        self.terminal_calls.append(terminal)
+        self.record(terminal)
+        return True
 
     def call(self, routine, node, mapping, *, function=False):
         scope = self.scope(self.analysis.source_scope_for(node, routine.scope))
@@ -706,11 +903,21 @@ class _Scan:
                 if set(callee.arguments) & callee.scope.procedure_arguments:
                     self.barrier("callback", routine, node, "procedure-dummy association requires exact callback authority")
                     return
+        # This syntax hint selects an existing proof attempt only. A failed
+        # complete issuer falls through to the unchanged ordinary traversal.
+        terminal_hint = not function and any(
+            (body := tuple(item for item in _children(callee.execution) if _kind(item) != "Comment"))
+            and _kind(body[-1]) in {"Stop_Stmt", "Error_Stop_Stmt"}
+            for name in candidates if (callee := pool.get(name)) is not None)
+        if terminal_hint and self.terminating_call(routine, node, mapping):
+            return
         try:
             resolved = (resolve_original_function if function else resolve_original_call)(self.analysis, scope, node)
         except OriginalCallBudgetExceeded as error:
             raise ResourceReachabilityBudgetExceeded(str(error)) from error
         except CompilationError as error:
+            if not function and not terminal_hint and self.terminating_call(routine, node, mapping):
+                return
             self.barrier("call", routine, node, str(error))
             return
         if resolved.procedure.startswith("$external::"):
@@ -770,14 +977,30 @@ class _Scan:
         self.frame(_kind(node), node, lambda: self._statement(routine, node, mapping, called=called,
                    depth=depth, ignore_directives=ignore_directives))
 
+    def orphan_worksharing(self, routine, node):
+        from compiler.frontend.descriptor_worksharing import original_worksharing_storage
+
+        try:
+            if routine.qualified not in self.worksharing:
+                self.worksharing[routine.qualified] = original_worksharing_storage(self.analysis, routine)
+            proof = self.worksharing[routine.qualified]
+            proof.checkpoint()
+        except CompilationError:
+            return False
+        if not any(node is opening or node is ending for opening, _loop, ending, _collapse in proof._regions):
+            return False
+        self.record(NativeWorksharingObligation(routine.qualified, node, proof))
+        return True
+
     def _statement(self, routine, node, mapping, *, called, depth=0, ignore_directives=False):
         self.tick(statement=_kind(node).endswith("_Stmt"))
         kind = _kind(node)
         if kind == "Comment":
-            if str(node).lstrip().lower().startswith("!$omp") and not ignore_directives:
+            if (str(node).lstrip().lower().startswith("!$omp") and not ignore_directives
+                    and (not called or not self.orphan_worksharing(routine, node))):
                 self.barrier("completion", routine, node, "unowned original OpenMP directive")
         elif kind == "Assignment_Stmt":
-            self.access(routine, node.items[0], mapping, "write")
+            self.access(routine, node.items[0], mapping, "write", assignment=node)
             self.expression(routine, node.items[2], mapping)
         elif kind == "Call_Stmt":
             self.call(routine, node, mapping)
@@ -802,18 +1025,27 @@ class _Scan:
             if kind == "Block_Nonlabel_Do_Construct":
                 mapping = {**mapping, **{identity: pointer.target
                            for identity, pointer in self.confined_pointers.items() if pointer.loop is node}}
-            self.sequence(routine, children, mapping, called=called, depth=depth + 1)
+                self.local_loops.append(self.local_loop(children, called=called))
+                try:
+                    self.sequence(routine, children, mapping, called=called, depth=depth + 1)
+                finally:
+                    self.local_loops.pop()
+            else:
+                self.sequence(routine, children, mapping, called=called, depth=depth + 1)
         elif kind in {"If_Then_Stmt", "Else_If_Stmt", "Nonlabel_Do_Stmt", "Select_Case_Stmt", "Case_Stmt"}:
             if kind == "Nonlabel_Do_Stmt":
                 control = next((part for part in _children(node) if _kind(part) == "Loop_Control"), None)
                 if control is None or control.items[1] is None:
-                    self.barrier("control", routine, node, "non-counted loop needs separate completion authority")
+                    if not (self.local_loops and self.local_loops[-1][0] is node and self.local_loops[-1][2]):
+                        self.barrier("control", routine, node, "non-counted loop needs separate completion authority")
                 else:
                     self.access(routine, control.items[1][0], mapping, "write")
             for child in _children(node):
                 self.expression(routine, child, mapping)
         elif kind in {"Else_Stmt", "End_If_Stmt", "End_Do_Stmt", "End_Select_Stmt", "Continue_Stmt"}:
             pass
+        elif kind in {"Exit_Stmt", "Cycle_Stmt"}:
+            self.local_transfer(routine, node, called=called)
         elif kind == "Return_Stmt" and called and not self.joined_depth:
             self.expression(routine, node, mapping)
         elif kind in {"Allocate_Stmt", "Deallocate_Stmt", "Pointer_Assignment_Stmt"}:
@@ -889,7 +1121,8 @@ def _template(analysis, procedure, selection):
     key = _template_key(analysis, procedure, selection)
     if key in registry:
         return registry[key].validate(analysis)
-    if len(registry) >= analysis.procedure_limit:
+    from compiler.frontend.storage_mutation_effects import source_registry_budget
+    if len(registry) >= source_registry_budget(analysis):
         raise ResourceReachabilityBudgetExceeded("native effect template registry budget exhausted")
     scan = _Scan(analysis, ())
     scan.routine(procedure, {}, selection)
@@ -900,9 +1133,10 @@ def _template(analysis, procedure, selection):
     identity = _digest({"version": VERSION, "source_identity": analysis.inputs.identity(),
                         "procedure": procedure, "selection": None if selection is None else list(map(id, selection)),
                         "source_work": dict(work), "nodes": root.public()})
-    value = NativeEffectTemplate(procedure, identity, (root,), tuple(scan.template_calls), tuple(scan.completion),
+    value = NativeEffectTemplate(procedure, identity, (root,), tuple(scan.template_calls), tuple(scan.terminal_calls), tuple(scan.completion),
         tuple(scan.confined_pointers.values()), work,
-        analysis, routine, selection, tuple(scan.scopes.values()), tuple(scan.schemas.values()), _limits(analysis), _ISSUER)
+        analysis, routine, selection, tuple(scan.scopes.values()), tuple(scan.schemas.values()), _limits(analysis), _ISSUER,
+        tuple(scan.worksharing.values()))
     registry[key] = value
     try:
         return value.validate(analysis)
@@ -920,7 +1154,8 @@ class _Instantiate:
         self.accesses, self.barriers, self.calls, self.completion = [], [], [], []
         self.routines, self.scopes, self.schemas = {}, {}, {}
         self.source_visits = self.source_operations = self.steps = 0
-        self.deferred_completion = []
+        self.deferred_completion, self.terminal_calls = [], []
+        self.retirement_barriers, self.lifetime_obligations = [], []
 
     def tick(self):
         self.steps += 1
@@ -937,9 +1172,11 @@ class _Instantiate:
             counts = dict(value.source_work)
             self.source_visits += counts["syntax_nodes"]
             self.source_operations += counts["statements"]
-            if (self.source_visits > NATIVE_GROUP_SCAN_LIMIT
-                    or self.source_operations > self.analysis.operation_limit):
-                raise ResourceReachabilityBudgetExceeded("resource reachability unique source scan budget exhausted")
+            # _Scan already enforces both source limits for this template.
+            # Summed work describes the complete graph; reusing one template's
+            # ceiling here creates an artificial whole-closure size window.
+            # Distinct templates remain bounded by source procedures/calls,
+            # and instantiation/substitution retains its independent budget.
             self.scopes.update((id(scope), scope) for scope in value._scopes)
             self.schemas.update((id(schema), schema) for schema in value._schemas)
             self.completion.extend(value.completion)
@@ -960,6 +1197,8 @@ class _Instantiate:
     def barrier(self, value):
         if value not in self.barriers:
             self.barriers.append(value)
+        if value not in self.retirement_barriers:
+            self.retirement_barriers.append(value)
 
     def access(self, item, mapping):
         storage = self.substitute(item.storage, mapping)
@@ -993,6 +1232,20 @@ class _Instantiate:
                 self.access(item, mapping)
             elif isinstance(item, ReachabilityBarrier):
                 self.barrier(item)
+            elif isinstance(item, (NativeAllocationObligation, NativeWorksharingObligation)):
+                self.lifetime_obligations.append((instance.ordinal, item))
+                if isinstance(item, NativeAllocationObligation):
+                    barrier = ReachabilityBarrier("allocation", item.procedure, str(item.target),
+                        "whole allocatable assignment may reallocate original storage")
+                else:
+                    item.proof.checkpoint()
+                    barrier = ReachabilityBarrier("completion", item.procedure, str(item.original),
+                        "unowned original OpenMP directive")
+                # Preserve the ordinary payload path's stronger eligibility.
+                # Only an independent whole-call retirement proof may discharge
+                # these typed obligations, with full storage and completion.
+                if barrier not in self.barriers:
+                    self.barriers.append(barrier)
             elif isinstance(item, NativeDeferredCompletion):
                 self.deferred_completion.append((instance, item))
             elif isinstance(item, NativePresenceConditional):
@@ -1004,6 +1257,15 @@ class _Instantiate:
                     self.items(item.absent, instance, mapping)
                 else:
                     self.items(item.absent if actual[1] is _ABSENT else item.present, instance, mapping)
+            elif isinstance(item, NativeTerminatingCall):
+                item.validate(self.analysis)
+                if len(self.instances) - 1 + len(self.terminal_calls) >= self.analysis.operation_limit:
+                    raise ResourceReachabilityBudgetExceeded("resource reachability call instantiation budget exhausted")
+                callee = item.proof._callee
+                self.routines[callee.qualified] = callee
+                if len(self.routines) > self.analysis.procedure_limit:
+                    raise ResourceReachabilityBudgetExceeded("resource reachability procedure budget exhausted")
+                self.terminal_calls.append((instance.ordinal, item))
             elif isinstance(item, NativeTemplateCall):
                 self.calls.append(item.edge)
                 child_mapping = dict(mapping)
@@ -1033,7 +1295,7 @@ class _Instantiate:
             raise ResourceReachabilityBudgetExceeded("resource reachability call depth budget exhausted")
         # The root selection is not a source CALL occurrence. Each subsequent
         # instance retains one exact original edge, even with shared templates.
-        if call is not None and len(self.instances) - 1 >= self.analysis.operation_limit:
+        if call is not None and len(self.instances) - 1 + len(self.terminal_calls) >= self.analysis.operation_limit:
             raise ResourceReachabilityBudgetExceeded("resource reachability call instantiation budget exhausted")
         template = self.template(procedure, selection)
         instance = NativeCallInstance(len(self.instances), template, parent, call, tuple(mapping.values()))
@@ -1047,7 +1309,8 @@ class _Instantiate:
     def graph(self, procedure, selection):
         source_work = (("syntax_nodes", self.source_visits), ("statements", self.source_operations),
                        ("procedures", len(self.routines)), ("templates", len(self.templates)))
-        instance_work = (("call_instances", len(self.instances) - 1), ("substitution_steps", self.steps))
+        instance_work = (("call_instances", len(self.instances) - 1 + len(self.terminal_calls)),
+                         ("terminal_instances", len(self.terminal_calls)), ("substitution_steps", self.steps))
         identity = _digest({"version": VERSION, "source_identity": self.analysis.inputs.identity(),
             "procedure": procedure, "selection": list(map(id, selection)), "limits": _limits(self.analysis),
             "templates": list(self.templates), "instances": [item.public() for item in self.instances]})
@@ -1056,14 +1319,16 @@ class _Instantiate:
             registry = self.analysis._native_effect_graphs = {}
         if identity in registry:
             return registry[identity].validate(self.analysis, procedure, selection)
-        if len(registry) >= self.analysis.procedure_limit:
+        from compiler.frontend.storage_mutation_effects import source_registry_budget
+        if len(registry) >= source_registry_budget(self.analysis):
             raise ResourceReachabilityBudgetExceeded("native effect graph registry budget exhausted")
         source_identity = json.dumps(self.analysis.inputs.identity(), sort_keys=True, separators=(",", ":"))
         deferred = tuple({(item.procedure, tuple(map(id, item.originals))): item
                           for _instance, item in self.deferred_completion}.values())
         value = NativeEffectGraph(identity, procedure, tuple(self.templates.values()), tuple(self.instances),
-                                  source_work, instance_work, not self.barriers, deferred, self.analysis, selection, source_identity,
-                                  _limits(self.analysis), _ISSUER)
+                                  source_work, instance_work, not self.barriers, deferred, tuple(self.terminal_calls), self.analysis, selection, source_identity,
+                                  _limits(self.analysis), _ISSUER, not self.retirement_barriers,
+                                  tuple(self.lifetime_obligations))
         registry[identity] = value
         try:
             return value.validate(self.analysis, procedure, selection)
@@ -1071,6 +1336,25 @@ class _Instantiate:
             if registry.get(identity) is value:
                 del registry[identity]
             raise
+
+
+def _instantiate_native_graph(analysis, procedure, original_selection):
+    if not isinstance(original_selection, tuple) or not original_selection:
+        raise CompilationError("native effect graph requires an exact nonempty original tuple")
+    analysis._selected_source(procedure, original_selection)
+    scan = _Instantiate(analysis)
+    scan.instance(procedure, {}, selection=original_selection)
+    return scan, scan.graph(procedure, original_selection)
+
+
+def prove_native_effect_graph(analysis, procedure, original_selection):
+    """Issue the same source graph without inventing a storage demand.
+
+    This grants no demand coverage, alias separation or native payload access.
+    The existing joined-completion issuer must still check every obligation.
+    """
+    _scan, graph = _instantiate_native_graph(analysis, procedure, original_selection)
+    return graph
 
 
 def prove_resource_reachability(analysis, procedure, original_selection, demanded):
@@ -1091,10 +1375,7 @@ def prove_resource_reachability(analysis, procedure, original_selection, demande
         raise ResourceReachabilityBudgetExceeded("resource reachability demand budget exhausted")
     for binding in demanded:
         _authenticate_binding(analysis, binding)
-    analysis._selected_source(procedure, original_selection)
-    scan = _Instantiate(analysis)
-    scan.instance(procedure, {}, selection=original_selection)
-    graph = scan.graph(procedure, original_selection)
+    scan, graph = _instantiate_native_graph(analysis, procedure, original_selection)
     for obligation in graph.deferred_completion:
         try:
             from compiler.frontend.native_completion import prove_graph_joined_completion
@@ -1128,12 +1409,13 @@ def prove_resource_reachability(analysis, procedure, original_selection, demande
         registry = analysis._resource_reachability_proofs = {}
     if identity in registry:
         return registry[identity].validate(analysis, procedure, original_selection, demanded)
-    if len(registry) >= analysis.procedure_limit:
+    from compiler.frontend.storage_mutation_effects import source_registry_budget
+    if len(registry) >= source_registry_budget(analysis):
         raise ResourceReachabilityBudgetExceeded("resource reachability proof registry budget exhausted")
     proof = ResourceReachabilityProof(procedure, identity, tuple(scan.accesses), required, tuple(scan.barriers),
         tuple(scan.calls), graph, demanded, analysis, original_selection, tuple(scan.routines.items()), tuple(scan.scopes.values()),
         tuple(scan.schemas.values()), tuple(scan.completion),
-        (analysis.depth_limit, analysis.procedure_limit, analysis.operation_limit, NATIVE_GROUP_SCAN_LIMIT), work, _ISSUER)
+        _limits(analysis), work, _ISSUER)
     registry[identity] = proof
     try:
         return proof.validate(analysis, procedure, original_selection, demanded)

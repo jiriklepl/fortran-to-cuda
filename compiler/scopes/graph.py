@@ -246,6 +246,62 @@ def _member_graph(member):
         skipped.update(selected[1:])
         spans[task_id] = unit.scope.first, unit.scope.last
     native_ids = set()
+    for index, external in enumerate(member.device_tasks):
+        external.proof.validate(member.builder.analysis, member.routine, external.node)
+        graph, selected = member.builder.analysis._selected_source(member.routine.qualified, (external.node,))
+        if graph is not source or not selected:
+            raise CompilationError("external device task lost original graph authority")
+        task_id = f"{member.routine.qualified}:external:{index}"
+        actions = {member.canonical(binding).root: set() for binding in external.proof.bindings}
+        for resource, binding in zip(external.proof.public()["contract"]["resources"], external.proof.bindings, strict=True):
+            actions[member.canonical(binding).root].update(effect["kind"] for effect in resource["effects"])
+        # Exact physical boxes stay in the provider contract/transaction. Whole
+        # conservative hazards do not grant whole-root definition credit.
+        effects = TaskEffects(reads=tuple(ResourceAccess(root) for root, kinds in actions.items() if "read" in kinds),
+            may_writes=tuple(ResourceAccess(root) for root, kinds in actions.items() if kinds & {"write", "overwrite"}),
+            metadata_reads=frozenset(actions), ordered=True)
+        selections[selected[0]].append(Task(task_id, effects, frozenset({ExecutionTarget.GPU}), payload=external))
+        skipped.update(selected[1:])
+        spans[task_id] = external.first, external.last
+        native_ids.add(task_id)
+    for index, source_task in enumerate(member.source_device_tasks):
+        source_task.proof.validate(member.builder.analysis, member.routine, source_task.nodes)
+        graph, selected = member.builder.analysis._selected_source(member.routine.qualified, source_task.nodes)
+        if graph is not source or not selected:
+            raise CompilationError("source device task lost its complete original graph selection")
+        task_id = f"{member.routine.qualified}:source_device:{index}"
+        from compiler.scopes.source_task_bindings import source_task_actions
+
+        actions = source_task_actions(member, source_task)
+        effects = TaskEffects(reads=tuple(ResourceAccess(root) for root in actions),
+            may_writes=tuple(ResourceAccess(root) for root, written in actions.items() if written),
+            scalar_reads=frozenset(binding.root for binding in source_task.proof.team.scalars),
+            metadata_reads=frozenset(actions), ordered=True)
+        targets = frozenset({ExecutionTarget.GPU})
+        deferred = None
+        if source_task.placement is not None:
+            source_task.placement.validate(member)
+            if source_task.placement.public()["task_id"] != task_id:
+                raise CompilationError("source task placement changed its exact graph task")
+            targets = frozenset({ExecutionTarget.CPU, ExecutionTarget.GPU})
+            deferred = source_task.placement.deferred()
+        selections[selected[0]].append(Task(task_id, effects, targets, payload=source_task,
+                                           deferred_placement=deferred))
+        skipped.update(selected[1:])
+        spans[task_id] = source_task.first, source_task.last
+        native_ids.add(task_id)
+    for index, transfer in enumerate(member.storage_transfers):
+        transfer.proof.validate(member.builder.analysis, member.routine, transfer.node)
+        graph, selected = member.builder.analysis._selected_source(member.routine.qualified, (transfer.node,))
+        if graph is not source or not selected:
+            raise CompilationError("allocation exchange lost original graph authority")
+        task_id = f"{member.routine.qualified}:storage:{index}"
+        effects = TaskEffects(lifetime_resources=frozenset(member.canonical(binding).root
+                                                         for binding in transfer.proof.bindings), ordered=True)
+        selections[selected[0]].append(Task(task_id, effects, payload=transfer))
+        skipped.update(selected[1:])
+        spans[task_id] = transfer.first, transfer.last
+        native_ids.add(task_id)
     for index, (nodes, scope) in enumerate(member.graph_native_tasks):
         originals = member.builder.inline.original_selection(nodes)
         graph, selected = member.builder.analysis._selected_source(member.routine.qualified, originals)
@@ -255,12 +311,20 @@ def _member_graph(member):
         native_bindings = {root: binding for operation in scope.native for root, binding in operation.bindings.items()}
         bindings.update({member.canonical(binding).root: binding for binding in native_bindings.values()})
         effects = _scope_effects(member, scope, {}, native_bindings)
-        if not _total_integer_source(member, originals) or not alias_safe(effects):
+        # An original single-line IF action has exact graph authority but no
+        # independently editable source span. Retain its original execution;
+        # only physically editable statements can become motion candidates.
+        editable = all(any(getattr(item, "item", None) for item in walk(node))
+                       for node in (originals[0], originals[-1]))
+        span = ((statement_span(originals[0])[0], statement_span(originals[-1])[1])
+                if editable else None)
+        if span is None or not _total_integer_source(member, originals) or not alias_safe(effects):
             effects = replace(effects, ordered=True)
         task = Task(task_id, effects, payload=originals)
         selections[selected[0]].append(task)
         skipped.update(selected[1:])
-        spans[task_id] = statement_span(originals[0])[0], statement_span(originals[-1])[1]
+        if span is not None:
+            spans[task_id] = span
         native_ids.add(task_id)
     used = set()
 
@@ -432,6 +496,25 @@ def _apply_source_schedule(owner):
 class GraphOwner(LexicalOwner):
     """One source invocation, with a checked hierarchical execution inventory."""
 
+    def _scan_group(self, group, depth):
+        epoch = getattr(self, "position_epoch", None)
+        if epoch is None:
+            return super()._scan_group(group, depth)
+        originals = self.builder.inline.original_selection(group if isinstance(group, tuple) else (group,))
+        boundaries = (epoch.boundaries() if hasattr(epoch, "boundaries") else
+                      (getattr(epoch, "_boundary", None),))
+        if any(boundary is not None and len(originals) == len(boundary.originals)
+               and all(left is right for left, right in zip(originals, boundary.originals, strict=True))
+               for boundary in boundaries):
+            return  # The retained source boundary executes this original span once.
+        previous = getattr(self.builder, "_graph_storage_epoch", None)
+        self.builder._graph_storage_epoch = epoch if epoch.covers(self.builder.analysis, self.routine.qualified,
+                                                                 originals) else None
+        try:
+            return super()._scan_group(group, depth)
+        finally:
+            self.builder._graph_storage_epoch = previous
+
     def validate_plan(self, nodes):
         graphs, schedules, unit_ids, spans = {}, {}, {}, {}
         for name, member in self.members.items():
@@ -454,11 +537,24 @@ class GraphOwner(LexicalOwner):
         discover_query_regions(self)
 
     def _emit_lexical(self, nodes, checkpoint, *, native_cleanup=True):
+        previous = getattr(self.builder, "_graph_storage_epoch", None)
+        self.builder._graph_storage_epoch = getattr(self, "position_epoch", None)
+        try:
+            return self._emit_position_epoch(nodes, checkpoint, native_cleanup=native_cleanup)
+        finally:
+            self.builder._graph_storage_epoch = previous
+
+    def _emit_position_epoch(self, nodes, checkpoint, *, native_cleanup=True):
         for name, graph in self.task_graphs.items():
             verify_schedule(graph, self.task_schedules[name])
         accepted = super()._emit_lexical(nodes, checkpoint, native_cleanup=native_cleanup)
         if accepted:
             record = self.builder.scopes[-1]
+            external = [task.public(member) for member in self.members.values() for task in member.device_tasks]
+            if external:
+                record["external_device_tasks"] = external
+                record["estimate_available"] = False
+                record["planning_reason"] = "opaque external device provider is explicitly selected and unpriced"
             motions = _apply_source_schedule(self) if record.get("owner_variant") is not None else []
             if record.get("owner_variant") is not None:
                 from compiler.scopes.query_regions import emit_query_regions
@@ -471,7 +567,9 @@ class GraphOwner(LexicalOwner):
                 "source_windows": False,
                 "resource_lifetime": "coherent epochs within one original invocation, including counted-loop backedges",
                 "unknown_boundary": "publish and close; continue discovery; reopen with zero initialized coverage",
-                "epochs": {"entry_coverage": "reviewed entry facts only before the first close",
+                "epochs": {"entry_coverage": ("none at selected-position allocation activation"
+                                              if getattr(self, "position_epoch", None) is not None else
+                                              "reviewed entry facts only before the first close"),
                            "reopened_coverage": "none; exact reached source reads admit only missing required values",
                            "handle_reuse": "validate current-context membership before descriptor registration"},
                 "procedures": [
@@ -488,6 +586,10 @@ class GraphOwner(LexicalOwner):
                 expected = {task_id for identities in self.graph_unit_ids.values() for task_id in identities.values()}
                 if getattr(self.emission, "graph_emitted_units", set()) != expected:
                     raise CompilationError("source emission omitted a checked graph unit")
+                expected_source = {patch.placement.identity for member in self.members.values()
+                                   for patch in member.source_device_tasks if patch.placement is not None}
+                if getattr(self.emission, "graph_emitted_source_tasks", set()) != expected_source:
+                    raise CompilationError("source emission omitted a checked deferred source task")
         return accepted
 
 
@@ -534,6 +636,44 @@ def validate_scheduled_unit(member, unit):
     seen.add(task_id)
 
 
+def validate_scheduled_source_task(member, patch):
+    """The renderer consumes the sealed graph choice, not a local rediscovery."""
+    owner = member.owner
+    if not isinstance(owner, GraphOwner) or patch.placement is None:
+        raise CompilationError("source placement requires its owning checked source graph")
+    patch.placement.validate(member)
+    record = patch.placement.public()
+    graph = owner.task_graphs[member.routine.qualified]
+    schedule = owner.task_schedules[member.routine.qualified]
+    verify_schedule(graph, schedule)
+
+    def selected(current, planned):
+        for placement in planned.placements:
+            task = next(task for task in current.tasks if task.id == placement.task_id)
+            if task.id == record["task_id"]:
+                if (task.payload is not patch or task.deferred_placement is None
+                        or task.deferred_placement.public() != patch.placement.deferred().public()
+                        or placement.target is not None or placement.deferred_placement is None
+                        or placement.deferred_placement.public() != task.deferred_placement.public()):
+                    raise CompilationError("source emission contradicts its sealed deferred graph placement")
+                return True
+            children = ((task.structure.then_graph, task.structure.else_graph) if isinstance(task.structure, BranchRegion)
+                        else (task.structure.body,) if isinstance(task.structure, LoopRegion) else ())
+            for child, child_schedule in zip(children, placement.children, strict=True):
+                if selected(child, child_schedule):
+                    return True
+        return False
+
+    if not selected(graph, schedule):
+        raise CompilationError("source graph lost its exact deferred source task")
+    seen = getattr(owner.emission, "graph_emitted_source_tasks", None)
+    if seen is None:
+        seen = owner.emission.graph_emitted_source_tasks = set()
+    if patch.placement.identity in seen:
+        raise CompilationError("checked deferred source task emitted more than once")
+    seen.add(patch.placement.identity)
+
+
 def run_graph_owner(builder):
     """Compile an entire original caller without enumerating source windows."""
     reason = builder._missing_automatic_cost_reason()
@@ -558,6 +698,16 @@ def run_graph_owner(builder):
             }
         )
         return builder.finish(materialize_native_effects=False)
+    selection = builder._native_ancestor_selection
+    if selection is not None and selection.public().get("lifetime") == "supported_original_path":
+        from compiler.scopes.supported_paths import run_supported_path
+        return run_supported_path(builder)
+    if selection is not None and selection.public().get("lifetime") == "owner_local_call_groups":
+        from compiler.scopes.call_groups import run_owner_local_call_groups
+        return run_owner_local_call_groups(builder)
+    from compiler.scopes.hierarchical_regions import try_hierarchical_regions
+    if try_hierarchical_regions(builder):
+        return builder.finish(materialize_native_effects=False)
     from compiler.scopes.generation_transaction import GenerationTransaction
 
     candidate, owner = None, None
@@ -565,23 +715,31 @@ def run_graph_owner(builder):
     try:
         with GenerationTransaction(builder) as transaction:
             candidate = transaction.builder
-            nodes = candidate.inline.prepare(_children(candidate.entry.execution))
+            owner = GraphOwner(candidate)
+            from compiler.scopes.conditional_return import prepare as prepare_return
+            prepare_return(owner)
+            from compiler.scopes.graph_epochs import discover_graph_storage_epoch
+            if getattr(candidate, "_conditional_return_draft", None) is None:
+                discover_graph_storage_epoch(owner)
+            from compiler.scopes.native_ancestor import prepare
+            nodes = prepare(candidate, _children(candidate.entry.execution))
             candidate.generated.update(candidate.inline.generated)
             candidate.numerical_ir.update(candidate.inline.ir)
             candidate.numerical_reasons.update({name: None for name in candidate.inline.regions})
-            owner = GraphOwner(candidate)
             accepted = owner.run(nodes)
             attempt = {"procedure": candidate.entry.qualified, "admitted": bool(accepted),
+                       "storage_epoch_search": getattr(owner, "position_epoch_search", None),
                        "boundaries": [dict(item) for member in owner.members.values() for item in member.boundaries],
                        "numerical_team_declines": [dict(item) for member in owner.members.values()
                                                    for item in member.numerical_team_declines]}
             if accepted:
+                candidate.graph_owner_attempt = attempt
                 transaction.adopt(candidate)
         if not accepted:
             builder.graph_owner_attempt = attempt
             from compiler.scopes.numerical_roots import admit_numerical_roots
 
-            if admit_numerical_roots(builder):
+            if builder._native_ancestor_selection is None and admit_numerical_roots(builder):
                 return builder.finish(materialize_native_effects=False)
             builder.boundaries.append(
                 {
@@ -593,8 +751,11 @@ def run_graph_owner(builder):
     except CompilationError as error:
         if owner is not None:
             builder.graph_owner_attempt = {"procedure": builder.entry.qualified, "admitted": False,
+                "storage_epoch_search": getattr(owner, "position_epoch_search", None),
                 "error": str(error), "boundaries": [dict(item) for member in owner.members.values()
-                                                      for item in member.boundaries]}
+                                                      for item in member.boundaries],
+                **({"conditional_return_barrier": error.conditional_return_barrier}
+                   if hasattr(error, "conditional_return_barrier") else {})}
         builder.boundaries.append(
             {
                 "procedure": builder.entry.qualified,

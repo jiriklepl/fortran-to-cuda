@@ -57,6 +57,22 @@ def transfer_cost_lines(profile, costs):
     return result
 
 
+def physical_copy_cost_lines(calibration):
+    """Emit the optional versioned record after profile/runtime validation."""
+    result = ["fort_scope_copy_costs_v2 copy_costs{}; copy_costs.version = FORT_SCOPE_COPY_COST_ABI_VERSION;"]
+    if calibration is None:
+        return result
+    result += ["copy_costs.valid = 1;",
+               f"copy_costs.minimum_relative_saving = {float(calibration['minimum_relative_saving'])!r};"]
+    for path, rates in calibration["costs"].items():
+        for direction, rate in enumerate(rates):
+            target = f"copy_costs.{path}[{direction}]"
+            result += [f"{target}.{field} = {float(value)!r};" for field, value in rate.items() if field != "coverage"]
+            result += [f"{target}.{field} = {value}{'U' if field.endswith('_mask') else 'ULL'};"
+                       for field, value in rate["coverage"].items()]
+    return result
+
+
 def checked_snapshots(region, *, failure, prefix="fort_batch_original"):
     """Query bounds in source order without narrowing before the range check."""
     valid = prefix + "_valid"

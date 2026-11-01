@@ -453,9 +453,7 @@ class InlineRegions:
             retained = _prepare(self.builder.analysis, self.builder.entry.qualified, sources, provider,
                                 extraction=extraction, require_effects=False)
             extraction = retained.extraction
-        for binding in extraction.bindings:
-            if binding.rank:
-                self.builder.capture(binding)
+        self.builder.capture_many(binding for binding in extraction.bindings if binding.rank)
         if hasattr(self.builder, "_coordinator_root"):
             # Canonical storage bounds checked by the parent do not prove a
             # child's rebased logical INTEGER ABI. Read that descriptor only

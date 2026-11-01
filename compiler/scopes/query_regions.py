@@ -603,7 +603,7 @@ def _emit_region(proof, ordinal):
         code += [f"if (fort_can) fort_can = {condition}" for condition in
                  expected_descriptor_conditions(builder.capture(binding), binding.rank, name)]
     code += [f"if (.not. fort_can) exit {block}", f"if ({anchor.context} == 0) then",
-        f"fort_status = fort_scope_create(0_c_int, {anchor.context})",
+        f"fort_status = fort_scope_resident_create_v1(0_c_int, {anchor.context})",
         f"if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_set_device_budget({anchor.context}, &",
         f"{builder.device_budget}_c_size_t)", *configuration, "endif"]
     for index, (root, binding) in enumerate(proof.arrays):

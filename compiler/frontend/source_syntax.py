@@ -188,10 +188,22 @@ class SourceSyntaxSnapshot:
         result._sealed = True
         return result
 
-    def _layout(self, node):
+    def original_subtree_unchanged(self, node):
+        """Check retained original rows without mutating an immutable session.
+
+        Consumers which inspect declaration values after a delegated callback
+        can request this exact structural check even for sealed syntax. It
+        reuses the original expected rows and does not capture a new baseline.
+        """
+        if node is None:
+            return True
+        state = self._nodes.get(id(node))
+        return state is not None and state.original is node and self._layout(node, cache=False).unchanged()
+
+    def _layout(self, node, *, cache=True):
         """Group immutable baseline records; never cache a validation result."""
         key = id(node)
-        if key in self._layouts:
+        if cache and key in self._layouts:
             return self._layouts[key]
         pending, seen, states = [node], set(), []
         while pending:
@@ -222,6 +234,8 @@ class SourceSyntaxSnapshot:
                                  tuple((name, tuple(state.item_attributes[index][1] for state in records))
                                        for index, name in enumerate(keys)), item=True))
         layout = _Layout(tuple(seen), tuple(groups), tuple(sequences.values()))
+        if not cache:
+            return layout
         # Repeated subtree requests may overlap. Bound retained baseline
         # indexes independently of the per-demand successful comparisons.
         while self._layouts and self._layout_weight + len(seen) > self._layout_limit:

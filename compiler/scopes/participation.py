@@ -202,9 +202,14 @@ def _effects(analysis, procedure, mapping=None, active=(), budget=None):
 
 def _threadprivate(analysis):
     roots = set()
+    session = getattr(analysis, "_source_session", None)
+    comments = session.specification_comments(analysis) if session is not None else {}
     scopes = [*analysis.modules.values(), *(routine.scope for routine in analysis.routines.values())]
     for scope in scopes:
-        for node in walk(_part(scope.node, "Specification_Part")):
+        indexed = comments.get(id(scope.node))
+        nodes = (indexed[1] if indexed is not None and indexed[0] is scope.node
+                 else walk(_part(scope.node, "Specification_Part")))
+        for node in nodes:
             directive = _directive(node)
             if directive is None or not directive.startswith("threadprivate"):
                 continue

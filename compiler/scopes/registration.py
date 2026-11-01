@@ -83,7 +83,7 @@ def fresh_undefined_read_guard(facts, required, parameters, *, context, query_pl
 
 def build_registration(fact, rank, handle, prefix, key, layout, *, context="fort_context",
                        status="fort_status", on_error=("return",), parameters=None,
-                       logical_lower_bounds=None, entry_guard=None):
+                       logical_lower_bounds=None, entry_guard=None, generation="1_c_int64_t"):
     """Consume compiler-owned source sections only at the original descriptor.
 
     The caller supplies an already guarded local layout and runs this code only
@@ -92,11 +92,12 @@ def build_registration(fact, rank, handle, prefix, key, layout, *, context="fort
     """
     if entry_guard is not None:
         initial = build_registration(fact, rank, handle, prefix, key, layout, context=context,
-            status=status, on_error=on_error, parameters=parameters, logical_lower_bounds=logical_lower_bounds)
+            status=status, on_error=on_error, parameters=parameters, logical_lower_bounds=logical_lower_bounds,
+            generation=generation)
         # A closed epoch has no initialized coverage to inherit. Only a
         # separately authenticated reached read may subsequently admit values.
         empty = build_registration({"initialized": "none"}, rank, handle, prefix, key, layout,
-            context=context, status=status, on_error=on_error)
+            context=context, status=status, on_error=on_error, generation=generation)
         return RegistrationCode(initial.specification,
             (f"if ({entry_guard}) then", *initial.prepare, "else", *empty.prepare, "endif"))
     if not re.fullmatch(r"fort_[a-z0-9_]{1,24}", prefix) or not 1 <= rank <= 15:
@@ -127,11 +128,11 @@ def build_registration(fact, rank, handle, prefix, key, layout, *, context="fort
         count = f"{len(boxes)}_c_size_t"
     elif initialized in {"whole", "none"}:
         prepare += [f"{status} = fort_scope_register({context}, {key}, &",
-                    f"1_c_int64_t, {layout}, {int(not _empty_registration(fact))}_c_int, {handle})"]
+                    f"{generation}, {layout}, {int(not _empty_registration(fact))}_c_int, {handle})"]
         return RegistrationCode((), tuple(prepare))
     else:
         raise CompilationError("registration requires explicit initial definition coverage")
     prepare += [f"{status} = fort_scope_register_sections({context}, {key}, &",
-                f"1_c_int64_t, {layout}, {pointer}, {count}, {handle})"]
+                f"{generation}, {layout}, {pointer}, {count}, {handle})"]
     return RegistrationCode(tuple(line for statement in spec for line in _statement_lines(statement)),
                             tuple(line for statement in prepare for line in _statement_lines(statement)))

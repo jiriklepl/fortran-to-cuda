@@ -40,6 +40,30 @@ def _freeze(value):
     return value
 
 
+def _freeze_source_record(analysis, record):
+    """Detach a proof record, borrowing only session-owned input provenance.
+
+    SourceSession owns and seals the entire SourceInputs graph. Its identity()
+    wrapper refers only to that deeply immutable provenance; repeatedly copying
+    every configured line map does not add a validation boundary. A standalone
+    analysis still receives the ordinary recursively detached record. This
+    helper conveys ownership only, never original-source or execution authority.
+    """
+    session = getattr(analysis, "_source_session", None)
+    if session is None:
+        return _freeze(record)
+    from compiler.frontend.immutable_graph import sealed
+
+    session.verify(analysis)
+    if not sealed(analysis.inputs):
+        raise CompilationError("source provenance requires session-owned immutable inputs")
+    original = analysis.inputs.identity()
+    if record.get("source_inputs") != original:
+        raise CompilationError("proof source provenance differs from its original session")
+    return MappingProxyType({key: original if key == "source_inputs" else _freeze(value)
+                             for key, value in record.items()})
+
+
 def _thaw(value):
     if isinstance(value, (dict, MappingProxyType)):
         return {key: _thaw(item) for key, item in value.items()}
@@ -53,6 +77,25 @@ def _span(node):
              for item in walk(node) if getattr(item, "item", None) is not None]
     spans = [span for span in spans if span is not None]
     return (min(span[0] for span in spans), max(span[1] for span in spans)) if spans else ()
+
+
+def _complete_sequences(sequence, initial):
+    """Resume parents in source order without Python control recursion."""
+    frames, result = [sequence(*initial)], None
+    try:
+        while frames:
+            try:
+                child = frames[-1].send(result)
+            except StopIteration as done:
+                frames.pop()
+                result = done.value
+            else:
+                frames.append(sequence(*child))
+                result = None
+        return result
+    finally:
+        for frame in reversed(frames):
+            frame.close()
 
 
 @dataclass(frozen=True)
@@ -177,10 +220,7 @@ def _build_structure(analysis, routine, authority_identity, *, defer_native_grou
             ids[key] = identity
         return identity
 
-    def sequence(items, path, guard=(), depth=0):
-        if depth > analysis.depth_limit:
-            return add(path, "boundary", items, guard,
-                       reason="bounded structured source control depth exhausted")
+    def sequence(items, path, guard=()):
         children = []
         if defer_native_groups:
             from compiler.frontend.native_group_structure import (
@@ -227,8 +267,7 @@ def _build_structure(analysis, routine, authority_identity, *, defer_native_grou
                                 previous.append(str(condition))
                             else:
                                 condition_id = None
-                            body_id = sequence(current, child_path + "/body" + str(len(alternatives)),
-                                               branch_guard, depth + 1)
+                            body_id = yield current, child_path + "/body" + str(len(alternatives)), branch_guard
                             alternatives.append((condition_id, body_id))
                         current, header = [], item
                     else:
@@ -238,7 +277,7 @@ def _build_structure(analysis, routine, authority_identity, *, defer_native_grou
                 condition, action = original.items
                 condition_id = add(child_path + "/condition", "operation", (condition,), guard,
                                    role="condition", aliases=(original,), evaluation="condition")
-                body_id = sequence((action,), child_path + "/body", (*guard, str(condition)), depth + 1)
+                body_id = yield (action,), child_path + "/body", (*guard, str(condition))
                 children.append(add(child_path, "branch", (original,), guard,
                                     alternatives=((condition_id, body_id),)))
             elif kind in {"Block_Nonlabel_Do_Construct", "Block_Label_Do_Construct"}:
@@ -263,7 +302,7 @@ def _build_structure(analysis, routine, authority_identity, *, defer_native_grou
                 # Directives inside the original header/end belong to this
                 # reached loop body. Only attached outside comments retain the
                 # enclosing guard (including a previous team's closing join).
-                body_id = sequence(content[first+1:last], child_path + "/body", (*guard, str(header)), depth + 1)
+                body_id = yield content[first+1:last], child_path + "/body", (*guard, str(header))
                 children.append(add(child_path, "loop", (original,), guard,
                                     children=(*directives, header_id, body_id), control=str(header)))
             elif kind == "Associate_Construct":
@@ -276,7 +315,7 @@ def _build_structure(analysis, routine, authority_identity, *, defer_native_grou
                     header = contents[0]
                     selector_id = add(child_path + "/selector", "operation", (header,), guard,
                                       role="selector", evaluation="associate_selector")
-                    body_id = sequence(contents[1:-1], child_path + "/body", guard, depth + 1)
+                    body_id = yield contents[1:-1], child_path + "/body", guard
                     children.append(add(child_path, "associate", (original,), guard,
                                         children=(selector_id, body_id), association=record.public()))
             elif kind == "Call_Stmt":
@@ -328,7 +367,8 @@ def _build_structure(analysis, routine, authority_identity, *, defer_native_grou
                 role="condition", aliases=(condition_header,), evaluation="condition")
             root_id = add(path, "sequence", selection, guard, children=(condition_id,), role="sequence")
         else:
-            root_id = sequence(_children(routine.execution) if selection is None else selection, path, guard)
+            root_id = _complete_sequences(sequence,
+                (_children(routine.execution) if selection is None else selection, path, guard))
     except CompilationError as error:
         reasons.append(str(error))
         # A truncated graph is never advertised as an executable skeleton.
@@ -381,6 +421,23 @@ def mapped_resource(resource, mapping):
         return resource
     formal, actual = max(candidates, key=lambda pair: len(pair[0]))
     return None if actual is None else actual + resource[len(formal):]
+
+
+def storage_mutation_effects(analysis, requested, *, expression=None, selection=None, joined_storage=None):
+    """Demand the storage component without invoking payload effect analysis.
+
+    This is the replacement lifetime foundation. Existing window/whole-body
+    consumers migrate independently; it supplies no native access or execution
+    permission and cannot substitute for a reached coherence frontier.
+    """
+    from compiler.frontend.source_functions import _origin
+    from compiler.frontend.storage_mutation_effects import prove_storage_mutation_effects
+
+    # An explicit joined token belongs to this exact analysis, including a
+    # private native consumer. Historical queries retain original projection.
+    owner = analysis if joined_storage is not None else _origin(analysis)
+    return prove_storage_mutation_effects(owner, requested, expression=expression, selection=selection,
+                                         joined_storage=joined_storage)
 
 
 def descriptor_stability(analysis, requested, *, _structure=None):

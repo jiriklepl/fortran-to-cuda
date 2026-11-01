@@ -1,7 +1,8 @@
 """Ordinary numerical pairs are reused only within one lexical planning pass."""
 
+import json
 from collections import Counter
-from copy import copy
+from copy import copy, deepcopy
 from dataclasses import replace
 from hashlib import sha256
 
@@ -296,8 +297,25 @@ def test_same_original_authority_emits_identical_artifacts_with_fresh_lookup_ora
 
     monkeypatch.setattr(ScopeBuilder, "_consume_numerical_region", fresh)
     fresh_outputs, fresh_report = emit()
-    assert fresh_outputs == reused_outputs
-    assert fresh_report == reused_report
+    def without_cache_diagnostics(record):
+        result = deepcopy(record)
+        counters = result["native_effects"]["summary_cache"]
+        assert set(counters) == {"disk_hits", "disk_writes", "hits", "memory_hits", "misses", "rejected", "stores"}
+        assert all(type(value) is int and value >= 0 for value in counters.values())
+        # Fresh and reused lookup paths intentionally exercise the summary
+        # cache differently. Compare every semantic field and every artifact;
+        # only these named diagnostic counters may differ.
+        result["native_effects"]["summary_cache"] = {key: 0 for key in counters}
+        return result
+
+    assert fresh_outputs.keys() == reused_outputs.keys()
+    for name in fresh_outputs:
+        if name == "scope-manifest.json":
+            assert without_cache_diagnostics(json.loads(fresh_outputs[name])) == without_cache_diagnostics(
+                json.loads(reused_outputs[name]))
+        else:
+            assert fresh_outputs[name] == reused_outputs[name], name
+    assert without_cache_diagnostics(fresh_report) == without_cache_diagnostics(reused_report)
     assert any(name.endswith(".cu") for name in reused_outputs)
     assert not parent.outputs
     assert not parent.edits

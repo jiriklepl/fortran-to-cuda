@@ -209,8 +209,10 @@ def test_foreign_or_forged_plan_cannot_emit(tmp_path):
 def test_mutable_source_authority_is_not_converted_into_native_close(tmp_path, mutation):
     path, builder, proof, originals = planned_window_fixture(tmp_path)
     if mutation == "source":
-        path.write_text(PLANNED_SOURCE + "\n! source mutation\n")
         assert proof.validate(builder.analysis, ENTRY, originals) is proof
+        path.write_text(PLANNED_SOURCE + "\n! source mutation\n")
+        with pytest.raises(CompilationError, match="changed"):
+            proof.validate(builder.analysis, ENTRY, originals)
         with pytest.raises(CompilationError, match="changed"):
             builder.finish()
     elif mutation == "binding":
@@ -302,16 +304,16 @@ def test_source_validation_failure_is_hard_without_diagnostic_keyword_matching(t
         proof.validate(builder.analysis, ENTRY, originals)
 
 
-def test_local_expression_limit_can_close_without_spending_more_global_budget(tmp_path):
+def test_nested_arithmetic_retains_lifetime_within_original_source_budget(tmp_path):
     deep = "a(0)"
     for _ in range(10):
         deep = "abs(" + deep + ")"
     source = PLANNED_SOURCE.replace("call replace_storage(b)", "b(0)=" + deep)
     _path, builder, proof, originals = planned_window_fixture(tmp_path, source)
     record = proof.public()
-    point, = record["planned_closures"]["close_points"]
-    assert "expression depth exhausted" in point["reason"]
-    assert point["original_source_kind"] == "Assignment_Stmt"
+    assert not record["planned_closures"]["close_points"]
+    assert not record["planned_closures"]["closed_path_possible"]
+    assert record["planned_closures"]["active_path_may_return"]
     assert record["ordered_effect_work"] <= builder.analysis.operation_limit
     assert record["ordered_effects"] <= record["ordered_effect_work"]
     assert proof.validate(builder.analysis, ENTRY, originals) is proof
@@ -416,8 +418,9 @@ end subroutine
     _path, builder, proof, originals = planned_window_fixture(tmp_path, source)
     point, = proof.public()["planned_closures"]["close_points"]
     assert point["original_source_kind"] == "Call_Stmt"
-    assert "whole-closure authority" in point["reason"]
-    with pytest.raises(CompilationError, match="whole-closure authority"):
+    reason = "worksharing storage requires a restricted original orphan DO"
+    assert point["reason"] == reason
+    with pytest.raises(CompilationError, match=reason):
         prove_reached_window(builder.analysis, ENTRY, originals, ROOTS, builder.facts)
     # The cut closes outside the child's original team. It does not admit or
     # instrument any critical/parallel group or derive its completion effects.

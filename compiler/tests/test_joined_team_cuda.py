@@ -61,6 +61,7 @@ enddo
 !$omp end do
 '''
 INDIRECT_CASES = ('indirect_faces', 'indirect_budget')
+CASES = ('plain', 'zero_budget', 'module_child', *INDIRECT_CASES, 'many_segments')
 NATIVE_SEGMENT_COUNT = 28
 
 
@@ -249,7 +250,7 @@ def joined_binaries(tmp_path_factory):
         'schema_version': 1, 'cuda_flags': cuda_flags, 'fortran_flags': fortran_flags,
         'architecture': architecture}, indent=2)+'\n')
     cache, reuse, binaries = {}, [], {}
-    for label in ('plain', 'zero_budget', 'module_child', *INDIRECT_CASES, 'many_segments'):
+    for label in CASES:
         case = directory/label
         facts = {'schema_version': 1, 'participation': 'serial',
                  'captures': {'argument::'+name: FACT for name in ('a', 'b', 'out')}}

@@ -1,0 +1,151 @@
+def visit(self, routine, graph, identities, depth=0):
+    if depth > self.analysis.depth_limit:
+        raise CompilationError("descriptor window control depth exhausted")
+    for identity in identities:
+        self.tick()
+        node = graph.nodes[identity]
+        if node.kind == "sequence":
+            self.visit(routine, graph, node.children, depth)
+        elif node.kind == "loop":
+            self.loop_frames.append(self.loop_frame(routine, graph, identity))
+            try:
+                self.visit(routine, graph, node.children, depth + 1)
+            finally:
+                self.loop_frames.pop()
+        elif node.kind == "branch":
+            for condition, body in node.alternatives:
+                self.visit(routine, graph, (body,) if condition is None else (condition, body), depth + 1)
+        elif node.kind == "operation":
+            self.operations += 1
+            role = node.details.get("evaluation")
+            for original in graph.source_nodes(identity):
+                if role == "directive":
+                    self.directive(routine, original)
+                elif role == "condition":
+                    self.resolution(routine, original)
+                    self.expression(routine, original)
+                elif role == "loop_header":
+                    control = original.items[1]
+                    if control is None or control.items[1] is None:
+                        frame = self.loop_frames[-1] if self.loop_frames else None
+                        if frame is None or frame[0] != routine.qualified or frame[2] is not original:
+                            raise DescriptorWindowUnsupported("descriptor window non-counted header requires its exact complete original loop")
+                        if frame[4] == "while":
+                            self.resolution(routine, frame[5])
+                            self.expression(routine, frame[5])
+                    else:
+                        self.resolution(routine, control.items[1])
+                        self.expression(routine, control.items[1])
+                elif _kind(original) == "Assignment_Stmt":
+                    target, _equals, value = original.items
+                    self.resolution(routine, (target, value))
+                    scope = self.analysis.source_scope_for(original, routine.scope)
+                    binding = self.analysis._binding(scope, target) if _kind(target) == "Name" else None
+                    if binding is not None and "allocatable" in binding.attributes:
+                        raise DescriptorWindowUnsupported("descriptor window whole allocatable assignment may replace storage")
+                    self.expression(routine, target)
+                    self.expression(routine, value)
+                elif _kind(original) != "Continue_Stmt":
+                    raise DescriptorWindowUnsupported("descriptor window operation lacks descriptor/escape authority")
+        elif node.kind == "call":
+            self.operations += 1
+            originals = graph.source_nodes(identity)
+            if len(originals) != 1 or node.details.get("contract"):
+                raise DescriptorWindowUnsupported("descriptor window requires original direct source calls")
+            call = originals[0]
+            self.resolution(routine, call)
+            if self.terminating_call(routine, call):
+                continue
+            scope = self.analysis.source_scope_for(call, routine.scope)
+            resolved = resolve_source_call(self.analysis, scope, call)
+            for mapping in resolved.mappings:
+                if self.optional_scalar_mapping(routine, call, resolved, mapping) is not None:
+                    if (mapping.presence == "forwarded_optional"
+                            and self.optional_output(self.analysis.routines[resolved.procedure], mapping.formal_binding)):
+                        # Exact original name forwarding does not evaluate
+                        # the optional payload; every callee use is still
+                        # visited and needs its own original PRESENT guard.
+                        self.tick()
+                    else:
+                        self.expression(routine, mapping.actual)
+                    continue
+                if (mapping.presence != "supplied"
+                        or mapping.formal_binding.attributes & _UNSAFE
+                        or mapping.binding is not None and mapping.binding.attributes & _UNSAFE):
+                    raise DescriptorWindowUnsupported("descriptor window call association/escape authority is unavailable")
+                if mapping.source_object is not None:
+                    self.fixed_object(mapping.formal_binding)
+                    self.fixed_object(mapping.binding)
+                    self.object_mappings[mapping.source_object.identity] = mapping.source_object.public()
+                else:
+                    self.expression(routine, mapping.actual)
+            nested = (routine.qualified, id(call)) in self.team_calls
+            self.team_call_depth += int(nested)
+            try:
+                self.procedure(resolved.procedure)
+            except (_DescriptorFunctionRequired, _DescriptorTerminationRequired):
+                raise
+            except DescriptorWindowUnsupported as error:
+                raise _DescriptorTerminationRequired(routine.qualified, call, str(error)) from error
+            finally:
+                self.team_call_depth -= int(nested)
+        elif node.kind == "boundary":
+            originals = graph.source_nodes(identity)
+            if len(originals) == 1 and _kind(originals[0]) in {"Write_Stmt", "Print_Stmt"}:
+                from compiler.frontend.descriptor_output import (
+                    DescriptorOutputUnsupported,
+                    original_intrinsic_output,
+                )
+
+                try:
+                    output = original_intrinsic_output(self, routine, originals[0])
+                except DescriptorOutputUnsupported as error:
+                    raise DescriptorWindowUnsupported(str(error)) from error
+                self.operations += 1
+                self.native_outputs[routine.qualified, identity] = {
+                    **output, "source_graph": graph.identity, "original_node_id": identity}
+                continue
+            if len(originals) == 1 and _kind(originals[0]) in {"Exit_Stmt", "Cycle_Stmt"}:
+                self.loop_control(routine, graph, identity, originals[0])
+                continue
+            if len(originals) == 1 and _kind(originals[0]) == "Return_Stmt":
+                original = originals[0]
+                if (len(self.active) < 2 or self.active[-1] != routine.qualified
+                        or tuple(original.items) != (None,)
+                        or (routine.qualified, id(original)) in self.joined_returns):
+                    raise DescriptorWindowUnsupported("descriptor window RETURN requires a bare complete-callee exit outside original OpenMP")
+                if any("allocatable" in binding.attributes and name not in routine.arguments
+                       for name, binding in routine.scope.bindings.items()):
+                    raise DescriptorWindowUnsupported("descriptor window RETURN local allocation finalization requires separate authority")
+                self.resolution(routine, original)
+                self.operations += 1
+                self.native_returns[routine.qualified, identity] = {
+                    "procedure": routine.qualified, "source_graph": graph.identity,
+                    "original_node_id": identity, "original_statement": str(original),
+                    "complete_original_callee_required": True, "all_following_original_nodes_scanned": True,
+                    "descriptor_evidence_only": True, "entry_definition_authority": False,
+                    "payload_access_authorized": False, "execution_authorized": False}
+                continue
+            if len(originals) == 1 and self.scalar_metadata_call(routine, originals[0]):
+                continue
+            candidates = [proof for proof in self.join_analysis._native_environments.values()
+                          if isinstance(proof, NativeEnvironmentProof) and len(originals) == 1
+                          and proof.procedure == routine.qualified
+                          and proof._call is originals[0]]
+            if len(candidates) != 1:
+                reason = ("descriptor window unknown selected storage effects: boundary"
+                          + (": " + node.details["reason"] if node.details.get("reason") else ""))
+                if len(originals) == 1 and _kind(originals[0]) == "Call_Stmt":
+                    if self.terminating_call(routine, originals[0]):
+                        self.operations += 1
+                        continue
+                    raise _DescriptorTerminationRequired(routine.qualified, originals[0], reason)
+                raise DescriptorWindowUnsupported(reason)
+            proof = candidates[0].validate(self.join_analysis, routine.qualified, originals[0])
+            self.resolution(routine, originals[0])
+            self.operations += 1
+            self.environments[proof.identity] = {**proof.public(), "descriptor_evidence_only": True,
+                                                 "execution_authorized": False}
+        else:
+            raise DescriptorWindowUnsupported("descriptor window unknown selected storage effects: " + node.kind
+                                   + (": " + node.details["reason"] if node.details.get("reason") else ""))

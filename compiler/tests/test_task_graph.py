@@ -211,6 +211,72 @@ def test_device_memory_budget_evicts_and_publishes_a_dirty_last_copy():
         schedule_tasks(graph, required_targets={"a": GPU}, memory_budget_bytes=32, resource_bytes={"a": 64, "b": 64})
 
 
+def test_connected_consumers_amortize_an_upload_that_each_cannot_afford_alone():
+    graph = build_task_graph(tuple(work(f"read{i}", reads=(access("a"),)) for i in range(3)))
+    costs = {task.id: TaskCost(3, 0.5) for task in graph.tasks}
+    greedy = schedule_tasks(graph, costs, transfer_cost=4, group_search_budget=0)
+    grouped = schedule_tasks(graph, costs, transfer_cost=4)
+    assert {item.target for item in greedy.placements} == {CPU}
+    assert {item.target for item in grouped.placements} == {GPU}
+    assert grouped.estimated_cost == 5.5 < greedy.estimated_cost == 9
+    assert [(copy.resource, copy.target) for item in grouped.placements for copy in item.transfers] == [("a", GPU)]
+    assert schedule_tasks(graph, costs, transfer_cost=4).public() == grouped.public()
+    verify_schedule(graph, grouped)
+
+
+def test_connected_gpu_search_cannot_cross_a_required_host_writer():
+    graph = build_task_graph((work("first", reads=(access("a"),)),
+                              work("host", writes=(access("a"),), targets={CPU}),
+                              work("last", reads=(access("a"),))))
+    schedule = schedule_tasks(graph, {task.id: TaskCost(3, 0.5) for task in graph.tasks}, transfer_cost=4)
+    assert schedule.task_ids == graph.task_ids
+    assert {item.target for item in schedule.placements} == {CPU}
+    verify_schedule(graph, schedule)
+
+
+def test_search_budget_does_not_truncate_graph_or_limit_residency():
+    graph = build_task_graph(tuple(work(f"read{i}", reads=(access("a"),)) for i in range(150)))
+    schedule = schedule_tasks(graph, {task.id: TaskCost(3, 0.5) for task in graph.tasks},
+                              transfer_cost=4, group_search_budget=1)
+    assert len(schedule.placements) == 150
+    assert set(schedule.task_ids) == set(graph.task_ids)
+    assert {item.target for item in schedule.placements} == {GPU}
+    assert sum(len(item.transfers) for item in schedule.placements) == 1
+    assert len(schedule.groups) == 1
+    verify_schedule(graph, schedule)
+
+
+def test_connected_search_keeps_memory_budget_and_required_placement():
+    graph = build_task_graph((work("first", reads=(access("a"),)),
+                              work("second", reads=(access("a"), access("b")))))
+    costs = {task.id: TaskCost(3, 0.5) for task in graph.tasks}
+    schedule = schedule_tasks(graph, costs, transfer_cost=4, memory_budget_bytes=64,
+                              resource_bytes={"a": 64, "b": 64})
+    assert {item.target for item in schedule.placements} == {CPU}
+    forced = schedule_tasks(graph, costs, transfer_cost=4, required_targets={"first": CPU})
+    assert next(item.target for item in forced.placements if item.task_id == "first") == CPU
+    verify_schedule(graph, forced)
+
+
+def test_eviction_estimate_preserves_dirty_replica_when_clean_storage_can_be_reclaimed():
+    graph = build_task_graph((work("dirty", writes=(access("dirty"),), overwrite=(access("dirty"),)),
+                              work("new", reads=(access("new"),)),
+                              work("reuse", reads=(access("dirty"),))))
+    schedule = schedule_tasks(graph, required_targets={task.id: GPU for task in graph.tasks},
+                              initial_residency=("clean", "dirty"),
+                              resource_bytes={"clean": 64, "dirty": 64, "new": 64},
+                              memory_budget_bytes=128, preserve_source_order=True)
+    assert schedule.placements[1].evictions == ("clean",)
+    assert [(item.resource, item.target) for p in schedule.placements for item in p.transfers] == [("new", GPU)]
+    verify_schedule(graph, schedule)
+
+
+@pytest.mark.parametrize("budget", [-1, True, 1.5])
+def test_connected_search_rejects_invalid_budget(budget):
+    with pytest.raises(ValueError, match="Group search budget"):
+        schedule_tasks(build_task_graph(()), group_search_budget=budget)
+
+
 def test_unknown_native_call_is_an_ordering_and_publication_barrier():
     graph = build_task_graph(
         (

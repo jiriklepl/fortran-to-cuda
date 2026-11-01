@@ -98,7 +98,7 @@ def test_excluded_tail_does_not_supply_or_invalidate_interval_authority(tmp_path
 
 
 @pytest.mark.parametrize("selected", ["allocate(a(3))", "deallocate(a)", "call move_alloc(a,temporary)",
-                                      "a=3.0_8", "call unknown(a)", "call unknown()"])
+                                      "a=[3.0_8]", "call unknown(a)", "call unknown()"])
 def test_selected_lifetime_or_unknown_effects_reject(tmp_path, selected):
     _path, analysis, _graph, ids = fixture(tmp_path, selected=selected)
     with pytest.raises(CompilationError, match="unknown selected storage|whole allocatable"):
@@ -106,7 +106,7 @@ def test_selected_lifetime_or_unknown_effects_reject(tmp_path, selected):
     assert not getattr(analysis, "_descriptor_window_proofs", {})
 
 
-@pytest.mark.parametrize("child", ["a=3.0_8", "deallocate(a)", "call move_alloc(a,b)", "call absent(a)"])
+@pytest.mark.parametrize("child", ["a=[3.0_8]", "deallocate(a)", "call move_alloc(a,b)", "call absent(a)"])
 def test_direct_child_complete_source_is_required(tmp_path, child):
     declaration = "real(8),allocatable,intent(inout)::a(:)\nreal(8),allocatable::b(:)"
     _path, analysis, _graph, ids = fixture(tmp_path, child=child, child_decl=declaration)
@@ -158,6 +158,7 @@ def test_recursion_and_automatic_bound_effects_are_not_hidden(tmp_path, body):
 
 
 def test_source_function_requires_registered_original_readonly_token(tmp_path):
+    from compiler.frontend.descriptor_windows import _derive
     extra = """logical pure function check(x) result(ok)
 real(8),intent(in)::x
 ok=x>0.0_8
@@ -165,7 +166,7 @@ end function
 """
     _path, analysis, _graph, ids = fixture(tmp_path, selected="total=merge(1.0_8,0.0_8,check(total))", extra=extra)
     with pytest.raises(CompilationError, match="registered original readonly source-function"):
-        prove(analysis, ids)
+        _derive(analysis, ENTRY, ids, (ROOT,))
     # The ordinary source-effect provider mints the original scalar helper
     # proof. The descriptor query never calls whole descriptor_stability.
     analysis.summarize(ENTRY)
@@ -209,9 +210,9 @@ def test_selection_cannot_skip_a_native_operation_in_its_immediate_sequence(tmp_
 
 
 @pytest.mark.parametrize("attributes", ["pointer", "allocatable,optional", "allocatable,volatile", "target"])
-def test_only_original_numeric_allocatable_formals_are_initially_supported(tmp_path, attributes):
+def test_unsafe_original_numeric_array_associations_remain_rejected(tmp_path, attributes):
     _path, analysis, _graph, ids = fixture(tmp_path, owner_attrs=attributes)
-    with pytest.raises(CompilationError, match="numeric allocatable formals"):
+    with pytest.raises(CompilationError, match="numeric allocation or ordinary array formal"):
         prove(analysis, ids)
 
 
@@ -260,7 +261,7 @@ def test_team_pointer_or_address_escape_requires_distinct_authority(tmp_path, ch
     if child == "q=>a":
         declaration += "\nreal(8),pointer::q(:)"
     _path, analysis, _graph, ids = fixture(tmp_path, child=child, child_decl=declaration)
-    with pytest.raises(CompilationError, match="OpenMP storage|specification effects|unknown function/escape"):
+    with pytest.raises(CompilationError, match="OpenMP storage|specification effects|unknown function/escape|worksharing storage requires an original orphan DO in the complete callee"):
         prove(analysis, ids)
 
 
@@ -288,40 +289,48 @@ end do
 a(1)=total"""
 
 
-def test_registered_native_prefix_only_supplies_child_directive_authority(tmp_path):
+def test_joined_scalar_reduction_storage_does_not_require_native_prefix_execution(tmp_path):
     _path, analysis, _graph, ids = fixture(tmp_path, child=TEAM_BODY, child_decl=TEAM_DECLARATION)
-    with pytest.raises(CompilationError, match="registered whole-closure"):
-        prove(analysis, ids)
+    initial = prove(analysis, ids).public()
     assert not getattr(analysis, "_native_prefix_proofs", {})
     native = prove_native_prefix(analysis, "intervals::read_modify")
-    # The native proof is already complete. The descriptor query neither
-    # rebuilds payload effects nor inherits native execution authority.
+    # Descriptor-only team structure is independently source-issued. A native
+    # execution token cannot replace it or grant payload/entry authority.
     analysis.summarize = lambda *_args, **_kwargs: pytest.fail("payload summary requested")
     public = prove(analysis, ids).public()
-    requirement, = public["native_prefix_descriptor_requirements"]
-    assert requirement["proof_identity"] == native.identity
-    assert requirement["whole_original_closure_scanned"]
+    assert not initial["native_prefix_descriptor_requirements"]
+    assert not public["native_prefix_descriptor_requirements"]
+    assert analysis._native_prefix_proofs[native.identity] is native
+    requirement, = public["native_joined_descriptor_requirements"]
+    assert requirement["proof_role"] == "original_joined_storage_structure"
+    assert requirement["storage_structure"]["version"] == 2
+    assert requirement["whole_original_group_scanned"]
     assert requirement["descriptor_evidence_only"]
-    assert requirement["native_prefix_execution_requirements"]["requires_no_active_context"]
     assert not requirement["execution_authorized"]
-    assert not requirement["allocation_freshness_authority"]
+    assert not requirement["entry_definition_authority"]
+    assert not requirement["gpu_legality_established"]
     assert not public["prefix_effects_proved"]
     assert not public["entry_definition_authority"]
     assert public["source_operations"] > 5
 
 
-def test_registered_whole_native_prefix_covers_transitive_directives_only(tmp_path):
+def test_transitive_joined_storage_is_independent_of_unused_native_prefix(tmp_path):
     extra = "subroutine team_reduce(a)\n" + TEAM_DECLARATION + "\n" + TEAM_BODY + "\nend subroutine"
     _path, analysis, _graph, ids = fixture(tmp_path, child="call team_reduce(a)", extra=extra)
     native = prove_native_prefix(analysis, "intervals::read_modify")
     public = prove(analysis, ids).public()
-    requirement, = public["native_prefix_descriptor_requirements"]
-    assert requirement["proof_identity"] == native.identity
-    assert set(requirement["covered_original_procedures"]) == {"intervals::read_modify", "intervals::team_reduce"}
+    assert not public["native_prefix_descriptor_requirements"]
+    requirement, = public["native_joined_descriptor_requirements"]
+    assert requirement["procedure"] == "intervals::team_reduce"
+    assert requirement["storage_structure"]["version"] == 2
+    assert requirement["whole_original_group_scanned"]
+    assert not requirement["execution_authorized"]
     assert set(public["source_call_closure"]) == {"intervals::read_modify", "intervals::team_reduce"}
     analysis._native_prefix_proofs.pop(native.identity)
-    with pytest.raises(CompilationError, match="registered whole-closure"):
-        prove(analysis, ids)
+    independent = prove(analysis, ids).public()
+    assert not independent["native_prefix_descriptor_requirements"]
+    assert independent["native_joined_descriptor_requirements"]
+    assert not independent["execution_authorized"]
 
 
 def test_copied_native_prefix_cannot_supply_directive_authority(tmp_path):
@@ -334,12 +343,12 @@ def test_copied_native_prefix_cannot_supply_directive_authority(tmp_path):
 
 def test_native_prefix_does_not_suppress_descriptor_specific_replacement_checks(tmp_path):
     declaration = TEAM_DECLARATION.replace("real(8),intent(inout)::a", "real(8),allocatable,intent(inout)::a")
-    _path, analysis, _graph, ids = fixture(tmp_path, child=TEAM_BODY + "\na=3.0_8", child_decl=declaration)
+    _path, analysis, _graph, ids = fixture(tmp_path, child=TEAM_BODY + "\na=[3.0_8]", child_decl=declaration)
     # SourceEffects already rejects this complete native proof. The interval
     # provider independently rejects the allocatable whole assignment as well.
     with pytest.raises(CompilationError):
         prove_native_prefix(analysis, "intervals::read_modify")
-    with pytest.raises(CompilationError, match="registered whole-closure"):
+    with pytest.raises(CompilationError, match="whole allocatable assignment may replace storage"):
         prove(analysis, ids)
 
 
@@ -425,7 +434,7 @@ def test_fixed_object_actual_association_remains_original_and_nonoptional(tmp_pa
         prove(analysis, ids)
 
 
-@pytest.mark.parametrize("body", ["a=0.0_8", "deallocate(a)", "call unknown(a)", "control=control"])
+@pytest.mark.parametrize("body", ["a=[0.0_8]", "deallocate(a)", "call unknown(a)", "control=control"])
 def test_fixed_object_mapping_never_skips_child_descriptor_or_whole_object_effects(tmp_path, body):
     _paths, analysis, _graph, ids = object_fixture(tmp_path, body=body)
     with pytest.raises(CompilationError, match="whole allocatable|unknown selected storage|original expression storage"):
@@ -484,7 +493,7 @@ def test_existing_exact_whole_joined_token_supplies_directive_evidence_only(tmp_
     assert not public["native_prefix_descriptor_requirements"]
 
 
-@pytest.mark.parametrize("tail", ["a=0.0_8", "deallocate(a)", "call unknown(a)"])
+@pytest.mark.parametrize("tail", ["a=[0.0_8]", "deallocate(a)", "call unknown(a)"])
 def test_joined_token_cannot_hide_original_later_child_descriptor_effects(tmp_path, tail):
     declaration = "real(8),allocatable,intent(inout)::a(:)\ninteger::i"
     _path, analysis, _graph, ids = fixture(tmp_path, child=JOINED_BODY + "\n" + tail, child_decl=declaration)
@@ -495,13 +504,20 @@ def test_joined_token_cannot_hide_original_later_child_descriptor_effects(tmp_pa
         prove(analysis, ids)
 
 
-def test_copied_joined_token_is_not_descriptor_authority(tmp_path):
+def test_unrelated_copied_joined_token_is_not_consumed_by_private_descriptor_issuer(tmp_path):
     _path, analysis, _graph, ids = fixture(tmp_path, child=JOINED_BODY,
                                          child_decl="real(8),intent(inout)::a(:)\ninteger::i")
     token = register_joined(analysis)
-    analysis._joined_completions["copied"] = copy(token)
-    with pytest.raises(CompilationError, match="whole original joined-group authority"):
-        prove(analysis, ids)
+    copied = copy(token)
+    analysis._joined_completions["copied"] = copied
+    registry = analysis._joined_completions
+    before = dict(registry)
+    public = prove(analysis, ids).public()
+    assert public["native_joined_descriptor_requirements"]
+    assert analysis._joined_completions is registry
+    assert registry.keys() == before.keys()
+    assert all(registry[key] is value for key, value in before.items())
+    assert registry["copied"] is copied
 
 
 def test_joined_token_does_not_authorize_partial_original_group_selection(tmp_path):

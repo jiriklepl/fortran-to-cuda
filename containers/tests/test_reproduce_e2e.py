@@ -492,6 +492,8 @@ def test_nsight_transport_records_graph_nodes_without_changing_application_args(
     args = ['profile','--trace=cuda','application','output_dir=output/']
     observed = json.loads(subprocess.check_output([wrapper,*args],text=True))
     assert observed == ['profile','--cuda-graph-trace=node',*args[1:]]
+    already_requested = ['profile', '--cuda-graph-trace=node', *args[1:]]
+    assert json.loads(subprocess.check_output([wrapper, *already_requested], text=True)) == already_requested
     assert identity['profiler_sha256'] == runner.digest(profiler)
     assert identity['wrapper_sha256'] == runner.digest(wrapper)
     assert json.loads(subprocess.check_output([wrapper,'--version'],text=True)) == ['--version']
@@ -637,6 +639,49 @@ def test_graph_and_command_queue_counters_keep_actual_submissions_separate(tmp_p
     queue['complete'] = False
     with pytest.raises(ValueError, match='complete runtime counters'):
         runner.observed_gpu_activity('FORT_SCOPED evidence '+json.dumps(queue),scope_manifest={})
+
+
+@pytest.mark.parametrize("field", ["operation", "owner", "procedure", "segment", "implementation", "boundary"])
+def test_source_device_task_graph_identity_is_only_an_original_operation(field):
+    identity = "e" * 64
+    position = {name: "unknown" for name in ("owner", "procedure", "segment", "operation", "implementation", "boundary")}
+    position[field] = identity
+    log = "FORT_SCOPED graph_submit bytes=19 provenance_version=1 context=2 " + " ".join(
+        name + "=" + value for name, value in position.items())
+    manifest = {"runtime_provenance": {"records": [{"id": identity, "kind": "source_device_task"}]}}
+    counters = {"graph_statistics": [{"context": 2, "submissions": 1, "logical_kernels": 19}],
+                "command_queue_statistics": []}
+    if field == "operation":
+        events = runner.graph_submission_evidence(log, [manifest], counters)
+        assert events == [{"context": 2, "logical_kernels": 19, **position}]
+    else:
+        with pytest.raises(ValueError, match="source manifest: " + field):
+            runner.graph_submission_evidence(log, [manifest], counters)
+
+
+@pytest.mark.parametrize("fault", ["absent", "foreign_id", "wrong_kind", "invented_kind", "missing_stats", "wrong_count"])
+def test_source_device_task_graph_submission_keeps_registry_and_counter_guards(fault):
+    identity = "e" * 64
+    log = ("FORT_SCOPED graph_submit bytes=19 provenance_version=1 context=2 owner=unknown procedure=unknown "
+           "segment=unknown operation=" + identity + " implementation=unknown boundary=unknown")
+    record = {"id": identity, "kind": "source_device_task"}
+    counters = {"graph_statistics": [{"context": 2, "submissions": 1, "logical_kernels": 19}],
+                "command_queue_statistics": []}
+    if fault == "foreign_id":
+        record["id"] = "f" * 64
+    elif fault == "wrong_kind":
+        record["kind"] = "implementation"
+    elif fault == "invented_kind":
+        record["kind"] = "unregistered_device_operation"
+    elif fault == "missing_stats":
+        counters["graph_statistics"] = []
+    elif fault == "wrong_count":
+        counters["graph_statistics"][0]["logical_kernels"] = 20
+    manifest = {"runtime_provenance": {"records": [] if fault == "absent" else [record]}}
+    reason = ("completed graph statistics" if fault == "missing_stats" else
+              "disagree" if fault == "wrong_count" else "source manifest: operation")
+    with pytest.raises(ValueError, match=reason):
+        runner.graph_submission_evidence(log, [manifest], counters)
 
 
 def test_compact_carrier_evidence_stays_separate_and_rejects_incomplete_counts(tmp_path, monkeypatch):

@@ -91,13 +91,13 @@ def test_module_window_is_explicit_source_local_and_definition_free(tmp_path):
     analysis, graph, selected, paths = fixture(tmp_path)
     originals = {path: path.read_bytes() for path in paths}
     assert not analysis.summarize(ENTRY)["complete"]
-    with pytest.raises(CompilationError, match="formals"):
+    with pytest.raises(CompilationError, match="formal"):
         prove_descriptor_window(analysis, ENTRY, selected, (ROOT,))
     proof = prove(analysis, selected)
     assert proof is prove(analysis, selected)
     public = proof.public()
     state = proof.resource_state(ROOT)
-    assert public["schema_version"] == 5
+    assert public["schema_version"] == 6
     assert proof.module_roots == (ROOT,)
     assert state["resource_kind"] == "original_module_allocatable"
     assert state["original_visible_spelling"] == "slot"
@@ -181,7 +181,7 @@ def test_excluded_prefix_allocation_effects_never_become_freshness(tmp_path, pre
     ("deallocate(slot)", None),
     ("allocate(slot(-2:5))", None),
     ("call move_alloc(slot,temporary)", None),
-    ("slot=1.0_8", None),
+    ("slot=[1.0_8,2.0_8]", None),
     ("call unknown(slot)", None),
     ("call coordinate(n)", "call retire()"),
     ("call coordinate(n)", "deallocate(local)"),
@@ -192,6 +192,30 @@ def test_selected_allocation_and_unknown_call_effects_reject(tmp_path, selected,
         prove(analysis, ids)
     assert not getattr(analysis, "_descriptor_window_proofs", {})
     assert analysis.stable_module_allocatables == frozenset()
+
+
+def test_scalar_fill_preserves_module_descriptor_without_proving_allocation_or_execution(tmp_path):
+    analysis, _, selected, paths = fixture(tmp_path, selected="slot=1.0_8")
+    originals = {path: path.read_bytes() for path in paths}
+    public = prove(analysis, selected).public()
+    assert public["schema_version"] == 24
+    fill, = public["native_intrinsic_descriptor_requirements"]
+    assert fill["intrinsic"] == "scalar_array_assignment"
+    assert fill["target"]["resource"] == ROOT
+    assert fill["procedure"] == ENTRY
+    assert fill["rhs"] == {"type": "real", "kind": 8, "rank": 0}
+    assert fill["requires_original_allocated_array"]
+    assert fill["storage_writes"]
+    assert not fill["allocation_presence_proved"]
+    assert not fill["allocation_or_escape"]
+    assert not fill["execution_authorized"]
+    assert not public["entry_definition_authority"]
+    assert not public["execution_authorized"]
+    assert not public["gpu_legality_established"]
+    assert public["requires_close_before_excluded_tail"]
+    assert not analysis.stable_module_allocatables
+    assert not analysis._allocation_authorizations
+    assert {path: path.read_bytes() for path in paths} == originals
 
 
 @pytest.mark.parametrize(("attributes", "module_extra"), [
@@ -238,12 +262,13 @@ def test_module_window_stale_source_and_resolution_reject(tmp_path, mutation):
         proof.validate(analysis, ENTRY, selected)
 
 
-@pytest.mark.parametrize(("depth", "accepted"), [(8, True), (9, False)])
+@pytest.mark.parametrize(("depth", "accepted"), [(8, True), (9, True)])
 def test_descriptor_depth_counts_original_controls_once(tmp_path, depth, accepted):
     loops = "\n".join(f"do j{i}=1,1" for i in range(depth))
     selected = loops + "\nslot(1)=2.0_8\n" + "\n".join("end do" for _ in range(depth))
     analysis, _, ids, _ = fixture(tmp_path, selected=selected)
-    # Original explicit INTEGER declarations retain the ordinary semantic limit.
+    # Original INTEGER iterators are authenticated; source nesting uses syntax
+    # work rather than the separate procedure-call recursion limit.
     path = analysis.inputs.paths[-1]
     text = path.read_text().replace("integer::i", "integer::i," + ",".join(f"j{i}" for i in range(depth)))
     path.write_text(text)
@@ -253,7 +278,7 @@ def test_descriptor_depth_counts_original_controls_once(tmp_path, depth, accepte
                  if type(node).__name__ == "Block_Nonlabel_Do_Construct")
     ids = (graph.node_id(first),)
     if accepted:
-        assert prove(analysis, ids).public()["schema_version"] == 5
+        assert prove(analysis, ids).public()["schema_version"] == 6
     else:
         with pytest.raises(CompilationError, match="depth|bounded|unavailable"):
             prove(analysis, ids)
@@ -280,7 +305,7 @@ end do"""
 
 def test_descriptor_window_consumes_exact_native_predicate_without_execution_authority(tmp_path):
     analysis, selected, expression = predicate_fixture(tmp_path)
-    with pytest.raises(CompilationError, match="registered"):
+    with pytest.raises(CompilationError, match="registered|storage mutation/escape closure"):
         prove(analysis, selected)
     predicate = prove_native_predicate(analysis, ENTRY, expression)
     proof = prove(analysis, selected)
@@ -301,12 +326,16 @@ def test_descriptor_native_predicate_foreign_and_stale_tokens_reject(tmp_path):
     alien = prove_native_predicate(foreign, ENTRY, foreign_expression)
     analysis._native_predicates[alien.identity] = alien
     with pytest.raises(CompilationError, match="registered"):
+        alien.validate(analysis, ENTRY, expression)
+    with pytest.raises(CompilationError, match="registered|storage mutation/escape closure"):
         prove(analysis, selected)
     analysis._native_predicates.clear()
     predicate = prove_native_predicate(analysis, ENTRY, expression)
     proof = prove(analysis, selected)
     analysis._native_predicates.pop(predicate.identity)
     with pytest.raises(CompilationError, match="registered"):
+        predicate.validate(analysis, ENTRY, expression)
+    with pytest.raises(CompilationError, match="registered|storage mutation/escape closure"):
         proof.validate(analysis, ENTRY, selected)
 
 

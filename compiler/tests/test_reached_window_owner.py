@@ -195,9 +195,9 @@ def test_later_source_or_capture_fact_mutation_invalidates_emission(tmp_path, mu
     path, builder, proof, originals = window_fixture(tmp_path)
     before = proof.public()
     if mutation == "source":
-        path.write_text(SOURCE + "\n! changed\n")
         with GenerationTransaction(builder) as transaction:
             owner = ReachedWindowOwner(transaction.builder, proof, originals)
+            path.write_text(SOURCE + "\n! changed\n")
             with pytest.raises(CompilationError, match="source changed"):
                 owner.run()
             path.write_text(SOURCE)

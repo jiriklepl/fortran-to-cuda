@@ -89,8 +89,6 @@ def _separate_units(originals):
             ending = items[index]
             index += 1
         units.append((opening, loop, content[0], content[-1], ending))
-        if len(units) > 32:
-            raise CompilationError("separate numerical team source-unit budget exhausted")
     if not units:
         raise CompilationError("separate numerical team requires at least one original DO unit")
     return items, tuple(units)
@@ -659,7 +657,9 @@ class CombinedNumericalTeam(StructuredScope):
                                             self.partition["source_sha256"])
         if pristine is not None:
             specification += ["logical :: fort_team_pristine"]
-        shared = tuple(dict.fromkeys((*declared_names(specification), "fort_native_ready")))
+        identities = ([owner.registration_identity(number) for number in owner.handle_numbers()]
+                      if owner is not None and owner.resource_slot_namespace is not None else [])
+        shared = tuple(dict.fromkeys((*declared_names(specification), "fort_native_ready", *identities)))
         parallel = "!$omp parallel" + "".join(" " + clause for clause in self.partition["parallel_clauses"])
         parallel += " shared(" + ",".join(shared) + ")"
         do = "!$omp do" + "".join(" " + clause for clause in self.partition["do_clauses"])

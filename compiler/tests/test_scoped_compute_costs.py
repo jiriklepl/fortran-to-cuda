@@ -511,7 +511,8 @@ end program
                              "-o", str(tmp_path / "stub.o")],
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
-    result = subprocess.run([fortran, "-std=f2018", "-J", str(tmp_path),
+    # Keep the exercised C ABI stub; discard only unrelated resident helper bodies.
+    result = subprocess.run([fortran, "-std=f2018", "-ffunction-sections", "-Wl,--gc-sections", "-J", str(tmp_path),
                              str(runtime_dir / "scoped_memory.f90"), str(source),
                              str(tmp_path / "stub.o"), "-o", str(tmp_path / "caller")],
                             cwd=tmp_path, capture_output=True, text=True, timeout=30)

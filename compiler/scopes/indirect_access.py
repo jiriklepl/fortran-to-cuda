@@ -124,6 +124,17 @@ def _build(sections, resource, handle, prefix, names, parameters, context, statu
         for action in ("read", "write")
     }
     reads, writes = references_by_action["read"], references_by_action["write"]
+    # One bounded scratch footprint, reused for consecutive translated
+    # references. No metadata-sized allocation or persistent cache is needed.
+    if any(len(group) > 1 for references in references_by_action.values()
+           for group in _translated_groups(references)):
+        cache_low, cache_high, cache_total, cache_item, cache_steps, cache_min, cache_max = (
+            prefix + "_cache" + tail for tail in
+            ("_lows", "_highs", "_total", "_item", "_steps", "_min", "_max"))
+        specification += [f"integer(c_size_t) :: {cache_low}({rank},{RECTANGLE_LIMIT}), "
+                          f"{cache_high}({rank},{RECTANGLE_LIMIT})",
+                          f"integer :: {cache_total}, {cache_item}",
+                          f"integer(c_int64_t) :: {cache_steps}, {cache_min}({rank}), {cache_max}({rank})"]
     # Compare ordered structural references, ignoring only their direction and
     # diagnostic source spelling. Insertion order affects the bounded exact
     # union, so equality of unordered sets would not justify this reuse.
@@ -155,29 +166,88 @@ def _build(sections, resource, handle, prefix, names, parameters, context, statu
                           f"type(fort_scope_section), target :: {boxes}({RECTANGLE_LIMIT})",
                           f"integer :: {total}"]
         prepare += [f"{total} = 0"]
-        for reference_index, reference in enumerate(references):
+        def scan_reference(reference, reference_index, target_low, target_high, target_total):
             iterators = {}
             for loop_index, loop in enumerate(reference.loops):
                 iterator = prefix + suffix + "_i" + str(reference_index) + "_" + str(loop_index)
                 specification.append(f"integer(c_int64_t) :: {iterator}")
                 lower, upper = value(loop.lower, iterators), value(loop.upper, iterators)
-                prepare += [f"do {iterator} = {lower}, {upper}, {loop.step}_c_int64_t"]
+                prepare.append(f"do {iterator} = {lower}, {upper}, {loop.step}_c_int64_t")
                 iterators[loop.iterator] = iterator
                 scan_step()
             if not reference.loops:
                 scan_step()
             for dimension, coordinate in enumerate(reference.indices, 1):
                 logical = value(coordinate, iterators)
-                # The layout extent is size_t, but it was constrained by the
-                # source ABI in build_native_access; test without subtraction
-                # in unsigned arithmetic to retain negative original bounds.
+                # Keep every original intermediate and logical-bounds check.
                 require(f"{logical} < {origin}({dimension}) .or. "
                         f"{logical} - {origin}({dimension}) >= int({extents}({dimension}), c_int64_t)")
-                prepare += [f"{lo}({dimension}) = int({logical} - {origin}({dimension}), c_size_t)",
-                            f"{hi}({dimension}) = {lo}({dimension}) + 1_c_size_t"]
-            prepare += _append_exact(lo, hi, low, high, total, item, count, different, axis,
-                                     changed, contained, rank, status, on_error)
-            prepare += ["enddo"] * len(reference.loops)
+                prepare.extend([f"{lo}({dimension}) = int({logical} - {origin}({dimension}), c_size_t)",
+                                f"{hi}({dimension}) = {lo}({dimension}) + 1_c_size_t"])
+            prepare.extend(_append_exact(lo, hi, target_low, target_high, target_total, item, count,
+                                         different, axis, changed, contained, rank, status, on_error))
+            prepare.extend(["enddo"] * len(reference.loops))
+
+        for group in _translated_groups(references):
+            if len(group) == 1:
+                reference_index, reference, _recipe = group[0]
+                scan_reference(reference, reference_index, low, high, total)
+                continue
+            # Only this consecutive group lives in the bounded scratch list.
+            # Metadata is stable for this reached preparation, never cached
+            # across calls, resources, physical origins or allocation epochs.
+            first_index, first_reference, first_recipe = group[0]
+            prepare += [f"{cache_total} = 0", f"{cache_steps} = {scan_steps}"]
+            scan_reference(first_reference, first_index, cache_low, cache_high, cache_total)
+            prepare += [f"{cache_steps} = {scan_steps} - {cache_steps}",
+                        f"if ({cache_total} > 0) then"]
+            # Scalar comparisons avoid introducing MINVAL/MAXVAL names
+            # that an original host/use-associated procedure might shadow.
+            for dimension in range(1, rank + 1):
+                prepare += [f"{cache_min}({dimension}) = int({cache_low}({dimension},1), c_int64_t)",
+                            f"{cache_max}({dimension}) = int({cache_high}({dimension},1), c_int64_t)"]
+            prepare += [f"do {cache_item} = 2, {cache_total}"]
+            for dimension in range(1, rank + 1):
+                prepare += [f"if (int({cache_low}({dimension},{cache_item}), c_int64_t) < {cache_min}({dimension})) "
+                            f"{cache_min}({dimension}) = int({cache_low}({dimension},{cache_item}), c_int64_t)",
+                            f"if (int({cache_high}({dimension},{cache_item}), c_int64_t) > {cache_max}({dimension})) "
+                            f"{cache_max}({dimension}) = int({cache_high}({dimension},{cache_item}), c_int64_t)"]
+            prepare += ["enddo"]
+            for dimension, (_base, offset, _checks) in enumerate(first_recipe, 1):
+                prepare += [f"{cache_min}({dimension}) = {cache_min}({dimension}) + {origin}({dimension}) "
+                            f"- ({offset}_c_int64_t)",
+                            f"{cache_max}({dimension}) = {cache_max}({dimension}) - 1_c_int64_t + "
+                            f"{origin}({dimension}) - ({offset}_c_int64_t)"]
+            prepare += ["endif"]
+            for group_index, (_reference_index, _reference, recipe) in enumerate(group):
+                if group_index:
+                    # The original loop bounds, including nested empty loops,
+                    # were checked above. Charge their complete logical work.
+                    require(f"{scan_steps} > {INSPECTION_STEP_LIMIT}_c_int64_t - {cache_steps}")
+                    prepare += [f"{scan_steps} = {scan_steps} + {cache_steps}"]
+                prepare += [f"if ({cache_total} > 0) then"]
+                for dimension, (_base, offset, checks) in enumerate(recipe, 1):
+                    if group_index:
+                        # Translation is not algebraic cancellation: extrema
+                        # establish every original INTEGER intermediate for
+                        # every reached point, including canceled offsets.
+                        for intermediate in checks:
+                            require(f"{cache_min}({dimension}) + ({intermediate}_c_int64_t) < "
+                                    f"{INTEGER_MIN}_c_int64_t .or. {cache_max}({dimension}) + "
+                                    f"({intermediate}_c_int64_t) > {INTEGER_MAX}_c_int64_t")
+                        require(f"{cache_min}({dimension}) + ({offset}_c_int64_t) < {origin}({dimension}) .or. "
+                                f"{cache_max}({dimension}) + ({offset}_c_int64_t) - {origin}({dimension}) >= "
+                                f"int({extents}({dimension}), c_int64_t)")
+                prepare += [f"do {cache_item} = 1, {cache_total}"]
+                for dimension, (_base, offset, _checks) in enumerate(recipe, 1):
+                    delta = offset - first_recipe[dimension - 1][1]
+                    prepare += [f"{lo}({dimension}) = int(int({cache_low}({dimension},{cache_item}), c_int64_t) "
+                                f"+ ({delta}_c_int64_t), c_size_t)",
+                                f"{hi}({dimension}) = int(int({cache_high}({dimension},{cache_item}), c_int64_t) "
+                                f"+ ({delta}_c_int64_t), c_size_t)"]
+                prepare += _append_exact(lo, hi, low, high, total, item, count, different, axis,
+                                         changed, contained, rank, status, on_error)
+                prepare += ["enddo", "endif"]
         prepare += [f"do {item} = 1, {total}",
                     f"{boxes}({item})%lower = c_loc({low}(1,{item}))",
                     f"{boxes}({item})%upper = c_loc({high}(1,{item}))", "enddo",
@@ -187,12 +257,53 @@ def _build(sections, resource, handle, prefix, names, parameters, context, statu
                             tuple(line for statement in prepare for line in _statement_lines(statement)), access, handle)
 
 
+def _translation(expression):
+    """An original metadata selector followed by checked constant offsets.
+
+    Unsupported expressions use the ordinary inspector. The tuple retains
+    every intermediate offset, so equal final coordinates do not erase source
+    overflow failures. Bounds on offsets keep all widened checks in int64.
+    """
+    if expression.kind == "metadata":
+        return expression, 0, (0,)
+    if expression.kind == "binary" and expression.operator in {"+", "-"}:
+        left, right = expression.children
+        if expression.operator == "+" and left.kind == "literal":
+            left, right = right, left
+        if right.kind == "literal":
+            base = _translation(left)
+            if base is not None:
+                offset = base[1] + (right.value if expression.operator == "+" else -right.value)
+                if INTEGER_MIN <= offset <= INTEGER_MAX:
+                    return base[0], offset, (*base[2], offset)
+    if expression.kind == "unary" and expression.operator == "+":
+        return _translation(expression.children[0])
+    return None
+
+
+def _translated_groups(references):
+    """Keep source reference order; reuse only adjacent matching traversals."""
+    groups = []
+    previous_key = None
+    for index, reference in enumerate(references):
+        recipe = tuple(_translation(coordinate) for coordinate in reference.indices)
+        key = (reference.loops, tuple(item[0] for item in recipe)) if all(recipe) else None
+        if key is not None and key == previous_key:
+            groups[-1].append((index, reference, recipe))
+        else:
+            groups.append([(index, reference, recipe)])
+        previous_key = key
+    return groups
+
+
 def _append_exact(lo, hi, lows, highs, total, item, count, different, axis, changed, contained, rank, status, on_error):
     """Insert one box, merging only when its exact union is a rectangle.
 
     Prefixes may exceed the bounded representation even if a later completed
-    plane could fit. Such order-sensitive loss of precision is conservative:
-    it closes ownership rather than inventing a volume-sized envelope.
+    plane could fit. Translated groups normalize their first footprint before
+    combining it with the resource union, which may change conservative budget
+    admission. Every admitted rectangle still denotes an exact union of points;
+    no volume-sized envelope or runtime list-capacity increase is introduced.
     """
     return [f"{contained} = .false.", f"{item} = 1", f"do while ({item} <= {total})",
             f"if (all({lo} >= {lows}(:,{item})) .and. all({hi} <= {highs}(:,{item}))) then",

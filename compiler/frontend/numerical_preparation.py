@@ -404,6 +404,13 @@ def _extraction_identity(extraction, budget):
                     tuple((id(node), str(node)) for guard in extraction.preconditions for node in guard._source_nodes)), budget)
 
 
+def _extraction_content_identity(extraction, budget):
+    # The public identity describes source and lowering content. Parser and
+    # Binding object addresses belong only to the private reuse receipt above;
+    # including them here makes equivalent fresh compilations irreproducible.
+    return _digest((extraction.public(), extraction.source), budget)
+
+
 @dataclass(frozen=True, init=False)
 class NumericalPreparationProvider:
     """An explicit source-only policy capability, bound to one analysis."""
@@ -483,6 +490,38 @@ class NumericalPreparationProvider:
         return _prepare(analysis, procedure, selection, self, consume=consume,
                         extraction=extraction, require_effects=False)
 
+    def prepare_atomic_alternative(self, alternative, *, consume=None, conditional_context=None):
+        """Normal lowering/physical preparation in a distinct atomic context.
+
+        No independently executable or completed DO token is manufactured.
+        Whole-team source selection and reached-path execution are obligations
+        of the atomic consumer, separate from this numerical preparation.
+        """
+        from compiler.frontend.atomic_worksharing_team import AtomicWorksharingAlternative
+        from compiler.scopes.region_context import original_region_context
+        from compiler.scopes.regions import extract_region
+
+        if type(alternative) is not AtomicWorksharingAlternative:
+            raise CompilationError("atomic numerical preparation requires its original alternative token")
+        team = alternative.team
+        if team.public().get("conditional_affine_context_required") and conditional_context is None:
+            raise NumericalPreparationUnsupported("original SECTION numerical preparation requires its exact guarded conditional context")
+        if conditional_context is not None:
+            from compiler.frontend.conditional_numerical import ConditionalNumericalContext
+            if type(conditional_context) is not ConditionalNumericalContext or conditional_context.team is not team:
+                raise NumericalPreparationUnsupported("conditional numerical preparation requires its exact typed source context")
+            conditional_context.validate(self)
+        selection = team._nodes
+        analysis, routine = team._analysis, team._routine
+        self.validate(analysis, consume=consume)
+        alternative.validate(analysis, routine.qualified, selection)
+        context = original_region_context(routine, selection, analysis=analysis)
+        extraction = extract_region(analysis, routine, selection, preceding=context.preceding,
+            following=context.following, cyclic_following=context.cyclic_following,
+            atomic_alternative=alternative, immutable_inputs=self.immutable_inputs)
+        return _prepare(analysis, routine.qualified, selection, self, consume=consume,
+                        extraction=extraction, context=context, conditional_context=conditional_context)
+
 
 @dataclass(frozen=True)
 class PreparedOriginalRegion:
@@ -506,6 +545,7 @@ class PreparedOriginalRegion:
     _extraction_identity: str = field(repr=False)
     _context_identity: str = field(repr=False)
     _native_environment_required: bool = field(repr=False)
+    conditional_context: object = field(default=None, repr=False, compare=False)
 
     @property
     def original_storage_effects(self):
@@ -531,7 +571,9 @@ class PreparedOriginalRegion:
                 "original_storage_effects": self.original_storage_effects,
                 "requires_original_team_environment_preflight": self.requires_original_team_environment_preflight,
                 "capture_authorized": False, "artifacts_emitted": False, "execution_authorized": False,
-                "definition_transfer": "conditional on all original typed preconditions; separate effects proof required"}
+                "definition_transfer": "conditional on all original typed preconditions; separate effects proof required",
+                **({"conditional_numerical_context": self.conditional_context.public()}
+                   if self.conditional_context is not None else {})}
 
     @property
     def all_runtime_guards_typed(self):
@@ -562,6 +604,12 @@ class PreparedOriginalRegion:
         from compiler.scopes.region_context import original_region_context
         context = original_region_context(routine, selection, consume=budget.tick, analysis=analysis)
         _validate_completion(analysis, procedure, selection, identities, self.completion, self.completion_proof)
+        if self.conditional_context is not None:
+            from compiler.frontend.conditional_numerical import ConditionalNumericalContext
+            if type(self.conditional_context) is not ConditionalNumericalContext:
+                raise CompilationError("prepared conditional context lost its exact source type")
+            self.conditional_context.validate(self._provider)
+            self.conditional_context.domain(self.completion_proof)
         # The configured caller can reach IEEE imports through namespaces
         # outside this selected region's helper closure. Reauthenticate the
         # same bounded original scan on every reuse, including its reexports.
@@ -583,14 +631,16 @@ class PreparedOriginalRegion:
                 or self.preconditions is not self.extraction.preconditions
                 or self.completion is not self.extraction.completion
                 or _digest((self._provider.identity, graph.identity, identities, source,
-                            self._payload_identity, self._extraction_identity, self._context_identity,
+                            self._payload_identity, _extraction_content_identity(self.extraction, budget), self._context_identity,
                             self.scalar_changes, self.requires_original_team_environment_preflight,
-                            native_environment), budget) != self.identity):
+                            native_environment, *((self.conditional_context.identity,)
+                                if self.conditional_context is not None else ())), budget) != self.identity):
             raise CompilationError("prepared numerical source, context or checked IR authority changed")
         return self
 
 
 def _validate_completion(analysis, procedure, selection, identities, record, proof):
+    from compiler.frontend.atomic_worksharing_team import AtomicWorksharingAlternative
     from compiler.frontend.native_completion import NativeCompletionProof
     from compiler.frontend.numerical_completion import NumericalCompletionProof
     from compiler.frontend.worksharing_completion import WorksharingCompletionProof
@@ -603,7 +653,7 @@ def _validate_completion(analysis, procedure, selection, identities, record, pro
         proof.validate(analysis)
         if proof.procedure != procedure or proof.selected_node_ids != identities:
             raise CompilationError("original numerical preparation completion selection changed")
-    elif type(proof) is WorksharingCompletionProof:
+    elif type(proof) in {WorksharingCompletionProof, AtomicWorksharingAlternative}:
         proof.validate(analysis, procedure, selection)
     else:
         raise CompilationError("original numerical preparation completion token is unsupported")
@@ -612,7 +662,7 @@ def _validate_completion(analysis, procedure, selection, identities, record, pro
 
 
 def _prepare(analysis, procedure, exact_original_selection, provider, *, consume=None, extraction=None, context=None,
-             require_effects=True):
+             require_effects=True, conditional_context=None):
     from compiler.driver.pipeline import prepare_function
     from compiler.frontend import lower_source
     from compiler.ir import ParallelRegion
@@ -642,8 +692,12 @@ def _prepare(analysis, procedure, exact_original_selection, provider, *, consume
                                                + "; ".join(observers))
     native_environment = _environment_required(analysis, provider.environment_root, budget)
     source_name = str(routine.scope.path) + "#inline:" + extraction.source_identity
-    function, plan = prepare_function(lower_source(extraction.source, extraction.entry, source_name=source_name),
-                                      options=provider.options)
+    function = lower_source(extraction.source, extraction.entry, source_name=source_name)
+    if conditional_context is None:
+        function, plan = prepare_function(function, options=provider.options)
+    else:
+        completion = getattr(analysis, "_atomic_worksharing_alternatives", {}).get(extraction.completion.get("proof_identity"))
+        plan = conditional_context.prepare_plan(provider, completion, extraction, function)
     if native_environment:
         function = replace(function, requires_numerical_environment=True)
     if function.requires_numerical_environment:
@@ -665,7 +719,8 @@ def _prepare(analysis, procedure, exact_original_selection, provider, *, consume
     completion_proof = None
     completion_id = extraction.completion.get("proof_identity")
     if completion_id is not None:
-        for registry in ("_numerical_completions", "_joined_completions", "_worksharing_completions"):
+        for registry in ("_numerical_completions", "_joined_completions", "_worksharing_completions",
+                         "_atomic_worksharing_alternatives"):
             completion_proof = getattr(analysis, registry, {}).get(completion_id)
             if completion_proof is not None:
                 break
@@ -676,11 +731,14 @@ def _prepare(analysis, procedure, exact_original_selection, provider, *, consume
     payload, extracted, context_id = (_digest((function, plan, offload), budget),
                                      _extraction_identity(extraction, budget), _digest(context.public(), budget))
     team_guard = native_environment and not provider.config.collective and not serial
-    identity = _digest((provider.identity, graph.identity, identities, source, payload, extracted, context_id,
-                        scalar_changes, team_guard, native_environment), budget)
+    identity = _digest((provider.identity, graph.identity, identities, source, payload,
+                        _extraction_content_identity(extraction, budget), context_id,
+                        scalar_changes, team_guard, native_environment,
+                        *((conditional_context.identity,) if conditional_context is not None else ())), budget)
     token = PreparedOriginalRegion(procedure, identity, extraction, function, plan, offload, context,
                                    extraction.preconditions, scalar_changes, extraction.completion, completion_proof, team_guard,
-                                   provider, selection, identities, source, payload, extracted, context_id, native_environment)
+                                   provider, selection, identities, source, payload, extracted, context_id, native_environment,
+                                   conditional_context)
     registry = _registry(analysis, "_numerical_preparations")
     budget.tick()
     existing = registry.get(identity)

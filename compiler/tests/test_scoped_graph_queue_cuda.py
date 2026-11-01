@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -43,7 +44,41 @@ int main(int argc,char **argv) {
     if(mode=="graphs_off") setenv("FORT_SCOPE_CUDA_GRAPHS","0",1);
     if(mode=="long_mirrors" || mode=="pressure") setenv("FORT_SCOPE_QUEUE_TEST_BUDGET","192",1);
     Fixture f;
-    if(mode=="plan_suffix") {
+    if(mode=="trace_origins") {
+        double *other=nullptr;
+        fort_scope_layout layout{1,FORT_SCOPE_REAL64,8,f.host_other,f.extent,f.lower,1};
+        check(fort_scope_register(f.context,4,1,&layout,0,&f.other));
+        check(fort_scope_device_reserve_v1(f.context,f.other,reinterpret_cast<void **>(&other)));
+        const std::string owner(64,'a'),procedure(64,'b'),segment(64,'c'),operation(64,'d'),boundary(64,'e');
+        auto position=[&](char id) {
+            const std::string implementation(64,id);
+            fort_scope_trace_set_v1(f.context,FORT_SCOPE_TRACE_ALL,owner.c_str(),procedure.c_str(),
+                segment.c_str(),operation.c_str(),implementation.c_str(),boundary.c_str(),nullptr);
+        };
+        for(int round=0;round<3;++round) {
+            position('1'+3*round); enqueue(f,0);
+            position('2'+3*round);
+            {
+                double add=10+round; void *args[6]={&f.pa,&other,&f.n,&f.first,&f.last,&add};
+                auto task=f.tasks[0]; task.kernel.arguments=args;
+                fort_scope_plan_binding bindings[2]={f.producer[0],{f.other,f.producer[1].access}};
+                task.bindings=bindings;
+                size_t sizes[6]={8,8,4,4,4,8};
+                check(fort_scope_graph_enqueue_v1(f.context,200,&task,sizes));
+            }
+            position('3'+3*round); enqueue(f,1);
+            position('f');
+            f.observe(f.out); // Selective conflict flush: producer+consumer, middle task stays queued.
+            assert(queued(f).pending_tasks==1);
+            for(int i=0;i<8;++i) assert(f.host_out[i]==3*(i+2));
+            f.observe(f.other);
+            for(int i=0;i<8;++i) assert(f.host_other[i]==i+10+round);
+            fort_scope_trace_state_v1 current{};
+            fort_scope_trace_set_v1(f.context,0,nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,&current);
+            assert(std::string(current.implementation)==std::string(64,'f'));
+            assert(!queued(f).pending_tasks && f.stats().launches==3u*(round+1));
+        }
+    } else if(mode=="plan_suffix") {
         check(fort_scope_task_graph_enable_v1(f.context));
         check(fort_scope_plan_reset_mode(f.context,FORT_SCOPE_PLAN_CONTINUE));
         check(fort_scope_plan_add(f.context,FORT_SCOPE_PLAN_WORKER,100,f.producer,2,1e8,128,1));
@@ -286,3 +321,35 @@ def test_deferred_real_cuda_queue(cuda_queue_executable, mode):
     if result.returncode == 77:
         pytest.skip("CUDA device unavailable")
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.cuda
+@pytest.mark.parametrize("graphs", [False, True])
+@pytest.mark.parametrize("allocation_failure", [None, "enqueue", "flush"])
+def test_queued_launches_keep_original_provenance(cuda_queue_executable, graphs, allocation_failure):
+    environment = {key: value for key, value in os.environ.items()
+                   if not key.startswith("FORT_")}
+    environment.update(FORT_RUNTIME_TRACE="1", FORT_SCOPE_CUDA_GRAPHS="1" if graphs else "0")
+    if allocation_failure:
+        environment["FORT_SCOPE_TEST_FAIL_TRACE_ALLOC"] = allocation_failure
+    result = subprocess.run([str(cuda_queue_executable), "trace_origins"], capture_output=True,
+                            text=True, timeout=20, env=environment)
+    if result.returncode == 77:
+        pytest.skip("CUDA device unavailable")
+    assert result.returncode == 0, result.stdout + result.stderr
+    rows = [(match[1], dict(re.findall(r"(\w+)=([^\s]+)", match[2])))
+            for line in result.stderr.splitlines()
+            if (match := re.match(r"FORT_SCOPED (launch|graph_kernel|graph_submit|download) (.*)", line))]
+    launched = [row for event, row in rows if event in {"launch", "graph_kernel"}]
+    expected = ["unknown"] * 9 if allocation_failure else [char * 64 for char in "132465798"]
+    assert [row["implementation"] for row in launched] == expected
+    assert all(row["bytes"] == "0" for row in launched)
+    if not allocation_failure:
+        assert all(row["owner"] == "a" * 64 and row["procedure"] == "b" * 64
+                   and row["operation"] == "d" * 64 for row in launched)
+    else:
+        assert all(row["owner"] == row["procedure"] == row["operation"] == "unknown" for row in launched)
+    assert sum(event == "launch" for event, _ in rows) == (3 if graphs else 9)
+    assert sum(event == "graph_kernel" for event, _ in rows) == (6 if graphs else 0)
+    assert sum(event == "graph_submit" for event, _ in rows) == (4 if graphs else 0)
+    assert all(row["implementation"] == "f" * 64 for event, row in rows if event == "download")

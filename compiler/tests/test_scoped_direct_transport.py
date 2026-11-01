@@ -67,13 +67,18 @@ def test_sparse_faces_preserve_host_interior_and_readonly_mirrors(pinned, exact_
     scope.close()
 
 
-def test_published_runtime_contains_no_automatic_compact_carrier():
+def test_published_runtime_keeps_direct_default_and_explicit_compact_calibration():
     files, manifest = read_scoped_runtime()
     assert 'scoped_copy.hpp' not in files
     assert 'scoped_copy.hpp' not in manifest['headers']
     assert 'compact_transport' not in manifest
     assert all(name in files for name in manifest['headers'])
-    assert 'copy_compact' not in files['scoped_runtime.cu']
+    assert manifest['scope_transfers']['default'] == 'direct'
+    physical = manifest['scope_transfers']['physical_copies']
+    assert physical['abi_version'] == 2
+    assert physical['configure'] == 'fort_scope_set_copy_costs_v2'
+    assert physical['configure'] in files['scoped_runtime.h']
+    assert {'section_batch.hpp', 'section_batch_cost.hpp'} <= set(manifest['headers'])
     # The independently requested alternatives and shared storage APIs remain.
     assert 'FORT_SCOPE_TRANSFERS_COALESCED' in files['scoped_runtime.cu']
     assert 'fort_scope_scratch_acquire_v1' in files['scoped_runtime.h']

@@ -148,25 +148,80 @@ class GraphFreezer:
         self.owned_types, self.own_if = tuple(owned_types), own_if
         self.borrowed = {id(value): value for value in borrowed}
         self.borrowed_types, self.borrow_if = tuple(borrowed_types), borrow_if
-        self.memo, self.objects = {}, {}
+        self.memo, self.objects, self._originals = {}, {}, {}
         self._active_tuples = set()
+
+    def _remember(self, original, frozen):
+        # Detached containers do not keep their old containers alive. Retain
+        # those exact sources while this memo is active so IDs cannot recycle.
+        self._originals[id(original)] = original
+        self.memo[id(original)] = frozen
+
+    def _borrows(self, value):
+        return (self.borrowed.get(id(value)) is value or isinstance(value, self.borrowed_types)
+                or self.borrow_if is not None and self.borrow_if(value))
+
+    def adopt_sealed(self, value):
+        """Retain an already owned immutable subgraph and its exact aliases.
+
+        Callers with several payload roots adopt sealed roots before freezing
+        separate edges into them. Borrowed authorities/services remain external;
+        arbitrary mutable descendants do not become owned by adoption.
+        """
+        owned_root = sealed(value) and (isinstance(value, self.owned_types)
+                                       or self.own_if is not None and self.own_if(value))
+        if (not (owned_root or type(value) in (FrozenDict, FrozenList, tuple, frozenset))
+                or self._borrows(value)):
+            raise CompilationError("immutable graph adoption requires an already sealed owned root")
+        pending, adopted, owned = [value], {}, {}
+        while pending:
+            current = pending.pop()
+            identity = id(current)
+            if identity in adopted:
+                continue
+            if identity in self.memo:
+                if self._originals.get(identity) is not current or self.memo[identity] is not current:
+                    raise CompilationError("immutable graph adoption conflicts with an already detached alias")
+                continue
+            if self._borrows(current):
+                continue
+            if current is None or isinstance(current, (bool, int, float, complex, str, bytes, Enum, PurePath, type)):
+                continue
+            if sealed(current) and (isinstance(current, self.owned_types)
+                                    or self.own_if is not None and self.own_if(current)):
+                owned[identity] = current
+                children = _state(current).values()
+            elif type(current) is FrozenDict:
+                children = (part for pair in current.items() for part in pair)
+            elif type(current) in (FrozenList, tuple, frozenset):
+                children = current
+            else:
+                raise CompilationError("immutable graph adoption found an unowned mutable descendant")
+            adopted[identity] = current
+            pending.extend(children)
+        # Failed adoption never leaves a partial identity policy in this memo.
+        self.memo.update(adopted)
+        self._originals.update(adopted)
+        self.objects.update(owned)
+        return value
 
     def freeze(self, value):
         if id(value) in self.memo:
+            if self._originals.get(id(value)) is not value:
+                raise CompilationError("immutable graph memo lost its exact original object")
             return self.memo[id(value)]
-        if (self.borrowed.get(id(value)) is value or isinstance(value, self.borrowed_types)
-                or self.borrow_if is not None and self.borrow_if(value)):
+        if self._borrows(value):
             return value
         if value is None or isinstance(value, (bool, int, float, complex, str, bytes, Enum, PurePath, type)):
             return value
         if isinstance(value, dict):
             result = FrozenDict()
-            self.memo[id(value)] = result
+            self._remember(value, result)
             dict.update(result, ((self.freeze(key), self.freeze(item)) for key, item in value.items()))
             return result
         if isinstance(value, list):
             result = FrozenList()
-            self.memo[id(value)] = result
+            self._remember(value, result)
             list.extend(result, (self.freeze(item) for item in value))
             return result
         if isinstance(value, tuple):
@@ -174,23 +229,25 @@ class GraphFreezer:
                 raise CompilationError("immutable graph has an unsupported tuple backedge")
             self._active_tuples.add(id(value))
             result = tuple(self.freeze(item) for item in value)
+            if type(value) is tuple and all(left is right for left, right in zip(result, value, strict=True)):
+                result = value
             self._active_tuples.remove(id(value))
-            self.memo[id(value)] = result
+            self._remember(value, result)
             return result
         if isinstance(value, (set, frozenset)):
             result = frozenset(self.freeze(item) for item in value)
-            self.memo[id(value)] = result
+            if type(value) is frozenset and all(self.memo.get(id(item), item) is item for item in value):
+                result = value
+            self._remember(value, result)
             return result
         if isinstance(value, MappingProxyType):
             result = MappingProxyType(self.freeze(dict(value)))
-            self.memo[id(value)] = result
+            self._remember(value, result)
             return result
         if isinstance(value, self.owned_types) or self.own_if is not None and self.own_if(value):
             if sealed(value):
-                self.memo[id(value)] = value
-                self.objects[id(value)] = value
-                return value
-            self.memo[id(value)] = value
+                return self.adopt_sealed(value)
+            self._remember(value, value)
             self.objects[id(value)] = value
             state = _state(value)
             if hasattr(value, "__dict__"):

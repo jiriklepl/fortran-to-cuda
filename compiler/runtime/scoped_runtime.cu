@@ -2,8 +2,10 @@
  * -DFORT_SCOPE_CPU_TEST for the isolated coherence reference backend. */
 #include "scoped_runtime.h"
 #include "section_copy.hpp"
+#include "section_batch_cost.hpp"
 #include "scoped_regions.hpp"
 #include "scoped_planning.hpp"
+#include "scoped_source_quote.hpp"
 #include "scoped_graphs.hpp"
 #include "scoped_host_metadata.hpp"
 #include "floating_environment.hpp"
@@ -20,6 +22,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <new>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -105,6 +108,9 @@ struct QueuedBinding {
 struct QueuedTask {
     uint64_t key;
     fort_scope_kernel_v1 kernel;
+    // Numerical work may be submitted by a later native access. Retain its
+    // original diagnostic position independently of that flush boundary.
+    std::unique_ptr<fort_scope_trace_state_v1> provenance;
     std::vector<std::vector<unsigned char>> values;
     std::vector<void *> arguments;
     std::vector<QueuedBinding> bindings;
@@ -116,22 +122,36 @@ struct QueuedTask {
         return {kernel,binding_views.data(),binding_views.size()};
     }
 };
-struct Context {
-    explicit Context(int ordinal) : device(ordinal) {
+struct KernelTracePositions {
+    const fort_scope_trace_state_v1 *const *values=nullptr;
+    const fort_scope_trace_state_v1 *fallback=nullptr;
+    const fort_scope_trace_state_v1 *at(size_t index) const noexcept {
+        return values ? values[index] : fallback;
+    }
+};
+bool trace_allocation_allowed(const char *stage) noexcept {
+#ifdef FORT_SCOPE_TEST_FAULTS
+    const auto *failure=std::getenv("FORT_SCOPE_TEST_FAIL_TRACE_ALLOC");
+    return !failure || std::strcmp(failure,stage);
+#else
+    (void)stage;
+    return true;
+#endif
+}
+// Physical values and their exact completion dependencies have one owner.
+// An execution context borrows this state; its plans/proofs never do.
+struct Residency {
+    explicit Residency(int ordinal) : device(ordinal) {
         transfer_stats.version = FORT_SCOPE_TRANSFER_ABI_VERSION;
         scratch_stats.version = FORT_SCOPE_SCRATCH_ABI_VERSION;
-        graph_stats.version = FORT_SCOPE_GRAPH_ABI_VERSION;
         completion_stats.version = FORT_SCOPE_COMPLETION_ABI_VERSION;
-        queue_stats.version = FORT_SCOPE_GRAPH_ABI_VERSION;
         residency_stats.version = FORT_SCOPE_RESIDENCY_ABI_VERSION;
-        const auto *queue = std::getenv("FORT_SCOPE_GRAPH_QUEUE"), *graphs = std::getenv("FORT_SCOPE_CUDA_GRAPHS");
-        queue_stats.queue_enabled = !queue || std::strcmp(queue,"0");
-        queue_stats.graphs_enabled = !graphs || std::strcmp(graphs,"0");
     }
     int device;
-    fort_scope_t handle = 0;
-    fort_scope_trace_state_v1 provenance{};
-    bool ready = false, pending = false, poisoned = false, closed = false;
+    uint64_t domain = 0, active_context = 0;
+    uint64_t last_context = 0;
+    fort_scope_trace_state_v1 last_provenance{};
+    bool ready = false, pending = false, poisoned = false, retired = false;
     size_t device_budget = std::numeric_limits<size_t>::max();
     std::mutex mutex;
     std::unordered_map<fort_buffer_t, std::unique_ptr<Buffer>> buffers;
@@ -142,21 +162,85 @@ struct Context {
     uint64_t scratch_token = 0;
     fort_scope_scratch_stats_v1 scratch_stats{};
     fort_scope_transfer_stats transfer_stats{};
-    fort_scope_graph_stats_v1 graph_stats{};
     fort_scope_completion_stats_v1 completion_stats{};
-    fort_scope_graph_queue_stats_v1 queue_stats{};
     fort_scope_residency_stats_v1 residency_stats{};
     uint64_t residency_clock = 0;
-    std::vector<std::unique_ptr<QueuedTask>> commands;
-    std::unordered_map<fort_buffer_t,Buffer> virtual_buffers;
-    uint64_t virtual_generation = 0;
     std::vector<Buffer *> unfenced_upload_buffers;
     std::deque<std::shared_ptr<Completion>> completions;
     std::weak_ptr<Completion> tail_completion;
+    std::unordered_map<uint64_t, size_t> workspaces;
+    size_t workspace_bytes = 0;
+#ifdef FORT_SCOPE_CPU_TEST
+    size_t compact_reference_capacity = 0;
+#endif
+#ifndef FORT_SCOPE_CPU_TEST
+    std::vector<cudaEvent_t> completion_events, available_completion_events;
+    cudaStream_t stream = nullptr;
+    cudaMemPool_t pool = nullptr;
+#endif
+};
+struct Context {
+    explicit Context(int ordinal) : Context(std::make_shared<Residency>(ordinal), false) {}
+    explicit Context(std::shared_ptr<Residency> owner, bool borrowed)
+        : residency(std::move(owner)), borrowed_domain(borrowed), device(residency->device),
+          ready(residency->ready), pending(residency->pending), poisoned(residency->poisoned),
+          device_budget(residency->device_budget), mutex(residency->mutex), buffers(residency->buffers),
+          identities(residency->identities), stats(residency->stats), scratch(residency->scratch),
+          scratch_capacity(residency->scratch_capacity), scratch_token(residency->scratch_token),
+          scratch_stats(residency->scratch_stats), transfer_stats(residency->transfer_stats),
+          completion_stats(residency->completion_stats), residency_stats(residency->residency_stats),
+          residency_clock(residency->residency_clock), unfenced_upload_buffers(residency->unfenced_upload_buffers),
+          completions(residency->completions), tail_completion(residency->tail_completion)
+#ifndef FORT_SCOPE_CPU_TEST
+          , completion_events(residency->completion_events), available_completion_events(residency->available_completion_events),
+          stream(residency->stream), pool(residency->pool)
+#endif
+    {
+        graph_stats.version = FORT_SCOPE_GRAPH_ABI_VERSION;
+        queue_stats.version = FORT_SCOPE_GRAPH_ABI_VERSION;
+        const auto *queue = std::getenv("FORT_SCOPE_GRAPH_QUEUE"), *graphs = std::getenv("FORT_SCOPE_CUDA_GRAPHS");
+        queue_stats.queue_enabled = !queue || std::strcmp(queue,"0");
+        queue_stats.graphs_enabled = !graphs || std::strcmp(graphs,"0");
+    }
+    std::shared_ptr<Residency> residency;
+    bool borrowed_domain = false;
+    int device;
+    fort_scope_t handle = 0;
+    fort_scope_trace_state_v1 provenance{};
+    bool &ready, &pending, &poisoned;
+    bool closed = false;
+    size_t &device_budget;
+    std::mutex &mutex;
+    std::unordered_map<fort_buffer_t, std::unique_ptr<Buffer>> &buffers;
+    std::unordered_map<uint64_t, fort_buffer_t> &identities;
+    fort_scope_stats &stats;
+    void *&scratch;
+    size_t &scratch_capacity;
+    uint64_t &scratch_token;
+    fort_scope_scratch_stats_v1 &scratch_stats;
+    fort_scope_transfer_stats &transfer_stats;
+    fort_scope_graph_stats_v1 graph_stats{};
+    fort_scope_completion_stats_v1 &completion_stats;
+    fort_scope_graph_queue_stats_v1 queue_stats{};
+    fort_scope_residency_stats_v1 &residency_stats;
+    uint64_t &residency_clock;
+    std::vector<std::unique_ptr<QueuedTask>> commands;
+    std::unordered_map<fort_buffer_t,Buffer> virtual_buffers;
+    uint64_t virtual_generation = 0;
+    std::vector<Buffer *> &unfenced_upload_buffers;
+    std::deque<std::shared_ptr<Completion>> &completions;
+    std::weak_ptr<Completion> &tail_completion;
     std::optional<fort_scope_batch_costs> transfer_costs;
+    std::optional<fort_physical::compact::Pricing> copy_costs;
     std::optional<fort_scope_team_costs> team_costs;
     std::optional<fort_scope_batch_report> batch_report;
     bool batch_active = false;
+    struct SourceHostTask {
+        uint64_t token;
+        bool started = false;
+        std::vector<fort_buffer_t> buffers;
+    };
+    std::optional<SourceHostTask> source_host_task;
     std::vector<fort_scoped::planning::Operation> plan;
     std::vector<bool> schedule;
     size_t worker_cursor = 0;
@@ -186,9 +270,9 @@ struct Context {
     std::array<unsigned char, sizeof(fort_scope_plan_costs)> preview_costs{};
 #ifndef FORT_SCOPE_CPU_TEST
     fort_scoped::graphs::Cache graphs;
-    std::vector<cudaEvent_t> completion_events, available_completion_events;
-    cudaStream_t stream = nullptr;
-    cudaMemPool_t pool = nullptr;
+    std::vector<cudaEvent_t> &completion_events, &available_completion_events;
+    cudaStream_t &stream;
+    cudaMemPool_t &pool;
 #endif
 };
 enum class Change { None, Query, State };
@@ -220,6 +304,7 @@ std::unordered_set<int> initialized_devices;
 std::mutex registry_mutex;
 std::mutex trace_mutex;
 std::unordered_map<fort_scope_t, std::shared_ptr<Context>> contexts;
+std::unordered_map<fort_scope_domain_t, std::shared_ptr<Residency>> domains;
 fort_scoped::native_hint::Generation native_hint_gpu_generation, native_hint_error_generation;
 fort_scoped::native_hint::Cache native_hint_cache; // Protected by registry_mutex.
 void note_hint_error(int status) noexcept {
@@ -236,6 +321,12 @@ std::shared_ptr<Context> lookup(fort_scope_t handle) {
     std::lock_guard<std::mutex> lock(registry_mutex);
     auto found = contexts.find(handle);
     require(found != contexts.end(), FORT_SCOPE_STALE, "invalid or stale scope handle");
+    return found->second;
+}
+std::shared_ptr<Residency> lookup_domain(fort_scope_domain_t handle) {
+    std::lock_guard<std::mutex> lock(registry_mutex);
+    const auto found = domains.find(handle);
+    require(found != domains.end(), FORT_SCOPE_STALE, "invalid or stale residency domain");
     return found->second;
 }
 Buffer &buffer(Context &c, fort_buffer_t handle) {
@@ -261,21 +352,67 @@ void trace_id(char (&destination)[65], const char *source) noexcept {
         destination[64] = '\0';
     }
 }
-void trace(const Context &c, const char *operation, const Buffer *b = nullptr, size_t bytes = 0) noexcept {
+struct IdentitySwapTrace {
+    uint64_t first_identity,second_identity,first_handle,second_handle,first_generation,second_generation;
+};
+void trace(const Context &c, const char *operation, const Buffer *b = nullptr, size_t bytes = 0,
+           const IdentitySwapTrace *exchange=nullptr, const fort_scope_trace_state_v1 *position=nullptr) noexcept {
     if (!trace_enabled()) return;
     try {
         std::lock_guard<std::mutex> lock(trace_mutex);
         std::cerr << "FORT_SCOPED " << operation;
         if (b) std::cerr << " buffer=" << b->identity << " generation=" << b->generation;
         std::cerr << " bytes=" << bytes << " provenance_version=1 context=" << c.handle;
+        if(c.residency->domain)
+            std::cerr << " domain_version=1 domain=" << c.residency->domain
+                      << " domain_role=" << (c.handle==c.residency->domain ? "storage" : "execution");
         if (b) std::cerr << " buffer_handle=" << b->handle;
-        const auto &p = c.provenance;
+        const auto &p = position ? *position : c.provenance;
         for (const auto &[name, value] : {
             std::pair{"owner", p.owner}, {"procedure", p.procedure}, {"segment", p.segment},
             {"operation", p.operation}, {"implementation", p.implementation}, {"boundary", p.boundary}})
             std::cerr << ' ' << name << '=' << (value[0] ? value : "unknown");
+        if(exchange)
+            std::cerr << " swap_version=1 first_identity=" << exchange->first_identity
+                      << " second_identity=" << exchange->second_identity
+                      << " first_before_handle=" << exchange->first_handle
+                      << " second_before_handle=" << exchange->second_handle
+                      << " first_after_handle=" << exchange->second_handle
+                      << " second_after_handle=" << exchange->first_handle
+                      << " first_before_generation=" << exchange->first_generation
+                      << " second_before_generation=" << exchange->second_generation
+                      << " first_after_generation=" << exchange->second_generation
+                      << " second_after_generation=" << exchange->first_generation;
         std::cerr << '\n';
     } catch (...) {} // Reporting must never change numerical success.
+}
+// Domain metadata links physical ownership to context/source provenance. It
+// never supplies placement, definition or source-lifetime authority.
+void domain_trace(const Residency &owner,const char *event,const Context *context=nullptr) noexcept {
+    if(!trace_enabled()) return;
+    try {
+        std::lock_guard<std::mutex> lock(trace_mutex);
+        std::cerr << "FORT_SCOPED domain {\"schema_version\":1,\"event\":\"" << event
+                  << "\",\"domain\":" << owner.domain
+                  << ",\"context\":" << (context ? context->handle : 0)
+                  << ",\"physical_context\":" << owner.domain
+                  << ",\"last_context\":" << owner.last_context << ",\"device\":" << owner.device
+                  << ",\"failed\":" << (owner.poisoned ? "true" : "false");
+        const auto &p=context ? context->provenance : owner.last_provenance;
+        for(const auto &[name,value] : {
+            std::pair{"owner",p.owner},{"procedure",p.procedure},{"segment",p.segment},
+            {"operation",p.operation},{"implementation",p.implementation},{"boundary",p.boundary}})
+            std::cerr << ",\"" << name << "\":\"" << (value[0] ? value : "unknown") << '"';
+        std::cerr << "}\n";
+    } catch(...) {} // Optional attribution cannot change runtime status.
+}
+struct DomainJson { const Context &context; };
+std::ostream &operator<<(std::ostream &out,DomainJson attribution) {
+    const auto &c=attribution.context;
+    if(c.residency->domain)
+        out << ",\"domain_version\":1,\"domain\":" << c.residency->domain
+            << ",\"domain_role\":\"" << (c.handle==c.residency->domain ? "storage" : "execution") << '"';
+    return out;
 }
 #ifndef FORT_SCOPE_CPU_TEST
 void cuda_check(Context &c, cudaError_t status, bool allocation = false) {
@@ -468,13 +605,15 @@ Region pending_host_reads(const Buffer &b) {
     return result;
 }
 size_t field_budget(const Context &c) {
-    require(c.scratch_capacity <= c.device_budget, FORT_SCOPE_STATE, "scratch capacity exceeds scope budget");
-    return c.device_budget-c.scratch_capacity;
+    require(c.scratch_capacity <= c.device_budget &&
+            c.residency->workspace_bytes <= c.device_budget-c.scratch_capacity,
+            FORT_SCOPE_STATE, "scratch/workspace capacity exceeds scope budget");
+    return c.device_budget-c.scratch_capacity-c.residency->workspace_bytes;
 }
 void payload_peak(Context &c) noexcept {
     // Every allocation has already passed the inclusive, overflow-safe budget
     // check. Preserve the original field-only peak in fort_scope_stats.
-    const auto total = c.stats.allocated_bytes+c.scratch_capacity;
+    const auto total = c.stats.allocated_bytes+c.scratch_capacity+c.residency->workspace_bytes;
     c.scratch_stats.peak_total_device_bytes = std::max<uint64_t>(
         total, c.scratch_stats.peak_total_device_bytes);
 }
@@ -542,8 +681,9 @@ void release_scratch(Context &c) {
     c.scratch_stats.capacity_bytes = 0;
 }
 void grow_scratch(Context &c, size_t bytes) {
-    require(c.stats.allocated_bytes <= c.device_budget &&
-            bytes <= c.device_budget-c.stats.allocated_bytes,
+    require(c.residency->workspace_bytes <= c.device_budget &&
+            c.stats.allocated_bytes <= c.device_budget-c.residency->workspace_bytes &&
+            bytes <= c.device_budget-c.residency->workspace_bytes-c.stats.allocated_bytes,
             FORT_SCOPE_RESOURCE, "scratch allocation exceeds the declared scope budget");
     const bool growing = c.scratch != nullptr;
     // An idle lease can still have pending kernels on this stream. Retire its
@@ -611,7 +751,7 @@ void transfer_statistics_trace(const Context &c, fort_scope_t handle) noexcept {
     try {
         const auto stats = transfer_statistics(c);
         std::lock_guard<std::mutex> lock(trace_mutex);
-        std::cerr << std::setprecision(17) << "FORT_SCOPED evidence {\"schema_version\":1,\"context\":" << handle
+        std::cerr << std::setprecision(17) << "FORT_SCOPED evidence {\"schema_version\":1,\"context\":" << handle << DomainJson{c}
                   << ",\"event\":\"transfer_statistics\",\"stats_version\":" << stats.version
                   << ",\"complete\":true,\"requested_mode\":" << stats.requested_mode
                   << ",\"effective_mode\":" << stats.effective_mode
@@ -637,7 +777,7 @@ void graph_statistics_trace(const Context &c, bool complete) noexcept {
     try {
         const auto &stats = c.graph_stats;
         std::lock_guard<std::mutex> lock(trace_mutex);
-        std::cerr << "FORT_SCOPED evidence {\"schema_version\":1,\"context\":" << c.handle
+        std::cerr << "FORT_SCOPED evidence {\"schema_version\":1,\"context\":" << c.handle << DomainJson{c}
                   << ",\"event\":\"graph_statistics\",\"stats_version\":" << stats.version
                   << ",\"complete\":" << (complete ? "true" : "false");
         for (const auto &[key,value] : {
@@ -654,7 +794,7 @@ void completion_statistics_trace(const Context &c, bool complete) noexcept {
     try {
         const auto &stats = c.completion_stats;
         std::lock_guard<std::mutex> lock(trace_mutex);
-        std::cerr << "FORT_SCOPED evidence {\"schema_version\":1,\"context\":" << c.handle
+        std::cerr << "FORT_SCOPED evidence {\"schema_version\":1,\"context\":" << c.handle << DomainJson{c}
                   << ",\"event\":\"completion_statistics\",\"stats_version\":" << stats.version
                   << ",\"complete\":" << (complete ? "true" : "false");
         for (const auto &[key,value] : {
@@ -672,7 +812,7 @@ void queue_statistics_trace(const Context &c,bool complete) noexcept {
         !stats.direct_kernels && stats.queue_enabled && stats.graphs_enabled)) return;
     try {
         std::lock_guard<std::mutex> lock(trace_mutex);
-        std::cerr << "FORT_SCOPED evidence {\"schema_version\":1,\"context\":" << c.handle
+        std::cerr << "FORT_SCOPED evidence {\"schema_version\":1,\"context\":" << c.handle << DomainJson{c}
                   << ",\"event\":\"command_queue_statistics\",\"stats_version\":" << stats.version
                   << ",\"complete\":" << (complete?"true":"false")
                   << ",\"queue_enabled\":" << stats.queue_enabled << ",\"graphs_enabled\":" << stats.graphs_enabled;
@@ -691,7 +831,7 @@ void residency_statistics_trace(const Context &c,bool complete) noexcept {
     if (!trace_enabled() || !stats.evictions) return;
     try {
         std::lock_guard<std::mutex> lock(trace_mutex);
-        std::cerr << "FORT_SCOPED evidence {\"schema_version\":1,\"context\":" << c.handle
+        std::cerr << "FORT_SCOPED evidence {\"schema_version\":1,\"context\":" << c.handle << DomainJson{c}
                   << ",\"event\":\"residency_statistics\",\"stats_version\":" << stats.version
                   << ",\"complete\":" << (complete?"true":"false") << ",\"device_budget\":" << c.device_budget;
         for (const auto &[key,value] : {
@@ -871,7 +1011,216 @@ void copy(Context &c, Buffer &b, const Box &box, bool upload) {
     mark_context_pending(c);
     trace(c, upload ? "upload" : "download", &b, plan.bytes);
 }
+void compact_trace(const Context &c,const Buffer &b,const fort_physical::compact::Plan &plan,
+                   const fort_physical::compact::Price &price,bool upload,size_t boxes,bool reused) noexcept {
+    if(!trace_enabled())return;
+    try {
+        std::lock_guard<std::mutex> lock(trace_mutex);
+        std::cerr<<"FORT_SCOPED evidence {\"schema_version\":1,\"context\":"<<c.handle<<DomainJson{c}
+                 <<",\"event\":\"compact_transfer\",\"version\":1,\"buffer\":"<<b.handle
+                 <<",\"identity\":"<<b.identity<<",\"generation\":"<<b.generation
+                 <<",\"upload\":"<<(upload?"true":"false")<<",\"bytes\":"<<plan.bytes
+                 <<",\"logical_rectangles\":"<<boxes<<",\"physical_operations\":"<<price.operations
+                 <<",\"dma_calls\":1,\"copy_kernel_launches\":"<<price.chunks
+                 <<",\"word_bytes\":"<<plan.word_bytes<<",\"workspace_bytes\":"<<price.workspace_bytes
+                 <<",\"reused\":"<<(reused?"true":"false");
+        const auto &p=c.provenance;
+        for(const auto &[key,value]:{std::pair{"owner",p.owner},{"procedure",p.procedure},{"segment",p.segment},
+                {"operation",p.operation},{"implementation",p.implementation},{"boundary",p.boundary}})
+            std::cerr<<",\""<<key<<"\":\""<<(value[0]?value:"unknown")<<'"';
+        std::cerr<<"}\n";
+    } catch(...) {}
+}
+void compact_estimate_unavailable(Context &c) noexcept {
+    c.owner_estimate_available=false;
+    if(c.last_report) {c.last_report->available=0;c.last_report->owner_available=0;}
+}
+void compact_fallback(Context &c,uint32_t reason) noexcept {
+    compact_estimate_unavailable(c);transfer_fallback(c,reason);
+}
+[[maybe_unused]] void compact_lease_observation(Context &c,size_t expected_capacity,bool expected_reused,
+                               size_t actual_capacity,bool actual_reused) noexcept {
+    if(expected_capacity!=actual_capacity || expected_reused!=actual_reused)
+        compact_estimate_unavailable(c);
+}
+bool copy_compact(Context &c,Buffer &b,const Region &parts,bool upload) {
+    namespace compact=fort_physical::compact;
+    if(c.transfer_stats.requested_mode!=FORT_SCOPE_TRANSFERS_AUTO || !c.copy_costs ||
+       parts.empty() || c.batch_active)return false;
+    std::vector<fort_physical::CopyOperation> operations;
+    compact::Plan plan;
+    try {
+        for(const auto &part:parts) {
+            const fort_physical::CopyPlan original(b.element_bytes,b.extents,part.lo,part.hi);
+            require(original.valid,FORT_SCOPE_ARGUMENT,"invalid physical transfer layout");
+            if(!original.visit([&](const auto &op) {
+                if(operations.size()==compact::operation_limit)return false;
+                operations.push_back(op);return true;
+            })) {compact_estimate_unavailable(c);return false;}
+        }
+        plan=compact::make_plan(operations,b.bytes,std::numeric_limits<size_t>::max());
+    } catch(const compact::Ineligible &) { compact_estimate_unavailable(c);return false; }
+      catch(const std::bad_alloc &) { compact_estimate_unavailable(c);return false; }
+    const auto own=field_budget(c);
+    if(c.stats.allocated_bytes>own || (!b.device && b.bytes>own-c.stats.allocated_bytes))return false;
+    const auto available=own-c.stats.allocated_bytes-(b.device?0:b.bytes);
+    compact::PoolState pool;pool.available_device_bytes=available;
+    const auto &pricing=*c.copy_costs;
+#ifdef FORT_SCOPE_CPU_TEST
+    pool.capacity=c.residency->compact_reference_capacity;
+    pool.cold_available=pool.capacity==0;
+    pool.reused=pool.capacity>=plan.bytes && pool.capacity<=available/2;
+#else
+    const auto snapshot=fort_staging::snapshot();
+    const auto idle=snapshot.idle_role==fort_staging::Role::Compact ? 2*snapshot.idle_capacity : 0;
+    const auto active=snapshot.device_reserved-idle;
+    pool.available_device_bytes=std::min(active>available?0:available-active,fort_staging::compact_available(snapshot));
+    pool.capacity=snapshot.idle_capacity;
+    pool.cold_available=snapshot.idle_capacity==0;
+    pool.reused=snapshot.idle_device==c.device && snapshot.idle_role==fort_staging::Role::Compact &&
+                pool.capacity>=plan.bytes && snapshot.device_reserved<=available &&
+                pool.capacity<=pool.available_device_bytes/2;
+#endif
+    auto price=compact::price(plan,pricing.copy,pricing.base,upload,c.pending,pool);
+    if(!price.available) {compact_estimate_unavailable(c);return false;}
+    if(!price.selected)return false;
+    allocate(c,b);
+#if defined(FORT_SCOPE_CPU_TEST) || defined(FORT_SCOPE_TEST_FAULTS)
+    if(std::getenv("FORT_SCOPE_TEST_FAIL_COMPACT_ALLOC")) {
+        compact_fallback(c,FORT_SCOPE_TRANSFER_ALLOCATION);return false;
+    }
+#endif
+#ifdef FORT_SCOPE_CPU_TEST
+    std::vector<unsigned char> packed_storage,device_storage;
+    try {packed_storage.resize(price.capacity);device_storage.resize(price.capacity);}
+    catch(const std::bad_alloc &) {compact_fallback(c,FORT_SCOPE_TRANSFER_ALLOCATION);return false;}
+    auto *packed=packed_storage.data(),*compact_device=device_storage.data();
+    const bool reused=pool.reused;
+#else
+    DeviceGuard guard(c);
+    fort_staging::Result lease;
+    try {lease=fort_staging::acquire(price.capacity,fort_staging::Role::Compact,false,available,true);}
+    catch(const std::bad_alloc &) {compact_fallback(c,FORT_SCOPE_TRANSFER_ALLOCATION);return false;}
+    if(lease.exhausted) {compact_fallback(c,lease.unpriced_idle?FORT_SCOPE_TRANSFER_ESTIMATES_UNAVAILABLE:FORT_SCOPE_TRANSFER_BUDGET);return false;}
+    if(lease.status!=cudaSuccess) {
+        try {cuda_check(c,lease.status,true);}catch(const Error &error) {
+            if(error.status!=FORT_SCOPE_RESOURCE)throw;
+            compact_fallback(c,FORT_SCOPE_TRANSFER_ALLOCATION);return false;
+        }
+    }
+    require(bool(lease.slots),FORT_SCOPE_STATE,"missing compact staging lease");
+    // Cache state can change after metadata pricing. Reprice the actual lease
+    // before payload submission; a changed choice never replays source work.
+    const bool reused=lease.reused;
+    compact_lease_observation(c,price.capacity,pool.reused,lease.slots->capacity,reused);
+    pool={lease.slots->capacity,available,reused};
+    price=compact::price(plan,pricing.copy,pricing.base,upload,c.pending,pool);
+    if(!price.available || !price.selected) {
+        size_t freed=0;cuda_check(c,fort_staging::release(std::move(lease.slots),freed));
+        compact_estimate_unavailable(c);
+        return false;
+    }
+    auto &slot=lease.slots->slots[0];auto *packed=slot.host,*compact_device=slot.device;
+#endif
+    const auto workspace=price.workspace_bytes;
+    require(workspace<=available,FORT_SCOPE_RESOURCE,"compact workspace exceeds inclusive device budget");
+    c.residency->workspace_bytes+=workspace;payload_peak(c);
+    bool charged=true,submitted=false;
+    auto &stats=c.transfer_stats;
+    try {
+        wait(c); // Full-layout allocations and prior writers use the domain stream.
+        stats.staging_allocations+=reused?0:2;stats.staging_reuses+=reused?1:0;
+        stats.slot_capacity=price.capacity;stats.staging_device_bytes=workspace;
+        if(upload) {
+            const auto start=std::chrono::steady_clock::now();size_t offset=0;
+            for(const auto &op:operations) {pack_tile(packed+offset,static_cast<char*>(b.host),op,false);offset+=op.width*op.height*op.depth;}
+            stats.packing_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
+            stats.packed_bytes+=plan.bytes;
+        }
+        auto kernels=[&](bool scatter) {
+            for(const auto &chunk:plan.chunks) {
+#ifdef FORT_SCOPE_CPU_TEST
+                for(size_t i=0;i<chunk.count;++i) {
+                    const auto &d=chunk.ops[i];
+                    const fort_physical::CopyOperation op{d.offset,d.width,d.height,d.depth,d.pitch,d.physical_height};
+                    pack_tile(compact_device+d.packed_offset,static_cast<char*>(b.device),op,scatter);
+                }
+#else
+                auto *physical=static_cast<unsigned char*>(b.device);
+                if(plan.word_bytes==8) {
+                    if(scatter)compact::launch<uint64_t,true>(physical,compact_device,chunk,slot.stream);
+                    else compact::launch<uint64_t,false>(physical,compact_device,chunk,slot.stream);
+                } else if(plan.word_bytes==4) {
+                    if(scatter)compact::launch<uint32_t,true>(physical,compact_device,chunk,slot.stream);
+                    else compact::launch<uint32_t,false>(physical,compact_device,chunk,slot.stream);
+                } else {
+                    if(scatter)compact::launch<unsigned char,true>(physical,compact_device,chunk,slot.stream);
+                    else compact::launch<unsigned char,false>(physical,compact_device,chunk,slot.stream);
+                }
+                cuda_check(c,cudaGetLastError());
+#endif
+            }
+        };
+        submitted=true;
+#ifndef FORT_SCOPE_CPU_TEST
+        slot.pending=true; // Also covers launch/API failure before event record.
+#endif
+        if(!upload)kernels(false);
+#ifdef FORT_SCOPE_CPU_TEST
+        if(upload)std::memcpy(compact_device,packed,plan.bytes);else std::memcpy(packed,compact_device,plan.bytes);
+#else
+        cuda_check(c,cudaMemcpyAsync(upload?compact_device:packed,upload?packed:compact_device,plan.bytes,
+                                   upload?cudaMemcpyHostToDevice:cudaMemcpyDeviceToHost,slot.stream));
+#endif
+#if defined(FORT_SCOPE_CPU_TEST) || defined(FORT_SCOPE_TEST_FAULTS)
+        if(std::getenv("FORT_SCOPE_TEST_FAIL_COMPACT_SUBMIT"))throw Error(FORT_SCOPE_EXECUTION,"injected compact post-submission failure");
+#endif
+        if(upload)kernels(true);
+        if(upload) {++c.stats.uploads;c.stats.upload_bytes+=plan.bytes;++stats.pinned_uploads;stats.pinned_upload_bytes+=plan.bytes;}
+        else {++c.stats.downloads;c.stats.download_bytes+=plan.bytes;++stats.pinned_downloads;stats.pinned_download_bytes+=plan.bytes;}
+        const auto start=std::chrono::steady_clock::now();
+#if defined(FORT_SCOPE_CPU_TEST) || defined(FORT_SCOPE_TEST_FAULTS)
+        if(std::getenv("FORT_SCOPE_TEST_FAIL_COMPACT_RECORD"))throw Error(FORT_SCOPE_EXECUTION,"injected compact event-record failure");
+#endif
+#ifndef FORT_SCOPE_CPU_TEST
+        cuda_check(c,cudaEventRecord(slot.complete,slot.stream));
+        cuda_check(c,cudaEventSynchronize(slot.complete));slot.pending=false;
+#endif
+#if defined(FORT_SCOPE_CPU_TEST) || defined(FORT_SCOPE_TEST_FAULTS)
+        if(std::getenv("FORT_SCOPE_TEST_FAIL_COMPACT_WAIT"))throw Error(FORT_SCOPE_EXECUTION,"injected compact completion failure");
+#endif
+        ++stats.events;++stats.event_waits;
+        stats.event_wait_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count();
+        if(!upload) {
+            const auto unpack_start=std::chrono::steady_clock::now();size_t offset=0;
+            for(const auto &op:operations) {pack_tile(packed+offset,static_cast<char*>(b.host),op,true);offset+=op.width*op.height*op.depth;}
+            stats.unpacking_seconds+=std::chrono::duration<double>(std::chrono::steady_clock::now()-unpack_start).count();
+            stats.unpacked_bytes+=plan.bytes;
+        }
+#ifdef FORT_SCOPE_CPU_TEST
+        c.residency->compact_reference_capacity=price.capacity;
+#else
+        size_t freed=0;cuda_check(c,fort_staging::release(std::move(lease.slots),freed));
+#endif
+        c.residency->workspace_bytes-=workspace;charged=false;
+        stats.effective_mode=FORT_SCOPE_TRANSFERS_AUTO;
+        compact_trace(c,b,plan,price,upload,parts.size(),reused);
+        trace(c,upload?"upload":"download",&b,plan.bytes);
+        return true;
+    } catch(...) {
+        if(submitted)c.poisoned=true;
+#ifndef FORT_SCOPE_CPU_TEST
+        if(lease.slots) {
+            size_t freed=0;
+            if(lease.slots->cleanup(freed)!=cudaSuccess) {c.poisoned=true;charged=false;}
+        }
+#endif
+        if(charged)c.residency->workspace_bytes-=workspace;
+        throw;
+    }
+}
 void copy_region(Context &c, Buffer &b, const Region &parts, bool upload) {
+    if(copy_compact(c,b,parts,upload))return;
     // Experimental upload-only transport. Logical coverage remains the exact
     // requested union: extra physical bytes never establish device freshness.
     // Full source freshness is deliberately stronger than span freshness, and
@@ -1118,7 +1467,8 @@ void begin_accesses(Context &c, const fort_scope_plan_binding *bindings, size_t 
     acquire_prepared_accesses(c,prepared,device,devices);
 }
 #ifndef FORT_SCOPE_CPU_TEST
-void submit_graph(Context &c, uint64_t key, const fort_scope_kernel_v1 *kernels, size_t count,bool resource_fallback=false) {
+void submit_graph(Context &c, uint64_t key, const fort_scope_kernel_v1 *kernels, size_t count,bool resource_fallback=false,
+                  KernelTracePositions positions={}) {
     seal_uploads(c);
     initialize(c);
     DeviceGuard guard(c);
@@ -1131,6 +1481,11 @@ void submit_graph(Context &c, uint64_t key, const fort_scope_kernel_v1 *kernels,
         if (status == cudaSuccess && !warmup) {
             c.stats.launches += count; mark_context_pending(c);
             trace(c,"graph_submit",nullptr,count);
+            // These are submitted logical graph members, not individual CUDA
+            // launch API calls or evidence of device completion.
+            if (trace_enabled())
+                for (size_t i=0;i<count;++i)
+                    trace(c,"graph_kernel",nullptr,0,nullptr,positions.at(i));
             return;
         }
         if (status == cudaSuccess) trace(c,"graph_warmup_direct",nullptr,count);
@@ -1147,12 +1502,14 @@ void submit_graph(Context &c, uint64_t key, const fort_scope_kernel_v1 *kernels,
         const auto &kernel=kernels[i];
         cuda_check(c,cudaLaunchKernel(kernel.function,dim3(kernel.grid[0],kernel.grid[1],kernel.grid[2]),
             dim3(kernel.block[0],kernel.block[1],kernel.block[2]),const_cast<void **>(kernel.arguments),kernel.shared_bytes,c.stream));
-        ++c.stats.launches; ++c.queue_stats.direct_kernels; mark_context_pending(c); trace(c,"launch");
+        ++c.stats.launches; ++c.queue_stats.direct_kernels; mark_context_pending(c);
+        trace(c,"launch",nullptr,0,nullptr,positions.at(i));
     }
     ++c.queue_stats.direct_submissions;
 }
 #endif
-void execute_graph(Context &c, uint64_t key, const fort_scope_graph_task_v1 *tasks, size_t count,bool resource_fallback=false) {
+void execute_graph(Context &c, uint64_t key, const fort_scope_graph_task_v1 *tasks, size_t count,bool resource_fallback=false,
+                   KernelTracePositions positions={}) {
     require(!count || (key && tasks),FORT_SCOPE_ARGUMENT,"missing graph tasks or stable group key");
     if (!count) return;
     std::vector<fort_scope_kernel_v1> kernels;
@@ -1202,6 +1559,7 @@ void execute_graph(Context &c, uint64_t key, const fort_scope_graph_task_v1 *tas
     }
 #ifdef FORT_SCOPE_CPU_TEST
     (void)resource_fallback;
+    (void)positions;
     throw Error(FORT_SCOPE_RESOURCE,"CUDA graphs unavailable in the CPU reference backend");
 #else
     std::vector<fort_buffer_t> handles;
@@ -1210,7 +1568,7 @@ void execute_graph(Context &c, uint64_t key, const fort_scope_graph_task_v1 *tas
     reserve_devices(c,handles.data(),handles.size());
     for (auto &resource : resources)
         for (const auto &parts : resource.uploads) copy_region(c,*resource.actual,parts,true);
-    submit_graph(c,key,kernels.data(),count,resource_fallback);
+    submit_graph(c,key,kernels.data(),count,resource_fallback,positions);
     for (auto &resource : resources) {
         auto &b = *resource.actual;
         b.initialized = std::move(resource.state.initialized);
@@ -1260,13 +1618,20 @@ void flush_commands(Context &c,const std::vector<bool> *selected,bool conflict) 
     if (c.commands.empty()) return;
     std::vector<fort_scope_graph_task_v1> tasks;
     tasks.reserve(c.commands.size());
+    const bool tracing=trace_enabled();
+    const fort_scope_trace_state_v1 unknown{};
+    std::unique_ptr<const fort_scope_trace_state_v1 *[]> positions;
+    if (tracing && trace_allocation_allowed("flush"))
+        positions.reset(new(std::nothrow) const fort_scope_trace_state_v1 *[c.commands.size()]);
     uint64_t key=1469598103934665603ULL;
     for (size_t i=0; i<c.commands.size(); ++i) if (!selected || (*selected)[i]) {
         tasks.push_back(c.commands[i]->view());
+        if (positions) positions[tasks.size()-1]=c.commands[i]->provenance ? c.commands[i]->provenance.get() : &unknown;
         key=(key^c.commands[i]->key)*1099511628211ULL;
     }
     if (tasks.empty()) return;
-    execute_graph(c,key?key:1,tasks.data(),tasks.size(),true);
+    // Diagnostic allocation failure loses attribution, never numerical work.
+    execute_graph(c,key?key:1,tasks.data(),tasks.size(),true,{positions.get(),&unknown});
     // No numerical work is replayable once submit has succeeded. Remove it
     // before any later source operation can query virtual definitions.
     if (!selected) c.commands.clear();
@@ -1321,6 +1686,8 @@ void enqueue_graph(Context &c,uint64_t key,const fort_scope_graph_task_v1 *task,
     require(!task->kernel.argument_count || sizes,FORT_SCOPE_ARGUMENT,"missing queued kernel argument sizes");
     require(!task->binding_count || task->bindings,FORT_SCOPE_ARGUMENT,"missing queued task effects");
     auto owned=std::make_unique<QueuedTask>(); owned->key=key; owned->kernel=task->kernel;
+    if (trace_enabled() && trace_allocation_allowed("enqueue"))
+        owned->provenance.reset(new(std::nothrow) fort_scope_trace_state_v1(c.provenance));
     owned->values.reserve(task->kernel.argument_count); owned->arguments.reserve(task->kernel.argument_count);
     uint64_t bytes=0;
     for (size_t i=0; i<task->kernel.argument_count; ++i) {
@@ -1424,17 +1791,28 @@ void reserve_devices(Context &c,const fort_buffer_t *handles,size_t count,void *
     }
     std::vector<Buffer *> victims;
     if (missing>available) {
-        std::vector<Buffer *> candidates;
+        struct Candidate { Buffer *buffer; bool dirty; };
+        std::vector<Candidate> candidates;
         candidates.reserve(c.buffers.size());
         for (auto &entry : c.buffers) {
             auto &b=*entry.second;
-            if (b.device && !b.prepared && !pinned.count(b.handle)) candidates.push_back(&b);
+            if (b.device && !b.prepared && !pinned.count(b.handle)) {
+                // A readonly replica can be dropped without publication.
+                // Include physically current bytes even when their logical
+                // definition was killed: retirement must preserve storage,
+                // and a partial host probe does not make a dirty buffer clean.
+                Budget region_budget;
+                candidates.push_back({&b,!difference(b.device_current,b.host_current,region_budget).empty()});
+            }
         }
-        std::sort(candidates.begin(),candidates.end(),[](const Buffer *a,const Buffer *b) {
-            return a->last_device_use!=b->last_device_use ? a->last_device_use<b->last_device_use : a->handle<b->handle;
+        std::sort(candidates.begin(),candidates.end(),[](const Candidate &a,const Candidate &b) {
+            if(a.dirty!=b.dirty)return !a.dirty;
+            return a.buffer->last_device_use!=b.buffer->last_device_use ?
+                a.buffer->last_device_use<b.buffer->last_device_use : a.buffer->handle<b.buffer->handle;
         });
         auto remaining=missing-available;
-        for (auto *b : candidates) {
+        for (const auto &candidate : candidates) {
+            auto *b=candidate.buffer;
             victims.push_back(b);
             if (b->bytes>=remaining) { remaining=0; break; }
             remaining-=b->bytes;
@@ -1500,22 +1878,45 @@ void note_numerical_activity(Context &c) noexcept {
     if (c.endpoint_mode != FORT_SCOPE_PLAN_CONTINUE || !c.segment_cost_pending)
         c.owner_estimate_available = false;
 }
-template<class F> int with(fort_scope_t handle, F &&f, Change change = Change::State) noexcept {
-    return protect([&]() {
+template<class F> int with(fort_scope_t handle, F &&f, Change change = Change::State,
+                           bool source_host_control = false) noexcept {
+    const int status=protect([&]() {
         const auto c = lookup(handle);
         std::lock_guard<std::mutex> lock(c->mutex);
-        require(!c->closed, FORT_SCOPE_STALE, "invalid or stale scope handle");
+        require(!c->closed && !c->residency->retired, FORT_SCOPE_STALE, "invalid or stale scope handle");
         require(!c->poisoned, FORT_SCOPE_EXECUTION, "scope has an execution failure; unsafe replay prohibited");
+        if(c->source_host_task && !source_host_control && change!=Change::None) {
+            if(c->source_host_task->started) c->poisoned=true;
+            throw Error(c->poisoned ? FORT_SCOPE_EXECUTION : FORT_SCOPE_STATE,
+                        "scope mutation during original CPU source transaction");
+        }
         // Invalidate before a possibly partial mutation, including operations
         // that fail. Read-only metadata probes preserve a context-local proof.
         invalidate(*c, change);
         try { f(*c); }
         catch (...) {
+            if(source_host_control && c->source_host_task && c->source_host_task->started) {
+                c->poisoned=true;
+                throw Error(FORT_SCOPE_EXECUTION,"original CPU source work started; unsafe replay prohibited");
+            }
             if (c->endpoint_mode == FORT_SCOPE_PLAN_CONTINUE && change != Change::None)
                 c->owner_estimate_available = false;
             throw;
         }
     });
+    // Even a protective-environment/setup failure before entering the lambda
+    // is fatal if the original CPU span has already been declared started.
+    if(source_host_control && status!=FORT_SCOPE_OK) {
+        try {
+            const auto c=lookup(handle);
+            std::lock_guard<std::mutex> lock(c->mutex);
+            if(c->source_host_task && c->source_host_task->started) {
+                c->poisoned=true;
+                return FORT_SCOPE_EXECUTION;
+            }
+        } catch(...) {} // Preserve the original failure for stale handles.
+    }
+    return status;
 }
 }
 
@@ -1544,8 +1945,10 @@ public:
         const double elapsed = seconds();
         try {
             std::lock_guard<std::mutex> lock(trace_mutex);
-            std::cerr << std::setprecision(17) << "FORT_SCOPED planning_timing context=" << handle
-                      << " phase=" << phase << " seconds=" << elapsed
+            std::cerr << std::setprecision(17) << "FORT_SCOPED planning_timing context=" << handle;
+            if(context.residency->domain)
+                std::cerr << " domain_version=1 domain=" << context.residency->domain << " domain_role=execution";
+            std::cerr << " phase=" << phase << " seconds=" << elapsed
                       << " cache_hit=" << (cache_hit ? 1 : 0)
                       << " query_generation=" << context.query_generation
                       << " state_generation=" << context.state_generation << '\n';
@@ -1611,9 +2014,23 @@ const fort_scoped::planning::Inputs &planning_inputs(Context &c, fort_scope_t ha
     input.pending = c.pending || !c.commands.empty();
     input.graph_mode = c.graph_planning;
     input.transfer_mode = c.transfer_stats.requested_mode == FORT_SCOPE_TRANSFERS_PINNED
-        ? FORT_SCOPE_TRANSFERS_PINNED : FORT_SCOPE_TRANSFERS_DIRECT;
+        ? FORT_SCOPE_TRANSFERS_PINNED : c.transfer_stats.requested_mode==FORT_SCOPE_TRANSFERS_AUTO && c.copy_costs
+        ? FORT_SCOPE_TRANSFERS_AUTO : FORT_SCOPE_TRANSFERS_DIRECT;
     input.direct_transfer_fit_applicable = c.transfer_stats.requested_mode == FORT_SCOPE_TRANSFERS_DIRECT;
     input.transfer_costs = c.transfer_costs;
+    input.copy_costs=c.copy_costs;
+#ifdef FORT_SCOPE_CPU_TEST
+    input.copy_pool_capacity=c.residency->compact_reference_capacity;
+    input.copy_pool_cold_available=!input.copy_pool_capacity;
+#else
+    const auto copy_pool=fort_staging::snapshot();
+    input.copy_pool_revision=copy_pool.revision;
+    input.copy_pool_available_bytes=fort_staging::compact_available(copy_pool);
+    input.copy_pool_cold_available=copy_pool.idle_capacity==0;
+    const bool idle_compact=copy_pool.idle_role==fort_staging::Role::Compact;
+    input.copy_pool_active_device_bytes=copy_pool.device_reserved-(idle_compact?2*copy_pool.idle_capacity:0);
+    if(idle_compact && copy_pool.idle_device==c.device)input.copy_pool_capacity=copy_pool.idle_capacity;
+#endif
 #ifdef FORT_SCOPE_CPU_TEST
     input.asynchronous_release = false;
 #else
@@ -2122,11 +2539,11 @@ const char *batch_reason(uint32_t reason) noexcept {
         default: return "none";
     }
 }
-void batch_trace(fort_scope_t handle, const fort_scope_batch_report &report) noexcept {
+void batch_trace(const Context &c,fort_scope_t handle, const fort_scope_batch_report &report) noexcept {
     if (!diagnostics_enabled()) return;
     try {
         std::lock_guard<std::mutex> lock(trace_mutex);
-        std::cerr << std::setprecision(17) << "FORT_SCOPED evidence {\"schema_version\":1,\"event\":\"batch_statistics\",\"stats_version\":1,\"context\":" << handle
+        std::cerr << std::setprecision(17) << "FORT_SCOPED evidence {\"schema_version\":1,\"event\":\"batch_statistics\",\"stats_version\":1,\"context\":" << handle << DomainJson{c}
                   << ",\"available\":" << report.available << ",\"applied\":" << report.applied
                   << ",\"selected_transfers\":" << report.selected_transfers << ",\"reason\":\"" << batch_reason(report.reason) << "\""
                   << ",\"owner_cost_available\":" << report.owner_cost_available
@@ -2141,7 +2558,7 @@ void batch_trace(fort_scope_t handle, const fort_scope_batch_report &report) noe
         std::cerr << "}\n";
     } catch (...) {}
 }
-void decision_trace(const fort_scope_plan_decision &d, const std::string &reason) {
+void decision_trace(const Context &c,const fort_scope_plan_decision &d, const std::string &reason) {
     const char *enabled = std::getenv("FORT_RUNTIME_TRACE");
     if (!enabled || std::strcmp(enabled, "1")) return;
     std::lock_guard<std::mutex> lock(trace_mutex);
@@ -2152,7 +2569,10 @@ void decision_trace(const fort_scope_plan_decision &d, const std::string &reason
               << " launches=" << d.launches << " waits=" << d.waits
               << " peak_device_bytes=" << d.peak_device_bytes
               << " estimated_seconds=" << d.estimated_seconds << " native_seconds=" << d.native_seconds
-              << " reason=" << (reason.empty() ? "calibrated_selection" : reason) << '\n';
+              << " reason=" << (reason.empty() ? "calibrated_selection" : reason);
+    if(c.residency->domain)
+        std::cerr << " context=" << c.handle << " domain_version=1 domain=" << c.residency->domain << " domain_role=execution";
+    std::cerr << '\n';
 }
 void definition_validation_trace(Context &context, fort_scope_t handle,
                                  const fort_scoped::planning::DefinitionValidation &proof,
@@ -2161,7 +2581,7 @@ void definition_validation_trace(Context &context, fort_scope_t handle,
     if (!enabled || std::strcmp(enabled, "1")) return;
     try {
         std::ostringstream out;
-        out << std::setprecision(17) << "{\"schema_version\":1,\"context\":" << handle
+        out << std::setprecision(17) << "{\"schema_version\":1,\"context\":" << handle << DomainJson{context}
             << ",\"event\":\"definition_validation\",\"status\":" << proof.status
             << ",\"cache_hit\":" << (cache_hit ? "true" : "false")
             << ",\"seconds\":" << seconds
@@ -2233,7 +2653,7 @@ void evidence_row(void *opaque, const fort_scoped::planning::EvidenceEvent &even
     // A trace can be incomplete, but may never retain an unbounded event graph.
     if (output.rows >= 4096) { output.truncated = true; return; }
     std::ostringstream out;
-    out << std::setprecision(17) << "{\"schema_version\":1,\"context\":" << output.handle
+    out << std::setprecision(17) << "{\"schema_version\":1,\"context\":" << output.handle << DomainJson{output.context}
         << ",\"sequence\":" << output.rows++ << ",\"event\":\"" << event.event << '"';
     if (event.phase) out << ",\"phase\":\"" << event.phase << '"';
     if (event.resource) {
@@ -2266,6 +2686,8 @@ void evidence_row(void *opaque, const fort_scoped::planning::EvidenceEvent &even
         out << ",\"unit\":" << event.unit << ",\"direction\":\"" << (event.upload ? "h2d" : "d2h")
             << "\",\"rectangle\":"; json_rectangle(out, *event.rectangle);
         out << ",\"bytes\":" << event.bytes << ",\"copy_calls\":" << event.copies;
+        if(event.compact_copy)out<<",\"transport\":\"compact\",\"physical_operations\":"<<event.physical_operations
+                                  <<",\"copy_kernel_launches\":"<<event.copy_kernels;
     }
     if (!std::strcmp(event.event, "gate")) {
         out << ",\"first_worker\":" << event.first << ",\"last_worker_exclusive\":" << event.last
@@ -2286,7 +2708,7 @@ void planning_evidence(Context &context, fort_scope_t handle, const fort_scope_p
     try {
         {
             std::lock_guard<std::mutex> lock(trace_mutex);
-            std::cerr << std::setprecision(17) << "FORT_SCOPED evidence {\"schema_version\":1,\"context\":" << handle
+            std::cerr << std::setprecision(17) << "FORT_SCOPED evidence {\"schema_version\":1,\"context\":" << handle << DomainJson{context}
                   << ",\"event\":\"decision\",\"device\":" << context.device
                   << ",\"available\":" << result.decision.available << ",\"gpu_units\":" << result.decision.gpu_units
                   << ",\"cpu_units\":" << result.decision.cpu_units << ",\"reason\":\"" << result.reason
@@ -2332,7 +2754,7 @@ void planning_evidence(Context &context, fort_scope_t handle, const fort_scope_p
     }
     try {
         std::lock_guard<std::mutex> lock(trace_mutex);
-        std::cerr << "FORT_SCOPED evidence {\"schema_version\":1,\"context\":" << handle
+        std::cerr << "FORT_SCOPED evidence {\"schema_version\":1,\"context\":" << handle << DomainJson{context}
                   << ",\"event\":\"end\",\"rows\":" << output.rows
                   << ",\"complete\":" << (complete ? "true" : "false")
                   << ",\"truncated\":" << (output.truncated ? "true" : "false") << "}\n";
@@ -2692,7 +3114,7 @@ extern "C" int fort_scope_plan_select(fort_scope_t h, const fort_scope_plan_cost
                 (result.decision.available && result.decision.gpu_units);
             if (!c.plan_installed) c.schedule.clear();
             c.plan_recording = false;
-            decision_trace(*out, result.reason);
+            decision_trace(c,*out, result.reason);
         }
     }, Change::None);
 }
@@ -2877,7 +3299,7 @@ extern "C" int fort_scope_native_hint_begin_v1(const uint64_t *metadata_words,si
         uint64_t gpu,error;
         {
             std::lock_guard<std::mutex> lock(registry_mutex);
-            if(!contexts.empty())return FORT_SCOPE_OK;
+            if(!contexts.empty() || !domains.empty())return FORT_SCOPE_OK;
             gpu=native_hint_gpu_generation.value();error=native_hint_error_generation.value();
         }
         if(gpu==std::numeric_limits<uint64_t>::max() || error==std::numeric_limits<uint64_t>::max())
@@ -2895,7 +3317,7 @@ extern "C" int fort_scope_native_hint_begin_v1(const uint64_t *metadata_words,si
         bool found=false;
         {
             std::lock_guard<std::mutex> lock(registry_mutex);
-            if(!contexts.empty() || native_hint_gpu_generation.value()!=gpu ||
+            if(!contexts.empty() || !domains.empty() || native_hint_gpu_generation.value()!=gpu ||
                     native_hint_error_generation.value()!=error)return FORT_SCOPE_OK;
             found=native_hint_cache.find(key);
             if(!found) {
@@ -2930,7 +3352,7 @@ extern "C" int fort_scope_native_hint_finish_v1(fort_scope_native_hint_observati
         {
             std::lock_guard<std::mutex> lock(registry_mutex);
             const auto gpu=native_hint_gpu_generation.value(),error=native_hint_error_generation.value();
-            if(contexts.empty() && gpu!=std::numeric_limits<uint64_t>::max() &&
+            if(contexts.empty() && domains.empty() && gpu!=std::numeric_limits<uint64_t>::max() &&
                     error!=std::numeric_limits<uint64_t>::max() &&
                     gpu==observation->gpu_generation && error==observation->error_generation) {
                 learned=native_hint_cache.insert(key);
@@ -2954,6 +3376,123 @@ extern "C" int fort_scope_create(int device, fort_scope_t *out) {
         trace(*c, "create");
     });
 }
+extern "C" int fort_scope_domain_create_v1(int device, fort_scope_domain_t *out) {
+    return protect([&]() {
+        require(out && device>=0,FORT_SCOPE_ARGUMENT,"invalid residency domain output or device");
+        auto owner=std::make_shared<Residency>(device);
+        owner->domain=token();
+        { std::lock_guard<std::mutex> lock(registry_mutex); domains.emplace(owner->domain,owner); }
+        *out=owner->domain;
+        domain_trace(*owner,"domain_create");
+    });
+}
+extern "C" int fort_scope_create_in_domain_v1(fort_scope_domain_t domain,fort_scope_t *out) {
+    return protect([&]() {
+        require(out,FORT_SCOPE_ARGUMENT,"missing borrowed context output");
+        auto owner=lookup_domain(domain);
+        std::lock_guard<std::mutex> lock(owner->mutex);
+        require(!owner->retired,FORT_SCOPE_STALE,"residency domain is retired");
+        require(!owner->poisoned,FORT_SCOPE_EXECUTION,"residency domain failed; unsafe replay prohibited");
+        require(!owner->active_context,FORT_SCOPE_STATE,"residency domain already has an active context");
+        auto context=std::make_shared<Context>(owner,true);
+        context->handle=token();
+        { std::lock_guard<std::mutex> registry(registry_mutex); contexts.emplace(context->handle,context); }
+        owner->active_context=context->handle;
+        *out=context->handle;
+        trace(*context,"create");
+        domain_trace(*owner,"domain_attach",context.get());
+    });
+}
+extern "C" int fort_scope_domain_get_v1(fort_scope_t h,fort_scope_domain_t *out) {
+    return protect([&]() {
+        require(out,FORT_SCOPE_ARGUMENT,"missing residency domain output");
+        auto context=lookup(h);
+        std::lock_guard<std::mutex> lock(context->mutex);
+        require(!context->closed && !context->residency->retired,FORT_SCOPE_STALE,"invalid or stale context");
+        *out=context->borrowed_domain ? context->residency->domain : 0;
+    });
+}
+extern "C" int fort_scope_domain_stats_get_v1(fort_scope_domain_t domain,fort_scope_stats *out) {
+    return protect([&]() {
+        require(out,FORT_SCOPE_ARGUMENT,"missing residency statistics output");
+        auto owner=lookup_domain(domain);
+        std::lock_guard<std::mutex> lock(owner->mutex);
+        require(!owner->retired,FORT_SCOPE_STALE,"retired residency domain");
+        *out=owner->stats;
+    });
+}
+extern "C" int fort_scope_domain_device_get_v1(fort_scope_domain_t domain,int *out) {
+    return protect([&]() {
+        require(out,FORT_SCOPE_ARGUMENT,"missing residency device output");
+        auto owner=lookup_domain(domain);
+        std::lock_guard<std::mutex> lock(owner->mutex);
+        require(!owner->retired,FORT_SCOPE_STALE,"retired residency domain");
+        *out=owner->device;
+    });
+}
+namespace {
+void check_workspace_capacity(const Residency &owner,size_t bytes) {
+    require(bytes<=owner.device_budget && owner.scratch_capacity<=owner.device_budget-bytes &&
+            owner.stats.allocated_bytes<=owner.device_budget-bytes-owner.scratch_capacity,
+            FORT_SCOPE_RESOURCE,"external workspace exceeds residency budget");
+}
+void workspace_changed(Residency &owner) {
+    const auto total=owner.workspace_bytes+owner.scratch_capacity+owner.stats.allocated_bytes;
+    owner.scratch_stats.peak_total_device_bytes=std::max<uint64_t>(
+        owner.scratch_stats.peak_total_device_bytes,total);
+    if(owner.active_context) {
+        const auto context=lookup(owner.active_context);
+        invalidate(*context,Change::State);
+        context->owner_estimate_available=false;
+        if(context->last_report) {
+            context->last_report->available=0;
+            context->last_report->owner_available=0;
+        }
+    }
+}
+}
+extern "C" int fort_scope_domain_workspace_reserve_v1(fort_scope_domain_t domain,size_t bytes,uint64_t *out) {
+    return protect([&]() {
+        require(out,FORT_SCOPE_ARGUMENT,"missing external workspace lease output");
+        auto owner=lookup_domain(domain);
+        std::lock_guard<std::mutex> lock(owner->mutex);
+        require(!owner->retired,FORT_SCOPE_STALE,"retired residency domain");
+        require(!owner->poisoned,FORT_SCOPE_EXECUTION,"residency domain has failed");
+        require(bytes<=std::numeric_limits<size_t>::max()-owner->workspace_bytes,FORT_SCOPE_RESOURCE,"workspace byte overflow");
+        check_workspace_capacity(*owner,owner->workspace_bytes+bytes);
+        const auto lease=token();
+        owner->workspaces.emplace(lease,bytes);
+        owner->workspace_bytes+=bytes;
+        workspace_changed(*owner);
+        *out=lease;
+    });
+}
+extern "C" int fort_scope_domain_workspace_resize_v1(fort_scope_domain_t domain,uint64_t lease,size_t bytes) {
+    return protect([&]() {
+        auto owner=lookup_domain(domain);
+        std::lock_guard<std::mutex> lock(owner->mutex);
+        require(!owner->retired,FORT_SCOPE_STALE,"retired residency domain");
+        require(!owner->poisoned,FORT_SCOPE_EXECUTION,"residency domain has failed");
+        auto found=owner->workspaces.find(lease);
+        require(found!=owner->workspaces.end(),FORT_SCOPE_STALE,"foreign or stale external workspace lease");
+        const auto other=owner->workspace_bytes-found->second;
+        require(bytes<=std::numeric_limits<size_t>::max()-other,FORT_SCOPE_RESOURCE,"workspace byte overflow");
+        check_workspace_capacity(*owner,other+bytes);
+        owner->workspace_bytes=other+bytes; found->second=bytes;
+        workspace_changed(*owner);
+    });
+}
+extern "C" int fort_scope_domain_workspace_release_v1(fort_scope_domain_t domain,uint64_t lease) {
+    return protect([&]() {
+        auto owner=lookup_domain(domain);
+        std::lock_guard<std::mutex> lock(owner->mutex);
+        require(!owner->retired,FORT_SCOPE_STALE,"retired residency domain");
+        auto found=owner->workspaces.find(lease);
+        require(found!=owner->workspaces.end(),FORT_SCOPE_STALE,"foreign or stale external workspace lease");
+        owner->workspace_bytes-=found->second; owner->workspaces.erase(found);
+        workspace_changed(*owner);
+    });
+}
 extern "C" int fort_scope_serial_caller(void) {
 #ifdef _OPENMP
     return !omp_in_parallel();
@@ -2974,13 +3513,21 @@ extern "C" int fort_scope_device_get(fort_scope_t h, int *out) {
 }
 extern "C" int fort_scope_set_device_budget(fort_scope_t h, size_t bytes) {
     return with(h, [&](Context &c) {
-        require(!c.ready, FORT_SCOPE_STATE, "device budget must be set before CUDA initialization");
+        if(c.borrowed_domain && c.ready) {
+            require(bytes==c.device_budget,FORT_SCOPE_STATE,"cannot change a live residency budget"); return;
+        }
+        require(!c.ready && bytes>=c.residency->workspace_bytes,FORT_SCOPE_STATE,
+                "device budget must precede initialization and cover external workspaces");
         c.device_budget = bytes;
     });
 }
 extern "C" int fort_scope_set_transfers(fort_scope_t h, uint32_t mode) {
     return with(h, [&](Context &c) {
         require(mode <= FORT_SCOPE_TRANSFERS_COALESCED, FORT_SCOPE_ARGUMENT, "invalid scoped transfer mode");
+        if(c.borrowed_domain && (!c.buffers.empty() || c.ready)) {
+            require(!c.plan_recording && !c.plan_installed && mode==c.transfer_stats.requested_mode,
+                    FORT_SCOPE_STATE,"cannot change a live residency transfer mode"); return;
+        }
         require(c.buffers.empty() && !c.ready && !c.plan_recording && !c.plan_installed,
                 FORT_SCOPE_STATE, "configure scoped transfers before registration and planning");
         auto &stats = c.transfer_stats;
@@ -2997,16 +3544,34 @@ extern "C" int fort_scope_transfer_stats_get_v1(fort_scope_t h, fort_scope_trans
         *out = transfer_statistics(c);
     }, Change::None);
 }
+extern "C" int fort_scope_set_copy_costs_v2(fort_scope_t h,const fort_scope_copy_costs_v2 *costs,
+        const fort_scope_plan_costs *base,int compatible) {
+    return with(h,[&](Context &c) {
+        require(compatible==0 || compatible==1,FORT_SCOPE_ARGUMENT,"invalid physical copy calibration compatibility");
+        require((c.borrowed_domain || (c.buffers.empty() && !c.ready)) && !c.plan_recording && !c.plan_installed,
+                FORT_SCOPE_STATE,"configure physical copy calibration before registration/planning");
+        c.copy_costs.reset();
+        if(compatible && costs)require(costs->version==FORT_SCOPE_COPY_COST_ABI_VERSION,
+            FORT_SCOPE_ARGUMENT,"unsupported physical-copy cost ABI; expected version2");
+        if(!compatible || !costs || !base || !fort_physical::compact::valid_costs(*costs))return;
+        try {fort_scoped::planning::detail::validate(fort_scoped::planning::Inputs{},*base);}
+        catch(const fort_scoped::planning::detail::Unavailable &) {return;}
+        c.copy_costs=fort_physical::compact::Pricing{*costs,*base};
+        if(c.transfer_stats.requested_mode==FORT_SCOPE_TRANSFERS_AUTO) {
+            c.transfer_stats.fallback_reason=FORT_SCOPE_TRANSFER_NONE;c.transfer_stats.fallbacks=0;
+        }
+    });
+}
 extern "C" int fort_scope_set_transfer_costs_v1(fort_scope_t h, const fort_scope_batch_costs *costs,
                                                int compatible) {
     return with(h, [&](Context &c) {
         require(compatible == 0 || compatible == 1, FORT_SCOPE_ARGUMENT, "invalid transfer calibration compatibility");
-        require(c.buffers.empty() && !c.ready && !c.plan_recording && !c.plan_installed,
+        require((c.borrowed_domain || (c.buffers.empty() && !c.ready)) && !c.plan_recording && !c.plan_installed,
                 FORT_SCOPE_STATE, "configure scoped transfer pricing before registration and planning");
         c.transfer_costs.reset();
         if (compatible && costs && fort_scoped::planning::detail::valid_transfer_costs(*costs)) {
             c.transfer_costs = *costs;
-            if (c.transfer_stats.requested_mode==FORT_SCOPE_TRANSFERS_AUTO || c.transfer_stats.requested_mode==FORT_SCOPE_TRANSFERS_PIPELINED) {
+            if (!c.borrowed_domain && (c.transfer_stats.requested_mode==FORT_SCOPE_TRANSFERS_AUTO || c.transfer_stats.requested_mode==FORT_SCOPE_TRANSFERS_PIPELINED)) {
                 c.transfer_stats.fallback_reason=FORT_SCOPE_TRANSFER_NONE; c.transfer_stats.fallbacks=0;
             }
         }
@@ -3028,7 +3593,7 @@ extern "C" int fort_scope_batch_execute_v1(fort_scope_t h, const fort_scope_batc
         *out={}; out->version=FORT_SCOPE_BATCH_ABI_VERSION; out->preparation_operations=1;
         const auto *pricing=transfers ? transfers : c.transfer_costs ? &*c.transfer_costs : nullptr;
         auto observation=[&]() {
-            if (compatible!=-1) { c.batch_report=*out; batch_trace(h,*out); }
+            if (compatible!=-1) { c.batch_report=*out; batch_trace(c,h,*out); }
         };
         if (!compatible || !base || !pricing || !fort_scoped::planning::detail::valid_transfer_costs(*pricing)) {
             out->reason=FORT_SCOPE_BATCH_MISSING_COSTS; observation(); return;
@@ -3316,6 +3881,55 @@ extern "C" int fort_scope_register_sections(fort_scope_t h, uint64_t identity, u
                                             size_t count, fort_buffer_t *out) {
     return register_buffer(h, identity, generation, layout, false, defined, count, out);
 }
+extern "C" int fort_scope_identity_swap_v1(fort_scope_t h,fort_buffer_t first,fort_buffer_t second,
+                                            const fort_scope_layout *first_after,const fort_scope_layout *second_after,
+                                            fort_buffer_t *first_current,fort_buffer_t *second_current) {
+    return with(h,[&](Context &c) {
+        // The original descriptor mutation has already happened. No rejection
+        // from this point can authorize replay or publication through old names.
+        try {
+            require(first!=second && first_current && second_current && first_current!=second_current,
+                    FORT_SCOPE_ARGUMENT,"identity exchange needs distinct physical handles and output slots");
+            require(!c.batch_active && (!c.plan_installed || c.worker_cursor==c.schedule.size()),
+                    FORT_SCOPE_STATE,"identity exchange crosses unfinished execution planning");
+            auto &a=buffer(c,first), &b=buffer(c,second);
+            require(!a.prepared && !b.prepared,FORT_SCOPE_STATE,"identity exchange during prepared access");
+            const auto ai=c.identities.find(a.identity),bi=c.identities.find(b.identity);
+            require(a.identity!=b.identity && ai!=c.identities.end() && bi!=c.identities.end() &&
+                    ai->second==first && bi->second==second,FORT_SCOPE_STALE,"identity exchange has stale canonical slots");
+            auto matches=[](const fort_scope_layout *after,const Buffer &physical) {
+                if(!after || after->rank!=physical.extents.size() || !after->extents || !after->lower_bounds ||
+                   after->host!=physical.host || after->type!=physical.type ||
+                   after->element_bytes!=physical.element_bytes || after->generation!=physical.generation) return false;
+                return std::equal(physical.extents.begin(),physical.extents.end(),after->extents) &&
+                       std::equal(physical.lower.begin(),physical.lower.end(),after->lower_bounds);
+            };
+            require(matches(first_after,b) && matches(second_after,a),FORT_SCOPE_STALE,
+                    "post-exchange descriptor does not match opposite physical allocation");
+            // A validated but uninstalled query is metadata, not an execution
+            // obligation (forced sections/native fallback can leave one).
+            // It cannot span the source-proved descriptor exchange frontier.
+            abandon_planning_metadata(c);
+            // Existing map slots and scalar fields commit without allocation.
+            // Queue bindings/upload readers still refer to the same Buffer and
+            // physical handle; no pending read or numerical work is replayed.
+            const IdentitySwapTrace exchange{a.identity,b.identity,first,second,a.generation,b.generation};
+            ai->second=second; bi->second=first;
+            std::swap(a.identity,b.identity);
+            *first_current=second; *second_current=first;
+            c.owner_estimate_available=false;
+            if(c.last_report) { c.last_report->available=0; c.last_report->owner_available=0; }
+            trace(c,"identity_swap",nullptr,0,&exchange);
+        } catch(Error &error) {
+            c.poisoned=true;
+            error.status=FORT_SCOPE_EXECUTION;
+            throw; // Preserve the exact failed validation without reallocating.
+        } catch(...) {
+            c.poisoned=true;
+            throw Error(FORT_SCOPE_EXECUTION,"post-mutation identity exchange failed; unsafe replay prohibited");
+        }
+    });
+}
 extern "C" int fort_scope_admit_source_reads_v1(fort_scope_t h, fort_buffer_t handle,
                                                 const fort_scope_section *items, size_t count) {
     return with(h, [&](Context &c) {
@@ -3468,6 +4082,274 @@ extern "C" int fort_scope_access_begin_v1(fort_scope_t h, const fort_scope_plan_
         if (count) note_numerical_activity(c);
         begin_accesses(c, bindings, count, device != 0, devices);
     });
+}
+static int execute_external_transaction(fort_scope_t h,const fort_scope_external_call_v1 *call,
+                                        fort_scope_external_worker_v1 worker,
+                                        fort_scope_source_worker_v1 source_worker, bool source_task,
+                                        uint64_t expected_launches, void *user,
+                                        fort_scope_external_report_v1 *out) {
+    if(out) { *out={}; out->version=FORT_SCOPE_EXTERNAL_ABI_VERSION; }
+    if(call && call->binding_count) native_hint_gpu_generation.advance();
+    const int status=with(h,[&](Context &c) {
+        require(call && out && call->version==FORT_SCOPE_EXTERNAL_ABI_VERSION && !call->reserved &&
+                (!call->binding_count || (call->bindings && (source_task ? bool(source_worker) : bool(worker)))),
+                FORT_SCOPE_ARGUMENT,"invalid external transaction");
+        require(!source_task || (call->binding_count ? expected_launches>0 : expected_launches==0),
+                FORT_SCOPE_ARGUMENT,"source task requires its checked nonempty launch count");
+        if(!call->binding_count) return;
+        if(source_task) c.owner_estimate_available=false;
+        require(!c.batch_active,FORT_SCOPE_STATE,"external transaction during active batch");
+        if(call->workspace_lease) {
+            const auto found=c.residency->workspaces.find(call->workspace_lease);
+            require(found!=c.residency->workspaces.end(),FORT_SCOPE_STALE,"foreign or stale external workspace lease");
+            require(call->workspace_bytes<=found->second,FORT_SCOPE_RESOURCE,"external workspace claim is too small");
+        } else require(!call->workspace_bytes,FORT_SCOPE_ARGUMENT,"external workspace requires a residency lease");
+        std::vector<fort_scope_plan_binding> bindings;
+        std::vector<fort_scope_external_view_v1> views;
+        std::vector<void *> devices(call->binding_count);
+        std::unordered_set<fort_buffer_t> seen;
+        bindings.reserve(call->binding_count); views.reserve(call->binding_count);
+        for(size_t i=0;i<call->binding_count;++i) {
+            const auto &binding=call->bindings[i]; auto &b=buffer(c,binding.buffer);
+            require(seen.insert(binding.buffer).second,FORT_SCOPE_ALIAS,"external transaction repeats a canonical resource");
+            require(binding.type==b.type && binding.rank==b.extents.size() && binding.element_bytes==b.element_bytes,
+                    FORT_SCOPE_ARGUMENT,"external transaction type or rank mismatch");
+            require(!b.prepared,FORT_SCOPE_STATE,"external transaction overlaps a prepared access");
+            bindings.push_back({binding.buffer,binding.access});
+            views.push_back({b.handle,b.generation,b.type,static_cast<uint32_t>(b.extents.size()),b.element_bytes,b.bytes,
+                             b.extents.data(),b.strides.data(),b.lower.data(),nullptr});
+        }
+        bool submission_uncertain=false;
+        try {
+            begin_accesses(c,bindings.data(),bindings.size(),true,devices.data());
+            initialize(c);
+            for(size_t i=0;i<views.size();++i) views[i].device=devices[i];
+            note_numerical_activity(c);
+            int started=-1, result=FORT_SCOPE_EXECUTION;
+            uint64_t accepted_launches=0;
+            auto record_source_launches=[&]() {
+                if(!source_task) return;
+                require(accepted_launches<=expected_launches &&
+                        accepted_launches<=std::numeric_limits<decltype(c.stats.launches)>::max()-c.stats.launches &&
+                        accepted_launches<=std::numeric_limits<decltype(c.queue_stats.direct_kernels)>::max()-c.queue_stats.direct_kernels,
+                        FORT_SCOPE_EXECUTION,"source task accepted launch count exceeds its checked limit");
+                c.stats.launches+=accepted_launches;
+                c.queue_stats.direct_kernels+=accepted_launches;
+                if(accepted_launches) mark_context_pending(c);
+                for(uint64_t i=0;i<accepted_launches;++i) trace(c,"launch");
+            };
+            try {
+#ifndef FORT_SCOPE_CPU_TEST
+                DeviceGuard guard(c);
+                void *stream=reinterpret_cast<void *>(c.stream);
+#else
+                void *stream=nullptr;
+#endif
+                result=source_task ? source_worker(user,views.data(),views.size(),stream,&started,&accepted_launches)
+                                   : worker(user,views.data(),views.size(),stream,&started);
+            } catch(...) {
+                submission_uncertain=true;
+                out->started=1; c.poisoned=true;
+                record_source_launches();
+                throw Error(FORT_SCOPE_EXECUTION,"external callback exception; unsafe replay prohibited");
+            }
+            submission_uncertain=started!=0 || accepted_launches!=0;
+            out->started=started==0 ? 0u : 1u;
+            record_source_launches();
+            if(source_task && ((accepted_launches && started!=1) ||
+                               (result==FORT_SCOPE_OK && accepted_launches!=expected_launches))) {
+                c.poisoned=true;
+                throw Error(FORT_SCOPE_EXECUTION,"source task submission count differs; unsafe replay prohibited");
+            }
+            require(!c.poisoned,FORT_SCOPE_EXECUTION,"external device restoration failed");
+            if((started!=0 && started!=1) || (result==FORT_SCOPE_OK && started!=1) ||
+                    (result!=FORT_SCOPE_OK && (started || result==FORT_SCOPE_EXECUTION ||
+                                              result<FORT_SCOPE_ARGUMENT || result>FORT_SCOPE_PLAN_MISMATCH))) {
+                c.poisoned=true;
+                throw Error(FORT_SCOPE_EXECUTION,"external execution failed or submission state missing; unsafe replay prohibited");
+            }
+            if(result!=FORT_SCOPE_OK) throw Error(result,"external callback rejected before submission");
+#if defined(FORT_SCOPE_CPU_TEST) || defined(FORT_SCOPE_TEST_FAULTS)
+            if(std::getenv("FORT_SCOPE_TEST_FAIL_EXTERNAL_COMMIT")) throw std::bad_alloc();
+#endif
+            mark_context_pending(c);
+            for(const auto &binding : bindings) end(c,buffer(c,binding.buffer),true);
+            out->committed=1;
+            trace(c,"external_commit",nullptr,bindings.size());
+        } catch(...) {
+            if(submission_uncertain) c.poisoned=true;
+            for(const auto &binding : bindings) {
+                const auto found=c.buffers.find(binding.buffer);
+                if(found!=c.buffers.end()) found->second->prepared.reset();
+            }
+            if(submission_uncertain) {
+                out->started=1;
+                throw Error(FORT_SCOPE_EXECUTION,"external submission or commit failed; unsafe replay prohibited");
+            }
+            throw;
+        }
+    });
+    if(out) out->status=status;
+    return status;
+}
+extern "C" int fort_scope_external_execute_v1(fort_scope_t h,const fort_scope_external_call_v1 *call,
+                                               fort_scope_external_worker_v1 worker,void *user,
+                                               fort_scope_external_report_v1 *out) {
+    return execute_external_transaction(h,call,worker,nullptr,false,0,user,out);
+}
+extern "C" int fort_scope_source_execute_v1(fort_scope_t h,const fort_scope_external_call_v1 *call,
+                                             uint64_t expected_launches,fort_scope_source_worker_v1 worker,
+                                             void *user,fort_scope_external_report_v1 *out) {
+    return execute_external_transaction(h,call,nullptr,worker,true,expected_launches,user,out);
+}
+extern "C" int fort_scope_source_host_prepare_v1(fort_scope_t h,const fort_scope_external_call_v1 *call,
+                                                 uint64_t *out) {
+    if(out) *out=0;
+    return with(h,[&](Context &c) {
+        require(out && call && call->version==FORT_SCOPE_EXTERNAL_ABI_VERSION && !call->reserved &&
+                call->binding_count && call->bindings && !call->workspace_lease && !call->workspace_bytes,
+                FORT_SCOPE_ARGUMENT,"invalid original CPU source transaction");
+        require(!c.source_host_task && !c.batch_active && !c.scratch_token &&
+                (!c.plan_installed || c.worker_cursor==c.schedule.size()),
+                FORT_SCOPE_STATE,"original CPU source transaction overlaps active execution");
+        for(const auto &entry:c.buffers)
+            require(!entry.second->prepared,FORT_SCOPE_STATE,"original CPU source transaction overlaps prepared access");
+        Context::SourceHostTask task{token(),false,{}};
+        task.buffers.reserve(call->binding_count);
+        std::vector<fort_scope_plan_binding> bindings;bindings.reserve(call->binding_count);
+        std::unordered_set<fort_buffer_t> seen;
+        for(size_t i=0;i<call->binding_count;++i) {
+            const auto &binding=call->bindings[i];auto &b=buffer(c,binding.buffer);
+            require(seen.insert(binding.buffer).second,FORT_SCOPE_ALIAS,"CPU source repeats a canonical resource");
+            require(binding.type==b.type && binding.rank==b.extents.size() && binding.element_bytes==b.element_bytes,
+                    FORT_SCOPE_ARGUMENT,"CPU source type or layout mismatch");
+            bindings.push_back({b.handle,binding.access});task.buffers.push_back(b.handle);
+        }
+        // Validate the entire declared read/preservation set against queued
+        // definitions too, before any physical acquisition/submission occurs.
+        for(const auto &binding:bindings)
+            (void)prepare_access(virtual_buffer(c,binding.buffer),&binding.access,false);
+        try {
+            begin_accesses(c,bindings.data(),bindings.size(),false,nullptr);
+            c.source_host_task=std::move(task);
+            c.owner_estimate_available=false;
+            *out=c.source_host_task->token;
+            trace(c,"source_native_prepare",nullptr,bindings.size());
+        } catch(...) {
+            for(const auto &binding:bindings) buffer(c,binding.buffer).prepared.reset();
+            throw;
+        }
+    });
+}
+extern "C" int fort_scope_source_host_start_v1(fort_scope_t h,uint64_t token) {
+    return with(h,[&](Context &c) {
+        require(c.source_host_task && c.source_host_task->token==token,FORT_SCOPE_STALE,"foreign or stale CPU source token");
+        require(!c.source_host_task->started,FORT_SCOPE_STATE,"CPU source work was already started");
+        c.source_host_task->started=true;
+        note_numerical_activity(c);
+        trace(c,"source_native_start",nullptr,c.source_host_task->buffers.size());
+    },Change::State,true);
+}
+extern "C" int fort_scope_source_host_complete_v1(fort_scope_t h,uint64_t token) {
+    return with(h,[&](Context &c) {
+        require(c.source_host_task && c.source_host_task->token==token,FORT_SCOPE_STALE,"foreign or stale CPU source token");
+        require(c.source_host_task->started,FORT_SCOPE_STATE,"CPU source completion before original work");
+        for(auto handle:c.source_host_task->buffers) {
+            const auto &b=buffer(c,handle);
+            require(b.prepared && !b.prepared->device,FORT_SCOPE_EXECUTION,"CPU source lost prepared access");
+        }
+        for(auto handle:c.source_host_task->buffers) end(c,buffer(c,handle),false);
+        trace(c,"source_native_commit",nullptr,c.source_host_task->buffers.size());
+        c.source_host_task.reset();
+    },Change::State,true);
+}
+extern "C" int fort_scope_source_host_cancel_v1(fort_scope_t h,uint64_t token) {
+    return with(h,[&](Context &c) {
+        require(c.source_host_task && c.source_host_task->token==token,FORT_SCOPE_STALE,"foreign or stale CPU source token");
+        require(!c.source_host_task->started,FORT_SCOPE_EXECUTION,"CPU source cancellation after original work started");
+        for(auto handle:c.source_host_task->buffers) buffer(c,handle).prepared.reset();
+        trace(c,"source_native_cancel",nullptr,c.source_host_task->buffers.size());
+        c.source_host_task.reset();
+    },Change::State,true);
+}
+static int source_quote(fort_scope_t h,const fort_scope_external_call_v1 *call,
+        const fort_scope_source_work_v1 *work,const fort_scope_plan_costs *base,
+        const fort_scope_source_costs_v1 *protocol,const fort_scope_source_host_costs_v1 *native_costs,
+        int compatible,fort_scope_source_quote_result_v1 *out) {
+    if(out) { *out={};out->version=native_costs ? FORT_SCOPE_SOURCE_QUOTE_LIVE_ABI_VERSION : FORT_SCOPE_SOURCE_QUOTE_ABI_VERSION; }
+    return with(h,[&](Context &c) {
+        require(call && work && base && protocol && out,FORT_SCOPE_ARGUMENT,"missing source quote metadata");
+        require(call->version==FORT_SCOPE_EXTERNAL_ABI_VERSION && !call->reserved &&
+                (!call->binding_count || call->bindings),FORT_SCOPE_ARGUMENT,"invalid source quote binding list");
+        fort_scoped::source_quote::Snapshot snapshot;
+        snapshot.device_budget=c.device_budget;snapshot.workspace_bytes=c.residency->workspace_bytes;
+        snapshot.scratch_capacity=c.scratch_capacity;snapshot.scratch_active=c.scratch_token!=0 || c.batch_active ||
+            (c.plan_installed && c.worker_cursor!=c.schedule.size());
+        snapshot.queue_pending=!c.commands.empty();
+        // A whole-domain native fallback destroys opaque providers first.
+        // Their cleanup is outside this source/scratch protocol calibration.
+        snapshot.opaque_workspace=!c.residency->workspaces.empty() || call->workspace_lease || call->workspace_bytes;
+        snapshot.opaque_workspace_claim=call->workspace_lease || call->workspace_bytes;
+        auto &input=snapshot.input;
+        input.device_ready=c.ready;input.pending=c.pending;input.driver_initialized=driver_initialized(c);
+        input.transfer_mode=c.transfer_stats.requested_mode==FORT_SCOPE_TRANSFERS_PINNED ?
+            FORT_SCOPE_TRANSFERS_PINNED : c.transfer_stats.requested_mode==FORT_SCOPE_TRANSFERS_AUTO && c.copy_costs ?
+            FORT_SCOPE_TRANSFERS_AUTO : FORT_SCOPE_TRANSFERS_DIRECT;
+        input.direct_transfer_fit_applicable=c.transfer_stats.requested_mode==FORT_SCOPE_TRANSFERS_DIRECT;
+        input.transfer_costs=c.transfer_costs;
+        input.copy_costs=c.copy_costs;
+#ifdef FORT_SCOPE_CPU_TEST
+        input.copy_pool_capacity=c.residency->compact_reference_capacity;
+    input.copy_pool_cold_available=!input.copy_pool_capacity;
+#else
+        const auto copy_pool=fort_staging::snapshot();
+        input.copy_pool_revision=copy_pool.revision;
+    input.copy_pool_available_bytes=fort_staging::compact_available(copy_pool);
+    input.copy_pool_cold_available=copy_pool.idle_capacity==0;
+        const bool idle_compact=copy_pool.idle_role==fort_staging::Role::Compact;
+        input.copy_pool_active_device_bytes=copy_pool.device_reserved-(idle_compact?2*copy_pool.idle_capacity:0);
+        if(idle_compact && copy_pool.idle_device==c.device)input.copy_pool_capacity=copy_pool.idle_capacity;
+#endif
+#ifndef FORT_SCOPE_CPU_TEST
+#if CUDART_VERSION >= 11020
+        input.asynchronous_release=c.ready && c.pool!=nullptr;
+#else
+        input.asynchronous_release=false;
+#endif
+#else
+        input.asynchronous_release=false;
+#endif
+        for(const auto &entry:c.buffers) {
+            const auto &b=*entry.second;
+            if(b.prepared) snapshot.scratch_active=true;
+            input.resources.push_back({b.handle,b.element_bytes,b.bytes,b.extents,b.initialized,b.host_current,
+                                       b.device_current,b.device!=nullptr,pending_host_reads(b),b.last_device_use});
+        }
+        std::vector<fort_scoped::planning::Binding> bindings;
+        bindings.reserve(call->binding_count);
+        std::unordered_set<fort_buffer_t> seen;
+        for(size_t index=0;index<call->binding_count;++index) {
+            const auto &binding=call->bindings[index];const auto &b=buffer(c,binding.buffer);
+            require(seen.insert(binding.buffer).second,FORT_SCOPE_ALIAS,"source quote repeats a canonical resource");
+            require(binding.type==b.type && binding.rank==b.extents.size() && binding.element_bytes==b.element_bytes,
+                    FORT_SCOPE_ARGUMENT,"source quote type or rank mismatch");
+            bindings.push_back({b.handle,effects(b,&binding.access)});
+        }
+        *out=fort_scoped::source_quote::price(std::move(snapshot),bindings,*work,*base,*protocol,compatible!=0,native_costs);
+    },Change::None);
+}
+extern "C" int fort_scope_source_quote_v1(fort_scope_t h,const fort_scope_external_call_v1 *call,
+        const fort_scope_source_work_v1 *work,const fort_scope_plan_costs *base,
+        const fort_scope_source_costs_v1 *protocol,int compatible,fort_scope_source_quote_result_v1 *out) {
+    return source_quote(h,call,work,base,protocol,nullptr,compatible,out);
+}
+extern "C" int fort_scope_source_quote_v2(fort_scope_t h,const fort_scope_external_call_v1 *call,
+        const fort_scope_source_work_v1 *work,const fort_scope_plan_costs *base,
+        const fort_scope_source_costs_v1 *protocol,const fort_scope_source_host_costs_v1 *native_costs,
+        int compatible,fort_scope_source_quote_result_v1 *out) {
+    if(out) {*out={};out->version=FORT_SCOPE_SOURCE_QUOTE_LIVE_ABI_VERSION;}
+    if(!native_costs) return protect([&] {throw Error(FORT_SCOPE_ARGUMENT,"missing native-live protocol costs");});
+    return source_quote(h,call,work,base,protocol,native_costs,compatible,out);
 }
 extern "C" int fort_scope_observe_v1(fort_scope_t h, const fort_buffer_t *handles, size_t count) {
     return with(h, [&](Context &c) {
@@ -3709,18 +4591,8 @@ extern "C" int fort_scope_unregister(fort_scope_t h, fort_buffer_t handle) {
         c.identities.erase(b.identity); c.buffers.erase(handle);
     });
 }
-extern "C" int fort_scope_close(fort_scope_t h) {
-    const auto status = with(h, [&](Context &c) {
-        require(!c.scratch_token, FORT_SCOPE_STATE, "scope closed with an active scratch lease");
-        require(!c.plan_installed || c.worker_cursor == c.schedule.size(), FORT_SCOPE_STATE,
-                "scope closed before its scheduled workers completed");
-        flush_commands(c);
-#ifndef FORT_SCOPE_CPU_TEST
-        if (c.graph_stats.live_graphs) {
-            DeviceGuard guard(c);
-            cuda_check(c,c.graphs.clear(c.graph_stats));
-        }
-#endif
+namespace {
+void close_storage(Context &c) {
         bool ordered_release = false;
 #ifndef FORT_SCOPE_CPU_TEST
 #if CUDART_VERSION >= 11020
@@ -3757,16 +4629,71 @@ extern "C" int fort_scope_close(fort_scope_t h) {
 #endif
         c.buffers.clear(); c.identities.clear(); c.closed = true;
         trace(c, "close");
-        transfer_statistics_trace(c, h);
-        graph_statistics_trace(c,true);
+        transfer_statistics_trace(c, c.handle);
+        if(!c.residency->domain) graph_statistics_trace(c,true);
         completion_statistics_trace(c,true);
-        queue_statistics_trace(c,true);
+        if(!c.residency->domain) queue_statistics_trace(c,true);
         residency_statistics_trace(c,true);
+        c.residency->retired=true;
+}
+}
+extern "C" int fort_scope_close(fort_scope_t h) {
+    const auto status = with(h, [&](Context &c) {
+        require(!c.scratch_token, FORT_SCOPE_STATE, "scope closed with an active scratch lease");
+        require(!c.plan_installed || c.worker_cursor == c.schedule.size(), FORT_SCOPE_STATE,
+                "scope closed before its scheduled workers completed");
+        for(const auto &entry:c.buffers) require(!entry.second->prepared,FORT_SCOPE_STATE,"unfinished buffer access at context close");
+        flush_commands(c);
+#ifndef FORT_SCOPE_CPU_TEST
+        if (c.graph_stats.live_graphs) {
+            DeviceGuard guard(c);
+            cuda_check(c,c.graphs.clear(c.graph_stats));
+        }
+#endif
+        if(c.borrowed_domain) {
+            c.residency->last_context=c.handle; c.residency->last_provenance=c.provenance;
+            c.closed=true; c.residency->active_context=0;
+            trace(c,"detach");
+            domain_trace(*c.residency,"domain_detach",&c);
+            graph_statistics_trace(c,true); queue_statistics_trace(c,true);
+            return;
+        }
+        close_storage(c);
     });
     if (status == FORT_SCOPE_OK) {
         std::lock_guard<std::mutex> lock(registry_mutex); contexts.erase(h);
     }
     return status;
+}
+namespace {
+void abandon_storage(Context &c) {
+#ifdef FORT_SCOPE_CPU_TEST
+        for (auto &entry : c.buffers) std::free(entry.second->device);
+        std::free(c.scratch);
+#else
+        // A CUDA execution failure invalidates results. Cleanup is best effort;
+        // CUDA can reject further operations after a fatal device fault.
+        int previous = 0;
+        const bool restore = cudaGetDevice(&previous) == cudaSuccess;
+        if (cudaSetDevice(c.device) == cudaSuccess && c.ready) {
+            (void)cudaStreamSynchronize(c.stream);
+            (void)c.graphs.clear(c.graph_stats);
+            for (auto event : c.completion_events) if (event) (void)cudaEventDestroy(event);
+            c.completion_events.clear(); c.available_completion_events.clear();
+            for (auto &entry : c.buffers) {
+                if (entry.second->device) (void)cudaFree(entry.second->device);
+            }
+            if (c.scratch) (void)cudaFree(c.scratch);
+            if (c.pool) (void)cudaMemPoolDestroy(c.pool);
+            (void)cudaStreamDestroy(c.stream);
+        }
+        if (restore) (void)cudaSetDevice(previous);
+#endif
+        c.scratch = nullptr; c.scratch_capacity = 0; c.scratch_token = 0;
+        c.buffers.clear(); c.identities.clear(); c.closed = true;
+        c.residency->workspaces.clear(); c.residency->workspace_bytes=0; c.residency->retired=true;
+
+}
 }
 extern "C" int fort_scope_abandon(fort_scope_t h) {
     return protect([&]() {
@@ -3774,34 +4701,58 @@ extern "C" int fort_scope_abandon(fort_scope_t h) {
         std::lock_guard<std::mutex> lock(c->mutex);
         require(!c->closed, FORT_SCOPE_STALE, "invalid or stale scope handle");
         require(c->poisoned, FORT_SCOPE_STATE, "only a failed scope can be abandoned");
-#ifdef FORT_SCOPE_CPU_TEST
-        for (auto &entry : c->buffers) std::free(entry.second->device);
-        std::free(c->scratch);
-#else
-        // A CUDA execution failure invalidates results. Cleanup is best effort;
-        // CUDA can reject further operations after a fatal device fault.
-        int previous = 0;
-        const bool restore = cudaGetDevice(&previous) == cudaSuccess;
-        if (cudaSetDevice(c->device) == cudaSuccess && c->ready) {
-            (void)cudaStreamSynchronize(c->stream);
-            (void)c->graphs.clear(c->graph_stats);
-            for (auto event : c->completion_events) if (event) (void)cudaEventDestroy(event);
-            c->completion_events.clear(); c->available_completion_events.clear();
-            for (auto &entry : c->buffers) {
-                if (entry.second->device) (void)cudaFree(entry.second->device);
-            }
-            if (c->scratch) (void)cudaFree(c->scratch);
-            if (c->pool) (void)cudaMemPoolDestroy(c->pool);
-            (void)cudaStreamDestroy(c->stream);
-        }
-        if (restore) (void)cudaSetDevice(previous);
+        if(c->borrowed_domain) {
+#ifndef FORT_SCOPE_CPU_TEST
+            int previous=0;
+            const bool restore=cudaGetDevice(&previous)==cudaSuccess;
+            if(cudaSetDevice(c->device)==cudaSuccess) (void)c->graphs.clear(c->graph_stats);
+            if(restore) (void)cudaSetDevice(previous);
 #endif
-        c->scratch = nullptr; c->scratch_capacity = 0; c->scratch_token = 0;
-        c->buffers.clear(); c->identities.clear(); c->closed = true;
+            for(auto &entry:c->buffers) entry.second->prepared.reset();
+            c->commands.clear(); c->virtual_buffers.clear();
+            c->residency->last_context=c->handle; c->residency->last_provenance=c->provenance;
+            c->closed=true; c->residency->active_context=0;
+            domain_trace(*c->residency,"domain_detach",c.get());
+        } else abandon_storage(*c);
         graph_statistics_trace(*c,false);
-        completion_statistics_trace(*c,false);
         queue_statistics_trace(*c,false);
-        residency_statistics_trace(*c,false);
+        if (!c->borrowed_domain) {
+            completion_statistics_trace(*c,false);
+            residency_statistics_trace(*c,false);
+        }
         std::lock_guard<std::mutex> registry_lock(registry_mutex); contexts.erase(h);
     });
+}
+extern "C" int fort_scope_domain_close_v1(fort_scope_domain_t domain) {
+    const auto status=protect([&]() {
+        auto owner=lookup_domain(domain);
+        std::lock_guard<std::mutex> lock(owner->mutex);
+        require(!owner->retired,FORT_SCOPE_STALE,"residency domain is retired");
+        require(!owner->poisoned,FORT_SCOPE_EXECUTION,"failed domain cannot publish; abandon required");
+        require(!owner->active_context,FORT_SCOPE_STATE,"residency domain still has an active context");
+        require(owner->workspaces.empty() && !owner->scratch_token,FORT_SCOPE_STATE,"residency domain has outstanding workspace or scratch lease");
+        Context observer(owner,false); observer.handle=domain;
+        observer.provenance=owner->last_provenance;
+        close_storage(observer);
+        domain_trace(*owner,"domain_retire");
+    });
+    if(status==FORT_SCOPE_OK) { std::lock_guard<std::mutex> lock(registry_mutex); domains.erase(domain); }
+    return status;
+}
+extern "C" int fort_scope_domain_abandon_v1(fort_scope_domain_t domain) {
+    const auto status=protect([&]() {
+        auto owner=lookup_domain(domain);
+        std::lock_guard<std::mutex> lock(owner->mutex);
+        require(!owner->retired,FORT_SCOPE_STALE,"residency domain is retired");
+        require(!owner->active_context,FORT_SCOPE_STATE,"abandon failed context before its residency domain");
+        require(owner->poisoned,FORT_SCOPE_STATE,"only a failed residency domain can be abandoned");
+        require(owner->workspaces.empty(),FORT_SCOPE_STATE,"destroy provider and release its workspace leases before domain abandonment");
+        Context observer(owner,false); observer.handle=domain;
+        observer.provenance=owner->last_provenance;
+        abandon_storage(observer);
+        completion_statistics_trace(observer,false); residency_statistics_trace(observer,false);
+        domain_trace(*owner,"domain_abandon");
+    });
+    if(status==FORT_SCOPE_OK) { std::lock_guard<std::mutex> lock(registry_mutex); domains.erase(domain); }
+    return status;
 }

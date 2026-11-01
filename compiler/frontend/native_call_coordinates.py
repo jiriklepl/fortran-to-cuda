@@ -300,13 +300,13 @@ def _derive(analysis, caller, original_call, budget):
                   for axis in range(1, actual.rank + 1))))
         if formal.intent == "out":
             kills.append(actual.root)
-    association_closure = None
+    association_closure, element_calls = None, ()
     if elements:
         from compiler.frontend.scalar_elements import ScalarElementUnsupported, check_scalar_element_closure
 
         try:
-            association_closure = check_scalar_element_closure(analysis, child.qualified, resolved.mappings,
-                                                               consume=budget.consume)
+            association_closure, element_calls = check_scalar_element_closure(
+                analysis, child.qualified, resolved.mappings, consume=budget.consume)
         except ScalarElementUnsupported as error:
             raise NativeCallCoordinatesUnsupported(str(error)) from error
     record = {"schema_version": NATIVE_CALL_COORDINATES_VERSION, "kind": "original_native_call_coordinates",
@@ -333,7 +333,7 @@ def _derive(analysis, caller, original_call, budget):
                          "nontrivial empty-sensitive LBOUND/UBOUND inquiry substitutions rejected",
                          "partial caller-to-child transforms exclude unresolved caller descriptor origins",
                          "conditional child return coverage remains owned by its reached plan"]}
-    return tuple(arrays), scalars, scalar_roots, tuple(kills), record, tuple(elements)
+    return tuple(arrays), scalars, scalar_roots, tuple(kills), record, tuple(elements), element_calls
 
 
 @dataclass(frozen=True)
@@ -348,6 +348,7 @@ class NativeCallCoordinatesProof:
     _scalar_roots: object = field(compare=False, repr=False)
     _kills: tuple[str, ...] = field(compare=False, repr=False)
     _elements: tuple = field(compare=False, repr=False)
+    _element_calls: tuple = field(compare=False, repr=False)
     _record: object = field(compare=False, repr=False)
 
     @property
@@ -377,13 +378,26 @@ class NativeCallCoordinatesProof:
     def public(self):
         return {"proof_identity": self.identity, **_thaw(self._record)}
 
+    def _require_element_calls(self, analysis):
+        from compiler.frontend.call_bindings import ResolvedOriginalCall
+
+        for proof in self._element_calls:
+            if type(proof) is not ResolvedOriginalCall:
+                raise CompilationError("native call coordinates require exact original nested associations")
+            proof.validate(analysis, proof._scope, proof._original)
+
     def validate(self, analysis, caller, original_call, *, consume=None):
         if (analysis is not self._analysis or caller != self.caller or original_call is not self._call
                 or getattr(analysis, "_native_definition_proofs", {}).get(self.identity) is not self):
             raise CompilationError("native call coordinates lack registered exact original source authority")
+        # Require retained associations before fresh derivation can issue any
+        # missing receipt. Registry removal/replacement cannot heal a token.
+        self._require_element_calls(analysis)
         budget = _Budget(analysis, consume)
         derived = _derive(analysis, caller, original_call, budget)
-        if _hash(derived[4]) != self.identity or not _same_elements(self._elements, derived[5]):
+        if (_hash(derived[4]) != self.identity or not _same_elements(self._elements, derived[5])
+                or len(self._element_calls) != len(derived[6])
+                or any(retained is not fresh for retained, fresh in zip(self._element_calls, derived[6], strict=True))):
             raise CompilationError("native call coordinate source authority changed")
         return self
 
@@ -511,8 +525,15 @@ class NativeCallCoordinatesProof:
 
 def prove_native_call_coordinates(analysis, caller, original_call, *, consume=None):
     """Register original associations; child reached transfer remains separate."""
+    # The public issuer may reuse an existing coordinate token, so its
+    # prerequisites must be checked before deriving a matching new record.
+    for retained in getattr(analysis, "_native_definition_proofs", {}).values():
+        if (type(retained) is NativeCallCoordinatesProof and retained._analysis is analysis
+                and retained.caller == caller and retained._call is original_call):
+            retained._require_element_calls(analysis)
     budget = _Budget(analysis, consume)
-    arrays, scalars, scalar_roots, kills, record, elements = _derive(analysis, caller, original_call, budget)
+    arrays, scalars, scalar_roots, kills, record, elements, element_calls = _derive(
+        analysis, caller, original_call, budget)
     identity = _hash(record)
     registry = getattr(analysis, "_native_definition_proofs", None)
     if registry is None:
@@ -524,13 +545,15 @@ def prove_native_call_coordinates(analysis, caller, original_call, *, consume=No
         # depend on whether this token was created earlier.
         if (not isinstance(proof, NativeCallCoordinatesProof) or proof.identity != identity
                 or proof._analysis is not analysis or proof.caller != caller or proof._call is not original_call
-                or _hash(_thaw(proof._record)) != identity or not _same_elements(proof._elements, elements)):
+                or _hash(_thaw(proof._record)) != identity or not _same_elements(proof._elements, elements)
+                or len(proof._element_calls) != len(element_calls)
+                or any(retained is not fresh for retained, fresh in zip(proof._element_calls, element_calls, strict=True))):
             raise CompilationError("native call coordinates lack registered exact original source authority")
         return proof
     if len(registry) >= analysis.procedure_limit:
         raise CompilationError("native call coordinate proof registry budget exhausted")
     proof = NativeCallCoordinatesProof(caller, record["callee"], identity, analysis, original_call, arrays,
                                        MappingProxyType(scalars), MappingProxyType(scalar_roots), kills, elements,
-                                       _freeze(record))
+                                       element_calls, _freeze(record))
     registry[identity] = proof
     return proof

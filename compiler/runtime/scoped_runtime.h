@@ -1,6 +1,8 @@
 /* Versioned shared runtime ABI. Link one scoped_runtime object per executable.
  * All coordinates are zero-based physical offsets with exclusive upper bounds.
- * Host allocations are borrowed and must remain stable until unregister/close.
+ * Host allocations are borrowed and must remain stable until unregister,
+ * retirement, private-context close or owning-domain close. Detaching a
+ * borrowed context does not end its domain's storage lifetime.
  * One caller at a time may execute work in a context. Different contexts may
  * execute concurrently if their host accesses do not conflict. */
 #ifndef FORT_SCOPED_RUNTIME_H
@@ -14,6 +16,7 @@ extern "C" {
 #define FORT_SCOPE_ABI_VERSION 1
 typedef uint64_t fort_scope_t;
 typedef uint64_t fort_buffer_t;
+typedef uint64_t fort_scope_domain_t;
 /* Optional submission provenance. Full SHA256 identities resolve through the
  * compiler manifest. Unbound fields are explicitly unknown. Diagnostic calls
  * never change numerical status, coherence or scheduling; tracing disabled
@@ -181,8 +184,9 @@ typedef struct fort_scope_stats {
     uint64_t launches, waits, reconciliations;
 } fort_scope_stats;
 
-/* Context-owned temporary device storage, independent of registered arrays.
+/* Temporary device storage, independent of registered arrays.
  * A lease is valid only in its owning context until its matching release.
+ * A borrowing context may reuse its domain's idle cached arena.
  * Scratch has no host mirror, definition coverage, or publication operation.
  * All uses must share the context stream and record launches normally. */
 #define FORT_SCOPE_SCRATCH_ABI_VERSION 1
@@ -193,7 +197,7 @@ typedef struct fort_scope_scratch_lease_v1 {
     size_t bytes, capacity;
 } fort_scope_scratch_lease_v1;
 /* Legacy fort_scope_stats remains field-only. This additive record includes
- * cached scratch capacity and the peak combined field/scratch payload. */
+ * cached scratch capacity and the peak combined field/scratch/workspace payload. */
 typedef struct fort_scope_scratch_stats_v1 {
     uint32_t version, active;
     uint64_t acquisitions, allocations, reuses, releases, grows;
@@ -309,6 +313,27 @@ typedef struct fort_scope_batch_costs {
     double pack_bytes_per_second, unpack_bytes_per_second, pack_row_seconds, unpack_row_seconds;
     double pinned_h2d_latency, pinned_h2d_bandwidth, pinned_d2h_latency, pinned_d2h_bandwidth;
 } fort_scope_batch_costs;
+/* Optional exact physical-copy calibration, separate from batch-worker ABI.
+ * AUTO may use compact copies only inside the observed geometry envelope.
+ * Directions are H2D/D2H; each rate predicts the complete physical batch.
+ * Submission terms count original operations or compact kernel chunks.
+ * Empirical errors are diagnostics, not global profitability bounds.
+ * No field grants memory validity, execution, source motion or lifetime. */
+#define FORT_SCOPE_COPY_COST_ABI_VERSION 2
+typedef struct fort_scope_copy_rate_v2 {
+    double batch_seconds, submission_seconds, byte_seconds, row_seconds, descriptor_seconds;
+    double median_relative_error, p90_relative_error, maximum_relative_error;
+    size_t minimum_payload_bytes, maximum_payload_bytes, minimum_rows, maximum_rows;
+    size_t minimum_row_bytes, maximum_row_bytes, minimum_pitch_bytes, maximum_pitch_bytes, maximum_span_bytes;
+    size_t minimum_operations, maximum_operations, minimum_descriptor_work, maximum_descriptor_work;
+    size_t minimum_kernel_chunks, maximum_kernel_chunks;
+    uint32_t word_bytes_mask, layout_combinations_mask;
+} fort_scope_copy_rate_v2;
+typedef struct fort_scope_copy_costs_v2 {
+    uint32_t version, valid;
+    double minimum_relative_saving;
+    fort_scope_copy_rate_v2 direct[2], compact_cold[2], compact_reuse[2];
+} fort_scope_copy_costs_v2;
 /* Access rectangles describe ordinal zero. For begin/count, shift the chosen
  * axis by the minimum/maximum of step*begin and step*(begin+count-1).
  * FIXED_AXIS permits immutable input sections independent of the partition.
@@ -374,6 +399,10 @@ typedef struct fort_scope_batch_report {
  * Missing costs preserve the existing direct placement/transfer behavior. */
 int fort_scope_set_transfer_costs_v1(fort_scope_t context, const fort_scope_batch_costs *costs,
                                     int compatible);
+/* Configuration precedes registration; a matching generated hardware/runtime
+ * guard supplies compatible. Missing/invalid costs cannot select compact. */
+int fort_scope_set_copy_costs_v2(fort_scope_t context, const fort_scope_copy_costs_v2 *costs,
+                                const fort_scope_plan_costs *base, int compatible);
 /* One active batch per context; synchronous on return. compatible=-1 previews
  * bounded metadata/cost selection without CUDA, callbacks, resources, schedule
  * consumption or coherence changes. An unapplied result leaves ordinary
@@ -483,6 +512,45 @@ int fort_scope_plan_native_begin_v1(fort_scope_t context,
 uint32_t fort_scope_abi_version(void);
 const char *fort_scope_error(void);
 int fort_scope_create(int device, fort_scope_t *context);
+/* Caller-owned physical residency, independent of context-local plans/proofs.
+ * At most one context borrows a domain at a time. Borrowed context close drains
+ * its accepted task queue and detaches WITHOUT publishing or retiring buffers.
+ * Domain close is the explicit host/publication and storage-lifetime frontier;
+ * it requires no active context, prepared access, scratch or workspace lease.
+ * All canonical registrations, exact mirrors and completion dependencies remain
+ * owned by the domain until then. Private create/close semantics are unchanged.
+ * Physical statistics queried through borrowed contexts are DOMAIN aggregates;
+ * graph/query/planning state is fresh per context. No implicit domain lookup by
+ * host address, thread, procedure or allocation identity is performed. */
+#define FORT_SCOPE_DOMAIN_ABI_VERSION 1
+int fort_scope_domain_create_v1(int device, fort_scope_domain_t *domain);
+int fort_scope_create_in_domain_v1(fort_scope_domain_t domain, fort_scope_t *context);
+/* Returns zero for a private context. Also usable on a poisoned live context
+ * to arrange nonpublishing cleanup; stale contexts remain errors. */
+int fort_scope_domain_get_v1(fort_scope_t context, fort_scope_domain_t *domain);
+/* Metadata only: query the ordinal before creating a provider's device
+ * workspace. Does not select/initialize CUDA; allowed on a failed domain. */
+int fort_scope_domain_device_get_v1(fort_scope_domain_t domain, int *device);
+/* Physical field-copy/allocation totals, including work done by prior detached
+ * contexts. Read-only and available for diagnostics even after a domain fails;
+ * external workspace claims are separately charged, not counted as fields. */
+int fort_scope_domain_stats_get_v1(fort_scope_domain_t domain, fort_scope_stats *stats);
+int fort_scope_domain_close_v1(fort_scope_domain_t domain);
+/* Fatal cleanup only, after its failed context has been abandoned/detached.
+ * Does not publish or replay work. Provider-owned external memory must first
+ * be destroyed by its owner and every workspace lease released; outstanding
+ * provider leases reject abandonment. This call retires runtime storage. */
+int fort_scope_domain_abandon_v1(fort_scope_domain_t domain);
+/* Account externally allocated persistent/peak workspace, WITHOUT allocating
+ * another buffer. Reserve a conservative cap before provider construction,
+ * shrink after its measured/queryable footprint is known, release only after
+ * provider destruction/completion. Lease tokens are domain-specific. Claims
+ * count against the SAME payload+scratch budget across detached contexts.
+ * Resize/growth is transactional; reservation never evicts a prepared buffer.
+ * These calls may not be invoked from an external worker callback. */
+int fort_scope_domain_workspace_reserve_v1(fort_scope_domain_t domain, size_t bytes, uint64_t *lease);
+int fort_scope_domain_workspace_resize_v1(fort_scope_domain_t domain, uint64_t lease, size_t bytes);
+int fort_scope_domain_workspace_release_v1(fort_scope_domain_t domain, uint64_t lease);
 /* No CUDA initialization or descriptor access. Source scopes retain native
  * collective execution in active teams or if runtime OpenMP support is absent. */
 int fort_scope_serial_caller(void);
@@ -519,6 +587,21 @@ int fort_scope_register(fort_scope_t context, uint64_t identity, uint64_t genera
 int fort_scope_register_sections(fort_scope_t context, uint64_t identity, uint64_t generation,
                                 const fort_scope_layout *layout, const fort_scope_section *initialized,
                                 size_t initialized_count, fort_buffer_t *buffer);
+/* Commit an independently proved, already executed descriptor-only exchange
+ * (for example a complete MOVE_ALLOC swap). Registered identity slots must be
+ * distinct. Each post-layout must exactly describe the opposite existing
+ * physical allocation, including allocation generation and lower bounds.
+ * Physical handles/storage/definitions/mirrors/completions are never moved,
+ * copied or reinitialized; only the logical identity map and returned caller
+ * bindings change. Accepted queued tasks retain their physical handles.
+ * There must be no prepared access or unfinished installed execution plan.
+ * Uninstalled recorded queries are abandoned at this checked frontier.
+ * This is a POST-mutation contract: every validation/commit failure in a live
+ * context poisons its domain and returns EXECUTION, never authorizes replay.
+ * Caller compiler registration epochs are separate from allocation generation. */
+int fort_scope_identity_swap_v1(fort_scope_t context, fort_buffer_t first, fort_buffer_t second,
+                                const fort_scope_layout *first_after, const fort_scope_layout *second_after,
+                                fort_buffer_t *first_current, fort_buffer_t *second_current);
 /* A source definition event, such as entry to a plain numeric INTENT(OUT)
  * dummy. Forget semantic definitions while retaining physical mirror versions
  * for native continuation/publication. No transfer or completion wait occurs.
@@ -541,6 +624,161 @@ int fort_scope_layout_get(fort_scope_t context, fort_buffer_t buffer, fort_scope
  * Existing end/cancel calls complete each acquired resource. */
 int fort_scope_access_begin_v1(fort_scope_t context, const fort_scope_plan_binding *bindings,
                                size_t count, int device, void **devices);
+/* Checked opaque device transaction. Bindings describe physical canonical
+ * roots, using the same exact read/write/overwrite rules as generated tasks.
+ * Types/ranks/element sizes are checked before any access or provider call.
+ * Views and their descriptor arrays are borrowed ONLY until callback return.
+ * Device pointers address physical allocation origins (not interior sections).
+ * All provider work must use the supplied context stream and retain no view.
+ * No scoped/domain API may be called inside the callback (domain mutex held).
+ * started is initialized to -1: the worker MUST write 0 on a checked rejection
+ * before enqueue, and write 1 BEFORE its first enqueue attempt. Success with
+ * nonempty bindings requires started=1; unreported state, exceptions, and any
+ * failure after an enqueue attempt poison the domain/context. Native replay
+ * is then forbidden. Explicit prework rejection cancels every prepared write;
+ * cached allocations/read mirrors may remain. Success commits exact effects
+ * and may be asynchronous; normal host access/wait/domain close observes its
+ * completion. A zero binding count invokes no callback and initializes no CUDA.
+ * This is an unpriced operation, not a cached plan/definition proof or a claim
+ * that one opaque operation is exactly one CUDA kernel. */
+#define FORT_SCOPE_EXTERNAL_ABI_VERSION 1
+typedef struct fort_scope_external_binding_v1 {
+    fort_buffer_t buffer;
+    uint32_t type, rank;
+    size_t element_bytes;
+    fort_scope_access access;
+} fort_scope_external_binding_v1;
+typedef struct fort_scope_external_view_v1 {
+    fort_buffer_t buffer;
+    uint64_t generation;
+    uint32_t type, rank;
+    size_t element_bytes, bytes;
+    const size_t *extents, *strides; /* strides are in BYTES */
+    const int64_t *lower_bounds;
+    void *device;
+} fort_scope_external_view_v1;
+typedef struct fort_scope_external_call_v1 {
+    uint32_t version, reserved;
+    const fort_scope_external_binding_v1 *bindings;
+    size_t binding_count;
+    uint64_t workspace_lease;
+    size_t workspace_bytes;
+} fort_scope_external_call_v1;
+typedef struct fort_scope_external_report_v1 {
+    uint32_t version;
+    int32_t status;
+    uint32_t started, committed;
+} fort_scope_external_report_v1;
+typedef int (*fort_scope_external_worker_v1)(void *user, const fort_scope_external_view_v1 *views,
+                                             size_t count, void *stream, int *started);
+int fort_scope_external_execute_v1(fort_scope_t context, const fort_scope_external_call_v1 *call,
+                                   fort_scope_external_worker_v1 worker, void *user,
+                                   fort_scope_external_report_v1 *report);
+/* Source-issued numerical task, using the SAME transaction/access engine.
+ * Scratch is acquired before this call and released after it, never inside
+ * the non-reentrant callback. expected_launches is the checked, finite batch
+ * count calculated before submission; a successful worker must report exactly
+ * that many accepted kernels. The callback writes started=1 before its first
+ * launch attempt and increments accepted_launches only after each successful
+ * launch-status check. It must call no fort_scope API. Runtime launch counters
+ * and provenance record these accepted kernels, including a failed prefix.
+ * An excessive count, overflow, or successful count mismatch is fatal after
+ * attempted work; no original span may be replayed. Opaque library callbacks
+ * retain the separate external ABI and make no kernel-count claim. */
+typedef int (*fort_scope_source_worker_v1)(void *user, const fort_scope_external_view_v1 *views,
+                                           size_t count, void *stream, int *started,
+                                           uint64_t *accepted_launches);
+int fort_scope_source_execute_v1(fort_scope_t context, const fort_scope_external_call_v1 *call,
+                                 uint64_t expected_launches, fort_scope_source_worker_v1 worker,
+                                 void *user, fort_scope_external_report_v1 *report);
+/* Original CPU work outside the runtime lock. Prepare validates ALL canonical
+ * typed effects before acquiring existing host coherence. It grants no entry
+ * definitions. Start must immediately precede the original work; completion
+ * commits only its declared writes and retains readonly device replicas.
+ * Cancellation is safe only before start. A failure/misuse after start poisons
+ * the context: publication/replay is prohibited and explicit abandon is needed.
+ * Tokens belong to one live context and cannot be reused or transferred. */
+int fort_scope_source_host_prepare_v1(fort_scope_t context, const fort_scope_external_call_v1 *call,
+                                      uint64_t *token);
+int fort_scope_source_host_start_v1(fort_scope_t context, uint64_t token);
+int fort_scope_source_host_complete_v1(fort_scope_t context, uint64_t token);
+int fort_scope_source_host_cancel_v1(fort_scope_t context, uint64_t token);
+/* A pure local placement quote. It reads exact live replica/completion metadata
+ * but never initializes CUDA, acquires scratch, prepares access, installs a
+ * schedule, drains a queue, or changes owner-estimate completeness. CPU means
+ * publish/retire this context/domain, then execute the original native team;
+ * GPU means the source transaction and a comparable projected terminal close.
+ * Computation totals are independent backend evidence, not source authority.
+ * Submit calibration includes ALL per-field preparation and kernel enqueue;
+ * GPU_LAUNCH_INCLUDED computation is therefore incompatible. Unsupported live
+ * state, missing/range-incompatible calibration or undefined reads returns an
+ * unavailable quote; it never grants execution or definition authority. */
+#define FORT_SCOPE_SOURCE_QUOTE_ABI_VERSION 1
+#define FORT_SCOPE_SOURCE_QUOTE_LIVE_ABI_VERSION 2
+#define FORT_SCOPE_SOURCE_PROTOCOL_ID UINT64_C(0x4654534f55520001)
+#define FORT_SCOPE_SOURCE_HOST_PROTOCOL_ID UINT64_C(0x465453484f530001)
+enum fort_scope_source_quote_reason_v1 {
+    FORT_SCOPE_SOURCE_QUOTE_READY = 0,
+    FORT_SCOPE_SOURCE_QUOTE_CALIBRATION = 1,
+    FORT_SCOPE_SOURCE_QUOTE_WORK = 2,
+    FORT_SCOPE_SOURCE_QUOTE_RANGE = 3,
+    FORT_SCOPE_SOURCE_QUOTE_LIVE_STATE = 4,
+    FORT_SCOPE_SOURCE_QUOTE_BUDGET = 5,
+    FORT_SCOPE_SOURCE_QUOTE_SIMULATION = 6
+};
+enum fort_scope_source_quote_flag_v1 {
+    FORT_SCOPE_SOURCE_QUOTE_SCRATCH_LEASE = 1,
+    /* Required in v1: the emitted native fallback retires its whole domain. */
+    FORT_SCOPE_SOURCE_QUOTE_NATIVE_CLOSE_DOMAIN = 2,
+    /* The source provider joins pending work before its scratch acquisition. */
+    FORT_SCOPE_SOURCE_QUOTE_WAIT_BEFORE_LEASE = 4,
+    /* Only quote_v2: both alternatives leave canonical storage/domain live. */
+    FORT_SCOPE_SOURCE_QUOTE_NATIVE_LIVE = 8
+};
+typedef struct fort_scope_source_costs_v1 {
+    uint32_t version, valid, precision_bits, reserved;
+    uint64_t protocol_id, max_bindings, max_launches;
+    size_t max_scratch_bytes;
+    double source_submit_seconds, scratch_cold_acquire_seconds, scratch_reuse_acquire_seconds;
+    double scratch_idle_grow_seconds, scratch_release_seconds;
+} fort_scope_source_costs_v1;
+typedef struct fort_scope_source_work_v1 {
+    uint32_t version, precision_bits, flags, reserved;
+    uint64_t expected_launches, real_work_proxy, memory_bytes;
+    size_t scratch_bytes;
+    double minimum_relative_saving;
+    fort_scope_compute_costs_v1 compute;
+} fort_scope_source_work_v1;
+typedef struct fort_scope_source_quote_result_v1 {
+    uint32_t version, available, gpu_preferred, reason;
+    /* Both use NATIVE_CLOSE_DOMAIN in v1; neither is a keep-live endpoint. */
+    uint32_t native_endpoint, gpu_endpoint;
+    double native_seconds, gpu_seconds, gpu_execution_seconds, transfer_dispersion_debit_seconds;
+    fort_scope_plan_decision gpu;
+    fort_scope_terminal_cost native_terminal, gpu_terminal;
+    uint64_t scratch_capacity_before, scratch_capacity_after, peak_total_device_bytes;
+} fort_scope_source_quote_result_v1;
+int fort_scope_source_quote_v1(fort_scope_t context, const fort_scope_external_call_v1 *call,
+                              const fort_scope_source_work_v1 *work, const fort_scope_plan_costs *base_costs,
+                              const fort_scope_source_costs_v1 *source_costs, int compatible,
+                              fort_scope_source_quote_result_v1 *result);
+/* Independently measured complete prepare/start/complete host management.
+ * It excludes copies, waits and original computation, and replaces the older
+ * per-binding host-access charge. No missing cost is treated as zero. */
+typedef struct fort_scope_source_host_costs_v1 {
+    uint32_t version, valid;
+    uint64_t protocol_id, max_bindings;
+    double prepare_start_complete_seconds;
+} fort_scope_source_host_costs_v1;
+/* Uses work.version=2 and exactly the NATIVE_LIVE endpoint. No terminal close
+ * is projected or executed; private reserved scratch/opaque provider storage
+ * remains live and budgeted. All other quote purity and known-mask rules hold.
+ * The unchanged result layout reports version=2 and both endpoints LIVE. */
+int fort_scope_source_quote_v2(fort_scope_t context, const fort_scope_external_call_v1 *call,
+                              const fort_scope_source_work_v1 *work, const fort_scope_plan_costs *base_costs,
+                              const fort_scope_source_costs_v1 *source_costs,
+                              const fort_scope_source_host_costs_v1 *native_costs, int compatible,
+                              fort_scope_source_quote_result_v1 *result);
 /* Explicit observation publishes every defined section of the selected
  * canonical resources with one host wait. Undefined holes remain undefined.
  * Discard forgets values without publication and retains reusable storage.

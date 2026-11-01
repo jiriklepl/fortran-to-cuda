@@ -162,6 +162,16 @@ class SourceInputs:
 
     def identity(self):
         """Immutable JSON provenance for reusable source proofs, never ASTs."""
+        from compiler.frontend.immutable_graph import FrozenDict, FrozenList, sealed
+
+        if sealed(self):
+            # Every nested input container already belongs to the immutable
+            # session. Preserve its exact JSON instead of copying all line
+            # maps for every proof. Unsealed analyses still need detachment.
+            return FrozenDict({"schema_version": 1, "sources": self.sources,
+                               "dependencies": self.dependencies,
+                               "configuration": self.configuration,
+                               "entries": FrozenList(self.entries[name] for name in sorted(self.entries))})
         return deepcopy({"schema_version": 1, "sources": self.sources,
                          "dependencies": self.dependencies,
                          "configuration": self.configuration,

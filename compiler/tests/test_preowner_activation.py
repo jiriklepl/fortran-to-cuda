@@ -241,8 +241,11 @@ def test_single_line_prefix_control_disables_inside_original_condition(tmp_path)
 def test_prefix_authority_and_budget_failures_remain_hard(tmp_path, mutation):
     path, builder, proof, originals = preowner_window_fixture(tmp_path)
     if mutation == "source":
+        assert proof.validate(builder.analysis, ENTRY, originals) is proof
+        original_facts = proof.public()
         path.write_text(PREOWNER_SOURCE + "\n! changed original\n")
         assert proof.validate(builder.analysis, ENTRY, originals) is proof
+        assert proof.public() == original_facts
         with pytest.raises(CompilationError, match="changed"):
             builder.finish()
     elif mutation == "binding":
@@ -276,9 +279,11 @@ def test_native_only_fast_result_revalidates_source_and_facts(tmp_path, mutation
         ROOTS[1]: {"lifetime": "invocation"}})
     owner = ReachedWindowOwner(builder, proof, originals)
     if mutation == "source":
+        original_facts = proof.public()
         path.write_text(PREOWNER_SOURCE + "\n! changed after owner construction\n")
-        assert not owner.run()
-        with pytest.raises(CompilationError, match="changed"):
+        assert owner.run() is False
+        assert proof.public() == original_facts
+        with pytest.raises(CompilationError, match="source changed"):
             owner.builder.finish()
     else:
         owner.builder.facts["captures"][ROOTS[0]]["initialized"] = "none"

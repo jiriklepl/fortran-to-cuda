@@ -159,8 +159,11 @@ class GenerationTransaction:
         original = dict(vars(analysis))
         self._analyses[analysis] = original
         session = getattr(analysis, "_source_session", None)
-        clone = _GenerationCopy(self._analysis, memo=(
-            {id(value): value for value in session.roots.values()} if session is not None else None))
+        authority = {id(value): value for value in session.roots.values()} if session is not None else {}
+        context = getattr(analysis, "_source_authority_context", None)
+        if context is not None:
+            authority.update((id(value), value) for value in context.policy.values())
+        clone = _GenerationCopy(self._analysis, memo=authority)
         # Register first: cached proof objects can refer to this same analysis.
         detached = {name: clone(value) for name, value in original.items() if name != "_summary_cache"}
         cache = original["_summary_cache"]
@@ -169,8 +172,9 @@ class GenerationTransaction:
             private_cache._memory = OrderedDict(cache._memory)
             private_cache._stats = dict(cache._stats)
         detached["_summary_cache"] = private_cache
-        vars(analysis).clear()
-        vars(analysis).update(detached)
+        analysis._replace_generation_work_state(detached)
+        from compiler.frontend.authority_context import fork_derivations
+        fork_derivations(analysis)
 
     def __enter__(self):
         if self._active or self._closed:
@@ -200,8 +204,7 @@ class GenerationTransaction:
 
     def _restore(self):
         for analysis, original in reversed(tuple(self._analyses.items())):
-            vars(analysis).clear()
-            vars(analysis).update(original)
+            analysis._replace_generation_work_state(original)
             _ACTIVE_ANALYSES.discard(analysis)
 
     def _commit(self):

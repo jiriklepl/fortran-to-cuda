@@ -179,12 +179,16 @@ enddo
                for point in eligibility["disable_points"])
 
 
-def test_changed_source_invalidates_partial_entry_proof(tmp_path):
+def test_changed_source_rejects_publication_of_partial_entry_proof(tmp_path):
     path, builder, originals = entry_sections_fixture(tmp_path)
     proof = prove_reached_window(builder.analysis, ENTRY, originals, ROOTS, builder.facts)
-    sections = proof.activation_sections(ROOTS[0])
-    path.write_text(path.read_text().replace("i=-3,5", "i=-3,6"))
-    assert proof.activation_sections(ROOTS[0]) == sections
+    original_sections = proof.activation_sections(ROOTS[0])
+    assert original_sections is not None
+    before = path.read_text()
+    changed = before.replace("i=-3,5", "i=-3,6")
+    assert changed != before
+    path.write_text(changed)
+    assert proof.activation_sections(ROOTS[0]) == original_sections
     with pytest.raises(CompilationError, match="source changed"):
         builder.finish()
     assert not builder.outputs

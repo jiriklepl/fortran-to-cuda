@@ -63,6 +63,7 @@ def register_source_object_authority(analysis):
     """Snapshot existing declaration identities; projections borrow these only."""
     scopes = {id(scope): scope for scope in analysis.modules.values()}
     scopes.update((id(routine.scope), routine.scope) for routine in analysis.numerical_helpers.values())
+    scopes.update((id(scope), scope) for scope in analysis._block_scopes.values())
     analysis._source_object_scopes = {
         key: (scope, scope.node, _specification(scope), _resolution(scope),
               {name: (binding, _canonical(binding.public())) for name, binding in scope.bindings.items()

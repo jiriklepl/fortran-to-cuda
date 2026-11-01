@@ -14,18 +14,30 @@ class OriginalActual:
     actual: str
 
 
-def register_original_actuals(owner, arrays, *, scalar_elements=(), native_arrays=()):
+def register_original_actuals(owner, arrays, *, scalar_elements=(), native_arrays=(), unallocated_inputs=()):
     """Reserve a deferred patch; numerical artifacts are known after scanning."""
-    key = _name("fort_original_actuals_", owner.routine.qualified + str(len(owner.patches)))
     registrations = getattr(owner, "original_actual_registrations", {})
     owner.original_actual_registrations = registrations
+    key = _name("fort_original_actuals_", owner.routine.qualified
+                + ":" + str(len(owner.patches)) + ":" + str(len(registrations)))
+    if key in registrations:
+        raise CompilationError("original actual registration identity collision")
     for mapping in arrays:
         if str(mapping.actual).lower().startswith("fort_"):
             raise CompilationError("original mapped actual conflicts with compiler-private registration names")
-        owner.builder.capture(mapping.binding)
+    owner.builder.capture_many(mapping.binding for mapping in arrays)
+    for mapping in arrays:
         owner.declaration(mapping.binding)
         owner.add_resource(mapping.binding)
     registrations[key] = tuple(arrays)
+    if unallocated_inputs:
+        conditional = getattr(owner, "original_unallocated_input_registrations", {})
+        owner.original_unallocated_input_registrations = conditional
+        if (not set(unallocated_inputs) <= {mapping.binding.root for mapping in arrays}
+                or any("allocatable" not in mapping.binding.attributes for mapping in arrays
+                       if mapping.binding.root in unallocated_inputs)):
+            raise CompilationError("conditional original registration requires its allocated input association")
+        conditional[key] = tuple(unallocated_inputs)
     reservations = getattr(owner, "original_scalar_element_reservations", {})
     owner.original_scalar_element_reservations = reservations
     for element in scalar_elements:
@@ -65,24 +77,37 @@ def finish_original_registrations(owner, text):
             return ["fort_actual_handle_valid = 0", "if (fort_actual_status == FORT_SCOPE_OK) &",
                     f"fort_actual_status = fort_scope_buffer_valid_v1({owner.context}, {handle}, fort_actual_handle_valid)",
                     f"if (fort_actual_status == FORT_SCOPE_OK .and. fort_actual_handle_valid == 0) {handle} = 0"]
+        from compiler.scopes.provider_lifetime import context_creation, registration_generation
+        generation = registration_generation(owner)
+        create = context_creation(owner, owner.context, "fort_scope_resident_create_v1"
+                                  if owner.builder.config.scope_execution == "graph" else "fort_scope_create")
         lines = ["fort_actual_status = FORT_SCOPE_OK", f"if ({owner.enabled}) then",
                  f"if ({owner.context} == 0) then",
-                 f"fort_actual_status = fort_scope_create(0_c_int, {owner.context})",
+                 f"fort_actual_status = {create}",
                  "if (fort_actual_status == FORT_SCOPE_OK) &",
                  f"fort_actual_status = fort_scope_set_device_budget({owner.context}, {owner.builder.device_budget}_c_size_t)"]
         lines += owner.builder.owner_transfer_setup(owner.owner.leaves, imports, context=owner.context,
                                                     status="fort_actual_status")
-        lines += ["endif"]
+        from compiler.scopes.provenance import position
+        lines += [f"if ({owner.context} /= 0) then",
+                  *position(owner.builder, context=owner.context, owner=owner.creation_trace_owner()),
+                  "endif", "endif"]
         failure = [*owner.close(prework=True, prework_status="fort_actual_status"), "exit " + block]
-        for mapping in arrays:
+        facts = owner.builder.capture_many(mapping.binding for mapping in arrays)
+        for mapping, fact in zip(arrays, facts, strict=True):
             binding, name = mapping.binding, str(mapping.actual)
             number = owner.resources[binding.root][1]
             handle = f"fort_buffer_{number}"
             _, enum, width = DTYPES[binding.signature()[:2]]
-            fact = owner.builder.capture(binding)
+            conditional = binding.root in getattr(owner, "original_unallocated_input_registrations", {}).get(key, ())
+            if conditional:
+                lines += [f"if (allocated({name})) then"]
             lines += refresh_epoch_handle(handle)
             if fact.get("requires_registered_handle"):
                 lines += [f"if ({handle} == 0) then", "fort_actual_status = FORT_SCOPE_BOUNDARY", *failure, "endif"]
+                if conditional:
+                    lines += ["else", f"if ({handle} /= 0) then", "fort_actual_status = FORT_SCOPE_BOUNDARY",
+                              *failure, "endif", "endif"]
                 continue
             extents, lowers = f"fort_actual_extents_{number}", f"fort_actual_lowers_{number}"
             spec += [f"integer(c_size_t), target :: {extents}({binding.rank})",
@@ -92,18 +117,25 @@ def finish_original_registrations(owner, text):
                       f"{lowers} = lbound({name}, kind=c_int64_t)", "fort_actual_pointer = c_null_ptr",
                       f"if (all({extents} > 0)) fort_actual_pointer = c_loc({name})",
                       f"fort_actual_layout = fort_scope_layout({binding.rank}, {enum}, {width}_c_size_t, &",
-                      f"fort_actual_pointer, c_loc({extents}), c_loc({lowers}), 1_c_int64_t)"]
+                      f"fort_actual_pointer, c_loc({extents}), c_loc({lowers}), {generation})"]
             source = fact.get("source_sections")
             parameters = ({item.resource: owner.builder.visible(owner.routine, item.resource)
                            for item in source.dependencies if item.kind == "scalar_read"} if source else {})
-            code = build_registration(fact, binding.rank, handle, f"fort_actual_defined_{number}",
-                f"{number}_c_int64_t", "fort_actual_layout", context=owner.context, status="fort_actual_status",
+            code = build_registration(fact, binding.rank, handle, f"fort_actual_def_{number}",
+                owner.registration_identity(number), "fort_actual_layout", context=owner.context, status="fort_actual_status",
                 on_error=tuple(failure), parameters=parameters,
                 logical_lower_bounds={binding.root: tuple(f"lbound({name},{axis},kind=c_int64_t)"
                                                           for axis in range(1, binding.rank+1))},
-                entry_guard=owner.epoch_pristine if owner.builder.config.scope_execution == "graph" else None)
+                entry_guard=owner.epoch_pristine if owner.builder.config.scope_execution == "graph" else None,
+                generation=generation)
             spec += code.specification
             lines += [*code.prepare, "endif"]
+            if conditional:
+                # Never evaluate SHAPE/LBOUND/C_LOC on an unallocated actual.
+                # A formerly live handle requires ordinary retirement; losing
+                # its original allocation is not permission to reuse it.
+                lines += ["else", f"if ({handle} /= 0) then", "fort_actual_status = FORT_SCOPE_BOUNDARY",
+                          *failure, "endif", "endif"]
         for mapping in getattr(owner, "original_native_actual_registrations", {}).get(key, ()):
             binding, name = mapping.binding, str(mapping.actual)
             number = owner.resources[binding.root][1]
@@ -121,7 +153,7 @@ def finish_original_registrations(owner, text):
                       f"if (all({extents} > 0)) fort_actual_pointer = c_loc({name})",
                       f"fort_actual_layout = fort_scope_layout({binding.rank}, FORT_SCOPE_BYTES, {binding.kind}_c_size_t, &",
                       f"fort_actual_pointer, c_loc({extents}), c_loc({lowers}), 1_c_int64_t)",
-                      f"fort_actual_status = fort_scope_register({owner.context}, {number}_c_int64_t, &",
+                      f"fort_actual_status = fort_scope_register({owner.context}, {owner.registration_identity(number)}, &",
                       f"1_c_int64_t, fort_actual_layout, 0_c_int, {handle})", "endif"]
         for element in getattr(owner, "original_scalar_element_reservations", {}).get(key, ()):
             binding = element.binding
@@ -141,7 +173,7 @@ def finish_original_registrations(owner, text):
                       f"if ({extents}(1) > 0) fort_actual_pointer = c_loc({name})",
                       f"fort_actual_layout = fort_scope_layout(1, FORT_SCOPE_BYTES, {binding.kind}_c_size_t, &",
                       f"fort_actual_pointer, c_loc({extents}), c_loc({lowers}), 1_c_int64_t)",
-                      f"fort_actual_status = fort_scope_register({owner.context}, {number}_c_int64_t, &",
+                      f"fort_actual_status = fort_scope_register({owner.context}, {owner.registration_identity(number)}, &",
                       f"1_c_int64_t, fort_actual_layout, 0_c_int, {handle})", "endif"]
         lines += ["if (fort_actual_status /= FORT_SCOPE_OK) then",
                   *owner.close(prework=True, prework_status="fort_actual_status"), "endif", "endif"]

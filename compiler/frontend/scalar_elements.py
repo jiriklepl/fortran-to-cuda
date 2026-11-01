@@ -8,11 +8,11 @@ import re
 
 from fparser.two.utils import Base
 
-from compiler.frontend.call_bindings import _arrange
+from compiler.frontend.call_bindings import resolve_original_call, resolve_original_function
 from compiler.frontend.source_functions import _original, _validate_resolution, _validate_scope, _walk
 from compiler.ir import CompilationError
 
-SOURCE_SCALAR_ELEMENT_VERSION = 1
+SOURCE_SCALAR_ELEMENT_VERSION = 2
 _SCAN_LIMIT = 65536
 _UNSAFE = {"optional", "pointer", "target", "allocatable", "value", "volatile", "asynchronous"}
 
@@ -65,9 +65,7 @@ def check_scalar_element_closure(analysis, procedure, mappings, *, consume=None)
             _validate_resolution(analysis, mapping.binding.declaring_scope,
                                  _walk(mapping.scalar_element.declaration), tick=tick)
     pending, checked, records = [(procedure, aliases, ())], set(), []
-    controls = {"If_Construct", "If_Stmt", "Block_Nonlabel_Do_Construct", "Block_Label_Do_Construct",
-                "Select_Case_Construct", "Case_Construct", "Associate_Construct", "Where_Construct",
-                "Forall_Construct"}
+    associations = []
     while pending:
         name, associated, ancestors = pending.pop(0)
         if name in ancestors or len(ancestors) > analysis.depth_limit:
@@ -82,19 +80,18 @@ def check_scalar_element_closure(analysis, procedure, mappings, *, consume=None)
         scope_authority(routine.scope)
         alias_ids = {id(binding) for binding in associated}
         calls, functions = [], []
-        stack = [(routine.execution, 0), (_part(routine.scope.node, "Specification_Part"), 0)]
+        # This iterative syntax walk is bounded by source visits and statements.
+        # Lexical nesting is independent of interprocedural call depth.
+        stack = [routine.execution, _part(routine.scope.node, "Specification_Part")]
         while stack:
-            node, depth = stack.pop()
+            node = stack.pop()
             tick()
             if isinstance(node, (tuple, list)):
-                stack.extend((item, depth) for item in reversed(node))
+                stack.extend(reversed(node))
                 continue
             if not isinstance(node, Base):
                 continue
             kind = type(node).__name__
-            depth += kind in controls
-            if depth > analysis.depth_limit:
-                raise CompilationError("scalar element association control depth budget exhausted")
             scope = analysis.source_scope_for(node, routine.scope)
             if kind.endswith("_Stmt"):
                 operations += 1
@@ -143,7 +140,7 @@ def check_scalar_element_closure(analysis, procedure, mappings, *, consume=None)
                 if analysis._binding(scope, target) or analysis._candidates(scope, target) or analysis._unknown_exports(scope):
                     raise ScalarElementUnsupported("scalar element closure requires an unshadowed intrinsic")
             children = getattr(node, "content", getattr(node, "items", ())) or ()
-            stack.extend((item, depth) for item in reversed(children))
+            stack.extend(reversed(children))
 
         for node, scope, function in (*calls, *functions):
             scope_authority(scope)
@@ -166,48 +163,36 @@ def check_scalar_element_closure(analysis, procedure, mappings, *, consume=None)
             original = tuple(getattr(node.items[1], "items", ()) or ())
             for _ in original:
                 tick()
-            # This witness grants no invocation/effect legality. Inspect every
-            # available source candidate instead of resolving unrelated array
-            # actuals through the native coordinate mapper or selecting an
-            # overload from an unsupported-coordinate diagnostic.
-            for candidate in candidates:
+            # Reuse the exact original type/rank association. The selected
+            # callee still receives the complete storage-reference scan below;
+            # association alone grants no effects, coordinates or completion.
+            resolved = (resolve_original_function if function else resolve_original_call)(analysis, scope, node)
+            associations.append((resolved, scope, node))
+            candidate, callee = resolved.procedure, resolved.callee
+            tick()
+            scope_authority(callee.scope)
+            forwarded = []
+            for association in resolved.associations:
                 tick()
-                callee = _original(analysis, candidate)
-                scope_authority(callee.scope)
-                for _ in callee.arguments:
-                    tick()
-                if callee.source_kind == "external":
-                    interface = analysis.external_interface(callee)
-                    if not interface["available"] or any(type(item).__name__ == "Actual_Arg_Spec" for item in original):
-                        raise ScalarElementUnsupported(
-                            "scalar element closure requires a supported original external interface")
-                try:
-                    actuals, _arguments = _arrange(callee, original, function=function)
-                except CompilationError as error:
-                    # Authority and budgets were checked above. _arrange only
-                    # classifies the original positional/keyword/omission
-                    # structure; incompatible candidates cannot grant a role.
-                    raise ScalarElementUnsupported(
-                        "scalar element closure requires supported source-call argument structure") from error
-                forwarded = []
-                for formal_name, actual in zip(callee.arguments, actuals, strict=True):
-                    tick()
-                    formal = callee.scope.bindings[formal_name]
-                    scope_authority(formal.declaring_scope)
-                    if type(actual).__name__ != "Name":
-                        continue
-                    binding = analysis._binding(scope, actual)
-                    if binding is not None:
-                        scope_authority(binding.declaring_scope)
-                    if binding is not None and id(binding) in alias_ids:
-                        if (formal.rank or formal.intent != "in" or formal.signature() != binding.signature()
-                                or formal.attributes & _UNSAFE):
-                            raise ScalarElementUnsupported("scalar element forwarding requires unchanged scalar INTENT(IN)")
-                        forwarded.append(formal)
-                pending.append((candidate, tuple(forwarded), (*ancestors, name)))
+                formal, actual = association.formal_binding, association.actual
+                scope_authority(formal.declaring_scope)
+                if type(actual).__name__ != "Name":
+                    continue
+                binding = analysis._binding(scope, actual)
+                if binding is not None:
+                    scope_authority(binding.declaring_scope)
+                if binding is not None and id(binding) in alias_ids:
+                    if (formal.rank or formal.intent != "in" or formal.signature() != binding.signature()
+                            or formal.attributes & _UNSAFE):
+                        raise ScalarElementUnsupported("scalar element forwarding requires unchanged scalar INTENT(IN)")
+                    forwarded.append(formal)
+            pending.append((candidate, tuple(forwarded), (*ancestors, name)))
         records.append({"procedure": name, "associated_formals": sorted(binding.root for binding in associated),
                         "source": str(routine.scope.path), "source_sha256": analysis.sources[str(routine.scope.path)]})
-    return {"version": SOURCE_SCALAR_ELEMENT_VERSION, "procedures": records, "source_work": visits,
+    for resolved, scope, original in associations:
+        resolved.validate(analysis, scope, original)
+    record = {"version": SOURCE_SCALAR_ELEMENT_VERSION, "procedures": records, "source_work": visits,
             "operations": operations, "backing_resources": sorted(backing),
             "no_other_backing_reference": True, "only_scalar_in_forwarding": True,
             "effect_authority": False, "definition_authority": False, "completion_authority": False}
+    return record, tuple(resolved for resolved, _scope, _original in associations)

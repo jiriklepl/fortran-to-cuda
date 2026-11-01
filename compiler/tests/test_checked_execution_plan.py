@@ -46,6 +46,10 @@ def test_plan_binds_original_guarded_native_correction_and_shared_resources(tmp_
     with scanned(tmp_path) as (owner, plan):
         assert plan.validate() is plan
         record = plan.public()
+        assert record["schema_version"] == 2
+        storage = dict(record["storage_epoch"])
+        storage_identity = storage.pop("identity")
+        assert storage_identity == _digest(storage)
         identity = record.pop("identity")
         assert identity == _digest(record)
         assert plan.members == (owner,)
@@ -76,7 +80,9 @@ def test_execution_identity_reuses_semantics_across_independent_source_graphs(tm
     with scanned(tmp_path) as (second_owner, second):
         assert second_owner.builder.analysis is not first_owner.builder.analysis
         assert second.execution_identity == expected
-        assert all(left is not right and left.identity != right.identity
+        # Content digests may match; ownership remains tied to exact issued
+        # objects and their source analysis, independently of serialization.
+        assert all(left is not right
                    for left, right in zip(authorities, second._numerical_authorities, strict=True))
         # Exact in-process source/proof authority is still required.
         with pytest.raises(CompilationError, match="registered"):

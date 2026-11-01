@@ -46,6 +46,8 @@ class Native:
     resource_demand: object = field(default=None, repr=False, compare=False)
     source_reads: object = field(default=None, repr=False, compare=False)
     source_constants: dict = field(default_factory=dict)
+    clock_proofs: tuple = ()
+    constructor_proofs: tuple = ()
 
     @property
     def coherence_effects(self):
@@ -64,7 +66,7 @@ class Native:
                                                      and section.resource not in self.source_constants))
 
 
-def _native_analysis(analysis):
+def _native_analysis(analysis, *, complete_source=()):
     """Isolate reached native proofs without changing GPU lifetime authority.
 
     Original source/AST objects remain shared and authenticated. Cache and token
@@ -74,6 +76,22 @@ def _native_analysis(analysis):
     from compiler.frontend.summary_cache import SummaryCache
 
     result = analysis.private_projection()
+    # These tokens are exact analysis-instance authorities. A fresh native
+    # projection must issue its own selected storage proofs, rather than
+    # inheriting an equal-record token from an earlier private projection.
+    result._local_allocation_context = None
+    result._storage_mutation_effects = {}
+    result._conditional_unit_descriptors = {}
+    result._conditional_descriptor_consumers = {}
+    result._original_sequence_exits = {}
+    result._original_reached_positions = {}
+    result._original_reached_positions_owner = None
+    result._library_storage_calls = {}
+    result._library_storage_calls_owner = None
+    result._opaque_library_state_proofs = {}
+    result._metadata_constructor_proofs = {}
+    result._entry_preservations = {}
+    result._entry_preservations_owner = None
     for name in ("summaries", "_closures", "_native_sections", "_structures", "_segments",
                  "_descriptor_proofs", "_joined_completions", "_numerical_completions",
                  "_reduction_proofs",
@@ -91,18 +109,27 @@ def _native_analysis(analysis):
     # reissue selected proofs; sharing their registries would either lend
     # foreign authority or mutate the original owner's proof state.
     for name in ("_descriptor_window_proofs", "_native_prefix_proofs", "_reached_window_proofs",
+                 "_local_allocation_proofs",
                  "_native_definition_proofs", "_native_definition_state_proofs", "_numerical_preparations", "_numerical_preparation_providers",
                  "_native_preservation_proofs", "_selection_activation_proofs", "_reached_read_requirements_proofs",
                  "_numerical_effect_proofs", "_original_call_associations", "_native_effect_templates",
                  "_native_effect_graphs", "_resource_reachability_proofs", "_native_demand_effects",
                  "_native_graph_completions", "_worksharing_completions", "_worksharing_native_completions",
                  "_ordered_worksharing_inventories",
-                 "_prepared_worksharing_inventories"):
+                 "_prepared_worksharing_inventories", "_scalar_clock_proofs",
+                 "_opaque_library_state_proofs", "_external_device_task_proofs", "_metadata_constructor_proofs"):
         setattr(result, name, {})
     result._native_preservation_registry_owner = None
     result._selection_activation_registry_owner = None
     result._reached_read_requirements_proofs_owner = result
     result._summary_cache = SummaryCache(max_entries=0)
+    if complete_source:
+        # A retained original team is one indivisible execution task. Its
+        # finite syntax bounds this linear effects walk; the numerical/search
+        # budget must not force an artificial publication halfway through it.
+        # Caller authenticates these original nodes before creating the fork.
+        result.operation_limit = max(analysis.operation_limit,
+                                     sum(1 for node in complete_source for _ in walk(node)))
     return result
 
 
@@ -122,8 +149,10 @@ def _host_read_candidate(builder, binding):
     parts = binding.root.split("::")
     module = builder.analysis.modules.get(parts[0]) if len(parts) == 2 else None
     forbidden = {"pointer", "optional", "volatile", "asynchronous", "value", "parameter"}
+    fixed = ("target" not in binding.attributes and len(binding.shape_nodes) == binding.rank
+             and all(_kind(axis) == "Explicit_Shape_Spec" for axis in binding.shape_nodes))
     candidate = (module is not None and module.bindings.get(parts[1]) is binding and binding.rank > 0
-            and "allocatable" in binding.attributes and not binding.attributes & forbidden
+            and ("allocatable" in binding.attributes or fixed) and not binding.attributes & forbidden
             and binding.dtype in {"real", "integer"} and binding.kind in {4, 8})
     if not candidate:
         return False
@@ -194,8 +223,10 @@ def fortran_lines(lines):
 
 
 def directive(node):
+    if _kind(node) != "Comment":
+        return None
     text = str(node).lstrip().lower()
-    return text[5:].strip() if _kind(node) == "Comment" and text.startswith("!$omp") else None
+    return text[5:].strip() if text.startswith("!$omp") else None
 
 
 def original_roots(nodes):
@@ -291,11 +322,19 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     """Demand effects from exact original nodes, excluding owner entry events."""
     original = original_roots(builder.inline.original_selection(nodes)) if selected is None else ()
     full_original = original
-    analysis = _native_analysis(builder.analysis)
-    analysis._native_metadata = native_metadata
     joined = kind == "joined native OpenMP" or (
         kind == "guarded original numerical fallback"
         and any(directive(item) is not None for node in original for item in walk(node)))
+    complete_source = ()
+    if joined and builder.config.scope_execution == "graph":
+        # A source spelling, parser clone or arbitrary larger limit cannot
+        # authorize this demand: recover the exact retained original team.
+        _graph, identities = builder.analysis._selected_source(builder.entry.qualified, full_original)
+        if not identities:
+            raise CompilationError("complete native effects require an original source selection")
+        complete_source = full_original
+    analysis = _native_analysis(builder.analysis, complete_source=complete_source)
+    analysis._native_metadata = native_metadata
     # Bounds and tile guards must retain the completion proof of the exact
     # original team. The numerical outlining token alone cannot authorize
     # native effects; issue an independent native joined-group proof here.
@@ -320,13 +359,28 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     analysis._segments = {}
     bindings, private_bindings = {}, {}
     examined = original if selected is None else nodes
-    native_environment, native_states = {}, {}
+    native_environment, native_states, clock_proofs, constructor_proofs = {}, {}, {}, {}
+    constructor_receivers = set()
     from compiler.frontend.native_environment import intrinsic_export
+    from compiler.frontend.scalar_clock import is_system_clock, original_scalar_clock
     for root in examined:
         for call in walk(root):
+            if _kind(call) == "Assignment_Stmt" and _kind(call.items[0]) == "Name":
+                scope = analysis.source_scope_for(call, builder.entry.scope)
+                receiver = analysis._binding(scope, call.items[0])
+                if receiver is not None and receiver.dtype.startswith("type("):
+                    proof = analysis.metadata_constructor(builder.entry.qualified, call)
+                    if proof is not None:
+                        proof.validate(proof._analysis, proof._routine, call)
+                        constructor_proofs[proof.identity] = proof
+                        constructor_receivers.add(proof._opaque.binding.root)
             if _kind(call) != "Call_Stmt" or _kind(call.items[0]) != "Name":
                 continue
             scope = analysis.source_scope_for(call, builder.entry.scope)
+            if is_system_clock(analysis, scope, call):
+                proof = original_scalar_clock(analysis, builder.entry.qualified, call)
+                clock_proofs[proof.identity] = proof
+                continue
             intrinsic = intrinsic_export(analysis, scope, call.items[0])
             if intrinsic not in {"$intrinsic::ieee_exceptions::ieee_get_halting_mode",
                                  "$intrinsic::ieee_exceptions::ieee_set_halting_mode"}:
@@ -357,6 +411,10 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     payload_roots = {binding.root for binding, reference in referenced if id(reference) not in descriptor_references}
     host_only_reads, immutable_inputs, source_constants = {}, {}, {}
     for binding, _ in referenced:
+        if binding.root in constructor_receivers:
+            # Only this exact original private receiver is supplied by the
+            # retained assignment. It grants no numeric capture or definition.
+            continue
         if hasattr(binding, 'native_metadata_object') or binding.root in host_metadata:
             continue
         if binding.root in native_states:
@@ -393,7 +451,8 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
             # complete reached operation below. It grants neither GPU access
             # nor any initialized/defined coverage, and never escapes this fork.
             host_only_reads[binding.root] = binding
-            analysis._stable_module_allocatables = analysis._stable_module_allocatables | {binding.root}
+            if "allocatable" in binding.attributes:
+                analysis._stable_module_allocatables = analysis._stable_module_allocatables | {binding.root}
             continue
         if binding.rank and "allocatable" in binding.attributes and binding.root in payload_roots:
             fact = builder.capture(binding)
@@ -442,6 +501,14 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
             proof = native_environment.get(operation.get("proof_identity"))
             if proof is None or proof.public() != operation.get("proof"):
                 raise CompilationError("native environment summary lacks its registered original operation")
+        if operation["kind"] == "native_scalar_clock":
+            proof = clock_proofs.get(operation.get("proof_identity"))
+            if proof is None or proof.public() != operation.get("proof"):
+                raise CompilationError("native clock summary lacks its registered original operation")
+        if operation["kind"] == "native_metadata_constructor":
+            proof = constructor_proofs.get(operation.get("proof_identity"))
+            if proof is None or proof.public() != operation.get("proof"):
+                raise CompilationError("metadata constructor summary lacks its registered original operation")
         if operation["kind"] in {"read", "write", "overwrite"} and operation["rank"]:
             if operation["resource"] in private_roots:
                 continue
@@ -485,14 +552,16 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
             and any(item.reads for item in sections.resources)):
         from compiler.frontend.reached_read_requirements import prove_native_read_requirements
 
-        source_reads = prove_native_read_requirements(analysis, builder.entry.qualified, original)
+        source_reads = prove_native_read_requirements(analysis, builder.entry.qualified, original,
+                                                      descriptor_window=descriptor)
     return Native(tuple(nodes), effects, set(summary["guaranteed_whole_overwrites"]) - set(private_roots),
                   bindings, summary, kind, sections, span, private_bindings, host_metadata,
-                  preserve_original=bool(native_environment),
+                  preserve_original=bool(native_environment or clock_proofs or constructor_proofs),
                   host_only_reads=host_only_reads, host_only_proof=host_only_proof,
                   native_states=native_states, native_environment=tuple(native_environment.values()),
-                  proof_analysis=analysis if retain_proof_analysis or native_environment or source_reads is not None else None,
-                  immutable_inputs=immutable_inputs, source_reads=source_reads, source_constants=source_constants)
+                  proof_analysis=analysis if retain_proof_analysis or native_environment or clock_proofs or constructor_proofs or source_reads is not None else None,
+                  immutable_inputs=immutable_inputs, source_reads=source_reads, source_constants=source_constants,
+                  clock_proofs=tuple(clock_proofs.values()), constructor_proofs=tuple(constructor_proofs.values()))
 
 
 def condition_fragment(builder, header, *, native_host_reads=False):
@@ -674,10 +743,14 @@ class StructuredScope:
         return cls(builder, nodes, lexical_native=True, native_operation=operation)
 
     def __init__(self, builder, nodes, *, condition_only=False, native_metadata=False, lexical_native=False,
-                 native_host_reads=False, native_call_demand=None, native_operation=None):
+                 native_host_reads=False, native_call_demand=None, native_operation=None, native_only=False):
         self.builder, self.nodes = builder, tuple(nodes)
         self.native_metadata = native_metadata
         self.native_host_reads = native_host_reads
+        if native_only:
+            if not lexical_native:
+                raise CompilationError("native-only source retention requires original lexical emission")
+            self.native_only = True
         self.calls, self.native, self.segments = [], [], []
         self.guarded = {}
         self.close_guards = {}
@@ -708,7 +781,7 @@ class StructuredScope:
             self.tree = [operation]
         else:
             self.tree = self.parse(nodes)
-        if len(self.calls) > 32 or self.operation_count > 256:
+        if builder.config.scope_execution != "graph" and (len(self.calls) > 32 or self.operation_count > 256):
             raise CompilationError("bounded structured owner exceeds call/operation budget")
         self.first, self.last = statement_span(nodes[0])[0], statement_span(nodes[-1])[1]
         original = builder.analysis.source_text(builder.entry.scope.path).splitlines()[self.first - 1:self.last]
@@ -754,6 +827,16 @@ class StructuredScope:
                 continue
             if kind == "Call_Stmt":
                 if self.builder.config.reached_execution and not hasattr(node, "fort_inline_region"):
+                    from compiler.frontend.scalar_clock import is_system_clock
+                    scope = self.builder.analysis.source_scope_for(node, self.builder.entry.scope)
+                    if is_system_clock(self.builder.analysis, scope, node):
+                        flush()
+                        operation = fragment(self.builder, (node,), kind="original native scalar clock")
+                        self.native.append(operation)
+                        self.operation_count += len(operation.summary["operations"])
+                        result.append(operation)
+                        continue
+                if self.builder.config.reached_execution and not hasattr(node, "fort_inline_region"):
                     from compiler.frontend.native_environment import intrinsic_export
                     scope = self.builder.analysis.source_scope_for(node, self.builder.entry.scope)
                     if intrinsic_export(self.builder.analysis, scope, node.items[0]) in {
@@ -765,6 +848,14 @@ class StructuredScope:
                         self.operation_count += len(operation.summary["operations"])
                         result.append(operation)
                         continue
+                if getattr(self, "native_only", False):
+                    flush()
+                    operation = fragment(self.builder, (node,), kind="original native ancestor call",
+                                         native_metadata=self.native_metadata, native_host_reads=self.native_host_reads)
+                    self.native.append(operation)
+                    self.operation_count += len(operation.summary["operations"])
+                    result.append(operation)
+                    continue
                 call = self.builder.resolve(self.builder.entry, node)
                 coordinator = self.builder.coordinator(call.procedure) if call.region is None else None
                 if coordinator is not None:
@@ -1017,6 +1108,7 @@ class StructuredScope:
                                    "managed_resources": sorted(operation.coherence_effects),
                                    "host_only_native_reads": operation.host_only_proof or None,
                                    "native_environment": [proof.public() for proof in operation.native_environment],
+                                   "metadata_constructors": [proof.public() for proof in operation.constructor_proofs],
                                    "native_local_state": [proof.public() for proof in operation.native_states.values()],
                                    "source_read_requirements": ({"proof_identity": operation.source_reads.identity,
                                        "validity": "well-defined original reads at this reached source point",
@@ -1119,6 +1211,12 @@ class StructuredScope:
                 # Environment changes execute on the original callers after
                 # device completion, without publishing unrelated arrays.
                 lines += _checked("fort_scope_wait(fort_context)")
+            if operation.clock_proofs:
+                for proof in operation.clock_proofs:
+                    proof.validate(operation.proof_analysis, builder.entry.qualified, proof._node)
+                lines += _checked("fort_scope_wait(fort_context)")
+            for proof in operation.constructor_proofs:
+                proof.validate(proof._analysis, proof._routine, proof._assignment)
             accesses = refined(operation, query=False)
             from compiler.scopes.access import build_native_acquisition
             if accesses is not None:

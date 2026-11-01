@@ -149,6 +149,8 @@ def prepare(owner):
     """
     if latch(owner) is None or owner.parent is not None or owner.builder.config.profile is None:
         return None, "not a complete graph AUTO owning root with a profile"
+    if any(member.source_device_tasks for member in owner.members.values()):
+        return None, "source task work/path/scalar inputs require a fresh quote; descriptor-only native hint disabled"
     if any(_kind(node) in {"Return_Stmt", "Stop_Stmt", "Error_Stop_Stmt", "Entry_Stmt"}
            for node in walk(owner.routine.execution)):
         return None, "root may leave before its single normal completion"

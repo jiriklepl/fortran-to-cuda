@@ -50,6 +50,8 @@ def validate_source_reads(builder, call, proof):
             or any(left is not right for left, right in zip(originals, proof.prepared._selection, strict=True))):
         raise CompilationError("original read admission differs from its exact original source selection")
     proof.validate(builder.analysis, builder.entry.qualified, proof.prepared._selection, proof.prepared)
+    if proof.prepared.conditional_context is not None:
+        raise CompilationError("conditional original reads require their whole-team guarded provider")
     return proof
 
 

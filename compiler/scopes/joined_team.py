@@ -525,7 +525,9 @@ class JoinedTeam(StructuredScope):
         opening = next(item for node in self.original_nodes for item in walk(node)
                        if (directive(item) or '').startswith('parallel'))
         first, last = statement_span(opening)
-        shared = self.shared_names([*specification, *extra])
+        shared = list(self.shared_names([*specification, *extra]))
+        if owner.resource_slot_namespace is not None:
+            shared.extend(owner.registration_identity(number) for number in owner.handle_numbers())
         parallel = str(opening) + ' shared(' + ','.join(dict.fromkeys(shared)) + ')'
         qualification = coordinated([f'if (fort_team_omp_level() /= 1 .or. fort_team_omp_threads() /= {builder.config.host_threads}) then',
                                      *fail(), 'endif'])

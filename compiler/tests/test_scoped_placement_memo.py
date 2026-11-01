@@ -117,6 +117,40 @@ int main(int argc,char**argv){
   assert(memo::make_key(pinned,c,env)->words!=pin->words);
   pinned.transfer_costs->pack_row_seconds=1;
   assert(memo::make_key(pinned,c,env)->words!=pin->words);
+  auto physical=in;physical.transfer_mode=FORT_SCOPE_TRANSFERS_AUTO;
+  physical.copy_costs=fort_physical::compact::Pricing{};
+  auto physical_key=memo::make_key(physical,c,env);assert(physical_key);
+  for(int test=0;test<25;++test) {
+   auto changed=physical;
+   switch(test) {
+    case 0:changed.copy_pool_revision++;break;
+    case 1:changed.copy_pool_capacity=256*1024;break;
+    case 2:changed.copy_pool_active_device_bytes=512*1024;break;
+    case 3:changed.copy_costs->copy.compact_reuse[1].maximum_operations=49;break;
+    case 4:changed.copy_costs->copy.direct[0].minimum_pitch_bytes=64;break;
+    case 5:changed.copy_costs->copy.compact_cold[0].maximum_relative_error=1;break;
+    case 6:changed.copy_costs->base.wait_seconds=1;break;
+    case 7:changed.copy_costs->copy.compact_cold[0].descriptor_seconds=1;break;
+    case 8:changed.copy_pool_available_bytes=0;break;
+    case 9:changed.copy_pool_cold_available=false;break;
+    case 10:changed.copy_costs->copy.minimum_relative_saving=.25;break;
+    case 11:changed.copy_costs->copy.direct[0].batch_seconds=1;break;
+    case 12:changed.copy_costs->copy.direct[0].submission_seconds=1;break;
+    case 13:changed.copy_costs->copy.direct[0].row_seconds=1;break;
+    case 14:changed.copy_costs->copy.direct[0].byte_seconds=1;break;
+    case 15:changed.copy_costs->copy.compact_cold[0].minimum_descriptor_work=2;break;
+    case 16:changed.copy_costs->copy.compact_reuse[0].maximum_descriptor_work=9;break;
+    case 17:changed.copy_costs->copy.direct[1].minimum_kernel_chunks=2;break;
+    case 18:changed.copy_costs->copy.compact_cold[1].maximum_kernel_chunks=3;break;
+    case 19:changed.copy_costs->copy.direct[0].word_bytes_mask=4;break;
+    case 20:changed.copy_costs->copy.compact_reuse[1].layout_combinations_mask=2;break;
+    case 21:changed.copy_costs->copy.direct[1].median_relative_error=.1;break;
+    case 22:changed.copy_costs->copy.compact_cold[1].p90_relative_error=.2;break;
+    case 23:changed.copy_costs->copy.version=2;break;
+    case 24:changed.copy_costs->copy.valid=1;break;
+   }
+   auto changed_key=memo::make_key(changed,c,env);assert(changed_key && changed_key->words!=physical_key->words);
+  }
  }else if(mode=="collision_lru"){
   memo::Cache cache;auto collision=*key;collision.words.push_back(99); // Deliberate same hash.
   cache.insert(*key,{true,false});assert(!cache.find(collision));

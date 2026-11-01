@@ -27,6 +27,10 @@ def _reusable_plan(value):
     return value
 
 
+def _readonly_mapping(mapping, roots):
+    return getattr(getattr(mapping, "formal_binding", None), "root", None) in roots
+
+
 def _caller_arrays(parent, resolved, child, immutable_inputs, reached):
     """Separate original associations from the child's retained handles."""
     associations = [mapping for mapping in resolved.mappings if mapping.formal_binding.rank
@@ -69,8 +73,9 @@ def _caller_arrays(parent, resolved, child, immutable_inputs, reached):
         name = str(mapping.actual).lower().partition("%")[0].partition("(")[0].strip()
         if name == "fort_actuals_contiguous":
             raise CompilationError("original module companion actual conflicts with descriptor guard name")
-    conditions = [condition for mapping in arrays for condition in expected_descriptor_conditions(
-        parent.builder.capture(mapping.binding), mapping.binding.rank, str(mapping.actual))]
+    facts = parent.builder.capture_many(mapping.binding for mapping in arrays)
+    conditions = [(mapping, condition) for mapping, fact in zip(arrays, facts, strict=True)
+                  for condition in expected_descriptor_conditions(fact, mapping.binding.rank, str(mapping.actual))]
     outputs = [mapping for mapping in associations if mapping.formal_binding.intent == "out"]
     # A reusable graph helper receives caller-owned identities. Register its
     # actuals before entering its rebased dummies, including IN/INOUT actuals;
@@ -90,12 +95,11 @@ def _parameterized_handles(parent, resolved, child):
     """Bind fixed helper handle formals to this original CALL's actual slots."""
     actuals = {"argument::" + mapping.formal: mapping.binding for mapping in resolved.mappings
                if mapping.formal_binding.rank and mapping.binding is not None}
-    bindings = {number: None for number in child.handle_numbers()}
-    roots = {number: root for root, (_binding, number) in parent.owner.resources.items()}
-    for root, (_binding, slot) in child.resources.items():
-        if root in actuals:
-            bindings[slot] = actuals[root]
-            roots[slot] = parent.canonical(actuals[root]).root
+    bindings = {slot: actuals.get(root, child.canonical(binding))
+                for root, (binding, slot) in child.resources.items()}
+    if set(bindings) != set(child.handle_numbers()):
+        raise CompilationError("parameterized module companion has unmapped forwarded resource slots")
+    roots = {slot: parent.canonical(binding).root for slot, binding in bindings.items()}
     if len(set(roots[number] for number in bindings)) != len(bindings):
         raise CompilationError("parameterized module companion has uncertain hidden-resource aliases")
     result = {}
@@ -104,15 +108,12 @@ def _parameterized_handles(parent, resolved, child):
                     | set(getattr(child, "parameterized_native_bindings", {})))
     native_slots = {slot for root, (_binding, slot) in child.resources.items() if root in native_roots}
     for slot, binding in bindings.items():
-        if binding is None:
-            result[slot] = slot
-        else:
-            parent.add_resource(binding)
-            result[slot] = parent.resources[binding.root][1]
-            attribute = "parameterized_native_bindings" if slot in native_slots else "parameterized_actual_bindings"
-            retained = getattr(parent, attribute, {})
-            setattr(parent, attribute, retained)
-            retained[binding.root] = binding
+        parent.add_resource(binding)
+        result[slot] = parent.resources[binding.root][1]
+        attribute = "parameterized_native_bindings" if slot in native_slots else "parameterized_actual_bindings"
+        retained = getattr(parent, attribute, {})
+        setattr(parent, attribute, retained)
+        retained[binding.root] = binding
     return result
 
 
@@ -143,7 +144,8 @@ def _body_input_intents(builder, routine):
 
 
 class ModuleOwner(MappedReachedControl, LexicalOwner):
-    def __init__(self, parent, routine, mappings, immutable_inputs=None, reached=None):
+    def __init__(self, parent, routine, mappings, immutable_inputs=None, reached=None, readonly_inputs=(),
+                 *, original_call=None):
         from compiler.scopes.region_dispatch import InlineRegions
 
         proxy = copy(parent.builder)
@@ -156,9 +158,39 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
             consumption.bind_child(proxy)
         proxy.inline = InlineRegions(proxy)
         super().__init__(proxy, parent=parent)
-        if any("save" in binding.attributes for binding in routine.scope.bindings.values()):
-            raise CompilationError("original module companion saved local state requires a separate lifetime proof")
+        if proxy.config.scope_execution == "graph" and reached is None:
+            # This parameterized helper can be shared by independently checked
+            # roots. Its live context supplies the invocation owner; embedding
+            # its first caller's identity would make otherwise identical source
+            # edits incompatible and misattribute later callers.
+            self.trace_owner = None
+        from compiler.frontend.device_tasks import external_device_task
+        opaque = set()
+        for node in walk(routine.execution):
+            if _kind(node) == "Call_Stmt":
+                proof = external_device_task(proxy.analysis, routine, node)
+                if proof is not None and proof.public()["version"] == 2:
+                    opaque.update(item["resource"] for item in proof.public()["source_effects"]["opaque_state"])
+        saved = tuple(binding for binding in routine.scope.bindings.values() if "save" in binding.attributes)
+        if any(binding.rank or binding.dtype not in {"real", "integer", "logical"}
+               or binding.attributes & {"allocatable", "pointer", "volatile", "asynchronous", "value", "optional"}
+               for binding in saved if binding.root not in opaque):
+            raise CompilationError("original module companion saved array or associated state requires a separate lifetime proof")
+        self.saved_scalar_storage = tuple({"resource": binding.root, "descriptor": binding.public(),
+            "storage": "unchanged original SAVE declaration shared by every original ENTRY",
+            "source": str(routine.scope.path), "source_sha256": proxy.analysis.sources[str(routine.scope.path)],
+            "payload_definitions_authorized": False, "gpu_write_authorized": False}
+            for binding in saved if binding.root not in opaque)
+        self.opaque_saved_storage = tuple(sorted(opaque))
+        self.readonly_allocatable_inputs = tuple(readonly_inputs)
         self.canonical_bindings = mappings
+        # Retain the exact original association separately from summary policy.
+        # A native projection may use another policy-salted structured graph,
+        # but must reauthenticate this CALL and its canonical actuals.
+        self.original_source_call = original_call
+        proxy._native_host_owner = self
+        self.resource_slot_namespace = self if proxy.config.scope_execution == "graph" and reached is None else None
+        self.resource_slot_roots = {}
         # Mapping values are exact original actuals retained from the resolved
         # source CALL. No capture fact or initialized coverage is inferred.
         proxy._native_host_array_actuals = dict(mappings) if proxy.config.scope_execution == "graph" else {}
@@ -169,6 +201,10 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
         self.enabled = _name("fort_child_enabled_", routine.qualified)
         self.epoch_pristine = _name("fort_child_epoch_", routine.qualified)
         self.query_plan = _name("fort_child_query_", routine.qualified)
+        if hasattr(self, "retention_allowed"):
+            self.retention_allowed = _name("fort_child_retention_", routine.qualified)
+        if hasattr(self, "eligibility_allowed"):
+            self.eligibility_allowed = _name("fort_child_eligibility_", routine.qualified)
         self.kind = _name("fort_child_kind_", routine.qualified)
         self.control_guard = _name("fort_borrowed_", routine.qualified)
         self.call_sites = []
@@ -176,11 +212,13 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
         managed_roots = ({state["resource"] for state in reached[1].record["states"]}
                          if reached is not None else None)
 
-        def capture(_proxy, binding):
+        def check_capture(binding):
             if managed_roots is not None and binding.rank and binding.root not in managed_roots:
                 raise CompilationError("original module companion capture exceeds its reached managed projection: "
                                        + binding.root)
-            fact = self.owner.builder.capture(self.canonical(binding))
+
+        def project_capture(binding, fact):
+            check_capture(binding)
             if binding.name in routine.arguments:
                 # The original caller guards its actual before this dummy's
                 # association can replace the original descriptor lower bounds.
@@ -200,7 +238,47 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
                         "initialized": "none", "requires_registered_handle": True}
             return fact
 
+        def capture(_proxy, binding):
+            check_capture(binding)
+            return project_capture(binding, self.owner.builder.capture(self.canonical(binding)))
+
+        def capture_many(_proxy, bindings, *, _consumer_check=None):
+            from compiler.scopes.graph_epochs import _binding_receipt
+
+            bindings = tuple(bindings)
+            for binding in bindings:
+                check_capture(binding)
+            canonical = tuple(self.canonical(binding) for binding in bindings)
+            receipts = tuple(_binding_receipt(binding) for binding in bindings)
+            mapping = self.canonical_bindings
+            mapping_entries = tuple((root, id(binding)) for root, binding in mapping.items())
+            native_actuals = _proxy._native_host_array_actuals
+            native_entries = tuple((root, id(binding)) for root, binding in native_actuals.items())
+            issuing_owner, issuing_parent = self.owner, self.parent
+            routine_arguments = self.routine.arguments
+            argument_values = tuple(routine_arguments)
+            intents = self.body_input_intents
+            def checkpoint():
+                if _consumer_check is not None:
+                    _consumer_check()
+                if (_proxy is not self.builder or self.builder.entry is not routine or self.routine is not routine
+                        or self.owner is not issuing_owner or self.parent is not issuing_parent
+                        or self.builder._native_host_owner is not self or self.canonical_bindings is not mapping
+                        or tuple((root, id(binding)) for root, binding in mapping.items()) != mapping_entries
+                        or self.builder._native_host_array_actuals is not native_actuals
+                        or tuple((root, id(binding)) for root, binding in native_actuals.items()) != native_entries
+                        or self.routine.arguments is not routine_arguments or tuple(routine_arguments) != argument_values
+                        or self.body_input_intents is not intents
+                        or any(_binding_receipt(binding) != receipt or self.canonical(binding) is not actual
+                               for binding, receipt, actual in zip(bindings, receipts, canonical, strict=True))):
+                    raise CompilationError("original module capture batch changed its original canonical association")
+            checkpoint()
+            facts = issuing_owner.builder.capture_many(canonical, _consumer_check=checkpoint)
+            checkpoint()
+            return tuple(project_capture(binding, fact) for binding, fact in zip(bindings, facts, strict=True))
+
         proxy.capture = MethodType(capture, proxy)
+        proxy.capture_many = MethodType(capture_many, proxy)
         # Admitted reached units enroll their own resources. An unrelated
         # formal needs no payload facts merely to retain its original CALL
         # association, but OUT events precede every child branch and RETURN.
@@ -209,11 +287,15 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
             if binding.rank and binding.intent == "out" and binding.root not in proxy.immutable_inputs:
                 self.add_resource(binding)
         self.owner.builder.region_owners[routine.qualified] = proxy.inline
-        self.nodes = proxy.inline.prepare(_children(routine.execution))
+        from compiler.scopes.conditional_return import check_entry
+        check_entry(self)
+        from compiler.scopes.native_ancestor import prepare
+        self.nodes = prepare(proxy, _children(routine.execution))
         proxy.generated.update(proxy.inline.generated)
         proxy.numerical_ir.update(proxy.inline.ir)
         proxy.numerical_reasons.update({name: None for name in proxy.inline.regions})
         self.scan(self.nodes)
+        check_entry(self)
         if reached is not None:
             self.validate_mapped_plan()
         if len({number for _, number in self.resources.values()}) != len(self.resources):
@@ -222,13 +304,19 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
     def emit_companion(self):
         self.refresh()
         builder, routine = self.builder, self.routine
+        edits = []
         header = _part(routine.scope.node, "Subroutine_Stmt")
         first = statement_span(self.nodes[0])[0]
         start = _span(header)[1]+1
         kind_import = f"use iso_c_binding, only: {self.kind} => c_int64_t"
+        from compiler.scopes.device_tasks import child_control
+        provider_imports, provider_spec, provider_names = child_control(self)
+        imports = [kind_import, *provider_imports]
         if start != first:
-            builder.add_edit(routine.scope.path, start, start-1, kind_import + "\n")
+            edits.append((routine.scope.path, start, start-1, "\n".join(imports) + "\n", False))
         handles = [f"fort_buffer_{number}" for number in self.handle_numbers()]
+        identities = ([f"fort_storage_identity_{number}" for number in self.handle_numbers()]
+                      if self.resource_slot_namespace is self else [])
         labels = {int(node.item.label) for node in walk(routine.execution)
                   if getattr(node, "item", None) is not None and getattr(node.item, "label", None)}
         label = next((number for number in range(99999, 99900, -1) if number not in labels), None)
@@ -236,12 +324,18 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
             raise CompilationError("original module companion has no bounded free statement label")
         graph_controls = ([self.epoch_pristine, self.query_plan]
                           if builder.config.scope_execution == "graph" else [])
-        prologue = [*([kind_import] if start == first else []),
+        if hasattr(self, "retention_allowed"):
+            graph_controls.append(self.retention_allowed)
+        if hasattr(self, "eligibility_allowed"):
+            graph_controls.append(self.eligibility_allowed)
+        prologue = [*(imports if start == first else []),
                     f"logical :: {self.control_guard}",
                     f"integer({self.kind}), intent(inout) :: " + ", ".join([self.context, *handles]),
+                    *([f"integer({self.kind}), intent(in) :: " + ", ".join(identities)] if identities else []),
                     "logical, intent(inout) :: " + ", ".join([self.enabled, *graph_controls]),
+                    *provider_spec,
                     f"{self.control_guard} = .false.", f"goto {label}",
-                    "entry " + self.entry + "(" + ", ".join([*routine.arguments, self.context, self.enabled, *graph_controls, *handles]) + ")",
+                    "entry " + self.entry + "(" + ", ".join([*routine.arguments, self.context, self.enabled, *graph_controls, *handles, *identities, *provider_names]) + ")",
                     f"{self.control_guard} = .true."]
         outputs = [binding for binding in routine.scope.bindings.values()
                    if (binding.name in routine.arguments and binding.rank and binding.intent == "out"
@@ -256,23 +350,29 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
                              "if (fort_entry_status /= FORT_SCOPE_OK) error stop 'original entry definition failed'", "endif"]
             prologue += ["endif", "end block"]
         prologue += [str(label) + " continue"]
-        builder.add_edit(routine.scope.path, first, first-1, "\n".join(fortran_lines(prologue))+"\n", prepend=True)
+        edits.append((routine.scope.path, first, first-1, "\n".join(fortran_lines(prologue))+"\n", True))
         module = routine.scope.parent
         contains = next(node for node in _children(_part(module.node, "Module_Subprogram_Part"))
                         if _kind(node) == "Contains_Stmt")
         line = _span(contains)[0]
-        builder.add_edit(module.path, line, line-1, "public :: " + self.entry + "\n")
+        edits.append((module.path, line, line-1, "public :: " + self.entry + "\n", False))
         builder.variants.register(routine.qualified, interface="original_module_entry_v1", role="coordinator",
             name=self.entry, summary_identity=self.graph.identity,
             requirements=("original unsaved module body", "shared owning context control",
                           "per-call original actual handles" if builder.config.scope_execution == "graph"
                           else "one canonical actual mapping"),
             shared_artifacts=("sources/" + _name("source_", str(routine.scope.path)) + ".f90",))
+        return tuple(edits)
 
     def public(self):
         return {"procedure": self.routine.qualified, "entry": self.entry,
                 "interface": "original_module_entry_v1",
-                "control_version": 3 if self.builder.config.scope_execution == "graph" else 1,
+                "control_version": (6 if hasattr(self, "eligibility_allowed") else 5 if hasattr(self, "retention_allowed") else 4 if self.resource_slot_namespace is self else
+                                    3 if self.builder.config.scope_execution == "graph" else 1),
+                **({"eligibility_control": {"argument": self.eligibility_allowed,
+                    "association": "same original owner SAVE exclusion gate forwarded INOUT",
+                    "activation": "required before every registration, fresh context and child device dispatch"}}
+                   if hasattr(self, "eligibility_allowed") else {}),
                 "structured_summary_identity": self.graph.identity,
                 "native_abi": "original entry; compiler-control arguments are never referenced",
                 "storage": "one original body and declarations; no persistent-state copy",
@@ -290,10 +390,17 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
                 "mapped_reached_plan": (self.builder._mapped_reached_child.public()
                     if hasattr(self.builder, "_mapped_reached_child") else None),
                 "parameterized_handles": self.builder.config.scope_execution == "graph",
+                **({"storage_identity": "caller canonical allocation identity forwarded separately from helper-local slots"}
+                   if self.resource_slot_namespace is self else {}),
                 "body_intent_diagnostics": list(self.body_intent_diagnostics),
-                "limits": ("ordinary numeric formals and read-only optional scalars; per-call original actual handles; original saved locals remain native"
+                "saved_scalar_storage": list(self.saved_scalar_storage),
+                **({"readonly_allocatable_inputs": [proof.public() for proof in self.readonly_allocatable_inputs]}
+                   if self.readonly_allocatable_inputs else {}),
+                **({"qualified_opaque_storage": list(self.opaque_saved_storage)} if self.opaque_saved_storage else {}),
+                "numerical_team_declines": list(self.numerical_team_declines),
+                "limits": ("ordinary numeric formals and read-only optional scalars; per-call original actual handles; shared original SAVE scalars; saved arrays remain native"
                            if self.builder.config.scope_execution == "graph" else
-                           "ordinary numeric formals and read-only optional scalars; one canonical mapping; original saved locals remain native")}
+                           "ordinary numeric formals and read-only optional scalars; one canonical mapping; shared original SAVE scalars; saved arrays remain native")}
 
 
 def borrow_module(parent, node, *, reached=None):
@@ -302,10 +409,23 @@ def borrow_module(parent, node, *, reached=None):
         return False
     resolved = parent.builder.execution_source_call(parent.routine, node)
     elements = tuple(mapping.scalar_element for mapping in resolved.mappings if mapping.scalar_element is not None)
+    element_coordinates = None
     if elements:
         if reached is None:
-            raise CompilationError("scalar element borrowing requires a registered mapped reached call")
-        authorized = reached[1].coordinates.scalar_elements
+            draft = getattr(parent.owner.builder, "_conditional_return_draft", None)
+            if draft is None or draft.selected_root is None:
+                raise CompilationError("scalar element borrowing requires a registered mapped reached call")
+            draft.validate()
+            from compiler.frontend.native_call_coordinates import prove_native_call_coordinates
+
+            # The same original association and complete scalar closure proof
+            # used by mapped reached calls; child effects/lifetime stay separate.
+            element_coordinates = prove_native_call_coordinates(
+                parent.builder.analysis, parent.routine.qualified, node)
+        else:
+            element_coordinates = reached[1].coordinates
+        element_coordinates.validate(parent.builder.analysis, parent.routine.qualified, node)
+        authorized = element_coordinates.scalar_elements
         if (len(elements) != len(authorized) or any(
                 element.actual is not original.actual or element.binding is not original.binding
                 or element.public() != original.public()
@@ -313,6 +433,8 @@ def borrow_module(parent, node, *, reached=None):
             raise CompilationError("scalar element borrowing lost original coordinate association authority")
         managed = {member.canonical(binding).root for member in parent.owner.members.values()
                    for unit in member.units for binding in unit.arrays.values()}
+        managed.update(member.canonical(binding).root for member in parent.owner.members.values()
+                       for task in member.source_device_tasks for binding, _written in task.proof.fields)
         if managed & {element.binding.root for element in elements}:
             raise CompilationError("scalar element backing storage must remain unmanaged")
     if reached is not None and any(mapping.formal_binding.rank and mapping.actual is not None
@@ -329,8 +451,18 @@ def borrow_module(parent, node, *, reached=None):
     owner = parent.owner
     if routine.qualified in owner.active or len(owner.active) >= parent.builder.analysis.depth_limit:
         raise CompilationError("recursive or over-depth original module companion")
+    readonly_inputs = []
+    if parent.builder.config.scope_execution == "graph" and reached is None:
+        from compiler.frontend.readonly_allocatable_input import prove_readonly_allocatable_input
+
+        for name in routine.arguments:
+            binding = routine.scope.bindings[name]
+            if "allocatable" in binding.attributes:
+                readonly_inputs.append(prove_readonly_allocatable_input(parent.builder.analysis, routine, binding))
+    readonly_roots = {proof.binding.root for proof in readonly_inputs}
     if any(binding.dtype not in {"real", "integer", "logical"}
-           or binding.attributes & {"allocatable", "pointer", "volatile", "asynchronous", "value"}
+           or binding.attributes & {"pointer", "volatile", "asynchronous", "value"}
+           or "allocatable" in binding.attributes and binding.root not in readonly_roots
            or ("optional" in binding.attributes and not optional_scalar_input(binding))
            for name in routine.arguments for binding in (routine.scope.bindings[name],)):
         raise CompilationError("original module companion requires ordinary numeric arguments")
@@ -348,12 +480,20 @@ def borrow_module(parent, node, *, reached=None):
             raise CompilationError("original module companion requires whole original array actuals")
         if mapping.binding.attributes & {"pointer", "optional", "volatile", "asynchronous"}:
             raise CompilationError("original module companion actual association requires a reached caller proof")
+        if (mapping.formal_binding.root in readonly_roots
+                and ("allocatable" not in mapping.binding.attributes or "target" in mapping.binding.attributes
+                     or _kind(mapping.actual) != "Name")):
+            raise CompilationError("readonly allocatable input requires independent whole original allocatable actual storage")
         mappings["argument::" + mapping.formal] = parent.canonical(mapping.binding)
     if len({binding.root for binding in mappings.values()}) != len(mappings):
         raise CompilationError("original module companion has uncertain actual aliases")
     existing = owner.members.get(routine.qualified)
     parameterized = parent.builder.config.scope_execution == "graph" and reached is None
     if existing is not None:
+        from compiler.scopes.native_ancestor import native_only
+        if (getattr(existing, "native_ancestor_only", None) is not None
+                and existing.native_ancestor_only != native_only(parent.builder, routine)):
+            raise CompilationError("shared module helper has different native-ancestor discovery modes; close at original call")
         same_mapping = (isinstance(existing, ModuleOwner)
             and {root: binding.root for root, binding in existing.canonical_bindings.items()}
             == {root: binding.root for root, binding in mappings.items()})
@@ -373,7 +513,8 @@ def borrow_module(parent, node, *, reached=None):
         members, resources = dict(owner.members), dict(owner.resources)
         owner.active.append(routine.qualified)
         try:
-            existing = ModuleOwner(parent, routine, mappings, immutable_inputs, reached)
+            existing = ModuleOwner(parent, routine, mappings, immutable_inputs, reached, readonly_inputs,
+                                   original_call=node)
             caller_arrays = _caller_arrays(parent, resolved, existing, immutable_inputs, reached)
             owner.members[routine.qualified] = existing
         except CompilationError:
@@ -399,11 +540,21 @@ def borrow_module(parent, node, *, reached=None):
                        {number: number for number in existing.handle_numbers()})
     parent.forwarded_handles.update(handle_bindings.values())
     arguments = resolved.render_original_arguments()
-    controls = [f"{existing.context} = {parent.context}", f"{existing.enabled} = {parent.enabled}",
+    marker = _name("fort_external_controls_", parent.routine.qualified + str((first, last)))
+    placeholders = getattr(parent, "external_control_placeholders", {})
+    parent.external_control_placeholders = placeholders
+    placeholders[marker] = existing, parent.context
+    controls = [marker, f"{existing.enabled} = {parent.enabled}",
                 *([f"{existing.epoch_pristine} = {parent.epoch_pristine}",
                    f"{existing.query_plan} = {parent.query_plan}"]
                   if parent.builder.config.scope_execution == "graph" else []),
-                *[f"fort_buffer_{slot} = fort_buffer_{number}" for slot, number in handle_bindings.items()]]
+                *([f"{existing.retention_allowed} = {parent.retention_allowed}"]
+                  if hasattr(existing, "retention_allowed") else []),
+                *([f"{existing.eligibility_allowed} = {parent.eligibility_allowed}"]
+                  if hasattr(existing, "eligibility_allowed") else []),
+                *[f"fort_buffer_{slot} = fort_buffer_{number}" for slot, number in handle_bindings.items()],
+                *([f"fort_storage_identity_{slot} = {parent.registration_identity(number, kind=parent.kind)}"
+                   for slot, number in handle_bindings.items()] if parameterized else [])]
     # A CONTIGUOUS callee dummy can conceal a caller-created temporary. Check
     # actual storage before that association exists, otherwise a retained
     # handle might outlive temporary copyback at the original call return.
@@ -425,26 +576,39 @@ def borrow_module(parent, node, *, reached=None):
                       "logical :: fort_actuals_contiguous", "fort_actuals_contiguous = .true."]
         for mapping in preflight_arrays:
             name = str(mapping.actual)
-            if "allocatable" in mapping.binding.attributes:
+            conditional = _readonly_mapping(mapping, readonly_roots)
+            if conditional:
+                preflight += [f"if (allocated({name})) then"]
+            elif "allocatable" in mapping.binding.attributes:
                 preflight += [f"if (fort_actuals_contiguous) fort_actuals_contiguous = allocated({name})"]
             preflight += [f"if (fort_actuals_contiguous) fort_actuals_contiguous = is_contiguous({name})"]
             if reached is not None or descriptor_conditions:
                 preflight += [f"if (fort_actuals_contiguous) fort_actuals_contiguous = {condition}"
                               for condition in parent.builder.original_bound_conditions(name, mapping.binding.rank)]
+            if conditional:
+                preflight += ["endif"]
         preflight += ["if (.not. fort_actuals_contiguous) then", *parent.close(prework=True), "endif"]
         if descriptor_conditions:
-            preflight += [f"if ({parent.enabled}) then",
-                          *[f"if (fort_actuals_contiguous) fort_actuals_contiguous = {condition}"
-                            for condition in descriptor_conditions],
+            preflight += [f"if ({parent.enabled}) then"]
+            for mapping, condition in descriptor_conditions:
+                conditional = _readonly_mapping(mapping, readonly_roots)
+                if conditional:
+                    preflight += [f"if (allocated({mapping.actual})) then"]
+                preflight += [f"if (fort_actuals_contiguous) fort_actuals_contiguous = {condition}"]
+                if conditional:
+                    preflight += ["endif"]
+            preflight += [
                           "if (.not. fort_actuals_contiguous) then",
                           *parent.close(prework=True, reason="capture expected descriptor mismatch"), "endif", "endif"]
         preflight += ["end block"]
-    if reached is not None or registrations or native_arrays:
+    if reached is not None or registrations or native_arrays or elements:
         from compiler.scopes.call_registration import register_original_actuals
         # A zero handle must become an undefined tracked range at OUT entry,
         # rather than being freshly seeded from caller facts after return.
         preflight += register_original_actuals(parent, registrations,
-                                              scalar_elements=elements, native_arrays=native_arrays)
+            scalar_elements=elements, native_arrays=native_arrays,
+            unallocated_inputs=tuple(mapping.binding.root for mapping in registrations
+                if _readonly_mapping(mapping, readonly_roots)))
     lines = [*parent.rearm_epoch(), f"if ({parent.enabled}) then", *preflight, "endif",
              f"if ({parent.enabled}) then", *_call(existing.entry, [*arguments, *controls]),
              "else", *parent.original((node,)).splitlines(), "endif"]
@@ -457,7 +621,18 @@ def borrow_module(parent, node, *, reached=None):
         lines = [f"if ({parent.control_guard}) then", *lines, "else", *parent.original((node,)).splitlines(), "endif"]
     from compiler.scopes.provenance import borrowed
     lines = borrowed(parent, (node,), lines)
-    parent.patches.append((first, last, "\n".join(fortran_lines(lines))+"\n"))
+    text = "\n".join(fortran_lines(lines))+"\n"
+    parent.patches.append((first, last, text))
+    from compiler.scopes.conditional_return import retain_call
+    from compiler.scopes.source_task_bindings import needs_call_receipt
+    source_projection = needs_call_receipt(existing)
+    receipt = retain_call(parent, node, existing, resolved, marker, text, handle_bindings,
+                          source_projection=source_projection, scalar_element_coordinates=element_coordinates)
+    if source_projection:
+        # Exact existing original-call receipts; no new source/lifetime issuer.
+        if not hasattr(parent, "source_companion_calls"):
+            parent.source_companion_calls = []
+        parent.source_companion_calls.append(receipt)
     if reached is not None:
         patches = getattr(parent, "mapped_call_patches", {})
         parent.mapped_call_patches = patches
@@ -467,6 +642,9 @@ def borrow_module(parent, node, *, reached=None):
                                    "handle_bindings": {str(slot): number for slot, number in handle_bindings.items()}}
                                   if parameterized else {}),
                                "mapped_call_node_id": reached[1].node_id if reached is not None else None,
-                               "coordinate_proof_identity": reached[1].coordinates.identity if reached is not None else None})
+                               "coordinate_proof_identity": (element_coordinates.identity if element_coordinates is not None
+                                   else reached[1].coordinates.identity if reached is not None else None),
+                               **({"original_scalar_element_coordinates": element_coordinates.public()}
+                                  if element_coordinates is not None else {})})
     parent.builder.resolved_calls[(parent.routine.qualified, (first, last))] = resolved.public()
     return True

@@ -116,8 +116,11 @@ class ScopeBuilder:
             raise CompilationError("scope captures must be keyed by canonical source resource")
         if config.policy not in {"sections", "auto"} or config.collective:
             raise CompilationError("source scopes require sections/auto and a serial coordinator")
+        from compiler.frontend.provider_lifetime import program_roots
+        metadata = program_roots(facts.get("provider_only_lifetime"))
+        kwargs = {"program_roots": metadata} if metadata else {}
         self.analysis = SourceEffects(paths, contracts=contracts, analysis_sources=analysis_sources,
-                                      summary_cache=summary_cache)
+                                      summary_cache=summary_cache, **kwargs)
         if config.scope_execution == "graph":
             # A source skeleton retains the input program rather than expanding
             # a proof. Give every original helper enough room for its own syntax
@@ -129,10 +132,13 @@ class ScopeBuilder:
         if facts.get("sources") != self.analysis.sources:
             raise CompilationError("scope capture facts do not match the supplied source hashes")
         names = [name for name in self.analysis.routines
-                 if name == entry.lower() or ("::" not in entry and name.split("::")[-1] == entry.lower())]
+                 if name == entry.lower() or ("::" not in entry and not name.startswith("$program::")
+                                              and name.split("::")[-1] == entry.lower())]
         if len(names) != 1:
             raise CompilationError("source scope entry is unavailable or ambiguous")
         self.entry = self.analysis.routines[names[0]]
+        if self.entry.qualified.startswith("$program::"):
+            raise CompilationError("original program metadata cannot be selected as an executable source entry")
         # Copies for borrowed bodies keep the original invocation's call graph.
         self._numerical_environment_root = self.entry.qualified
         self.facts, self.options, self.config = facts, options, config
@@ -156,6 +162,15 @@ class ScopeBuilder:
         # Own the parsed graph and captured edit text once. Private projections
         # and caches remain separate; finish reauthenticates live input files.
         self.analysis.seal_session()
+        if "provider_only_lifetime" in facts:
+            from compiler.frontend.provider_lifetime import provider_only_lifetime
+            self.provider_only_lifetime = provider_only_lifetime(
+                self.analysis, self.entry.qualified, facts["provider_only_lifetime"])
+            if self.provider_only_lifetime is None:
+                raise CompilationError("provider-only lifetime requires an explicit original call-path request")
+            self._provider_lifetime_members = []
+        from compiler.frontend.native_ancestor import native_ancestor_selection
+        self._native_ancestor_selection = native_ancestor_selection(self.analysis, self.entry.qualified)
         self.packages = load_numerical_sources(numerical_sources, self.analysis)
         self.device_budget = facts.get("device_budget_bytes", 256*1024*1024)
         if type(self.device_budget) is not int or not 0 <= self.device_budget < 2**63:
@@ -163,6 +178,8 @@ class ScopeBuilder:
         self.outputs, self.edits, self.clones, self.generated = {}, {}, {}, {}
         self.queries = {}
         self._lexical_target_edits = {}
+        self._module_companion_publications = {}
+        self._original_worksharing_publications = ()
         self.numerical_ir = {}
         self.view_generated = {}
         self.view_clones = {}
@@ -413,8 +430,56 @@ class ScopeBuilder:
         region = self._consume_call_numerical_region(call)
         return region.effects if region is not None else None
 
+    def _check_private_descriptor_window(self, proof):
+        """Conditional child effects require the same complete graph contract."""
+        from compiler.frontend.descriptor_windows import DescriptorWindowProof
+
+        if (type(proof) is DescriptorWindowProof
+                and proof._record.get("native_worksharing_storage_requirements")):
+            from compiler.scopes.graph_epochs import CallGroupStorageEpoch, GraphStorageEpoch
+            from compiler.scopes.storage_epoch import require_original_worksharing_coverage
+            from compiler.scopes.supported_paths import SupportedPathStorageEpoch
+
+            epoch = getattr(self, "_graph_storage_epoch", None)
+            if type(epoch) not in {GraphStorageEpoch, CallGroupStorageEpoch, SupportedPathStorageEpoch}:
+                raise CompilationError("worksharing effects require a complete graph storage epoch")
+            require_original_worksharing_coverage(epoch._descriptor, proof)
+        if (type(proof) is DescriptorWindowProof
+                and proof._record.get("requires_unregistered_private_allocations")):
+            from compiler.scopes.graph_epochs import CallGroupStorageEpoch, GraphStorageEpoch, _same_source
+            from compiler.scopes.storage_epoch import private_descriptor_windows
+            from compiler.scopes.supported_paths import SupportedPathStorageEpoch
+
+            epoch = getattr(self, "_graph_storage_epoch", None)
+            if type(epoch) not in {GraphStorageEpoch, CallGroupStorageEpoch, SupportedPathStorageEpoch}:
+                raise CompilationError("private allocation effects require a complete graph storage epoch")
+            parent = epoch._descriptor
+            if not _same_source(proof._analysis, epoch._owner.builder.analysis):
+                raise CompilationError("private allocation child changed its original source domain")
+            if proof.procedure == epoch._owner.routine.qualified:
+                if not epoch.covers(proof._analysis, proof.procedure, proof._selected):
+                    raise CompilationError("private allocation child exceeds its complete original epoch")
+            elif proof.procedure not in parent.public()["source_call_closure"]:
+                raise CompilationError("private allocation child is outside its complete original closure")
+            covered = {root for window in private_descriptor_windows(parent)
+                       for root in window._record["requires_unregistered_private_allocations"]}
+            if not set(proof._record["requires_unregistered_private_allocations"]) <= covered:
+                raise CompilationError("private allocation child lost its parent registration obligation")
+        return proof
+
     def descriptor_window_for(self, analysis, procedure, selection):
         """Issue exact per-consumer authority inside an authenticated owner."""
+        if getattr(self, "_conditional_return_draft", None) is not None:
+            from compiler.scopes.conditional_return import descriptor_for
+            return descriptor_for(self, analysis, procedure, selection)
+        epoch = getattr(self, "_graph_storage_epoch", None)
+        if epoch is not None:
+            descriptor = epoch.descriptor_for(self, analysis, procedure, selection)
+            if descriptor is not None or procedure != epoch._owner.routine.qualified:
+                from compiler.scopes.storage_epoch import require_original_worksharing_coverage
+
+                descriptor = require_original_worksharing_coverage(epoch._descriptor, descriptor)
+                return self._check_private_descriptor_window(descriptor)
         proof = self.validate_reached_window()
         descriptor = None
         if proof is not None:
@@ -453,7 +518,7 @@ class ScopeBuilder:
                 from compiler.frontend.descriptor_windows import prove_descriptor_window
 
                 descriptor = prove_descriptor_window(analysis, procedure, selected, roots, module_roots=modules)
-        return descriptor
+        return self._check_private_descriptor_window(descriptor)
 
     def segment_summary(self, analysis, procedure, selection, **options):
         """Consume interval descriptor proofs only inside a bound window."""
@@ -568,6 +633,9 @@ class ScopeBuilder:
                     actual = items[1]
             if _kind(actual) not in {"Int_Literal_Constant", "Real_Literal_Constant",
                                      "Logical_Literal_Constant"}:
+                from compiler.frontend.constant_actual import constant_scalar_actual
+                if constant_scalar_actual(self.analysis, self.analysis.source_scope_for(node, routine.scope), mapping.actual):
+                    continue
                 raise CompilationError("scalar-expression actual requires original-position checked evaluation: "
                                        + str(mapping.actual))
         return resolved
@@ -988,6 +1056,14 @@ class ScopeBuilder:
 
     def capture(self, binding):
         fact = self.capture_fact(binding)
+        draft = getattr(self, "_conditional_return_draft", None)
+        if draft is not None and draft.selected_root is not None:
+            # An earlier native prefix may have allocated or changed storage.
+            # This reached region has no invocation-entry definition authority.
+            return draft.capture(binding, fact)
+        epoch = getattr(self, "_graph_storage_epoch", None)
+        if epoch is not None and epoch.captures(binding):
+            return epoch.capture(self, binding, fact)
         proof = self.validate_reached_window()
         if proof is not None:
             if self.visible_binding(self.entry, binding.root) is not binding:
@@ -1020,8 +1096,33 @@ class ScopeBuilder:
                 result["source_sections"] = sections
             return result
         if fact.get("lifetime") == "selected_window":
+            draft = getattr(self, "_conditional_return_draft", None)
+            if draft is not None:
+                return draft.capture(binding, fact)
             raise CompilationError("capture requires a registered selected-position lifetime proof: " + binding.root)
         return fact
+
+    def capture_many(self, bindings, *, _consumer_check=None):
+        """Retain scalar capture policy while sharing one checked epoch batch."""
+        bindings = tuple(bindings)
+        if not bindings:
+            return ()
+        # Original readonly associations can repeat one actual. The epoch's
+        # pure batch consumes that exact binding once and preserves call order
+        # when expanding the detached facts back to the original associations.
+        unique = tuple({id(binding): binding for binding in bindings}.values())
+        epoch = getattr(self, "_graph_storage_epoch", None)
+        if (len(unique) > 1 and epoch is not None and getattr(epoch._owner, "builder", None) is self
+                and hasattr(epoch, "capture_many") and all(epoch.captures(binding) for binding in unique)):
+            facts = dict(zip((id(binding) for binding in unique),
+                             epoch.capture_many(self, unique, _consumer_check=_consumer_check), strict=True))
+            return tuple(facts[id(binding)] for binding in bindings)
+        results = []
+        for binding in bindings:
+            results.append(self.capture(binding))
+            if _consumer_check is not None:
+                _consumer_check()
+        return tuple(results)
 
     def add_edit(self, path, first, last, replacement, *, prepend=False):
         edits = self.edits.setdefault(path, [])
@@ -1173,7 +1274,21 @@ class ScopeBuilder:
         return cache[procedure]
 
     def owner_transfer_setup(self, leaves, imports, *, context="fort_context", status="fort_status"):
-        """Configure nondefault transfers once, before recording any work."""
+        """Configure checked graph/transfer policy before recording any work."""
+        if not leaves:
+            if self.config.scope_transfers != "direct":
+                raise CompilationError("external-only graph requires direct transport")
+            if self.config.scope_execution == "graph":
+                # Ordinary worker configuration already enables the runtime's
+                # graph planner. Source/external-only graphs have no worker
+                # module, but need the SAME live pending-state simulator.
+                # Bind the existing C API locally; no runtime ABI is added.
+                return [f"if ({status} == FORT_SCOPE_OK) then", "block", "interface",
+                    "function fort_enable_checked_graph(context) bind(C, name='fort_scope_task_graph_enable_v1') result(code)",
+                    "import c_int, c_int64_t", "integer(c_int64_t), value :: context", "integer(c_int) :: code",
+                    "end function fort_enable_checked_graph", "end interface",
+                    f"{status} = fort_enable_checked_graph({context})", "end block", "endif"]
+            return []
         if self.config.scope_transfers == "direct" and self.config.scope_execution != "graph":
             return []
         public, _ = self.entry_artifacts(sorted(leaves)[0])
@@ -1736,7 +1851,6 @@ class ScopeBuilder:
             if call.region is not None:
                 for binding in call.region.bindings:
                     if binding.rank:
-                        self.capture(binding)
                         arrays[binding.root] = binding
                     else:
                         scalars[binding.root] = binding
@@ -1748,19 +1862,16 @@ class ScopeBuilder:
             _, formal_definitions, _ = self.call_effects(call)
             for formal,binding in call.bindings.items():
                 if binding.rank:
-                    self.capture(binding)
                     arrays[binding.root] = binding
                     if formal in formal_definitions:
                         written.add(binding.root)
             for root in actions:
                 self.visible(routine, root)
                 binding = self.visible_binding(routine, root)
-                self.capture(binding)
                 arrays[root] = binding
             child_leaves, _ = self.closure(call.procedure)
             for root in self.runtime_origin_roots(child_leaves):
                 binding = self.visible_binding(routine, root)
-                self.capture(binding)
                 arrays[root] = binding
             for actual in call.actuals:
                 binding = self.analysis._actual_binding(self.analysis.source_scope_for(actual, routine.scope), actual)
@@ -1773,6 +1884,7 @@ class ScopeBuilder:
                     scalars[binding.root] = binding
             scalars.update(view_dependencies(call))
             scalars.update(self.native_bound_bindings(call))
+        self.capture_many(arrays.values())
         return arrays, scalars, written
 
     def owner_query(self, calls, arrays, written):
@@ -2586,13 +2698,15 @@ class ScopeBuilder:
                  for procedure, registry in self.region_owners.items()},
                 dict(self.runtime_provenance.records), dict(self.coordinators), dict(self.coordinator_reasons),
                 {key: (declaration, set(selected), replacement)
-                 for key, (declaration, selected, replacement) in self._lexical_target_edits.items()})
+                 for key, (declaration, selected, replacement) in self._lexical_target_edits.items()},
+                dict(self._module_companion_publications), self._original_worksharing_publications)
 
     def restore_scope_checkpoint(self, checkpoint):
         (self.outputs, self.edits, self.clones, self.queries,
          self.generated, self.numerical_reasons, self.numerical_ir, self.batch_chains, variants, self.view_generated,
          self.view_clones, self.view_queries, registries, provenance, coordinators, coordinator_reasons,
-         self._lexical_target_edits) = checkpoint
+         self._lexical_target_edits, self._module_companion_publications,
+         self._original_worksharing_publications) = checkpoint
         self.runtime_provenance.records.clear()
         self.runtime_provenance.records.update(provenance)
         self.variants.restore(variants)
@@ -2875,6 +2989,14 @@ class ScopeBuilder:
 
     def finish(self, *, materialize_native_effects=None):
         """Publish source edits and build artifacts after approved scope work."""
+        draft = getattr(self, "_conditional_return_draft", None)
+        if draft is not None:
+            proof = getattr(draft.owner, "return_contract", None)
+            if proof is None:
+                raise CompilationError("prospective returned-domain captures cannot publish without sealed exhaustive coverage")
+            proof.validate()
+        if self._native_ancestor_selection is not None:
+            self._native_ancestor_selection.validate(self.analysis)
         self._check_reached_publication()
         self._validate_reached_window_fresh()
         self.validate_selection_activation()
@@ -2886,6 +3008,11 @@ class ScopeBuilder:
             if registry.used:
                 registry.refresh(self)
                 registry.finish()
+        from compiler.scopes.storage_epoch import require_original_worksharing_publication
+
+        require_original_worksharing_publication(self)
+        from compiler.scopes.provider_lifetime import emit_spine
+        emit_spine(self)
         provenance = {}
         patches = []
         for path, edits in self.edits.items():
@@ -2912,6 +3039,10 @@ class ScopeBuilder:
             self.outputs["scoped-runtime.json"] = json.dumps(self.runtime,indent=2)+"\n"
         report = {
             "schema_version":1, "entry":self.entry.qualified,
+            **({"provider_only_lifetime": self.provider_lifetime_record}
+               if hasattr(self, "provider_lifetime_record") else {}),
+            **({"native_ancestor_selection": self._native_ancestor_selection.public()}
+               if self._native_ancestor_selection is not None else {}),
             "capture_descriptor_expectations": {
                 "schema_version": 1, "enforcement": "original_descriptor_before_registration",
                 "definition_authority": False,
@@ -2928,6 +3059,8 @@ class ScopeBuilder:
                if hasattr(self, "lexical_owner_attempt") else {}),
             **({"graph_owner_attempt": deepcopy(self.graph_owner_attempt)}
                if hasattr(self, "graph_owner_attempt") else {}),
+            **({"hierarchical_region_attempt": deepcopy(self.hierarchical_region_attempt)}
+               if hasattr(self, "hierarchical_region_attempt") else {}),
             "automatic_scope_available":bool(self.scopes), "scope_count":len(self.scopes),
             "scopes":self.scopes, "boundaries":self.boundaries, "source_edits":patches,
             "runtime_provenance": self.runtime_provenance.public(available=bool(self.scopes) and self.config.scope_measurement != "native", additional=[
@@ -2978,6 +3111,11 @@ class ScopeBuilder:
             ],
         }
         self.analysis.verify_publication()
+        if getattr(self, "provider_only_lifetime", None) is not None:
+            from compiler.frontend.provider_lifetime import digest as lifetime_digest
+            self.provider_lifetime_record["source_edits_identity"] = lifetime_digest(patches)
+            self.provider_lifetime_record["execution_identity"] = lifetime_digest(self.provider_lifetime_record)
+            self.provider_only_lifetime.validate()
         self.outputs["scope-manifest.json"] = json.dumps(report,indent=2)+"\n"
         return self.outputs, report
 

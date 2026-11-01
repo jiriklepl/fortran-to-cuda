@@ -81,6 +81,24 @@ inline std::optional<Key> make_key(const planning::Inputs &in,const fort_scope_p
                 t.pack_row_seconds,t.unpack_row_seconds,t.pinned_h2d_latency,t.pinned_h2d_bandwidth,
                 t.pinned_d2h_latency,t.pinned_d2h_bandwidth})key.real(x);
         }
+        key.integer(bool(in.copy_costs));key.integer(in.copy_pool_capacity);
+        key.integer(in.copy_pool_active_device_bytes);key.integer(in.copy_pool_available_bytes);key.integer(in.copy_pool_cold_available);key.integer(in.copy_pool_revision);
+        if(in.copy_costs) {
+            key.real(in.copy_costs->base.wait_seconds);
+            const auto &t=in.copy_costs->copy;
+            key.integer(t.version);key.integer(t.valid);
+            key.real(t.minimum_relative_saving);
+            for(unsigned d=0;d<2;++d)for(const auto *r:{&t.direct[d],&t.compact_cold[d],&t.compact_reuse[d]}) {
+                for(auto x:{r->batch_seconds,r->submission_seconds,r->byte_seconds,r->row_seconds,r->descriptor_seconds,
+                            r->median_relative_error,r->p90_relative_error,r->maximum_relative_error})key.real(x);
+                for(auto x:{r->minimum_payload_bytes,r->maximum_payload_bytes,r->minimum_rows,r->maximum_rows,
+                            r->minimum_row_bytes,r->maximum_row_bytes,r->minimum_pitch_bytes,r->maximum_pitch_bytes,
+                            r->maximum_span_bytes,r->minimum_operations,r->maximum_operations,
+                            r->minimum_descriptor_work,r->maximum_descriptor_work,
+                            r->minimum_kernel_chunks,r->maximum_kernel_chunks})key.integer(x);
+                key.integer(r->word_bytes_mask);key.integer(r->layout_combinations_mask);
+            }
+        }
         std::unordered_map<fort_buffer_t,const planning::Resource *> resources;
         for(const auto &r:in.resources)resources.emplace(r.handle,&r);
         std::unordered_map<fort_buffer_t,size_t> incidence;

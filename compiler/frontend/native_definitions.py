@@ -442,7 +442,7 @@ def _derive_joined(analysis, procedure, selection, include_entry, descriptor_win
         projection, local, _guard = analysis.native_definition_unit_projection(procedure, selection,
             completion, unit_graph, unit_ids, descriptor_window=descriptor_window, consume=charge)
         specification = _part(routine.scope.node, "Specification_Part")
-        local.scope.node.content = ([specification] if specification is not None else []) + [local.execution]
+        local = projection.project_specification(local, specification)
         projection._native_sections_include_entry = False
         projection._native_sections_completion = completion
         summary = projection.summarize(procedure)
@@ -522,10 +522,18 @@ def _derive(analysis, procedure, selection, include_entry, descriptor_window=Non
     if descriptor_window is not None:
         analysis._validate_descriptor_window(procedure, identities, descriptor_window)
         states = descriptor_window.public()["resources"]
-        descriptor_roots = tuple(state["resource"] for state in states
-                                 if state["resource_kind"] == "original_allocatable_formal")
-        module_roots = tuple(state["resource"] for state in states
-                             if state["resource_kind"] == "original_module_allocatable")
+        from compiler.scopes.conditional_return import ConditionalUnitDescriptorProof
+        if type(descriptor_window) is ConditionalUnitDescriptorProof:
+            # This already validated owner projection describes allocatables
+            # only. Its original bindings distinguish module and formal roots.
+            module_roots = descriptor_window.module_roots
+            descriptor_roots = tuple(state["resource"] for state in states
+                                     if state["resource"] not in module_roots)
+        else:
+            descriptor_roots = tuple(state["resource"] for state in states
+                                     if state["resource_kind"] == "original_allocatable_formal")
+            module_roots = tuple(state["resource"] for state in states
+                                 if state["resource_kind"] == "original_module_allocatable")
     if any(type(node).__name__ in {"Common_Stmt", "Equivalence_Stmt"} for node in walk(routine.scope.node)):
         raise CompilationError("native definitions storage association requires separate authority")
     visits, leaves, rectangle_count = 0, 0, 0
@@ -565,7 +573,7 @@ def _derive(analysis, procedure, selection, include_entry, descriptor_window=Non
                 type(item).__name__ not in {"Assignment_Stmt", "Continue_Stmt"} for item in originals):
             raise CompilationError("native definitions require original assignment or condition source")
         descriptor = None
-        if descriptor_window is not None:
+        if descriptor_roots or module_roots:
             from compiler.frontend.descriptor_windows import prove_descriptor_window
             # SourceEffects requires exact selection authority. Re-prove only
             # this original descendant, with the same source-authenticated

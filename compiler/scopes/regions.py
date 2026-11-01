@@ -68,6 +68,10 @@ class OriginalNumericalPrecondition:
             return values[0] + " > 0_c_int64_t"
         if self.role == "tile_integer_range" and len(values) == 2:
             return " + ".join(values) + " <= 2147483647_c_int64_t"
+        if self.role == "array_extent_range" and len(values) == 1:
+            return values[0] + " <= 2147483647_c_int64_t"
+        if self.role == "array_shape_equal" and len(values) == 2:
+            return values[0] + " == " + values[1]
         raise CompilationError("unknown original numerical precondition")
 
     def render_activation(self, resolve):
@@ -223,7 +227,7 @@ def _helper(analysis, routine, name):
     return analysis.numerical_helpers.get(candidates[0])
 
 
-def _helper_actuals(analysis, routine, node):
+def _helper_actuals(analysis, routine, node, *, allow_omitted_optional=False):
     """Resolve ordinary numerical calls without evaluating their actuals."""
     if _kind(node) == "Call_Stmt":
         name, arguments = node.items
@@ -252,8 +256,13 @@ def _helper_actuals(analysis, routine, node):
         actuals[formal] = value
         if keyword:
             seen.add(formal)
-    if set(actuals) != set(helper.arguments):
-        raise CompilationError("inline numerical helper requires all original arguments")
+    missing = set(helper.arguments) - set(actuals)
+    if missing:
+        if not allow_omitted_optional or any(
+                name not in helper.scope.bindings or "optional" not in helper.scope.bindings[name].attributes
+                for name in missing):
+            raise CompilationError("inline numerical helper requires all original arguments")
+        actuals.update((name, None) for name in missing)
     return helper, tuple(actuals[name] for name in helper.arguments)
 
 
@@ -565,13 +574,15 @@ def _upward_reads(analysis, routine, nodes):
                 "Nonlabel_Do_Stmt", "End_Do_Stmt", "Comment"})
             reads |= _upward_reads(analysis, routine, body) - defined
         elif kind == "Call_Stmt":
-            helper, actuals = _helper_actuals(analysis, routine, node)
+            helper, actuals = _helper_actuals(analysis, routine, node, allow_omitted_optional=True)
             if helper is None:
                 reads |= _scalar_reads(analysis, routine, node) - defined
                 continue
             reads |= _host_associated_reads(analysis, routine, helper) - defined
             outputs = set()
             for formal, actual in zip(helper.arguments, actuals, strict=True):
+                if actual is None:
+                    continue  # An absent optional has no caller storage to observe or define.
                 binding = helper.scope.bindings.get(formal)
                 if binding is None:
                     # Native continuations can take procedure arguments. This
@@ -624,12 +635,14 @@ def _upward_array_reads(analysis, routine, nodes):
         if kind == "Comment":
             continue
         if kind == "Call_Stmt":
-            helper, actuals = _helper_actuals(analysis, routine, node)
+            helper, actuals = _helper_actuals(analysis, routine, node, allow_omitted_optional=True)
             if helper is None:
                 incoming |= reads(node) - defined
                 continue
             outputs = set()
             for formal, actual in zip(helper.arguments, actuals, strict=True):
+                if actual is None:
+                    continue
                 parameter = helper.scope.bindings.get(formal)
                 binding = analysis._binding(routine.scope, actual) if _kind(actual) == "Name" else None
                 if parameter is None or parameter.intent != "out":
@@ -713,7 +726,7 @@ def allocation_guard(analysis, routine, binding, preceding):
 
 
 def extract_region(analysis, routine, node, *, preceding=(), following=(), cyclic_following=(),
-                   worksharing=None, immutable_inputs=None):
+                   worksharing=None, immutable_inputs=None, atomic_alternative=None):
     """Construct a bounded loop candidate with its original participation proof."""
     analysis.verify_source()
     role = analysis._source_roles.get(routine.qualified)
@@ -731,7 +744,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         raise CompilationError("inline original specification is unsupported: " + "; ".join(specification_issues))
     if analysis._unknown_exports(routine.scope):
         raise CompilationError("inline intrinsic authority requires complete wildcard imports")
-    if worksharing is None and any(directive(item) is not None
+    if worksharing is None and atomic_alternative is None and any(directive(item) is not None
                                    for item in walk(_part(routine.scope.node, "Specification_Part"))):
         # fparser may attach opening executable directives to specifications.
         # A detached DO alone does not prove either serial participation or the
@@ -747,6 +760,11 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
             raise CompilationError('inline worksharing requires a compiler-issued participation proof')
         worksharing.validate(analysis, routine.qualified, source_nodes)
         following = worksharing.following(analysis)
+    if atomic_alternative is not None:
+        from compiler.frontend.atomic_worksharing_team import AtomicWorksharingAlternative
+        if type(atomic_alternative) is not AtomicWorksharingAlternative or worksharing is not None:
+            raise CompilationError("atomic extraction requires its distinct whole-team alternative token")
+        atomic_alternative.validate(analysis, routine.qualified, source_nodes)
     selected_span = (min(statement_span(item)[0] for item in nodes),
                      max(statement_span(item)[1] for item in nodes))
 
@@ -764,7 +782,7 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
 
     # A detached DO can be a genuine original AST node while still belonging
     # to a larger team. Source identity alone must not turn it into serial work.
-    if worksharing is None:
+    if worksharing is None and atomic_alternative is None:
         complete_original_groups(_children(routine.execution))
     # fparser attaches an associated !$OMP DO prefix to its DO construct.
     # Peel only that original structural prefix; do not authorize a projected
@@ -772,13 +790,26 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
     # Ordinary comments can precede an attached OpenMP prefix. They belong to
     # the exact original selection, but do not create an execution operation
     # beside the joined group. Keep that selection for completion authority.
-    grouped = tuple(item for item in grouped_nodes(nodes)
-                    if _kind(item) != "Comment" or directive(item) is not None)
+    if atomic_alternative is not None:
+        # Only this exact registered alternative may peel the original DO
+        # prefixes without claiming an independent worksharing completion.
+        grouped = []
+        for original in atomic_alternative.loops:
+            loop = copy.copy(original)
+            content = list(loop.content)
+            while content and _kind(content[0]) == "Comment":
+                content.pop(0)
+            loop.content = content
+            grouped.append(loop)
+        grouped = tuple(grouped)
+    else:
+        grouped = tuple(item for item in grouped_nodes(nodes)
+                        if _kind(item) != "Comment" or directive(item) is not None)
     if len(grouped) == 1 and isinstance(grouped[0], tuple):
         nodes = grouped[0]
-    elif len(grouped) == 1 or worksharing is not None:
+    elif len(grouped) == 1 or worksharing is not None or atomic_alternative is not None:
         nodes = grouped
-    joined = worksharing is not None or directive(nodes[0]) is not None
+    joined = worksharing is not None or atomic_alternative is not None or directive(nodes[0]) is not None
     if joined:
         if any(_kind(item) not in {"Comment", "Block_Nonlabel_Do_Construct"} for item in nodes):
             # Selecting only sibling DOs would silently discard an intervening
@@ -811,7 +842,9 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         if not related:
             raise CompilationError("inline extraction nodes must belong to the original execution")
     helpers = _helper_closure(analysis, routine, loops)
-    if worksharing is not None:
+    if atomic_alternative is not None:
+        completion = atomic_alternative.public()
+    elif worksharing is not None:
         completion = worksharing.public()
     elif joined:
         # Completion belongs to the exact original group. Source-proven pure
@@ -943,7 +976,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
         from compiler.scopes.participation import _threadprivate
         if set(used) & _threadprivate(analysis):
             raise CompilationError("inline OpenMP capture is THREADPRIVATE")
-        explicit_private = set(worksharing.private_roots) if worksharing is not None else set()
+        explicit_private = (set(atomic_alternative.private_roots) if atomic_alternative is not None else
+                            set(worksharing.private_roots) if worksharing is not None else set())
         for item in nodes:
             text = directive(item) or ""
             for match in re.finditer(r"private\s*\(([^()]*)\)", text):
@@ -988,7 +1022,8 @@ def extract_region(analysis, routine, node, *, preceding=(), following=(), cycli
                        for helper in helpers.values() for binding, _ in references(analysis, helper.scope, helper.execution)):
         raise CompilationError("immutable helper payload requires an original reached argument evaluation proof")
     from compiler.scopes.constant_parameters import outline_constants
-    constants = outline_constants(analysis, routine, used.values(), occupied, _fixed_shape)
+    constants = outline_constants(analysis, routine, used.values(), occupied, _fixed_shape,
+                                  capture_scalar_parameters=atomic_alternative is not None)
     captures = {root: binding for root, binding in used.items()
                 if root not in private and root not in immutable_reads and "parameter" not in binding.attributes}
     captures.update((binding.root, binding) for binding in constants.scalar_captures)

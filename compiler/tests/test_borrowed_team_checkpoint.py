@@ -166,7 +166,13 @@ def test_rebuilding_discarded_helper_keeps_attempt_and_operation_caps(tmp_path, 
         assert registry.operations == 256
 
 
-def test_distinct_coordinator_search_limit_is_not_refunded_by_restore(tmp_path):
+def test_distinct_coordinator_search_limit_is_not_refunded_by_restore(tmp_path, monkeypatch):
+    from functools import partial
+
+    from compiler.scopes import source as scope_source
+
+    # Exercise an explicit diagnostic cap independently of source-sized defaults.
+    monkeypatch.setattr(scope_source, "SourceEffects", partial(scope_source.SourceEffects, procedures=64))
     additions = "\n".join(f"subroutine marker_{index}(value)\ninteger,intent(inout)::value\n"
         "value=value+1\nend subroutine" for index in range(65))
     helper = HELPER_SOURCE.rsplit("end module", 1)[0] + additions + "\nend module\n"

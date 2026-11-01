@@ -138,11 +138,17 @@ def test_repeated_projected_child_reuses_one_original_body_variant(tmp_path):
     assert len(report["scopes"][0]["gpu_leaves"]) == 3
 
 
-def test_changed_unused_original_association_invalidates_projection_proof(tmp_path):
+def test_changed_unused_association_rejects_publication_of_projection(tmp_path):
     sources = projected_sources()
     paths, builder, proof, originals = mapped_child_fixture(tmp_path, **sources)
-    paths[0].write_text(paths[0].read_text().replace("z(-7:)", "z(-9:)"))
     assert proof.validate(builder.analysis, builder.entry.qualified, originals) is proof
+    original_facts = proof.public()
+    before = paths[0].read_text()
+    changed = before.replace("z(-7:)", "z(-9:)")
+    assert changed != before
+    paths[0].write_text(changed)
+    assert proof.validate(builder.analysis, builder.entry.qualified, originals) is proof
+    assert proof.public() == original_facts
     with pytest.raises(CompilationError, match="source|original|changed"):
         builder.finish()
     assert not builder.outputs
