@@ -5,8 +5,9 @@
 #include "scoped_runtime.h"
 #include "section_batch.hpp"
 #include <cmath>
+#include "copy_startup.hpp"
+#include <cstring>
 namespace fort_physical { namespace compact {
-constexpr std::size_t capacities[]={256ULL*1024,1024ULL*1024,4ULL*1024*1024,16ULL*1024*1024};
 inline bool finite_nonnegative(double x){return std::isfinite(x)&&x>=0;}
 inline bool valid_rate(const fort_scope_copy_rate_v2 &r) {
     double sum=0;
@@ -96,6 +97,66 @@ inline Price price(const Plan &p,const fort_scope_copy_costs_v2 &c,const fort_sc
     out.compact_available=true;
     out.selected=out.compact_seconds<out.direct_seconds*(1-c.minimum_relative_saving);
     return out;
+}
+// Bounded rent-or-buy metadata. Observed successful API submission is a pricing
+// heuristic only: it does not certify completion, readability or future work.
+// The same pure transition serves speculative planning and the locked pool.
+namespace startup {
+inline Key key(const Pricing &p,int device) {
+    Key result;std::size_t i=0;
+    auto integer=[&](std::uint64_t v){result.words[i++]=v;};
+    auto real=[&](double v){std::uint64_t bits=0;std::memcpy(&bits,&v,sizeof(bits));integer(bits);};
+    integer(static_cast<std::uint64_t>(device));integer(p.copy.version);integer(p.copy.valid);
+    real(p.copy.minimum_relative_saving);real(p.base.wait_seconds);
+    for(unsigned d=0;d<2;++d)for(const auto *r:{&p.copy.direct[d],&p.copy.compact_cold[d],&p.copy.compact_reuse[d]}) {
+        for(double v:{r->batch_seconds,r->submission_seconds,r->byte_seconds,r->row_seconds,r->descriptor_seconds,
+                r->median_relative_error,r->p90_relative_error,r->maximum_relative_error})real(v);
+        for(auto v:{r->minimum_payload_bytes,r->maximum_payload_bytes,r->minimum_rows,r->maximum_rows,
+                r->minimum_row_bytes,r->maximum_row_bytes,r->minimum_pitch_bytes,r->maximum_pitch_bytes,
+                r->maximum_span_bytes,r->minimum_operations,r->maximum_operations,r->minimum_descriptor_work,
+                r->maximum_descriptor_work,r->minimum_kernel_chunks,r->maximum_kernel_chunks})integer(v);
+        integer(r->word_bytes_mask);integer(r->layout_combinations_mask);
+    }
+    return result;
+}
+inline void bind(State &s,const Pricing &p,int device) {
+    const auto identity=key(p,device);
+    if(s.bound && s.model==identity)return;
+    ownership_changed(s); // Includes model ownership: A→B→A cannot accept an old observation.
+    s.cap={};s.model=identity;s.bound=true;
+    if(s.disabled || !valid_costs(p.copy) || !finite_nonnegative(p.base.wait_seconds))return;
+    // A finite envelope upper bound caps metadata, not predicted speedup.
+    // The artificial corner is never accepted as a measured geometry.
+    for(unsigned bucket=0;bucket<4;++bucket)for(const auto &r:p.copy.compact_cold) {
+        const auto bytes=std::min(capacities[bucket],r.maximum_payload_bytes);
+        if(bytes<r.minimum_payload_bytes)continue;
+        const double upper=r.batch_seconds+double(r.maximum_kernel_chunks)*r.submission_seconds+
+            double(bytes)*r.byte_seconds+double(r.maximum_rows)*r.row_seconds+
+            double(r.maximum_descriptor_work)*r.descriptor_seconds;
+        if(std::isfinite(upper)&&upper>0)s.cap[bucket]=std::max(s.cap[bucket],upper);
+    }
+}
+struct Decision : Offer { Price price{}; };
+inline Decision choose(const Plan &plan,const Pricing &p,bool upload,bool pending,
+                       const PoolState &pool,const State &s) {
+    Decision out;out.price=compact::price(plan,p.copy,p.base,upload,pending,pool);
+    out.selected=out.price.selected;out.capacity=out.price.capacity;
+    if(s.disabled || !s.bound || s.model!=key(p,static_cast<int>(s.model.words[0])) || !out.price.compact_available || pool.reused || !pool.cold_available)return out;
+    while(out.bucket>0 && capacities[out.bucket-1]>=out.price.capacity)--out.bucket;
+    if(out.bucket==4 || capacities[out.bucket]!=out.price.capacity || s.cap[out.bucket]<=0)return out;
+    const PoolState warm{out.price.capacity,pool.available_device_bytes,true,false};
+    const auto reuse=compact::price(plan,p.copy,p.base,upload,pending,warm);
+    if(!reuse.compact_available || !reuse.selected)return out;
+    const auto saving=out.price.direct_seconds*(1-p.copy.minimum_relative_saving)-reuse.compact_seconds;
+    if(!std::isfinite(saving)||saving<=0)return out;
+    out.observation=std::min(saving,s.cap[out.bucket]);
+    out.premium=std::max(0.,out.price.compact_seconds-reuse.compact_seconds);
+    if(!out.price.selected && std::isfinite(out.premium) && s.credit[out.bucket]>=out.premium) {
+        out.seed=true;out.selected=out.price.selected=true;
+    }
+    return out;
+}
+
 }
 }}
 #endif

@@ -25,6 +25,7 @@ def read_common_header() -> str:
                     .replace('#include "floating_environment.hpp"', floating_environment)
                     for name in ("offload.hpp", "hybrid.hpp") if runtime.joinpath(name).is_file()]
     units += "\n" + floating_environment
+    units += "\n" + runtime.joinpath("copy_startup.hpp").read_text(encoding="utf-8")
     units += "\n#ifdef FORT_OFFLOAD_ENABLED\n" + "\n".join(experimental) + "\n#endif\n"
     return numerical_source_prologue() + base.replace("// FORT_RUNTIME_UNITS", units)
 
@@ -42,6 +43,7 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
         "section_copy.hpp": runtime.joinpath("section_copy.hpp").read_text(encoding="utf-8"),
         "section_batch.hpp": runtime.joinpath("section_batch.hpp").read_text(encoding="utf-8"),
         "section_batch_cost.hpp": runtime.joinpath("section_batch_cost.hpp").read_text(encoding="utf-8"),
+        "copy_startup.hpp": runtime.joinpath("copy_startup.hpp").read_text(encoding="utf-8"),
         "staging.hpp": runtime.joinpath("staging.hpp").read_text(encoding="utf-8"),
         "scoped_cuda_resources.hpp": runtime.joinpath("scoped_cuda_resources.hpp").read_text(encoding="utf-8"),
         "scoped_graphs.hpp": runtime.joinpath("scoped_graphs.hpp").read_text(encoding="utf-8"),
@@ -276,7 +278,8 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
                 "abi_version": 2, "configure": "fort_scope_set_copy_costs_v2",
                 "selection": "AUTO only; one-operation copies and explicit DIRECT retain the direct path",
                 "coverage": "complete-batch empirical geometry, word and observed layout-combination bounds; no cost extrapolation",
-                "prediction": "median-fit complete direct/cold/reuse paths; compact requires strictly more than 50 percent predicted saving; empirical errors are diagnostic",
+                "prediction": "median-fit complete direct/cold/reuse paths; strict 50 percent warm saving; bounded submitted-copy credit may fund a cold purchase, always charged at its full cold price; empirical errors are diagnostic",
+                "startup_credit": "one model/device record and four bounded capacity balances in the shared pool; successful direct submissions only, ownership changes reset; no future work, completion or data authority",
                 "workspace": "existing shared Compact slot pair; active bytes included in domain device budget",
                 "pool_device_bytes_limit": 64 * 1024 * 1024,
                 "pool_budget_scope": "active, allocating and idle cached device workspace",
