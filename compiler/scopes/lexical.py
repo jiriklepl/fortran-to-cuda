@@ -675,7 +675,7 @@ class LexicalOwner:
             except CompilationError:
                 pass
         originals = self.builder.inline.original_selection(tuple(nodes))
-        from compiler.scopes.conditional_return import boundary_lifecycle, SameFamilyNativeCallLifecycle
+        from compiler.scopes.conditional_return import SameFamilyNativeCallLifecycle, boundary_lifecycle
         diagnostic = {} if self is self.owner and hasattr(self, "retention_allowed") else None
         lifecycle, completion = boundary_lifecycle(self, originals, diagnostic=diagnostic)
         counted_entry = None

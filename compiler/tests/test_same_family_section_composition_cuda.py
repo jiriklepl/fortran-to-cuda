@@ -370,17 +370,9 @@ def test_combined_native_call_and_distinct_guarded_sections(binaries, mode):
         retired = [e for e in between if e["kind"] == "domain_retire"]
         assert sum(str(e["domain"]) in working_domains for e in retired) == 1
         empty_domains = {str(e["domain"]) for e in retired} - working_domains
-        metadata_events = {
-            "close",
-            "create",
-            "detach",
-            "domain_attach",
-            "domain_create",
-            "domain_detach",
-            "domain_retire",
-            "position",
-        }
-        assert all(e["kind"] in metadata_events for e in events if str(e.get("domain")) in empty_domains)
+        # An empty original team still executes, while its checked child
+        # retains the borrowed domain for subsequent calls and GPU work.
+        assert not empty_domains
         assert len(commits) == (3 if active else 0)
         if active:
             assert not empty_domains
@@ -391,14 +383,6 @@ def test_combined_native_call_and_distinct_guarded_sections(binaries, mode):
             inner = events[commits[0] + 1 : commits[-1]]
             assert copy_bytes(inner, "upload") == copy_bytes(inner, "download") == 0
         else:
-            # The existing no-work atomic protocol creates and retires empty
-            # contexts. They hold no fields and add overhead, not payload cuts.
-            assert len(empty_domains) == 3
-            for event in retired:
-                if str(event["domain"]) in empty_domains:
-                    assert provenance[event["boundary"]]["reason"] == (
-                        "atomic original team declined before complete alternative"
-                    )
             assert copy_bytes(between, "download") == 8 * n
             assert copy_bytes(between, "upload") == 8 * n
     (directory / (mode + "-combined-ledger.json")).write_text(json.dumps(ledger, indent=2) + "\n")

@@ -272,6 +272,7 @@ class AtomicWorksharingTeamProof:
     _nodes: tuple = field(repr=False, compare=False)
     _record: str = field(repr=False, compare=False)
     _issuer: object = field(repr=False, compare=False)
+    _source_fact: object = field(default=None, repr=False, compare=False)
 
     def public(self):
         return {"identity": self.identity, **json.loads(self._record)}
@@ -326,10 +327,20 @@ class AtomicWorksharingTeamProof:
         if (self._issuer is not _ISSUER or analysis is not self._analysis or routine is not self._routine
                 or len(nodes) != len(self._nodes) or any(a is not b for a, b in zip(nodes, self._nodes, strict=True))
                 or getattr(analysis, "_atomic_worksharing_teams", {}).get(self.identity) is not self
+                or getattr(analysis, "_atomic_worksharing_owner", None) is not analysis
                 or sha256(self._record.encode()).hexdigest() != self.identity):
             _fail("requires its exact registered original team")
         # Consumption cannot silently reissue a retired original completion.
         self.parent.validate(analysis, routine.qualified, self.parent.selected_node_ids)
+        if self._source_fact is not None:
+            dependencies = self._source_fact.dependencies
+            if (len(dependencies) != 1 or dependencies[0].name != "_joined_completions"
+                    or dependencies[0].owner is not analysis or dependencies[0].token is not self.parent):
+                _fail("changed its exact consumed parent completion")
+            self._source_fact.require(self)
+            return self
+        if getattr(analysis, "_source_session", None) is not None:
+            _fail("mutable diagnostic token cannot enter a sealed source context")
         parent, units, predicates, bindings, record = _derive(analysis, routine, nodes)
         if (parent is not self.parent or _encoded(record) != self._record
                 or len(bindings) != len(self.bindings) or any(a is not b for a, b in zip(bindings, self.bindings, strict=True))
@@ -344,21 +355,36 @@ class AtomicWorksharingTeamProof:
 
 
 def prove_atomic_worksharing_team(analysis, routine, original_nodes):
+    from compiler.frontend.source_facts import ATOMIC_TEAM, dependencies, issue, lookup
+
     nodes = tuple(original_nodes)
+    context = analysis.source_authority_context() if getattr(analysis, "_source_session", None) is not None else None
+    query = routine.qualified, tuple(id(node) for node in nodes)
+    previous = lookup(analysis, ATOMIC_TEAM, query)
+    if previous is not None:
+        return previous.validate(analysis, routine, nodes)
     registry = getattr(analysis, "_atomic_worksharing_teams", None)
     if registry is None or getattr(analysis, "_atomic_worksharing_owner", None) is not analysis:
         registry = analysis._atomic_worksharing_teams = {}
         analysis._atomic_worksharing_owner = analysis
     for proof in registry.values():
         if len(nodes) == len(proof._nodes) and all(a is b for a, b in zip(nodes, proof._nodes, strict=True)):
+            if getattr(analysis, "_source_session", None) is not None and proof._source_fact is None:
+                continue  # Sealing issues a new handle; never retarget a diagnostic proof.
             return proof.validate(analysis, routine, nodes)
     parent, units, predicates, bindings, record = _derive(analysis, routine, nodes)
+    if context is not None:
+        context.require(analysis)
     encoded = _encoded(record)
     proof = AtomicWorksharingTeamProof(sha256(encoded.encode()).hexdigest(), parent, units, predicates, bindings,
                                      analysis, routine, nodes, encoded, _ISSUER)
     if len(registry) >= analysis.operation_limit * analysis.procedure_limit:
         _fail("original-team registry budget exhausted")
     registry[proof.identity] = proof
+    if getattr(analysis, "_source_session", None) is not None:
+        prerequisites = dependencies(((analysis, "_joined_completions", analysis._joined_completions,
+                                       parent.identity, parent),))
+        proof = issue(analysis, ATOMIC_TEAM, query, proof, prerequisites)
     return proof.validate()
 
 

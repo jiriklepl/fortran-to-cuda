@@ -203,7 +203,6 @@ class NativeExecutableCall:
 
 
 def _host_target(analysis, scope, name, bindings):
-    from compiler.frontend.source_effects import _part
     name = str(name).lower()
     if _kind(name) != "str" or not name.isidentifier():
         raise CompilationError("retired host dispatch requires a fixed original procedure name")
@@ -237,6 +236,7 @@ def _host_arrange(call, callee):
     # Reuse positional/keyword arrangement, with declaration placeholders for
     # original procedure dummies (which have no data Binding).
     from types import SimpleNamespace
+
     from compiler.frontend.call_bindings import _arrange
     bindings = dict(callee.scope.bindings)
     for name in callee.scope.procedure_arguments & set(callee.arguments):
@@ -786,7 +786,8 @@ class _Scan:
             while schema is not None and member not in schema.members:
                 if id(schema) in seen:
                     raise CompilationError("recursive or unavailable original parent declaration")
-                seen.add(id(schema)); self.tick()
+                seen.add(id(schema))
+                self.tick()
                 header = next(item for item in _children(schema.node) if _kind(item) == "Derived_Type_Stmt")
                 if header.items[2] is not None:
                     raise CompilationError("parameterized component declaration requires separate coverage")
@@ -866,15 +867,18 @@ class _Scan:
             return
         import re
         if not text.startswith("!$omp"):
-            self.host_block(routine, node, "unclassified executable directive"); return
+            self.host_block(routine, node, "unclassified executable directive")
+            return
         text = text[5:].strip()
         if not self.joined_depth or not re.match(r"(?:parallel(?:\s+do)?|end\s+parallel(?:\s+do)?|do|end\s+do)(?:\s|$)", text):
-            self.host_block(routine, node, "asynchronous/task/orphan directive lacks whole original join"); return
+            self.host_block(routine, node, "asynchronous/task/orphan directive lacks whole original join")
+            return
         rest = re.sub(r"^(?:end\s+parallel\s+do|end\s+parallel|parallel\s+do|parallel|end\s+do|do)\b", "", text).strip()
         while rest:
             clause = re.match(r"(private|shared|firstprivate|default|schedule|collapse|num_threads)\s*\(([^()]*)\)\s*", rest)
             if clause is None:
-                self.host_block(routine, node, "unclassified OpenMP clause/implicit copy"); return
+                self.host_block(routine, node, "unclassified OpenMP clause/implicit copy")
+                return
             name, value = clause.group(1), clause.group(2).strip()
             if name in {"private", "shared", "firstprivate"}:
                 for name in value.split(","):
@@ -882,9 +886,11 @@ class _Scan:
                     if binding is None or binding.dtype not in {"real", "integer", "logical"} or binding.attributes & {"asynchronous", "pointer"}:
                         self.host_block(routine, node, "OpenMP clause needs primitive synchronous declarations")
             elif name == "default":
-                if value not in {"shared", "none"}: self.host_block(routine,node,"unclassified OpenMP default")
+                if value not in {"shared", "none"}:
+                    self.host_block(routine,node,"unclassified OpenMP default")
             elif name == "schedule":
-                if not re.fullmatch(r"(?:static|dynamic|guided|runtime|auto)(?:\s*,\s*[1-9][0-9]*)?",value): self.host_block(routine,node,"executable OpenMP schedule clause")
+                if not re.fullmatch(r"(?:static|dynamic|guided|runtime|auto)(?:\s*,\s*[1-9][0-9]*)?",value):
+                    self.host_block(routine,node,"executable OpenMP schedule clause")
             elif not re.fullmatch(r"[1-9][0-9]*",value):
                 self.host_block(routine,node,"executable OpenMP scalar clause")
             rest=rest[clause.end():]
@@ -1264,10 +1270,12 @@ class _Scan:
         else:
             from compiler.frontend.source_functions import original_name_absent
             for operator in _children(node):
-                if isinstance(operator,str) and operator.lower() in {"+","-","*","/","**","//","==","/=","<","<=",">",">=",".and.",".or.",".not.",".eqv.",".neqv."}:
-                    if not original_name_absent(self.analysis,self.analysis.source_scope_for(node,routine.scope),
-                                               "operator("+operator.lower()+")",_scope_validator=self.scope):
-                        self.host_block(routine,node,"defined operator requires separate executable-call coverage")
+                if (isinstance(operator, str)
+                        and operator.lower() in {"+", "-", "*", "/", "**", "//", "==", "/=", "<", "<=", ">", ">=",
+                                                 ".and.", ".or.", ".not.", ".eqv.", ".neqv."}
+                        and not original_name_absent(self.analysis, self.analysis.source_scope_for(node, routine.scope),
+                                                     "operator(" + operator.lower() + ")", _scope_validator=self.scope)):
+                    self.host_block(routine, node, "defined operator requires separate executable-call coverage")
             if ("Defined" in kind or kind in {"Level_5_Expr", "Coindexed_Named_Object"}
                     or kind not in {"list", "tuple", "Parenthesis", "Level_1_Expr", "Level_2_Expr",
                         "Level_2_Unary_Expr", "Level_3_Expr", "Level_4_Expr", "Add_Operand", "Mult_Operand",
@@ -1389,7 +1397,7 @@ class _Scan:
         for item in grouped_original_sequence(nodes, peeled):
             if isinstance(item, NativeGroupCandidate):
                 originals = item.original_nodes
-                def group(originals=originals):
+                def group(originals=originals, item=item):
                     try:
                         if not self.project_payload:
                             raise CompilationError("payload projection not requested")
@@ -1401,7 +1409,8 @@ class _Scan:
                     self.group_directives.append({id(part) for part in item.items if _kind(part) == "Comment"})
                     try:
                         for part in item.items:
-                            if _kind(part) == "Comment": self.host_directive(routine, part)
+                            if _kind(part) == "Comment":
+                                self.host_directive(routine, part)
                         for node in originals:
                             if _kind(node) != "Comment":
                                 self.statement(routine, node, mapping, called=called, depth=depth + 1,
@@ -1476,7 +1485,8 @@ class _Scan:
                 self.host_aliases.pop()
         elif kind in {"If_Construct", "Block_Nonlabel_Do_Construct", "Case_Construct"}:
             for part in _children(node):
-                if _kind(part) == "Comment": self.host_directive(routine, part)
+                if _kind(part) == "Comment":
+                    self.host_directive(routine, part)
             children = tuple(child for child in _children(node)
                              if not (ignore_directives and _kind(child) == "Comment"
                                      and any(id(child) in current for current in self.group_directives)))
@@ -1520,7 +1530,8 @@ class _Scan:
                 self.host_block(routine, node, "selected RETURN requires caller exit-lifetime coverage")
             if kind != "Return_Stmt" or not called:
                 self.barrier("statement", routine, node, "unsupported original statement or nonlocal completion")
-            for child in _children(node): self.expression(routine, child, mapping)
+            for child in _children(node):
+                self.expression(routine, child, mapping)
         elif kind in {"Allocate_Stmt", "Deallocate_Stmt", "Pointer_Assignment_Stmt", "Nullify_Stmt"}:
             self.family_block(routine, node, "allocation/import/persistent association changes are excluded")
             pointer = next((item for item in self.confined_pointers.values() if item.assignment is node), None)
@@ -1530,13 +1541,15 @@ class _Scan:
             self.barrier("association", routine, node, "allocation or pointer association changes need separate authority")
             self.host_lifetime_depth += int(kind in {"Allocate_Stmt", "Deallocate_Stmt"})
             try:
-                for child in _children(node): self.expression(routine, child, mapping, "association")
+                for child in _children(node):
+                    self.expression(routine, child, mapping, "association")
             finally:
                 self.host_lifetime_depth -= int(kind in {"Allocate_Stmt", "Deallocate_Stmt"})
         else:
             self.host_block(routine, node, "unclassified original statement or nonlocal completion")
             self.barrier("statement", routine, node, "unsupported original statement or nonlocal completion")
-            for child in _children(node): self.expression(routine, child, mapping)
+            for child in _children(node):
+                self.expression(routine, child, mapping)
 
     def specification_authority(self, routine):
         for owner in tuple(self.scopes.values()):
@@ -1822,7 +1835,8 @@ class _Instantiate:
         self.tick()
         if procedure in self.host_active or len(self.host_active) >= self.analysis.depth_limit:
             self.host_blockers.append(ReachabilityBarrier("retired_host_completion", procedure, str(call.original) if call else "",
-                "recursive or over-depth executable source closure")); return
+                "recursive or over-depth executable source closure"))
+            return
         if len(self.host_instances) >= self.analysis.operation_limit:
             raise ResourceReachabilityBudgetExceeded("executable source call-instance budget exhausted")
         template = self.template(procedure, selection)

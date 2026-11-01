@@ -20,6 +20,7 @@ def _payload(_owner, encoded):
 DESCRIPTOR = _register_family("original_descriptor_window", 1, _payload, legacy_import=True)
 STORAGE = _register_family("original_storage_mutation", 1, _payload, legacy_import=True)
 TEAM = _register_family("original_descriptor_team", 1, _payload, legacy_import=True)
+ATOMIC_TEAM = _register_family("original_atomic_worksharing_team", 1, _payload, legacy_import=True)
 _PREREQUISITE = _register_family("original_source_prerequisite", 1, _payload, legacy_import=True)
 
 
@@ -180,7 +181,7 @@ def issue(analysis, family, query, proof, prerequisites=()):
     if getattr(analysis, "_source_session", None) is None:
         return proof
     registry_name = {DESCRIPTOR: "_descriptor_window_proofs", STORAGE: "_storage_mutation_effects",
-                     TEAM: "_descriptor_team_proofs"}[family]
+                     TEAM: "_descriptor_team_proofs", ATOMIC_TEAM: "_atomic_worksharing_teams"}[family]
     registry = getattr(analysis, registry_name)
     if registry.get(proof.identity) is not proof:
         raise CompilationError("source fact lost its original issuer registration")

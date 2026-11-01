@@ -6,6 +6,27 @@ The original proposal is preserved at
 `/tmp/fortran-residency-implementation-24/GPU_RESIDENCY_PLAN.original.md`.
 Historical reports and timing controls remain unchanged.
 
+The [atomic retention follow-up](benchmarks/reports/gpu-residency-implementation-20261023/atomic-arena-provider-empty-retention-20261101-addendum-01/README.md)
+is applied. Three empty original host teams execute while preserving the live
+producer/consumer domain, readonly input and dirty output; their intervening
+payload transfers are zero. Full fields, halos, bounds and genuine OpenMP team
+entries are checked. Latest device coverage is 18 distinct passes after one
+test-only hidden-mode observer recovery; the raw 17-pass/one-failure invocation
+remains recorded. The [final compiler composition](benchmarks/reports/gpu-residency-implementation-20261023/compiler-atomic-composition-20261102-addendum-01/README.md)
+passes 354 CPU/source cases and Ruff, with 13 promoted paths. It reuses immutable
+atomic source facts and checked provider artifacts through the existing
+authority machinery, preserving source/policy/publication checks. Runtime and
+calibration are unchanged. Application correctness and performance qualification
+remain pending. The full V3 selections below precede this increment.
+
+The [bounded Convection profile](benchmarks/reports/gpu-residency-implementation-20261023/convection-profile03-20261102/README.md)
+confirms atomic derivations fall from 112 to seven, with validation rederivations
+falling from 104 to zero. The measured prefix reaches 15 initial provider
+emissions rather than two. The source bases also differ in native CALL support,
+so these observations establish removed repetition and further progress, without
+a whole-compilation speedup claim. No compiler verdict or artifacts were accepted;
+the next gate is normal generation on the qualified source.
+
 The [current compiler V3 selection](benchmarks/reports/gpu-residency-implementation-20261023/maintained-compiler-v3-20261101-addendum-01/README.md)
 passes all 11,995 selected cases in one complete invocation, without failures,
 errors, skips or recoveries. Its [companion selection](benchmarks/reports/gpu-residency-implementation-20261023/maintained-companions-v3-20261101-addendum-01/README.md)
