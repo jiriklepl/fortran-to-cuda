@@ -586,10 +586,17 @@ class LexicalOwner:
     def before_close(self):
         from compiler.scopes.device_tasks import before_close as external_before_close
         external = external_before_close(self)
+        discards = []
+        if getattr(self, "routine", None) and hasattr(self, "resources"):
+            for root, (binding, number) in self.resources.items():
+                if (getattr(binding, "declaring_scope", None) is self.routine.scope
+                        and binding.name not in self.routine.arguments
+                        and "save" not in binding.attributes):
+                    discards.append(f"if (fort_buffer_{number} /= 0) fort_close_status = fort_scope_discard_v1({self.context}, fort_buffer_{number})")
         if self.interval_placement:
             from compiler.offload.selection_cost import before_close
-            return [*before_close(self.owner, self.context), *external]
-        return external
+            return [*before_close(self.owner, self.context), *discards, *external]
+        return [*discards, *external]
 
     @property
     def interval_placement(self):
@@ -632,6 +639,7 @@ class LexicalOwner:
                           else "fort_scope_close")
         lines = ["block", "use iso_c_binding, only: c_int, c_int32_t, c_null_char, c_null_ptr",
                  f"use fort_scoped_memory, only: {close_function}, FORT_SCOPE_OK, fort_scope_trace_set_v1, &",
+                 "fort_scope_discard_v1, &",
                  "fort_scope_plan_abandon_remaining_v1, FORT_SCOPE_ARGUMENT, FORT_SCOPE_BOUNDARY, &",
                  "FORT_SCOPE_UNINITIALIZED, FORT_SCOPE_PLAN_MISMATCH",
                  "integer(c_int) :: fort_close_status", *fallback, *query_retirement, f"if ({self.context} /= 0) then",

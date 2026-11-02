@@ -322,8 +322,8 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
         "section_coordinates": "zero-based physical offsets, exclusive upper bounds",
         "host_storage": "borrowed stable contiguous whole arrays",
         "concurrent_access": "separate contexts with nonconflicting host storage",
-        "rectangle_limit": 32,
-        "intersection_limit": 1024,
+        "rectangle_limit": 128,
+        "intersection_limit": 8192,
         "capabilities": ["section_coherence", "partial_host_initialization", "source_definition_changes", "device_memory_budget", "coherent_runtime_placement", "ordered_definition_validation", "context_query_reuse", "segment_continuation", "pinned_section_transfers", "pipelined_subchain_transfers", "context_scratch_leases"],
     }
     return outputs, manifest
