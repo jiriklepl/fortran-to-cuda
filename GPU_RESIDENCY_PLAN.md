@@ -31,6 +31,7 @@ records the raw measurements and source guards. Current-runtime application
 correctness and performance remain unqualified. Fresh native, be58 and 7a612e4
 comparison controls pass focused correctness checks.
 
+The maintained compiler checkpoint `705efb5` has the following verification.
 The original maintained compiler invocation fails and remains recorded. Its
 stale region/continuation fixtures and earlier diagnostic expectation have been
 corrected; separate whole-module follow-ups also resolve the affinity, native
@@ -58,12 +59,30 @@ unproved `Utype` allocation. Its 122 CPU tests and three existing CUDA retiremen
 controls pass. The [fresh parent attempt 18](/tmp/fortran-parent-graph-current-18/result.json)
 passes that barrier, then declines at the scalar-OUT reduction in `mean_TKE`
 (`linearforcing.f90:171`). All source guards hold; no package or application is
-emitted. A private scalar-formal retirement extension passes 658 CPU cases, two
+emitted. The subsequent scalar-formal retirement extension passes 658 CPU cases, two
 fixture checks and three [CUDA modes](/tmp/fortran-scalar-formal-retirement-gpu-02/gpu-01/qualification.json),
 including returned-scalar consumption, masked/unmasked host work, both guards,
-full fields/halos and exact copy ledgers. It remains outside this snapshot until
-promotion. The next parent attempt, current-runtime application build and strict
+full fields/halos and exact copy ledgers. Its [fresh maintained compiler selection](/tmp/fortran-maintained-current807-c3-native-full-04/execution/compiler/completion.json)
+passes all 12,558 selected cases in one clean run, with no failures, errors,
+skips or recoveries. All 1,502 source guards hold and owned process groups exit.
+The 1,279 marked CUDA cases are outside this CPU selection; the new three-mode
+device control passes separately. A current-runtime application build and strict
 natural runs remain subsequent gates.
+
+The pipeline observer fix is committed as `5cd8ae1`. It retains the original
+catalog owner when authenticating serial inline fallbacks, whose existing
+completion record intentionally omits a procedure. Exact source, worker, span
+and checked-route validation remain required. Its [whole pipeline run](/tmp/fortran-inline-fallback-catalog-fix-20261102-01/whole-pipeline-01/completion.json)
+passes 4,427 tests with 29 declared optional skips and no failures; saved actual
+hidden/traced logs and forged-record controls also pass. Compiler/runtime
+execution is unchanged by this observer fix.
+
+The [scalar-qualified parent retry 19-02](/tmp/fortran-parent-graph-current-19-02/result.json)
+passes `mean_TKE`, then declines at the guarded Rayleigh-damping call in
+`sponge.f90:618`: ownership/lifetime evidence for its coefficient and profile
+components is incomplete. All 1,338 source and 380 external guards hold; no
+package or application is emitted. The next diagnostic work inventories related
+native component-storage barriers before another full parent attempt.
 The new `benchmarks/evaluate_speedup.py` results are exploratory single samples.
 The approved seven rotated measurements, full-process timing and strict
 correctness gates still govern performance claims. The 10%, 2× and 20× targets

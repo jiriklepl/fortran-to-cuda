@@ -119,6 +119,47 @@ class NativeLifetimeContext:
                 result.append((pointer.binding, pointer.target.binding))
         return tuple(result)
 
+    def scalar_reduction_associations(self, procedure, originals, binding):
+        """Exact original scalar actuals, only after whole-call retirement.
+
+        No payload, initialization, alias or execution permission is issued.
+        Pointer team bindings remain a separate role.
+        """
+        from compiler.frontend.native_completion import _incoming_array_calls
+        from compiler.frontend.native_demand import _Declarations
+
+        self.team_bindings(procedure, originals)  # Authenticate the whole group.
+        routine = self.analysis._require_original(procedure)
+        declarations = _Declarations()
+        if (routine.scope.bindings.get(binding.name) is not binding
+                or binding.name not in routine.arguments or binding.rank
+                or binding.intent not in {"out", "inout"}
+                or binding.dtype not in {"real", "integer", "logical"} or binding.kind not in {4, 8}
+                or binding.attributes - {"intent"}):
+            raise CompilationError("native scalar reduction requires an exact plain OUT or INOUT formal")
+        rows = []
+        for instance, edge, mapping in _incoming_array_calls(self.analysis, self.graph, procedure, binding):
+            caller = self.analysis._require_original(edge.caller)
+            actual = mapping.binding
+            if (actual is None or _kind(mapping.actual) != "Name" or actual.rank
+                    or actual.signature() != binding.signature() or actual.attributes
+                    or actual.declaring_scope is not caller.scope or actual.name in caller.arguments
+                    or caller.scope.bindings.get(actual.name) is not actual
+                    or self.analysis._binding(edge.resolved._scope, str(mapping.actual).lower()) is not actual
+                    or mapping.actual is not edge.resolved.actuals[routine.arguments.index(binding.name)]):
+                raise CompilationError("native scalar reduction requires its exact caller-owned plain scalar local")
+            specification = tuple(node for node in getattr(caller.scope.node, "content", ())
+                                  if _kind(node) == "Specification_Part")
+            if (not declarations.independent(caller.scope)
+                    or any(_kind(node) in {"Namelist_Stmt", "Data_Stmt"} for node in walk(specification))):
+                raise CompilationError("native scalar reduction actual has unproved storage association")
+            if any(item is not mapping and item.binding is actual for item in edge.resolved.associations):
+                raise CompilationError("native scalar reduction actual aliases another original argument")
+            rows.append({"instance": instance.ordinal, "caller": edge.caller, "callee": procedure,
+                         "formal": binding.public(), "actual": actual.public(),
+                         "original_call": str(edge.original), "whole_original_call_retirement_required": True})
+        return tuple(rows)
+
     def binding(self, binding):
         return binding is not None and self.bindings.get(id(binding)) is binding
 
