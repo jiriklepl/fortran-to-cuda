@@ -57,11 +57,15 @@ def _optional_attachments(value):
 
 
 def _unit_storage_roles(unit):
+    from compiler.scopes.native_opaque_accesses import access_state
+
     scope = unit.scope
     native = tuple((_Identity(operation), _attachments(operation),
-                    _mapping(operation.host_only_reads), _mapping(operation.host_metadata))
+                    _mapping(operation.native_opaque_accesses), tuple((_attachments(access), access_state(access, operation))
+                          for access in operation.native_opaque_accesses.values()), _mapping(operation.host_metadata))
                    for operation in scope.native)
     return (_Identity(unit.host_metadata),
+            unit.source_guard, unit.native_source, unit.publication_only,
             None if unit.host_metadata is None else _mapping(unit.host_metadata),
             _Identity(scope.native), native, _Identity(scope.nodes),
             tuple(_Identity(node) for node in scope.nodes), _Identity(scope.tree),
@@ -157,6 +161,8 @@ class StorageAdmission:
         sessions = {id(analysis._source_session): analysis._source_session
                     for _builder, analysis, _routine, _configuration, _facts in self._plan._contexts}
         pending = [getattr(self._owner, "position_epoch", None), *self._plan._procedures]
+        pending.extend(access for member in self._plan.members for unit in self._plan.units(member)
+                       for operation in unit.scope.native for access in operation.native_opaque_accesses.values())
         pending.extend(task for member in self._plan.members for task in (*member.device_tasks, *member.source_device_tasks))
         seen, retained = set(), []
         while pending:

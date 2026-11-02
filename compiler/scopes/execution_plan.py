@@ -164,6 +164,7 @@ def _registered_authorities(owner, owned_types):
     from compiler.frontend.native_demand import SourceBoundNativeDemandEffects
     from compiler.frontend.native_environment import NativeEnvironmentProof, NativeLocalStateProof
     from compiler.frontend.native_intrinsics import NativePredicateProof
+    from compiler.frontend.native_opaque_writes import NativeOnlyArrayWrite
     from compiler.frontend.native_prefix import NativePrefixProof
     from compiler.frontend.native_preservation import NativePreservationProof
     from compiler.frontend.numerical_completion import NumericalCompletionProof
@@ -199,11 +200,14 @@ def _registered_authorities(owner, owned_types):
     from compiler.scopes.hierarchical_regions import SelectedRoot
     from compiler.scopes.interval_draft import SourceIntervalDraft
     from compiler.scopes.lexical import OwnerEmission
+    from compiler.scopes.native_opaque_accesses import NativeReadonlyPermit
     from compiler.scopes.resource_demand import IntervalResourceDemand
     from compiler.scopes.source import ScopeBuilder
     from compiler.scopes.supported_paths import SupportedPathStorageEpoch
 
     registries = {
+        NativeOnlyArrayWrite: "_native_opaque_write_proofs",
+        NativeReadonlyPermit: "_native_opaque_read_permits",
         AllocationExchangeProof: "_allocation_exchange_proofs",
         AtomicWorksharingTeamProof: "_atomic_worksharing_teams",
         AtomicWorksharingAlternative: "_atomic_worksharing_alternatives",
@@ -483,7 +487,7 @@ def _cost_requirements(members):
         for ordinal, unit in enumerate(member.units):
             kinds = set()
             for operation in unit.scope.native:
-                if operation.host_only_reads:
+                if operation.native_opaque_accesses:
                     kinds.add("host_only_ranges")
                 if operation.native_environment:
                     kinds.add("native_environment")

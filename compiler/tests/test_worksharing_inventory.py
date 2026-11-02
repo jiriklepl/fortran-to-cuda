@@ -84,7 +84,9 @@ def test_discovery_and_admission_prepare_each_original_unit_once(tmp_path, monke
         return original_prepare(self, analysis, procedure, loop, completion, **kwargs)
 
     def team(*args, **kwargs):
-        teams.append(id(args[0]))
+        # Retain each analysis until the identity checks: dead temporaries
+        # may release their address for a later, distinct analysis.
+        teams.append(args[0])
         return original_team(*args, **kwargs)
 
     monkeypatch.setattr(NumericalPreparationProvider, "prepare_worksharing", prepare)
@@ -92,8 +94,9 @@ def test_discovery_and_admission_prepare_each_original_unit_once(tmp_path, monke
     _, report = builder.run()
     assert report["scopes"][0]["checked_execution_plan"]["numerical_invocations"] == 2
     assert len(prepared) == len({id(loop) for loop in prepared}) == 3
-    assert teams.count(id(builder.analysis)) == 1
-    assert len(teams) == len(set(teams))
+    team_ids = [id(analysis) for analysis in teams]
+    assert team_ids.count(id(builder.analysis)) == 1
+    assert len(team_ids) == len(set(team_ids))
     inventories = tuple(builder.analysis._prepared_worksharing_inventories.values())
     assert len(inventories) == 1
     inventory, = inventories

@@ -19,7 +19,7 @@ from compiler.tests.test_scoped_planning_runtime import (
     record,
     select,
 )
-from compiler.tests.test_scoped_runtime import TOKEN, Scope, access, runtime  # noqa: F401
+from compiler.tests.test_scoped_runtime import RECTANGLE_LIMIT, TOKEN, Scope, access, runtime  # noqa: F401
 
 
 class Terminal(c.Structure):
@@ -330,10 +330,11 @@ def test_prework_resource_fallback_preserves_results_and_invalidates_owner_estim
 
 def test_fragmented_definition_query_has_no_live_effects(continuation):
     scope = Scope(continuation)
-    values = (c.c_double * 64)(*range(64))
-    even = [([index], [index + 1]) for index in range(0, 64, 2)]
-    odd = [([index], [index + 1]) for index in range(1, 64, 2)]
-    status, handle = scope.register(values, [64], defined=even)
+    size = 2 * RECTANGLE_LIMIT
+    values = (c.c_double * size)(*range(size))
+    even = [([index], [index + 1]) for index in range(0, size, 2)]
+    odd = [([index], [index + 1]) for index in range(1, size, 2)]
+    status, handle = scope.register(values, [size], defined=even)
     scope.check(status)
     begin(scope)
     record(scope, 91, handle, access(write=odd, overwrite=odd))
@@ -341,7 +342,7 @@ def test_fragmented_definition_query_has_no_live_effects(continuation):
     assert continuation.fort_scope_plan_validate(scope.handle) == 5
     assert "fragmentation" in continuation.fort_scope_error().decode()
     assert bytes(scope.stats()) == before
-    assert list(values) == list(range(64))
+    assert list(values) == list(range(size))
     scope.close()
 
 

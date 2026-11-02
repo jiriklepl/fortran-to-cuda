@@ -9,6 +9,9 @@ from pathlib import Path
 
 import pytest
 
+from compiler.emission.common.resources import read_scoped_runtime
+
+RECTANGLE_LIMIT = read_scoped_runtime()[1]["rectangle_limit"]
 RUNTIME = Path(__file__).resolve().parents[1] / "runtime"
 SIZE = c.c_size_t
 TOKEN = c.c_uint64
@@ -271,12 +274,14 @@ def test_conditional_holes_and_overwrite_skip_input(runtime):
 @pytest.mark.native
 def test_fragmentation_reconciles_current_values(runtime):
     scope = Scope(runtime)
-    host = (c.c_double * 128)(*range(128))
-    status, buffer = scope.register(host, [128])
+    size = 4 * RECTANGLE_LIMIT
+    host = (c.c_double * size)(*range(size))
+    status, buffer = scope.register(host, [size])
     scope.check(status)
-    # Alternate writers so enclosing stale-source copies would corrupt data.
-    expected = list(range(128))
-    for i in range(80):
+    # Alternate writers beyond the current bound so enclosing stale-source
+    # copies would corrupt data during reconciliation.
+    expected = list(range(size))
+    for i in range(2 * RECTANGLE_LIMIT + 16):
         box = [([i], [i+1])]
         if i % 2:
             scope.cpu_begin(buffer, access(write=box, overwrite=box))
@@ -320,19 +325,20 @@ def test_generation_alias_empty_and_overflow(runtime):
 @pytest.mark.native
 def test_partial_initialization_limit_is_preexecution_boundary(runtime):
     scope = Scope(runtime)
-    host = (c.c_double * 80)()
-    status, buffer = scope.register(host, [80], initialized=False)
+    size = 2 * RECTANGLE_LIMIT + 16
+    host = (c.c_double * size)()
+    status, buffer = scope.register(host, [size], initialized=False)
     scope.check(status)
-    for i in range(32):
+    for i in range(RECTANGLE_LIMIT):
         box = [([2*i], [2*i+1])]
         scope.cpu_begin(buffer, access(write=box, overwrite=box))
         host[2*i] = i+10
         scope.cpu_end(buffer)
-    box = [([64], [65])]
+    box = [([2 * RECTANGLE_LIMIT], [2 * RECTANGLE_LIMIT + 1])]
     assert runtime.fort_scope_host_begin(scope.handle, buffer, c.byref(access(write=box, overwrite=box))) == 5
     # Failed preparation did not commit an unexecuted write or leave an access open.
     scope.close()
-    assert [host[2*i] for i in range(32)] == [i+10 for i in range(32)]
+    assert [host[2*i] for i in range(RECTANGLE_LIMIT)] == [i+10 for i in range(RECTANGLE_LIMIT)]
 
 
 @pytest.mark.native
@@ -545,19 +551,20 @@ def test_definition_kill_cannot_lose_executed_gpu_prefix_on_native_boundary(runt
 @pytest.mark.parametrize("device_source", [False, True])
 def test_read_only_fragmentation_reconciliation_retains_original_current_copy(runtime, device_source):
     scope = Scope(runtime)
-    host = (c.c_double * 80)(*range(80))
-    status, buffer = scope.register(host, [80])
+    size = 2 * RECTANGLE_LIMIT + 16
+    host = (c.c_double * size)(*range(size))
+    status, buffer = scope.register(host, [size])
     scope.check(status)
     if device_source:
         device = scope.gpu(buffer, access(flags=6))
-        for i in range(80):
+        for i in range(size):
             device[i] = i + 100
         scope.gpu_end(buffer)
     else:
         # First allocate without acquiring the payload on the device.
         device = scope.gpu(buffer, access())
         scope.gpu_end(buffer)
-    for i in range(33):
+    for i in range(RECTANGLE_LIMIT + 1):
         effects = access(read=[([2 * i], [2 * i + 1])])
         if device_source:
             scope.cpu_begin(buffer, effects)
@@ -571,7 +578,7 @@ def test_read_only_fragmentation_reconciliation_retains_original_current_copy(ru
     before = scope.stats()
     if device_source:
         device = scope.gpu(buffer, access(flags=1))
-        assert list(device[:80]) == [i + 100 for i in range(80)]
+        assert list(device[:size]) == [i + 100 for i in range(size)]
         scope.gpu_end(buffer)
         assert scope.stats().upload_bytes == before.upload_bytes
     else:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from hashlib import sha256
 
 from fparser.two.utils import walk
@@ -15,6 +15,8 @@ from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.integers import integer_literal
 
 NATIVE_COMPLETION_VERSION = 7
+NATIVE_FIXED_ARRAY_COMPLETION_VERSION = 4
+NATIVE_FORMAL_ARRAY_COMPLETION_VERSION = 5
 
 
 def _kind(node):
@@ -59,7 +61,7 @@ class NativeCompletionProof:
 
 
 def _joined_completion_facts(analysis, procedure, selected, *, call_completion=None, worksharing=None,
-                             graph_pointers=None, uniform_sites=None, retirement_schedules=False, native_lifetime=None, section_units=None):
+                             graph_pointers=None, uniform_sites=None, retirement_schedules=False, native_lifetime=None, section_units=None, reduction_team=None):
     """Verify one original group; serialized facts cannot grant a token.
 
     The retained native source supplies its original team, private storage,
@@ -70,7 +72,17 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
     deferred = graph.native_group_for_selection(selected)
     if deferred is None and graph.deferred_native_descendants(identities):
         raise CompilationError("deferred native completion requires the exact whole original source selection")
-    if deferred is not None and not deferred.available:
+    if reduction_team is not None:
+        from compiler.frontend.descriptor_teams import DescriptorTeamProof, _original_group
+        if type(reduction_team) is not DescriptorTeamProof or worksharing is not None:
+            raise CompilationError("fixed array native completion requires its issued whole-team storage proof")
+        reduction_team.validate(analysis, procedure, identities)
+        group = _original_group(analysis.routines[procedure], tuple(selected), graph_selection=True)
+        if (len(group.original_nodes) != len(reduction_team._originals)
+                or any(a is not b for a, b in zip(group.original_nodes, reduction_team._originals, strict=True))
+                or not reduction_team.public().get("intrinsic_fixed_array_reductions")):
+            raise CompilationError("fixed array native completion changed its complete original team")
+    if deferred is not None and not deferred.available and reduction_team is None:
         raise CompilationError("deferred native group completion unavailable: " + str(deferred.reason))
     routine = analysis.routines[procedure]
     originals = tuple(node for identity in identities for node in graph.source_nodes(identity))
@@ -171,14 +183,21 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
             from compiler.frontend.native_private import original_private_array
             private_arrays[binding.root] = original_private_array(routine, binding)
 
-    def clauses(text):
+    def clauses(text, original):
         remainder = text.strip()
         while remainder:
-            match = re.match(r"(private|shared|default|collapse|schedule)\s*\(([^()]*)\)\s*", remainder)
+            pattern = r"(private|shared|default|collapse|schedule|reduction)\s*\(([^()]*)\)\s*" if reduction_team is not None else r"(private|shared|default|collapse|schedule)\s*\(([^()]*)\)\s*"
+            match = re.match(pattern, remainder)
             if match is None:
                 raise CompilationError("unsupported joined native OpenMP clause: " + remainder)
             kind, values = match.group(1), match.group(2).strip()
-            if kind == "default":
+            if kind == "reduction":
+                team_record = reduction_team.public()
+                rows = (*team_record.get("intrinsic_scalar_reductions", ()),
+                        *team_record["intrinsic_fixed_array_reductions"])
+                if not any(row["original_directive"] == str(original) for row in rows):
+                    raise CompilationError("fixed array reduction clause lacks exact original storage evidence")
+            elif kind == "default":
                 if values not in {"shared", "none"}:
                     raise CompilationError("unsupported native OpenMP DEFAULT")
             elif kind == "collapse":
@@ -384,7 +403,7 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
     if first is None or not re.match(r"parallel(?:\s|$)", first):
         raise CompilationError("native operation is not one complete PARALLEL region")
     combined = bool(re.match(r"parallel\s+do(?:\s|$)", first))
-    clauses(first[len("parallel do"):] if combined else first[len("parallel"):])
+    clauses(first[len("parallel do"):] if combined else first[len("parallel"):], nodes[0])
     # A PRIVATE clause on a preceding worksharing DO ends with that DO; it
     # cannot establish the ownership of an ordinary loop in a later SECTION.
     section_private = frozenset(explicit_private)
@@ -428,7 +447,7 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                 continue
             if not re.match(r"do(?:\s|$)", directive):
                 raise CompilationError("unsupported joined native OpenMP directive: " + directive)
-            clauses(directive[2:])
+            clauses(directive[2:], node)
             index += 1
             while index < len(items) and _kind(items[index]) == "Comment" and _directive(items[index]) is None:
                 index += 1
@@ -464,6 +483,10 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
               "has_openmp_in_closure": True, "has_opaque_calls_in_closure": False,
               "join": "implicit combined-loop completion" if implicit_join else "explicit original parallel end",
               "retains_original_team_and_directives": True}
+    if reduction_team is not None:
+        record.update(native_only=True, internal_cuts_authorized=False, gpu_legality_established=False,
+                      fixed_array_reduction_team_identity=reduction_team.identity,
+                      reduction_arithmetic="unchanged original CPU OpenMP reduction; no reassociation")
     if private_arrays:
         record["original_private_arrays"] = [private_arrays[root] for root in sorted(private_arrays)]
     if uniform_reads:
@@ -526,14 +549,81 @@ class NativeGraphCompletionProof:
     _issuer: object = field(repr=False, compare=False)
     _call_storage: object = field(default=None, repr=False, compare=False)
     _call_joins: tuple = field(default=(), repr=False, compare=False)
+    _reduction_teams: tuple = field(default=(), repr=False, compare=False)
+    _context: object = field(default=None, repr=False, compare=False)
+    _arena: object = field(default=None, repr=False, compare=False)
+
+    def _require_handle(self, analysis):
+        if analysis is not self._analysis or type(self) is not NativeGraphCompletionProof:
+            raise CompilationError("native graph completion requires exact registered source and graph authority")
+        if getattr(analysis, "_source_session", None) is None:
+            if self._context is not None or self._arena is not None or self._reduction_teams:
+                raise CompilationError("fixed array completion requires its sealed source authority")
+            return
+        context = analysis.source_authority_context()
+        if self._context is not context:
+            raise CompilationError("native graph completion changed its issuing source context")
+        context.require(analysis)
+        arena = context.derivation_arena(analysis)
+        if not arena.accepts(self._arena):
+            raise CompilationError("native graph completion belongs to a discarded generation")
+        try:
+            arena.require_handle(("native_graph_completion", id(analysis), self.identity), self)
+        except CompilationError as error:
+            raise CompilationError("native graph completion requires exact registered source and graph authority: " + str(error)) from error
 
     def validate(self, analysis, procedure, selected):
-        if (self._issuer is not _GRAPH_COMPLETION_ISSUER or analysis is not self._analysis
+        attachments = _graph_completion_attachments(self)
+        identity = self.identity
+        session = getattr(analysis, "_source_session", None)
+        self._require_handle(analysis)
+        registry = analysis._native_graph_completions
+        context = getattr(analysis, "_source_authority_context", None)
+        arena = getattr(analysis, "_source_derivation_arena", None)
+        self._validate_source(analysis, procedure, selected)
+        _require_graph_completion_attachments(self, attachments)
+        self._require_handle(analysis)
+        if (getattr(analysis, "_source_session", None) is not session
+                or getattr(analysis, "_source_authority_context", None) is not context
+                or getattr(analysis, "_source_derivation_arena", None) is not arena
+                or getattr(analysis, "_native_graph_completions", None) is not registry
+                or getattr(analysis, "_native_graph_completions", {}).get(identity) is not self):
+            raise CompilationError("native graph completion publication authority changed")
+        _require_graph_completion_attachments(self, attachments)
+        return self
+
+    def _validate_source(self, analysis, procedure, selected):
+        if (type(self) is not NativeGraphCompletionProof or self._issuer is not _GRAPH_COMPLETION_ISSUER or analysis is not self._analysis
                 or procedure != self.procedure or tuple(selected) != self.selected_node_ids
                 or getattr(analysis, "_native_graph_completions", {}).get(self.identity) is not self
                 or analysis.structure(procedure) is not self._structure):
             raise CompilationError("native graph completion requires exact registered source and graph authority")
         self._graph.validate(analysis, self._graph.procedure, self._graph._selection)
+        rows = self._record.get("fixed_array_reduction_teams", ())
+        if rows or self._reduction_teams:
+            from compiler.frontend.descriptor_teams import DescriptorTeamProof
+            if self._call_storage is not None or not rows or len(rows) != len(self._reduction_teams):
+                raise CompilationError("fixed array completion lost its exact team receipts")
+            groups = {(name, tuple(map(id, originals))) for name, originals in _native_call_groups(self._graph)}
+            for row, team in zip(rows, self._reduction_teams, strict=True):
+                if (type(team) is not DescriptorTeamProof
+                        or (team.procedure, tuple(map(id, team._originals))) not in groups):
+                    raise CompilationError("fixed array completion changed its graph-owned original team")
+                team.validate(analysis, team.procedure, team.selected_node_ids)
+                if _freeze(team.public()) != row or not row.get("intrinsic_fixed_array_reductions"):
+                    raise CompilationError("fixed array completion changed its original reduction storage")
+        # Recompute every existing equation, even when both new fields were
+        # stripped. Retirement's identity version4 is distinct from its public
+        # schema3; ordinary graph records retain their original version2 bytes.
+        formal_rows = _formal_array_call_rows(analysis, self._graph, self._reduction_teams)
+        if formal_rows != _thaw(self._record.get("fixed_array_call_instances", ())):
+            raise CompilationError("native array completion changed its exact incoming CALL coverage")
+        version = _graph_completion_version(self._record, self._call_storage)
+        expected = sha256(json.dumps({"version": version, "native_graph": self._graph.identity,
+            "procedure": procedure, "selected": tuple(selected), "record": _thaw(self._record)},
+            sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        if expected != self.identity:
+            raise CompilationError("native graph completion record changed")
         if self._call_storage is not None:
             if self._record.get("storage_identity") != self._call_storage.identity:
                 raise CompilationError("native call retirement changed its independent storage proof")
@@ -554,9 +644,71 @@ class NativeGraphCompletionProof:
         return self
 
     def public(self):
-        return {"schema_version": 3 if self._call_storage is not None else 2,
+        return {"schema_version": NATIVE_FORMAL_ARRAY_COMPLETION_VERSION if self._record.get("fixed_array_call_instances") else NATIVE_FIXED_ARRAY_COMPLETION_VERSION if self._reduction_teams else 3 if self._call_storage is not None else 2,
                 "proof_identity": self.identity, "procedure": self.procedure,
                 "native_graph_identity": self._graph.identity, **_thaw(self._record)}
+
+
+
+def _graph_completion_attachments(proof):
+    from compiler.frontend.descriptor_teams import _original_call_receipts
+
+    owners = [proof]
+    formal = [team for team in proof._reduction_teams if team._fixed_array_associations]
+    if formal:
+        owners.extend((proof._graph, *proof._graph.templates, *proof._graph.instances))
+        for instance in proof._graph.instances:
+            if instance.call is not None:
+                owners.extend((instance.call, instance.call.edge,
+                               *_original_call_receipts(instance.call.edge.resolved)))
+        for team in formal:
+            owners.extend((team, *team._fixed_array_associations))
+            for item in team._fixed_array_associations:
+                owners.extend(_original_call_receipts(item._resolved))
+    return tuple((owner, item.name, object.__getattribute__(owner, item.name))
+                 for owner in owners for item in fields(type(owner)))
+
+
+def _require_graph_completion_attachments(proof, attachments):
+    if any(object.__getattribute__(owner, name) is not value for owner, name, value in attachments):
+        raise CompilationError("native graph completion attachments changed during publication")
+
+
+def _publish_graph_completion(analysis, registry, proof):
+    session = getattr(analysis, "_source_session", None)
+    context = analysis.source_authority_context() if getattr(analysis, "_source_session", None) is not None else None
+    arena = context.derivation_arena(analysis) if context is not None else None
+    if context is None and proof._reduction_teams:
+        raise CompilationError("fixed array graph completion requires a sealed original source session")
+    object.__setattr__(proof, "_context", context)
+    object.__setattr__(proof, "_arena", arena)
+    attachments = _graph_completion_attachments(proof)
+    identity = proof.identity
+    registry[identity] = proof
+    try:
+        proof._validate_source(analysis, proof.procedure, proof.selected_node_ids)
+        analysis.verify_publication()
+        if context is not None:
+            context.require(analysis)
+            if context.derivation_arena(analysis) is not arena:
+                raise CompilationError("native graph completion issuing generation changed")
+        if (getattr(analysis, "_source_session", None) is not session
+                or (context is not None and (
+                    getattr(analysis, "_source_authority_context", None) is not context
+                    or getattr(analysis, "_source_derivation_arena", None) is not arena))
+                or getattr(analysis, "_native_graph_completions", None) is not registry
+                or registry.get(identity) is not proof):
+            raise CompilationError("native graph completion registry changed before publication")
+        # No delegated source/publication check follows this attachment fence.
+        # Frozen records and tuples make raw field identity sufficient here.
+        _require_graph_completion_attachments(proof, attachments)
+        if context is not None:
+            arena.register_handle(("native_graph_completion", id(analysis), identity), proof)
+        return proof
+    except BaseException:
+        if registry.get(identity) is proof:
+            del registry[identity]
+        raise
 
 
 def prove_graph_joined_completion(analysis, procedure, selected, native_graph):
@@ -568,10 +720,10 @@ def prove_graph_joined_completion(analysis, procedure, selected, native_graph):
     native_graph.validate(analysis, native_graph.procedure, native_graph._selection)
     if not native_graph.completion_eligible:
         raise CompilationError("native graph has unresolved effect or association barriers")
-    checked = {}
+    checked, reduction_teams = {}, []
     for obligation in native_graph.deferred_completion:
         key = obligation.procedure, tuple(map(id, obligation.originals))
-        checked[key] = _graph_joined_facts(analysis, obligation.procedure, obligation.originals, native_graph)
+        checked[key] = _graph_joined_facts(analysis, obligation.procedure, obligation.originals, native_graph, reduction_teams=reduction_teams)
     key = procedure, tuple(map(id, selected))
     ordinary = None
     if key not in checked:
@@ -584,11 +736,16 @@ def prove_graph_joined_completion(analysis, procedure, selected, native_graph):
         # A previously proved ordinary join is retained independently in the
         # same graph. Verify the full graph-owned structure as for a deferred
         # group; absence of an obligation never supplies completion evidence.
-        checked[key] = _graph_joined_facts(analysis, procedure, selected, native_graph)
+        checked[key] = _graph_joined_facts(analysis, procedure, selected, native_graph, reduction_teams=reduction_teams)
     structure, identities, record = checked[key]
     if ordinary is not None:
         record["retained_ordinary_completion_identity"] = ordinary.identity
-    identity = sha256(json.dumps({"version": 2, "native_graph": native_graph.identity,
+    if reduction_teams:
+        record["fixed_array_reduction_teams"] = [team.public() for team in reduction_teams]
+    formal_rows = _formal_array_call_rows(analysis, native_graph, reduction_teams)
+    if formal_rows:
+        record["fixed_array_call_instances"] = formal_rows
+    identity = sha256(json.dumps({"version": _graph_completion_version(record), "native_graph": native_graph.identity,
                                   "procedure": procedure, "selected": identities, "record": record},
                                  sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     registry = getattr(analysis, "_native_graph_completions", None)
@@ -599,12 +756,85 @@ def prove_graph_joined_completion(analysis, procedure, selected, native_graph):
     if len(registry) >= analysis.procedure_limit:
         raise CompilationError("native graph completion proof registry budget exhausted")
     proof = NativeGraphCompletionProof(procedure, identity, identities, _freeze(record), native_graph,
-                                        structure, analysis, _GRAPH_COMPLETION_ISSUER)
-    registry[identity] = proof
-    return proof.validate(analysis, procedure, identities)
+                                        structure, analysis, _GRAPH_COMPLETION_ISSUER, _reduction_teams=tuple(reduction_teams))
+    return _publish_graph_completion(analysis, registry, proof)
 
 
-def _graph_joined_facts(analysis, procedure, selected, native_graph, *, retirement_storage=None):
+def _graph_completion_version(record, call_storage=None):
+    return (4 if call_storage is not None else NATIVE_FORMAL_ARRAY_COMPLETION_VERSION
+            if record.get("fixed_array_call_instances") else NATIVE_FIXED_ARRAY_COMPLETION_VERSION
+            if record.get("fixed_array_reduction_teams") else 2)
+
+
+def _incoming_array_calls(analysis, native_graph, procedure, binding):
+    instances = [item for item in native_graph.instances if item.template.procedure == procedure]
+    if not instances:
+        raise CompilationError("native reduction formal has no original incoming CALL instance")
+    for instance in instances:
+        if (instance.call is None or instance.parent is None
+                or not 0 <= instance.ordinal < len(native_graph.instances)
+                or not 0 <= instance.parent < instance.ordinal
+                or native_graph.instances[instance.ordinal] is not instance):
+            raise CompilationError("native reduction formal requires every original incoming CALL")
+        parent = native_graph.instances[instance.parent]
+        edge = instance.call.edge
+        if (not any(item is instance.call for item in parent.template.calls)
+                or edge.caller != parent.template.procedure or edge.callee != procedure):
+            raise CompilationError("native reduction CALL lost its exact original graph edge")
+        edge.resolved.validate(analysis, edge.resolved._scope, edge.original)
+        mapping = next((item for item in edge.resolved.associations if item.formal_binding is binding), None)
+        if mapping is None:
+            raise CompilationError("native reduction CALL lost its exact formal association")
+        yield instance, edge, mapping
+
+
+def _derive_formal_array_calls(analysis, native_graph, procedure, binding):
+    from compiler.frontend.native_fixed_array_association import prove_native_fixed_array_association
+
+    context = analysis.source_authority_context()
+    proofs = []
+    for _instance, edge, _mapping in _incoming_array_calls(analysis, native_graph, procedure, binding):
+        parent = context.session.lexical_parent(edge.original)
+        selection = (parent,) if _kind(parent) == "If_Stmt" else (edge.original,)
+        proof = prove_native_fixed_array_association(analysis, edge.caller, selection, binding.name)
+        if not any(previous is proof for previous in proofs):
+            proofs.append(proof)
+    return tuple(proofs)
+
+
+def _formal_array_call_rows(analysis, native_graph, teams):
+    from compiler.frontend.native_fixed_array_association import NativeFixedArrayAssociation
+
+    by_formal = {}
+    for team in teams:
+        for proof in team._fixed_array_associations:
+            if type(proof) is not NativeFixedArrayAssociation:
+                raise CompilationError("native array completion requires exact original association receipts")
+            proof.validate(analysis, proof._caller.qualified, proof._selection, proof._formal_name)
+            key = team.procedure, id(proof.formal)
+            proofs = by_formal.setdefault(key, [])
+            if not any(previous is proof for previous in proofs):
+                proofs.append(proof)
+    rows = []
+    for (procedure, _key), proofs in by_formal.items():
+        binding = proofs[0].formal
+        used = set()
+        for instance, edge, mapping in _incoming_array_calls(analysis, native_graph, procedure, binding):
+            matched = [proof for proof in proofs if proof._caller.qualified == edge.caller
+                       and _original_call_control(proof._selection) is edge.original]
+            if len(matched) != 1 or matched[0].actual is not mapping.binding:
+                raise CompilationError("native array completion lacks exact association for an incoming CALL")
+            proof = matched[0]
+            used.add(id(proof))
+            rows.append({"instance": instance.ordinal, "caller": edge.caller, "callee": procedure,
+                         "formal": binding.name, "association_identity": proof.identity,
+                         "original_call": str(edge.original)})
+        if used != {id(proof) for proof in proofs}:
+            raise CompilationError("native array completion has an unrelated original CALL association")
+    return sorted(rows, key=lambda item: (item["instance"], item["callee"], item["formal"]))
+
+
+def _graph_joined_facts(analysis, procedure, selected, native_graph, *, retirement_storage=None, reduction_teams=None):
     native_graph.validate(analysis, native_graph.procedure, native_graph._selection)
     template = next((item for item in native_graph.templates if item.procedure == procedure), None)
     if template is None:
@@ -616,7 +846,31 @@ def _graph_joined_facts(analysis, procedure, selected, native_graph, *, retireme
         _require_native_call_retirement(analysis, native_graph, retirement_storage)
     directives = [_directive(node) for original in selected for node in walk(original)
                   if _directive(node) is not None]
-    opening = r"parallel(?:\s|$)" if retirement_storage is not None else r"parallel\s+do(?:\s|$)"
+    reduction_team = None
+    if reduction_teams is not None and any(re.search(r"\breduction\s*\(", text) for text in directives):
+        from compiler.frontend.descriptor_teams import _FixedArrayAssociationRequired, prove_descriptor_team
+        associations, requested = (), set()
+        while True:
+            try:
+                team = prove_descriptor_team(analysis, procedure, tuple(selected),
+                    fixed_array_associations=associations)
+                break
+            except _FixedArrayAssociationRequired as error:
+                if type(error) is not _FixedArrayAssociationRequired:
+                    raise
+                routine = analysis._require_original(procedure)
+                binding = error.binding
+                if (id(binding) in requested or len(requested) >= len(routine.arguments)
+                        or routine.scope.bindings.get(binding.name) is not binding
+                        or binding.name not in routine.arguments):
+                    raise CompilationError("native array completion has an invalid formal association request") from error
+                requested.add(id(binding))
+                associations += _derive_formal_array_calls(analysis, native_graph, procedure, binding)
+        if team.public().get("intrinsic_fixed_array_reductions"):
+            reduction_team = team.validate(analysis, procedure, team.selected_node_ids)
+            if all(previous is not team for previous in reduction_teams):
+                reduction_teams.append(team)
+    opening = r"parallel(?:\s|$)" if retirement_storage is not None or reduction_team is not None else r"parallel\s+do(?:\s|$)"
     if not directives or not re.match(opening, directives[0]):
         raise CompilationError("graph-owned native completion requires one complete original PARALLEL DO")
     calls = {id(instance.call.edge.original): instance.call.edge
@@ -646,7 +900,7 @@ def _graph_joined_facts(analysis, procedure, selected, native_graph, *, retireme
         lifetime = NativeLifetimeContext(analysis, native_graph)
     structure, identities, _executable, private, record = _joined_completion_facts(
         analysis, procedure, selected, call_completion=complete_call, graph_pointers=pointers,
-        retirement_schedules=retirement_storage is not None, native_lifetime=lifetime)
+        retirement_schedules=retirement_storage is not None, native_lifetime=lifetime, reduction_team=reduction_team)
     if any(pointer.binding.root not in private for pointer in pointers):
         raise CompilationError("confined native pointer requires explicit original PRIVATE descriptor storage")
     record.update(native_only=True, internal_cuts_authorized=False, gpu_legality_established=False,
@@ -679,7 +933,7 @@ def _native_call_groups(native):
 
 def native_call_storage_structures(analysis, native):
     """Existing callees of one whole original CALL or single-line IF CALL."""
-    from compiler.frontend.descriptor_teams import prove_descriptor_team
+    from compiler.frontend.descriptor_teams import _FixedArrayAssociationRequired, prove_descriptor_team
     from compiler.frontend.resource_reachability import NativeEffectGraph
 
     if type(native) is not NativeEffectGraph:
@@ -696,8 +950,25 @@ def native_call_storage_structures(analysis, native):
     for name, originals in _native_call_groups(native):
         if name not in analysis.routines or name == native.procedure:
             raise CompilationError("native call team requires an original complete subroutine callee")
-        result.append(prove_descriptor_team(analysis, name, originals,
-            native_graph=native if lifetime is not None and lifetime.team_bindings(name, originals) else None))
+        try:
+            team = prove_descriptor_team(analysis, name, originals,
+                native_graph=native if lifetime is not None and lifetime.team_bindings(name, originals) else None)
+        except _FixedArrayAssociationRequired as error:
+            if type(error) is not _FixedArrayAssociationRequired:
+                raise
+            # A formal reduction needs the same graph-owned incoming CALL
+            # receipts as ordinary joined completion. Descriptor storage alone
+            # cannot manufacture that association or grant payload access.
+            completion = prove_graph_joined_completion(analysis, name, originals, native)
+            selected = analysis._selected_source(name, originals)[1]
+            completion.validate(analysis, name, selected)
+            matches = [proof for proof in completion._reduction_teams
+                       if proof.procedure == name and len(proof._originals) == len(originals)
+                       and all(left is right for left, right in zip(proof._originals, originals, strict=True))]
+            if len(matches) != 1 or not matches[0]._fixed_array_associations:
+                raise CompilationError("native call storage lost its exact formal reduction team") from error
+            team = matches[0]
+        result.append(team)
     for template in native.templates:
         result.extend(template.worksharing)
     return tuple({id(proof): proof for proof in result}.values())
@@ -727,6 +998,11 @@ def _require_native_call_retirement(analysis, native, storage):
                 raise CompilationError("native retirement changed its confined-pointer team graph")
         else:
             proof.validate(analysis, proof._routine)
+    # Storage keeps the exact team handles; retirement does not become an
+    # executable fixed-array completion. Recheck every formal association
+    # against this original CALL graph at issue and subsequent publication.
+    _formal_array_call_rows(analysis, native,
+        tuple(proof for proof in structures if type(proof) is DescriptorTeamProof))
     groups = _native_call_groups(native)
     expected_teams = {(name, analysis._selected_source(name, originals)[1]) for name, originals in groups}
     actual_teams = {(proof.procedure, tuple(proof.selected_node_ids)) for proof in structures
@@ -787,9 +1063,13 @@ def prove_native_call_retirement(analysis, procedure, selected, native, storage)
         elif ordinary:
             raise CompilationError("native call retirement has ambiguous original group completion")
         else:
-            _graph, checked_ids, facts = _graph_joined_facts(analysis, name, originals, native, retirement_storage=storage)
+            reduction_teams = []
+            _graph, checked_ids, facts = _graph_joined_facts(analysis, name, originals, native,
+                retirement_storage=storage, reduction_teams=reduction_teams)
             if checked_ids != selected_ids:
                 raise CompilationError("native call retirement changed a complete original group")
+            if any(not any(team is retained for retained in storage._joined_storage) for team in reduction_teams):
+                raise CompilationError("native retirement replaced its exact joined storage team")
             group_records.append({"procedure": name, "selected_node_ids": list(selected_ids),
                                   "graph_completion": facts})
     record = {"kind": "whole_original_native_call_retirement", "available": True,
@@ -815,5 +1095,4 @@ def prove_native_call_retirement(analysis, procedure, selected, native, storage)
         raise CompilationError("native graph completion proof registry budget exhausted")
     proof = NativeGraphCompletionProof(procedure, identity, identities, _freeze(record), native, structure,
         analysis, _GRAPH_COMPLETION_ISSUER, storage, tuple(joins))
-    registry[identity] = proof
-    return proof.validate(analysis, procedure, identities)
+    return _publish_graph_completion(analysis, registry, proof)

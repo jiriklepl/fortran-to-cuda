@@ -45,7 +45,8 @@ def needs_call_receipt(member):
         if id(current) in seen:
             continue
         seen.add(id(current))
-        if any(_projectable(task) for task in current.source_device_tasks):
+        if (any(_projectable(task) for task in current.source_device_tasks)
+                or any(operation.native_opaque_accesses for unit in current.units for operation in unit.scope.native)):
             return True
         for receipt in getattr(current, "source_companion_calls", ()):
             if original_type(receipt) is not CheckedBorrowedCall:
@@ -123,13 +124,10 @@ def _field_roots(nodes, edges, procedure, field_slots):
     return {field: sorted(memo[(procedure, slot)]) for field, slot in field_slots.items()}
 
 
-def call_projection(member, task):
-    """Revalidate the complete original companion DAG before publishing it."""
-    if not _projectable(task):
-        return None
+def checked_call_inventory(member):
+    """Existing exact companion receipts and local slots, without task authority."""
     from compiler.scopes.module_owner import ModuleOwner
 
-    task.proof.validate(member.builder.analysis, member.routine, task.nodes)
     owner = member.owner
     if owner.members.get(member.routine.qualified) is not member:
         _fail("lost its exact checked member")
@@ -278,6 +276,16 @@ def call_projection(member, task):
         active.remove(name)
 
     visit(member)
+    return nodes, edges, changed
+
+
+def call_projection(member, task):
+    """Revalidate the complete original companion DAG before publishing it."""
+    if not _projectable(task):
+        return None
+    task.proof.validate(member.builder.analysis, member.routine, task.nodes)
+    nodes, edges, changed = checked_call_inventory(member)
+    owner = member.owner
     if not changed:
         return None  # Preserve the existing single-association record unchanged.
     fields = tuple(binding.root for binding, _written in task.proof.fields)

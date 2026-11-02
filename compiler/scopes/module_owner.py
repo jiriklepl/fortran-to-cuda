@@ -38,7 +38,7 @@ def _caller_arrays(parent, resolved, child, immutable_inputs, reached):
     numbers = set(child.handle_numbers())
     parameterized = parent.builder.config.scope_execution == "graph" and reached is None
     native_roots = ({root for unit in child.units for operation in unit.scope.native
-                     for root in operation.host_only_reads}
+                     for root in operation.native_opaque_accesses}
                     | set(getattr(child, "parameterized_native_bindings", {}))) if parameterized else set()
     native_arrays = [mapping for mapping in associations if mapping.formal_binding.root in native_roots]
     if native_arrays:
@@ -104,7 +104,7 @@ def _parameterized_handles(parent, resolved, child):
         raise CompilationError("parameterized module companion has uncertain hidden-resource aliases")
     result = {}
     native_roots = ({root for unit in child.units for operation in unit.scope.native
-                     for root in operation.host_only_reads}
+                     for root in operation.native_opaque_accesses}
                     | set(getattr(child, "parameterized_native_bindings", {})))
     native_slots = {slot for root, (_binding, slot) in child.resources.items() if root in native_roots}
     for slot, binding in bindings.items():

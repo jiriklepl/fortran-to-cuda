@@ -452,7 +452,7 @@ class LexicalOwner:
     def host_read_roots(self):
         members = {id(member): member for member in (*self.owner.members.values(), self)}.values()
         return ({member.canonical(binding).root for member in members for unit in member.units
-                 for operation in unit.scope.native for binding in operation.host_only_reads.values()}
+                 for operation in unit.scope.native for access in operation.native_opaque_accesses.values() for binding in (access.binding,)}
                 | {member.canonical(binding).root for member in members
                    for binding in getattr(member, "parameterized_native_bindings", {}).values()})
 
@@ -490,7 +490,7 @@ class LexicalOwner:
         # Include that in-progress member so its prior units have authority too.
         members = {id(member): member for member in (*self.owner.members.values(), self)}.values()
         host_reads = {self.canonical(binding).root for operation in scope.native
-                      for binding in operation.host_only_reads.values()}
+                      for access in operation.native_opaque_accesses.values() for binding in (access.binding,)}
         managed = {self.canonical(binding).root for binding in arrays.values()}
         previous_host, previous_managed = set(), set()
         for member in members:
@@ -500,7 +500,7 @@ class LexicalOwner:
                 for binding in getattr(member, "parameterized_native_bindings", {}).values())
             for unit in member.units:
                 previous_host.update(member.canonical(binding).root for operation in unit.scope.native
-                                     for binding in operation.host_only_reads.values())
+                                     for access in operation.native_opaque_accesses.values() for binding in (access.binding,))
                 previous_managed.update(member.canonical(binding).root for binding in unit.arrays.values())
         return ((host_reads & (managed | previous_managed)) | (managed & previous_host)
                 | (managed & self.owner.scalar_element_resources.keys()))
@@ -753,9 +753,21 @@ class LexicalOwner:
         before = self.owner.builder.scope_checkpoint()
         joined_rejections = []
         try:
-            native_only = getattr(self, "native_ancestor_only", False)
+            defer_native_write = False
             if len(nodes) == 1 and _kind(nodes[0]) == "Call_Stmt":
-                self.check_host_read_actuals(nodes[0])
+                from compiler.scopes.segments import native_opaque_call_candidates
+
+                defer_native_write = native_opaque_call_candidates(self.builder, nodes[0]) is not None
+                if not defer_native_write:
+                    self.check_host_read_actuals(nodes[0])
+            original_if = None
+            if (not condition_only and boundary_nodes is not None and len(boundary_nodes) == 1
+                    and _kind(boundary_nodes[0]) == "If_Stmt"):
+                original_if = boundary_nodes[0]
+                if (source_guard != str(original_if.items[0]) or native_source != str(original_if.items[1])
+                        or tuple(self.builder.inline.original_selection(nodes)) != (original_if.items[1],)):
+                    raise CompilationError("native lexical CALL lost its original guard and action")
+            native_only = getattr(self, "native_ancestor_only", False)
             scope = None
             if not condition_only and not native_only:
                 if (len(nodes) > 1 and self.builder.config.scope_execution == "graph"
@@ -811,7 +823,7 @@ class LexicalOwner:
                     if scope is None:
                         scope = StructuredScope(self.builder, nodes, condition_only=condition_only,
                                                 native_metadata=True, lexical_native=True, native_host_reads=True,
-                                                native_only=native_only)
+                                                native_only=native_only, original_if=original_if)
                 except CompilationError as demand_error:
                     # Existing precise original-source effects may be stronger
                     # than conservative demand effects (e.g. indirect sections).
@@ -820,7 +832,7 @@ class LexicalOwner:
                     try:
                         scope = StructuredScope(self.builder, nodes, condition_only=condition_only,
                                                 native_metadata=True, lexical_native=True, native_host_reads=True,
-                                                native_only=native_only)
+                                                native_only=native_only, original_if=original_if)
                     except CompilationError as complete_error:
                         raise CompilationError(str(demand_error) + "; precise native path: "
                                                + str(complete_error)) from complete_error
@@ -836,6 +848,18 @@ class LexicalOwner:
                     self.graph_native_tasks.append((tuple(nodes), scope))
                 return
             arrays, scalars, written = self.builder.owner_inputs(scope.calls, reached_definitions=True)
+            if defer_native_write:
+                from compiler.frontend.native_opaque_writes import NativeOnlyArrayWrite
+                writes = ([access for operation in scope.native for access in operation.native_opaque_accesses.values()
+                           if type(access.permit) is NativeOnlyArrayWrite] if type(scope) is StructuredScope else [])
+                if not writes:
+                    self.check_host_read_actuals(nodes[0])
+                else:
+                    # No child/formal forwarding occurs on this route. Only
+                    # complete original C2 operations can retain the reservation.
+                    if scope.calls:
+                        raise CompilationError("native opaque writer cannot forward a numeric child")
+                    scope.validate_opaque_control()
             scope.inputs(arrays, scalars, written)
             # Opaque reservations cannot later become managed numeric buffers.
             # Check canonical actual resources across every original owner and
@@ -892,6 +916,12 @@ class LexicalOwner:
             self.builder.scope_budget(scope.calls)
             unit = Unit(tuple(nodes), scope, arrays, scalars, written, leaves, definitions,
                         source_guard, "" if condition_only else native_source, condition_only, metadata)
+            if type(scope) is StructuredScope:
+                from compiler.frontend.native_opaque_writes import NativeOnlyArrayWrite
+                for operation in scope.native:
+                    if any(type(access.permit) is NativeOnlyArrayWrite for access in operation.native_opaque_accesses.values()):
+                        operation.opaque_unit = unit
+                scope.validate_opaque_control(unit)
             for binding in {**arrays, **metadata}.values():
                 self.add_resource(binding)
             self.units.append(unit)
@@ -971,6 +1001,12 @@ class LexicalOwner:
                 # Numerical ineligibility does not rule out a useful native
                 # correction. Try its native effects once, without borrowing
                 # another implementation after failure.
+                self.admit((node,))
+                return
+            from compiler.scopes.segments import native_opaque_call_candidates
+            if native_opaque_call_candidates(self.builder, node) is not None:
+                # Shape discovery grants nothing: admit must issue the exact
+                # complete C2 graph/storage permit before an opaque role exists.
                 self.admit((node,))
                 return
             if self.mapped_child(node):
@@ -1107,6 +1143,8 @@ class LexicalOwner:
         raise CompilationError("lexical storage lacks an original declaration: " + binding.root)
 
     def emit_unit(self, unit, index):
+        if isinstance(unit.scope, StructuredScope):
+            unit.scope.validate_opaque_control(unit)
         if self.builder.config.scope_execution == "graph":
             from compiler.scopes.graph import validate_scheduled_unit
 

@@ -7,6 +7,7 @@ from types import MappingProxyType
 
 from fparser.two.utils import walk
 
+from compiler.frontend.call_bindings import _original_call_control
 from compiler.frontend.component_bindings import _typename
 from compiler.frontend.source_objects import _TypeBuilder
 from compiler.ir import CompilationError
@@ -27,7 +28,7 @@ class NativeLifetimeContext:
         if type(graph) is not NativeEffectGraph:
             raise CompilationError("native lifetime context requires its issued original graph")
         graph.validate(analysis, graph.procedure, graph._selection)
-        if (len(graph._selection) != 1 or _kind(graph._selection[0]) != "Call_Stmt"
+        if (_original_call_control(graph._selection) is None
                 or not graph.retirement_effects_eligible):
             raise CompilationError("native lifetime context requires one complete original CALL graph")
         self.analysis, self.graph = analysis, graph

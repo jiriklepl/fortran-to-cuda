@@ -11,6 +11,8 @@ import json
 from dataclasses import dataclass, field
 from hashlib import sha256
 
+from fparser.two.utils import walk
+
 from compiler.frontend.call_bindings import (
     OriginalCallBudgetExceeded,
     resolve_original_call,
@@ -28,7 +30,7 @@ from compiler.frontend.source_objects import _members, _TypeBuilder
 from compiler.ir import CompilationError
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
-VERSION = 12
+VERSION = 13
 HOST_CONTROL_VERSION = 4
 
 
@@ -1405,12 +1407,39 @@ class _Scan:
                         self.completion.append((routine.qualified, proof.selected_node_ids, proof))
                     except CompilationError as error:
                         self.record(NativeDeferredCompletion(routine.qualified, originals, str(error)))
+                    owned = {id(part) for part in item.items if _kind(part) == "Comment"}
+                    directives = []
+                    for original in originals:
+                        for part in walk(original):
+                            self.tick()
+                            if _kind(part) == "Comment" and str(part).lstrip().lower().startswith("!$omp"):
+                                directives.append(part)
+                    if any(id(part) not in owned for part in directives):
+                        try:
+                            # Only the new fixed-array route widens ownership.
+                            # Its existing issuer checks every exact original
+                            # clause, nesting and parent join before any comment
+                            # is suppressed by the effect traversal below.
+                            from compiler.frontend.descriptor_teams import prove_descriptor_team
+                            team = prove_descriptor_team(self.analysis, routine.qualified, originals)
+                            team.validate(self.analysis, routine.qualified, team.selected_node_ids)
+                        except CompilationError:
+                            # No newly owned directives: preserve their ordinary
+                            # conservative effect/completion rejection below.
+                            pass
+                        else:
+                            if team.public().get("intrinsic_fixed_array_reductions"):
+                                owned.update(id(part) for part in directives)
                     self.joined_depth += 1
-                    self.group_directives.append({id(part) for part in item.items if _kind(part) == "Comment"})
+                    self.group_directives.append(owned)
                     try:
+                        # Preserve every existing top-level executable sentinel,
+                        # including non-OMP host blockers; the scanner dedups.
                         for part in item.items:
                             if _kind(part) == "Comment":
                                 self.host_directive(routine, part)
+                        for part in directives:
+                            self.host_directive(routine, part)
                         for node in originals:
                             if _kind(node) != "Comment":
                                 self.statement(routine, node, mapping, called=called, depth=depth + 1,
@@ -1447,6 +1476,7 @@ class _Scan:
         if kind == "Comment":
             self.host_directive(routine, node)
             if (str(node).lstrip().lower().startswith("!$omp") and not ignore_directives
+                    and not any(id(node) in owned for owned in self.group_directives)
                     and (not called or not self.orphan_worksharing(routine, node))):
                 self.barrier("completion", routine, node, "unowned original OpenMP directive")
         elif kind == "Assignment_Stmt":

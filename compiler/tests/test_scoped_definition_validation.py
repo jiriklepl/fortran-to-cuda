@@ -110,15 +110,18 @@ void guards(){auto in=preservation();assert(validate_definitions(in).status==FOR
  in=preservation();in.operations[0].bindings[0].effects.writes={Box{{0},{17}}};assert(validate_definitions(in).status==FORT_SCOPE_BOUNDARY);
 }
 void fragmentation(){
- Inputs in;in.graph_mode=true;Resource b;b.handle=1;b.element_bytes=8;b.extents={11,11};b.bytes=968;
- const Region full={Box{{0,0},{11,11}}};b.initialized=b.host_current=full;in.resources={b};Region bars;
- for(size_t k=1;k<11;k+=2)bars.push_back(Box{{k,0},{k+1,11}});
- for(size_t k=1;k<11;k+=2)bars.push_back(Box{{0,k},{11,k+1}});
- Operation op;op.kind=FORT_SCOPE_PLAN_WORKER;op.unit=100;op.flops=100;op.memory_bytes=968;
+ // Crossed bars leave more disconnected cells than the public bound.
+ size_t islands=1;while(islands*islands<=fort_scoped::coherence::rectangle_limit)++islands;
+ const size_t side=2*islands-1;
+ Inputs in;in.graph_mode=true;Resource b;b.handle=1;b.element_bytes=8;b.extents={side,side};b.bytes=8*side*side;
+ const Region full={Box{{0,0},{side,side}}};b.initialized=b.host_current=full;in.resources={b};Region bars;
+ for(size_t k=1;k<side;k+=2)bars.push_back(Box{{k,0},{k+1,side}});
+ for(size_t k=1;k<side;k+=2)bars.push_back(Box{{0,k},{side,k+1}});
+ Operation op;op.kind=FORT_SCOPE_PLAN_WORKER;op.unit=100;op.flops=100;op.memory_bytes=b.bytes;
  op.bindings={{1,{{},bars,bars}}};in.operations={op};
  assert(legacy(in).status==FORT_SCOPE_BOUNDARY);
  assert(validate_definitions(in).status==FORT_SCOPE_OK);
- fort_scope_plan_costs costs{};costs.version=FORT_SCOPE_PLANNING_ABI_VERSION;costs.valid=1;costs.max_allocation_bytes=4096;
+ fort_scope_plan_costs costs{};costs.version=FORT_SCOPE_PLANNING_ABI_VERSION;costs.valid=1;costs.max_allocation_bytes=b.bytes;
  costs.cpu_flops=costs.cpu_bandwidth=costs.gpu_flops=costs.gpu_bandwidth=1e9;
  costs.h2d_bandwidth=costs.d2h_bandwidth=1e9;uint64_t work=0;
  auto physical=detail::simulate(in,costs,{false},work);assert(!physical.count.uploads && !physical.count.downloads);

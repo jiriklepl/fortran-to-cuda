@@ -58,8 +58,8 @@ def test_reached_metadata_constructor_retains_assignment_and_exact_native_read(t
         assert text.find("fort_scope_host_end", assignment) > assignment
     else:
         assert operation["managed_resources"] == []
-        assert operation["host_only_native_reads"]["resources"] == ["external_fixture::metadata"]
-        assert operation["host_only_native_reads"]["managed_definitions"] is False
+        assert [item["resource"] for item in operation["native_opaque_accesses"]["accesses"]] == ["external_fixture::metadata"]
+        assert operation["native_opaque_accesses"]["managed_definitions"] is False
 
 
 def test_unproved_constructor_keeps_original_close_and_does_not_resurrect_entry_facts(tmp_path):
