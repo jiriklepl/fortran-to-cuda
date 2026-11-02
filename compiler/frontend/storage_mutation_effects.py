@@ -12,8 +12,8 @@ from hashlib import sha256
 from fparser.two.utils import Base
 
 from compiler.frontend.call_bindings import (
-    _original_call_control,
     _fixed_array_bounds,
+    _original_call_control,
     _OriginalTypes,
     _resolve_candidates,
     resolve_original_call,
@@ -868,11 +868,22 @@ class _Scan:
                     self.statement(routine, child, result)
             return
         if kind == "Associate_Construct":
-            from compiler.frontend.descriptor_associations import original_fixed_association
+            from compiler.frontend.descriptor_associations import (
+                _ReadonlyRecordAssociationRequired,
+                original_fixed_association,
+            )
 
             try:
-                proof = original_fixed_association(self.analysis, routine, node,
-                    scope_validator=self.scope, tick=self.tick)
+                try:
+                    proof = original_fixed_association(self.analysis, routine, node,
+                        scope_validator=self.scope, tick=self.tick)
+                except _ReadonlyRecordAssociationRequired as error:
+                    if type(error) is not _ReadonlyRecordAssociationRequired:
+                        raise
+                    proof = original_fixed_association(self.analysis, routine, node,
+                        scope_validator=self.readonly_scope, tick=self.tick, declaration_only=True)
+                    for access in proof._association.selectors:
+                        self.readonly_record(access.root_binding, formal=False)
             except CompilationError as error:
                 self.event(result, "frontiers", "unproved original lexical association: " + str(error), node)
                 for child in _children(node):
@@ -1744,6 +1755,7 @@ def _publish_derivation(analysis, record, scanner):
             or not same_intrinsic_source_attachments(analysis, scanner.source_receipt)
             or any(not same_intrinsic_scope_attachments(saved) for saved in scanner.record_scopes.values())
             or any(not _attached(binding, saved) for binding, saved in scanner.record_declarations.values())
+            or any(not _attached(proof, saved) for proof, saved, _public in scanner.fixed_associations.values())
             or any(not _same_group_syntax(saved) for saved in scanner.syntax_receipts.values())):
         raise CompilationError("storage mutation consumed original source context changed at publication")
     if declaration_dependencies is not None:
