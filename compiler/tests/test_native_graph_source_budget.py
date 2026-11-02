@@ -41,8 +41,8 @@ def test_complete_graph_exceeds_single_template_statement_limit_without_truncati
     assert len(graph["instances"]) == 4
     assert len(proof.calls) == 3
     assert all(template["source_work"]["statements"] <= 256 for template in graph["templates"])
-    assert graph["limits"]["per_template"] == {"source_statements": 256, "source_nodes": 65536}
-    assert graph["limits"]["aggregate"] == {"source_statements": 1024, "source_nodes": 262144}
+    assert graph["limits"]["per_template"] == {"source_statements": 65536, "ordinary_statements": 256, "source_nodes": 65536}
+    assert graph["limits"]["aggregate"] == {"source_statements": 262144, "ordinary_statements": 1024, "source_nodes": 262144}
     assert graph["limits"]["unique_templates"] == 4
     assert graph["limits"]["source_policy_version"] == VERSION
     assert {template["scope"] for template in graph["templates"]} == {"exact original root selection", "complete callee"}

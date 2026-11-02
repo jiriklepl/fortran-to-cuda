@@ -402,8 +402,10 @@ class _Scan:
 
         key = id(binding), formal
         if key not in self.readonly_records:
+            context = self.native_lifetime if (not formal and self.native_lifetime is not None
+                                              and self.native_lifetime.group_only) else None
             schema = readonly_record_declaration(self.analysis, binding,
-                retain_scope=self.readonly_scope, tick=self.tick, formal=formal)
+                retain_scope=self.readonly_scope, tick=self.tick, formal=formal, _storage_context=context)
             self.readonly_records[key] = schema
         return self.readonly_records[key]
 
@@ -505,8 +507,10 @@ class _Scan:
             return False
         scope = self.analysis.source_scope_for(node, routine.scope)
         binding = self.analysis._binding(scope, array)
+        context = self.native_lifetime if self.native_lifetime is not None and self.native_lifetime.group_only else None
+        target_read = context is not None and context.readonly_target(binding)
         if (binding is None or not binding.rank or _typename(binding.dtype) is None
-                or binding.attributes & _UNSAFE):
+                or binding.attributes & (_UNSAFE - {"target"} if target_read else _UNSAFE)):
             # Existing exact owned-region authority may already classify an
             # associated root. Ordinary binding() retains that decision; this
             # new unassociated-array slice cannot replace or relax it.
@@ -517,8 +521,11 @@ class _Scan:
             if keyword != "array":
                 self.expression(routine, actual, result)
         try:
+            if target_read:
+                context.require_target_read(routine,array,binding,descriptor=True)
             self.readonly_record(binding, formal=False)
-            record_array_declaration(self.analysis, binding, retain_scope=self.readonly_scope, tick=self.tick)
+            record_array_declaration(self.analysis, binding, retain_scope=self.readonly_scope, tick=self.tick,
+                                     _storage_context=context)
             types = _OriginalTypes(self.analysis)
             for keyword, actual in arguments.items():
                 if keyword != "array":
@@ -582,7 +589,9 @@ class _Scan:
                     visit_scope=self.scope, tick=self.tick,
                     lexical_alias=None if lexical is None else lexical[0],
                     readonly_record=root if not array_element and (id(root), True) in self.readonly_records else None,
-                    _scope_scan=self.component_scope)
+                    _scope_scan=self.component_scope,
+                    _storage_context=self.native_lifetime if (self.native_lifetime is not None
+                        and self.native_lifetime.group_only) else None)
             except CompilationError as error:
                 self.event(result, "frontiers", "unproved original component read: " + str(error), node)
                 return
@@ -1385,10 +1394,13 @@ def _derive(analysis, procedure, expression=None, selection=None, *, joined_stor
     analysis.verify_source()
     scanner = _Scan(analysis)
     if native_graph is not None:
+        from compiler.frontend.descriptor_teams import DescriptorTeamProof
         from compiler.frontend.native_lifetime_context import NativeLifetimeContext
-        if selection is None or expression is not None or type(joined_storage) is not tuple:
-            raise CompilationError("native lifetime scan requires exact whole CALL and independent callee structures")
-        scanner.native_lifetime = NativeLifetimeContext(analysis, native_graph)
+        if (selection is None or expression is not None
+                or type(joined_storage) not in {tuple,DescriptorTeamProof}):
+            raise CompilationError("native lifetime scan requires exact whole CALL or joined group and independent storage")
+        scanner.native_lifetime = NativeLifetimeContext(analysis, native_graph,
+            joined_storage=joined_storage if type(joined_storage) is DescriptorTeamProof else None)
         scanner.native_lifetime.require_selection(procedure, selection)
     routine = _original(analysis, procedure)
     original_expression = None
@@ -1540,11 +1552,35 @@ class StorageMutationEffects:
     _call_registries: tuple = field(default=(), repr=False, compare=False)
     _source_fact: object = field(default=None, repr=False, compare=False)
     _native_graph: object = field(default=None, repr=False, compare=False)
+    _native_completion: object = field(default=None, repr=False, compare=False)
+    _native_completion_fields: tuple = field(default=(), repr=False, compare=False)
+    _native_read_dependencies: object = field(default=None, repr=False, compare=False)
 
     def public(self):
         return {"identity": self.identity, **_thaw(self._record)}
 
     def validate(self, analysis=None, procedure=None, expression=_UNSET, *, selection=_UNSET, joined_storage=_UNSET):
+        from compiler.frontend.descriptor_associations import _attached, _attachments
+        from compiler.frontend.native_completion import _require_graph_completion_attachments
+        saved = _attachments(self)
+        completion, fields, dependencies = self._native_completion,self._native_completion_fields,self._native_read_dependencies
+        team = self._joined_storage
+        result = self._validate(analysis,procedure,expression,selection=selection,joined_storage=joined_storage)
+        if not _attached(self,saved):
+            raise CompilationError("storage mutation retained source/role fields changed during validation")
+        if completion is not None:
+            dependencies.require()
+            _require_graph_completion_attachments(completion,fields)
+            registry = getattr(self._analysis,"_descriptor_team_proofs",None)
+            if type(registry) is not dict or dict.get(registry,team.identity) is not team:
+                raise CompilationError("native joined storage lost its exact original team registry entry")
+        if not _attached(self,saved):
+            raise CompilationError("storage mutation retained source/role fields changed at final validation")
+        return result
+
+    def _validate(self, analysis=None, procedure=None, expression=_UNSET, *, selection=_UNSET, joined_storage=_UNSET):
+        completion, fields, dependencies = self._native_completion,self._native_completion_fields,self._native_read_dependencies
+        fact = self._source_fact
         analysis = self._analysis if analysis is None else analysis
         procedure = self._procedure if procedure is None else procedure
         expression = self._expression if expression is _UNSET else expression
@@ -1556,10 +1592,33 @@ class StorageMutationEffects:
                 or (lifetime is not None and lifetime["native_graph_identity"] != self._native_graph.identity)
                 or (self._source_fact is not None and self._source_fact.query[-1] != id(self._native_graph))):
             raise CompilationError("storage mutation changed its original native lifetime graph")
+        if self._native_read_dependencies is not None:
+            from compiler.frontend.source_dependency_receipts import _SourceReceipt
+            if (type(self._native_read_dependencies) is not _SourceReceipt
+                    or self._native_read_dependencies.analysis is not analysis):
+                raise CompilationError("native storage read requires its original declaration dependencies")
+            self._native_read_dependencies.require()
         if self._native_graph is not None:
             self._native_graph.validate(analysis, procedure, selection)
-        if self._source_fact is not None:
-            return self._source_fact.require(self)
+        from compiler.frontend.native_completion import _require_graph_completion_attachments
+        group = lifetime is not None and lifetime.get("whole_original_group_retirement_required")
+        if (bool(group) != (self._native_completion is not None)
+                or bool(group) != (self._native_read_dependencies is not None)):
+            raise CompilationError("native joined storage changed its required retirement completion")
+        if self._native_completion is not None:
+            _require_graph_completion_attachments(self._native_completion,self._native_completion_fields)
+            if (self._native_completion._graph is not self._native_graph
+                    or self._native_completion._call_storage is not None
+                    or self._native_completion._ordinary_join is None
+                    or lifetime.get("completion_identity") != self._native_completion.identity):
+                raise CompilationError("native joined storage changed its original retirement role")
+            self._native_completion.validate(analysis,procedure,self._native_completion.selected_node_ids)
+        if fact is not None:
+            result = fact.require(self)
+            if completion is not None:
+                _require_graph_completion_attachments(completion,fields)
+                dependencies.require()
+            return result
         if getattr(analysis, "_source_session", None) is not None:
             raise CompilationError("mutable diagnostic proof cannot enter a sealed authority context")
         record, scanner = _derive(analysis, procedure, expression, selection,
@@ -1567,6 +1626,8 @@ class StorageMutationEffects:
         self._validate_record(analysis, procedure, expression, selection, record, joined_storage)
         _publish_derivation(analysis, record, scanner)
         self._require_registration(analysis, procedure, expression, selection, joined_storage)
+        if self._native_read_dependencies is not None:
+            self._native_read_dependencies.require()
         return self
 
     def _require_registration(self, analysis, procedure, expression, selection, joined_storage):
@@ -1774,6 +1835,8 @@ def _publish_derivation(analysis, record, scanner):
            or not _same_group_syntax(constants)
            for binding, saved, scope, constants in scanner.fixed_array_result_receipts):
         raise CompilationError("storage fixed function result declaration changed at publication")
+    if scanner.native_lifetime is not None:
+        scanner.native_lifetime.require_checkpoint()
     _require_retained_calls(analysis, calls, terminating)
     for proof in terminating:
         proof.require_attachments()
@@ -1820,7 +1883,15 @@ def prove_storage_mutation_effects(analysis, procedure, *, expression=None, sele
                                        tuple((name, getattr(analysis, name)) for name, used in (
                                            ("_original_call_associations", scanner.call_receipts),
                                            ("_descriptor_terminating_calls", scanner.terminating_calls)) if used),
-                                       _native_graph=native_graph)
+                                       _native_graph=native_graph,
+                                       _native_completion=(scanner.native_lifetime.group_completion
+                                           if scanner.native_lifetime is not None else None),
+                                       _native_completion_fields=(scanner.native_lifetime._joined[3]
+                                           + scanner.native_lifetime._joined[2]
+                                           + ((analysis,"_descriptor_team_proofs",scanner.native_lifetime._joined[4]),)
+                                           if scanner.native_lifetime is not None and scanner.native_lifetime.group_only else ()),
+                                       _native_read_dependencies=(scanner.declaration_dependencies.receipt()
+                                           if scanner.native_lifetime is not None and scanner.native_lifetime.group_only else None))
         _publish_derivation(analysis, record, scanner)
         if analysis._storage_mutation_effects is not registry or identity in registry:
             raise CompilationError("storage mutation issuing registry changed before publication")

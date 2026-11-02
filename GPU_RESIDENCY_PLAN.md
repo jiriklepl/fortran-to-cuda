@@ -6,7 +6,7 @@ The original proposal is preserved at
 `/tmp/fortran-residency-implementation-24/GPU_RESIDENCY_PLAN.original.md`.
 Historical reports and timing controls remain unchanged.
 
-## Current integration checkpoint: 2026-11-02
+## Current integration checkpoint: 2026-11-03
 
 Build06 passes all four two-step GPU/hidden-GPU cases and both natural runs
 (109 and 2,458 steps), including all 20 fields, bounds, halos and all 6/114
@@ -107,6 +107,75 @@ The new `benchmarks/evaluate_speedup.py` results are exploratory single samples.
 The approved seven rotated measurements, full-process timing and strict
 correctness gates still govern performance claims. The 10%, 2× and 20× targets
 remain open.
+
+The ordinary multi-DO native-team increment is now applied. It retains the exact
+original OpenMP join and descriptor-team receipts for shared local scratch, and
+classifies original read-only primitive fields of TARGET record arrays only
+inside that whole-group retirement context. It grants no GPU payload, layout,
+alias, capture or initialization authority. Authenticated native joins use the
+existing 65,536-node source bound while retaining every statement; ordinary work
+and numerical admission keep their existing 256-operation limits. The original
+function traversal remains available when no routine execution index exists.
+
+The [component qualification](/tmp/fortran-ordinary-multido-retirement-gpu-01/qualification-final.json)
+passes 862 distinct cases: 857 affected CPU tests, two fixture controls and three
+CUDA modes. The fresh actual-source audit admits all three diffusion groups,
+retaining 486/204/198 statements, with no escapes or fabricated scratch facts.
+The device fixture checks full fields, halos, aliases, record canaries, original
+execution counts and physical-copy ledgers: a skipped native group preserves
+the domain without intervening copies; a reached group publishes the required
+fields before native execution and reopens coherently. Failed intermediate
+function-index tests and the first sandboxed CUDA run remain recorded. Runtime
+and calibration identities are unchanged. The
+[parent retry 21](/tmp/fortran-parent-graph-current-21/result.json) clears diffusion,
+then declines while validating the original `ResistanceForce` call at
+`dynamics.f90:425`: its lifecycle asks for stable-storage/definition facts for
+`filters::filter_ratios`. All 1,345 source and 1,786 input guards hold, with no
+fallback search or application emitted. The
+[fresh full compiler selection](/tmp/fortran-maintained-current807-c3-native-full-06/execution/compiler/completion.json)
+finishes with 12,679 passes, 11 failures and two skips. The failures expose a
+second indexed-lookup fallback bug in read-only allocatable input checks; a
+missing lexical-parent index entry raises instead of returning an empty result.
+The two native-marked tests that dynamically request CUDA skip in the sandbox.
+All guards hold and owned process groups exit. This is a failed invocation;
+repairs and a fresh run with CUDA access remain required. This component result
+does not qualify current-runtime ELMM correctness or an application speedup.
+
+The applied successor restores the original occurrence walk when the parent index
+has no entry; all 70 affected forwarding/input/index cases pass. It also reuses
+the storage epoch's managed-resource and native-reservation inventory in
+same-family CALL validation, so scalar-element backing reservations require
+their original permits instead of invented managed capture facts. All 309
+affected compiler cases, two fixture controls and three CUDA modes pass, with
+mutable coefficient-table inputs, full fields/halos and exact copy ledgers.
+The paired reader now recognizes already-validated native reservation roots in
+implicit child forwarding; its nine focused controls pass. The
+[complete paired pipeline gate](/tmp/fortran-conditional-native-opaque-reader-fix-05/whole-pipeline-01/completion.json)
+passes 4,435 cases with the exact 29 declared optional skips. All 4,464 selected
+node IDs, source guards and owned-process exits are verified. Earlier stopped
+snapshots, the test-only terminal-blank-line correction and the restored genuine
+Git test fixture remain recorded. A final import-order-only cleanup for the new
+paired test passes that repository's Ruff configuration; the import set and
+non-import syntax/positions are unchanged, and all eight affected tests pass
+again. The
+[combined qualification](/tmp/fortran-same-family-resource-role-gpu-02/qualification-final.json)
+keeps its 384 main component cases separate from the paired-suite totals.
+The [fresh full compiler run 07](/tmp/fortran-maintained-current807-c3-native-full-07/execution/compiler/completion.json)
+retains all previous cases and passes all 12,711 selected compiler cases in one
+clean invocation, with zero failures, errors or skips. All 1,512 source guards
+hold and owned process groups exit. The two native CUDA diagnostics that
+previously skipped now pass; 1,288 marked CUDA cases remain outside this selection,
+with the new component CUDA modes qualified separately.
+[Parent attempt 22](/tmp/fortran-parent-graph-current-22/result.json) clears the
+missing-facts failure, then declines at the same original native CALL while
+checking a lexical caller that inherits its parent's resource-slot namespace.
+All 1,348 source and 1,826 input guards hold; no package or application is emitted.
+Moving this check later is insufficient unless final source-authenticated CALL
+projection also supports the inherited namespace. A small reproduction confirms
+the same rejection at final epoch construction, and a flat serialized control
+exposes missing transitive native-reservation use in the reader. These remain
+explicit integration limitations. Current-runtime ELMM correctness and speedup
+remain unqualified.
 
 The following entries preserve earlier checkpoints and their limitations.
 

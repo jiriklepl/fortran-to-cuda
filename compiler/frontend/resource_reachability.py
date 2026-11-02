@@ -8,7 +8,7 @@ definition, numerical or placement authority.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from hashlib import sha256
 
 from fparser.two.utils import walk
@@ -32,6 +32,7 @@ from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
 VERSION = 13
 HOST_CONTROL_VERSION = 4
+JOINED_SOURCE_BUDGET_VERSION = 1
 
 
 class ResourceReachabilityBudgetExceeded(CompilationError):
@@ -464,8 +465,13 @@ class NativeEffectTemplate:
     host_blockers: tuple = field(default=(), repr=False, compare=False)
     family_blockers: tuple = field(default=(), repr=False, compare=False)
     _family_identity: str = field(default="", repr=False, compare=False)
+    _source_budget_receipts: tuple = field(default=(), repr=False, compare=False)
 
     def validate(self, analysis):
+        attached = tuple((item.name,object.__getattribute__(self,item.name)) for item in fields(self))
+        registry = getattr(analysis,"_native_effect_templates",None)
+        source_budget = self._source_budget_receipts
+        completion, source_work = self.completion, self.source_work
         if (self._issuer is not _ISSUER or analysis is not self._analysis
                 or getattr(analysis, "_native_effect_templates", {}).get(_template_key(analysis, self.procedure,
                                                                                    self._selection, self._payload_requested)) is not self
@@ -499,10 +505,31 @@ class NativeEffectTemplate:
             terminal.validate(analysis)
         for name, selected, proof in self.completion:
             proof.validate(analysis, name, selected)
+        for receipt in source_budget:
+            _require_joined_source_budget(analysis, receipt)
+            if not any(name == receipt[0] and tuple(selected) == receipt[3] and proof is receipt[2]
+                       for name, selected, proof in completion):
+                raise CompilationError("joined source budget lost its retained ordinary join")
+        counts = dict(source_work)
+        ordinary = counts.get("ordinary_statements", counts["statements"])
+        joined = counts.get("joined_source_statements", 0)
+        if (ordinary > analysis.operation_limit or ordinary + joined != counts["statements"]
+                or joined and not source_budget):
+            raise CompilationError("native template source budget policy changed")
         for proof in self.worksharing:
             if proof._analysis is not analysis or proof._routine is not self._routine or self._selection is not None:
                 raise CompilationError("native orphan structure requires its complete original callee")
             proof.checkpoint()
+        if self._source_budget_receipts is not source_budget or self.completion is not completion or self.source_work is not source_work:
+            raise CompilationError("joined source budget attachments changed during validation")
+        for receipt in source_budget:
+            _require_joined_source_budget(analysis, receipt, validate=False)
+        if (self._limits != _limits(analysis)
+                or getattr(analysis,"_native_effect_templates",None) is not registry
+                or any(object.__getattribute__(self,name) is not value for name,value in attached)
+                or getattr(analysis,"_native_effect_templates",{}).get(_template_key(
+                    analysis,self.procedure,self._selection,self._payload_requested)) is not self):
+            raise CompilationError("native template policy or registry changed during validation")
         return self
 
     def public(self):
@@ -572,6 +599,8 @@ class NativeEffectGraph:
         return self
 
     def validate(self, analysis, procedure, original_selection, *, purpose="payload"):
+        attached = tuple((item.name,object.__getattribute__(self,item.name)) for item in fields(self))
+        registry = getattr(analysis,"_native_effect_graphs",None)
         if purpose == "payload":
             self.require_payload_projection()
         elif purpose != "retired_host_discovery":
@@ -609,6 +638,11 @@ class NativeEffectGraph:
             target = _host_target(analysis, instance.call.scope, instance.call.original.items[0], dict(parent.procedure_bindings))
             if target.qualified != instance.procedure:
                 raise CompilationError("executable instance changed its original callback target")
+        if (self._limits != _limits(analysis)
+                or getattr(analysis,"_native_effect_graphs",None) is not registry
+                or any(object.__getattribute__(self,name) is not value for name,value in attached)
+                or getattr(analysis,"_native_effect_graphs",{}).get(self.identity) is not self):
+            raise CompilationError("native graph policy or registry changed during validation")
         return self
 
     def public(self):
@@ -627,12 +661,15 @@ class NativeEffectGraph:
                 "terminal_calls": [{"instance": ordinal, **item.public()} for ordinal, item in self.terminal_calls],
                 "completion_scope": "normal return only; original diagnostics and termination remain observable",
                 "motion_authority": False, "internal_cut_authority": False,
-                "counting": "each unique original template is bounded separately; root selections and complete callees remain distinct",
+                "counting": "each original template retains every statement; exact original joined groups use the source-node bound, other work keeps the operation window",
                 "limits": {"depth": self._limits[0], "procedures": self._limits[1],
                            "unique_templates": templates,
-                           "per_template": {"source_statements": self._limits[2], "source_nodes": self._limits[3]},
-                           "aggregate": {"source_statements": templates * self._limits[2],
+                           "per_template": {"source_statements": self._limits[3],
+                                            "ordinary_statements": self._limits[2], "source_nodes": self._limits[3]},
+                           "aggregate": {"source_statements": templates * self._limits[3],
+                                         "ordinary_statements": templates * self._limits[2],
                                          "source_nodes": templates * self._limits[3]},
+                           "joined_source_budget_policy_version": self._limits[6],
                            "call_instances": self._limits[2],
                            "substitution_and_obligation_steps": self._limits[3],
                            "source_policy_version": self._limits[4]},
@@ -641,11 +678,13 @@ class NativeEffectGraph:
 
 
 def _limits(analysis):
-    return analysis.depth_limit, analysis.procedure_limit, analysis.operation_limit, NATIVE_GROUP_SCAN_LIMIT, VERSION, HOST_CONTROL_VERSION
+    return (analysis.depth_limit, analysis.procedure_limit, analysis.operation_limit, NATIVE_GROUP_SCAN_LIMIT,
+            VERSION, HOST_CONTROL_VERSION, JOINED_SOURCE_BUDGET_VERSION)
 
 
 def _template_key(analysis, name, selection, project_payload=True):
-    return id(analysis), name, None if selection is None else tuple(map(id, selection)), project_payload
+    return (id(analysis), name, None if selection is None else tuple(map(id, selection)),
+            project_payload, JOINED_SOURCE_BUDGET_VERSION)
 
 
 @dataclass(frozen=True)
@@ -731,13 +770,58 @@ def _authenticate_schema(analysis, schema):
         raise CompilationError("resource reachability component declaration changed")
 
 
+def _require_joined_source_budget(analysis, receipt, *, validate=True):
+    from compiler.frontend.descriptor_teams import _same_group_syntax
+    from compiler.frontend.native_completion import NativeCompletionProof
+
+    procedure, originals, proof, selected, syntax, attached, registry = receipt
+    if (type(proof) is not NativeCompletionProof or type(registry) is not dict
+            or getattr(analysis, "_joined_completions", None) is not registry
+            or dict.get(registry, proof.identity) is not proof
+            or proof.procedure != procedure or proof.selected_node_ids != selected
+            or any(object.__getattribute__(proof, name) is not value for name, value in attached)
+            or not _same_group_syntax(syntax)):
+        raise CompilationError("joined source budget requires its exact original ordinary join")
+    if validate:
+        from compiler.frontend.descriptor_teams import _original_group
+        routine = _original(analysis, procedure)
+        _original_group(routine, originals)
+        graph, current = analysis._selected_source(procedure, originals)
+        if tuple(current) != selected or graph.identity != proof.structured_identity:
+            raise CompilationError("joined source budget changed its complete original selection")
+        proof.validate(analysis, procedure, selected)
+        from compiler.frontend.native_completion import prove_joined_completion
+        current = prove_joined_completion(analysis, procedure, originals)
+        if proof.public() != current.public():
+            raise CompilationError("joined source budget changed its original ordinary completion facts")
+        _require_joined_source_budget(analysis, receipt, validate=False)
+
+
+def _joined_source_budget(analysis, routine, originals, proof):
+    from compiler.frontend.descriptor_teams import _group_syntax_checkpoint, _original_group
+    from compiler.frontend.native_completion import NativeCompletionProof
+
+    if type(proof) is not NativeCompletionProof:
+        raise CompilationError("joined source budget requires its issued ordinary join")
+    _original_group(routine, originals)
+    _graph, selected = analysis._selected_source(routine.qualified, originals)
+    receipt = (routine.qualified, tuple(originals), proof, tuple(selected),
+        _group_syntax_checkpoint(originals),
+        tuple((item.name, object.__getattribute__(proof, item.name)) for item in fields(proof)),
+        analysis._joined_completions)
+    _require_joined_source_budget(analysis, receipt)
+    members = frozenset(id(node) for node, _children in receipt[4][0] if _kind(node).endswith("_Stmt"))
+    return receipt, members
+
+
 class _Scan:
     def __init__(self, analysis, demanded, *, project_payload=True):
         self.analysis, self.demanded = analysis, demanded
         self.project_payload = project_payload
         self.accesses, self.barriers, self.calls, self.completion = [], [], [], []
         self.routines, self.scopes, self.schemas = {}, {}, {}
-        self.visits = self.operations = 0
+        self.visits = self.operations = self.ordinary_operations = 0
+        self.source_budget_stack, self.source_budget_receipts = [], []
         self.active = []
         self.specifications = set()
         self.nodes, self.frames = [], []
@@ -992,10 +1076,15 @@ class _Scan:
             self.frames.pop()
         self.record(NativeEffectNode(kind, original, items, declaration))
 
-    def tick(self, statement=False):
+    def tick(self, statement=False, *, original=None):
         self.visits += 1
         self.operations += int(statement)
-        if self.visits > NATIVE_GROUP_SCAN_LIMIT or self.operations > self.analysis.operation_limit:
+        # A whole authenticated original join is source traversal, not a
+        # numerical search window. Every statement remains in the ledger and
+        # under the existing syntax bound; other work keeps its operation cap.
+        if statement and not any(id(original) in members for _receipt, members in self.source_budget_stack):
+            self.ordinary_operations += 1
+        if self.visits > NATIVE_GROUP_SCAN_LIMIT or self.ordinary_operations > self.analysis.operation_limit:
             raise ResourceReachabilityBudgetExceeded("resource reachability source scan budget exhausted")
 
     def barrier(self, kind, routine, node, reason):
@@ -1315,7 +1404,7 @@ class _Scan:
                 argument = argument.items[1]
             self.expression(routine, argument, mapping)
         for statement in _children(proof._callee.execution):
-            self.tick(statement=_kind(statement).endswith("_Stmt"))
+            self.tick(statement=_kind(statement).endswith("_Stmt"), original=statement)
         self.terminal_calls.append(terminal)
         self.record(terminal)
         return True
@@ -1400,10 +1489,12 @@ class _Scan:
             if isinstance(item, NativeGroupCandidate):
                 originals = item.original_nodes
                 def group(originals=originals, item=item):
+                    source_budget = None
                     try:
                         if not self.project_payload:
                             raise CompilationError("payload projection not requested")
                         proof = self.analysis.joined_completion(routine.qualified, originals)
+                        source_budget = _joined_source_budget(self.analysis, routine, originals, proof)
                         self.completion.append((routine.qualified, proof.selected_node_ids, proof))
                     except CompilationError as error:
                         self.record(NativeDeferredCompletion(routine.qualified, originals, str(error)))
@@ -1432,6 +1523,9 @@ class _Scan:
                                 owned.update(id(part) for part in directives)
                     self.joined_depth += 1
                     self.group_directives.append(owned)
+                    if source_budget is not None:
+                        self.source_budget_stack.append(source_budget)
+                        self.source_budget_receipts.append(source_budget[0])
                     try:
                         # Preserve every existing top-level executable sentinel,
                         # including non-OMP host blockers; the scanner dedups.
@@ -1445,6 +1539,9 @@ class _Scan:
                                 self.statement(routine, node, mapping, called=called, depth=depth + 1,
                                                ignore_directives=True)
                     finally:
+                        if source_budget is not None:
+                            self.source_budget_stack.pop()
+                            _require_joined_source_budget(self.analysis, source_budget[0])
                         self.group_directives.pop()
                         self.joined_depth -= 1
                 self.frame("joined_group", originals, group)
@@ -1471,7 +1568,7 @@ class _Scan:
         return True
 
     def _statement(self, routine, node, mapping, *, called, depth=0, ignore_directives=False):
-        self.tick(statement=_kind(node).endswith("_Stmt"))
+        self.tick(statement=_kind(node).endswith("_Stmt"), original=node)
         kind = _kind(node)
         if kind == "Comment":
             self.host_directive(routine, node)
@@ -1681,7 +1778,10 @@ def _template(analysis, procedure, selection, *, project_payload=True):
     root = NativeEffectNode("procedure" if selection is None else "selection",
                             routine.execution if selection is None else selection, tuple(scan.nodes))
     work = (("syntax_nodes", scan.visits), ("statements", scan.operations))
-    identity = _digest({"version": VERSION, "source_identity": analysis.inputs.identity(),
+    if scan.source_budget_receipts:
+        work += (("ordinary_statements", scan.ordinary_operations),
+                 ("joined_source_statements", scan.operations - scan.ordinary_operations))
+    identity = _digest({"version": VERSION, "joined_source_budget_version": JOINED_SOURCE_BUDGET_VERSION, "source_identity": analysis.inputs.identity(),
                         "procedure": procedure, "selection": None if selection is None else list(map(id, selection)),
                         "source_work": dict(work), "nodes": root.public(), "project_payload": project_payload,
                         "family_blockers": [item.public() for item in scan.family_blockers]})
@@ -1689,7 +1789,7 @@ def _template(analysis, procedure, selection, *, project_payload=True):
         tuple(scan.confined_pointers.values()), work,
         analysis, routine, selection, tuple(scan.scopes.values()), tuple(scan.schemas.values()), _limits(analysis), _ISSUER,
         tuple(scan.worksharing.values()), project_payload, tuple(scan.host_calls.values()), tuple(scan.host_blockers), tuple(scan.family_blockers),
-        _digest([item.public() for item in scan.family_blockers]))
+        _digest([item.public() for item in scan.family_blockers]), tuple(scan.source_budget_receipts))
     registry[key] = value
     try:
         return value.validate(analysis)

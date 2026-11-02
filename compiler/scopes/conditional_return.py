@@ -329,9 +329,13 @@ class SameFamilyNativeCallLifecycle:
         # this route grants none of their lifetime/layout/alias/read authority.
         if not set(record["writable_actual_families"]) <= set(member.owner.resources):
             raise CompilationError("same-family CALL writable actual is outside the inherited managed family")
-        for binding, _slot in member.owner.resources.values():
-            fact = member.owner.builder.capture_fact(binding)
-            draft.capture(binding, fact)
+        from compiler.scopes.storage_epoch import resource_inventory
+
+        managed, _reservations, _opaque = resource_inventory(member.owner)
+        for root, (binding, _slot) in member.owner.resources.items():
+            if root in managed:
+                fact = member.owner.builder.capture_fact(binding)
+                draft.capture(binding, fact)
         return self
 
 
@@ -445,7 +449,8 @@ def boundary_lifecycle(member, originals, *, diagnostic=None):
             team = prove_descriptor_team(analysis, procedure, originals)
             if completion.selected_node_ids != selected or team.selected_node_ids != selected:
                 raise CompilationError("joined boundary changed its exact original team selection")
-        proof = prove_storage_mutation_effects(analysis, procedure, selection=originals, joined_storage=team)
+        proof = prove_storage_mutation_effects(analysis, procedure, selection=originals, joined_storage=team,
+            native_graph=native if joined and completion._ordinary_join is not None else None)
         from compiler.frontend.call_bindings import _original_call_control
         if not joined and _original_call_control(originals) is not None and not proof._record["complete"]:
             from compiler.frontend.native_completion import native_call_storage_structures, prove_native_call_retirement

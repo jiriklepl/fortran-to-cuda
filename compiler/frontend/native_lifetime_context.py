@@ -18,7 +18,7 @@ def _kind(node):
 
 
 class NativeLifetimeContext:
-    def __init__(self, analysis, graph):
+    def __init__(self, analysis, graph, *, joined_storage=None):
         from compiler.frontend.resource_reachability import (
             NativeEffectGraph,
             NativeEffectNode,
@@ -28,12 +28,37 @@ class NativeLifetimeContext:
         if type(graph) is not NativeEffectGraph:
             raise CompilationError("native lifetime context requires its issued original graph")
         graph.validate(analysis, graph.procedure, graph._selection)
-        if (_original_call_control(graph._selection) is None
+        self._joined = None
+        if joined_storage is not None:
+            from compiler.frontend.descriptor_teams import DescriptorTeamProof, _team_attachments
+            from compiler.frontend.native_completion import (
+                NativeGraphCompletionProof,
+                _graph_completion_attachments,
+            )
+            if (type(joined_storage) is not DescriptorTeamProof or not graph.completion_eligible
+                    or joined_storage._analysis is not analysis
+                    or joined_storage.procedure != graph.procedure
+                    or len(joined_storage._originals) != len(graph._selection)
+                    or any(a is not b for a,b in zip(joined_storage._originals,graph._selection,strict=True))):
+                raise CompilationError("native group lifetime requires its exact original joined storage")
+            joined_storage.validate(analysis,graph.procedure,joined_storage.selected_node_ids)
+            completed = [proof for proof in getattr(analysis,"_native_graph_completions",{}).values()
+                         if type(proof) is NativeGraphCompletionProof and proof._graph is graph
+                         and proof._ordinary_join is not None and proof._call_storage is None
+                         and proof.procedure == graph.procedure
+                         and proof.selected_node_ids == joined_storage.selected_node_ids]
+            if len(completed) != 1:
+                raise CompilationError("native group lifetime requires its same-graph ordinary whole-group completion")
+            completion = completed[0].validate(analysis,graph.procedure,joined_storage.selected_node_ids)
+            self._joined = (joined_storage,completion,_team_attachments(joined_storage),
+                            _graph_completion_attachments(completion),analysis._descriptor_team_proofs)
+        elif (_original_call_control(graph._selection) is None
                 or not graph.retirement_effects_eligible):
             raise CompilationError("native lifetime context requires one complete original CALL graph")
         self.analysis, self.graph = analysis, graph
         self.types = _TypeBuilder(analysis)
         self.schemas = {}
+        self._readonly_target_schemas = {}
         bindings, pointers, accesses, calls, groups = {}, {}, {}, {}, {}
         for template in graph.templates:
             for pointer in template.confined_pointers:
@@ -97,9 +122,72 @@ class NativeLifetimeContext:
             self.schemas[id(schema)] = schema, record
         return schema
 
-    def checkpoint(self):
-        self.graph.validate(self.analysis, self.graph.procedure, self.graph._selection)
+    @property
+    def group_only(self):
+        return self._joined is not None
+
+    @property
+    def group_completion(self):
+        return None if self._joined is None else self._joined[1]
+
+    def require_checkpoint(self):
+        if self._joined is not None:
+            from compiler.frontend.native_completion import _require_graph_completion_attachments
+            team,completion,team_fields,completion_fields,registry = self._joined
+            if (getattr(self.analysis,"_descriptor_team_proofs",None) is not registry
+                    or type(registry) is not dict or dict.get(registry,team.identity) is not team
+                    or any(object.__getattribute__(owner,name) is not value for owner,name,value in team_fields)
+                    or completion._graph is not self.graph or completion._ordinary_join is None
+                    or completion._call_storage is not None or team.procedure != self.graph.procedure
+                    or team.selected_node_ids != completion.selected_node_ids
+                    or len(team._originals) != len(self.graph._selection)
+                    or any(a is not b for a,b in zip(team._originals,self.graph._selection,strict=True))):
+                raise CompilationError("native group lifetime changed its original storage/completion receipts")
+            _require_graph_completion_attachments(completion,completion_fields)
         return self
+
+    def checkpoint(self):
+        self.require_checkpoint()
+        self.graph.validate(self.analysis, self.graph.procedure, self.graph._selection)
+        if self._joined is not None:
+            team,completion,*_rest = self._joined
+            team.validate(self.analysis,team.procedure,team.selected_node_ids)
+            completion.validate(self.analysis,team.procedure,team.selected_node_ids)
+        return self.require_checkpoint()
+
+    def readonly_target(self, binding):
+        """Declaration/read role only, separate from binding()/pointer grants."""
+        self.require_checkpoint()
+        if (self._joined is None or binding is None or binding.rank != 1
+                or not {"target","allocatable"} <= binding.attributes
+                or binding.attributes - {"target","allocatable","public","dimension"}
+                or _typename(binding.dtype) is None or binding.declaring_scope is None
+                or _kind(binding.declaring_scope.node) != "Module"
+                or binding.declaring_scope.bindings.get(binding.name) is not binding):
+            return False
+        paths = [item for accesses in self.accesses.values() for item in accesses
+                 if item.storage.binding is binding and item.kind in {"read","descriptor"}
+                 and item.procedure == self.graph.procedure]
+        if not paths:
+            return False
+        cached = self._readonly_target_schemas.get(id(binding))
+        if cached is None:
+            cached = binding,self.record_schema(binding)  # Existing fixed primitive declaration check.
+            self._readonly_target_schemas[id(binding)] = cached
+        if cached[0] is not binding or any(item.storage.components
+                and item.storage.components[0].schema is not cached[1] for item in paths):
+            raise CompilationError("native storage target read changed its original declaring type")
+        return True
+
+    def require_target_read(self, routine, original, binding, *, descriptor=False):
+        if not self.readonly_target(binding) or routine.qualified != self.graph.procedure:
+            raise CompilationError("native storage target read requires its exact whole original joined group")
+        accesses = self.accesses.get(id(original),())
+        if not any(item.original is original and item.storage.binding is binding
+                   and item.procedure == routine.qualified
+                   and item.kind == ("descriptor" if descriptor else "read") for item in accesses):
+            raise CompilationError("native storage target read is absent from its original effect graph")
+        return self.require_checkpoint()
 
     def require_selection(self, procedure, originals):
         if (procedure != self.graph.procedure or len(originals) != len(self.graph._selection)
@@ -208,10 +296,18 @@ class NativeLifetimeContext:
 
     def prerequisites(self):
         return (self.graph, *self.graph.templates,
+                *((self._joined[0],self._joined[1]) if self._joined is not None else ()),
                 *(call.edge.resolved for template in self.graph.templates for call in template.calls),
                 *(terminal.proof for template in self.graph.templates for terminal in template.terminations))
 
     def public(self):
+        if self._joined is not None:
+            return {'kind':'original_native_joined_group_storage_context','native_graph_identity':self.graph.identity,
+                    'procedure':self.graph.procedure,'whole_original_group_retirement_required':True,
+                    'completion_identity':self._joined[1].identity,'storage_team_identity':self._joined[0].identity,
+                    'retirement_required':True,'payload_access_authorized':False,'entry_definition_authorized':False,
+                    'alias_authorized':False,'ownership_authorized':False,'capture_authorized':False,
+                    'physical_sections_authorized':False,'target_role':'original primitive-field reads and descriptor inquiries only'}
         return {'kind': 'original_native_graph_lifetime_context', 'native_graph_identity': self.graph.identity,
                 'procedure': self.graph.procedure, 'confined_pointer_count': len(self.pointers),
                 'whole_original_call_and_all_callees_required': True, 'retirement_required': True,

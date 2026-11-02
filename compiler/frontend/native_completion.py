@@ -557,6 +557,8 @@ class NativeGraphCompletionProof:
     _reduction_teams: tuple = field(default=(), repr=False, compare=False)
     _context: object = field(default=None, repr=False, compare=False)
     _arena: object = field(default=None, repr=False, compare=False)
+    _ordinary_join: object = field(default=None, repr=False, compare=False)
+    _ordinary_join_fields: tuple = field(default=(), repr=False, compare=False)
 
     def _require_handle(self, analysis):
         if analysis is not self._analysis or type(self) is not NativeGraphCompletionProof:
@@ -604,6 +606,19 @@ class NativeGraphCompletionProof:
                 or analysis.structure(procedure) is not self._structure):
             raise CompilationError("native graph completion requires exact registered source and graph authority")
         self._graph.validate(analysis, self._graph.procedure, self._graph._selection)
+        ordinary = self._ordinary_join
+        retained = self._record.get("retained_ordinary_completion_identity")
+        if (ordinary is None) != (retained is None):
+            raise CompilationError("native graph completion lost its ordinary join attachment")
+        if ordinary is None and self._ordinary_join_fields:
+            raise CompilationError("native graph completion lost its ordinary join fields")
+        if ordinary is not None:
+            _require_ordinary_join_fields(ordinary, self._ordinary_join_fields)
+            _require_ordinary_join_identity(ordinary)
+            if self._call_storage is not None or retained != ordinary.identity:
+                raise CompilationError("ordinary native join changed its completion role")
+            _require_retained_ordinary_join(analysis, self._graph, procedure, selected, ordinary)
+            ordinary.validate(analysis, procedure, selected)
         rows = self._record.get("fixed_array_reduction_teams", ())
         if rows or self._reduction_teams:
             from compiler.frontend.descriptor_teams import DescriptorTeamProof
@@ -662,7 +677,7 @@ def _graph_completion_attachments(proof):
 
     owners = [proof]
     formal = [team for team in proof._reduction_teams if team._fixed_array_associations]
-    if formal:
+    if formal or proof._ordinary_join is not None:
         owners.extend((proof._graph, *proof._graph.templates, *proof._graph.instances))
         for instance in proof._graph.instances:
             if instance.call is not None:
@@ -672,13 +687,23 @@ def _graph_completion_attachments(proof):
             owners.extend((team, *team._fixed_array_associations))
             for item in team._fixed_array_associations:
                 owners.extend(_original_call_receipts(item._resolved))
-    return tuple((owner, item.name, object.__getattribute__(owner, item.name))
-                 for owner in owners for item in fields(type(owner)))
+    attached = tuple((owner, item.name, object.__getattribute__(owner, item.name))
+                     for owner in owners for item in fields(type(owner)))
+    if proof._ordinary_join is not None:
+        ordinary = proof._ordinary_join
+        attached += tuple((ordinary, item.name, object.__getattribute__(ordinary, item.name))
+                          for item in fields(NativeCompletionProof))
+        attached += ((proof._analysis, "_joined_completions", proof._analysis._joined_completions),)
+    return attached
 
 
 def _require_graph_completion_attachments(proof, attachments):
     if any(object.__getattribute__(owner, name) is not value for owner, name, value in attachments):
         raise CompilationError("native graph completion attachments changed during publication")
+    if proof._ordinary_join is not None:
+        _require_ordinary_join_fields(proof._ordinary_join, proof._ordinary_join_fields)
+        _require_retained_ordinary_join(proof._analysis, proof._graph, proof.procedure,
+                                       proof.selected_node_ids, proof._ordinary_join)
 
 
 def _publish_graph_completion(analysis, registry, proof):
@@ -733,19 +758,27 @@ def prove_graph_joined_completion(analysis, procedure, selected, native_graph):
         checked[key] = _graph_joined_facts(analysis, obligation.procedure, obligation.originals, native_graph, reduction_teams=reduction_teams)
     key = procedure, tuple(map(id, selected))
     ordinary = None
+    ordinary_fields = ()
     if key not in checked:
         _structure, identities = analysis._selected_source(procedure, selected)
         retained = [proof for template in native_graph.templates for name, original_ids, proof in template.completion
                     if name == procedure and tuple(original_ids) == identities]
         if len(retained) != 1 or type(retained[0]) is not NativeCompletionProof:
             raise CompilationError("joined group is absent from the complete native graph's obligations")
-        ordinary = retained[0].validate(analysis, procedure, identities)
+        ordinary = retained[0]
+        ordinary_fields = tuple((item.name, object.__getattribute__(ordinary, item.name))
+                                for item in fields(NativeCompletionProof))
+        _require_ordinary_join_identity(ordinary)
+        ordinary.validate(analysis, procedure, identities)
+        _require_ordinary_join_fields(ordinary, ordinary_fields)
         # A previously proved ordinary join is retained independently in the
         # same graph. Verify the full graph-owned structure as for a deferred
         # group; absence of an obligation never supplies completion evidence.
-        checked[key] = _graph_joined_facts(analysis, procedure, selected, native_graph, reduction_teams=reduction_teams)
+        checked[key] = _graph_joined_facts(analysis, procedure, selected, native_graph,
+                                         reduction_teams=reduction_teams, ordinary_completion=ordinary)
     structure, identities, record = checked[key]
     if ordinary is not None:
+        _require_ordinary_join_fields(ordinary, ordinary_fields)
         record["retained_ordinary_completion_identity"] = ordinary.identity
     if reduction_teams:
         record["fixed_array_reduction_teams"] = [team.public() for team in reduction_teams]
@@ -763,7 +796,9 @@ def prove_graph_joined_completion(analysis, procedure, selected, native_graph):
     if len(registry) >= analysis.procedure_limit:
         raise CompilationError("native graph completion proof registry budget exhausted")
     proof = NativeGraphCompletionProof(procedure, identity, identities, _freeze(record), native_graph,
-                                        structure, analysis, _GRAPH_COMPLETION_ISSUER, _reduction_teams=tuple(reduction_teams))
+                                        structure, analysis, _GRAPH_COMPLETION_ISSUER,
+                                        _reduction_teams=tuple(reduction_teams), _ordinary_join=ordinary,
+                                        _ordinary_join_fields=ordinary_fields)
     return _publish_graph_completion(analysis, registry, proof)
 
 
@@ -841,7 +876,38 @@ def _formal_array_call_rows(analysis, native_graph, teams):
     return sorted(rows, key=lambda item: (item["instance"], item["callee"], item["formal"]))
 
 
-def _graph_joined_facts(analysis, procedure, selected, native_graph, *, retirement_storage=None, reduction_teams=None):
+def _require_ordinary_join_fields(proof, saved):
+    if (len(saved) != len(fields(NativeCompletionProof))
+            or any(object.__getattribute__(proof, name) is not value for name, value in saved)):
+        raise CompilationError("native graph completion changed its retained ordinary join fields")
+
+
+def _require_ordinary_join_identity(proof):
+    payload = {"version": NATIVE_COMPLETION_VERSION, "procedure": proof.procedure,
+               "graph": proof.structured_identity, "selected": proof.selected_node_ids,
+               "executable": proof.executable_node_ids, "private": sorted(proof.private_roots),
+               "record": _thaw(proof._record)}
+    expected = sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    if expected != proof.identity:
+        raise CompilationError("native graph completion changed its ordinary join identity")
+
+
+def _require_retained_ordinary_join(analysis, native_graph, procedure, identities, proof):
+    """Pure exact-handle fence; an identity string never supplies a join."""
+    registry = getattr(analysis, "_joined_completions", None)
+    retained = [(template, candidate) for template in native_graph.templates
+                for name, selected, candidate in template.completion
+                if name == procedure and tuple(selected) == tuple(identities)]
+    if (type(proof) is not NativeCompletionProof or type(registry) is not dict
+            or dict.get(registry, proof.identity) is not proof
+            or proof.procedure != procedure or proof.selected_node_ids != tuple(identities)
+            or len(retained) != 1 or retained[0][1] is not proof
+            or retained[0][0].procedure != procedure):
+        raise CompilationError("native graph completion requires its exact retained ordinary whole-group join")
+
+
+def _graph_joined_facts(analysis, procedure, selected, native_graph, *, retirement_storage=None,
+                        reduction_teams=None, ordinary_completion=None):
     native_graph.validate(analysis, native_graph.procedure, native_graph._selection)
     template = next((item for item in native_graph.templates if item.procedure == procedure), None)
     if template is None:
@@ -890,7 +956,12 @@ def _graph_joined_facts(analysis, procedure, selected, native_graph, *, retireme
             reduction_team = team.validate(analysis, procedure, team.selected_node_ids)
             if all(previous is not team for previous in reduction_teams):
                 reduction_teams.append(team)
-    opening = r"parallel(?:\s|$)" if retirement_storage is not None or reduction_team is not None else r"parallel\s+do(?:\s|$)"
+    if ordinary_completion is not None:
+        _structure, identities = analysis._selected_source(procedure, selected)
+        _require_retained_ordinary_join(analysis, native_graph, procedure, identities, ordinary_completion)
+        ordinary_completion.validate(analysis, procedure, identities)
+    opening = (r"parallel(?:\s|$)" if retirement_storage is not None or reduction_team is not None
+               or ordinary_completion is not None else r"parallel\s+do(?:\s|$)")
     if not directives or not re.match(opening, directives[0]):
         raise CompilationError("graph-owned native completion requires one complete original PARALLEL DO")
     calls = {id(instance.call.edge.original): instance.call.edge

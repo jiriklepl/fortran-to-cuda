@@ -380,10 +380,8 @@ def _private_allocation_inventory(owner):
     return requirements, finish
 
 
-def _record(owner, *, proof_handoffs=None):
-    private_requirements, finish_private_inventory = _private_allocation_inventory(owner)
-    worksharing_requirements, finish_worksharing_inventory, _checkpoint_worksharing = _worksharing_inventory(
-        owner, proof_handoffs)
+def resource_inventory(owner):
+    """Existing canonical managed and typed native reservation roles."""
     managed, reservations = managed_resources(owner), set()
     for member in owner.members.values():
         reservations.update(member.canonical(binding).root for unit in member.units
@@ -397,6 +395,19 @@ def _record(owner, *, proof_handoffs=None):
     from compiler.scopes.native_opaque_accesses import epoch_inventory
 
     opaque_inventory = epoch_inventory(owner, managed)
+    if managed & getattr(owner, "scalar_element_resources", {}).keys():
+        raise CompilationError("scalar element backing storage conflicts with final managed resource inventory")
+    unknown = owner.resources.keys() - (managed | reservations)
+    if unknown:
+        raise CompilationError("storage epoch has an unclassified canonical registration: " + sorted(unknown)[0])
+    return managed, reservations, opaque_inventory
+
+
+def _record(owner, *, proof_handoffs=None):
+    private_requirements, finish_private_inventory = _private_allocation_inventory(owner)
+    worksharing_requirements, finish_worksharing_inventory, _checkpoint_worksharing = _worksharing_inventory(
+        owner, proof_handoffs)
+    managed, reservations, opaque_inventory = resource_inventory(owner)
     resources = []
     epoch = getattr(owner, "position_epoch", None)
     batch_bindings = tuple(binding for root, (binding, _number) in sorted(owner.resources.items()) if root in managed)
