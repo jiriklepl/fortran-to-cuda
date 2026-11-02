@@ -42,6 +42,14 @@ class _FixedArrayAssociationRequired(CompilationError):
         self.binding = binding
 
 
+class _ScalarReductionAssociationRequired(CompilationError):
+    """A scalar formal needs the whole original native lifetime graph."""
+
+    def __init__(self, binding):
+        super().__init__("native scalar reduction formal requires whole-CALL lifetime association")
+        self.binding = binding
+
+
 def _require_fixed_array_associations(analysis, procedure, associations):
     from compiler.frontend.native_fixed_array_association import NativeFixedArrayAssociation
 
@@ -356,8 +364,6 @@ def _derive(analysis, procedure, originals, record_region=None, *, native_graph=
             raise CompilationError("native lifetime and owned numeric record teams are distinct authorities")
         lifetime = NativeLifetimeContext(analysis, native_graph)
         pairs = lifetime.team_bindings(procedure, group.original_nodes)
-        if not pairs:
-            raise CompilationError("native lifetime team requires its original confined pointer")
         allowed_associations = tuple(binding for pair in pairs for binding in pair)
         private_pointers = tuple(pointer for pointer, _target in pairs)
     if record_region is not None:
@@ -393,6 +399,7 @@ def _derive(analysis, procedure, originals, record_region=None, *, native_graph=
                            for binding in routine.scope.bindings.values())
     texts, private, shared, stack, nowait = [], {}, {}, [], 0
     reductions, singles, masters = [], 0, 0
+    scalar_formals = {}
     array_reductions = []
     used_associations = set()
     array_checkpoint = None
@@ -469,7 +476,6 @@ def _derive(analysis, procedure, originals, record_region=None, *, native_graph=
                     if (not re.fullmatch(r"[a-z][a-z0-9_]*", name) or binding is None
                             or analysis._binding(clause_scope, name) is not binding
                             or binding.declaring_scope is not routine.scope
-                            or (name in routine.arguments and not binding.rank)
                             or binding.dtype not in allowed or binding.kind not in {4, 8}
                             or binding.attributes & (_UNSAFE | {"parameter"}) or name in reduced):
                         raise CompilationError("descriptor team REDUCTION requires independent original primitive scalar locals")
@@ -509,6 +515,11 @@ def _derive(analysis, procedure, originals, record_region=None, *, native_graph=
                             used_associations.update(id(item) for item in associated)
                         array_declarations.append(declaration)
                     else:
+                        if name in routine.arguments:
+                            if lifetime is None:
+                                raise _ScalarReductionAssociationRequired(binding)
+                            scalar_formals[name] = list(lifetime.scalar_reduction_associations(
+                                procedure, group.original_nodes, binding))
                         declarations.append(binding.public())
                 if declarations:
                     reductions.append({"original_directive": str(original), "operator": operator,
@@ -643,6 +654,10 @@ def _derive(analysis, procedure, originals, record_region=None, *, native_graph=
         record.update(version=5, owned_record_region=record_region.public())
         record_region.validate(analysis)
     if lifetime is not None:
+        if not private_pointers and not scalar_formals:
+            raise CompilationError("native lifetime team requires its original pointer or scalar reduction role")
+        if scalar_formals:
+            record["native_lifetime_scalar_reductions"] = scalar_formals
         if any(pointer.root not in private for pointer in private_pointers):
             raise CompilationError("native lifetime pointer requires exact original PRIVATE participation")
         record.update(version=6, native_lifetime_context=lifetime.public())
@@ -726,6 +741,18 @@ class DescriptorTeamProof:
             raise CompilationError("descriptor team changed its original native lifetime graph")
         if self._native_graph is not None:
             self._native_graph.validate(analysis, self._native_graph.procedure, self._native_graph._selection)
+        scalar_rows = json.loads(self._record).get("native_lifetime_scalar_reductions", {})
+        if scalar_rows:
+            from compiler.frontend.native_lifetime_context import NativeLifetimeContext
+            if self._native_graph is None:
+                raise CompilationError("native scalar reduction lost its retirement-only graph")
+            lifetime = NativeLifetimeContext(analysis, self._native_graph)
+            routine = analysis._require_original(procedure)
+            for name, rows in scalar_rows.items():
+                binding = routine.scope.bindings.get(name)
+                if binding is None or _encoded(lifetime.scalar_reduction_associations(
+                        procedure, self._originals, binding)) != _encoded(rows):
+                    raise CompilationError("native scalar reduction changed its original CALL storage associations")
         if self._source_fact is not None:
             if (analysis is not self._analysis or procedure != self.procedure
                     or tuple(selected) != self.selected_node_ids
@@ -762,6 +789,15 @@ def _team_attachments(proof):
     from compiler.frontend.native_fixed_array_association import NativeFixedArrayAssociation
 
     owners = [proof]
+    if json.loads(proof._record).get("native_lifetime_scalar_reductions") and proof._native_graph is not None:
+        owners.extend((proof._native_graph, *proof._native_graph.templates, *proof._native_graph.instances))
+        for template in proof._native_graph.templates:
+            for call in template.calls:
+                owners.extend((call, call.edge, *_original_call_receipts(call.edge.resolved)))
+                for association in call.edge.resolved.associations:
+                    owners.append(association.formal_binding)
+                    if association.binding is not None:
+                        owners.append(association.binding)
     if type(proof._fixed_array_associations) is tuple:
         for item in proof._fixed_array_associations:
             if type(item) is NativeFixedArrayAssociation:

@@ -78,9 +78,13 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
             raise CompilationError("fixed array native completion requires its issued whole-team storage proof")
         reduction_team.validate(analysis, procedure, identities)
         group = _original_group(analysis.routines[procedure], tuple(selected), graph_selection=True)
+        lifetime_scalar = reduction_team.public().get("native_lifetime_scalar_reductions")
+        if lifetime_scalar and (not retirement_schedules or native_lifetime is None
+                or reduction_team._native_graph is not native_lifetime.graph):
+            raise CompilationError("scalar formal team authorizes whole-call retirement only")
         if (len(group.original_nodes) != len(reduction_team._originals)
                 or any(a is not b for a, b in zip(group.original_nodes, reduction_team._originals, strict=True))
-                or not reduction_team.public().get("intrinsic_fixed_array_reductions")):
+                or not (reduction_team.public().get("intrinsic_fixed_array_reductions") or lifetime_scalar)):
             raise CompilationError("fixed array native completion changed its complete original team")
     if deferred is not None and not deferred.available and reduction_team is None:
         raise CompilationError("deferred native group completion unavailable: " + str(deferred.reason))
@@ -194,7 +198,7 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
             if kind == "reduction":
                 team_record = reduction_team.public()
                 rows = (*team_record.get("intrinsic_scalar_reductions", ()),
-                        *team_record["intrinsic_fixed_array_reductions"])
+                        *team_record.get("intrinsic_fixed_array_reductions", ()))
                 if not any(row["original_directive"] == str(original) for row in rows):
                     raise CompilationError("fixed array reduction clause lacks exact original storage evidence")
             elif kind == "default":
@@ -485,8 +489,9 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
               "retains_original_team_and_directives": True}
     if reduction_team is not None:
         record.update(native_only=True, internal_cuts_authorized=False, gpu_legality_established=False,
-                      fixed_array_reduction_team_identity=reduction_team.identity,
                       reduction_arithmetic="unchanged original CPU OpenMP reduction; no reassociation")
+        record["native_lifetime_scalar_team_identity" if lifetime_scalar else
+               "fixed_array_reduction_team_identity"] = reduction_team.identity
     if private_arrays:
         record["original_private_arrays"] = [private_arrays[root] for root in sorted(private_arrays)]
     if uniform_reads:
@@ -610,6 +615,8 @@ class NativeGraphCompletionProof:
                         or (team.procedure, tuple(map(id, team._originals))) not in groups):
                     raise CompilationError("fixed array completion changed its graph-owned original team")
                 team.validate(analysis, team.procedure, team.selected_node_ids)
+                if team.public().get("native_lifetime_scalar_reductions"):
+                    raise CompilationError("scalar formal retirement team cannot authorize strong native completion")
                 if _freeze(team.public()) != row or not row.get("intrinsic_fixed_array_reductions"):
                     raise CompilationError("fixed array completion changed its original reduction storage")
         # Recompute every existing equation, even when both new fields were
@@ -847,7 +854,20 @@ def _graph_joined_facts(analysis, procedure, selected, native_graph, *, retireme
     directives = [_directive(node) for original in selected for node in walk(original)
                   if _directive(node) is not None]
     reduction_team = None
-    if reduction_teams is not None and any(re.search(r"\breduction\s*\(", text) for text in directives):
+    if retirement_storage is not None:
+        from compiler.frontend.descriptor_teams import DescriptorTeamProof
+        candidates = [team for team in retirement_storage._joined_storage
+                      if type(team) is DescriptorTeamProof and team.procedure == procedure
+                      and len(team._originals) == len(selected)
+                      and all(a is b for a, b in zip(team._originals, selected, strict=True))
+                      and team.public().get("native_lifetime_scalar_reductions")]
+        if len(candidates) > 1:
+            raise CompilationError("native scalar retirement has ambiguous storage team handles")
+        if candidates:
+            reduction_team = candidates[0].validate(analysis, procedure, candidates[0].selected_node_ids)
+            if reduction_teams is not None:
+                reduction_teams.append(reduction_team)
+    if reduction_team is None and reduction_teams is not None and any(re.search(r"\breduction\s*\(", text) for text in directives):
         from compiler.frontend.descriptor_teams import _FixedArrayAssociationRequired, prove_descriptor_team
         associations, requested = (), set()
         while True:
@@ -933,7 +953,11 @@ def _native_call_groups(native):
 
 def native_call_storage_structures(analysis, native):
     """Existing callees of one whole original CALL or single-line IF CALL."""
-    from compiler.frontend.descriptor_teams import _FixedArrayAssociationRequired, prove_descriptor_team
+    from compiler.frontend.descriptor_teams import (
+        _FixedArrayAssociationRequired,
+        _ScalarReductionAssociationRequired,
+        prove_descriptor_team,
+    )
     from compiler.frontend.resource_reachability import NativeEffectGraph
 
     if type(native) is not NativeEffectGraph:
@@ -953,6 +977,13 @@ def native_call_storage_structures(analysis, native):
         try:
             team = prove_descriptor_team(analysis, name, originals,
                 native_graph=native if lifetime is not None and lifetime.team_bindings(name, originals) else None)
+        except _ScalarReductionAssociationRequired as error:
+            if type(error) is not _ScalarReductionAssociationRequired:
+                raise
+            if lifetime is None:
+                from compiler.frontend.native_lifetime_context import NativeLifetimeContext
+                lifetime = NativeLifetimeContext(analysis, native)
+            team = prove_descriptor_team(analysis, name, originals, native_graph=native)
         except _FixedArrayAssociationRequired as error:
             if type(error) is not _FixedArrayAssociationRequired:
                 raise

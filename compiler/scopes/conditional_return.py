@@ -456,7 +456,8 @@ def boundary_lifecycle(member, originals, *, diagnostic=None):
                 structures = native_call_storage_structures(analysis, native)
                 if structures:
                     candidate = prove_storage_mutation_effects(analysis, procedure, selection=originals, joined_storage=structures,
-                        native_graph=native if any(template.confined_pointers for template in native.templates) else None)
+                        native_graph=native if any(getattr(team, "_native_graph", None) is native
+                                                   for team in structures) else None)
                     completed = prove_native_call_retirement(analysis, procedure, originals, native, candidate)
                     proof, completion = candidate, completed
             except CompilationError as error:
