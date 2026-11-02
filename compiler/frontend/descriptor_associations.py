@@ -23,6 +23,12 @@ _UNSAFE = {"pointer", "allocatable", "target", "optional", "value", "volatile", 
            "parameter", "external", "intrinsic"}
 
 
+
+class _ReadonlyRecordAssociationRequired(CompilationError):
+    """Fixed-value layout declined; an exact storage-only declaration is possible."""
+
+
+
 def _encode(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
@@ -54,7 +60,9 @@ def _same_syntax(saved):
                for node, children in saved)
 
 
-def _derive(analysis, routine, original, scope_validator=None, tick=None):
+def _derive(analysis, routine, original, scope_validator=None, tick=None, *, declaration_only=False):
+    if type(declaration_only) is not bool:
+        raise CompilationError("descriptor association declaration role must be explicit")
     if (analysis._require_original(routine.qualified) is not routine
             or _kind(original) != "Associate_Construct"):
         raise CompilationError("descriptor association requires its exact original routine and construct")
@@ -93,6 +101,45 @@ def _derive(analysis, routine, original, scope_validator=None, tick=None):
     require_scope(scope.parent)
     require_scope(scope)
     types = _TypeBuilder(analysis)
+    declaration_visits = 0
+
+    def declaration_tick():
+        nonlocal declaration_visits
+        if tick is not None:
+            tick()
+        else:
+            declaration_visits += 1
+            if declaration_visits > 4 * analysis.operation_limit + 2:
+                raise CompilationError("readonly lexical record declaration budget exhausted")
+
+    def readonly_declaration(root):
+        from compiler.frontend.native_demand import _Declarations, _owned_storage
+        from compiler.frontend.storage_component_reads import readonly_record_declaration
+
+        if not _owned_storage(analysis, root, _Declarations()):
+            raise CompilationError("readonly lexical record requires exact original owned storage")
+        schema = readonly_record_declaration(analysis, root, retain_scope=require_scope,
+                                           tick=declaration_tick, formal=False)
+        return {"original_binding": root.public(), "declaring_module": schema.scope.module,
+                "declaring_type": schema.name, "schema_sha256": sha256(str(schema.node).encode()).hexdigest(),
+                "declaration_only": True, "layout_authorized": False,
+                "allocation_or_definition_inferred": False}
+
+    def original_declaration(root):
+        if declaration_only:
+            return readonly_declaration(root)
+        if root.dtype.startswith("type("):
+            schema = types.binding(root)
+            try:
+                return types.schema(schema)
+            except CompilationError as error:
+                # This typed request grants nothing. The independent storage
+                # consumer must explicitly request and publish the other role.
+                readonly_declaration(root)
+                raise _ReadonlyRecordAssociationRequired(
+                    "source record requires its readonly lexical declaration role") from error
+        return {"original_binding": root.public()}
+
     records, roots = [], []
     for item, access in zip(originals, association.selectors, strict=True):
         if tick is not None:
@@ -119,9 +166,12 @@ def _derive(analysis, routine, original, scope_validator=None, tick=None):
             raise CompilationError("descriptor association requires exact independent fixed scalar variable selectors")
         root = current.root_binding
         require_scope(root.declaring_scope)
-        if root.dtype.startswith("type("):
-            schema = types.binding(root)
-            declaration = types.schema(schema)
+        if declaration_only:
+            if _kind(selector) != "Name" or current.binding is not root or not root.dtype.startswith("type("):
+                raise CompilationError("readonly lexical declaration requires direct named scalar records")
+            declaration = original_declaration(root)
+        elif root.dtype.startswith("type("):
+            declaration = original_declaration(root)
         elif root.dtype in {"real", "integer", "logical"} and root.kind in {4, 8}:
             if root.declaring_scope.bindings.get(root.name) is not root:
                 raise CompilationError("descriptor association lost its original scalar declaration")
@@ -138,6 +188,10 @@ def _derive(analysis, routine, original, scope_validator=None, tick=None):
         "payload_access_authorized": False, "entry_definition_authority": False,
         "alias_separation_authorized": False, "descriptor_lifetime_authorized": False,
         "execution_authorized": False, "motion_authorized": False}
+    if declaration_only:
+        record.update(kind="original_readonly_scalar_record_lexical_declaration",
+                      declaration_only=True, layout_authorized=False, capture_authorized=False,
+                      allocation_or_definition_inferred=False)
     analysis.verify_publication()
     syntax = analysis._require_original_global()
     if analysis._require_original_routine(routine.qualified, _syntax=syntax) is not routine:
@@ -147,7 +201,9 @@ def _derive(analysis, routine, original, scope_validator=None, tick=None):
         _validate_scope(analysis, current)
     fixed = _TypeBuilder(analysis)
     for root, declaration in roots:
-        current = fixed.schema(fixed.binding(root)) if root.dtype.startswith("type(") else {"original_binding": root.public()}
+        current = (readonly_declaration(root) if declaration_only else
+                   fixed.schema(fixed.binding(root)) if root.dtype.startswith("type(") else
+                   {"original_binding": root.public()})
         if current != declaration:
             raise CompilationError("descriptor association changed its original fixed declaration at publication")
     if (getattr(analysis, "_associate_scopes", {}).get(id(original)) is not association
@@ -174,12 +230,14 @@ class FixedScalarAssociation:
     _association: object = field(repr=False)
     _record: str = field(repr=False)
     _issuer: object = field(repr=False)
+    _declaration_only: bool = field(default=False, repr=False)
 
     def validate(self, *, scope_validator=None, tick=None):
         saved = _attachments(self)
         if type(self) is not FixedScalarAssociation or self._issuer is not _ISSUER:
             raise CompilationError("descriptor association requires its source-issued composition")
-        record, association = _derive(self._analysis, self._routine, self._original, scope_validator, tick)
+        record, association = _derive(self._analysis, self._routine, self._original, scope_validator, tick,
+                                      declaration_only=self._declaration_only)
         if association is not self._association or record != self._record or not _attached(self, saved):
             raise CompilationError("descriptor association changed its exact original source composition")
         return self
@@ -188,7 +246,10 @@ class FixedScalarAssociation:
         return json.loads(self._record)
 
 
-def original_fixed_association(analysis, routine, original, *, scope_validator=None, tick=None):
-    record, association = _derive(analysis, routine, original, scope_validator, tick)
-    return FixedScalarAssociation(analysis, routine, original, association, record, _ISSUER).validate(
+def original_fixed_association(analysis, routine, original, *, scope_validator=None, tick=None,
+                               declaration_only=False):
+    record, association = _derive(analysis, routine, original, scope_validator, tick,
+                                  declaration_only=declaration_only)
+    return FixedScalarAssociation(analysis, routine, original, association, record, _ISSUER,
+                                  declaration_only).validate(
         scope_validator=scope_validator, tick=tick)

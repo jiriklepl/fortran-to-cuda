@@ -83,6 +83,26 @@ passes `mean_TKE`, then declines at the guarded Rayleigh-damping call in
 components is incomplete. All 1,338 source and 380 external guards hold; no
 package or application is emitted. The next diagnostic work inventories related
 native component-storage barriers before another full parent attempt.
+
+The association receipt change is now applied after 288 affected CPU cases, two
+native/source fixture checks and three device modes pass. It reuses existing
+read-only declaration and component checks, without GPU layout or initialization
+authority. The [next parent attempt 20](/tmp/fortran-parent-graph-current-20/result.json)
+clears damping and declines at the original diffusion team in
+`momentum_diffusion.f90:862–1214`: the local allocatable shared `Fl` flux scratch
+has no admitted storage/definition facts. Its tiled loops are also rejected by
+the private-scratch alternative; the whole numerical team reports a mapped-span
+limitation across include origins. These are separate lifetime, definedness and
+device-lowering questions. No scratch facts are fabricated, and no application
+package or performance result is accepted from this attempt.
+
+The [fresh compiler selection for the association increment](/tmp/fortran-maintained-current807-c3-native-full-05/execution/compiler/completion.json)
+passes all 12,586 selected cases in one clean invocation, with no failures,
+errors or skips and all 1,504 source guards intact. The 1,282 marked CUDA cases
+remain outside this CPU selection; its new three-mode device fixture passes
+separately. Removing trailing spaces from the imported Fortran test fixture
+preserves Python/Fortran syntax trees and line counts; all 28 affected CPU
+fixture checks pass again. The runtime and calibration identities are unchanged.
 The new `benchmarks/evaluate_speedup.py` results are exploratory single samples.
 The approved seven rotated measurements, full-process timing and strict
 correctness gates still govern performance claims. The 10%, 2× and 20× targets
