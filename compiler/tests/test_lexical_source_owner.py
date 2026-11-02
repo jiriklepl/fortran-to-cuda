@@ -580,3 +580,38 @@ end module''')
         assert any('scalar is live after' in item['reason'] for item in report['boundaries'])
         regions = report['inline_numerical_regions']['regions']
         assert all(region['written_resources'] != ['argument::b'] for region in regions)
+
+
+def test_automatic_local_is_published_before_original_host_boundary(tmp_path):
+    source = SOURCE.replace('step(a,b,out,n,escape)', 'step(a,out,n,escape)').replace(
+        'real(8),intent(inout)::b(-2:),out(-2:)',
+        'real(8),intent(inout)::out(-2:)\nreal(8)::b(-2:1021)').replace(
+        'visits=visits+1\ndo i=-2,n-3\nb(i)=2*a(i)+real(i,8)\nenddo',
+        'visits=visits+1\nb=-999.d0')
+    resource = 'local_owner::step::b'
+    for mode in ('reached', 'graph'):
+        directory = tmp_path / mode
+        directory.mkdir()
+        path = directory / 'local.f90'
+        path.write_text(source)
+        facts = {'schema_version': 1, 'participation': 'serial',
+                 'sources': {str(path): sha256(path.read_bytes()).hexdigest()},
+                 'captures': {'argument::a': FACT, 'argument::out': FACT,
+                              resource: {**FACT, 'initialized': 'none'}}}
+        builder = ScopeBuilder([path], 'local_owner::step', facts=facts, options=CompilerOptions(),
+                               config=OffloadConfig(policy='sections', scope_execution=mode))
+        outputs, report = builder.run()
+        owner, = report['scopes']
+        assert owner['gpu_leaves']
+        region, = report['inline_numerical_regions']['regions']
+        assert region['written_resources'] == [resource]
+        assert owner['boundaries'][0]['execution'] == 'publish and close when reached; original continuation once'
+        text = outputs[report['sources'][str(path)]['replacement']]
+        assert text.count('call opaque(b,n)') == 1
+        before_observer = text[:text.index('call opaque(b,n)')]
+        close = 'fort_scope_resident_close_v1' if mode == 'graph' else 'fort_scope_close'
+        assert f'fort_close_status = {close}(' in before_observer
+        # The GPU assignment is the first definition of this automatic local.
+        # The reached host CALL and following consumer still observe its value;
+        # procedure-local storage does not make that value dead at this close.
+        assert 'fort_scope_discard_v1(' not in before_observer

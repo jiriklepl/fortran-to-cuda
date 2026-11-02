@@ -6,6 +6,41 @@ The original proposal is preserved at
 `/tmp/fortran-residency-implementation-24/GPU_RESIDENCY_PLAN.original.md`.
 Historical reports and timing controls remain unchanged.
 
+## Current integration checkpoint: 2026-11-02
+
+Build06 passes all four two-step GPU/hidden-GPU cases and both natural runs
+(109 and 2,458 steps), including all 20 fields, bounds, halos and all 6/114
+output files at `atol=1e-6`, `rtol=1e-5`. The
+[natural-run receipt](/tmp/fortran-startup-application-natural-06/qualification.json)
+qualifies runtime `6d8484fe…` with CPU PoisFFT. It does not qualify the runtime
+changes introduced in `1295d77` or the private shared-parent implementation.
+
+Two regressions in that external increment are corrected: automatic local arrays
+must publish before a reached host boundary unless their values are proved dead;
+scratch growth must match the capacity used by source quotes and the reference
+runtime. The local-array regression and all 32 affected source tests pass.
+The existing GPU quote gate fails two modes before the scratch fix and passes
+all three afterward. Arena reuse and the async allocator remain. All 109
+selected reference-runtime tests pass for the retained region-limit and
+continuation changes, scratch handling, direct transport and source quotes;
+six marked CUDA cases are outside that selection.
+
+The current runtime is `807bdd62…`; its calibration and application build remain
+pending. A separate Python 3.13.5 task environment is used because the existing
+venv now resolves to Python 3.14 while its dependencies remain installed for
+3.13. Historical evidence is preserved, and changed interpreter identities are
+recorded in additive execution plans.
+
+Next: finish current-runtime regression checks and fresh comparison-control
+correctness; qualify the shared GPU→original CPU reduction→GPU component on
+the current source; then retry the actual RK parent and recalibrate/rebuild.
+The new `benchmarks/evaluate_speedup.py` results are exploratory single samples.
+The approved seven rotated measurements, full-process timing and strict
+correctness gates still govern performance claims. The 10%, 2× and 20× targets
+remain open.
+
+The following entries preserve earlier checkpoints and their limitations.
+
 The [repeated-registration label fix](benchmarks/reports/gpu-residency-implementation-20261023/repeated-registration-labels-20261102/README.md)
 is applied after 76 relevant tests pass, including native Fortran compilation;
 the exact regression fails against the old emitter. Cloned registration blocks
