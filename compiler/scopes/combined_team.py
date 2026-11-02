@@ -330,7 +330,7 @@ class CombinedNumericalTeam(StructuredScope):
             try:
                 operation = fragment(builder, self.original_nodes, kind="joined native OpenMP",
                                      retain_proof_analysis=True)
-                if operation.host_metadata or operation.native_environment or operation.host_only_reads:
+                if operation.host_metadata or operation.native_environment or operation.native_opaque_accesses:
                     raise CompilationError("original CPU team requires no extra host metadata or native environment effects")
                 if any(item.get("kind") in {"write", "overwrite"} and not item.get("rank", 0)
                        and item.get("resource") not in operation.private_bindings
@@ -464,8 +464,8 @@ class CombinedNumericalTeam(StructuredScope):
                 "native_summary_identity": fallback.summary["summary_identity"],
                 "native_completion": fallback.summary["native_completion"],
                 "native_required_whole": sorted(root for root, actions in fallback.coherence_effects.items()
-                                                if "read" in actions or root not in fallback.overwrites),
-                "whole_on_return": sorted(fallback.overwrites),
+                                                if "read" in actions or root not in fallback.coherence_overwrites),
+                "whole_on_return": sorted(fallback.coherence_overwrites),
                 "whole_return_authority": "same exact original group: independent source must-writes and validated numerical equivalence",
                 "native_validation_failure": "checked hard failure; borrowed context cannot close or replay",
             })
@@ -602,7 +602,7 @@ class CombinedNumericalTeam(StructuredScope):
         for index, (root, actions) in enumerate(sorted(operation.coherence_effects.items()), 1):
             flags = (["FORT_SCOPE_READ_ALL"] if "read" in actions else [])
             flags += ["FORT_SCOPE_WRITE_ALL"] if "write" in actions else []
-            flags += ["FORT_SCOPE_OVERWRITE_ALL"] if root in operation.overwrites else []
+            flags += ["FORT_SCOPE_OVERWRITE_ALL"] if root in operation.coherence_overwrites else []
             native_begin += [f"fort_bindings({index}) = fort_scope_plan_binding()",
                              f"fort_bindings({index})%buffer = {handles[root]}",
                              f"fort_bindings({index})%access%flags = " + " + ".join(flags)]

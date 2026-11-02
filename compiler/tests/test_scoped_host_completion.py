@@ -7,7 +7,7 @@ import ctypes as c
 import pytest
 
 from compiler.tests.test_scoped_access_batch import Binding, pack
-from compiler.tests.test_scoped_runtime import SIZE, TOKEN, Scope, access, runtime  # noqa: F401
+from compiler.tests.test_scoped_runtime import RECTANGLE_LIMIT, SIZE, TOKEN, Scope, access, runtime  # noqa: F401
 
 
 class CompletionStats(c.Structure):
@@ -122,10 +122,11 @@ def test_host_only_tasks_need_no_completion_tokens(completions):
 @pytest.mark.parametrize("destination", ["host", "device"])
 def test_readonly_fragmentation_reconciliation_preserves_original_mirror(completions, destination):
     scope = Scope(completions)
-    host = (c.c_double * 128)(*range(128))
-    status, handle = scope.register(host, [128])
+    size = 4 * RECTANGLE_LIMIT
+    host = (c.c_double * size)(*range(size))
+    status, handle = scope.register(host, [size])
     scope.check(status)
-    points = [([2 * i], [2 * i + 1]) for i in range(32)]
+    points = [([2 * i], [2 * i + 1]) for i in range(RECTANGLE_LIMIT)]
     if destination == "host":
         for lo, hi in points:
             device = scope.gpu(handle, access(write=[(lo, hi)], overwrite=[(lo, hi)]))
@@ -140,7 +141,7 @@ def test_readonly_fragmentation_reconciliation_preserves_original_mirror(complet
         assert scope.stats().upload_bytes == before
     else:
         device = scope.gpu(handle, access(flags=6))
-        for i in range(128):
+        for i in range(size):
             device[i] = 1000 + i
         scope.gpu_end(handle)
         for lo, hi in points:

@@ -25,15 +25,45 @@ selected reference-runtime tests pass for the retained region-limit and
 continuation changes, scratch handling, direct transport and source quotes;
 six marked CUDA cases are outside that selection.
 
-The current runtime is `807bdd62…`; its calibration and application build remain
-pending. A separate Python 3.13.5 task environment is used because the existing
-venv now resolves to Python 3.14 while its dependencies remain installed for
-3.13. Historical evidence is preserved, and changed interpreter identities are
-recorded in additive execution plans.
+The current runtime is `807bdd62…`. Fresh calibration passes and issues profile
+`47031362…`; its [receipt](/tmp/fortran-current-runtime-calibration-807bdd62-01/qualification.json)
+records the raw measurements and source guards. Current-runtime application
+correctness and performance remain unqualified. Fresh native, be58 and 7a612e4
+comparison controls pass focused correctness checks.
 
-Next: finish current-runtime regression checks and fresh comparison-control
-correctness; qualify the shared GPU→original CPU reduction→GPU component on
-the current source; then retry the actual RK parent and recalibrate/rebuild.
+The original maintained compiler invocation fails and remains recorded. Its
+stale region/continuation fixtures and earlier diagnostic expectation have been
+corrected; separate whole-module follow-ups also resolve the affinity, native
+fixture-window and sanitizer-environment issues. All 12,515 original cases have
+passing latest results; these do not constitute a clean full invocation. The
+native Python 3.13.11 environment preserves the
+existing dependencies while supplying Linux PIDFD support and avoiding a global
+C++ preload. The clean pipeline rerun passes 4,406 tests with 29 declared optional
+skips. The fresh integrated compiler selection completes with 12,523 passes and
+one test-only failure: temporary analysis objects can reuse an address while the
+test retains only their `id()`. The repaired test keeps the original objects
+alive and preserves its identity/count assertions; all eight tests in that
+module pass. [Latest coverage](/tmp/fortran-latest-current-12524-reconciliation-20261102-01/qualification.json)
+is therefore 12,524 passing cases, with zero skips;
+the [original full invocation](/tmp/fortran-maintained-current807-c3-native-full-03/execution/compiler/completion.json)
+remains recorded as failed, not relabelled as a clean invocation. The paired
+reader is committed as `9d0386b`; its import-only test repair passes all 290
+module cases and Ruff after the full pipeline check.
+
+The actual RK parent attempt [17-02](/tmp/fortran-parent-graph-current-17-02/result.json)
+declines at the guarded `mean_UVW` call: its joined fixed-array reduction lacks
+the lifetime evidence needed for safe reentry. The integrated fix reuses the existing
+graph-owned association receipts; it does not grant payload access to the
+unproved `Utype` allocation. Its 122 CPU tests and three existing CUDA retirement
+controls pass. The [fresh parent attempt 18](/tmp/fortran-parent-graph-current-18/result.json)
+passes that barrier, then declines at the scalar-OUT reduction in `mean_TKE`
+(`linearforcing.f90:171`). All source guards hold; no package or application is
+emitted. A private scalar-formal retirement extension passes 658 CPU cases, two
+fixture checks and three [CUDA modes](/tmp/fortran-scalar-formal-retirement-gpu-02/gpu-01/qualification.json),
+including returned-scalar consumption, masked/unmasked host work, both guards,
+full fields/halos and exact copy ledgers. It remains outside this snapshot until
+promotion. The next parent attempt, current-runtime application build and strict
+natural runs remain subsequent gates.
 The new `benchmarks/evaluate_speedup.py` results are exploratory single samples.
 The approved seven rotated measurements, full-process timing and strict
 correctness gates still govern performance claims. The 10%, 2× and 20× targets

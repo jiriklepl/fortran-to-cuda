@@ -173,7 +173,7 @@ class JoinedTeam(StructuredScope):
         span = self._window(loops)
         operation = fragment(self.builder, tuple(loops), kind='original native worksharing',
                              native_metadata=True, native_host_reads=self.native_host_reads, completion=proof, span=span)
-        if not operation.sections.available and not operation.host_only_reads:
+        if not operation.sections.available and not operation.native_opaque_accesses:
             from compiler.frontend.indirect_sections import analyze_indirect_sections
             from compiler.frontend.native_sections import NativeSections
             indirect = analyze_indirect_sections(self.builder.analysis, self.builder.entry.qualified,
@@ -417,7 +417,7 @@ class JoinedTeam(StructuredScope):
             else:
                 for index, (root, actions) in enumerate(sorted(operation.coherence_effects.items()), 1):
                     flags = (['FORT_SCOPE_READ_ALL'] if 'read' in actions else []) + (['FORT_SCOPE_WRITE_ALL'] if 'write' in actions else [])
-                    if root in operation.overwrites:
+                    if root in operation.coherence_overwrites:
                         flags.append('FORT_SCOPE_OVERWRITE_ALL')
                     prepare += [f'fort_bindings({index}) = fort_scope_plan_binding()',
                                 f'fort_bindings({index})%buffer = {handles[root]}',

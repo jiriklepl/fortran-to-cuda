@@ -19,7 +19,7 @@ def test_fixed_native_inputs_keep_domain_and_reserve_each_original_module_array(
     helper = next(item for item in owner["module_coordinators"] if item["procedure"].endswith("::smooth"))
     assert not helper["boundaries"]
     native = [op for segment in helper["planning_segments"] for op in segment["operations"]["native_operations"]]
-    assert any(op["host_only_native_reads"] for op in native)
+    assert any(op["native_opaque_accesses"] for op in native)
     epoch = owner["checked_execution_plan"]["storage_epoch"]
     reservations = [resource for resource in epoch["resources"] if resource["resource"] in {
         "graph_fixture::types", "graph_fixture::other_types"}]

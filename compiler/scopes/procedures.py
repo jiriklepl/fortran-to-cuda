@@ -144,7 +144,7 @@ class BorrowedCoordinator:
             if self.whole_team:
                 fallback = self.scope.borrowed_fallback
                 required = {root for root, actions in fallback.coherence_effects.items()
-                            if "read" in actions or root not in fallback.overwrites}
+                            if "read" in actions or root not in fallback.coherence_overwrites}
                 undefined = {self.routine.scope.bindings[name].root for name in self.routine.arguments
                              if self.routine.scope.bindings[name].rank
                              and self.routine.scope.bindings[name].intent == "out"}
@@ -155,7 +155,7 @@ class BorrowedCoordinator:
                 # whole-return credit; numerical bounding boxes supply none.
                 self.definition_summary = replace(self.definition_summary,
                     required_whole=self.definition_summary.required_whole | required,
-                    whole_on_return=self.definition_summary.whole_on_return | fallback.overwrites)
+                    whole_on_return=self.definition_summary.whole_on_return | fallback.coherence_overwrites)
             self.required_whole = set(self.definition_summary.required_whole)
             self.resources = tuple(self.arrays)
             return
@@ -167,7 +167,7 @@ class BorrowedCoordinator:
         self.required_whole = {root for segment in self.scope.segments for root in segment.payload}
         for operation in self.scope.native:
             if not operation.sections.available:
-                self.required_whole.update(set(operation.effects) - operation.overwrites)
+                self.required_whole.update(set(operation.coherence_effects) - operation.coherence_overwrites)
         for call in self.scope.calls:
             if call.region is not None:
                 continue

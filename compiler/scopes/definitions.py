@@ -46,9 +46,9 @@ def summarize(scope, *, entry_undefined=()):
             # A whole overwrite removes preservation reads, never explicit RHS
             # reads. The original source must define those before this point.
             reads = {root for root, actions in operation.coherence_effects.items()
-                     if "read" in actions or root not in operation.overwrites}
+                     if "read" in actions or root not in operation.coherence_overwrites}
             require(reads, whole, undefined)
-        return transfer(whole, undefined, set(), operation.overwrites)
+        return transfer(whole, undefined, set(), operation.coherence_overwrites)
 
     def call_effect(call, whole, undefined):
         effects, kills, writes = builder.roots_for(call)
@@ -87,7 +87,8 @@ def summarize(scope, *, entry_undefined=()):
                 child, call = item.coordinator, item.call
                 child.check_aliases(call)
                 mapping = {formal: binding.root for formal, binding in call.bindings.items()}
-                mapped = lambda roots: {mapping.get(root, root) for root in roots}
+                def mapped(roots, mapping=mapping):
+                    return {mapping.get(root, root) for root in roots}
                 proof = child.definition_summary
                 require(mapped(proof.required_whole), whole, undefined)
                 whole, undefined = transfer(whole, undefined, mapped(proof.changes), mapped(proof.whole_on_return))

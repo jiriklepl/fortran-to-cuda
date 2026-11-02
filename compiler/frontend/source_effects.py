@@ -808,6 +808,8 @@ class SourceEffects:
         from compiler.frontend.descriptor_scalar_fill import DESCRIPTOR_WINDOW_SCALAR_FILL_VERSION
         from compiler.frontend.descriptor_storage_groups import DESCRIPTOR_WINDOW_STORAGE_GROUP_VERSION
         from compiler.frontend.descriptor_teams import (
+            DESCRIPTOR_TEAM_FIXED_ARRAY_REDUCTION_VERSION,
+            DESCRIPTOR_TEAM_FORMAL_ARRAY_REDUCTION_VERSION,
             DESCRIPTOR_TEAM_IMPLICIT_WORKSHARING_VERSION,
             DESCRIPTOR_TEAM_VERSION,
             DESCRIPTOR_WINDOW_IMPLICIT_WORKSHARING_VERSION,
@@ -899,6 +901,8 @@ class SourceEffects:
                 "descriptor_window_master_version": DESCRIPTOR_WINDOW_MASTER_VERSION,
                 "descriptor_window_joined_block_version": DESCRIPTOR_WINDOW_JOINED_BLOCK_VERSION,
                 "descriptor_team_version": DESCRIPTOR_TEAM_VERSION,
+                "descriptor_team_fixed_array_reduction_version": DESCRIPTOR_TEAM_FIXED_ARRAY_REDUCTION_VERSION,
+                "descriptor_team_formal_array_reduction_version": DESCRIPTOR_TEAM_FORMAL_ARRAY_REDUCTION_VERSION,
                 "descriptor_team_implicit_worksharing_version": DESCRIPTOR_TEAM_IMPLICIT_WORKSHARING_VERSION,
                 "descriptor_window_implicit_worksharing_version": DESCRIPTOR_WINDOW_IMPLICIT_WORKSHARING_VERSION,
                 "descriptor_window_original_worksharing_version": DESCRIPTOR_WINDOW_ORIGINAL_WORKSHARING_VERSION,

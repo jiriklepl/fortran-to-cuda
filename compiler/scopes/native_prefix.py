@@ -16,7 +16,7 @@ def _readonly_assignments(scope, definitions):
         return False
     for operation in scope.native:
         if (operation.overwrites or operation.host_metadata or operation.native_environment
-                or operation.preserve_original or operation.host_only_reads
+                or operation.preserve_original or operation.native_opaque_accesses
                 or not operation.summary.get("complete")
                 or not operation.summary.get("native_completion", {}).get("available")
                 or operation.summary.get("definition_changes")

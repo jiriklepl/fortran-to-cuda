@@ -56,7 +56,9 @@ def test_conflicting_shared_companion_rejects_only_the_later_candidate(tmp_path,
     outputs, report = builder.run()
     assert reached == [mutation]
     assert report["scope_count"] == 1
-    assert any("shared original module companion" in item["reason"] for item in report["boundaries"])
+    reason = ("storage admission final inventory, facts or source policy changed"
+              if mutation == "control_signature" else "shared original module companion")
+    assert any(reason in item["reason"] for item in report["boundaries"])
     assert len(builder._module_companion_publications) == 3
     for _signature, edits in builder._module_companion_publications.values():
         assert all((first, last, text) in builder.edits[path] for path, first, last, text, _prepend in edits)

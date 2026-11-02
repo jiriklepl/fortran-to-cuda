@@ -196,7 +196,7 @@ enddo""",
         inspect()
 
 
-@pytest.mark.parametrize("fault", ["host_metadata", "host_only_reads", "native", "tree", "guarded"])
+@pytest.mark.parametrize("fault", ["host_metadata", "native_opaque_accesses", "native", "tree", "guarded"])
 def test_ordinary_storage_role_topology_cannot_change_before_membership(tmp_path, fault):
     with scanned(tmp_path, config=OffloadConfig(policy="sections", scope_execution="graph")) as (owner, plan):
         member, bindings = query(plan)
@@ -206,9 +206,9 @@ def test_ordinary_storage_role_topology_cannot_change_before_membership(tmp_path
             with StorageAdmission(plan) as admission:
                 if fault == "host_metadata":
                     object.__setattr__(unit, "host_metadata", dict(unit.host_metadata or {}))
-                elif fault == "host_only_reads":
+                elif fault == "native_opaque_accesses":
                     operation = unit.scope.native[0]
-                    object.__setattr__(operation, "host_only_reads", dict(operation.host_only_reads))
+                    object.__setattr__(operation, "native_opaque_accesses", dict(operation.native_opaque_accesses))
                 elif fault == "native":
                     object.__setattr__(unit.scope, "native", tuple(unit.scope.native) + (unit.scope.native[0],))
                 elif fault == "tree":

@@ -42,16 +42,20 @@ def test_native_read_range_keeps_original_effects_but_no_managed_definition(tmp_
     owner, = report["scopes"]
     assert not owner["boundaries"], owner["boundaries"]
     assert len(owner["gpu_leaves"]) == 2
-    operation, = [operation for operation in operations(owner) if operation["host_only_native_reads"]]
-    proof = operation["host_only_native_reads"]
-    assert proof["schema_version"] == 1
-    assert proof["resources"] == ["local_owner::edge_data"]
+    operation, = [operation for operation in operations(owner) if operation["native_opaque_accesses"]]
+    proof = operation["native_opaque_accesses"]
+    assert proof["version"] == 2
+    access, = proof["accesses"]
+    assert access["resource"] == "local_owner::edge_data"
+    assert access["mode"] == "R"
+    assert access["permit_kind"] == "original_readonly"
+    permit = access["permit"]
     assert not proof["device_capture"]
     assert not proof["managed_definitions"]
-    assert not proof["calls_or_escapes"]
-    assert not proof["allocation_changes"]
+    assert not permit["calls_or_escapes"]
+    assert not permit["allocation_changes"]
     assert len(proof["identity"]) == 64
-    assert len(proof["analysis_identity"]) == 64
+    assert len(permit["analysis_identity"]) == 64
     assert "local_owner::edge_data" in operation["resources"]
     assert "local_owner::edge_data" not in operation["managed_resources"]
     assert operation["host_metadata"]["local_owner::edge_data"]["device_capture"] is False
@@ -80,7 +84,7 @@ def test_numeric_native_read_types_require_no_gpu_capture_fact(tmp_path, dtype):
     _, _, report = emit(tmp_path, HOST_SOURCE.replace("real(8),allocatable::edge_data", dtype + ",allocatable::edge_data"))
     owner, = report["scopes"]
     assert not owner["boundaries"]
-    assert any(operation["host_only_native_reads"] for operation in operations(owner))
+    assert any(operation["native_opaque_accesses"] for operation in operations(owner))
 
 
 @pytest.mark.parametrize("action", ["edge_data(-2)=1", "deallocate(edge_data)", "call opaque(edge_data,n)",
@@ -92,7 +96,7 @@ def test_later_writes_lifetime_changes_and_escapes_close_without_replaying_prefi
     owner, = report["scopes"]
     assert owner["boundaries"]
     assert all(not boundary["reopen"] for boundary in owner["boundaries"])
-    assert any(operation["host_only_native_reads"] for operation in operations(owner))
+    assert any(operation["native_opaque_accesses"] for operation in operations(owner))
     text = outputs[report["sources"][str(path)]["replacement"]]
     assert text.lower().count(action.lower()) == 1
 
@@ -101,7 +105,7 @@ def test_existing_capture_facts_keep_the_resource_managed(tmp_path):
     _, _, report = emit(tmp_path, HOST_SOURCE, captures={"local_owner::edge_data": FACT})
     owner, = report["scopes"]
     assert not owner["boundaries"]
-    assert not any(operation["host_only_native_reads"] for operation in operations(owner))
+    assert not any(operation["native_opaque_accesses"] for operation in operations(owner))
     assert any("local_owner::edge_data" in operation["managed_resources"] for operation in operations(owner))
 
 
@@ -111,7 +115,7 @@ def test_managed_numerical_use_and_native_read_share_real_capture_facts(tmp_path
     owner, = report["scopes"]
     assert not owner["boundaries"]
     assert len(owner["gpu_leaves"]) == 2
-    assert not any(operation["host_only_native_reads"] for operation in operations(owner))
+    assert not any(operation["native_opaque_accesses"] for operation in operations(owner))
     assert any("local_owner::edge_data" in segment["resources"] for segment in owner["planning_segments"])
 
 
@@ -136,15 +140,15 @@ implicit none""").replace("real(8),allocatable::edge_data(:)\n", "")
     _, _, report = emit(tmp_path, source)
     owner, = report["scopes"]
     assert not owner["boundaries"]
-    operation, = [operation for operation in operations(owner) if operation["host_only_native_reads"]]
-    assert operation["host_only_native_reads"]["resources"] == ["boundary_values::edge_values"]
+    operation, = [operation for operation in operations(owner) if operation["native_opaque_accesses"]]
+    assert [item["resource"] for item in operation["native_opaque_accesses"]["accesses"]] == ["boundary_values::edge_values"]
 
 
 def test_later_uncaptured_numerical_write_closes_at_reached_operation(tmp_path):
     source = HOST_SOURCE.replace(READ, READ + "\ndo i=-2,n-3\nedge_data(i)=b(i)\nenddo")
     path, outputs, report = emit(tmp_path, source)
     owner, = report["scopes"]
-    assert any(operation["host_only_native_reads"] for operation in operations(owner))
+    assert any(operation["native_opaque_accesses"] for operation in operations(owner))
     boundary, = owner["boundaries"]
     assert "read-only complete effects" in boundary["reason"] or "managed write" in boundary["reason"]
     assert "edge_data(i)=b(i)" in outputs[report["sources"][str(path)]["replacement"]].lower()
@@ -174,7 +178,7 @@ end module""")
     assert "host-only native range cannot be forwarded to a managed child formal" in boundary["reason"]
     assert "local_owner::edge_data" in boundary["reason"]
     assert not owner["module_coordinators"]
-    assert any(operation["host_only_native_reads"] for operation in operations(owner))
+    assert any(operation["native_opaque_accesses"] for operation in operations(owner))
     text = outputs[report["sources"][str(path)]["replacement"]].lower()
     assert len(re.findall(r"call\s+child\s*\(\s*edge_data\s*,\s*n\s*\)", text)) == 1
     assert boundary["reopen"] is False
@@ -185,7 +189,7 @@ def test_invalid_existing_capture_facts_cannot_be_replaced_by_host_authority(tmp
     _, _, report = emit(tmp_path, HOST_SOURCE, captures={"local_owner::edge_data": {**FACT, "storage": "unstable"}})
     owner, = report["scopes"]
     assert owner["boundaries"]
-    assert not any(operation["host_only_native_reads"] for operation in operations(owner))
+    assert not any(operation["native_opaque_accesses"] for operation in operations(owner))
 
 
 @pytest.mark.parametrize("attribute", ["pointer", "volatile", "asynchronous"])
@@ -194,7 +198,7 @@ def test_uncertain_native_storage_remains_a_boundary(tmp_path, attribute):
     _, _, report = emit(tmp_path, HOST_SOURCE.replace("real(8),allocatable::edge_data(:)", declaration))
     owner, = report["scopes"]
     assert owner["boundaries"]
-    assert not any(operation["host_only_native_reads"] for operation in operations(owner))
+    assert not any(operation["native_opaque_accesses"] for operation in operations(owner))
 
 
 def test_threadprivate_original_storage_cannot_be_reserved_as_one_shared_range(tmp_path):
@@ -225,7 +229,7 @@ def test_native_lifetime_projection_does_not_mutate_parent_authority(tmp_path):
     stable = builder.analysis.stable_module_allocatables
     authority = builder.analysis._summary_authority()
     native = fragment(builder, (selected,), native_host_reads=True)
-    assert native.host_only_reads
+    assert native.native_opaque_accesses
     assert native.summary["complete"]
     assert builder.analysis._summary_authority() == authority
     assert builder.analysis.stable_module_allocatables == stable

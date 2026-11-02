@@ -390,10 +390,12 @@ def resolve_source_function(analysis, scope, expression):
     return _resolve_source_invocation(analysis, scope, expression, function=True)
 
 
-def _fixed_array_bounds(analysis, binding):
-    """Prove bounded original explicit shape; never evaluate runtime bounds."""
+def _fixed_array_bounds(analysis, binding, *, element_limit=256):
+    """Prove constant ABI bounds; metadata-only callers may omit the work cap."""
     from compiler.frontend.source_functions import _validate_scope
 
+    if element_limit is not None and (type(element_limit) is not int or element_limit < 1):
+        raise CompilationError("native source array element budget must be a positive exact integer or None")
     scope = binding.declaring_scope
     if (scope is None or scope.bindings.get(binding.name) is not binding
             or len(binding.shape_nodes) != binding.rank):
@@ -413,18 +415,18 @@ def _fixed_array_bounds(analysis, binding):
                 and extent <= INTEGER_MAX):
             raise CompilationError("native source array bounds exceed the INTEGER ABI")
         total *= extent
-        if total > 256:
-            raise CompilationError("native source array exceeds the 256-element fixed storage budget")
+        if element_limit is not None and total > element_limit:
+            raise CompilationError(f"native source array exceeds the {element_limit}-element fixed storage budget")
         bounds.append((lower, upper))
     return tuple(bounds)
 
 
-def _function_array_mapping(analysis, declaration, binding, section):
-    formal_bounds = _fixed_array_bounds(analysis, declaration)
+def _function_array_mapping(analysis, declaration, binding, section, *, element_limit=256):
+    formal_bounds = _fixed_array_bounds(analysis, declaration, element_limit=element_limit)
     if binding is None or binding.attributes & {
             "optional", "pointer", "allocatable", "target", "value", "volatile", "asynchronous"}:
         raise CompilationError("native source function array actual requires original fixed unaliased storage")
-    actual_bounds = _fixed_array_bounds(analysis, binding)
+    actual_bounds = _fixed_array_bounds(analysis, binding, element_limit=element_limit)
     if section is not None:
         # The existing rectangular mapping retains caller coordinates and
         # rank-reducing axes. Only a fully constant, in-bounds view is admitted;

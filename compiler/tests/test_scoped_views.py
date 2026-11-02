@@ -15,6 +15,7 @@ from compiler.tests.test_scoped_planning_runtime import (
     select,
 )
 from compiler.tests.test_scoped_runtime import (
+    RECTANGLE_LIMIT,
     RUNTIME,
     SIZE,
     TOKEN,
@@ -128,18 +129,19 @@ def test_partial_definition_retains_unrelated_dirty_device_values(runtime):
 @pytest.mark.native
 def test_partial_definition_fragmentation_failure_is_atomic(runtime):
     scope = Scope(runtime)
-    data = (c.c_double * 80)(*range(80))
-    status, buffer = scope.register(data, [80])
+    size = 2 * RECTANGLE_LIMIT + 16
+    data = (c.c_double * size)(*range(size))
+    status, buffer = scope.register(data, [size])
     scope.check(status)
     device = scope.gpu(buffer, access(flags=3))
-    for i in range(80):
+    for i in range(size):
         device[i] += 1000
     scope.gpu_end(buffer)
-    partial = access(write=[([2*i+1], [2*i+2]) for i in range(32)])
+    partial = access(write=[([2*i+1], [2*i+2]) for i in range(RECTANGLE_LIMIT)])
     runtime.fort_scope_forget_sections_v1.argtypes = [TOKEN, TOKEN, c.POINTER(Section), SIZE]
     assert runtime.fort_scope_forget_sections_v1(scope.handle, buffer, partial.writes, partial.write_count) == 5
     scope.close()
-    assert list(data) == [i+1000 for i in range(80)]
+    assert list(data) == [i+1000 for i in range(size)]
 
 
 @pytest.mark.native

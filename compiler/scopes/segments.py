@@ -8,8 +8,6 @@ mode-bearing workers and public planning interface.
 from __future__ import annotations
 
 import copy
-import hashlib
-import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
@@ -21,6 +19,7 @@ from compiler.frontend.component_bindings import references
 from compiler.frontend.source_effects import _kind
 from compiler.ir import CompilationError
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, MODEL_INQUIRIES
+from compiler.scopes.native_opaque_accesses import public_accesses
 
 
 @dataclass
@@ -36,8 +35,7 @@ class Native:
     private_bindings: dict = field(default_factory=dict)
     host_metadata: dict = field(default_factory=dict)
     preserve_original: bool = False
-    host_only_reads: dict = field(default_factory=dict)
-    host_only_proof: dict = field(default_factory=dict)
+    native_opaque_accesses: dict = field(default_factory=dict)
     native_states: dict = field(default_factory=dict)
     native_environment: tuple = ()
     proof_analysis: object = field(default=None, repr=False, compare=False)
@@ -48,20 +46,31 @@ class Native:
     source_constants: dict = field(default_factory=dict)
     clock_proofs: tuple = ()
     constructor_proofs: tuple = ()
+    opaque_control: tuple = ()
+    opaque_guard: object = field(default=None, repr=False, compare=False)
+    opaque_source_call: str | None = None
+    opaque_unit: object = field(default=None, repr=False, compare=False)
+    opaque_call_mapping: object = field(default=None, repr=False, compare=False)
+    opaque_builder: object = field(default=None, repr=False, compare=False)
+    opaque_consumer_graph: object = field(default=None, repr=False, compare=False)
 
     @property
     def coherence_effects(self):
         """Managed obligations only; ``effects`` still reports original reads."""
         return {root: actions for root, actions in self.effects.items()
-                if root not in self.host_only_reads and root not in self.immutable_inputs
+                if root not in self.native_opaque_accesses and root not in self.immutable_inputs
                 and root not in self.source_constants}
 
     @property
+    def coherence_overwrites(self):
+        return self.overwrites - self.native_opaque_accesses.keys() - self.immutable_inputs.keys() - self.source_constants.keys()
+
+    @property
     def coherence_sections(self):
-        if self.sections is None or not (self.host_only_reads or self.immutable_inputs or self.source_constants):
+        if self.sections is None or not (self.native_opaque_accesses or self.immutable_inputs or self.source_constants):
             return self.sections
         return replace(self.sections, resources=tuple(section for section in self.sections.resources
-                                                     if section.resource not in self.host_only_reads
+                                                     if section.resource not in self.native_opaque_accesses
                                                      and section.resource not in self.immutable_inputs
                                                      and section.resource not in self.source_constants))
 
@@ -115,6 +124,7 @@ def _native_analysis(analysis, *, complete_source=()):
                  "_numerical_effect_proofs", "_original_call_associations", "_native_effect_templates",
                  "_native_effect_graphs", "_resource_reachability_proofs", "_native_demand_effects",
                  "_native_graph_completions", "_worksharing_completions", "_worksharing_native_completions",
+                 "_native_fixed_array_associations", "_native_opaque_write_proofs",
                  "_ordered_worksharing_inventories",
                  "_prepared_worksharing_inventories", "_scalar_clock_proofs",
                  "_opaque_library_state_proofs", "_external_device_task_proofs", "_metadata_constructor_proofs"):
@@ -409,7 +419,7 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     host_metadata = {binding.native_metadata_object.root: binding.native_metadata_object
                      for binding, _ in referenced if hasattr(binding, 'native_metadata_object')}
     payload_roots = {binding.root for binding, reference in referenced if id(reference) not in descriptor_references}
-    host_only_reads, immutable_inputs, source_constants = {}, {}, {}
+    opaque_candidates, immutable_inputs, source_constants = {}, {}, {}
     for binding, _ in referenced:
         if binding.root in constructor_receivers:
             # Only this exact original private receiver is supplied by the
@@ -450,7 +460,7 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
             # This provisional *native-only* allowance is validated against the
             # complete reached operation below. It grants neither GPU access
             # nor any initialized/defined coverage, and never escapes this fork.
-            host_only_reads[binding.root] = binding
+            opaque_candidates[binding.root] = binding
             if "allocatable" in binding.attributes:
                 analysis._stable_module_allocatables = analysis._stable_module_allocatables | {binding.root}
             continue
@@ -514,7 +524,7 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
                 continue
             effects.setdefault(operation["resource"], set()).add(
                 "read" if operation["kind"] == "read" else "write")
-    for root in host_only_reads:
+    for root in opaque_candidates:
         if any(operation.get("resource") == root and operation["kind"] not in {"read", "descriptor_read"}
                for operation in summary["operations"]):
             raise CompilationError("host-only native storage requires read-only complete effects: " + root)
@@ -524,18 +534,10 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
         if any(operation.get("resource") == root and operation["kind"] not in {"read", "descriptor_read"}
                for operation in summary["operations"]) or "write" in effects.get(root, ()):
             raise CompilationError("native immutable input requires original read-only effects: " + root)
-    host_only_proof = {}
-    if host_only_reads:
-        host_only_proof = {"schema_version": 1, "authority": "complete original reached native operation",
-            "analysis_identity": summary["analysis_identity"], "summary_identity": summary["summary_identity"],
-            "structured_identity": summary.get("structured_identity"), "demand_identity": summary.get("demand_identity"),
-            "resources": sorted(host_only_reads), "allocation_changes": False, "calls_or_escapes": False,
-            "device_capture": False, "managed_definitions": False,
-            "lifetime": "original stable native operation; allocation changes close ownership",
-            "range_validation": "allocated guard then undefined BYTE reservation; managed aliases close before native work"}
-        host_only_proof["identity"] = hashlib.sha256(json.dumps(host_only_proof, sort_keys=True,
-            separators=(",", ":")).encode()).hexdigest()
-        host_metadata.update(host_only_reads)
+    from compiler.scopes.native_opaque_accesses import readonly_accesses
+
+    native_opaque_accesses = readonly_accesses(builder, analysis, selection, summary, opaque_candidates) if opaque_candidates else {}
+    host_metadata.update((root, access.binding) for root, access in native_opaque_accesses.items())
     span = span if span is not None else ((statement_span(nodes[0])[0], statement_span(nodes[-1])[1])
                                         if kind != "condition read" else ())
     descriptor = (builder.descriptor_window_for(analysis, builder.entry.qualified, selection)
@@ -557,9 +559,9 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
     return Native(tuple(nodes), effects, set(summary["guaranteed_whole_overwrites"]) - set(private_roots),
                   bindings, summary, kind, sections, span, private_bindings, host_metadata,
                   preserve_original=bool(native_environment or clock_proofs or constructor_proofs),
-                  host_only_reads=host_only_reads, host_only_proof=host_only_proof,
+                  native_opaque_accesses=native_opaque_accesses,
                   native_states=native_states, native_environment=tuple(native_environment.values()),
-                  proof_analysis=analysis if retain_proof_analysis or native_environment or clock_proofs or constructor_proofs or source_reads is not None else None,
+                  proof_analysis=analysis if native_opaque_accesses or retain_proof_analysis or native_environment or clock_proofs or constructor_proofs or source_reads is not None else None,
                   immutable_inputs=immutable_inputs, source_reads=source_reads, source_constants=source_constants,
                   clock_proofs=tuple(clock_proofs.values()), constructor_proofs=tuple(constructor_proofs.values()))
 
@@ -736,6 +738,135 @@ def native_demand_fragment(builder, nodes, demand, *, context=None):
                   demand_effects=proof, resource_demand=demand, source_reads=source_reads)
 
 
+def native_opaque_call_candidates(builder, node, *, analysis=None):
+    """Identify only a source CALL shape; this is never an access permit."""
+    from compiler.frontend.call_bindings import resolve_original_call
+
+    if hasattr(node, "fort_inline_region"):
+        return None
+    originals = tuple(builder.inline.original_selection(node))
+    if len(originals) != 1 or _kind(originals[0]) != "Call_Stmt":
+        return None
+    analysis = builder.analysis if analysis is None else analysis
+    call = originals[0]
+    caller = analysis._require_original(builder.entry.qualified)
+    scope = analysis.source_scope_for(call, caller.scope)
+    try:
+        resolved = resolve_original_call(analysis, scope, call)
+    except CompilationError:
+        return None
+    candidates = {}
+    for mapping in resolved.associations:
+        actual, formal = mapping.binding, mapping.formal_binding
+        if (actual is not None and _kind(mapping.actual) == "Name" and formal.rank == 1
+                and formal.intent in {"out", "inout"}
+                and any(_kind(axis) == "Explicit_Shape_Spec" for axis in formal.shape_nodes)
+                and analysis.modules.get(getattr(actual.declaring_scope, "module", None)) is actual.declaring_scope):
+            candidates[actual.root] = actual
+    return (call, resolved, candidates) if candidates else None
+
+
+def native_opaque_call_fragment(builder, node, *, original_if=None, condition=None):
+    """Keep one fully proved original fixed-array writer in its reached place.
+
+    Candidate discovery grants nothing. The complete graph, joined storage and
+    exact per-CALL associations must all succeed before any role is projected.
+    Unsupported managed footprints still require the existing whole-entry
+    contract; an opaque output never weakens another resource's admission.
+    """
+    from compiler.frontend.call_bindings import _original_call_control
+    from compiler.frontend.native_opaque_writes import prove_native_opaque_write
+    from compiler.frontend.native_sections import NativeSections
+    from compiler.frontend.resource_reachability import prove_resource_reachability
+    from compiler.frontend.storage_mutation_effects import prove_storage_mutation_effects
+    from compiler.scopes.native_opaque_accesses import NativeOpaqueAccess, write_effects
+
+    analysis = _native_analysis(builder.analysis)
+    candidate = native_opaque_call_candidates(builder, node, analysis=analysis)
+    if candidate is None:
+        return None
+    call, resolved, candidates = candidate
+    parent = builder.analysis._source_session.lexical_parent(call)
+    if original_if is not None:
+        if (parent is not original_if or _kind(original_if) != "If_Stmt"
+                or original_if.items[1] is not call
+                or (condition is not original_if and (condition is None
+                    or condition.nodes != (original_if.items[0],)))):
+            raise CompilationError("native opaque CALL lost its exact original IF branch")
+        selection = (original_if,)
+    else:
+        if _kind(parent) == "If_Stmt":
+            raise CompilationError("native opaque IF CALL requires its reached original branch")
+        selection = (call,)
+    if _original_call_control(selection) is not call:
+        raise CompilationError("native opaque CALL lost its original control")
+    for mapping in resolved.associations:
+        binding = mapping.binding
+        if (binding is not None and binding.rank and binding.root not in candidates
+                and "allocatable" in binding.attributes and builder.capture(binding).get("lifetime") != "selected_window"):
+            analysis._stable_module_allocatables |= {binding.root}
+    reachability = prove_resource_reachability(analysis, builder.entry.qualified, selection,
+                                              tuple(candidates[root] for root in sorted(candidates)))
+    teams = tuple({id(team): team for _, _, completion in reachability._completion
+                   for team in getattr(completion, "_reduction_teams", ())}.values())
+    storage = prove_storage_mutation_effects(analysis, builder.entry.qualified, selection=selection,
+        joined_storage=teams, native_graph=reachability.native_graph)
+    accesses = {}
+    for root, binding in sorted(candidates.items()):
+        proof = prove_native_opaque_write(analysis, builder.entry.qualified, selection, binding,
+                                         reachability=reachability, storage=storage)
+        accesses[root] = NativeOpaqueAccess(binding, proof.mode, proof)
+    effects, bindings = write_effects(reachability)
+    managed = set(effects) - accesses.keys()
+    for item in reachability.accesses:
+        if item.external and item.storage.binding.root in managed and item.kind == "undefine":
+            raise CompilationError("opaque native CALL cannot discharge a managed OUT definition")
+    sections = analysis.native_sections_for_nodes(builder.entry.qualified, selection, capture_locals=True)
+    if sections.available:
+        sections = replace(sections, resources=tuple(item for item in sections.resources if item.resource in managed))
+        if {item.resource for item in sections.resources} != managed:
+            raise CompilationError("native opaque CALL sections omit a managed read or write")
+    else:
+        for root in managed:
+            if builder.capture(bindings[root])["initialized"] != "whole":
+                raise CompilationError("native opaque CALL whole managed access requires whole initialized storage: " + root)
+        sections = NativeSections(False, sections.reason)
+    graph, selected = analysis._selected_source(builder.entry.qualified, (call,))
+    consumer_graph, consumer_selected = builder.analysis._selected_source(builder.entry.qualified, (call,))
+    if (analysis._source_session is not builder.analysis._source_session
+            or selected != consumer_selected
+            or analysis._require_original(builder.entry.qualified) is not builder.analysis._require_original(builder.entry.qualified)):
+        raise CompilationError("native opaque CALL source and consumer graph differ")
+    summary = {"complete": True, "analysis_identity": graph.authority_identity,
+               "summary_identity": reachability.identity, "structured_identity": graph.identity,
+               "selected_node_ids": list(selected), "guaranteed_whole_overwrites": [],
+               "native_completion": {"available": True, "has_openmp_in_closure": True,
+                   "reason": "same complete original native graph and exact joined array storage",
+                   "internal_cuts_authorized": False},
+               "operations": [{"kind": item.kind, "resource": item.storage.binding.root,
+                               "rank": item.storage.rank, "source": item.source}
+                              for item in reachability.accesses if item.external],
+               "original_effect_inventory": reachability.public()["accesses"]}
+    operation = Native((call,), effects, set(), bindings, summary, "original native opaque array CALL",
+        sections=sections, span=statement_span(selection[0]), host_metadata=dict(candidates),
+        preserve_original=original_if is None, native_opaque_accesses=accesses, proof_analysis=analysis,
+        opaque_control=selection, opaque_guard=condition, opaque_builder=builder, opaque_consumer_graph=consumer_graph)
+    # This is the existing public original-CALL transport, not a new mapping
+    # authority or a generated callee. The typed A receipts retain source proof.
+    from compiler.scopes.native_opaque_accesses import _encoded
+
+    operation.opaque_call_mapping = builder.execution_source_call(builder.entry, call)
+    public_call = operation.opaque_call_mapping.public()
+    first, last = statement_span(selection[0])
+    public_call.update(caller=builder.entry.qualified, source=str(builder.entry.scope.path),
+                       first_line=first, last_line=last)
+    operation.opaque_source_call = _encoded(public_call)
+    for access in accesses.values():
+        access.validate(operation)
+    builder.resolved_calls[(builder.entry.qualified, (first, last))] = public_call
+    return operation
+
+
 class StructuredScope:
     @classmethod
     def from_native(cls, builder, nodes, operation):
@@ -743,10 +874,16 @@ class StructuredScope:
         return cls(builder, nodes, lexical_native=True, native_operation=operation)
 
     def __init__(self, builder, nodes, *, condition_only=False, native_metadata=False, lexical_native=False,
-                 native_host_reads=False, native_call_demand=None, native_operation=None, native_only=False):
+                 native_host_reads=False, native_call_demand=None, native_operation=None, native_only=False,
+                 original_if=None):
         self.builder, self.nodes = builder, tuple(nodes)
         self.native_metadata = native_metadata
         self.native_host_reads = native_host_reads
+        self.opaque_lexical_if = original_if
+        if original_if is not None and (not lexical_native or condition_only
+                or _kind(original_if) != "If_Stmt" or len(nodes) != 1
+                or tuple(builder.inline.original_selection(nodes)) != (original_if.items[1],)):
+            raise CompilationError("native opaque lexical guard lost its original action")
         if native_only:
             if not lexical_native:
                 raise CompilationError("native-only source retention requires original lexical emission")
@@ -780,7 +917,7 @@ class StructuredScope:
             self.operation_count = len(operation.summary["operations"])
             self.tree = [operation]
         else:
-            self.tree = self.parse(nodes)
+            self.tree = self.parse(nodes, original_if=original_if, condition=original_if)
         if builder.config.scope_execution != "graph" and (len(self.calls) > 32 or self.operation_count > 256):
             raise CompilationError("bounded structured owner exceeds call/operation budget")
         self.first, self.last = statement_span(nodes[0])[0], statement_span(nodes[-1])[1]
@@ -803,7 +940,7 @@ class StructuredScope:
             operation.sections = replace(operation.sections, available=False, resources=(),
                 reason="original configured native group uses whole managed-resource effects")
 
-    def parse(self, nodes, depth=0):
+    def parse(self, nodes, depth=0, *, original_if=None, condition=None):
         if depth > 8:
             raise CompilationError("bounded structured owner exceeds branch depth")
         result, run = [], []
@@ -852,6 +989,13 @@ class StructuredScope:
                     flush()
                     operation = fragment(self.builder, (node,), kind="original native ancestor call",
                                          native_metadata=self.native_metadata, native_host_reads=self.native_host_reads)
+                    self.native.append(operation)
+                    self.operation_count += len(operation.summary["operations"])
+                    result.append(operation)
+                    continue
+                operation = native_opaque_call_fragment(self.builder, node, original_if=original_if, condition=condition)
+                if operation is not None:
+                    flush()
                     self.native.append(operation)
                     self.operation_count += len(operation.summary["operations"])
                     result.append(operation)
@@ -909,7 +1053,8 @@ class StructuredScope:
                 self.native.append(condition)
                 self.operation_count += len(condition.summary["operations"])
                 action = self.builder.inline.statement_projection(node.items[1], node)
-                result.append(Branch([(condition, self.parse((action,), depth + 1))], statement_span(node)))
+                result.append(Branch([(condition, self.parse((action,), depth + 1,
+                    original_if=node, condition=condition))], statement_span(node)))
             elif kind == "Associate_Construct":
                 originals = self.builder.inline.original_selection(node)
                 if len(originals) != 1 or _kind(originals[0]) != kind:
@@ -931,10 +1076,88 @@ class StructuredScope:
         flush()
         return result
 
+    def _opaque_route_state(self):
+        """Retain only the bounded generated branch/statement route objects."""
+        from compiler.scopes.storage_admission import _Identity
+
+        state = [(_Identity(self.nodes), tuple(map(_Identity, self.nodes))),
+                 (_Identity(self.native), tuple(map(_Identity, self.native))),
+                 _Identity(self.opaque_lexical_if)]
+        pending, seen = [(self.tree, 0)], set()
+        work = 0
+        while pending:
+            items, depth = pending.pop()
+            if id(items) in seen or depth > 8:
+                raise CompilationError("native opaque route is cyclic or exceeds original branch bounds")
+            seen.add(id(items))
+            state.append((_Identity(items), tuple(map(_Identity, items))))
+            for item in items:
+                work += 1
+                if work > self.builder.analysis.operation_limit * 8:
+                    raise CompilationError("native opaque route exceeds the existing source-operation budget")
+                if isinstance(item, Branch):
+                    state.append((_Identity(item), _Identity(item.alternatives),
+                                  tuple((_Identity(guard), _Identity(body)) for guard, body in item.alternatives)))
+                    pending.extend((body, depth + 1) for _guard, body in item.alternatives)
+                elif isinstance(item, Association):
+                    state.append((_Identity(item), _Identity(item.body)))
+                    pending.append((item.body, depth + 1))
+        return tuple(state)
+
+    def validate_opaque_control(self, unit=None):
+        """Bind the retained whole IF proof to its one reached CALL action."""
+        from compiler.frontend.native_opaque_writes import NativeOnlyArrayWrite
+
+        writers = [operation for operation in self.native if any(
+            type(access.permit) is NativeOnlyArrayWrite for access in operation.native_opaque_accesses.values())]
+        if not writers:
+            return
+        from dataclasses import fields
+
+        from compiler.scopes.storage_admission import _Identity
+
+        before = self._opaque_route_state()
+        unit_before = () if unit is None else tuple((part.name, _Identity(getattr(unit, part.name))) for part in fields(unit))
+        paths = {}
+
+        def visit(items, guards=()):
+            for item in items:
+                if isinstance(item, Branch):
+                    for guard, body in item.alternatives:
+                        visit(body, (*guards, guard))
+                elif isinstance(item, Association):
+                    visit(item.body, guards)
+                elif isinstance(item, Native):
+                    if id(item) in paths:
+                        raise CompilationError("native opaque CALL occurs twice in its execution tree")
+                    paths[id(item)] = guards
+        visit(self.tree)
+        for operation in writers:
+            if id(operation) not in paths:
+                raise CompilationError("native opaque CALL is detached from its execution tree")
+            guard = operation.opaque_guard
+            if guard is self.opaque_lexical_if and guard is not None:
+                if (len(self.tree) != 1 or self.tree[0] is not operation
+                        or tuple(self.builder.inline.original_selection(self.nodes)) != (guard.items[1],)):
+                    raise CompilationError("native opaque CALL lost its original lexical guard")
+                if unit is not None and (unit.scope is not self or unit.nodes != self.nodes
+                        or unit.source_guard != str(guard.items[0]) or unit.native_source != str(guard.items[1])
+                        or unit.publication_only):
+                    raise CompilationError("native opaque CALL changed its guarded original unit")
+            elif guard is not None and not any(item is guard for item in paths[id(operation)]):
+                raise CompilationError("native opaque CALL moved outside its original Branch")
+            elif guard is None and unit is not None and unit.source_guard is not None:
+                raise CompilationError("ordinary native opaque CALL acquired a different guard")
+            for access in operation.native_opaque_accesses.values():
+                access.validate(operation)
+        if (self._opaque_route_state() != before or (unit is not None and unit_before != tuple(
+                (part.name, _Identity(getattr(unit, part.name))) for part in fields(unit)))):
+            raise CompilationError("native opaque original control changed during delegated validation")
+
     def inputs(self, arrays, scalars, written):
         for operation in self.native:
             for root, binding in operation.bindings.items():
-                if root in operation.host_only_reads or root in operation.immutable_inputs:
+                if root in operation.native_opaque_accesses or root in operation.immutable_inputs:
                     continue
                 if binding.rank:
                     self.builder.capture(binding)
@@ -944,7 +1167,7 @@ class StructuredScope:
                         raise CompilationError("uncertain structured scalar capture: " + root)
                     scalars[root] = binding
 
-            written.update(root for root, actions in operation.effects.items() if "write" in actions)
+            written.update(root for root, actions in operation.coherence_effects.items() if "write" in actions)
         # Hidden query controls are original module/local scalars too. Capturing
         # them preserves mutability rather than hoisting their current values.
         for call in self.calls:
@@ -974,7 +1197,7 @@ class StructuredScope:
                                                or root in cleared):
                     raise CompilationError("unknown native footprint requires complete definitions; ownership boundary: " + root)
         for operation in self.native:
-            require(operation.coherence_effects, operation.overwrites, operation.coherence_sections.available)
+            require(operation.coherence_effects, operation.coherence_overwrites, operation.coherence_sections.available)
         for call in self.calls:
             if not self.builder.closure(call.procedure)[0]:
                 actions, _, overwrites = self.builder.roots_for(call)
@@ -1042,6 +1265,8 @@ class StructuredScope:
     def public(self):
         from compiler.scopes.source import _span
 
+        self.validate_opaque_control()
+
         def reduction_diagnostic(operation):
             if not self.builder.config.reached_execution:
                 return self.builder.analysis.reduction_candidates(
@@ -1106,7 +1331,7 @@ class StructuredScope:
                                    "resources": sorted(operation.effects),
                                    "resource_effects": {root: sorted(actions) for root, actions in sorted(operation.effects.items())},
                                    "managed_resources": sorted(operation.coherence_effects),
-                                   "host_only_native_reads": operation.host_only_proof or None,
+                                   "native_opaque_accesses": public_accesses(operation),
                                    "native_environment": [proof.public() for proof in operation.native_environment],
                                    "metadata_constructors": [proof.public() for proof in operation.constructor_proofs],
                                    "native_local_state": [proof.public() for proof in operation.native_states.values()],
@@ -1161,6 +1386,7 @@ class StructuredScope:
              provenance_segment=None, inherited_query=None):
         from compiler.scopes.provenance import position, source_id
         from compiler.scopes.source import _call, _checked, _name, _span
+        self.validate_opaque_control()
         builder = self.builder
         trace_segment = provenance_segment or source_id(builder, "segment", span=(self.first, self.last))
 
@@ -1229,7 +1455,7 @@ class StructuredScope:
             for root, actions in sorted(operation.coherence_effects.items()):
                 flags = (["FORT_SCOPE_READ_ALL"] if "read" in actions else [])
                 flags += ["FORT_SCOPE_WRITE_ALL"] if "write" in actions else []
-                flags += ["FORT_SCOPE_OVERWRITE_ALL"] if root in operation.overwrites else []
+                flags += ["FORT_SCOPE_OVERWRITE_ALL"] if root in operation.coherence_overwrites else []
                 prepared.append((handles[root], "fort_scope_access(flags=" + " + ".join(flags) + ")"))
             task = build_native_acquisition(prepared)
             return [*lines, "block", *task.specification, *task.prepare, *_checked(task.expression), "end block"]
@@ -1263,7 +1489,7 @@ class StructuredScope:
             for index, (root, actions) in enumerate(sorted(operation.coherence_effects.items()) if accesses is None else (), 1):
                 flags = (["FORT_SCOPE_READ_ALL"] if "read" in actions else [])
                 flags += ["FORT_SCOPE_WRITE_ALL"] if "write" in actions else []
-                flags += ["FORT_SCOPE_OVERWRITE_ALL"] if root in operation.overwrites else []
+                flags += ["FORT_SCOPE_OVERWRITE_ALL"] if root in operation.coherence_overwrites else []
                 lines += [f"fort_bindings({index}) = fort_scope_plan_binding()",
                           f"fort_bindings({index})%buffer = {handles[root]}",
                           f"fort_bindings({index})%access%flags = " + " + ".join(flags)]

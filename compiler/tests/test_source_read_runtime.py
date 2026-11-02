@@ -7,7 +7,15 @@ import ctypes as c
 import pytest
 
 from compiler.tests.test_scoped_planning_runtime import costs, planning, record, select  # noqa: F401
-from compiler.tests.test_scoped_runtime import SIZE, TOKEN, Scope, Section, access, runtime  # noqa: F401
+from compiler.tests.test_scoped_runtime import (  # noqa: F401
+    RECTANGLE_LIMIT,
+    SIZE,
+    TOKEN,
+    Scope,
+    Section,
+    access,
+    runtime,
+)
 
 
 def admit(scope, buffer, boxes):
@@ -71,19 +79,21 @@ def test_source_read_admission_has_no_implicit_storage_or_prepared_access_author
 @pytest.mark.native
 def test_fragmented_source_read_admission_commits_neither_coverage_set(runtime):
     scope = Scope(runtime)
-    host = (c.c_double * 100)(*range(100))
-    initial = [([3 * i], [3 * i + 1]) for i in range(32)]
-    status, buffer = scope.register(host, [100], defined=initial)
+    size = 3 * RECTANGLE_LIMIT + 4
+    host = (c.c_double * size)(*range(size))
+    initial = [([3 * i], [3 * i + 1]) for i in range(RECTANGLE_LIMIT)]
+    status, buffer = scope.register(host, [size], defined=initial)
     scope.check(status)
     before = counters(scope)
-    assert admit(scope, buffer, [([96], [97])]) == 5
+    new_region = [([3 * RECTANGLE_LIMIT], [3 * RECTANGLE_LIMIT + 1])]
+    assert admit(scope, buffer, new_region) == 5
     assert counters(scope) == before
-    unread = access(read=[([96], [97])])
+    unread = access(read=new_region)
     assert runtime.fort_scope_host_begin(scope.handle, buffer, c.byref(unread)) == 7
     scope.cpu_begin(buffer, access(read=initial))
     scope.cpu_end(buffer)
     scope.close()
-    assert list(host) == list(range(100))
+    assert list(host) == list(range(size))
 
 
 @pytest.mark.native

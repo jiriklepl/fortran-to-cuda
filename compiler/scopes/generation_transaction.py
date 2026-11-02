@@ -79,6 +79,13 @@ class _GenerationCopy:
         if isinstance(value, Enum):
             return value
         kind = type(value)
+        from compiler.scopes.native_opaque_accesses import NativeReadonlyPermit
+
+        if kind is NativeReadonlyPermit:
+            # The immutable registered receipt is source authority. Its access
+            # container remains owned generation state and is copied normally.
+            self.analysis(value._analysis)
+            return value
         if isinstance(value, dict):
             result = copy(value)
             result.clear()

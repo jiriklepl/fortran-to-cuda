@@ -197,7 +197,7 @@ def test_native_helper_borrows_each_readonly_module_actual_without_gpu_capture_f
     assert first["handle_bindings"] != second["handle_bindings"]
     operations = [operation for unit in helper["planning_segments"]
                   for operation in unit["operations"]["native_operations"]]
-    assert any(operation["host_only_native_reads"] for operation in operations)
+    assert any(operation["native_opaque_accesses"] for operation in operations)
     assert any(operation["source_constants"] for operation in operations)
     text = outputs[report["sources"][str(path)]["replacement"]]
     assert "shape(types, kind=c_size_t)" in text

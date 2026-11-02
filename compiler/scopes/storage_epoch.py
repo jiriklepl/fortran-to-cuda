@@ -27,6 +27,8 @@ def managed_resources(owner):
         from compiler.scopes.source_task_bindings import source_task_actions
 
         managed.update(root for task in member.source_device_tasks for root in source_task_actions(member, task))
+        managed.update(member.canonical(binding).root for task in member.device_tasks
+                       for binding in task.proof.bindings)
         managed.update(member.canonical(mapping.binding).root for arrays in
                        getattr(member, "original_actual_registrations", {}).values() for mapping in arrays)
     return managed
@@ -387,11 +389,14 @@ def _record(owner, *, proof_handoffs=None):
         reservations.update(member.canonical(binding).root for unit in member.units
                             for binding in (unit.host_metadata or {}).values())
         reservations.update(member.canonical(binding).root for unit in member.units for operation in unit.scope.native
-                            for binding in operation.host_only_reads.values())
+                            for access in operation.native_opaque_accesses.values() for binding in (access.binding,))
         reservations.update(member.canonical(mapping.binding).root for arrays in
                             getattr(member, "original_native_actual_registrations", {}).values() for mapping in arrays)
         reservations.update(member.canonical(element.binding).root for elements in
                             getattr(member, "original_scalar_element_reservations", {}).values() for element in elements)
+    from compiler.scopes.native_opaque_accesses import epoch_inventory
+
+    opaque_inventory = epoch_inventory(owner, managed)
     resources = []
     epoch = getattr(owner, "position_epoch", None)
     batch_bindings = tuple(binding for root, (binding, _number) in sorted(owner.resources.items()) if root in managed)
@@ -464,6 +469,8 @@ def _record(owner, *, proof_handoffs=None):
     if worksharing_requirements:
         record.update(version=3, original_worksharing_storage_obligations=worksharing_requirements)
         finish_worksharing_inventory()
+    if opaque_inventory:
+        record.update(version=4, native_opaque_accesses=opaque_inventory)
     return record
 
 

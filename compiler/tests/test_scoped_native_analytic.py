@@ -118,7 +118,15 @@ void guards(){auto c=costs();auto in=basic();
  // both kinds of actual logical input scans in its work counter.
  auto edge=basic();edge.operations[0].gpu_available=true;edge.resources[0].initialized.push_back(extra);
  edge.resources[0].host_current=edge.resources[0].initialized;auto costly_setup=c;costly_setup.gpu_setup_seconds=.1;
- auto startup=select(edge,costly_setup,&cpu);
+ // Continuations retain the ordinary physical simulation even when setup is costly.
+ auto continued=select(edge,costly_setup,&cpu);
+ assert(continued.decision.available && !continued.decision.gpu_units);
+ assert(!continued.native_startup_shortcut && !continued.native_analytic_shortcut);
+ uint64_t work=0;auto physical=detail::simulate(edge,costly_setup,cpu,work);
+ close(continued.report.execution_seconds-continued.decision.simulated_operations*costly_setup.planning_operation_seconds,
+       physical.execution_time);
+ // Only a fresh complete owner may use the original startup lower bound.
+ edge.continuation=false;auto startup=select(edge,costly_setup,&cpu);
  assert(startup.native_startup_shortcut && !startup.native_analytic_shortcut);
  assert(startup.unpriced_native_analytic_overhead && !startup.report.available);
  assert(startup.decision.simulated_operations==5);

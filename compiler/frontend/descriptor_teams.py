@@ -24,12 +24,39 @@ from compiler.ir import CompilationError
 
 _ISSUER = object()
 DESCRIPTOR_TEAM_VERSION = 2
+DESCRIPTOR_TEAM_FIXED_ARRAY_REDUCTION_VERSION = 7
+DESCRIPTOR_TEAM_FORMAL_ARRAY_REDUCTION_VERSION = 8
 DESCRIPTOR_TEAM_MASTER_VERSION = 3
 DESCRIPTOR_WINDOW_MASTER_VERSION = 19
 DESCRIPTOR_TEAM_IMPLICIT_WORKSHARING_VERSION = 4
 DESCRIPTOR_WINDOW_IMPLICIT_WORKSHARING_VERSION = 22
 _ABSENT = object()
 _UNSAFE = {"pointer", "target", "allocatable", "optional", "volatile", "asynchronous", "value", "save"}
+
+
+class _FixedArrayAssociationRequired(CompilationError):
+    """An incomplete storage scan, never a published team or permission."""
+
+    def __init__(self, binding):
+        super().__init__("native fixed-array reduction formal requires its exact original CALL association")
+        self.binding = binding
+
+
+def _require_fixed_array_associations(analysis, procedure, associations):
+    from compiler.frontend.native_fixed_array_association import NativeFixedArrayAssociation
+
+    if type(associations) is not tuple or len({id(item) for item in associations}) != len(associations):
+        raise CompilationError("native array team requires distinct exact association receipts")
+    attached = []
+    for item in associations:
+        if (type(item) is not NativeFixedArrayAssociation or item._resolved.procedure != procedure):
+            raise CompilationError("native array team association belongs to another original callee")
+        attached.extend((item, part.name, object.__getattribute__(item, part.name))
+                        for part in fields(NativeFixedArrayAssociation))
+    for item in associations:
+        item.validate(analysis, item._caller.qualified, item._selection, item._formal_name)
+    if any(object.__getattribute__(item, name) is not value for item, name, value in attached):
+        raise CompilationError("native array team association changed during validation")
 
 
 def _kind(node):
@@ -314,7 +341,9 @@ def _same_implicit_namespace(analysis, saved):
         for value, kind, items in containers)
 
 
-def _derive(analysis, procedure, originals, record_region=None, *, native_graph=None, encoded_record=False):
+def _derive(analysis, procedure, originals, record_region=None, *, native_graph=None, encoded_record=False,
+            fixed_array_associations=()):
+    _require_fixed_array_associations(analysis, procedure, fixed_array_associations)
     routine = analysis._require_original(procedure)
     group = _original_group(routine, originals)
     allowed_associations = ()
@@ -364,6 +393,9 @@ def _derive(analysis, procedure, originals, record_region=None, *, native_graph=
                            for binding in routine.scope.bindings.values())
     texts, private, shared, stack, nowait = [], {}, {}, [], 0
     reductions, singles, masters = [], 0, 0
+    array_reductions = []
+    used_associations = set()
+    array_checkpoint = None
     worksharing, consumed_implicit = [], []
     reduction_scopes = {}
 
@@ -400,9 +432,11 @@ def _derive(analysis, procedure, originals, record_region=None, *, native_graph=
                 pending.append(target)
 
     def clauses(text, owner, original):
+        nonlocal array_checkpoint
         remainder = text.strip()
         clause_scope = analysis.source_scope_for(original, routine.scope)
         reduced, explicit_private = set(), set()
+        array_reduced, explicit_shared = set(), set()
         while remainder:
             match = re.match(r"(private|shared|default|collapse|schedule|reduction)\s*\(([^()]*)\)\s*", remainder)
             if match is None:
@@ -427,21 +461,64 @@ def _derive(analysis, procedure, originals, record_region=None, *, native_graph=
                 logical = {".and.", ".or.", ".eqv.", ".neqv."}
                 if operator not in numeric | integer | logical:
                     raise CompilationError("descriptor team reduction identifier is not an intrinsic primitive operation")
-                declarations = []
+                declarations, array_declarations = [], []
                 for name in names.split(","):
                     name = name.strip()
                     binding = routine.scope.bindings.get(name)
                     allowed = {"real", "integer"} if operator in numeric else {"integer"} if operator in integer else {"logical"}
                     if (not re.fullmatch(r"[a-z][a-z0-9_]*", name) or binding is None
                             or analysis._binding(clause_scope, name) is not binding
-                            or binding.declaring_scope is not routine.scope or name in routine.arguments
-                            or binding.dtype not in allowed or binding.kind not in {4, 8} or binding.rank
+                            or binding.declaring_scope is not routine.scope
+                            or (name in routine.arguments and not binding.rank)
+                            or binding.dtype not in allowed or binding.kind not in {4, 8}
                             or binding.attributes & (_UNSAFE | {"parameter"}) or name in reduced):
                         raise CompilationError("descriptor team REDUCTION requires independent original primitive scalar locals")
                     reduced.add(name)
-                    declarations.append(binding.public())
-                reductions.append({"original_directive": str(original), "operator": operator,
-                                   "bindings": declarations, "descriptor_evidence_only": True})
+                    if binding.rank:
+                        array_reduced.add(name)
+                        from compiler.frontend.call_bindings import _fixed_array_bounds
+                        from compiler.frontend.source_functions import original_name_absent
+                        if binding.rank != 1:
+                            raise CompilationError("descriptor reduction requires original fixed rank-one array storage")
+                        if name in routine.arguments and binding.intent not in {"out", "inout"}:
+                            raise CompilationError("native array reduction requires an original OUT or INOUT formal")
+                        associated = tuple(item for item in fixed_array_associations if item.formal is binding)
+                        if name in routine.arguments and not associated:
+                            raise _FixedArrayAssociationRequired(binding)
+                        if name not in routine.arguments and associated:
+                            raise CompilationError("native fixed-array association cannot replace local storage")
+                        if array_checkpoint is None:
+                            array_syntax = _group_syntax_checkpoint(group.original_nodes)
+                            array_checkpoint = array_syntax, _implicit_namespace_checkpoint(analysis, routine, array_syntax)
+                        spelling = operator if operator[0].isalpha() else "operator(" + operator + ")"
+                        if not original_name_absent(analysis, clause_scope, spelling):
+                            raise CompilationError("fixed array reduction intrinsic operation is shadowed")
+                        (lower, upper), = _fixed_array_bounds(analysis, binding, element_limit=None)
+                        extent = max(0, upper - lower + 1)
+                        byte_count = extent * binding.kind
+                        if not extent or byte_count > (1 << 63) - 1:
+                            raise CompilationError("fixed array reduction requires nonempty ABI-safe byte storage")
+                        declaration = {"binding": binding.public(), "lower_bound": lower,
+                            "upper_bound": upper, "element_count": extent, "byte_count": byte_count,
+                            "storage": "original local fixed rank-one primitive array"}
+                        if associated:
+                            if any(item.formal_bounds != (lower, upper) or item.element_count != extent for item in associated):
+                                raise CompilationError("native reduction formal association changed its original bounds")
+                            declaration.update(storage="original fixed rank-one formal with exact native CALL associations",
+                                original_call_associations=[item.public() for item in associated])
+                            used_associations.update(id(item) for item in associated)
+                        array_declarations.append(declaration)
+                    else:
+                        declarations.append(binding.public())
+                if declarations:
+                    reductions.append({"original_directive": str(original), "operator": operator,
+                                       "bindings": declarations, "descriptor_evidence_only": True})
+                if array_declarations:
+                    array_reductions.append({"version": 1, "original_directive": str(original),
+                        "operator": operator, "bindings": array_declarations,
+                        "descriptor_evidence_only": True, "native_only": True,
+                        "payload_access_authorized": False, "entry_definition_authority": False,
+                        "gpu_legality_established": False, "arithmetic_reassociation_authorized": False})
             else:
                 for name in values.split(","):
                     name = name.strip()
@@ -467,7 +544,10 @@ def _derive(analysis, procedure, originals, record_region=None, *, native_graph=
                         if binding.attributes & {"pointer", "target", "volatile", "asynchronous"}:
                             raise CompilationError("descriptor team SHARED association is unproved")
                         shared[binding.root] = binding.public()
+                        explicit_shared.add(name)
             remainder = remainder[match.end():].lstrip(", ")
+        if array_reduced & explicit_shared:
+            raise CompilationError("fixed array reduction cannot also be explicitly SHARED in the same clause list")
         if reduced & explicit_private:
             raise CompilationError("descriptor team reduction storage cannot also be explicitly PRIVATE")
 
@@ -567,6 +647,20 @@ def _derive(analysis, procedure, originals, record_region=None, *, native_graph=
             raise CompilationError("native lifetime pointer requires exact original PRIVATE participation")
         record.update(version=6, native_lifetime_context=lifetime.public())
         lifetime.checkpoint()
+    if array_reductions:
+        roots = {item["binding"]["resource"] for row in array_reductions for item in row["bindings"]}
+        if roots & set(private):
+            raise CompilationError("fixed array reduction cannot also use original PRIVATE storage")
+        record.update(version=DESCRIPTOR_TEAM_FIXED_ARRAY_REDUCTION_VERSION,
+                      intrinsic_fixed_array_reductions=array_reductions,
+                      fixed_array_reduction_contract="whole original native team and every original join",
+                      parent_parallel_join_required=True)
+    if fixed_array_associations:
+        if used_associations != {id(item) for item in fixed_array_associations}:
+            raise CompilationError("native array team has an unused original CALL association")
+        record.update(version=DESCRIPTOR_TEAM_FORMAL_ARRAY_REDUCTION_VERSION,
+                      fixed_array_formal_associations=[item.public() for item in fixed_array_associations],
+                      formal_association_authority="original whole CALL element mapping only")
     encoded = _encoded(record) if encoded_record else None
     analysis.verify_publication()
     if analysis._require_original(procedure) is not routine:
@@ -588,6 +682,12 @@ def _derive(analysis, procedure, originals, record_region=None, *, native_graph=
                 or any(any(getattr(binding, name) is not value for name, value in saved)
                        for binding, saved in binding_fields)):
             raise CompilationError("implicit worksharing original loop association changed at publication")
+    if array_checkpoint is not None:
+        analysis.verify_source()
+        analysis.inputs.verify_live()
+        if (not _same_group_syntax(array_checkpoint[0])
+                or not _same_implicit_namespace(analysis, array_checkpoint[1])):
+            raise CompilationError("fixed array reduction original storage or source changed at publication")
     if record_checkpoint is not None:
         analysis.inputs.verify_live()
         record_checkpoint.require()
@@ -607,8 +707,18 @@ class DescriptorTeamProof:
     _record_region: object = field(default=None, repr=False, compare=False)
     _source_fact: object = field(default=None, repr=False, compare=False)
     _native_graph: object = field(default=None, repr=False, compare=False)
+    _fixed_array_associations: tuple = field(default=(), repr=False, compare=False)
 
     def validate(self, analysis, procedure, selected):
+        attached = _team_attachments(self)
+        registry = getattr(analysis, "_descriptor_team_proofs", None)
+        authority = (getattr(analysis, "_source_session", None),
+                     getattr(analysis, "_source_authority_context", None),
+                     getattr(analysis, "_source_derivation_arena", None), registry, self.identity)
+        _require_fixed_array_associations(analysis, procedure, self._fixed_array_associations)
+        associations = json.loads(self._record).get("fixed_array_formal_associations", [])
+        if associations != [item.public() for item in self._fixed_array_associations]:
+            raise CompilationError("native array team changed its original CALL association receipts")
         lifetime = json.loads(self._record).get("native_lifetime_context")
         if ((lifetime is None) != (self._native_graph is None)
                 or (lifetime is not None and lifetime["native_graph_identity"] != self._native_graph.identity)
@@ -621,7 +731,10 @@ class DescriptorTeamProof:
                     or tuple(selected) != self.selected_node_ids
                     or getattr(analysis, "_descriptor_team_proofs", {}).get(self.identity) is not self):
                 raise CompilationError("descriptor team requires its exact original compiler-issued authority")
-            return self._source_fact.require(self)
+            result = self._source_fact.require(self)
+            _require_fixed_array_associations(analysis, procedure, self._fixed_array_associations)
+            _require_team_attachments(self, attached, analysis, authority)
+            return result
         if getattr(analysis, "_source_session", None) is not None:
             raise CompilationError("mutable diagnostic proof cannot enter a sealed authority context")
         attached = tuple((part.name, getattr(self, part.name)) for part in fields(self))
@@ -631,7 +744,8 @@ class DescriptorTeamProof:
                 or registry.get(self.identity) is not self or sha256(self._record.encode()).hexdigest() != self.identity):
             raise CompilationError("descriptor team requires its exact original compiler-issued authority")
         derived = _derive(analysis, procedure, self._originals, self._record_region,
-                          native_graph=self._native_graph, encoded_record=self._record_region is not None)
+                          native_graph=self._native_graph, encoded_record=self._record_region is not None,
+                          fixed_array_associations=self._fixed_array_associations)
         encoded = derived[1] if self._record_region is not None else _encoded(derived)
         if encoded != self._record:
             raise CompilationError("descriptor team original structure, storage or source changed")
@@ -644,19 +758,55 @@ class DescriptorTeamProof:
         return {"proof_identity": self.identity, **json.loads(self._record)}
 
 
-def prove_descriptor_team(analysis, procedure, originals, *, record_region=None, native_graph=None):
+def _team_attachments(proof):
+    from compiler.frontend.native_fixed_array_association import NativeFixedArrayAssociation
+
+    owners = [proof]
+    if type(proof._fixed_array_associations) is tuple:
+        for item in proof._fixed_array_associations:
+            if type(item) is NativeFixedArrayAssociation:
+                owners.extend((item, *_original_call_receipts(item._resolved)))
+    return tuple((owner, part.name, object.__getattribute__(owner, part.name))
+                 for owner in owners for part in fields(type(owner)))
+
+
+def _original_call_receipts(resolved):
+    # These are the exact bounded receipt objects consumed by association
+    # checks, not a recursive scan of source or arbitrary object state.
+    return (resolved, *resolved.original_arguments, *resolved.associations,
+            *(item.actual_type for item in resolved.associations if item.actual_type is not None))
+
+
+def _require_team_attachments(proof, attached, analysis, authority):
+    session, context, arena, registry, identity = authority
+    if (any(object.__getattribute__(owner, name) is not value for owner, name, value in attached)
+            or getattr(analysis, "_descriptor_team_proofs", None) is not registry
+            or registry.get(identity) is not proof
+            or getattr(analysis, "_source_session", None) is not session
+            or getattr(analysis, "_source_authority_context", None) is not context
+            or getattr(analysis, "_source_derivation_arena", None) is not arena):
+        raise CompilationError("descriptor team attachments changed during validation")
+
+
+def prove_descriptor_team(analysis, procedure, originals, *, record_region=None, native_graph=None,
+                          fixed_array_associations=()):
     from compiler.frontend.source_facts import TEAM, issue, lookup, token_dependencies
 
     originals = tuple(originals)
+    _require_fixed_array_associations(analysis, procedure, fixed_array_associations)
     context = analysis.source_authority_context() if getattr(analysis, "_source_session", None) is not None else None
     query = procedure, tuple(id(node) for node in originals), id(record_region), id(native_graph)
+    if fixed_array_associations:
+        query = (*query[:-1], tuple(id(item) for item in fixed_array_associations), query[-1])
     previous = lookup(analysis, TEAM, query)
     if previous is not None:
         return previous.validate(analysis, procedure, previous.selected_node_ids)
     if record_region is not None:
-        record, encoded = _derive(analysis, procedure, originals, record_region, native_graph=native_graph, encoded_record=True)
+        record, encoded = _derive(analysis, procedure, originals, record_region, native_graph=native_graph,
+            encoded_record=True, fixed_array_associations=fixed_array_associations)
     else:
-        record = _derive(analysis, procedure, originals, native_graph=native_graph)
+        record = _derive(analysis, procedure, originals, native_graph=native_graph,
+                         fixed_array_associations=fixed_array_associations)
         encoded = _encoded(record)
     identity = sha256(encoded.encode()).hexdigest()
     registry = getattr(analysis, "_descriptor_team_proofs", None)
@@ -666,9 +816,11 @@ def prove_descriptor_team(analysis, procedure, originals, *, record_region=None,
         if len(registry) >= analysis.operation_limit:
             raise CompilationError("descriptor team proof registry budget exhausted")
         registry[identity] = DescriptorTeamProof(identity, procedure, record["structured_identity"],
-            tuple(record["selected_node_ids"]), analysis, tuple(originals), encoded, _ISSUER, record_region, _native_graph=native_graph)
+            tuple(record["selected_node_ids"]), analysis, tuple(originals), encoded, _ISSUER, record_region,
+            _native_graph=native_graph, _fixed_array_associations=fixed_array_associations)
     proof = registry[identity]
     if context is not None:
         context.require(analysis)
-        proof = issue(analysis, TEAM, query, proof, token_dependencies((record_region, native_graph)))
+        proof = issue(analysis, TEAM, query, proof,
+                      token_dependencies((record_region, native_graph, *fixed_array_associations)))
     return proof.validate(analysis, procedure, tuple(record["selected_node_ids"]))

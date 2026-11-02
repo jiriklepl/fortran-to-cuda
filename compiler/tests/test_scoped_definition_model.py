@@ -18,8 +18,9 @@ using namespace fort_scoped::planning;
 int main(int argc, char **argv) {
     if (argc != 2) return 2;
     std::string scenario = argv[1];
-    Resource b; b.handle = 1; b.element_bytes = 8; b.bytes = 8*65; b.extents = {65};
-    Region full{Box{{0}, {65}}}; b.initialized = full;
+    constexpr size_t size = 2 * fort_scoped::coherence::rectangle_limit + 1;
+    Resource b; b.handle = 1; b.element_bytes = 8; b.bytes = 8*size; b.extents = {size};
+    Region full{Box{{0}, {size}}}; b.initialized = full;
     Inputs in; in.resources = {b};
     Operation read{FORT_SCOPE_PLAN_WORKER, 1, {{1, {full, {}, {}}}}, 0, 0, false};
     in.operations = {read};
@@ -40,7 +41,7 @@ int main(int argc, char **argv) {
     } else if (scenario == "unknown_unit") {
         in.operations[0].unit = 0;
     } else if (scenario == "outside_layout") {
-        in.operations[0].bindings[0].effects.reads = {Box{{0}, {66}}};
+        in.operations[0].bindings[0].effects.reads = {Box{{0}, {size+1}}};
     } else if (scenario == "wrong_rank") {
         in.operations[0].bindings[0].effects.reads = {Box{{0, 0}, {1, 1}}};
     } else if (scenario == "unknown_layout") {
@@ -60,10 +61,10 @@ int main(int argc, char **argv) {
     } else if (scenario == "worker_budget") {
         in.operations.assign(65, read);
     } else if (scenario == "region_budget") {
-        in.resources[0].initialized.assign(33, Box{{0}, {1}});
+        in.resources[0].initialized.assign(fort_scoped::coherence::rectangle_limit + 1, Box{{0}, {1}});
     } else if (scenario == "fragmented") {
         in.resources[0].initialized.clear();
-        for (size_t i = 0; i < 32; ++i)
+        for (size_t i = 0; i < fort_scoped::coherence::rectangle_limit; ++i)
             in.resources[0].initialized.push_back(Box{{2*i+1}, {2*i+2}});
     } else if (scenario == "undefined_read") {
         in.resources[0].initialized.clear();
