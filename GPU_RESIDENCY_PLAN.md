@@ -6,6 +6,14 @@ The original proposal is preserved at
 `/tmp/fortran-residency-implementation-24/GPU_RESIDENCY_PLAN.original.md`.
 Historical reports and timing controls remain unchanged.
 
+The [current V4 regression checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/maintained-v4-20261102-addendum-01/README.md)
+passes all 12,056 selected compiler cases without failures, errors, skips or
+recoveries. The companion selection passes 4,333 cases with 29 declared optional
+skips. All 1,243 current source guards match the tested snapshots. Marked CUDA
+exclusions and focused device gates remain separate. This includes the applied
+atomic retention/reuse and native-wrapper changes below; application generation
+and performance qualification remain unresolved.
+
 The [atomic retention follow-up](benchmarks/reports/gpu-residency-implementation-20261023/atomic-arena-provider-empty-retention-20261101-addendum-01/README.md)
 is applied. Three empty original host teams execute while preserving the live
 producer/consumer domain, readonly input and dirty output; their intervening
@@ -27,7 +35,21 @@ so these observations establish removed repetition and further progress, without
 a whole-compilation speedup claim. No compiler verdict or artifacts were accepted;
 the next gate is normal generation on the qualified source.
 
-The [current compiler V3 selection](benchmarks/reports/gpu-residency-implementation-20261023/maintained-compiler-v3-20261101-addendum-01/README.md)
+The [native-only wrapper gate](benchmarks/reports/gpu-residency-implementation-20261023/native-wrapper-eligibility-20261102-addendum-01/README.md)
+is also applied. It checks the complete native graph and current child-routing
+policy before constructing a companion with no managed GPU work, then retains
+the existing whole-CALL retirement and fresh admission. Unknown or competing
+GPU routes keep their original preference. Source gates reconcile 231 CPU cases;
+six wrapper controls verify all 27 field/halo/bounds comparisons, one genuine
+original wrapper entry per reached call, and fatal retirement without replay.
+The unused nested-transaction experiment remains outside production. Parent16
+now passes the prior ResistanceForce/Apply frontier but declines at the guarded
+`mean_UVW` call in `linearforcing.f90:169`; explicit-shape association and joined
+reduction storage authority remain unresolved. Its terminal record is additive
+to the wrapper packet. Standalone Convection generation continues; no shared
+package or application result is established by these component tests.
+
+The [previous compiler V3 selection](benchmarks/reports/gpu-residency-implementation-20261023/maintained-compiler-v3-20261101-addendum-01/README.md)
 passes all 11,995 selected cases in one complete invocation, without failures,
 errors, skips or recoveries. Its [companion selection](benchmarks/reports/gpu-residency-implementation-20261023/maintained-companions-v3-20261101-addendum-01/README.md)
 passes 4,333 cases with 29 declared optional skips. Both qualify the applied

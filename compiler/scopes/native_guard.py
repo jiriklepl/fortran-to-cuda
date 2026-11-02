@@ -154,17 +154,112 @@ class GuardedNativeChild(LexicalOwner):
             self.boundary((group,), 'reached original native operation; effects unavailable')
 
 
+GUARDED_NATIVE_ROUTING_VERSION = 1
+
+
+def _formal_internal_child(analysis, routine, node):
+    """Recognize the exact original route used by the native-only scanner."""
+    if _kind(node.items[0]) != 'Name':
+        return None
+    targets = analysis._candidates(routine.scope, node.items[0])
+    if len(targets) != 1 or targets[0] not in analysis.routines:
+        return None
+    child = analysis.routines[targets[0]]
+    if (child.source_kind != 'internal' or child.scope.parent is not routine.scope
+            or not child.arguments):
+        return None
+    return child
+
+
+def native_only_wrapper(parent, node, routine):
+    """Fresh policy exclusion before any companion state is constructed.
+
+    A formal-bearing immediate internal child only enters GuardedNativeChild,
+    whose scanner never creates checked numerical/device work. The COMPLETE
+    native graph still validates every callee, actual callback and normal-return
+    effect; this routing choice grants no execution, capture or payload credit.
+    Unknown source shapes retain ordinary checked-child preference.
+    """
+    from compiler.frontend.device_tasks import _task_contract
+    from compiler.frontend.resource_reachability import prove_native_effect_graph
+    from compiler.scopes.segments import directive
+
+    builder, owner = parent.builder, parent.owner
+    if builder.analysis.routines.get(routine.qualified) is not routine:
+        raise CompilationError("native-only wrapper requires its exact original routine")
+    if (GUARDED_NATIVE_ROUTING_VERSION != 1 or builder.config.scope_execution != "graph"
+            or builder.config.policy != "sections" or builder.config.collective
+            or owner.interval_draft is not None or parent.interval_draft is not None
+            or getattr(owner.builder, "_conditional_return_draft", None) is None
+            or getattr(builder, "_reached_window_binding", None) is not None
+            or getattr(builder, "_mapped_reached_child", None) is not None
+            or getattr(owner.builder, "provider_only_lifetime", None) is not None
+            or routine.source_kind != "module" or routine.qualified in owner.members):
+        return False
+    originals = builder.inline.original_selection((node,))
+    if len(originals) != 1 or originals[0] is not node or _kind(node) != "Call_Stmt":
+        return False
+    calls, visits = [], 0
+
+    def sequence(nodes, depth=0):
+        nonlocal visits
+        if depth > builder.analysis.depth_limit:
+            return False
+        for item in nodes:
+            visits += 1
+            if visits > builder.analysis.operation_limit:
+                return False
+            kind = _kind(item)
+            if kind == "Comment":
+                if directive(item) is not None:
+                    return False
+            elif kind in {"Continue_Stmt", "Return_Stmt"}:
+                if kind == "Return_Stmt" and any(part is not None for part in _children(item)):
+                    return False
+            elif kind == "Call_Stmt":
+                if _task_contract(builder.analysis, routine, item) is not None:
+                    return False  # Existing external-provider routing has priority.
+                child = _formal_internal_child(builder.analysis, routine, item)
+                if child is None:
+                    return False
+                calls.append((item, child))
+            elif kind == "If_Construct":
+                body = tuple(part for part in _children(item) if _kind(part) not in {
+                    "If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt"})
+                if not sequence(body, depth + 1):
+                    return False
+            elif kind == "If_Stmt":
+                if not sequence((item.items[1],), depth + 1):
+                    return False
+            else:
+                return False  # In particular local loops/array work/other checked children.
+        return True
+
+    if not sequence(_children(routine.execution)) or not calls:
+        return False
+    owner.builder._conditional_return_draft.validate()
+    native = prove_native_effect_graph(builder.analysis, parent.routine.qualified, originals, project_payload=False)
+    view = native.same_family_call_view()
+    if not view.public()["available"]:
+        return False
+    roots = [instance for instance in native.host_instances if instance.parent == 0
+             and instance.call.original is node and not instance.call.function]
+    if len(roots) != 1 or roots[0].procedure != routine.qualified:
+        raise CompilationError("native-only wrapper lost its exact original outer CALL")
+    for original, child in calls:
+        matches = [instance for instance in native.host_instances if instance.parent == roots[0].ordinal
+                   and instance.call.original is original and not instance.call.function]
+        if len(matches) != 1 or matches[0].procedure != child.qualified:
+            raise CompilationError("native-only wrapper lost its exact original formal child route")
+    view.validate(builder.analysis, parent.routine.qualified, originals)
+    return True
+
+
 def borrow(parent, node):
     """Retain original formal associations; no effect or alias guess is used."""
     analysis = parent.builder.analysis
-    if _kind(node.items[0]) != 'Name':
-        return False
-    targets = analysis._candidates(parent.routine.scope, node.items[0])
-    if len(targets) != 1 or targets[0] not in analysis.routines:
-        return False
-    child = analysis.routines[targets[0]]
-    if (child.source_kind != 'internal' or child.scope.parent is not parent.routine.scope
-            or not child.arguments):
+    child = _formal_internal_child(analysis, parent.routine, node)
+    if child is None:
         return False
     owner = parent.owner
     if child.qualified in owner.active:
