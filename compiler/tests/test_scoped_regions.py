@@ -161,9 +161,9 @@ def test_adjacent_extreme_endpoints_require_no_overflowing_arithmetic(regions):
 
 
 def test_rectangle_and_intersection_budgets_are_not_extended(regions):
-    # Existing 33-box input fails before an otherwise possible normalization.
-    boxes = [((index,), (index + 1,)) for index in range(32)]
-    result = regions(boxes, [((32,), (33,))])
+    # Existing 129-box input fails before an otherwise possible normalization.
+    boxes = [((index,), (index + 1,)) for index in range(128)]
+    result = regions(boxes, [((128,), (129,))])
     assert result["fragmented"]
-    result = regions([((0,), (2,))], [((1,), (2,))], difference=True, checks=1024)
-    assert result == {"fragmented": True, "checks": 1025}
+    result = regions([((0,), (2,))], [((1,), (2,))], difference=True, checks=8192)
+    assert result == {"fragmented": True, "checks": 8193}

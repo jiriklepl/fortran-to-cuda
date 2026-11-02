@@ -709,17 +709,22 @@ void grow_scratch(Context &c, size_t bytes) {
     require(!std::getenv("FORT_SCOPE_TEST_FAIL_ALLOC"), FORT_SCOPE_RESOURCE, "injected device allocation failure");
     device = std::malloc(bytes);
     require(device, FORT_SCOPE_RESOURCE, "scratch reference allocation failed");
-#else
-    DeviceGuard guard(c);
-#if CUDART_VERSION >= 11020
-    if (c.pool) cuda_check(c, cudaMallocFromPoolAsync(&device, bytes, c.pool, c.stream), true);
-    else
-#endif
-        cuda_check(c, cudaMalloc(&device, bytes), true);
-    mark_context_pending(c);
-#endif
     c.scratch = device;
     c.scratch_capacity = bytes;
+#else
+    const size_t max_avail = c.device_budget - c.residency->workspace_bytes - c.stats.allocated_bytes;
+    size_t target_capacity = std::min(max_avail, std::max(bytes, size_t(4 * 1024 * 1024)));
+    if (target_capacity < bytes) target_capacity = bytes;
+    DeviceGuard guard(c);
+#if CUDART_VERSION >= 11020
+    if (c.pool) cuda_check(c, cudaMallocFromPoolAsync(&device, target_capacity, c.pool, c.stream), true);
+    else
+#endif
+        cuda_check(c, cudaMalloc(&device, target_capacity), true);
+    mark_context_pending(c);
+    c.scratch = device;
+    c.scratch_capacity = target_capacity;
+#endif
     ++c.scratch_stats.allocations;
     if (growing) ++c.scratch_stats.grows;
     c.scratch_stats.capacity_bytes = bytes;
@@ -1001,6 +1006,10 @@ void copy(Context &c, Buffer &b, const Box &box, bool upload) {
             if (op.height == 1 || op.pitch == op.width)
                 cuda_check(c, cudaMemcpyAsync(to, from, op.width*op.height, direction, c.stream));
             else cuda_check(c, cudaMemcpy2DAsync(to, op.pitch, from, op.pitch, op.width, op.height, direction, c.stream));
+        } else if (op.pitch == op.width && op.height == op.physical_height) {
+            cuda_check(c, cudaMemcpyAsync(to, from, op.width*op.height*op.depth, direction, c.stream));
+        } else if (op.pitch == op.width) {
+            cuda_check(c, cudaMemcpy2DAsync(to, op.pitch*op.physical_height, from, op.pitch*op.physical_height, op.width*op.height, op.depth, direction, c.stream));
         } else {
             cudaMemcpy3DParms parameters{};
             parameters.srcPtr = make_cudaPitchedPtr(const_cast<char *>(from), op.pitch, op.pitch, op.physical_height);

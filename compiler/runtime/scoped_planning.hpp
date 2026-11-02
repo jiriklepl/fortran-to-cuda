@@ -1004,7 +1004,7 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs,
             if (!detail::definition_only(op))
                 detail::seconds(native_startup_comparison, double(op.bindings.size())*costs.host_access_seconds);
         }
-        if (gpu_supported && fresh && native_startup_comparison <= gpu_lower_bound) {
+        if (gpu_supported && fresh && !input.continuation && native_startup_comparison <= gpu_lower_bound) {
             // Fresh, host-only coverage stays host current under every proven
             // native definition/write. Reuse source preflight when available;
             // raw planning clients must establish it before this shortcut.

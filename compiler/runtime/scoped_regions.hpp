@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 namespace fort_scoped { namespace coherence {
-constexpr size_t rectangle_limit = 32, intersection_limit = 1024;
+constexpr size_t rectangle_limit = 128, intersection_limit = 8192;
 struct Fragmented {};
 struct Box { std::vector<size_t> lo, hi; };
 using Region = std::vector<Box>;

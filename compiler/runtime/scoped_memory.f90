@@ -257,7 +257,7 @@ module fort_scoped_memory
   public :: fort_scope_source_host_complete_v1, fort_scope_source_host_cancel_v1
   public :: fort_scope_trace_set_v1, fort_scope_trace_restore_v1
   public :: fort_scope_native_hint_begin_v1, fort_scope_native_hint_finish_v1
-  public :: fort_scope_register_sections, fort_scope_forget_definition
+  public :: fort_scope_register_sections, fort_scope_forget_definition, fort_scope_discard_v1
   public :: fort_scope_view_get_v1, fort_scope_view_get_v2
   public :: fort_scope_forget_sections_v1, fort_scope_plan_forget_sections_v1
   public :: fort_scope_admit_source_reads_v1
@@ -668,6 +668,11 @@ module fort_scoped_memory
       integer(c_int) :: status
     end function
     function fort_scope_forget_definition(context, buffer) bind(C) result(status)
+      import c_int, c_int64_t
+      integer(c_int64_t), value :: context, buffer
+      integer(c_int) :: status
+    end function
+    function fort_scope_discard_v1(context, buffer) bind(C) result(status)
       import c_int, c_int64_t
       integer(c_int64_t), value :: context, buffer
       integer(c_int) :: status
