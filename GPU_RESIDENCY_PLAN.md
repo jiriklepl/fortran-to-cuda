@@ -6,14 +6,28 @@ The original proposal is preserved at
 `/tmp/fortran-residency-implementation-24/GPU_RESIDENCY_PLAN.original.md`.
 Historical reports and timing controls remain unchanged.
 
+The [repeated-registration label fix](benchmarks/reports/gpu-residency-implementation-20261023/repeated-registration-labels-20261102/README.md)
+is applied after 76 relevant tests pass, including native Fortran compilation;
+the exact regression fails against the old emitter. Cloned registration blocks
+now have distinct construct names, with unchanged registration bodies and
+single-occurrence output. A private copy of the complete failing boundary module
+also compiles with label-only changes. Fresh corrected SGS generation passes;
+normal Convection regeneration is running. The failed application build remains
+recorded, and no corrected application or speedup is qualified yet.
+
 The [invocation storage-admission change](benchmarks/reports/gpu-residency-implementation-20261023/storage-invocation-admission-20261102/README.md)
 is applied after 261 source tests and eight existing CUDA/source controls pass.
 Ordinary sealed invocation plans now use the existing synchronous admission
 scope: 30 membership queries require two full storage-record checks instead of
 30, with the issued record unchanged. Source publication, prerequisite ownership,
 native resource roles and final full validation remain checked. The runtime,
-calibration and manifest schema are unchanged. A bounded normal Convection
-generation attempt is running; application and speedup qualification remain open.
+calibration and manifest schema are unchanged. Fresh normal SGS and Convection
+packages now pass strict validation; Convection generation completes in 1,190
+seconds. Their composition passes, but the subsequent application build finds
+duplicate generated Fortran block labels in cloned boundary-registration paths.
+The [failed build record](/tmp/fortran-startup-application-build-05/completion.json)
+is retained. Corrected generation, application correctness and speedup remain
+open gates.
 
 The [baseline V4 regression checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/maintained-v4-20261102-addendum-01/README.md)
 passes all 12,056 selected compiler cases without failures, errors, skips or

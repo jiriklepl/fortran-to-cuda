@@ -186,5 +186,18 @@ def finish_original_registrations(owner, text):
         replacement = [block + ": block", *imports, *spec, *lines, "end block " + block]
         if elements:
             replacement = fortran_lines(replacement)
-        text = text.replace("!" + key, "\n".join(replacement))
+        parts = text.split("!" + key)
+        if len(parts) == 2:
+            text = "\n".join(replacement).join(parts)
+        else:
+            # Original predicate/fallback alternatives may clone one marker.
+            # Fortran construct names must be distinct across all those arms.
+            expanded = [parts[0]]
+            for occurrence, tail in enumerate(parts[1:]):
+                label = block + "_" + str(occurrence)
+                renamed = [label + ": block" if line == block + ": block" else
+                           "end block " + label if line == "end block " + block else
+                           "exit " + label if line == "exit " + block else line for line in replacement]
+                expanded.extend(("\n".join(renamed), tail))
+            text = "".join(expanded)
     return text
