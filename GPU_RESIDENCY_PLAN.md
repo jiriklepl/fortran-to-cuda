@@ -6,10 +6,19 @@ The original proposal is preserved at
 `/tmp/fortran-residency-implementation-24/GPU_RESIDENCY_PLAN.original.md`.
 Historical reports and timing controls remain unchanged.
 
-The [current V4 regression checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/maintained-v4-20261102-addendum-01/README.md)
+The [invocation storage-admission change](benchmarks/reports/gpu-residency-implementation-20261023/storage-invocation-admission-20261102/README.md)
+is applied after 261 source tests and eight existing CUDA/source controls pass.
+Ordinary sealed invocation plans now use the existing synchronous admission
+scope: 30 membership queries require two full storage-record checks instead of
+30, with the issued record unchanged. Source publication, prerequisite ownership,
+native resource roles and final full validation remain checked. The runtime,
+calibration and manifest schema are unchanged. A bounded normal Convection
+generation attempt is running; application and speedup qualification remain open.
+
+The [baseline V4 regression checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/maintained-v4-20261102-addendum-01/README.md)
 passes all 12,056 selected compiler cases without failures, errors, skips or
 recoveries. The companion selection passes 4,333 cases with 29 declared optional
-skips. All 1,243 current source guards match the tested snapshots. Marked CUDA
+skips. All 1,243 baseline source guards match the tested snapshots. Marked CUDA
 exclusions and focused device gates remain separate. This includes the applied
 atomic retention/reuse and native-wrapper changes below; application generation
 and performance qualification remain unresolved.
@@ -41,10 +50,8 @@ verdict; SGS alone passes strict validation. In the separate 900–1,200-second
 profile window, six whole-storage-epoch validations account for 253.6 cumulative
 seconds. Retained atomic-provider validation accounts for 233.4 seconds, with
 zero atomic derivations or provider regenerations. These nested spans overlap.
-The next compiler change extends the existing synchronous storage-admission
-scope to ordinary invocation lifetimes, preserving fresh source, dependency,
-ownership and final full-record checks. It remains private until mutation and
-emitted-package checks pass; no application speedup follows from this profile.
+The applied storage-admission change above targets this repeated validation.
+No application speedup follows from the profile or isolated validation counts.
 
 The [native-only wrapper gate](benchmarks/reports/gpu-residency-implementation-20261023/native-wrapper-eligibility-20261102-addendum-01/README.md)
 is also applied. It checks the complete native graph and current child-routing
