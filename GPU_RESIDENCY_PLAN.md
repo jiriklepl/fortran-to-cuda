@@ -35,6 +35,17 @@ so these observations establish removed repetition and further progress, without
 a whole-compilation speedup claim. No compiler verdict or artifacts were accepted;
 the next gate is normal generation on the qualified source.
 
+The [subsequent normal run and late profile](benchmarks/reports/gpu-residency-implementation-20261023/convection-late-validation-20261102/README.md)
+retain another 1,500-second Convection timeout without artifacts or a source
+verdict; SGS alone passes strict validation. In the separate 900–1,200-second
+profile window, six whole-storage-epoch validations account for 253.6 cumulative
+seconds. Retained atomic-provider validation accounts for 233.4 seconds, with
+zero atomic derivations or provider regenerations. These nested spans overlap.
+The next compiler change extends the existing synchronous storage-admission
+scope to ordinary invocation lifetimes, preserving fresh source, dependency,
+ownership and final full-record checks. It remains private until mutation and
+emitted-package checks pass; no application speedup follows from this profile.
+
 The [native-only wrapper gate](benchmarks/reports/gpu-residency-implementation-20261023/native-wrapper-eligibility-20261102-addendum-01/README.md)
 is also applied. It checks the complete native graph and current child-routing
 policy before constructing a companion with no managed GPU work, then retains
@@ -46,8 +57,9 @@ The unused nested-transaction experiment remains outside production. Parent16
 now passes the prior ResistanceForce/Apply frontier but declines at the guarded
 `mean_UVW` call in `linearforcing.f90:169`; explicit-shape association and joined
 reduction storage authority remain unresolved. Its terminal record is additive
-to the wrapper packet. Standalone Convection generation continues; no shared
-package or application result is established by these component tests.
+to the wrapper packet. Standalone Convection generation has since timed out as
+recorded above; no shared package or application result is established by these
+component tests.
 
 The [previous compiler V3 selection](benchmarks/reports/gpu-residency-implementation-20261023/maintained-compiler-v3-20261101-addendum-01/README.md)
 passes all 11,995 selected cases in one complete invocation, without failures,
