@@ -41,6 +41,48 @@ def _original_position(analysis, routine, expression, tick):
     """Find one exact executable occurrence in its original routine."""
     if _original(analysis, routine.qualified) is not routine:
         raise CompilationError("storage component read requires the exact original routine")
+    session = getattr(analysis,"_source_session",None)
+    if (session is not None and session.roots["routines"].get(routine.qualified) is routine
+            and analysis.routines.get(routine.qualified) is routine):
+        membership = session.execution_nodes(analysis,routine)
+        if membership.get(id(expression)) is not expression:
+            raise CompilationError("storage component read requires one exact original executable occurrence")
+        # Shared parser objects need the unchanged full occurrence census.
+        if session.execution_overlaps(analysis,routine,((expression,),)) is not None:
+            current, reverse, seen = expression, [], set()
+            while current is not routine.execution:
+                tick()
+                if id(current) in seen:
+                    raise CompilationError("storage component original lexical parent cycle")
+                seen.add(id(current))
+                try:
+                    parent = session.lexical_parent(current)
+                except CompilationError:
+                    # The immutable parent index may omit original leaf nodes.
+                    # Authenticate their exact current occurrence by the fresh walk.
+                    break
+                if parent is None:
+                    break
+                # Parser parents may skip tuple/list wrappers. Recover only
+                # those exact current edges; never traverse a sibling body.
+                pending, found = [(parent,())], []
+                while pending:
+                    owner,path = pending.pop()
+                    tick()
+                    for branch,child in enumerate(_children(owner)):
+                        edge = (*path,(owner,branch))
+                        if child is current:
+                            found.append(edge)
+                        elif isinstance(child,(tuple,list)):
+                            pending.append((child,edge))
+                if len(found) != 1:
+                    break
+                reverse.append(found[0])
+                current = parent
+            else:
+                return tuple(edge for path in reversed(reverse) for edge in path)
+            # Some parser constructs do not retain a complete parent chain.
+            # Their original fresh walk keeps the same admission verdict.
     pending, positions = [(routine.execution, ())], []
     while pending:
         node, parents = pending.pop()
@@ -132,7 +174,7 @@ class _LexicalAliasTypes(_OriginalTypes):
                                   self.schema(self.declaration_scope, binding.dtype))
 
 
-def readonly_record_declaration(analysis, binding, *, retain_scope, tick, formal=True):
+def readonly_record_declaration(analysis, binding, *, retain_scope, tick, formal=True, _storage_context=None):
     """Classify original record storage; never its value, layout or allocation.
 
     The only consumable dummy is a scalar nonoptional INTENT(IN) variable.
@@ -143,7 +185,15 @@ def readonly_record_declaration(analysis, binding, *, retain_scope, tick, formal
     from compiler.frontend.descriptor_associations import _attached, _attachments
     from compiler.frontend.source_objects import _canonical, _kind_state, _members, _resolution, _specification
 
-    if (binding is None or _typename(binding.dtype) is None or binding.attributes & _UNSAFE
+    if _storage_context is not None:
+        from compiler.frontend.native_lifetime_context import NativeLifetimeContext
+        if (type(_storage_context) is not NativeLifetimeContext
+                or _storage_context.analysis is not analysis or not _storage_context.group_only):
+            raise CompilationError("storage target read requires its exact native joined-group context")
+    target_read = (not formal and _storage_context is not None
+                   and _storage_context.readonly_target(binding))
+    unsafe = _UNSAFE - {"target"} if target_read else _UNSAFE
+    if (binding is None or _typename(binding.dtype) is None or binding.attributes & unsafe
             or formal and (binding.rank or binding.intent != "in" or "allocatable" in binding.attributes)):
         raise CompilationError("storage record requires an original scalar INTENT(IN) dummy and unassociated actual")
     attached = _attachments(binding)
@@ -236,7 +286,7 @@ def readonly_record_declaration(analysis, binding, *, retain_scope, tick, formal
     return schema
 
 
-def record_array_declaration(analysis, binding, *, retain_scope, tick):
+def record_array_declaration(analysis, binding, *, retain_scope, tick, _storage_context=None):
     """Authenticate original array storage, never record values or ownership.
 
     An inquiry of the root or read of one fixed numeric field does not touch
@@ -245,7 +295,8 @@ def record_array_declaration(analysis, binding, *, retain_scope, tick):
     """
     if binding is None or not binding.rank:
         raise CompilationError("storage record array requires its original array declaration")
-    return readonly_record_declaration(analysis, binding, retain_scope=retain_scope, tick=tick, formal=False)
+    return readonly_record_declaration(analysis, binding, retain_scope=retain_scope, tick=tick, formal=False,
+                                       _storage_context=_storage_context)
 
 
 def _component_scope_syntax(scope, tick):
@@ -263,7 +314,8 @@ def _component_scope_syntax(scope, tick):
         pending.extend(_children(declaration))
 
 
-def _describe(analysis, routine, node, tick, lexical_alias=None, readonly_record=None, scope_scan=None):
+def _describe(analysis, routine, node, tick, lexical_alias=None, readonly_record=None, scope_scan=None,
+              storage_context=None):
     if _kind(node) != "Data_Ref" or len(node.items) < 2 or _kind(node.items[0]) not in {"Name", "Part_Ref"}:
         raise CompilationError("storage component read requires a scalar original object and fixed field path")
     scope = analysis.source_scope_for(node, routine.scope)
@@ -285,7 +337,13 @@ def _describe(analysis, routine, node, tick, lexical_alias=None, readonly_record
             raise CompilationError("storage component alias is outside its original lexical declaration")
         types = _LexicalAliasTypes(analysis, root, matches[0].root_binding.declaring_scope)
     typed = types.actual(scope, node)
-    if (root is None or _typename(root.dtype) is None or root.attributes & _UNSAFE
+    target_read = (array_element and storage_context is not None and storage_context.readonly_target(root))
+    if target_read:
+        storage_context.require_target_read(routine,node,root)
+        if len(node.items) != 2 or _kind(node.items[1]) != "Name" or typed.rank:
+            raise CompilationError("native storage target read requires one fixed primitive scalar field")
+    unsafe = _UNSAFE - {"target"} if target_read else _UNSAFE
+    if (root is None or _typename(root.dtype) is None or root.attributes & unsafe
             or not array_element and (root.rank or "allocatable" in root.attributes)):
         raise CompilationError("storage component parent association requires separate authority")
     if array_element and (not root.rank or lexical_alias is not None
@@ -360,9 +418,10 @@ class NumericComponentRead:
 
 
 def numeric_component_read(analysis, routine, node, *, visit_index, visit_scope, tick, lexical_alias=None,
-                           readonly_record=None, _scope_scan=None):
+                           readonly_record=None, _scope_scan=None, _storage_context=None):
     return _numeric_component(analysis, routine, node, visit_index=visit_index, visit_scope=visit_scope,
-        tick=tick, lexical_alias=lexical_alias, readonly_record=readonly_record, scope_scan=_scope_scan)
+        tick=tick, lexical_alias=lexical_alias, readonly_record=readonly_record, scope_scan=_scope_scan,
+        storage_context=_storage_context)
 
 
 def numeric_component_actual(analysis, routine, resolved, association, *, visit_index, visit_scope, tick,
@@ -373,7 +432,7 @@ def numeric_component_actual(analysis, routine, resolved, association, *, visit_
 
 
 def _numeric_component(analysis, routine, node, *, visit_index, visit_scope, tick, lexical_alias=None,
-                       readonly_record=None, call_association=None, scope_scan=None):
+                       readonly_record=None, call_association=None, scope_scan=None, storage_context=None):
     """Fresh scanner service, never a reusable proof/capture/layout token.
 
     ``visit_index`` must be the calling scanner's ordinary expression visitor;
@@ -400,7 +459,8 @@ def _numeric_component(analysis, routine, node, *, visit_index, visit_scope, tic
         # canonical resource that changed before the first traversal callback.
         # binding() resolves the declaring type, without asking for its layout.
         if array_element:
-            record_array_declaration(analysis, original_root, retain_scope=visit_scope, tick=tick)
+            record_array_declaration(analysis, original_root, retain_scope=visit_scope, tick=tick,
+                                     _storage_context=storage_context)
         else:
             _TypeBuilder(analysis).binding(original_root)
         if not _attached(original_root, original_fields) or original_root.declaring_scope is not declaring_scope:
@@ -428,7 +488,8 @@ def _numeric_component(analysis, routine, node, *, visit_index, visit_scope, tic
     if array_element:
         if lexical_alias is not None or readonly_record is not None:
             raise CompilationError("storage array element requires its own original array declaration")
-        record_array_declaration(analysis, original_root, retain_scope=visit_scope, tick=tick)
+        record_array_declaration(analysis, original_root, retain_scope=visit_scope, tick=tick,
+                                     _storage_context=storage_context)
     roles = _scope_roles(analysis)
     def occurrence():
         if call_association is None:
@@ -447,7 +508,7 @@ def _numeric_component(analysis, routine, node, *, visit_index, visit_scope, tic
                 for index in _children(part.items[1]):
                     visit_index(index)
     root, typed, field_records, identities, indices, scopes = _describe(
-        analysis, routine, node, tick, lexical_alias, readonly_record, scope_scan)
+        analysis, routine, node, tick, lexical_alias, readonly_record, scope_scan, storage_context)
     if call_association is not None and (typed.rank or root is not call_association[1].binding):
         raise CompilationError("storage component actual requires its exact scalar field and parent binding")
     for scope in scopes.values():
@@ -456,7 +517,7 @@ def _numeric_component(analysis, routine, node, *, visit_index, visit_scope, tic
         for index in indices:
             visit_index(index)
     # Callback traversal cannot lend stale declaration/namespace authority.
-    current = _describe(analysis, routine, node, tick, lexical_alias, readonly_record, scope_scan)
+    current = _describe(analysis, routine, node, tick, lexical_alias, readonly_record, scope_scan, storage_context)
     if (current[0] is not root or (current[1].dtype, current[1].kind, current[1].rank) !=
             (typed.dtype, typed.kind, typed.rank) or current[2] != field_records or len(current[3]) != len(identities)
             or any(any(left is not right for left, right in zip(a[:3], b[:3], strict=True))
@@ -491,7 +552,8 @@ def _numeric_component(analysis, routine, node, *, visit_index, visit_scope, tic
                 or original_root.declaring_scope is not declaring_scope):
             raise CompilationError("storage component original object changed during read traversal")
     if array_element:
-        record_array_declaration(analysis, original_root, retain_scope=visit_scope, tick=tick)
+        record_array_declaration(analysis, original_root, retain_scope=visit_scope, tick=tick,
+                                     _storage_context=storage_context)
     resource = root.root + "%" + "%".join(field["member"] for field in field_records)
     record = {"version": 3 if array_element else 2 if readonly_record is not None else 1,
               "kind": "original_numeric_component_read", "resource": resource,
