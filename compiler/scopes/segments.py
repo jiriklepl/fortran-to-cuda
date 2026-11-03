@@ -494,8 +494,12 @@ def fragment(builder, nodes, *, kind="native source", selected=None, private_roo
         summary = summarize(analysis, builder.entry.qualified, selection, completion_proof)
     if not summary["complete"]:
         raise CompilationError("structured native effects incomplete: " + "; ".join(summary["reasons"]))
+    original_continue = (selected is None and len(original) == 1
+                         and _kind(original[0]) == "Continue_Stmt"
+                         and getattr(getattr(original[0], "item", None), "label", None) is None)
     if any(operation["kind"] == "boundary" or (operation["kind"] == "control"
-           and not (kind == "condition read" and operation["source"].upper() == "CONTINUE"))
+           and not ((kind == "condition read" or original_continue)
+                    and operation["source"].upper() == "CONTINUE"))
            for operation in summary["operations"]):
         raise CompilationError("unsupported exit or lifetime boundary inside structured ownership")
     completion = summary["native_completion"]
@@ -1065,7 +1069,7 @@ class StructuredScope:
                                            (record.reason if record is not None else "missing original selector proof"))
                 result.append(Association(self.parse(node.content[1:-1], depth + 1),
                                           statement_span(node), record.public()))
-            elif kind in {"Assignment_Stmt", "Block_Nonlabel_Do_Construct"}:
+            elif kind in {"Assignment_Stmt", "Block_Nonlabel_Do_Construct", "Continue_Stmt"}:
                 operation = fragment(self.builder, (node,), native_metadata=self.native_metadata,
                                      native_host_reads=self.native_host_reads)
                 self.native.append(operation)
