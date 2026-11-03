@@ -177,6 +177,46 @@ exposes missing transitive native-reservation use in the reader. These remain
 explicit integration limitations. Current-runtime ELMM correctness and speedup
 remain unqualified.
 
+The inherited-namespace increment is now applied. Argumentless internal routines
+retain their actual lexical storage namespace and original CALL receipts;
+they keep `parameterized=false`. Source projections use version 2 when that
+relation is present, and returned-domain contracts use version 4 for lexical
+child routes. Native reservations and managed fields used only by descendants
+follow the same checked CALL graph. Storage admission detects changes to the
+retained receipts, including in-place record edits. An original, unlabeled
+`CONTINUE` now uses the existing native effect proof without retiring residency.
+The runtime, ABI and calibration profile are unchanged.
+
+The [fresh complete compiler selection 08](/tmp/fortran-maintained-current807-c3-native-full-08/execution/compiler/completion.json)
+passes all 12,737 selected cases, retaining all 12,711 previous cases and adding
+26. There are zero failures, errors, skips or recoveries; all 1,515 source guards
+hold and all owned process groups exit. The 1,294 marked CUDA cases remain
+outside this selection. The separate
+[device gate](/tmp/fortran-inherited-lexical-gpu-03/qualification.json) passes six
+CUDA cases and two serialized-package controls. Both GPU variants match full
+native fields, halos, bounds and runtime coefficient values. The read-only
+variant, including `CONTINUE`, retains one domain with zero intermediate payload
+copies. The writing native CALL publishes and retires, transferring `8*n` bytes
+in each direction before the consumer. Cold and zero-trip paths inspect no
+unallocated storage; GPU-hidden execution has no physical GPU events.
+
+The [paired reader qualification](/tmp/fortran-inherited-lexical-namespace-fix-01/qualification-reader-final.json)
+records 4,476 passing tests and the exact 29 declared optional skips. Its single
+pytest process succeeds. The original controller remains recorded as failed:
+its JUnit mapper misparsed six parameter names containing `::`. Two independent
+audits using the pinned pytest address mapping establish a bijection between all
+4,505 selected nodes and raw results, with no missing, extra or duplicate cases.
+This is an audited clean pytest invocation, not a clean controller invocation.
+
+[Parent attempt 23](/tmp/fortran-parent-graph-current-23/result.json) clears the
+previous namespace rejection but fails later with `IndexError` in edit-boundary
+validation of an empty helper body. All 1,515 source and 1,847 input guards hold;
+there is no fallback search, emitted package or application execution. A separate
+configured-source inventory identifies `wallmodels::updatesurfacetemperatures`
+as genuinely empty, with six read-only array formals. The empty-body repair
+remains a subsequent private increment. Current-runtime application correctness,
+performance comparisons and the 10%, 2× and 20× checkpoints remain unqualified.
+
 The following entries preserve earlier checkpoints and their limitations.
 
 The [repeated-registration label fix](benchmarks/reports/gpu-residency-implementation-20261023/repeated-registration-labels-20261102/README.md)

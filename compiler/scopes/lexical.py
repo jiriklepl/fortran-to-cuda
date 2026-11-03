@@ -332,6 +332,8 @@ class LexicalOwner:
             self.active = []
             self.scalar_element_resources = {}
         self.internal_calls = []
+        self.source_lexical_calls = []
+        self._issued_lexical_calls = {}
         self.graph = builder.analysis.structure(self.routine.qualified)
         if not self.graph.available:
             raise CompilationError("lexical owner requires an available bounded source graph")
@@ -564,8 +566,11 @@ class LexicalOwner:
         self.internal_calls.append(record)
         self.builder.resolved_calls[(self.routine.qualified, span)] = record
         from compiler.scopes.provenance import borrowed
-        self.patches.append((*span, "\n".join(fortran_lines(borrowed(self, (node,),
-            self.original((node,)).splitlines()))) + "\n"))
+        patch = "\n".join(fortran_lines(borrowed(self, (node,),
+            self.original((node,)).splitlines()))) + "\n"
+        self.patches.append((*span, patch))
+        from compiler.scopes.conditional_return import retain_lexical_call
+        retain_lexical_call(self, node, owner.members[child.qualified], resolved, record, patch)
         return True
 
     def original(self, nodes):
@@ -1113,7 +1118,7 @@ class LexicalOwner:
                     self.scan(body.nodes, depth+1)
             else:
                 self.admit((group,))
-        elif kind == "Assignment_Stmt":
+        elif kind in {"Assignment_Stmt", "Continue_Stmt"}:
             self.admit((group,))
         elif kind == "Return_Stmt" and self.parent is not None and str(group).strip().lower() == "return":
             return
@@ -1665,6 +1670,9 @@ class LexicalOwner:
             return self._emit_checked_lexical(nodes, checkpoint, plan, native_cleanup=native_cleanup)
 
     def _emit_checked_lexical(self, nodes, checkpoint, plan, *, native_cleanup=True):
+        from compiler.frontend.immutable_graph import original_type
+        from compiler.scopes.source_task_bindings import lexical_namespace
+
         builder = self.builder
         from compiler.offload.scope_measurement import emit_native
         from compiler.offload.scope_measurement import prepare as prepare_measurement
@@ -1866,6 +1874,7 @@ class LexicalOwner:
             "internal_coordinators": [{"procedure": member.routine.qualified,
                 "structured_summary_identity": member.graph.identity,
                 "control": "host association; original declarations and body",
+                **({"lexical_namespace": lexical_namespace(member)} if original_type(member) is LexicalOwner else {}),
                 "calls": member.internal_calls, "boundaries": member.boundaries,
                 "planning_segments": [{"segment_id": index, "first_line": unit.scope.first,
                     "last_line": unit.scope.last, "resources": list(unit.arrays),

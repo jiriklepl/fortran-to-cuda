@@ -77,16 +77,17 @@ def _storage_topology(member):
     """Owned storage/control edges; emission results deliberately stay separate."""
     maps = ("original_actual_registrations", "original_native_actual_registrations",
             "original_scalar_element_reservations", "scalar_element_resources",
-            "resource_slot_roots", "parameterized_native_bindings")
+            "resource_slot_roots", "parameterized_native_bindings", "_issued_lexical_calls")
     sequences = ("units", "patches", "internal_calls", "call_sites", "counted_controls",
-                 "return_calls", "return_conditions", "closed_suffixes")
+                 "return_calls", "return_conditions", "closed_suffixes", "source_lexical_calls")
     controls = ("context", "enabled", "epoch_pristine", "query_plan", "control_guard",
                 "retention_allowed", "eligibility_allowed", "resource_slot_namespace")
     return (tuple((name, None if getattr(member, name, None) is None else
                     _mapping(getattr(member, name))) for name in maps),
             tuple((name, _Identity(getattr(member, name, None)),
                    tuple(_Identity(item) for item in getattr(member, name, ()))) for name in sequences),
-            tuple((name, _Identity(getattr(member, name, None))) for name in controls))
+            tuple((name, _Identity(getattr(member, name, None))) for name in controls),
+            _encoded([receipt.record for receipt in member.source_lexical_calls]))
 
 
 class StorageAdmission:
@@ -161,6 +162,7 @@ class StorageAdmission:
         sessions = {id(analysis._source_session): analysis._source_session
                     for _builder, analysis, _routine, _configuration, _facts in self._plan._contexts}
         pending = [getattr(self._owner, "position_epoch", None), *self._plan._procedures]
+        pending.extend(receipt for member in self._plan.members for receipt in member.source_lexical_calls)
         pending.extend(access for member in self._plan.members for unit in self._plan.units(member)
                        for operation in unit.scope.native for access in operation.native_opaque_accesses.values())
         pending.extend(task for member in self._plan.members for task in (*member.device_tasks, *member.source_device_tasks))

@@ -14,7 +14,7 @@ from compiler.frontend.atomic_worksharing_team import AtomicWorksharingTeamProof
 from compiler.frontend.immutable_graph import original_type
 from compiler.frontend.line_snapshot_team import OriginalLineSnapshotTeamProof
 from compiler.ir import CompilationError
-from compiler.scopes.conditional_return import CheckedBorrowedCall
+from compiler.scopes.conditional_return import CheckedBorrowedCall, CheckedLexicalCall
 from compiler.scopes.segments import statement_span
 
 
@@ -48,11 +48,63 @@ def needs_call_receipt(member):
         if (any(_projectable(task) for task in current.source_device_tasks)
                 or any(operation.native_opaque_accesses for unit in current.units for operation in unit.scope.native)):
             return True
+        for receipt in current.source_lexical_calls:
+            if original_type(receipt) is not CheckedLexicalCall:
+                _fail("requires an exact retained lexical CALL receipt")
+            receipt.validate(current)
+            pending.append(receipt.callee)
         for receipt in getattr(current, "source_companion_calls", ()):
             if original_type(receipt) is not CheckedBorrowedCall:
                 _fail("requires an exact retained checked CALL receipt")
             pending.append(receipt.callee)
     return False
+
+
+def lexical_namespace(member):
+    """Project only an exact argumentless lexical child's inherited storage."""
+    from compiler.scopes.lexical import LexicalOwner
+    from compiler.scopes.module_owner import ModuleOwner
+
+    parent, owner = member.parent, member.owner
+    if (original_type(member) is not LexicalOwner or parent is None
+            or owner.members.get(member.routine.qualified) is not member
+            or owner.members.get(parent.routine.qualified) is not parent
+            or member.resources is not parent.resources
+            or member.canonical_bindings is not parent.canonical_bindings
+            or member.resource_slot_namespace is not parent.resource_slot_namespace):
+        _fail("lost its original inherited lexical namespace")
+    namespace = member.resource_slot_namespace
+    current, seen = member, set()
+    while (current is not namespace and current.parent is not None
+           and original_type(current) is LexicalOwner):
+        if id(current) in seen:
+            _fail("contains a cyclic lexical namespace")
+        seen.add(id(current))
+        ancestor = current.parent
+        if (original_type(current) is not LexicalOwner
+                or current.resources is not ancestor.resources
+                or current.canonical_bindings is not ancestor.canonical_bindings
+                or current.resource_slot_namespace is not ancestor.resource_slot_namespace
+                or current.routine.scope.parent is not ancestor.routine.scope):
+            _fail("changed its lexical namespace parent chain")
+        current = ancestor
+    if namespace is not None and (current is not namespace or original_type(namespace) is not ModuleOwner
+            or namespace.resource_slot_namespace is not namespace
+            or owner.members.get(namespace.routine.qualified) is not namespace):
+        _fail("requires its original parameterized lexical namespace owner")
+    receipts = [receipt for receipt in parent.source_lexical_calls if receipt.callee is member]
+    if not receipts or any(original_type(receipt) is not CheckedLexicalCall for receipt in receipts):
+        _fail("requires exact original lexical CALL receipts")
+    for receipt in receipts:
+        receipt.validate(parent)
+    originals = [row for row in parent.internal_calls if row.get("procedure") == member.routine.qualified]
+    if (len(originals) != len(receipts)
+            or any(not any(row is receipt.record for receipt in receipts) for row in originals)):
+        _fail("lost complete original lexical CALL coverage")
+    return {"version": 1, "kind": "original_argumentless_lexical_namespace",
+            "parent": parent.routine.qualified,
+            "namespace_owner": None if namespace is None else namespace.routine.qualified,
+            "source_calls": [receipt.public() for receipt in receipts]}
 
 
 def _emitted_calls(source, entry):
@@ -98,18 +150,22 @@ def _field_roots(nodes, edges, procedure, field_slots):
             if name not in nodes or current_slot not in nodes[name]["resource_slots"].values():
                 _fail("lost a slot of its owning projection")
             node = nodes[name]
-            if not node["parameterized"]:
+            inherited = node.get("inherited_namespace")
+            if not node["parameterized"] and inherited is None:
                 reverse = {number: node["owner_resources"].get(root) for root, number in node["resource_slots"].items()}
                 if reverse[current_slot] is None:
                     _fail("lost its final owning allocation")
                 memo[key] = frozenset((reverse[current_slot],))
                 continue
             dependencies = []
-            for edge in incoming[name]:
-                actual = edge["handle_bindings"].get(str(current_slot))
-                if actual is None:
-                    _fail("lost a forwarded slot of its owning projection")
-                dependencies.append((edge["caller"], actual))
+            if inherited is not None:
+                dependencies.append((inherited["parent"], current_slot))
+            else:
+                for edge in incoming[name]:
+                    actual = edge["handle_bindings"].get(str(current_slot))
+                    if actual is None:
+                        _fail("lost a forwarded slot of its owning projection")
+                    dependencies.append((edge["caller"], actual))
             if not dependencies:
                 _fail("has no complete owning projection")
             if finish:
@@ -146,8 +202,7 @@ def checked_call_inventory(member):
         active.add(name)
         namespace = current.resource_slot_namespace
         parameterized = namespace is current
-        if namespace is not None and not parameterized:
-            _fail("requires an exact original helper namespace")
+        inherited = lexical_namespace(current) if namespace is not None and not parameterized else None
         if parameterized and original_type(current) is not ModuleOwner:
             _fail("requires an existing parameterized module companion")
         if parameterized:
@@ -169,7 +224,10 @@ def checked_call_inventory(member):
             "resource_slots": slots,
         }
         nodes[name] = node
-        if not parameterized:
+        if inherited is not None:
+            node["inherited_namespace"] = inherited
+            visit(current.parent)
+        elif not parameterized:
             canonical = {}
             for _root, (binding, slot) in current.resources.items():
                 original = current.canonical(binding).root
@@ -203,8 +261,11 @@ def checked_call_inventory(member):
                 caller = owner.members.get(site["caller"])
                 if caller is None:
                     _fail("lost an original caller")
-                if caller.resource_slot_namespace is not None and caller.resource_slot_namespace is not caller:
-                    _fail("requires an exact original caller namespace")
+                if caller.resource_slot_namespace is not None:
+                    if caller.resource_slot_namespace is not caller:
+                        lexical_namespace(caller)
+                    elif original_type(caller) is not ModuleOwner:
+                        _fail("requires an original parameterized caller namespace")
                 span = site["first_line"], site["last_line"]
                 retained = tuple(getattr(caller, "source_companion_calls", ()))
                 if any(original_type(receipt) is not CheckedBorrowedCall for receipt in retained):
@@ -246,7 +307,7 @@ def checked_call_inventory(member):
                         ):
                             _fail("changed its emitted handle or storage identity forwarding")
                     storage[str(local)] = {
-                        "kind": "forwarded_slot" if caller.resource_slot_namespace is caller else "owner_registration",
+                        "kind": "forwarded_slot" if caller.resource_slot_namespace is not None else "owner_registration",
                         "slot": actual,
                     }
                 changed |= actuals != expected
@@ -304,7 +365,7 @@ def call_projection(member, task):
                 _fail("changed a source field type or rank")
             actions[root] = actions.get(root, False) or written
     record = {
-        "version": 1,
+        "version": 2 if any("inherited_namespace" in node for node in nodes.values()) else 1,
         "kind": "original_source_task_companion_projection",
         "owner": owner.routine.qualified,
         "procedure": member.routine.qualified,

@@ -101,6 +101,70 @@ class _ScalarComponentActual:
 
 
 @dataclass(frozen=True)
+class CheckedLexicalCall:
+    """The original argumentless lexical CALL, with no synthetic association."""
+    parent: object
+    callee: object
+    node: object
+    resolved: object
+    record: object
+    patch: object
+    _issuer: object = field(repr=False, compare=False)
+
+    def validate(self, member):
+        from compiler.frontend.immutable_graph import original_type
+        from compiler.scopes.lexical import LexicalOwner
+
+        child, analysis = self.callee, member.builder.analysis
+        span = statement_span(self.node)
+        if (self._issuer is not _ISSUER or member is not self.parent
+                or original_type(self) is not CheckedLexicalCall
+                or member._issued_lexical_calls.get(id(self.node)) is not self
+                or not any(receipt is self for receipt in member.source_lexical_calls)
+                or child.parent is not member or child.owner is not member.owner
+                or original_type(child) is not LexicalOwner
+                or member.owner.members.get(child.routine.qualified) is not child
+                or analysis.routines.get(child.routine.qualified) is not child.routine
+                or child.routine.scope.parent is not member.routine.scope
+                or child.routine.source_kind != "internal" or child.routine.arguments
+                or child.resources is not member.resources
+                or child.canonical_bindings is not member.canonical_bindings
+                or child.resource_slot_namespace is not member.resource_slot_namespace
+                or not any(row is self.record for row in member.internal_calls)
+                or member.builder.resolved_calls.get((member.routine.qualified, span)) != self.record
+                or not any(first == span[0] and last == span[1] and patch is self.patch
+                           for first, last, patch in member.patches)):
+            raise CompilationError("lexical CALL lost its exact original source and namespace receipt")
+        scope = analysis.source_scope_for(self.node, member.routine.scope)
+        current = resolve_source_call(analysis, scope, self.node)
+        graph, selected = analysis._selected_source(member.routine.qualified, (self.node,))
+        expected = {**current.public(), "caller": member.routine.qualified,
+                    "source": str(member.routine.scope.path), "first_line": span[0], "last_line": span[1],
+                    "execution": "original internal procedure; host-associated owner control"}
+        if (scope is not member.routine.scope or graph is not member.graph or not selected
+                or current.procedure != child.routine.qualified or current.actuals
+                or current.public() != self.resolved.public() or self.record != expected):
+            raise CompilationError("lexical CALL changed its original source selection or association")
+        return self
+
+    def public(self):
+        self.validate(self.parent)
+        graph, selected = self.parent.builder.analysis._selected_source(
+            self.parent.routine.qualified, (self.node,))
+        return {"source_call": dict(self.record), "caller_graph": graph.identity,
+                "selected_node_ids": list(selected)}
+
+
+def retain_lexical_call(member, node, child, resolved, record, patch):
+    receipt = CheckedLexicalCall(member, child, node, resolved, record, patch, _ISSUER)
+    if id(node) in member._issued_lexical_calls:
+        raise CompilationError("lexical CALL duplicates its original source receipt")
+    member.source_lexical_calls.append(receipt)
+    member._issued_lexical_calls[id(node)] = receipt
+    return receipt.validate(member)
+
+
+@dataclass(frozen=True)
 class CheckedBorrowedCall:
     node: object
     callee: object
@@ -676,6 +740,12 @@ def _coverage(member):
                  **({"loop_entry": dict(patch.counted_entry.authority)} if patch.counted_entry is not None else {}),
                  **({"call_preservation": patch.lifecycle.public()}
                     if type(patch.lifecycle) is SameFamilyNativeCallLifecycle else {}))
+    for call in member.source_lexical_calls:
+        call.validate(member)
+        namespace = call.callee.resource_slot_namespace
+        mark((call.node,), "checked_lexical_child", procedure=call.callee.routine.qualified,
+             source_call=dict(call.record),
+             namespace_owner=None if namespace is None else namespace.routine.qualified)
     for call in member.return_calls:
         call.validate(member)
         forward = dict(call.handle_bindings)
@@ -730,7 +800,9 @@ def _record(owner):
     preservation = any(type(patch.lifecycle) is SameFamilyNativeCallLifecycle
                        for member in owner.members.values() for _first,_last,patch in member.patches
                        if hasattr(patch,"lifecycle"))
-    return {"version": 3 if preservation else 2 if selected_root is not None else 1,
+    lexical = any(member.source_lexical_calls for member in owner.members.values())
+    return {"version": 4 if lexical else 3 if preservation else 2 if selected_root is not None else 1,
+            **({"lexical_child_policy_version": 1} if lexical else {}),
             **({"native_call_preservation_policy_version": 2} if preservation else {}),
             "kind": "checked_conditional_return", "entry": owner.routine.qualified,
             "source_inputs": owner.builder.analysis.inputs.identity(),

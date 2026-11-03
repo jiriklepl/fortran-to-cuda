@@ -192,6 +192,7 @@ def _registered_authorities(owner, owned_types):
     from compiler.scopes.conditional_return import _ISSUER as return_issuer
     from compiler.scopes.conditional_return import (
         CheckedBorrowedCall,
+        CheckedLexicalCall,
         ConditionalReturnProof,
         ConditionalUnitDescriptorProof,
         SameFamilyNativeCallLifecycle,
@@ -293,6 +294,11 @@ def _registered_authorities(owner, owned_types):
     from compiler.frontend.immutable_graph import original_type
 
     for member in owner.members.values():
+        for receipt in member.source_lexical_calls:
+            if original_type(receipt) is not CheckedLexicalCall:
+                raise CompilationError("execution plan requires its exact checked lexical CALL receipt")
+            receipt.validate(member)
+            authorities[id(return_issuer)] = return_issuer
         for receipt in getattr(member, "source_companion_calls", ()):
             if original_type(receipt) is not CheckedBorrowedCall:
                 raise CompilationError("execution plan requires its exact checked source CALL receipt")
