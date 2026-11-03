@@ -306,7 +306,20 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
         builder, routine = self.builder, self.routine
         edits = []
         header = _part(routine.scope.node, "Subroutine_Stmt")
-        first = statement_span(self.nodes[0])[0]
+        if self.nodes:
+            first = statement_span(self.nodes[0])[0]
+        else:
+            from compiler.scopes.closed_selection import ClosedIntervalOwner, _require_original_empty_body
+
+            _require_original_empty_body(builder.analysis, routine)
+            ClosedIntervalOwner._validate_edit_boundaries(builder, (header,), routine=routine)
+            internal = _part(routine.scope.node, "Internal_Subprogram_Part")
+            anchor = (_part(internal, "Contains_Stmt") if internal is not None
+                      else _part(routine.scope.node, "End_Subroutine_Stmt"))
+            if anchor is None:
+                raise CompilationError("empty original companion requires its original closing or CONTAINS statement")
+            ClosedIntervalOwner._validate_edit_boundaries(builder, (anchor,), routine=routine)
+            first = statement_span(anchor)[0]
         start = _span(header)[1]+1
         kind_import = f"use iso_c_binding, only: {self.kind} => c_int64_t"
         from compiler.scopes.device_tasks import child_control

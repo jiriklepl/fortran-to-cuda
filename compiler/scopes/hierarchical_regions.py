@@ -15,7 +15,7 @@ from fparser.two.utils import walk
 
 from compiler.frontend.source_effects import _children, _kind
 from compiler.ir import CompilationError
-from compiler.scopes.closed_selection import ClosedIntervalOwner, OriginalSelectionOwner
+from compiler.scopes.closed_selection import ClosedIntervalOwner, OriginalSelectionOwner, _require_original_empty_body
 from compiler.scopes.graph import GraphOwner
 from compiler.scopes.segments import statement_span
 from compiler.scopes.source import _name
@@ -111,6 +111,11 @@ class HierarchicalRegionOwner(GraphOwner, OriginalSelectionOwner):
         self.hierarchical_selection.validate(self)
         for member in self.members.values():
             originals = self.closed_selection if member is self else tuple(_children(member.routine.execution))
+            if member is not self and not originals:
+                _require_original_empty_body(member.builder.analysis, member.routine)
+                # The authenticated original has no executable source interval.
+                # Its entry, CALL, return and graph checks still run below.
+                continue
             ClosedIntervalOwner._validate_edit_boundaries(self.builder, originals, routine=member.routine)
         return GraphOwner.validate_plan(self, nodes)
 

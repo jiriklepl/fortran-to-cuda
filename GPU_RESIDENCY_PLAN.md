@@ -217,6 +217,42 @@ as genuinely empty, with six read-only array formals. The empty-body repair
 remains a subsequent private increment. Current-runtime application correctness,
 performance comparisons and the 10%, 2× and 20× checkpoints remain unqualified.
 
+The empty-callee increment is now applied. A child without executable statements
+must match the captured original empty body before its nonexistent executable
+interval is skipped. Empty executable selections still reject. Generated ENTRY
+controls use the original `CONTAINS` or `END SUBROUTINE` as their insertion
+anchor; header and anchor checks reject shared physical source lines. Original
+entry, specification, CALL, return and lifetime checks remain required. An audit
+of the exact configured ELMM sources passes the selected root and all 51 child
+edit-boundary checks, including the genuine six-input empty helper.
+
+Ordinary numerical descendants now propagate implicit managed uses through the
+same fully checked returned-CALL relation. All source, descriptor, slot and
+canonical associations are checked before use obligations are discharged.
+Unused actuals, unrelated siblings and cyclic or disconnected relations grant
+no use. Duplicate ordinary-use seeding in the typed projection helper is removed;
+typed field-slot and varying-association transport remains. This adds no runtime,
+ABI, manifest schema, capture or initialization authority.
+
+The [fresh complete compiler selection 09](/tmp/fortran-maintained-current807-c3-native-full-09/execution/compiler/completion.json)
+passes all 12,760 selected cases with zero failures, errors, skips or retries.
+It retains all 12,737 previous cases and adds 23. All 1,518 source and 118 external
+guards hold, and every owned process exits. The
+[fresh paired selection](/tmp/fortran-empty-member-edit-boundary-fix-01/qualification-reader-final.json)
+has 4,502 passes and the exact 29 declared optional skips, with complete coverage
+of all 4,531 selected nodes. Both pytest and its controller succeed. The 1,300
+marked compiler CUDA cases remain outside its selection; six new
+[CUDA cases and two native controls](/tmp/fortran-empty-member-gpu-01/qualification.json)
+pass separately on the same frozen source. Direct and nested empty helpers match
+full native fields, bounds and defined scalar values, retain producer/consumer
+domains with zero intermediate copies, and preserve cold, zero-trip and hidden
+execution. Runtime `807bdd62…` and profile `47031362…` remain unchanged.
+
+[Parent attempt 24](/tmp/fortran-parent-graph-current-24/plan.json) is running on
+this frozen candidate with the same source inputs, selected interval and budgets.
+No accepted parent package, current-runtime application qualification or new
+performance result is claimed from these compiler and component gates.
+
 The following entries preserve earlier checkpoints and their limitations.
 
 The [repeated-registration label fix](benchmarks/reports/gpu-residency-implementation-20261023/repeated-registration-labels-20261102/README.md)

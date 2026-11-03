@@ -23,6 +23,17 @@ from compiler.scopes.segments import fortran_lines, statement_span
 from compiler.scopes.source import _name
 
 
+def _require_original_empty_body(analysis, routine):
+    """Only a captured original absent execution part has no edit interval."""
+    session = getattr(analysis, "_source_session", None)
+    if (analysis._require_original(routine.qualified) is not routine
+            or routine.execution is not None or session is None):
+        raise CompilationError("empty child requires its exact original execution body")
+    membership = session.execution_nodes(analysis, routine)
+    if set(membership) != {id(None)} or membership[id(None)] is not None:
+        raise CompilationError("empty child changed its captured original execution body")
+
+
 class ClosedSelectionBoundary:
     """A scan fence only; its original group is never replaced by this object."""
 
@@ -368,6 +379,8 @@ class ClosedIntervalOwner(OriginalSelectionOwner):
         from compiler.frontend.native_group_structure import NATIVE_GROUP_SCAN_LIMIT
 
         routine = builder.entry if routine is None else routine
+        if not originals:
+            raise CompilationError("original interval requires a nonempty original source selection")
         selected = {id(node) for original in originals for node in walk(original)}
         first, last = statement_span(originals[0])[0], statement_span(originals[-1])[1]
         statements = {}
