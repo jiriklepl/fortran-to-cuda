@@ -248,10 +248,19 @@ full native fields, bounds and defined scalar values, retain producer/consumer
 domains with zero intermediate copies, and preserve cold, zero-trip and hidden
 execution. Runtime `807bdd62…` and profile `47031362…` remain unchanged.
 
-[Parent attempt 24](/tmp/fortran-parent-graph-current-24/plan.json) is running on
-this frozen candidate with the same source inputs, selected interval and budgets.
-No accepted parent package, current-runtime application qualification or new
-performance result is claimed from these compiler and component gates.
+[Parent attempt 24](/tmp/fortran-parent-graph-current-24/result.json) reaches its
+40-minute target deadline during numerical-unit emission. All 1,518 source and
+1,867 input guards hold; no package, fallback search or application is accepted.
+The timeout stack shows a storage-membership query taking the full validation
+path through the epoch, returned CALL coverage and native source receipts.
+That stack identifies a cost to investigate; it does not attribute the entire
+interval to that operation. A small reproduction has `position_epoch=None`;
+the existing admission fast path excludes its hierarchical owner and returned
+contract. Extending that eligibility requires complete attachment and policy
+fences. A separate bounded late
+compiler profile preserves the failed attempt and grants no compiler verdict or
+artifact acceptance. Current-runtime application correctness and performance
+remain unqualified.
 
 The following entries preserve earlier checkpoints and their limitations.
 
