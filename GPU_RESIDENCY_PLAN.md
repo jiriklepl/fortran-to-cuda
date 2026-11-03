@@ -262,6 +262,40 @@ compiler profile preserves the failed attempt and grants no compiler verdict or
 artifact acceptance. Current-runtime application correctness and performance
 remain unqualified.
 
+The [bounded late profile](/tmp/fortran-parent24-compiler-late-profile-01/qualification.json)
+captures 149.91 seconds with all 3,396 inputs unchanged. Intrinsic-source
+attachment checks account for 42.99 exclusive seconds in that window. The
+observed epoch and returned-CALL validation spans overlap; the profile supplies
+neither a compiler verdict nor an application timing result.
+
+The hierarchical admission extension is now applied through the existing
+`StorageAdmission` mechanism. Exact sealed selected-return hierarchical owners
+retain the original full validators at entry and normal exit. Cached membership
+requires unchanged selected-root, draft, graph, descriptor-consumer, source CALL,
+handoff and native-preservation attachments. Other unsupported lifetime families
+keep full checks. Retained traversal stops at source-service boundaries while
+source-session, dependency, policy and live-input checks remain active.
+
+All 117 focused cases pass. Five cases emit byte-identical complete output
+dictionaries, including manifests, proof identities and telemetry, with caching
+enabled or disabled; four late atomic-task mutations reject. These comparisons
+use normal generation transactions on the same parsed source authority without
+stripping fields. Scoped fixtures perform two full storage validations, and
+retained payload grows with the selected graph. Actual ELMM compilation speedup
+is not established by those fixture counts.
+
+The [fresh maintained qualification](/tmp/fortran-hierarchical-storage-admission-final-maintained-qualification-01/qualification.json)
+passes all 12,822 selected compiler cases with zero failures, errors, skips or
+retries, and all 4,502 paired cases with the exact 29 declared optional skips.
+All 1,520 source guards and the respective 134/188 external guards hold; all
+owned processes exit. The 1,300 marked compiler CUDA cases remain outside the
+selection. Existing runtime `807bdd62…` GPU field/copy controls are reused through
+the emitted-code equivalence evidence; no new residency GPU fixture run is
+claimed. Runtime, ABI, public schemas and profile `47031362…` are unchanged.
+[Parent attempt 25](/tmp/fortran-parent-graph-current-25/plan.json) is running with
+the original inputs, selected SGS→Convection interval and compiler budgets.
+Application correctness and the 10%, 2× and 20× performance gates remain open.
+
 The following entries preserve earlier checkpoints and their limitations.
 
 The [repeated-registration label fix](benchmarks/reports/gpu-residency-implementation-20261023/repeated-registration-labels-20261102/README.md)

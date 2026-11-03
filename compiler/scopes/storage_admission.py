@@ -10,6 +10,7 @@ import json
 from contextlib import nullcontext
 from contextvars import ContextVar
 from dataclasses import fields, is_dataclass
+from types import MappingProxyType
 
 from compiler.frontend.immutable_graph import FrozenDict, FrozenList
 from compiler.ir import CompilationError
@@ -44,6 +45,14 @@ def _mapping(value):
     return _Identity(value), tuple((key, _Identity(item)) for key, item in value.items())
 
 
+def _retained_state(value):
+    if is_dataclass(value):
+        return _attachments(value)
+    if isinstance(value, (dict, FrozenDict, MappingProxyType)):
+        return _mapping(value)
+    return tuple(_Identity(item) for item in value)
+
+
 def _binding(binding):
     scope = binding.declaring_scope
     return (_Identity(binding), binding.root, binding.name, _Identity(scope),
@@ -53,24 +62,31 @@ def _binding(binding):
 
 
 def _optional_attachments(value):
-    return () if value is None else _attachments(value)
+    if value is None:
+        return ()
+    if not is_dataclass(value):
+        raise CompilationError("storage admission lost a retained proof attachment")
+    return _attachments(value)
 
 
-def _unit_storage_roles(unit):
+def _scope_storage_roles(scope):
     from compiler.scopes.native_opaque_accesses import access_state
 
-    scope = unit.scope
     native = tuple((_Identity(operation), _attachments(operation),
                     _mapping(operation.native_opaque_accesses), tuple((_attachments(access), access_state(access, operation))
                           for access in operation.native_opaque_accesses.values()), _mapping(operation.host_metadata))
                    for operation in scope.native)
-    return (_Identity(unit.host_metadata),
-            unit.source_guard, unit.native_source, unit.publication_only,
-            None if unit.host_metadata is None else _mapping(unit.host_metadata),
-            _Identity(scope.native), native, _Identity(scope.nodes),
+    return (_Identity(scope.native), native, _Identity(scope.nodes),
             tuple(_Identity(node) for node in scope.nodes), _Identity(scope.tree),
             tuple(_Identity(item) for item in scope.tree),
             _mapping(scope.guarded), _mapping(scope.close_guards))
+
+
+def _unit_storage_roles(unit):
+    return (_Identity(unit.host_metadata),
+            unit.source_guard, unit.native_source, unit.publication_only,
+            None if unit.host_metadata is None else _mapping(unit.host_metadata),
+            _scope_storage_roles(unit.scope))
 
 
 def _storage_topology(member):
@@ -79,7 +95,8 @@ def _storage_topology(member):
             "original_scalar_element_reservations", "scalar_element_resources",
             "resource_slot_roots", "parameterized_native_bindings", "_issued_lexical_calls")
     sequences = ("units", "patches", "internal_calls", "call_sites", "counted_controls",
-                 "return_calls", "return_conditions", "closed_suffixes", "source_lexical_calls")
+                 "return_calls", "return_conditions", "closed_suffixes", "source_lexical_calls",
+                 "source_companion_calls", "graph_native_tasks")
     controls = ("context", "enabled", "epoch_pristine", "query_plan", "control_guard",
                 "retention_allowed", "eligibility_allowed", "resource_slot_namespace")
     return (tuple((name, None if getattr(member, name, None) is None else
@@ -87,7 +104,32 @@ def _storage_topology(member):
             tuple((name, _Identity(getattr(member, name, None)),
                    tuple(_Identity(item) for item in getattr(member, name, ()))) for name in sequences),
             tuple((name, _Identity(getattr(member, name, None))) for name in controls),
-            _encoded([receipt.record for receipt in member.source_lexical_calls]))
+            _encoded([receipt.record for receipt in member.source_lexical_calls]),
+            _encoded([getattr(member, name, ()) for name in ("internal_calls", "call_sites", "counted_controls")]),
+            tuple((_Identity(nodes), tuple(_Identity(node) for node in nodes),
+                   _Identity(scope), _scope_storage_roles(scope)) for nodes, scope in member.graph_native_tasks))
+
+
+def _returned_topology(owner):
+    """Retain selected-return ownership without reissuing its source proofs."""
+    draft = getattr(owner.builder, "_conditional_return_draft", None)
+    selection = getattr(owner, "hierarchical_selection", None)
+    returned = getattr(owner, "return_contract", None)
+    sequences = ("closed_selection", "closed_prefix", "closed_controls", "closed_initializations")
+    context = getattr(owner, "selection_context", None)
+    return (_Identity(returned), _optional_attachments(returned),
+            _Identity(selection), _optional_attachments(selection),
+            _Identity(draft), None if draft is None else (
+                tuple((name, _Identity(getattr(draft, name))) for name in
+                      ("owner", "_issuer", "selected_root", "_selected_root_receipt")),
+                _Identity(draft._consumers),
+                tuple((_Identity(row), tuple(_Identity(item) for item in row)) for row in draft._consumers),
+                _mapping(draft._native_preservations)),
+            tuple((name, _Identity(getattr(owner, name, None)),
+                   tuple(_Identity(item) for item in getattr(owner, name, ()))) for name in sequences),
+            _Identity(getattr(owner, "selection_bundle", None)),
+            _Identity(context), None if context is None else _encoded(context),
+            _Identity(owner.emission.selection_prefix))
 
 
 class StorageAdmission:
@@ -147,8 +189,7 @@ class StorageAdmission:
                 _mapping(owner.members), _mapping(owner.resources), _Identity(epoch),
                 _optional_attachments(epoch), tuple(members), tuple(facts), tuple(policies),
                 tuple(_binding(binding) for binding in bindings.values()),
-                _Identity(getattr(owner, "return_contract", None)),
-                _Identity(getattr(owner.builder, "_conditional_return_draft", None)))
+                _returned_topology(owner))
 
     def _authorities(self):
         """Snapshot retained proof attachments without calling their validators."""
@@ -156,13 +197,29 @@ class StorageAdmission:
 
         from compiler.frontend.source_effects import SourceEffects
         from compiler.frontend.source_facts import SourceFact
+        from compiler.frontend.source_session import SourceSession
         from compiler.scopes.lexical import LexicalOwner, OwnerEmission
         from compiler.scopes.source import ScopeBuilder
 
         sessions = {id(analysis._source_session): analysis._source_session
                     for _builder, analysis, _routine, _configuration, _facts in self._plan._contexts}
-        pending = [getattr(self._owner, "position_epoch", None), *self._plan._procedures]
-        pending.extend(receipt for member in self._plan.members for receipt in member.source_lexical_calls)
+        pending = [getattr(self._owner, "position_epoch", None),
+                   getattr(self._owner, "return_contract", None),
+                   getattr(self._owner, "hierarchical_selection", None),
+                   self._owner.emission.selection_prefix,
+                   *self._plan._procedures, *self._plan._numerical_authorities,
+                   *self._plan._proof_handoffs, *self._plan._selection_prefixes]
+        draft = getattr(self._owner.builder, "_conditional_return_draft", None)
+        if draft is not None:
+            pending.extend(draft._native_preservations.values())
+        pending.extend(member.graph for member in self._plan.members)
+        pending.extend(receipt for member in self._plan.members for name in
+                       ("source_lexical_calls", "source_companion_calls", "return_calls", "return_conditions")
+                       for receipt in getattr(member, name, ()))
+        scopes = [unit.scope for member in self._plan.members for unit in self._plan.units(member)]
+        scopes.extend(scope for member in self._plan.members for _nodes, scope in member.graph_native_tasks)
+        pending.extend(getattr(scope, name) for scope in scopes for name in
+                       ("native", "calls", "tree", "guarded", "close_guards"))
         pending.extend(access for member in self._plan.members for unit in self._plan.units(member)
                        for operation in unit.scope.native for access in operation.native_opaque_accesses.values())
         pending.extend(task for member in self._plan.members for task in (*member.device_tasks, *member.source_device_tasks))
@@ -185,13 +242,15 @@ class StorageAdmission:
                                 if container.get(key) is value:
                                     registry.append((analysis, name, container, key))
                 retained.append((value, _attachments(value), tuple(registry)))
-                # Existing arena dependencies check context/branch ownership;
-                # its registry is not another owned execution graph to walk.
-                if type(value) is not SourceFact:
+                # Source services and arena dependencies retain their own
+                # ownership checks; their indexes are not execution payload.
+                if type(value) not in {SourceFact, SourceSession}:
                     pending.extend(getattr(value, part.name) for part in fields(value))
-            elif isinstance(value, (dict, FrozenDict)):
+            elif isinstance(value, (dict, FrozenDict, MappingProxyType)):
+                retained.append((value, _retained_state(value), ()))
                 pending.extend(value.values())
             elif isinstance(value, (tuple, list, FrozenList, frozenset, set)):
+                retained.append((value, _retained_state(value), ()))
                 pending.extend(value)
         return tuple(retained)
 
@@ -199,6 +258,7 @@ class StorageAdmission:
         """Callback-free identities of the consumed registrations and handles."""
         from compiler.frontend.proof_arena import DerivationArena
         from compiler.frontend.source_facts import _ABSENT
+        from compiler.scopes.conditional_return import ConditionalUnitDescriptorProof
 
         result = []
         for dependency in self._dependencies:
@@ -229,11 +289,21 @@ class StorageAdmission:
                 _Identity(getattr(token, "identity", _ABSENT)),
                 _Identity(getattr(token, "_source_fact", None)),
                 _optional_attachments(fact), tuple(handles)))
+        for proof, _attached, _registries in self._retained:
+            if type(proof) is ConditionalUnitDescriptorProof:
+                registry = getattr(proof._analysis, "_conditional_descriptor_consumers", None)
+                result.append((_Identity(proof), _Identity(registry),
+                               _Identity(dict.get(registry, proof.identity) if type(registry) is dict else None)))
+        for handoff in self._plan._proof_handoffs:
+            registry = getattr(handoff.analysis, handoff.registry, None)
+            result.append((_Identity(handoff), _Identity(registry),
+                           _Identity(dict.get(registry, handoff.key) if type(registry) is dict else None),
+                           _Identity(handoff.analysis._source_session)))
         return tuple(result)
 
     def _check_retained(self):
         for proof, attached, registries in self._retained:
-            if _attachments(proof) != attached or any(
+            if _retained_state(proof) != attached or any(
                     getattr(analysis, name, None) is not registry or dict.get(registry, key) is not proof
                     for analysis, name, registry, key in registries):
                 raise CompilationError("storage admission lost a retained exact proof attachment")
@@ -370,6 +440,7 @@ def _supported(plan):
     from compiler.scopes.execution_plan import CheckedExecutionPlan
     from compiler.scopes.graph import GraphOwner
     from compiler.scopes.graph_epochs import CallGroupStorageEpoch
+    from compiler.scopes.hierarchical_regions import HierarchicalRegionOwner, SelectedRoot
     from compiler.scopes.lexical import LexicalOwner
 
     if type(plan) is not CheckedExecutionPlan:
@@ -382,19 +453,29 @@ def _supported(plan):
         return False
     if type(epoch) is CallGroupStorageEpoch:
         return epoch._managed is not None
-    if epoch is not None or original_type(owner) not in {LexicalOwner, GraphOwner}:
+    if epoch is not None:
         return False
-    # The invocation lifetime is already issued. Other return/selection/interval
-    # families need their own exact checkpoint and retain ordinary full checks.
-    if (getattr(owner, "return_contract", None) is not None
-            or getattr(owner.builder, "_conditional_return_draft", None) is not None
-            or owner.interval_draft is not None or getattr(owner, "local_exit", None) is not None
+    if (owner.interval_draft is not None or getattr(owner, "local_exit", None) is not None
             or getattr(owner.builder, "_native_ancestor_selection", None) is not None
             or getattr(owner, "supported_path_mode", False)):
         return False
     record = json.loads(plan.storage_epoch()._record)
-    return not any(name in record for name in ("return_contract", "selected_position_epoch",
-        "supported_path_epoch", "private_allocation_obligations", "original_worksharing_storage_obligations"))
+    if any(name in record for name in ("selected_position_epoch",
+            "supported_path_epoch", "private_allocation_obligations", "original_worksharing_storage_obligations")):
+        return False
+    returned = getattr(owner, "return_contract", None)
+    draft = getattr(owner.builder, "_conditional_return_draft", None)
+    if original_type(owner) is HierarchicalRegionOwner:
+        from compiler.scopes.conditional_return import ConditionalReturnDraft, ConditionalReturnProof
+
+        selection = getattr(owner, "hierarchical_selection", None)
+        return (type(returned) is ConditionalReturnProof and returned._owner is owner
+                and type(draft) is ConditionalReturnDraft and draft.owner is owner
+                and type(selection) is SelectedRoot and selection._owner is owner
+                and draft.selected_root is selection and draft._selected_root_receipt is selection
+                and "return_contract" in record)
+    return (original_type(owner) in {LexicalOwner, GraphOwner} and returned is None and draft is None
+            and "return_contract" not in record)
 
 
 def emission_admission(plan):
