@@ -30,8 +30,8 @@ from compiler.frontend.source_objects import _members, _TypeBuilder
 from compiler.ir import CompilationError
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
-VERSION = 13
-HOST_CONTROL_VERSION = 4
+VERSION = 14
+HOST_CONTROL_VERSION = 5
 JOINED_SOURCE_BUDGET_VERSION = 1
 
 
@@ -670,7 +670,6 @@ class NativeEffectGraph:
                                          "ordinary_statements": templates * self._limits[2],
                                          "source_nodes": templates * self._limits[3]},
                            "joined_source_budget_policy_version": self._limits[6],
-                           "call_instances": self._limits[2],
                            "substitution_and_obligation_steps": self._limits[3],
                            "source_policy_version": self._limits[4]},
                 "workload_key_authority": False, "execution_authority": False,
@@ -1806,6 +1805,7 @@ class _Instantiate:
         self.project_payload = project_payload
         self.templates, self.instances, self.active = {}, [], []
         self.accesses, self.barriers, self.calls, self.completion = [], [], [], []
+        self.storage_actions = {}
         self.routines, self.scopes, self.schemas = {}, {}, {}
         self.source_visits = self.source_operations = self.steps = 0
         self.deferred_completion, self.terminal_calls = [], []
@@ -1875,8 +1875,19 @@ class _Instantiate:
         if storage.attributes & {"pointer", "volatile", "asynchronous", "optional"}:
             self.barrier(ReachabilityBarrier("association", item.procedure, item.source,
                          "pointer, optional or asynchronous storage needs separate authority"))
-        self.accesses.append(ResourceAccess(storage, item.kind, item.procedure, item.source,
-                                            item.external, item.original))
+        self.record_access(ResourceAccess(storage, item.kind, item.procedure, item.source,
+                                           item.external, item.original))
+
+    def record_access(self, item):
+        # Keep every ordered occurrence for effects and diagnostics. Alias
+        # obligations depend only on exact original storage and the union of
+        # its actions; repeated helper calls must not repeat that cross product.
+        # The enclosing node/substitution already charges the work budget.
+        self.accesses.append(item)
+        if item.external and item.kind in {"read", "write", "association", "undefine"}:
+            key = id(item.storage.binding), tuple(id(field.declaration) for field in item.storage.components)
+            _storage, actions = self.storage_actions.setdefault(key, (item.storage, set()))
+            actions.add(item.kind)
 
     def items(self, items, instance, mapping):
         for item in items:
@@ -1914,8 +1925,6 @@ class _Instantiate:
                     self.items(item.absent if actual[1] is _ABSENT else item.present, instance, mapping)
             elif isinstance(item, NativeTerminatingCall):
                 item.validate(self.analysis)
-                if len(self.instances) - 1 + len(self.terminal_calls) >= self.analysis.operation_limit:
-                    raise ResourceReachabilityBudgetExceeded("resource reachability call instantiation budget exhausted")
                 callee = item.proof._callee
                 self.routines[callee.qualified] = callee
                 if len(self.routines) > self.analysis.procedure_limit:
@@ -1937,7 +1946,7 @@ class _Instantiate:
                                          "optional allocatable/pointer actual needs descriptor-dependent presence authority"))
                     if isinstance(actual, StoragePath) and formal.intent == "out":
                         for action in ("undefine", "write"):
-                            self.accesses.append(ResourceAccess(actual, action, item.edge.caller,
+                            self.record_access(ResourceAccess(actual, action, item.edge.caller,
                                 str(item.edge.original), True, item.edge.original))
                 self.instance(item.edge.callee, child_mapping, parent=instance.ordinal, call=item)
             else:
@@ -1948,10 +1957,9 @@ class _Instantiate:
             raise ResourceReachabilityBudgetExceeded("resource reachability recursive call graph is unavailable")
         if len(self.active) >= self.analysis.depth_limit:
             raise ResourceReachabilityBudgetExceeded("resource reachability call depth budget exhausted")
-        # The root selection is not a source CALL occurrence. Each subsequent
-        # instance retains one exact original edge, even with shared templates.
-        if call is not None and len(self.instances) - 1 + len(self.terminal_calls) >= self.analysis.operation_limit:
-            raise ResourceReachabilityBudgetExceeded("resource reachability call instantiation budget exhausted")
+        # Every call retains its exact original edge. Instantiating its nodes
+        # and substitutions charges tick(); a per-template statement ceiling
+        # must not limit the number of uses of otherwise bounded templates.
         template = self.template(procedure, selection)
         instance = NativeCallInstance(len(self.instances), template, parent, call, tuple(mapping.values()))
         self.instances.append(instance)
@@ -1967,8 +1975,6 @@ class _Instantiate:
             self.host_blockers.append(ReachabilityBarrier("retired_host_completion", procedure, str(call.original) if call else "",
                 "recursive or over-depth executable source closure"))
             return
-        if len(self.host_instances) >= self.analysis.operation_limit:
-            raise ResourceReachabilityBudgetExceeded("executable source call-instance budget exhausted")
         template = self.template(procedure, selection)
         instance = NativeHostInstance(len(self.host_instances), procedure, parent, call, tuple(sorted(bindings.items())))
         self.host_instances.append(instance)
@@ -1988,6 +1994,10 @@ class _Instantiate:
                         target = _host_target(self.analysis, edge.scope, actual, bindings)
                         child[(getattr(callee.scope,"qualified",callee.scope.module), formal)] = target.qualified
                     self.host_instance(callee.qualified, child, parent=instance.ordinal, call=edge)
+                except ResourceReachabilityBudgetExceeded:
+                    # A work-budget failure rejects the complete query. Do
+                    # not issue a graph containing only a prefix of its calls.
+                    raise
                 except CompilationError as error:
                     self.host_blockers.append(ReachabilityBarrier("retired_host_completion", procedure, str(edge.original), str(error)))
         finally:
@@ -2065,10 +2075,11 @@ def prove_resource_reachability(analysis, procedure, original_selection, demande
 
     Demands are exact original Binding objects (including scalar dependencies),
     never names copied from an effect report. All aliases remain obligations.
-    Unique source statements and instantiated CALL occurrences each retain the
-    existing operation bound; source-node and substitution/obligation work each
-    retain the existing scan bound. Cached templates are authenticated and
-    charged on every query. This replaces repeated callee syntax expansion.
+    Each unique source template retains its statement and source-node bounds.
+    Instantiated CALLs share the substitution/obligation work budget, including
+    executable host-call discovery, without a separate work-unit-count limit.
+    Cached templates are authenticated and charged on every query. This
+    replaces repeated callee syntax expansion.
     """
     if not isinstance(original_selection, tuple) or not original_selection:
         raise CompilationError("resource reachability requires an exact nonempty original tuple")
@@ -2087,20 +2098,14 @@ def prove_resource_reachability(analysis, procedure, original_selection, demande
         except CompilationError as error:
             scan.barrier(ReachabilityBarrier("completion", obligation.procedure, str(obligation.originals),
                                            obligation.reason + "; native graph: " + str(error)))
-    obligations = {}
-    for access in scan.accesses:
-        if not access.external or access.kind not in {"read", "write", "association", "undefine"}:
-            continue
+    obligations = []
+    for storage, actions in scan.storage_actions.values():
         for binding in demanded:
             scan.tick()
-            if access.storage.binding is binding:
+            if storage.binding is binding:
                 continue
-            key = id(access.storage.binding), tuple(id(item.declaration) for item in access.storage.components), id(binding)
-            storage, actions = obligations.setdefault(key, (access.storage, set()))
-            actions.add(access.kind)
-    required = tuple(StorageDisjointnessObligation(storage, next(binding for binding in demanded if id(binding) == key[-1]),
-                                                   tuple(sorted(actions)))
-                     for key, (storage, actions) in obligations.items())
+            obligations.append(StorageDisjointnessObligation(storage, binding, tuple(sorted(actions))))
+    required = tuple(obligations)
     work = (*graph.source_work, *graph.instantiation_work,
             ("substitution_and_obligation_steps", scan.steps))
     identity = _digest({"version": VERSION, "procedure": procedure,

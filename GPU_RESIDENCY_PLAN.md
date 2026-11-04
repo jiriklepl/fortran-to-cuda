@@ -179,6 +179,33 @@ placement and its end-to-end profitability still require implementation and
 separate qualification before claiming the production-policy objective.
 There is still no current-runtime application correctness or speedup claim.
 
+The native effect graph now bounds actual instantiation work independently of
+the per-template statement limit. Repeated ordinary, terminal and host-only CALLs
+retain every occurrence; exhausting the work budget rejects the complete query.
+Alias obligations share exact original storage paths and union their actions,
+while the ordered access inventory remains unchanged. Source policy 14 and host
+discovery policy 5 invalidate older analysis receipts; runtime ABI is unchanged.
+The [focused 91-test run](/tmp/fortran-native-call-budget-04.xml) passes, including
+graphs beyond 256 CALLs, late writes and unknown calls, terminal occurrences and
+payload/host work-budget exhaustion. The [affected-consumer campaign](/tmp/fortran-native-call-budget-qualified-01/completion.json)
+passes all 862 tests in one invocation with no skips and all 1,363 compiler and
+paired-source guards held. Its earlier incorrectly configured invocation failed
+28 imports because the paired reader was absent from `PYTHONPATH`; that receipt
+remains recorded. This changes analysis capability, not
+placement or coherence permissions.
+
+The [original ELMM query](/tmp/fortran-parent31-native-demand-02/completion.json)
+now retains all 540 ordinary and 18 terminal calls in `ComputeUVWFluxesWM`, using
+19 templates. Its complete viscosity-demand query uses 56,141 of the unchanged
+65,536 work steps; previously repeated alias comparisons exhausted that budget.
+It still rejects live native admission because joined completion cannot consume
+the confined record pointer's field-write proof. `ComputeViscsWM` has complete
+reachability, but a standalone demand lacks caller-owned separation for its
+velocity dummies. The next change must connect these exact graph and caller
+proofs to native coherence; neither finding permits removing a runtime cut yet.
+These are source-analysis queries without regenerated packages or application
+execution. The preceding short-run failure and all timing gates remain open.
+
 The unused `compiler/debugging` AST example, saved JSON and standalone viewer
 are removed. The example executed a hardcoded developer Windows path at import;
 none of the three files has an executable caller or documentation link. The

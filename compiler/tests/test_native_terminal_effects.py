@@ -1,4 +1,5 @@
 """Issued fatal calls stay observable in native graphs and normal-return joins."""
+from collections import Counter
 from copy import copy
 
 import pytest
@@ -278,6 +279,20 @@ def test_repeated_helper_instances_retain_each_terminal_occurrence(tmp_path):
     assert [item['instance'] for item in terminals] == [1, 2]
     assert terminals[0]['termination'] == terminals[1]['termination']
     assert dict(proof.native_graph.instantiation_work)['call_instances'] == 4
+
+
+def test_terminal_occurrences_share_graph_work_budget_not_statement_limit(tmp_path):
+    source = SOURCE.replace('if(a(i)<0)call fail(ACTUAL)', 'call helper(a(i))\n' * 16).replace(
+        'subroutine fail_message(message)', 'subroutine helper(value)\nreal(8),intent(in)::value\n'
+        + 'if(value<0)call fail(ACTUAL)\n' * 16 + 'end subroutine\nsubroutine fail_message(message)')
+    proof = issue(setup(tmp_path, source=source))
+    assert not proof.barriers
+    graph = proof.native_graph
+    assert dict(graph.instantiation_work)['call_instances'] == 272
+    assert len(graph.terminal_calls) == 256
+    assert Counter(instance for instance, _terminal in graph.terminal_calls) == {
+        instance: 16 for instance in range(1, 17)}
+    assert all(terminal.public()['returns_to_caller'] is False for _instance, terminal in graph.terminal_calls)
 
 
 def test_failed_numeric_terminal_hint_still_scans_original_mutation(tmp_path):
