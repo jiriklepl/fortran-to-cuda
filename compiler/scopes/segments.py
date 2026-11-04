@@ -752,6 +752,7 @@ def native_call_fragment(builder, nodes):
     """
     from compiler.frontend.native_call_effects import prove_native_call_effects
     from compiler.frontend.native_sections import NativeSections
+    from compiler.scopes.native_opaque_accesses import readonly_accesses
 
     originals = tuple(builder.inline.original_selection(nodes))
     if (builder.config.scope_execution != "graph" or len(originals) != 1
@@ -762,7 +763,7 @@ def native_call_fragment(builder, nodes):
         raise CompilationError("complete native CALL requires its original enclosing control region")
     analysis = _native_analysis(builder.analysis)
     proof = prove_native_call_effects(analysis, builder.entry.qualified, originals)
-    bindings, effects, metadata, constants = {}, {}, {}, {}
+    bindings, effects, metadata, constants, readonly = {}, {}, {}, {}, {}
     for binding, role, actions in proof.resources:
         # Reject locally, before accepting an owner unit. A private SAVE
         # object or a hidden callee module object cannot acquire a caller
@@ -777,8 +778,18 @@ def native_call_fragment(builder, nodes):
         elif actions & {"read", "write"}:
             bindings[binding.root] = binding
             effects[binding.root] = set(actions & {"read", "write"})
-            if builder.capture(binding)["initialized"] != "whole":
-                raise CompilationError("complete native CALL requires whole initialized managed storage: " + binding.root)
+            if actions <= {"read", "association", "descriptor"} and _host_read_candidate(builder, binding):
+                # The complete CALL supplies the same original READ evidence
+                # used by inline native operations. Missing GPU capture facts
+                # grant only a host reservation, never a device definition.
+                readonly[binding.root] = metadata[binding.root] = binding
+            else:
+                # This is entry coverage, not the reached domain's current
+                # coverage. Earlier checked tasks may define the array. The
+                # whole-access DefinitionSummary below requires the existing
+                # lexical preflight before host acquisition and original CALL;
+                # rejection publishes the prefix and executes native once.
+                builder.capture(binding)
     graph, selected = analysis._selected_source(builder.entry.qualified, originals)
     summary = {"complete": True, "analysis_identity": graph.authority_identity,
                "structured_identity": graph.identity, "selected_node_ids": list(selected),
@@ -787,12 +798,21 @@ def native_call_fragment(builder, nodes):
                "native_completion": {"available": True, "has_openmp_in_closure": bool(proof.reachability._completion),
                    "reason": "complete original native CALL graph and stable storage",
                    "internal_cuts_authorized": False},
-               "operations": [{"kind": action, "resource": binding.root, "rank": binding.rank}
-                              for binding, _role, actions in proof.resources for action in sorted(actions)]}
-    return Native(originals, effects, set(), bindings, summary, "complete original native CALL",
+               # Association is retained in the full CALL proof. It is not a
+               # payload access; descriptor effects use the ordinary summary
+               # vocabulary consumed by graph and native READ permit issuers.
+               "operations": [{"kind": "descriptor_read" if action == "descriptor" else action,
+                               "resource": binding.root, "rank": binding.rank}
+                              for binding, _role, actions in proof.resources for action in sorted(actions)
+                              if action != "association"]}
+    accesses = readonly_accesses(builder, analysis, originals, summary, readonly) if readonly else {}
+    operation = Native(originals, effects, set(), bindings, summary, "complete original native CALL",
                   sections=NativeSections(False, "complete whole-array native CALL access; no overwrite authority"),
                   span=statement_span(originals[0]), host_metadata=metadata, preserve_original=True,
-                  source_constants=constants, proof_analysis=analysis, call_effects=proof)
+                  source_constants=constants, proof_analysis=analysis, call_effects=proof, native_opaque_accesses=accesses)
+    for access in accesses.values():
+        access.validate(operation)
+    return operation
 
 
 def native_opaque_call_candidates(builder, node, *, analysis=None):

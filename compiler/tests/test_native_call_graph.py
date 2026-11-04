@@ -53,13 +53,14 @@ end module
 """
 
 
-def generate(tmp_path, text=SOURCE, *, initialized="whole"):
+def generate(tmp_path, text=SOURCE, *, initialized="whole", capture_updates=None):
     path = tmp_path / "source.f90"
     path.write_text(text)
     fact = {"storage": "stable", "initialized": initialized, "escapes": False, "allocation_changes": False}
     facts = {"schema_version": 1, "participation": "serial",
              "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {"native_graph::" + name: dict(fact) for name in ("a", "b", "c")}}
+    facts["captures"].update(capture_updates or {})
     builder = ScopeBuilder([path], "native_graph::advance", facts=facts, options=CompilerOptions(),
                            config=OffloadConfig(policy="sections", scope_execution="graph"))
     outputs, report = builder.run()
@@ -88,7 +89,7 @@ def test_complete_original_call_keeps_graph_domain_and_host_reservations(tmp_pat
     assert "is_contiguous(visits" not in changed.lower()
 
 
-@pytest.mark.parametrize("change", ["unknown", "pointer_field", "reallocate", "partial_definitions"])
+@pytest.mark.parametrize("change", ["unknown", "pointer_field", "reallocate"])
 def test_unproved_call_retains_a_boundary_and_original_execution(tmp_path, change):
     text = SOURCE
     initialized = "whole"
@@ -99,8 +100,6 @@ def test_unproved_call_retains_a_boundary_and_original_execution(tmp_path, chang
     elif change == "reallocate":
         text = text.replace("type(record),target::points(-1:2)", "type(record),allocatable,target::points(:)")
         text = text.replace("visits=visits+1", "visits=visits+1\ndeallocate(points)")
-    else:
-        initialized = "none"
     path, _, outputs, report = generate(tmp_path, text, initialized=initialized)
     assert any(scope["boundaries"] for scope in report["scopes"]) or report["boundaries"]
     assert not any(op["kind"] == "complete original native CALL" for scope in report["scopes"]
@@ -131,3 +130,88 @@ def test_call_reservations_remain_inside_original_condition(tmp_path):
     assert reservations
     inside = {id(node) for node in walk(guard)}
     assert all(id(node) in inside for node in reservations)
+
+
+@pytest.mark.parametrize("produced_whole", [False, True])
+def test_call_whole_definition_requirement_is_checked_when_reached(tmp_path, produced_whole):
+    text = SOURCE.replace("call update(points,a)", "call update(points,b)")
+    if not produced_whole:
+        for axis in ("i", "j", "k"):
+            text = text.replace(f"do {axis}=-1,6", f"do {axis}=0,5", 1)
+    fact = {"storage": "stable", "initialized": "none", "escapes": False, "allocation_changes": False}
+    path, builder, outputs, report = generate(tmp_path, text, capture_updates={"native_graph::b": fact})
+    owner, = report["scopes"]
+    assert not owner["boundaries"], owner["boundaries"]
+    unit, = [unit for unit in owner["planning_segments"] if any(
+        op["kind"] == "complete original native CALL" for op in unit["operations"]["native_operations"])]
+    operation, = unit["operations"]["native_operations"]
+    assert operation["resource_effects"] == {"native_graph::b": ["read"]}
+    plan_unit, = [unit for proc in owner["checked_execution_plan"]["procedures"] for unit in proc["units"]
+                  if any(op["kind"] == "complete original native CALL" for op in unit["operations"]["native_operations"])]
+    assert plan_unit["ordered_definitions"]["required_whole"] == ["native_graph::b"]
+    assert not plan_unit["ordered_definitions"]["possible_definition_changes"]
+    assert builder.facts["captures"]["native_graph::b"]["initialized"] == "none"
+    changed = outputs[report["sources"][str(path)]["replacement"]]
+    call = changed.index("call update(points,b)")
+    preflight = changed.rfind("fort_scope_plan_validate(fort_context)", 0, call)
+    acquisition = changed.rfind("fort_scope_access_begin_v1", 0, call)
+    assert 0 <= preflight < acquisition < call
+    assert "FORT_SCOPE_UNINITIALIZED" in changed[:call]
+    assert "fort_native_ready = .true." in changed[preflight:call]
+
+
+def test_unknown_entry_definitions_do_not_create_native_definition_credit(tmp_path):
+    _, builder, _, report = generate(tmp_path, initialized="none")
+    owner, = report["scopes"]
+    assert not owner["boundaries"], owner["boundaries"]
+    assert all(fact["initialized"] == "none" for fact in builder.facts["captures"].values())
+    unit, = [unit for proc in owner["checked_execution_plan"]["procedures"] for unit in proc["units"]
+             if any(op["kind"] == "complete original native CALL" for op in unit["operations"]["native_operations"])]
+    assert unit["ordered_definitions"]["required_whole"] == ["native_graph::a"]
+    assert not unit["ordered_definitions"]["possible_definition_changes"]
+
+
+def mesh_source():
+    return SOURCE.replace("integer::visits=0", "integer::visits=0\nreal(8),allocatable::mesh(:)").replace(
+        "call update(points,a)", "call update(points,a,mesh)").replace(
+        "subroutine update(items,input)", "subroutine update(items,input,coords)\nreal(8),intent(in)::coords(-1:)").replace(
+        "p%flux=input(1,1,1)+i", "p%flux=input(1,1,1)+i+coords(i-2)")
+
+
+def test_complete_call_reserves_readonly_mesh_without_gpu_capture_fact(tmp_path):
+    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+
+    path, builder, outputs, report = generate(tmp_path, mesh_source())
+    owner, = report["scopes"]
+    assert not owner["boundaries"], owner["boundaries"]
+    operation, = [op for unit in owner["planning_segments"] for op in unit["operations"]["native_operations"]
+                   if op["kind"] == "complete original native CALL"]
+    assert operation["managed_resources"] == ["native_graph::a"]
+    access, = operation["native_opaque_accesses"]["accesses"]
+    assert access["resource"] == "native_graph::mesh"
+    assert access["mode"] == "R"
+    assert access["permit_kind"] == "original_readonly"
+    assert access["permit"]["device_capture"] is False
+    assert "native_graph::mesh" not in builder.facts["captures"]
+    assert not any(demand._plan is None for demand in builder._resource_demands.values())
+    assert outputs[report["sources"][str(path)]["replacement"]].count("call update(points,a,mesh)") == 1
+    validate_checked_execution_plans(report, capture_facts=builder.facts)
+
+
+@pytest.mark.parametrize("mutation", ["write", "out", "pointer", "allocation"])
+def test_readonly_mesh_contract_cannot_hide_writes_or_descriptor_changes(tmp_path, mutation):
+    text = mesh_source()
+    if mutation == "write":
+        text = text.replace("intent(in)::coords", "intent(inout)::coords").replace(
+            "visits=visits+1", "coords(-1)=coords(-1)+1\nvisits=visits+1")
+    elif mutation == "out":
+        text = text.replace("intent(in)::coords", "intent(out)::coords")
+    elif mutation == "pointer":
+        text = text.replace("allocatable::mesh", "pointer::mesh")
+    else:
+        text = text.replace("visits=visits+1", "deallocate(mesh)\nvisits=visits+1")
+    path, _, outputs, report = generate(tmp_path, text)
+    assert any(scope["boundaries"] for scope in report["scopes"]) or report["boundaries"]
+    assert not any(op["kind"] == "complete original native CALL" for scope in report["scopes"]
+                   for unit in scope["planning_segments"] for op in unit["operations"]["native_operations"])
+    assert outputs[report["sources"][str(path)]["replacement"]].count("call update(points,a,mesh)") == 1
