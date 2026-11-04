@@ -136,12 +136,43 @@ returns all 276 artifacts at 1,440.008 seconds. This clears the companion
 publication failure. Its original strict reader then rejects unused array
 formals in an original CALL. The attempt remains a failed package qualification,
 with all source/input guards held and both owned process groups exited.
-A private reader correction also addresses original scalar-element coordinate
+A reader correction also addresses original scalar-element coordinate
 contracts, unused host arrays above device rank three, comment gaps in source
 node numbering and local versus canonical names in nested CALLs. The saved
-package passes diagnostic readback with those changes; affected and full paired
-tests are still running before promotion. The package is reused for reader
-qualification without repeating source generation or modifying its artifacts.
+package passes [strict readback](/tmp/fortran-unused-formal-reader-20261104-01/package-qualification.json)
+with those changes: one scope, 276 unchanged artifacts and 82 build sources.
+The [qualified reader delta](/tmp/fortran-unused-formal-reader-20261104-01/qualification.json)
+passes 275 affected compiler tests and the complete paired suite of 4,528 tests
+with exactly the original 29 optional skips. This adds 26 regressions; all
+original tests and skip reasons remain. The first paired attempt omitted
+explicit toolchain settings and had 11 extra skips; it remains a failed
+qualification. The corrected full invocation restores those checks. This is
+the full17 compiler baseline plus a separately tested reader delta, not a new
+whole-compiler run with the changed reader. The compiler refresh is committed
+as `071f753`; the paired reader is committed as `3746361` in `elmm-pipeline`.
+The package is reused without repeating source generation or modifying its
+artifacts. Its [public application build](/tmp/fortran-current807-parent-application-build-02/completion.json)
+and diagnostic relink pass in 200.693 seconds with the original CPU pressure
+solver. No new source generation or runtime change is involved.
+
+The first [two-step channel-simple run](/tmp/fortran-current807-parent-short-08/runs/channel-simple-traced_gpu/report.json)
+passes all 20 fields, bounds, halos and six output files, but the short campaign
+fails its coverage gate. The [saved-trace diagnosis](/tmp/fortran-parent31-runtime-diagnosis-01/diagnosis.json)
+records 90 GPU launches, including six SGS launches and actual Convection work.
+The parent CALL position events are absent: their trace calls precede lazy
+context creation. A further source-group check rejects missing operation and
+implementation identities in catalog submissions. Procedure attribution alone
+does not pass that stricter gate, and the failed receipt remains unchanged.
+
+The same trace establishes a substantive residency gap: none of the 12 domains
+with GPU work contains both SGS and Convection. Reached wall-model boundaries
+retire the SGS domain; viscosity-boundary fallback, native-only wrapper routing
+and diffusion effects cause further cuts. Next, qualify precise native access
+and lifetime handling at these reached boundaries, starting with the original
+`ComputeUVWFluxesWM` internal calls, and reconcile coverage with emitted trace
+semantics. Do not claim shared retention merely because the compiler returned
+one parent scope. The remaining short cases, natural runs and performance
+campaign have not executed for this candidate.
 This emission slice and parent attempt currently use explicit `sections`
 placement. They qualify compilation and residency capability; automatic group
 placement and its end-to-end profitability still require implementation and
