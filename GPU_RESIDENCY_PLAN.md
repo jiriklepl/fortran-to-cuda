@@ -49,12 +49,25 @@ and nine existing full-artifact equivalence checks. It keeps the existing full
 check once after iterable callbacks, followed by exact builtin table and anchor
 validation before callback-free lookup. Entry/exit, source, lifetime, dependency
 and public validators remain unchanged. One-binding and 2,048-binding controls
-both require one full sweep per membership query. [Normal attempt 28](/tmp/fortran-parent-graph-current-28/plan.json)
-is running with unchanged source selection and limits. Its source snapshot
-contains this admission change without the private indexed-section enhancement.
-The fresh maintained campaign above passes, with all 1,525 source files and
-owned process groups independently audited. No compilation-speed or application
-benefit is granted from these correctness checks alone.
+both require one full sweep per membership query. [Normal attempt 28](/tmp/fortran-parent-graph-current-28/result.json)
+also reaches the unchanged 2,400-second target limit. All 1,525 source and 2,019
+input guards hold; the controller and worker group exit without a package,
+application or GPU execution. Its terminal stack is in the sole remaining full
+retained-attachment scan. The admission consolidation is correct but insufficient
+to remove the whole-plan-per-unit scaling problem. The fresh maintained campaign
+above passes, with all source files and process groups independently audited;
+current-runtime application correctness and speedup remain unqualified.
+
+The next private slice uses owned primitive emission inputs, with full semantic
+checks at batch boundaries and unit-local canonical slots during preparation.
+The existing generation transaction retains atomic adoption and rollback.
+Its [first flat gate](/tmp/fortran-owned-emission-image-20261104-01/tests-batch-03-completion.json)
+passes 36 cases with complete output/manifest equality and strict-package checks.
+For 1/7/64 real units, full validation calls are 5/5/5, versus 7/13/70 on the old
+path. Callback poisoning, source/slot/transaction-marker rejection, exact ticket
+consumption and preparation/publication rollback pass. Hierarchical children and
+module companions must pass the same gate before another ELMM attempt. This is
+private compiler work, with no application timing claim.
 
 Fresh historical controls require a matching original-runtime calibration too.
 The first fresh `7a612e4` control used its historical CUDA 13.4 profile and
