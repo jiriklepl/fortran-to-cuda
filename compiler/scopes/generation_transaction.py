@@ -13,10 +13,13 @@ memory entries and counters are committed to the original cache only on adopt.
 
 from __future__ import annotations
 
+import json
 from collections import OrderedDict
+from contextvars import ContextVar
 from copy import copy
 from dataclasses import fields, is_dataclass
 from enum import Enum
+from pathlib import Path
 from types import CellType, FunctionType, MappingProxyType, MethodType, SimpleNamespace
 from weakref import WeakSet
 
@@ -25,7 +28,85 @@ from compiler.frontend.summary_cache import SummaryCache
 from compiler.ir import CompilationError
 
 _ACTIVE_ANALYSES = WeakSet()
+_ACTIVE_GENERATION = ContextVar("owned_emission_generation", default=None)
+_PATH_TYPE = type(Path())
 _OWNED_MODULES = ("compiler.scopes.", "compiler.emission.", "compiler.ir.", "compiler.offload.")
+
+
+def _publication_channels(builder):
+    """Snapshot exact output values, without compiler/provider callbacks."""
+    return _channel_values(builder.edits, builder.outputs, builder.scopes)
+
+
+def _channel_values(edits, outputs, scopes):
+    if type(edits) is not dict or type(outputs) is not dict or type(scopes) is not list:
+        raise CompilationError("owned emission publication changed its output containers")
+    rows = []
+    for path, items in dict.items(edits):
+        if type(path) is not str and type(path) is not _PATH_TYPE:
+            raise CompilationError("owned emission publication changed its source destination")
+        if type(items) is not list:
+            raise CompilationError("owned emission publication changed its source edit list")
+        for edit in items:
+            if (type(edit) is not tuple or len(edit) != 3 or type(edit[0]) is not int
+                    or type(edit[1]) is not int or type(edit[2]) is not str):
+                raise CompilationError("owned emission publication changed a finished source edit")
+            rows.append((str(path), *edit, False))
+    artifacts = tuple(dict.items(outputs))
+    if any(type(name) is not str or type(text) is not str for name, text in artifacts):
+        raise CompilationError("owned emission publication changed a generated artifact")
+    pending, seen = [scopes], set()
+    while pending:
+        value = pending.pop()
+        kind = type(value)
+        if kind is dict or kind is list:
+            if id(value) in seen:
+                continue
+            seen.add(id(value))
+            if kind is dict:
+                for key, child in dict.items(value):
+                    if type(key) is not str:
+                        raise CompilationError("owned emission publication changed a JSON key")
+                    pending.append(child)
+            else:
+                pending.extend(value)
+        elif not (value is None or kind is str or kind is int or kind is bool or kind is float):
+            raise CompilationError("owned emission publication requires exact JSON values")
+    try:
+        records = json.dumps(scopes, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    except (ValueError, RecursionError) as error:
+        raise CompilationError("owned emission publication changed its JSON diagnostics") from error
+    return tuple(rows), artifacts, records
+
+
+def register_owned_emission_publication(builder, guard):
+    """Bind an issued image to its already active generation transaction."""
+    active = _ACTIVE_GENERATION.get()
+    if (type(active) is not GenerationTransaction or not active._active or active._closed
+            or getattr(builder, "_generation_transaction_marker", None) is not active._marker):
+        raise CompilationError("owned emission publication requires its active generation transaction")
+    if id(builder) in active._owned_images:
+        raise CompilationError("owned emission publication was registered more than once")
+    active._owned_images[id(builder)] = builder, guard
+
+
+def _verify_prepared_publication(builder, guard):
+    edits, artifacts, records = _publication_channels(builder)
+    expected_edits, expected_artifacts, expected_scopes = guard
+    if edits != expected_edits or records != b"[" + b",".join(expected_scopes) + b"]":
+        raise CompilationError("owned emission changed its sealed source edits or scope records")
+    current = dict(artifacts)
+    # Every executable artifact was materialized before image issuance.
+    # Only the final manifest metadata may be added or replaced by finish().
+    expected_names = {name for name, _data in expected_artifacts}
+    if set(current) - expected_names - {"scope-manifest.json"}:
+        raise CompilationError("owned emission added an unsealed generated artifact")
+    for name, data in expected_artifacts:
+        if name == "scope-manifest.json":
+            continue
+        if dict.get(current, name) != data.decode("utf-8"):
+            raise CompilationError("owned emission changed a sealed generated artifact")
+    return edits, artifacts, records
 
 
 class _GenerationCopy:
@@ -156,6 +237,8 @@ class GenerationTransaction:
         self._active = False
         self._closed = False
         self._marker = object()
+        self._owned_images = {}
+        self._context_token = None
 
     def _analysis(self, analysis):
         if analysis in self._analyses:
@@ -192,6 +275,7 @@ class GenerationTransaction:
         try:
             self.builder = _GenerationCopy(self._analysis)(self.parent)
             self.builder._generation_transaction_marker = self._marker
+            self._context_token = _ACTIVE_GENERATION.set(self)
         except BaseException:
             self._restore()
             self._active, self._closed = False, True
@@ -216,6 +300,8 @@ class GenerationTransaction:
 
     def _commit(self):
         winner = self._winner
+        owned = tuple(self._owned_images.values())
+        snapshots = tuple(_verify_prepared_publication(builder, guard) for builder, guard in owned)
         winner._check_reached_publication()
         if winner.facts != self._parent_state["facts"]:
             raise CompilationError("generation candidate changed independently admitted source facts")
@@ -223,11 +309,21 @@ class GenerationTransaction:
         winner.validate_selection_activation()
         winner._validate_numerical_regions()
         winner.analysis.verify_source()
+        for (builder, guard), before in zip(owned, snapshots, strict=True):
+            if _verify_prepared_publication(builder, guard) != before:
+                raise CompilationError("owned emission output changed during final publication validation")
+        if tuple(self._owned_images.values()) != owned:
+            raise CompilationError("owned emission images changed during final publication validation")
         # Rebind every nested builder, inline registry and bound closure to the
         # adopted root while retaining their internal alias relationships.
         copier = _GenerationCopy(self._analysis, {id(self.builder): self.parent, id(winner): self.parent})
         state = {name: copier(value) for name, value in vars(winner).items()
                  if name != "_generation_transaction_marker"}
+        for (builder, _guard), before in zip(owned, snapshots, strict=True):
+            if _publication_channels(builder) != before:
+                raise CompilationError("owned emission output changed while preparing atomic adoption")
+            if builder is winner and _channel_values(state["edits"], state["outputs"], state["scopes"]) != before:
+                raise CompilationError("owned emission output changed while copying atomic adoption")
         for analysis, original in self._analyses.items():
             cache, private = original["_summary_cache"], analysis._summary_cache
             with cache._lock:
@@ -249,5 +345,9 @@ class GenerationTransaction:
             self._restore()
             raise
         finally:
+            if self._context_token is not None:
+                _ACTIVE_GENERATION.reset(self._context_token)
+                self._context_token = None
+            self._owned_images.clear()
             self._active, self._closed = False, True
         return False

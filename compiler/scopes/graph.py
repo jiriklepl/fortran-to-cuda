@@ -548,49 +548,59 @@ class GraphOwner(LexicalOwner):
         for name, graph in self.task_graphs.items():
             verify_schedule(graph, self.task_schedules[name])
         accepted = super()._emit_lexical(nodes, checkpoint, native_cleanup=native_cleanup)
-        if accepted:
-            record = self.builder.scopes[-1]
-            external = [task.public(member) for member in self.members.values() for task in member.device_tasks]
-            if external:
-                record["external_device_tasks"] = external
-                record["estimate_available"] = False
-                record["planning_reason"] = "opaque external device provider is explicitly selected and unpriced"
-            motions = _apply_source_schedule(self) if record.get("owner_variant") is not None else []
-            if record.get("owner_variant") is not None:
-                from compiler.scopes.query_regions import emit_query_regions
-                emit_query_regions(self, record, motions)
-            record["graph_execution"] = {
-                "schema_version": 1,
-                "source_order_executor": not motions,
-                "source_motion": motions,
-                "cost_units": "relative scheduling heuristic; no wall-time calibration",
-                "source_windows": False,
-                "resource_lifetime": "coherent epochs within one original invocation, including counted-loop backedges",
-                "unknown_boundary": "publish and close; continue discovery; reopen with zero initialized coverage",
-                "epochs": {"entry_coverage": ("none at selected-position allocation activation"
-                                              if getattr(self, "position_epoch", None) is not None else
-                                              "reviewed entry facts only before the first close"),
-                           "reopened_coverage": "none; exact reached source reads admit only missing required values",
-                           "handle_reuse": "validate current-context membership before descriptor registration"},
-                "procedures": [
-                    {
-                        "procedure": name,
-                        "task_graph": graph.public(),
-                        "schedule": self.task_schedules[name].public(),
-                        "admitted_unit_tasks": dict(self.graph_unit_ids[name]),
-                    }
-                    for name, graph in self.task_graphs.items()
-                ],
-            }
-            if record.get("owner_variant") is not None:
-                expected = {task_id for identities in self.graph_unit_ids.values() for task_id in identities.values()}
-                if getattr(self.emission, "graph_emitted_units", set()) != expected:
-                    raise CompilationError("source emission omitted a checked graph unit")
-                expected_source = {patch.placement.identity for member in self.members.values()
-                                   for patch in member.source_device_tasks if patch.placement is not None}
-                if getattr(self.emission, "graph_emitted_source_tasks", set()) != expected_source:
-                    raise CompilationError("source emission omitted a checked deferred source task")
+        if accepted and not getattr(self.emission, "owned_graph_record_finished", False):
+            self._finish_graph_record()
         return accepted
+
+    def _finish_prepared_graph_record(self):
+        """Resolve graph motions and diagnostics before owned image issuance."""
+        if getattr(self.emission, "owned_graph_record_finished", False):
+            raise CompilationError("owned emission graph record was already prepared")
+        self._finish_graph_record()
+        self.emission.owned_graph_record_finished = True
+
+    def _finish_graph_record(self):
+        record = self.builder.scopes[-1]
+        external = [task.public(member) for member in self.members.values() for task in member.device_tasks]
+        if external:
+            record["external_device_tasks"] = external
+            record["estimate_available"] = False
+            record["planning_reason"] = "opaque external device provider is explicitly selected and unpriced"
+        motions = _apply_source_schedule(self) if record.get("owner_variant") is not None else []
+        if record.get("owner_variant") is not None:
+            from compiler.scopes.query_regions import emit_query_regions
+            emit_query_regions(self, record, motions)
+        record["graph_execution"] = {
+            "schema_version": 1,
+            "source_order_executor": not motions,
+            "source_motion": motions,
+            "cost_units": "relative scheduling heuristic; no wall-time calibration",
+            "source_windows": False,
+            "resource_lifetime": "coherent epochs within one original invocation, including counted-loop backedges",
+            "unknown_boundary": "publish and close; continue discovery; reopen with zero initialized coverage",
+            "epochs": {"entry_coverage": ("none at selected-position allocation activation"
+                                          if getattr(self, "position_epoch", None) is not None else
+                                          "reviewed entry facts only before the first close"),
+                       "reopened_coverage": "none; exact reached source reads admit only missing required values",
+                       "handle_reuse": "validate current-context membership before descriptor registration"},
+            "procedures": [
+                {
+                    "procedure": name,
+                    "task_graph": graph.public(),
+                    "schedule": self.task_schedules[name].public(),
+                    "admitted_unit_tasks": dict(self.graph_unit_ids[name]),
+                }
+                for name, graph in self.task_graphs.items()
+            ],
+        }
+        if record.get("owner_variant") is not None:
+            expected = {task_id for identities in self.graph_unit_ids.values() for task_id in identities.values()}
+            if getattr(self.emission, "graph_emitted_units", set()) != expected:
+                raise CompilationError("source emission omitted a checked graph unit")
+            expected_source = {patch.placement.identity for member in self.members.values()
+                               for patch in member.source_device_tasks if patch.placement is not None}
+            if getattr(self.emission, "graph_emitted_source_tasks", set()) != expected_source:
+                raise CompilationError("source emission omitted a checked deferred source task")
 
 
 def validate_scheduled_unit(member, unit):

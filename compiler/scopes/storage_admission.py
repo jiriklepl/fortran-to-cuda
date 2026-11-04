@@ -135,7 +135,15 @@ def _returned_topology(owner):
 class StorageAdmission:
     """A detached record bounded by fresh full checks, never a reusable cache."""
 
-    def __init__(self, plan):
+    def __init__(self, plan, *, image_preparation=None):
+        if image_preparation is not None:
+            from compiler.scopes.emission_image import EmissionPreparation
+
+            if type(image_preparation) is not EmissionPreparation:
+                raise CompilationError("storage preparation requires its exact issued image capability")
+            image_preparation.check(plan)
+        self._image_preparation = image_preparation
+        self._image_lookup = None
         self._plan = plan
         self._proof = plan.storage_epoch()
         self._owner = plan._owner
@@ -337,7 +345,7 @@ class StorageAdmission:
     def _anchors(self):
         return tuple(_Identity(getattr(self, name)) for name in
                      ("_plan", "_proof", "_owner", "_initial", "_retained", "_record", "_admitted",
-                      "_dependencies", "_analyses", "_registrations"))
+                      "_dependencies", "_analyses", "_registrations", "_image_preparation", "_image_lookup"))
 
     def _release(self):
         if self._token is not None:
@@ -346,7 +354,7 @@ class StorageAdmission:
         self._live = False
         # No receipt or detached membership map survives the emission scope.
         for name in ("_plan", "_proof", "_owner", "_initial", "_retained", "_record", "_admitted",
-                     "_dependencies", "_analyses", "_registrations"):
+                     "_dependencies", "_analyses", "_registrations", "_image_preparation", "_image_lookup"):
             setattr(self, name, None)
 
     def __enter__(self):
@@ -395,12 +403,58 @@ class StorageAdmission:
                         raise CompilationError("storage admission changed an issued canonical binding association")
                     admitted[id(member), id(binding)] = member, binding, frozen_root
         self._admitted = FrozenDict(admitted)
+        if self._image_preparation is not None:
+            # Own the canonical slots before callback-bearing preparation.
+            # No mutable membership table alias escapes into the renderer.
+            slots = dict(admitted)
+
+            def lookup(member, binding):
+                entry = dict.get(slots, (id(member), id(binding)))
+                if entry is None or entry[0] is not member or entry[1] is not binding:
+                    raise CompilationError("storage admission requires its exact admitted original binding")
+                return entry[2]
+
+            self._image_lookup = lookup
         self._live = True
         self._token = _ACTIVE.set((self, self._anchors(), _mapping(self._admitted)))
         self._check()
         return self
 
+    def _preparing_image(self):
+        return self._image_preparation is not None and not self._image_preparation.sealed
+
+    def _image_frame(self, proof, plan):
+        active = _ACTIVE.get()
+        if (type(self) is not StorageAdmission or self._live is not True
+                or type(active) is not tuple or len(active) != 3 or active[0] is not self):
+            raise CompilationError("storage admission requires its active synchronous emission scope")
+        if proof is not self._proof or plan is not self._plan:
+            raise CompilationError("storage admission cannot consume another checked plan or lifetime proof")
+        self._image_preparation.check(plan)
+        anchors = active[1]
+        if (type(anchors) is not tuple
+                or any(type(item) is not _Identity or len(item) != 1 for item in anchors)
+                or self._anchors() != anchors):
+            raise CompilationError("storage admission changed its detached canonical record")
+        return active
+
+    def seal_image_preparation(self, preparation, plan):
+        if preparation is not self._image_preparation or plan is not self._plan:
+            raise CompilationError("storage preparation cannot seal a foreign emission image")
+        self._image_frame(self._proof, plan)
+        # Preparation remains provisional inside GenerationTransaction. All
+        # original whole-plan and source checks precede issuance of bytes.
+        self._check()
+        self._proof.validate(plan)
+        for _builder, analysis, _routine, _configuration, _facts in plan._contexts:
+            analysis.verify_publication()
+            analysis.inputs.verify_live()
+        self._check()
+
     def validate(self, proof, plan):
+        if self._preparing_image():
+            self._image_frame(proof, plan)
+            return proof
         self._check()
         if proof is not self._proof or plan is not self._plan:
             raise CompilationError("storage admission cannot consume another checked plan or lifetime proof")
@@ -413,9 +467,12 @@ class StorageAdmission:
             raise CompilationError("storage admission requires its active synchronous emission scope")
         if proof is not self._proof or plan is not self._plan:
             raise CompilationError("storage admission cannot consume another checked plan or lifetime proof")
-        # Iteration can invoke arbitrary caller code. Fence it once, using the
-        # unchanged complete source, dependency and retained-attachment checks.
+        # Iteration may run caller code; owned-image preparation never
+        # publishes until its original full boundary validators accept it.
         bindings = tuple(bindings)
+        if self._preparing_image():
+            self._image_frame(proof, plan)
+            return tuple(self._image_lookup(member, binding) for binding in bindings)
         self._check()
         if _ACTIVE.get() is not active or self._live is not True:
             raise CompilationError("storage admission changed its active synchronous emission scope")
@@ -514,9 +571,13 @@ def _supported(plan):
             and "return_contract" not in record)
 
 
-def emission_admission(plan):
+def emission_admission(plan, *, image_preparation=None):
     """Opt in after final plan issuance; all other owners retain full checks."""
-    return StorageAdmission(plan) if _supported(plan) else nullcontext()
+    if _supported(plan):
+        return StorageAdmission(plan, image_preparation=image_preparation)
+    if image_preparation is not None:
+        raise CompilationError("owned image preparation requires a supported final storage epoch")
+    return nullcontext()
 
 
 def validate_emitted_storage(proof, plan):

@@ -165,6 +165,7 @@ class UnitEmission:
     compute_identity: dict | None = None
     native_preflight: dict | None = None
     fresh_native_prefix: dict | None = None
+    prepared: object = None
 
 
 @dataclass(frozen=True)
@@ -1175,6 +1176,31 @@ class LexicalOwner:
         raise CompilationError("lexical storage lacks an original declaration: " + binding.root)
 
     def emit_unit(self, unit, index):
+        if self.supports_owned_unit_emission(unit):
+            from compiler.scopes.unit_emission import render_unit
+
+            return render_unit(self.prepare_unit(unit, index))
+        return self._prepare_unit(unit, index)
+
+    def supports_owned_unit_emission(self, unit):
+        """The first owned-input slice retains other emission modes in place."""
+        from compiler.scopes.combined_team import CombinedNumericalTeam
+        from compiler.scopes.joined_team import JoinedTeam
+
+        config = self.builder.config
+        return (config.scope_execution == "graph" and config.policy == "sections"
+                and config.scope_measurement is None and self.owner.exact_window is None
+                and getattr(self.builder, "provider_only_lifetime", None) is None
+                and getattr(self.owner.builder, "provider_only_lifetime", None) is None
+                and not isinstance(unit.scope, (CombinedNumericalTeam, JoinedTeam)))
+
+    def prepare_unit(self, unit, index):
+        """Complete checked lowering before handing owned text to rendering."""
+        if not self.supports_owned_unit_emission(unit):
+            raise CompilationError("this unit requires its existing contextual emission path")
+        return self._prepare_unit(unit, index, owned=True)
+
+    def _prepare_unit(self, unit, index, *, owned=False):
         if isinstance(unit.scope, StructuredScope):
             unit.scope.validate_opaque_control(unit)
         if self.builder.config.scope_execution == "graph":
@@ -1524,6 +1550,8 @@ class LexicalOwner:
                 prefix += ["endif"]
             suffix = ["if (fort_native_ready) then", f"associate(fort_context => {self.context})",
                       *after, "end associate", "endif", *joined_copyback, "end block"]
+            if owned:
+                return self._prepared_unit_text(result, ((first, first-1, prefix), (last+1, last, suffix)))
             return [(first, first-1, "\n".join(fortran_lines(prefix))+"\n"),
                     (last+1, last, "\n".join(fortran_lines(suffix))+"\n"), *joined_patches]
         original = unit.native_source if unit.native_source is not None else self.original(unit.nodes)
@@ -1558,7 +1586,23 @@ class LexicalOwner:
             if result.fresh_native_prefix is not None:
                 lines = [f"if ({self.context} == 0 .and. .not. {self.query_plan}) then",
                          *self.original(unit.nodes).splitlines(), "else", *lines, "endif"]
+        if owned:
+            return self._prepared_unit_text(result, ((first, first-1 if unit.publication_only else last, lines),))
         return [(first, first-1 if unit.publication_only else last, "\n".join(fortran_lines(lines)) + "\n")]
+
+    @staticmethod
+    def _prepared_unit_text(result, edits):
+        import json
+
+        from compiler.scopes.unit_emission import PreparedUnitEmission
+
+        diagnostics = json.dumps({"compute_identity": result.compute_identity,
+                                  "native_preflight": result.native_preflight,
+                                  "fresh_native_prefix": result.fresh_native_prefix},
+                                 separators=(",", ":"), allow_nan=False).encode()
+        image = PreparedUnitEmission(tuple((first, last, tuple(lines)) for first, last, lines in edits), diagnostics)
+        result.prepared = image
+        return image
 
     def emit_control(self, nodes):
         """Place invocation controls in their original lexical procedure."""
@@ -1693,8 +1737,118 @@ class LexicalOwner:
         plan = (self.interval_draft.finalize(self) if self.interval_draft is not None
                 else build_execution_plan(self))
         from compiler.scopes.storage_admission import emission_admission
+        if self.supports_owned_emission(plan):
+            preparation = plan.emission_preparation()
+            tickets = preparation.tickets
+            try:
+                image = None
+                with emission_admission(plan, image_preparation=preparation):
+                    accepted = self._emit_checked_lexical(nodes, checkpoint, plan, native_cleanup=native_cleanup)
+                    if accepted:
+                        # Graph motions, query hooks and completion checks must
+                        # finish while original authority is still available.
+                        self.owner._finish_prepared_graph_record()
+                        targets = self._owned_publication_targets(plan)
+                        image = self._seal_owned_emission(plan, preparation)
+                # Exit-time source/proof validation is callback-bearing too.
+                # Publish only after it completes, using the owned values.
+                if image is not None:
+                    self._publish_owned_emission(targets, image, tickets)
+                return accepted
+            finally:
+                preparation.release()
         with emission_admission(plan):
             return self._emit_checked_lexical(nodes, checkpoint, plan, native_cleanup=native_cleanup)
+
+    def supports_owned_emission(self, plan):
+        """Ordinary checked members; other families retain their old routing."""
+        from compiler.frontend.immutable_graph import original_type
+        from compiler.scopes.graph import GraphOwner, _motion_runs
+        from compiler.scopes.hierarchical_regions import HierarchicalRegionOwner
+        from compiler.scopes.storage_admission import _supported
+
+        return (_supported(plan) and original_type(self) in {GraphOwner, HierarchicalRegionOwner}
+                and self is self.owner
+                and getattr(self.builder, "_generation_transaction_marker", None) is not None
+                and plan.members and plan.members[0] is self
+                and getattr(self, "position_epoch", None) is None
+                and self.interval_draft is None
+                and getattr(self.builder, "_native_ancestor_selection", None) is None
+                and all(not member.device_tasks and not member.source_device_tasks for member in plan.members)
+                and all(member.supports_owned_unit_emission(unit)
+                        for member in plan.members for unit in plan.units(member))
+                and not any(next(_motion_runs(graph, self.task_schedules[name], self.graph_task_spans[name]), None)
+                            is not None for name, graph in self.task_graphs.items()))
+
+    def _owned_publication_targets(self, plan):
+        """Companion refresh must have joined every affected output channel."""
+        root = self.builder
+        targets, seen = [], set()
+        for member in plan.members:
+            builder = member.builder
+            if id(builder) in seen:
+                continue
+            if (builder.outputs is not root.outputs or builder.edits is not root.edits
+                    or builder.scopes is not root.scopes):
+                raise CompilationError("owned companion publication requires shared prepared output channels")
+            seen.add(id(builder))
+            targets.append(builder)
+        return targets[0] if len(targets) == 1 else tuple(targets)
+
+    def _seal_owned_emission(self, plan, preparation):
+        """Finish every live callback before sealing complete output states."""
+        import json
+
+        self.builder._materialize_code_artifacts()
+        units = []
+        for member_index, member in enumerate(plan.members):
+            path = str(member.routine.scope.path)
+            for unit_index, unit in enumerate(plan.units(member)):
+                result = member.unit_emission(unit)
+                if result.prepared is None:
+                    raise CompilationError("owned publication lost its prepared unit input")
+                units.append((preparation.ticket(member_index, unit_index),
+                              tuple((path, first, last, text, False) for first, last, text in result.source_edits),
+                              result.prepared.diagnostics))
+        builder = self.builder
+        # Complete states preserve earlier TARGET replacement and insertion
+        # order. These edits are already finished; prepend was applied when
+        # the provisional candidate inserted them into its ordered lists.
+        edits = tuple((str(path), first, last, text, False)
+                      for path, current in builder.edits.items() for first, last, text in current)
+        artifacts = tuple((name, text.encode("utf-8")) for name, text in builder.outputs.items())
+        scopes = tuple(json.dumps(record, separators=(",", ":"), allow_nan=False).encode("utf-8")
+                       for record in builder.scopes)
+        return plan.seal_emission_image(preparation, units=tuple(units), edits=edits,
+                                        artifacts=artifacts, scopes=scopes)
+
+    @staticmethod
+    def _publish_owned_emission(builder, image, tickets):
+        """Consume owned values only; no preparation or source callbacks."""
+        import json
+        from pathlib import Path
+
+        for ticket in tickets:
+            image.consume(ticket)
+        edits, artifacts, scopes = image.finish()
+        prepared_channels = edits, artifacts, scopes
+        detached_edits = {}
+        for path, first, last, text, prepend in edits:
+            if prepend:
+                raise CompilationError("owned publication requires already ordered finished edits")
+            detached_edits.setdefault(Path(path), []).append((first, last, text))
+        outputs = {name: text.decode("utf-8") for name, text in artifacts}
+        records = [json.loads(record.decode("utf-8")) for record in scopes]
+        # Targets were captured before sealing. Publication only writes these
+        # output slots; child builders keep the exact shared-channel topology
+        # established by their original refresh and companion preparation.
+        targets = builder if type(builder) is tuple else (builder,)
+        for target in targets:
+            target.edits, target.outputs, target.scopes = detached_edits, outputs, records
+            target._owned_emission_prepared_channels = prepared_channels
+        from compiler.scopes.generation_transaction import register_owned_emission_publication
+
+        register_owned_emission_publication(targets[0], prepared_channels)
 
     def _emit_checked_lexical(self, nodes, checkpoint, plan, *, native_cleanup=True):
         from compiler.frontend.immutable_graph import original_type
