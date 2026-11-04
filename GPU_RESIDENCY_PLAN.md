@@ -98,17 +98,29 @@ The [independent review](/tmp/fortran-owned-team-image-20261104-01/peer-review.j
 verifies all 1,529 source files and the exact three-production-file/one-test-file
 delta. Earlier incorrect test assertions and the reproduced guard-retry failure
 remain in the focused evidence. The extension passes the full maintained
-campaign above. [Normal parent attempt 30](/tmp/fortran-parent-graph-current-30/plan.json)
-is still running without a terminal package qualification. It keeps the same
-source selection and time limits and requires actual owned-image activation.
-That activation is recorded at 1,145.791 seconds for all 116 unit tickets,
-crossing attempt 29's combined-team capability barrier; package acceptance is
-still pending.
+campaign above and is committed as `18243aa`.
+[Normal parent attempt 30](/tmp/fortran-parent-graph-current-30/result.json)
+activates owned emission at 1,145.791 seconds for all 116 unit tickets, crossing
+attempt 29's combined-team barrier. It then declines at the final companion
+output-channel check: `owned companion publication requires shared prepared
+output channels`. The controller finishes in 1,395.876 seconds, within the
+unchanged limits, with all 1,529 source and 2,098 input guards held and its
+process groups exited. No package is accepted and no fallback or application
+run occurs. The next fix must reproduce the stale-channel case in an ordinary
+lexical companion and preserve final publication and rollback checks.
 This emission slice and parent attempt currently use explicit `sections`
 placement. They qualify compilation and residency capability; automatic group
 placement and its end-to-end profitability still require implementation and
 separate qualification before claiming the production-policy objective.
 There is still no current-runtime application correctness or speedup claim.
+
+The unused `compiler/debugging` AST example, saved JSON and standalone viewer
+are removed. The example executed a hardcoded developer Windows path at import;
+none of the three files has an executable caller or documentation link. The
+154 historical hash-inventory references remain intact. This deletion follows
+the maintained campaign and changes no runtime or generated code. Current
+source-placement code remains in production use; legacy reference configuration
+still needs explicit fixture migration before removal.
 
 Fresh historical controls require a matching original-runtime calibration too.
 The first fresh `7a612e4` control used its historical CUDA 13.4 profile and
