@@ -494,7 +494,7 @@ class LexicalOwner:
         # Include that in-progress member so its prior units have authority too.
         members = {id(member): member for member in (*self.owner.members.values(), self)}.values()
         host_reads = {self.canonical(binding).root for operation in scope.native
-                      for access in operation.native_opaque_accesses.values() for binding in (access.binding,)}
+                      for binding in operation.host_metadata.values()}
         managed = {self.canonical(binding).root for binding in arrays.values()}
         previous_host, previous_managed = set(), set()
         for member in members:
@@ -504,7 +504,7 @@ class LexicalOwner:
                 for binding in getattr(member, "parameterized_native_bindings", {}).values())
             for unit in member.units:
                 previous_host.update(member.canonical(binding).root for operation in unit.scope.native
-                                     for access in operation.native_opaque_accesses.values() for binding in (access.binding,))
+                                     for binding in operation.host_metadata.values())
                 previous_managed.update(member.canonical(binding).root for binding in unit.arrays.values())
         return ((host_reads & (managed | previous_managed)) | (managed & previous_host)
                 | (managed & self.owner.scalar_element_resources.keys()))
@@ -755,7 +755,8 @@ class LexicalOwner:
                 self.numerical_team_declines.append({"first_line": first, "last_line": last, "reason": reason,
                     "route": route, "continuation": continuation + "; no numerical authority from the declined route"})
 
-    def admit(self, nodes, *, source_guard=None, native_source=None, boundary_nodes=None, condition_only=False):
+    def admit(self, nodes, *, source_guard=None, native_source=None, boundary_nodes=None, condition_only=False,
+              complete_native_call=False):
         self.refresh()
         before = self.owner.builder.scope_checkpoint()
         joined_rejections = []
@@ -776,7 +777,11 @@ class LexicalOwner:
                     raise CompilationError("native lexical CALL lost its original guard and action")
             native_only = getattr(self, "native_ancestor_only", False)
             scope = None
-            if not condition_only and not native_only:
+            if complete_native_call:
+                from compiler.scopes.segments import native_call_fragment
+                operation = native_call_fragment(self.builder, tuple(nodes))
+                scope = StructuredScope.from_native(self.builder, tuple(nodes), operation)
+            if scope is None and not condition_only and not native_only:
                 if (len(nodes) > 1 and self.builder.config.scope_execution == "graph"
                         and self.builder.config.policy in {"sections", "auto"}):
                     from compiler.scopes.source_device_tasks import admit_source_device_task
@@ -841,8 +846,18 @@ class LexicalOwner:
                                                 native_metadata=True, lexical_native=True, native_host_reads=True,
                                                 native_only=native_only, original_if=original_if)
                     except CompilationError as complete_error:
-                        raise CompilationError(str(demand_error) + "; precise native path: "
-                                               + str(complete_error)) from complete_error
+                        if (self.builder.config.scope_execution == "graph" and original_if is None
+                                and not condition_only and len(nodes) == 1 and _kind(nodes[0]) == "Call_Stmt"):
+                            from compiler.scopes.segments import native_call_fragment
+                            try:
+                                operation = native_call_fragment(self.builder, tuple(nodes))
+                                scope = StructuredScope.from_native(self.builder, tuple(nodes), operation)
+                            except CompilationError as call_error:
+                                raise CompilationError(str(demand_error) + "; precise native path: "
+                                    + str(complete_error) + "; complete native CALL: " + str(call_error)) from call_error
+                        else:
+                            raise CompilationError(str(demand_error) + "; precise native path: "
+                                                   + str(complete_error)) from complete_error
             from compiler.scopes.views import view_call
             if any(view_call(call) for call in scope.calls):
                 raise CompilationError("lexical rectangular calls require reached view preflight")
@@ -941,7 +956,7 @@ class LexicalOwner:
                                          + "; ".join(route + ": " + reason for route, reason in joined_rejections))
             if condition_only:
                 raise
-            if (self.owner.interval_draft is None and source_guard is None and len(nodes) == 1
+            if (not complete_native_call and self.owner.interval_draft is None and source_guard is None and len(nodes) == 1
                     and _kind(nodes[0]) == "Call_Stmt" and self.allow_child_continuation()):
                 try:
                     self.check_host_read_actuals(nodes[0])
@@ -1033,7 +1048,14 @@ class LexicalOwner:
             # the full native closure and then scans the same child again.
             self.admit((node,))
         except CompilationError as error:
-            self.boundary((node,), str(error))
+            if self.builder.config.scope_execution == "graph" and not hasattr(node, "fort_inline_region"):
+                # A failed companion/formal mapping does not rule out retaining
+                # the unchanged CALL with a complete native access inventory.
+                # The failed child transaction has already rolled back. Native
+                # admission either issues its own proof or retains a boundary.
+                self.admit((node,), complete_native_call=True)
+            else:
+                self.boundary((node,), str(error))
 
     def _scan_group(self, group, depth):
         self.refresh()
@@ -1436,21 +1458,27 @@ class LexicalOwner:
         # alias checking only: no host/device access or transfer is requested.
         for root, binding in (unit.host_metadata or {}).items():
             name, number = builder.visible(self.routine, root), self.resources[root][1]
-            spec += [f"integer(c_size_t), target :: fort_meta_extents_{number}({binding.rank})",
-                     f"integer(c_int64_t), target :: fort_meta_lowers_{number}({binding.rank})",
+            # The runtime models a scalar reservation as one opaque element.
+            # STORAGE_SIZE/C_LOC do not evaluate the possibly undefined value.
+            rank = max(1, binding.rank)
+            spec += [f"integer(c_size_t), target :: fort_meta_extents_{number}({rank})",
+                     f"integer(c_int64_t), target :: fort_meta_lowers_{number}({rank})",
                      f"integer(c_size_t) :: fort_meta_bits_{number}"]
             if 'allocatable' in binding.attributes:
                 prepare += [f"if (allocated({name})) then"]
             prepare += refresh_epoch_handle(f"fort_buffer_{number}")
-            prepare += [f"if (fort_status == FORT_SCOPE_OK .and. fort_buffer_{number} == 0) then",
-                        f"if (.not. is_contiguous({name})) then", *failure, "endif",
-                        f"fort_meta_extents_{number} = shape({name}, kind=c_size_t)",
-                        f"fort_meta_lowers_{number} = lbound({name}, kind=c_int64_t)",
-                        f"fort_meta_bits_{number} = storage_size({name}, kind=c_size_t)",
+            prepare += [f"if (fort_status == FORT_SCOPE_OK .and. fort_buffer_{number} == 0) then"]
+            if binding.rank:
+                prepare += [f"if (.not. is_contiguous({name})) then", *failure, "endif",
+                            f"fort_meta_extents_{number} = shape({name}, kind=c_size_t)",
+                            f"fort_meta_lowers_{number} = lbound({name}, kind=c_int64_t)"]
+            else:
+                prepare += [f"fort_meta_extents_{number} = 1_c_size_t", f"fort_meta_lowers_{number} = 1_c_int64_t"]
+            prepare += [f"fort_meta_bits_{number} = storage_size({name}, kind=c_size_t)",
                         f"if (fort_meta_bits_{number} <= 0 .or. mod(fort_meta_bits_{number}, 8_c_size_t) /= 0) then",
                         *failure, "endif", "fort_pointer = c_null_ptr",
                         f"if (all(fort_meta_extents_{number} > 0)) fort_pointer = c_loc({name})",
-                        f"fort_layout = fort_scope_layout({binding.rank}, FORT_SCOPE_BYTES, &",
+                        f"fort_layout = fort_scope_layout({rank}, FORT_SCOPE_BYTES, &",
                         f"fort_meta_bits_{number}/8_c_size_t, fort_pointer, c_loc(fort_meta_extents_{number}), &",
                         f"c_loc(fort_meta_lowers_{number}), {generation})",
                         f"fort_status = fort_scope_register(fort_context, {self.registration_identity(number)}, &",

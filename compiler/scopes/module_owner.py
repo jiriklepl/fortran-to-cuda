@@ -458,11 +458,13 @@ def borrow_module(parent, node, *, reached=None):
     if routine.source_kind != "module":
         return False
     if reached is None:
-        from compiler.scopes.native_guard import GUARDED_NATIVE_ROUTING_VERSION, native_only_wrapper
+        from compiler.scopes.native_guard import native_only_wrapper
 
         if native_only_wrapper(parent, node, routine):
-            parent.boundary((node,), "complete original wrapper has no checked GPU work under native-guard routing policy "
-                            + str(GUARDED_NATIVE_ROUTING_VERSION))
+            # Lack of GPU work does not require publishing the coherent domain.
+            # Admission still needs complete native effects, stable storage and
+            # physical alias checks; an unproved CALL retains its boundary.
+            parent.admit((node,), complete_native_call=True)
             return True
     from compiler.scopes.immutable_inputs import immutable_call_inputs
     immutable_inputs = immutable_call_inputs(parent.builder.analysis, parent.routine, node, resolved,

@@ -85,6 +85,7 @@ def _portable_proof_references(analysis, authorities):
         references[proof.identity] = _digest({"portable_reached_read_requirements_version": 1,
                                               "requirements": portable(public)})
 
+    from compiler.frontend.native_call_effects import NativeCallEffects
     from compiler.frontend.native_demand import SourceBoundNativeDemandEffects
 
     def original_selection(source, procedure, originals):
@@ -104,10 +105,13 @@ def _portable_proof_references(analysis, authorities):
     # instead bind their original selections, complete checked graph and
     # canonical effects. No arbitrary diagnostic identity is stripped.
     for proof in authorities:
-        if type(proof) is not SourceBoundNativeDemandEffects:
+        if type(proof) not in {SourceBoundNativeDemandEffects, NativeCallEffects}:
             continue
         source = proof._analysis
-        proof.validate(source, proof.procedure, proof._selection, proof.demanded)
+        if type(proof) is NativeCallEffects:
+            proof.validate(source, proof.procedure, proof._selection)
+        else:
+            proof.validate(source, proof.procedure, proof._selection, proof.demanded)
         reachability = proof.reachability
         graph = reachability.native_graph
         for template in graph.templates:
@@ -117,6 +121,8 @@ def _portable_proof_references(analysis, authorities):
         reference(graph, "identity", original_selection(source, graph.procedure, graph._selection))
         reference(reachability, "proof_identity",
                   original_selection(source, reachability.procedure, reachability._selection))
+        if type(proof) is NativeCallEffects:
+            reference(proof.storage, "identity", original_selection(source, proof.procedure, proof._selection))
         reference(proof, "identity", original_selection(source, proof.procedure, proof._selection))
     return portable
 
@@ -159,6 +165,7 @@ def _registered_authorities(owner, owned_types):
     from compiler.frontend.metadata_constructor import OriginalMetadataConstructorProof
     from compiler.frontend.native_ancestor import NativeAncestorSelection
     from compiler.frontend.native_call_coordinates import NativeCallCoordinatesProof
+    from compiler.frontend.native_call_effects import NativeCallEffects
     from compiler.frontend.native_completion import NativeCompletionProof, NativeGraphCompletionProof
     from compiler.frontend.native_definitions import NativeDefinitionProof, NativeDefinitionStateProof
     from compiler.frontend.native_demand import SourceBoundNativeDemandEffects
@@ -207,6 +214,7 @@ def _registered_authorities(owner, owned_types):
     from compiler.scopes.supported_paths import SupportedPathStorageEpoch
 
     registries = {
+        NativeCallEffects: "_native_call_effects",
         NativeOnlyArrayWrite: "_native_opaque_write_proofs",
         NativeReadonlyPermit: "_native_opaque_read_permits",
         AllocationExchangeProof: "_allocation_exchange_proofs",
@@ -499,7 +507,7 @@ def _cost_requirements(members):
                     kinds.add("native_environment")
                 if getattr(operation, "indirect_sections", None) is not None:
                     kinds.add("indirect_inspector")
-                if getattr(operation, "demand_effects", None) is not None:
+                if operation.demand_effects is not None or operation.call_effects is not None:
                     kinds.add("source_native_observations")
             if any(call.region is not None and call.region.scalar_element_captures for call in unit.scope.calls):
                 kinds.add("immutable_elements")

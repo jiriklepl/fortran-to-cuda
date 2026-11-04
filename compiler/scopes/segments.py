@@ -41,6 +41,7 @@ class Native:
     proof_analysis: object = field(default=None, repr=False, compare=False)
     immutable_inputs: dict = field(default_factory=dict)
     demand_effects: object = field(default=None, repr=False, compare=False)
+    call_effects: object = field(default=None, repr=False, compare=False)
     resource_demand: object = field(default=None, repr=False, compare=False)
     source_reads: object = field(default=None, repr=False, compare=False)
     source_constants: dict = field(default_factory=dict)
@@ -122,7 +123,7 @@ def _native_analysis(analysis, *, complete_source=()):
                  "_native_definition_proofs", "_native_definition_state_proofs", "_numerical_preparations", "_numerical_preparation_providers",
                  "_native_preservation_proofs", "_selection_activation_proofs", "_reached_read_requirements_proofs",
                  "_numerical_effect_proofs", "_original_call_associations", "_native_effect_templates",
-                 "_native_effect_graphs", "_resource_reachability_proofs", "_native_demand_effects",
+                 "_native_effect_graphs", "_resource_reachability_proofs", "_native_demand_effects", "_native_call_effects",
                  "_native_graph_completions", "_worksharing_completions", "_worksharing_native_completions",
                  "_native_fixed_array_associations", "_native_opaque_write_proofs",
                  "_ordered_worksharing_inventories",
@@ -742,6 +743,58 @@ def native_demand_fragment(builder, nodes, demand, *, context=None):
                   demand_effects=proof, resource_demand=demand, source_reads=source_reads)
 
 
+def native_call_fragment(builder, nodes):
+    """Use a complete native graph through the existing coherence machinery.
+
+    Every external storage root participates: numeric arrays are coherent host
+    accesses; records and scalars reserve their physical host ranges. This is
+    independent of both earlier and future numerical discovery in the owner.
+    """
+    from compiler.frontend.native_call_effects import prove_native_call_effects
+    from compiler.frontend.native_sections import NativeSections
+
+    originals = tuple(builder.inline.original_selection(nodes))
+    if (builder.config.scope_execution != "graph" or len(originals) != 1
+            or originals[0] is not nodes[0] or _kind(originals[0]) != "Call_Stmt"
+            or hasattr(originals[0], "fort_inline_region")):
+        raise CompilationError("complete native CALL requires original graph execution")
+    if _kind(builder.analysis._source_session.lexical_parent(originals[0])) == "If_Stmt":
+        raise CompilationError("complete native CALL requires its original enclosing control region")
+    analysis = _native_analysis(builder.analysis)
+    proof = prove_native_call_effects(analysis, builder.entry.qualified, originals)
+    bindings, effects, metadata, constants = {}, {}, {}, {}
+    for binding, role, actions in proof.resources:
+        # Reject locally, before accepting an owner unit. A private SAVE
+        # object or a hidden callee module object cannot acquire a caller
+        # address merely because its source effects are now understood.
+        if (role != "constant" and (role == "reservation" or actions & {"read", "write"})
+                and builder.visible_binding(builder.entry, binding.root) is not binding):
+            raise CompilationError("native CALL reservation lost its original visible storage: " + binding.root)
+        if role == "reservation":
+            metadata[binding.root] = binding
+        elif role == "constant":
+            constants[binding.root] = binding
+        elif actions & {"read", "write"}:
+            bindings[binding.root] = binding
+            effects[binding.root] = set(actions & {"read", "write"})
+            if builder.capture(binding)["initialized"] != "whole":
+                raise CompilationError("complete native CALL requires whole initialized managed storage: " + binding.root)
+    graph, selected = analysis._selected_source(builder.entry.qualified, originals)
+    summary = {"complete": True, "analysis_identity": graph.authority_identity,
+               "structured_identity": graph.identity, "selected_node_ids": list(selected),
+               "summary_identity": proof.identity, "demand_identity": proof.identity,
+               "guaranteed_whole_overwrites": [],
+               "native_completion": {"available": True, "has_openmp_in_closure": bool(proof.reachability._completion),
+                   "reason": "complete original native CALL graph and stable storage",
+                   "internal_cuts_authorized": False},
+               "operations": [{"kind": action, "resource": binding.root, "rank": binding.rank}
+                              for binding, _role, actions in proof.resources for action in sorted(actions)]}
+    return Native(originals, effects, set(), bindings, summary, "complete original native CALL",
+                  sections=NativeSections(False, "complete whole-array native CALL access; no overwrite authority"),
+                  span=statement_span(originals[0]), host_metadata=metadata, preserve_original=True,
+                  source_constants=constants, proof_analysis=analysis, call_effects=proof)
+
+
 def native_opaque_call_candidates(builder, node, *, analysis=None):
     """Identify only a source CALL shape; this is never an access permit."""
     from compiler.frontend.call_bindings import resolve_original_call
@@ -903,7 +956,7 @@ class StructuredScope:
                 raise CompilationError("native interval operation cannot have two admission authorities")
             operation = (native_demand_fragment(builder, nodes, native_call_demand)
                          if native_operation is None else native_operation)
-            if (type(operation) is not Native or operation.demand_effects is None
+            if (type(operation) is not Native or (operation.demand_effects is None and operation.call_effects is None)
                     or len(operation.nodes) != len(self.nodes)
                     or any(left is not right for left, right in zip(operation.nodes, self.nodes, strict=True))):
                 raise CompilationError("native interval operation differs from its original source nodes")
@@ -1426,6 +1479,9 @@ class StructuredScope:
             return lines
 
         def native_hooks(operation):
+            if operation.call_effects is not None:
+                operation.call_effects.validate(operation.proof_analysis, builder.entry.qualified,
+                    tuple(builder.inline.original_selection(operation.nodes)))
             if operation.demand_effects is not None:
                 operation.resource_demand.validate()
                 operation.demand_effects.validate(builder.analysis, builder.entry.qualified,
