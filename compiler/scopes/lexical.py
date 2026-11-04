@@ -1183,8 +1183,7 @@ class LexicalOwner:
         return self._prepare_unit(unit, index)
 
     def supports_owned_unit_emission(self, unit):
-        """The first owned-input slice retains other emission modes in place."""
-        from compiler.scopes.combined_team import CombinedNumericalTeam
+        """Completed ordinary and combined-team inputs; other modes stay contextual."""
         from compiler.scopes.joined_team import JoinedTeam
 
         config = self.builder.config
@@ -1192,7 +1191,7 @@ class LexicalOwner:
                 and config.scope_measurement is None and self.owner.exact_window is None
                 and getattr(self.builder, "provider_only_lifetime", None) is None
                 and getattr(self.owner.builder, "provider_only_lifetime", None) is None
-                and not isinstance(unit.scope, (CombinedNumericalTeam, JoinedTeam)))
+                and not isinstance(unit.scope, JoinedTeam))
 
     def prepare_unit(self, unit, index):
         """Complete checked lowering before handing owned text to rendering."""
@@ -1551,7 +1550,8 @@ class LexicalOwner:
             suffix = ["if (fort_native_ready) then", f"associate(fort_context => {self.context})",
                       *after, "end associate", "endif", *joined_copyback, "end block"]
             if owned:
-                return self._prepared_unit_text(result, ((first, first-1, prefix), (last+1, last, suffix)))
+                return self._prepared_unit_text(result, ((first, first-1, prefix), (last+1, last, suffix)),
+                                                finished_edits=joined_patches)
             return [(first, first-1, "\n".join(fortran_lines(prefix))+"\n"),
                     (last+1, last, "\n".join(fortran_lines(suffix))+"\n"), *joined_patches]
         original = unit.native_source if unit.native_source is not None else self.original(unit.nodes)
@@ -1591,7 +1591,7 @@ class LexicalOwner:
         return [(first, first-1 if unit.publication_only else last, "\n".join(fortran_lines(lines)) + "\n")]
 
     @staticmethod
-    def _prepared_unit_text(result, edits):
+    def _prepared_unit_text(result, edits, *, finished_edits=()):
         import json
 
         from compiler.scopes.unit_emission import PreparedUnitEmission
@@ -1600,7 +1600,8 @@ class LexicalOwner:
                                   "native_preflight": result.native_preflight,
                                   "fresh_native_prefix": result.fresh_native_prefix},
                                  separators=(",", ":"), allow_nan=False).encode()
-        image = PreparedUnitEmission(tuple((first, last, tuple(lines)) for first, last, lines in edits), diagnostics)
+        image = PreparedUnitEmission(tuple((first, last, tuple(lines)) for first, last, lines in edits), diagnostics,
+                                     tuple((first, last, text) for first, last, text in finished_edits))
         result.prepared = image
         return image
 

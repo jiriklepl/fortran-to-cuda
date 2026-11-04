@@ -10,10 +10,10 @@ Historical reports and timing controls remain unchanged.
 
 The generic guarded-condition and immutable-container changes pass
 [381 focused checks](/tmp/fortran-residency-generic-integration-20261104-01/qualification.json).
-The [fresh maintained campaign](/tmp/fortran-maintained-current807-c3-native-full-14/qualification-current-checkpoint.json),
-including the owned emission implementation below, passes all 12,942 selected compiler cases in 48 disjoint whole-file batches;
+The [fresh maintained campaign](/tmp/fortran-maintained-current807-c3-native-full-15/qualification-current-checkpoint.json),
+including the owned emission and combined-team implementation below, passes all 12,956 selected compiler cases in 48 disjoint whole-file batches;
 this is not a single pytest invocation. Both mandatory CUDA IEEE cases pass.
-The [paired pipeline run](/tmp/fortran-maintained-current807-c3-native-full-14/execution/pipeline/initial-01/completion.json)
+The [paired pipeline run](/tmp/fortran-maintained-current807-c3-native-full-15/execution/pipeline/initial-01/completion.json)
 passes 4,502 tests with exactly 29 declared optional skips. The compiler's 1,309
 marked CUDA exclusions include the nine new guarded-condition modes already
 covered by the separate device fixture; the paired exclusions remain 18.
@@ -71,8 +71,11 @@ failures and their corrections remain recorded. For 1/7/64 real flat units,
 full validation calls are 5/5/5, versus 7/13/70 on the old path. Hierarchical
 1/7-unit controls also stay at five checks. Callback poisoning, source/slot and
 transaction-marker rejection, exact ticket consumption and preparation,
-publication and cache rollback pass. The fresh maintained campaign above covers
-these exact source bytes; it establishes no application timing improvement.
+publication and cache rollback pass. The
+[preceding maintained campaign](/tmp/fortran-maintained-current807-c3-native-full-14/qualification-current-checkpoint.json)
+qualifies the base implementation committed as `81dfd11`; the fresh campaign
+above also covers the subsequent team extension. Neither establishes an
+application timing improvement.
 
 [Normal attempt 29](/tmp/fortran-parent-graph-current-29/result.json) stops before
 legacy emission because the selected owner cannot yet use the owned-input path.
@@ -80,11 +83,32 @@ Its capability report identifies 103 supported ordinary units and 13 unsupported
 combined OpenMP numerical-team units across 52 members. No other owner blocker
 is reported. The attempt finishes in 1,084.735 seconds, with all 1,528 source and
 2,059 input guards held and both process groups exited. It produces no accepted
-package or application execution. The next separate slice ports the existing
-team emitter's finished patches into primitive inputs, preserving its original
-participation, failure and copyback behavior. It also hardens capture of the
-final-publication guard before callbacks. Those changes need their own tests and
-normal-parent acceptance; the maintained result above does not qualify them.
+package or application execution.
+
+The [combined-team extension](/tmp/fortran-owned-team-image-20261104-01/qualification.json)
+now passes 159 distinct focused tests: 14 new cases and 145 existing affected
+cases, in two invocations with no failures or skips. Its finished source patches
+retain the existing team participation, failure and copyback behavior. All
+51/42/52 files in three representative generated packages match the legacy
+emitter exactly and pass the strict reader. One- and seven-team controls both
+perform five whole-plan admission checks. The final-publication guard is captured
+before callbacks and restored on every exit, including an early validator or
+report callback exception; a subsequent retry still rejects changed code.
+The [independent review](/tmp/fortran-owned-team-image-20261104-01/peer-review.json)
+verifies all 1,529 source files and the exact three-production-file/one-test-file
+delta. Earlier incorrect test assertions and the reproduced guard-retry failure
+remain in the focused evidence. The extension passes the full maintained
+campaign above. [Normal parent attempt 30](/tmp/fortran-parent-graph-current-30/plan.json)
+is still running without a terminal package qualification. It keeps the same
+source selection and time limits and requires actual owned-image activation.
+That activation is recorded at 1,145.791 seconds for all 116 unit tickets,
+crossing attempt 29's combined-team capability barrier; package acceptance is
+still pending.
+This emission slice and parent attempt currently use explicit `sections`
+placement. They qualify compilation and residency capability; automatic group
+placement and its end-to-end profitability still require implementation and
+separate qualification before claiming the production-policy objective.
+There is still no current-runtime application correctness or speedup claim.
 
 Fresh historical controls require a matching original-runtime calibration too.
 The first fresh `7a612e4` control used its historical CUDA 13.4 profile and
