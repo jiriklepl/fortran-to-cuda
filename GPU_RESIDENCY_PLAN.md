@@ -10,14 +10,15 @@ Historical reports and timing controls remain unchanged.
 
 The generic guarded-condition and immutable-container changes pass
 [381 focused checks](/tmp/fortran-residency-generic-integration-20261104-01/qualification.json).
-The [fresh maintained campaign](/tmp/fortran-maintained-current807-c3-native-full-15/qualification-current-checkpoint.json),
-including the owned emission and combined-team implementation below, passes all 12,956 selected compiler cases in 48 disjoint whole-file batches;
+The [fresh maintained campaign](/tmp/fortran-maintained-current807-c3-native-full-17/qualification-current-checkpoint.json),
+including owned emission, combined teams and companion refresh below, passes all 12,959 selected compiler cases in 48 disjoint whole-file batches;
 this is not a single pytest invocation. Both mandatory CUDA IEEE cases pass.
-The [paired pipeline run](/tmp/fortran-maintained-current807-c3-native-full-15/execution/pipeline/initial-01/completion.json)
+The [paired pipeline run](/tmp/fortran-maintained-current807-c3-native-full-17/execution/pipeline/initial-01/completion.json)
 passes 4,502 tests with exactly 29 declared optional skips. The compiler's 1,309
 marked CUDA exclusions include the nine new guarded-condition modes already
 covered by the separate device fixture; the paired exclusions remain 18.
-All source/tool/profile guards hold and all owned test groups exit.
+All 1,526 source files and source/tool/profile guards hold; the independent
+audit confirms all 51 controller/worker process groups have exited.
 
 Later `ELSEIF` predicates retain lazy, once-only evaluation and publish their
 required host views only when reached. Read-only publication keeps the device
@@ -106,8 +107,41 @@ output-channel check: `owned companion publication requires shared prepared
 output channels`. The controller finishes in 1,395.876 seconds, within the
 unchanged limits, with all 1,529 source and 2,098 input guards held and its
 process groups exited. No package is accepted and no fallback or application
-run occurs. The next fix must reproduce the stale-channel case in an ordinary
-lexical companion and preserve final publication and rollback checks.
+run occurs.
+
+The [companion refresh fix](/tmp/fortran-companion-warmup-retention-20261104-03/qualification.json)
+passes 275 distinct affected tests across overlapping 162- and 176-test runs,
+including three new regressions.
+Restoring a real builder checkpoint after discovering a zero-unit lexical child
+reproduces the same output-channel rejection in flat and hierarchical graphs.
+Refreshing every checked member through its existing owner refresh before
+capturing publication targets repairs those stale maps. The final identity,
+source and rollback checks remain; a separately owned scope sink still rejects.
+All eight complete package comparisons match the legacy route byte for byte
+and pass the strict package reader. The initial full16 maintained campaign
+passed the paired suite but stopped on two existing hierarchical artifact
+comparisons. The saved
+differences are only `native_effects.summary_cache.misses` and `stores`;
+all generated code and other manifest fields match. The fixture discarded
+speculative warmup graphs whose weak retention depends on garbage collection.
+Keeping those authentic warmup results alive preserves exact manifest equality,
+including with forced collection before both routes. All three affected fixture
+families now retain their speculative owners; no equality checks or fields were
+removed. The raw failed campaign remains recorded. The fresh full17 campaign
+above passes with the corrected fixtures and all original test selections.
+
+[Normal parent attempt 31](/tmp/fortran-parent-graph-current-31/result.json)
+accepts all 52 members and 116 units at 1,389.488 seconds; the normal builder
+returns all 276 artifacts at 1,440.008 seconds. This clears the companion
+publication failure. Its original strict reader then rejects unused array
+formals in an original CALL. The attempt remains a failed package qualification,
+with all source/input guards held and both owned process groups exited.
+A private reader correction also addresses original scalar-element coordinate
+contracts, unused host arrays above device rank three, comment gaps in source
+node numbering and local versus canonical names in nested CALLs. The saved
+package passes diagnostic readback with those changes; affected and full paired
+tests are still running before promotion. The package is reused for reader
+qualification without repeating source generation or modifying its artifacts.
 This emission slice and parent attempt currently use explicit `sections`
 placement. They qualify compilation and residency capability; automatic group
 placement and its end-to-end profitability still require implementation and
