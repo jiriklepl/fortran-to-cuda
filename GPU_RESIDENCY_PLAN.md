@@ -291,6 +291,20 @@ application admission. A fresh parent generation uses the original lifetime
 issuer and source configuration. Actual viscosity coverage, corrected short-run
 coverage, natural runs and application performance qualification remain outstanding.
 
+The separate [CALL observer qualification](/tmp/fortran-parent32-observer-01/qualification.json)
+addresses the lazy-context diagnostic failure without changing production code.
+`benchmarks/harness/checked_call_diagnostics.py` annotates authenticated generated
+CALL frames in a separate diagnostic binary and checks balanced counts and order.
+It attributes inline submissions through their exact implementation, source
+catalog and checked segment while retaining an unknown dynamic operation as
+unknown. Both two-step primary configurations pass all 20 fields, bounds, halos,
+outputs and six occurrences of each parent CALL using the previous parent31
+package. Its production and original diagnostic binaries are unchanged. The
+[complete submission check](/tmp/fortran-parent32-observer-01/all-kernel-coverage.json)
+accounts for 90 kernels in simple and 18 in channel; channel still lacks observed
+GPU advection through that parent package. These checks qualify the observer,
+not the newly generated candidate, performance or shared SGS/Convection residency.
+
 The unused `compiler/debugging` AST example, saved JSON and standalone viewer
 are removed. The example executed a hardcoded developer Windows path at import;
 none of the three files has an executable caller or documentation link. The
