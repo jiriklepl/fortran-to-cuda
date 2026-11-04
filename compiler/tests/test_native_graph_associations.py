@@ -84,6 +84,28 @@ def test_confined_pointer_optional_helper_and_guided_join_form_one_native_graph(
     assert analysis.numerical_helpers["work::twice"].scope.bindings["twice"].declaring_scope is not None
 
 
+@pytest.mark.parametrize("seal", [False, True])
+@pytest.mark.parametrize("assignment", ["p%aux=input(i)", "p%flux=p%flux+input(i)"])
+def test_direct_confined_field_write_uses_existing_graph_completion(tmp_path, seal, assignment):
+    source = SOURCE.replace("call helper(p%flux,input(i),aux=p%aux)",
+                            assignment + "\ncall helper(p%flux,input(i),aux=p%aux)")
+    _path, analysis, selected, demands, proof = setup(tmp_path, source, seal=seal)
+    assert not proof.barriers, [item.reason for item in proof.barriers]
+    effects = prove_native_demand(analysis, "work::owner", selected, demands)
+    assert effects.effects == ((demands[0], frozenset({"read"})),)
+    field = assignment.split("=")[0].replace("p%", "work::points%")
+    assert any(item.storage.resource == field and item.kind == "write" for item in proof.accesses)
+    assert any(item.native.resource == field and item.demanded is demands[1]
+               and "write" in item.actions for item in proof.obligations)
+    completion, = [item for _name, _selected, item in proof._completion
+                   if type(item).__name__ == "NativeGraphCompletionProof"]
+    assert completion._call_storage is None
+    assert not completion.public()["private_pointer_payload_authority"]
+    assert not completion.public()["internal_cuts_authorized"]
+    assert effects.validate(analysis, "work::owner", selected, demands) is effects
+
+
+@pytest.mark.parametrize("direct_write", [False, True])
 @pytest.mark.parametrize(("before", "after", "reason"), [
     ("p=>items(i)", "p%flux=0.0_8\np=>items(i)", "pointer"),
     ("call helper(p%flux,input(i),aux=p%aux)", "call helper(p%flux,input(i),aux=p%aux)\np=>items(i)", "pointer"),
@@ -94,8 +116,12 @@ def test_confined_pointer_optional_helper_and_guided_join_form_one_native_graph(
     ("value=value+twice(input)", "call unknown(value)", "unresolved"),
     ("p=>items(i)", "p=>items(i)\nreturn", "nonlocal completion"),
 ])
-def test_unknown_associations_or_completion_remain_barriers(tmp_path, before, after, reason):
-    _path, _analysis, _selected, _demands, proof = setup(tmp_path, SOURCE.replace(before, after))
+def test_unknown_associations_or_completion_remain_barriers(tmp_path, before, after, reason, direct_write):
+    source = SOURCE.replace(before, after)
+    if direct_write:
+        source = source.replace("call helper(p%flux,input(i),aux=p%aux)",
+                                "p%aux=input(i)\ncall helper(p%flux,input(i),aux=p%aux)")
+    _path, _analysis, _selected, _demands, proof = setup(tmp_path, source)
     assert proof.barriers
     assert reason.lower() in " ".join(item.reason for item in proof.barriers).lower()
 

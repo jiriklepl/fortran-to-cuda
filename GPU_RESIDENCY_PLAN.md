@@ -206,6 +206,31 @@ proofs to native coherence; neither finding permits removing a runtime cut yet.
 These are source-analysis queries without regenerated packages or application
 execution. The preceding short-run failure and all timing gates remain open.
 
+Joined completion now consumes the existing confined-pointer graph proof for
+direct field assignments, conservatively marking the complete target object
+written. It retains explicit PRIVATE checks and gives no private-payload or
+internal-cut authority. Native demand policy 3 keeps callee-private scalar
+accesses in the graph without exporting them as caller snapshots; SAVE,
+caller-local and forwarded-actual writes remain observable. Focused groups of
+107 and 67 tests pass with overlap. The final [affected-consumer campaign](/tmp/fortran-native-pointer-fields-qualified-02/completion.json)
+passes 951 tests in one invocation with no skips and all 1,363 source guards
+held; five marked CUDA cases are excluded from that CPU campaign. This includes
+callee-local scalars and arrays forwarded to nested OUT helpers, and rejection
+of unqualified caller-local and SAVE writes.
+The [updated original-source query](/tmp/fortran-parent31-native-demand-03/completion.json)
+clears the wall-model completion barrier. Caller-owned alias separation remains
+required for its velocity dummies.
+
+The [CUDA coherence regression](/tmp/fortran-native-pointer-fields-device-04.xml)
+passes its emission check and actual device test. Each of two invocations keeps
+three GPU launches in one context around original OpenMP record-field writes.
+The unchanged 4,096-byte input uploads once, and no payload copies occur between
+the first two kernels. Complete fields, halos, record values and bounds match
+the native reference; traced, untraced and device-disabled executions pass.
+This uses the existing reached native-access path. The graph-parent path still
+needs caller-context integration; this fixture does not qualify ELMM cross-stage
+retention or an application speedup.
+
 The unused `compiler/debugging` AST example, saved JSON and standalone viewer
 are removed. The example executed a hardcoded developer Windows path at import;
 none of the three files has an executable caller or documentation link. The

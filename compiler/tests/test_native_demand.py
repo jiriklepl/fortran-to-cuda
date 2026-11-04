@@ -65,6 +65,43 @@ def test_effects_keep_host_read_and_partial_write_without_overwrite(tmp_path, mo
     assert prove_native_demand(analysis, "fields::advance", selected, demanded) is proof
 
 
+@pytest.mark.parametrize("mode", ["direct", "forwarded", "forwarded_array"])
+def test_callee_local_writes_remain_in_graph_but_not_caller_effects(tmp_path, mode):
+    declaration = "integer::index(2)" if mode == "forwarded_array" else "integer::index"
+    statement = "index=1" if mode == "direct" else "call assign_index(index)"
+    source = SOURCE.replace("subroutine correction()", "subroutine correction()\n" + declaration + "\n" + statement)
+    if mode != "direct":
+        formal = "value(:)" if mode == "forwarded_array" else "value"
+        source = source.replace("end module", "subroutine assign_index(value)\ninteger,intent(out)::" + formal
+                                + "\nvalue=1\nend subroutine\nend module")
+    _path, analysis, selected, demanded = fixture(tmp_path, source)
+    local = analysis.routines["fields::correction"].scope.bindings["index"]
+    proof = prove_native_demand(analysis, "fields::advance", selected, (*demanded, local))
+    assert any(item.storage.binding is local and item.kind == "write" and item.external == (mode != "direct")
+               for item in proof.reachability.accesses)
+    assert all(binding is not local for binding, _actions in proof.effects)
+    assert {binding.root for binding, _actions in proof.effects} == {"fields::old", "fields::star"}
+
+
+@pytest.mark.parametrize("target", ["saved", "owner_local", "forwarded_local", "forwarded_saved"])
+def test_observable_scalar_writes_still_require_reached_planning(tmp_path, target):
+    if target in {"saved", "forwarded_saved"}:
+        source = SOURCE.replace("subroutine correction()", "subroutine correction()\ninteger,save::index\nindex=1")
+        if target == "forwarded_saved":
+            source = source.replace("index=1", "call assign_index(index)").replace(
+                "end module", "subroutine assign_index(value)\ninteger,intent(out)::value\nvalue=1\nend subroutine\nend module")
+    elif target == "owner_local":
+        source = SOURCE.replace("call correction()", "i=1\ncall correction()")
+    else:
+        source = SOURCE.replace("call correction()", "call correction(i)").replace(
+            "subroutine correction()", "subroutine correction(index)\ninteger,intent(inout)::index\nindex=1")
+    _path, analysis, selected, demanded = fixture(tmp_path, source)
+    if target in {"saved", "forwarded_saved"}:
+        demanded += (analysis.routines["fields::correction"].scope.bindings["index"],)
+    with pytest.raises(CompilationError, match="scalar writes require reached planning|entry or lifetime change"):
+        prove_native_demand(analysis, "fields::advance", selected, demanded)
+
+
 @pytest.mark.parametrize("change", ["copy", "selection", "demand", "registry", "source"])
 def test_stale_or_foreign_authority_rejected(tmp_path, change):
     path, analysis, selected, demanded = fixture(tmp_path)

@@ -20,7 +20,7 @@ from compiler.frontend.resource_reachability import (
 )
 from compiler.ir import CompilationError
 
-VERSION = 2
+VERSION = 3
 _ISSUER = object()
 _UNSTABLE = frozenset({"pointer", "optional", "volatile", "asynchronous", "value", "external", "intrinsic"})
 
@@ -195,7 +195,21 @@ def prove_native_demand(analysis, procedure, originals, demanded, *, context=Non
             raise CompilationError("native demand requires intrinsic numeric storage: " + binding.root)
     separated = _separations(analysis, reachability, context)
     effects = []
+    owner_scope = analysis._require_original(procedure).scope
+    callee_scopes = {id(template._routine.scope): template._routine
+                     for template in reachability.native_graph.templates
+                     if template._routine.scope is not owner_scope}
     for binding in demanded:
+        # A native callee's non-SAVE locals are neither caller-visible state
+        # nor a coherent payload. Keep their ordered accesses in reachability,
+        # but do not request caller-side snapshots of its private loop indices
+        # or temporaries. Locals of the selected owner remain visible effects.
+        # Inspect the substituted storage owner, not an access's external bit:
+        # a nested helper's formal write may still target a callee-private local.
+        callee = callee_scopes.get(id(binding.declaring_scope))
+        if (callee is not None and callee.scope.bindings.get(binding.name) is binding
+                and binding.name not in callee.arguments and "save" not in binding.attributes):
+            continue
         accesses = tuple(item for item in reachability.accesses if item.storage.binding is binding)
         if any(item.storage.components for item in accesses):
             raise CompilationError("native managed component effects require separate physical mapping authority")
