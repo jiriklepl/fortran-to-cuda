@@ -15,6 +15,7 @@ from compiler.scopes.segments import fortran_lines
 class PreparedUnitEmission:
     edits: tuple
     diagnostics: bytes
+    finished_edits: tuple = ()
 
     def __post_init__(self):
         _require_owned(self)
@@ -34,10 +35,17 @@ def _require_owned(image):
                 or edit[0] < 1 or edit[1] < edit[0]-1
                 or type(edit[2]) is not tuple or any(type(line) is not str for line in edit[2])):
             raise CompilationError("prepared unit emission requires owned original spans and text fragments")
+    if type(image.finished_edits) is not tuple:
+        raise CompilationError("prepared unit finished edits require an owned tuple")
+    for edit in image.finished_edits:
+        if (type(edit) is not tuple or len(edit) != 3
+                or type(edit[0]) is not int or type(edit[1]) is not int
+                or edit[0] < 1 or edit[1] < edit[0]-1 or type(edit[2]) is not str):
+            raise CompilationError("prepared unit finished edits require owned original spans and exact text")
 
 
 def render_unit(image):
     """Render detached text only; never inspect live preparation inputs."""
     _require_owned(image)
     return [(first, last, "\n".join(fortran_lines(lines)) + "\n")
-            for first, last, lines in image.edits]
+            for first, last, lines in image.edits] + list(image.finished_edits)

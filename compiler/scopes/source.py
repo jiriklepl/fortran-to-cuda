@@ -3026,116 +3026,123 @@ class ScopeBuilder:
 
     def finish(self, *, materialize_native_effects=None):
         """Publish source edits and build artifacts after approved scope work."""
-        draft = getattr(self, "_conditional_return_draft", None)
-        if draft is not None:
-            proof = getattr(draft.owner, "return_contract", None)
-            if proof is None:
-                raise CompilationError("prospective returned-domain captures cannot publish without sealed exhaustive coverage")
-            proof.validate()
-        if self._native_ancestor_selection is not None:
-            self._native_ancestor_selection.validate(self.analysis)
-        self._check_reached_publication()
-        self._validate_reached_window_fresh()
-        self.validate_selection_activation()
-        self._validate_numerical_regions()
-        self.analysis.verify_publication()
-        if any(sha256(package.path.read_bytes()).hexdigest() != package.digest for package in self.packages.values()):
-            raise CompilationError("normalized source changed while scope artifacts were being prepared")
-        provenance, patches = self._materialize_code_artifacts()
         owned_guard = getattr(self, "_owned_emission_prepared_channels", None)
-        if owned_guard is not None:
-            from compiler.scopes.generation_transaction import _verify_prepared_publication
+        try:
+            draft = getattr(self, "_conditional_return_draft", None)
+            if draft is not None:
+                proof = getattr(draft.owner, "return_contract", None)
+                if proof is None:
+                    raise CompilationError("prospective returned-domain captures cannot publish without sealed exhaustive coverage")
+                proof.validate()
+            if self._native_ancestor_selection is not None:
+                self._native_ancestor_selection.validate(self.analysis)
+            self._check_reached_publication()
+            self._validate_reached_window_fresh()
+            self.validate_selection_activation()
+            self._validate_numerical_regions()
+            self.analysis.verify_publication()
+            if any(sha256(package.path.read_bytes()).hexdigest() != package.digest for package in self.packages.values()):
+                raise CompilationError("normalized source changed while scope artifacts were being prepared")
+            provenance, patches = self._materialize_code_artifacts()
+            if owned_guard is not None:
+                from compiler.scopes.generation_transaction import _verify_prepared_publication
 
-            # Final report construction may invoke validators and diagnostic
-            # providers. Pin all completed channels before those callbacks.
-            finished_channels = _verify_prepared_publication(self, owned_guard)
-        report = {
-            "schema_version":1, "entry":self.entry.qualified,
-            **({"provider_only_lifetime": self.provider_lifetime_record}
-               if hasattr(self, "provider_lifetime_record") else {}),
-            **({"native_ancestor_selection": self._native_ancestor_selection.public()}
-               if self._native_ancestor_selection is not None else {}),
-            "capture_descriptor_expectations": {
-                "schema_version": 1, "enforcement": "original_descriptor_before_registration",
-                "definition_authority": False,
-                "supported_consumers": ["original_lexical", "original_module_companion"],
-                "unsupported_consumers": ["synthetic_owner", "qualified_collective_owner"]},
-            "scope_execution": self.config.scope_execution,
-            **({"scope_measurement": self.config.scope_measurement} if self.config.scope_measurement is not None else {}),
-            **({"reached_plan_schema_version": 1} if self.config.reached_execution else {}),
-            **({"reached_window_discovery": self.reached_window_discovery}
-               if hasattr(self, "reached_window_discovery") else {}),
-            **({"original_interval_discovery": self.original_interval_discovery}
-               if hasattr(self, "original_interval_discovery") else {}),
-            **({"lexical_owner_attempt": deepcopy(self.lexical_owner_attempt)}
-               if hasattr(self, "lexical_owner_attempt") else {}),
-            **({"graph_owner_attempt": deepcopy(self.graph_owner_attempt)}
-               if hasattr(self, "graph_owner_attempt") else {}),
-            **({"hierarchical_region_attempt": deepcopy(self.hierarchical_region_attempt)}
-               if hasattr(self, "hierarchical_region_attempt") else {}),
-            "automatic_scope_available":bool(self.scopes), "scope_count":len(self.scopes),
-            "scopes":self.scopes, "boundaries":self.boundaries, "source_edits":patches,
-            "runtime_provenance": self.runtime_provenance.public(available=bool(self.scopes) and self.config.scope_measurement != "native", additional=[
-                *[item.scoped.get("runtime_provenance", {}) for item in self.generated.values() if item],
-                *[item.report.get("runtime_provenance", {}) for item in self.view_generated.values()]]),
-            "sources":provenance, "runtime":self.runtime if self.scopes and self.config.scope_measurement != "native" else None,
-            "native_effects":self.analysis.report(self.entry.qualified,
-                materialize=(not self.config.reached_execution
-                             if materialize_native_effects is None else materialize_native_effects)),
-            "resolved_calls": [self.resolved_calls[key] for key in sorted(self.resolved_calls)],
-            "implementation_variants": self.variants.public(),
-            "inline_numerical_regions": self.inline.public(),
-            "child_numerical_regions": [{"procedure": procedure, **registry.public()}
-                                        for procedure, registry in self.region_owners.items()
-                                        if procedure != self.entry.qualified and registry.used],
-            "automatic_estimate_available":any(scope["estimate_available"] for scope in self.scopes),
-            "capture_facts_sha256":sha256(json.dumps(self.facts,sort_keys=True).encode()).hexdigest(),
-            "source_inputs":self.analysis.sources,
-            "analysis_sources":self.analysis.inputs.public(),
-            "numerical_sources":[{"procedure":p.procedure,"path":str(p.path),"entry":p.entry,"sha256":p.digest}
-                                 for p in sorted(self.packages.values(), key=lambda p:p.procedure)],
-            "numerical_decisions":[{"procedure":procedure,"supported":bool(self.generated[procedure]),
-                                    "reason":self.numerical_reasons[procedure],
-                                    **({"batch_execution": self.generated[procedure].scoped["batch_execution"]}
-                                       if self.generated[procedure] else {}),
-                                    **({"graph_auto_costs": self.generated[procedure].scoped["graph_auto_costs"],
-                                        "automatic_estimate_available": self.generated[procedure].scoped["automatic_estimate_available"],
-                                        "automatic_reason": self.generated[procedure].scoped["automatic_reason"]}
-                                       if self.generated[procedure] and
-                                       "graph_auto_costs" in self.generated[procedure].scoped else {})}
-                                   for procedure in sorted(self.generated)],
-            "borrowed_source_coordinators": [coordinator.public() for procedure, coordinator in self.coordinators.items()
-                                              if coordinator is not None and procedure in self.clones],
-            "source_coordinator_boundaries": [{"procedure": procedure, "reason": reason}
-                                               for procedure, reason in sorted(self.coordinator_reasons.items()) if reason],
-            "artifacts_sha256":{name:sha256(content.encode()).hexdigest() for name,content in self.outputs.items()},
-            "device_budget_bytes":self.device_budget,
-            "limits":{"calls_per_span":None if self.config.scope_execution == "graph" else 32,
-                      "closure_depth":8,
-                      "physical_native_sections":"bounded original-coordinate rectangles; conservative whole-resource fallback",
-                      "native_rectangles_per_resource":32},
-            "build_sources":[
-                {"path":name,"language":"cuda" if name.endswith(".cu") else "fortran",
-                 **({"numerical_contract": numerical_build_contract()} if name.endswith(".cu") else {}),
-                 "role":"common_runtime" if name in self.runtime_outputs else
-                        "original_source" if name.startswith("sources/") else "shared_entry"}
-                for name in self.outputs if name.endswith((".cu",".f90"))
-            ],
-        }
-        self.analysis.verify_publication()
-        if getattr(self, "provider_only_lifetime", None) is not None:
-            from compiler.frontend.provider_lifetime import digest as lifetime_digest
-            self.provider_lifetime_record["source_edits_identity"] = lifetime_digest(patches)
-            self.provider_lifetime_record["execution_identity"] = lifetime_digest(self.provider_lifetime_record)
-            self.provider_only_lifetime.validate()
-        manifest_text = json.dumps(report,indent=2)+"\n"
-        if owned_guard is not None:
-            from compiler.scopes.generation_transaction import _publication_channels
+                # Final report construction may invoke validators and diagnostic
+                # providers. Pin all completed channels before those callbacks.
+                finished_channels = _verify_prepared_publication(self, owned_guard)
+            report = {
+                "schema_version":1, "entry":self.entry.qualified,
+                **({"provider_only_lifetime": self.provider_lifetime_record}
+                   if hasattr(self, "provider_lifetime_record") else {}),
+                **({"native_ancestor_selection": self._native_ancestor_selection.public()}
+                   if self._native_ancestor_selection is not None else {}),
+                "capture_descriptor_expectations": {
+                    "schema_version": 1, "enforcement": "original_descriptor_before_registration",
+                    "definition_authority": False,
+                    "supported_consumers": ["original_lexical", "original_module_companion"],
+                    "unsupported_consumers": ["synthetic_owner", "qualified_collective_owner"]},
+                "scope_execution": self.config.scope_execution,
+                **({"scope_measurement": self.config.scope_measurement} if self.config.scope_measurement is not None else {}),
+                **({"reached_plan_schema_version": 1} if self.config.reached_execution else {}),
+                **({"reached_window_discovery": self.reached_window_discovery}
+                   if hasattr(self, "reached_window_discovery") else {}),
+                **({"original_interval_discovery": self.original_interval_discovery}
+                   if hasattr(self, "original_interval_discovery") else {}),
+                **({"lexical_owner_attempt": deepcopy(self.lexical_owner_attempt)}
+                   if hasattr(self, "lexical_owner_attempt") else {}),
+                **({"graph_owner_attempt": deepcopy(self.graph_owner_attempt)}
+                   if hasattr(self, "graph_owner_attempt") else {}),
+                **({"hierarchical_region_attempt": deepcopy(self.hierarchical_region_attempt)}
+                   if hasattr(self, "hierarchical_region_attempt") else {}),
+                "automatic_scope_available":bool(self.scopes), "scope_count":len(self.scopes),
+                "scopes":self.scopes, "boundaries":self.boundaries, "source_edits":patches,
+                "runtime_provenance": self.runtime_provenance.public(available=bool(self.scopes) and self.config.scope_measurement != "native", additional=[
+                    *[item.scoped.get("runtime_provenance", {}) for item in self.generated.values() if item],
+                    *[item.report.get("runtime_provenance", {}) for item in self.view_generated.values()]]),
+                "sources":provenance, "runtime":self.runtime if self.scopes and self.config.scope_measurement != "native" else None,
+                "native_effects":self.analysis.report(self.entry.qualified,
+                    materialize=(not self.config.reached_execution
+                                 if materialize_native_effects is None else materialize_native_effects)),
+                "resolved_calls": [self.resolved_calls[key] for key in sorted(self.resolved_calls)],
+                "implementation_variants": self.variants.public(),
+                "inline_numerical_regions": self.inline.public(),
+                "child_numerical_regions": [{"procedure": procedure, **registry.public()}
+                                            for procedure, registry in self.region_owners.items()
+                                            if procedure != self.entry.qualified and registry.used],
+                "automatic_estimate_available":any(scope["estimate_available"] for scope in self.scopes),
+                "capture_facts_sha256":sha256(json.dumps(self.facts,sort_keys=True).encode()).hexdigest(),
+                "source_inputs":self.analysis.sources,
+                "analysis_sources":self.analysis.inputs.public(),
+                "numerical_sources":[{"procedure":p.procedure,"path":str(p.path),"entry":p.entry,"sha256":p.digest}
+                                     for p in sorted(self.packages.values(), key=lambda p:p.procedure)],
+                "numerical_decisions":[{"procedure":procedure,"supported":bool(self.generated[procedure]),
+                                        "reason":self.numerical_reasons[procedure],
+                                        **({"batch_execution": self.generated[procedure].scoped["batch_execution"]}
+                                           if self.generated[procedure] else {}),
+                                        **({"graph_auto_costs": self.generated[procedure].scoped["graph_auto_costs"],
+                                            "automatic_estimate_available": self.generated[procedure].scoped["automatic_estimate_available"],
+                                            "automatic_reason": self.generated[procedure].scoped["automatic_reason"]}
+                                           if self.generated[procedure] and
+                                           "graph_auto_costs" in self.generated[procedure].scoped else {})}
+                                       for procedure in sorted(self.generated)],
+                "borrowed_source_coordinators": [coordinator.public() for procedure, coordinator in self.coordinators.items()
+                                                  if coordinator is not None and procedure in self.clones],
+                "source_coordinator_boundaries": [{"procedure": procedure, "reason": reason}
+                                                   for procedure, reason in sorted(self.coordinator_reasons.items()) if reason],
+                "artifacts_sha256":{name:sha256(content.encode()).hexdigest() for name,content in self.outputs.items()},
+                "device_budget_bytes":self.device_budget,
+                "limits":{"calls_per_span":None if self.config.scope_execution == "graph" else 32,
+                          "closure_depth":8,
+                          "physical_native_sections":"bounded original-coordinate rectangles; conservative whole-resource fallback",
+                          "native_rectangles_per_resource":32},
+                "build_sources":[
+                    {"path":name,"language":"cuda" if name.endswith(".cu") else "fortran",
+                     **({"numerical_contract": numerical_build_contract()} if name.endswith(".cu") else {}),
+                     "role":"common_runtime" if name in self.runtime_outputs else
+                            "original_source" if name.startswith("sources/") else "shared_entry"}
+                    for name in self.outputs if name.endswith((".cu",".f90"))
+                ],
+            }
+            self.analysis.verify_publication()
+            if getattr(self, "provider_only_lifetime", None) is not None:
+                from compiler.frontend.provider_lifetime import digest as lifetime_digest
+                self.provider_lifetime_record["source_edits_identity"] = lifetime_digest(patches)
+                self.provider_lifetime_record["execution_identity"] = lifetime_digest(self.provider_lifetime_record)
+                self.provider_only_lifetime.validate()
+            manifest_text = json.dumps(report,indent=2)+"\n"
+            if owned_guard is not None:
+                from compiler.scopes.generation_transaction import _publication_channels
 
-            if _publication_channels(self) != finished_channels:
-                raise CompilationError("owned emission output changed during final report publication")
-        self.outputs["scope-manifest.json"] = manifest_text
-        return self.outputs, report
+                if getattr(self, "_owned_emission_prepared_channels", None) is not owned_guard:
+                    self._owned_emission_prepared_channels = owned_guard
+                    raise CompilationError("owned emission publication changed its entry guard")
+                if _publication_channels(self) != finished_channels:
+                    raise CompilationError("owned emission output changed during final report publication")
+            self.outputs["scope-manifest.json"] = manifest_text
+            return self.outputs, report
+        finally:
+            if owned_guard is not None:
+                self._owned_emission_prepared_channels = owned_guard
 
 
 def form_source_scopes(paths, entry, *, facts, options, config, contracts=None, numerical_sources=None,
