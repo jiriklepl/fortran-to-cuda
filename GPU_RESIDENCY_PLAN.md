@@ -8,6 +8,46 @@ Historical reports and timing controls remain unchanged.
 
 ## Current integration checkpoint: 2026-11-04
 
+The integrated generic guarded-condition and immutable-container changes pass
+[381 focused checks](/tmp/fortran-residency-generic-integration-20261104-01/qualification.json).
+The [fresh maintained campaign](/tmp/fortran-maintained-current807-c3-native-full-12/execution/compiler/initial-01/completion.json)
+passes all 12,867 selected compiler cases in 48 disjoint whole-file batches;
+this is not a single pytest invocation. Both mandatory CUDA IEEE cases pass.
+The [paired pipeline run](/tmp/fortran-maintained-current807-c3-native-full-12/execution/pipeline/initial-01/completion.json)
+passes 4,502 tests with exactly 29 declared optional skips. The compiler's 1,309
+marked CUDA exclusions include the nine new guarded-condition modes already
+covered by the separate device fixture; the paired exclusions remain 18.
+All source/tool/profile guards hold and all owned test groups exit.
+
+Later `ELSEIF` predicates retain lazy, once-only evaluation and publish their
+required host views only when reached. Read-only publication keeps the device
+replica current. Generated packages match all 243 files (240 artifacts and three
+manifests) from the qualified 12-case device fixture; this integration reuses
+that evidence rather than claiming another GPU run. Exact builtin tuple and
+frozenset containers no longer save redundant membership snapshots, while every
+mutable descendant, source attachment and owning identity edge remains checked.
+Builtin-type checks use identity, preventing subclass spoofing. The actual-parent
+[census](/tmp/fortran-parent26-retained-state-diagnostic-01/qualification-observation.json)
+counted 40,344,451 saved identity slots, including 37,280,084 for those immutable
+containers. This motivates the change; application benefit remains unmeasured.
+
+[Normal parent attempt 27](/tmp/fortran-parent-graph-current-27/plan.json) is
+running with the same original SGS→Convection interval, runtime `807bdd62…`,
+CUDA 13.5 profile `d32bc253…` and 2,400-second target limit. No current-runtime
+ELMM application correctness or performance qualification is granted yet.
+
+Fresh historical controls require a matching original-runtime calibration too.
+The first fresh `7a612e4` control used its historical CUDA 13.4 profile and
+correctly fell back to CPU under CUDA 13.5. That failed coverage gate remains
+recorded. The [fresh original-runtime calibration](/tmp/fortran-7a612-runtime9517-cuda135-calibration-01/qualification.json)
+uses unchanged samplers and policy, issuing profile `e2a1cd94…`. Fresh control
+builds pass. Their scientific gate is still pending: a fresh AUTO run executes
+seven SGS kernels and 90 additional Convection-owner kernels, exposing the old
+validator's incorrect assumption that all kernels must belong to SGS. Exact GPU
+implementation attribution is limited by historical native-operation trace tags.
+
+The entries below preserve earlier checkpoints and their limitations.
+
 Build06 passes all four two-step GPU/hidden-GPU cases and both natural runs
 (109 and 2,458 steps), including all 20 fields, bounds, halos and all 6/114
 output files at `atol=1e-6`, `rtol=1e-5`. The
@@ -353,8 +393,8 @@ target limit. All 1,520 source and 1,966 external guards hold, owned groups exit
 and no package is accepted. Its stack is inside active `StorageAdmission`
 retained-state reconstruction during unit emission, rather than the earlier
 full-epoch path. This identifies the next diagnostic location, not an exclusive
-attribution of the entire compile interval. A first-admission census/profile is
-required before another package attempt.
+attribution of the entire compile interval. The first-admission census/profile above
+now supplies evidence for the integrated immutable-container change.
 
 The following entries preserve earlier checkpoints and their limitations.
 

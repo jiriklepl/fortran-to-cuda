@@ -911,7 +911,7 @@ class StructuredScope:
             self.operation_count = len(operation.summary["operations"])
             self.tree = [operation]
         elif condition_only:
-            if len(nodes) != 1 or _kind(nodes[0]) not in {"If_Then_Stmt", "If_Stmt"}:
+            if len(nodes) != 1 or _kind(nodes[0]) not in {"If_Then_Stmt", "Else_If_Stmt", "If_Stmt"}:
                 raise CompilationError("reached condition publication requires one original IF header")
             condition = condition_fragment(builder, nodes[0], native_host_reads=native_host_reads)
             # The original header evaluates its expression once, after this

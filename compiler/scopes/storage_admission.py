@@ -250,7 +250,11 @@ class StorageAdmission:
                 retained.append((value, _retained_state(value), ()))
                 pending.extend(value.values())
             elif isinstance(value, (tuple, list, FrozenList, frozenset, set)):
-                retained.append((value, _retained_state(value), ()))
+                # Exact immutable containers cannot change membership. Their
+                # owning fields keep strong identity references; still visit
+                # every nested mutable object and registry attachment.
+                if type(value) is not tuple and type(value) is not frozenset:
+                    retained.append((value, _retained_state(value), ()))
                 pending.extend(value)
         return tuple(retained)
 
