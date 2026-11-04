@@ -180,17 +180,93 @@ end module
 """
 
 
-def test_call_instance_limit_separate_from_unique_source_statements(tmp_path):
+def test_call_instances_do_not_inherit_per_template_statement_limit(tmp_path):
     source = branching_source()
-    _path, analysis, selected, demands = setup(tmp_path, source, operations=10)
+    _path, analysis, selected, demands = setup(tmp_path, source, operations=9)
     proof = prove(analysis, selected, demands)
     assert dict(proof.native_graph.source_work)["statements"] == 7
     assert dict(proof.native_graph.instantiation_work)["call_instances"] == 10
-    other_dir = tmp_path / "rejected"
+    assert len(proof.native_graph.host_instances) == 11
+    assert proof.native_graph.retired_host_completion_view().public()["available"]
+
+
+def expanded_source():
+    # 272 leaf invocations, but only three small original templates. The last
+    # branch has a different actual: a truncated prefix loses all writes to b.
+    return branching_source().replace("call branch(a)\n", "call branch(a)\n" * 16).replace(
+        "call leaf(x)\n" * 4, "call leaf(x)\n" * 16)
+
+
+@pytest.mark.parametrize("payload", [True, False])
+def test_shared_call_graph_exceeds_default_window_and_retains_tail(tmp_path, payload):
+    _path, analysis, selected, demands = setup(tmp_path, expanded_source())
+    graph = reachability.prove_native_effect_graph(analysis, "work::owner", selected, project_payload=payload)
+    assert dict(graph.instantiation_work)["call_instances"] == (289 if payload else 0)
+    assert len(graph.instances) == (290 if payload else 1)
+    assert len(graph.host_instances) == 290 > analysis.operation_limit
+    assert len(graph.templates) == 3
+    assert graph.retired_host_completion_view().public()["available"]
+    if payload:
+        record = graph.public()
+        assert "call_instances" not in record["limits"]
+        assert record["limits"]["substitution_and_obligation_steps"] == reachability.NATIVE_GROUP_SCAN_LIMIT
+        proof = prove(analysis, selected, demands)
+        assert not proof.barriers
+        writes = Counter(item.storage.binding.name for item in proof.accesses if item.kind == "write")
+        assert writes == {"a": 256, "b": 16}
+    else:
+        with pytest.raises(CompilationError, match="control-only graph role"):
+            graph.public()
+
+
+def test_shared_call_graph_retains_late_unknown_effect(tmp_path):
+    source = expanded_source().replace("call branch(b)", "call branch(b)\ncall unknown(b)")
+    _path, analysis, selected, demands = setup(tmp_path, source)
+    proof = prove(analysis, selected, demands)
+    assert dict(proof.native_graph.instantiation_work)["call_instances"] == 289
+    assert any("unknown(b)" in barrier.source.lower() for barrier in proof.barriers)
+    assert not proof.public()["selection_covered"]
+    assert not proof.native_graph.retired_host_completion_view().public()["available"]
+
+
+def test_repeated_accesses_share_alias_work_without_losing_effects(tmp_path, monkeypatch):
+    _path, analysis, selected, demands = setup(tmp_path, expanded_source())
+    graph = reachability.prove_native_effect_graph(analysis, "work::owner", selected)
+    # Two original storage objects compared with four demanded objects. A
+    # repeated-call cross product exhausts this bound despite identical work.
+    limit = dict(graph.instantiation_work)["substitution_steps"] + 8
+    monkeypatch.setattr(reachability, "NATIVE_GROUP_SCAN_LIMIT", limit)
+    bounded_dir = tmp_path / "bounded"
+    bounded_dir.mkdir()
+    _path, analysis, selected, demands = setup(bounded_dir, expanded_source())
+    proof = prove(analysis, selected, demands)
+    assert not proof.barriers
+    writes = Counter(item.storage.binding.name for item in proof.accesses if item.kind == "write")
+    assert writes == {"a": 256, "b": 16}
+    assert {(item.native.resource, item.demanded.root) for item in proof.obligations} == {
+        ("work::a", "work::b"), ("work::a", "work::source"), ("work::a", "work::observed"),
+        ("work::b", "work::a"), ("work::b", "work::source"), ("work::b", "work::observed")}
+    assert all("write" in item.actions for item in proof.obligations)
+    assert proof.public()["scan_work"]["substitution_and_obligation_steps"] == limit
+
+
+@pytest.mark.parametrize("phase", ["payload", "host"])
+def test_shared_call_graph_work_budget_rejects_without_issuing_prefix(tmp_path, monkeypatch, phase):
+    _path, analysis, selected, demands = setup(tmp_path, expanded_source())
+    proof = prove(analysis, selected, demands)
+    graph = proof.native_graph
+    steps = dict(graph.instantiation_work)["substitution_steps"]
+    # Host discovery charges one step per instance after payload expansion.
+    limit = steps - (len(graph.host_instances) if phase == "payload" else 0) - 1
+    assert max(dict(t.source_work)["syntax_nodes"] for t in graph.templates) < limit
+    monkeypatch.setattr(reachability, "NATIVE_GROUP_SCAN_LIMIT", limit)
+    other_dir = tmp_path / "bounded"
     other_dir.mkdir()
-    _path, analysis, selected, demands = setup(other_dir, source, operations=9)
-    with pytest.raises(reachability.ResourceReachabilityBudgetExceeded, match="call instantiation"):
-        prove(analysis, selected, demands)
+    _path, bounded, selected, demands = setup(other_dir, expanded_source())
+    with pytest.raises(reachability.ResourceReachabilityBudgetExceeded, match="instantiation budget"):
+        prove(bounded, selected, demands)
+    assert not getattr(bounded, "_native_effect_graphs", {})
+    assert not getattr(bounded, "_resource_reachability_proofs", {})
 
 
 def test_cached_template_still_charges_source_budget_and_authenticates(tmp_path):
