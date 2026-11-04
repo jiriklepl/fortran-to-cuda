@@ -72,7 +72,7 @@ def test_last_live_source_callback_cannot_remove_registry_before_return(final_pl
         result = original(self)
         if self is inputs:
             calls.append(self)
-            if len(calls) == 3:
+            if len(calls) == 1:
                 analysis._descriptor_window_proofs.pop(owner.position_epoch._descriptor.identity)
         return result
 
@@ -84,7 +84,7 @@ def test_last_live_source_callback_cannot_remove_registry_before_return(final_pl
 
     with pytest.raises(CompilationError, match="retained"):
         inspect()
-    assert len(calls) == 3
+    assert len(calls) == 1
     assert active_admission() is None
 
 
@@ -238,7 +238,7 @@ def test_final_source_callback_rechecks_dependency_context_and_generation(final_
                 result = original(self)
                 if self is inputs:
                     calls.append(self)
-                    if len(calls) == 3:
+                    if len(calls) == 1:
                         analysis, fact = dependency.owner, dependency.fact
                         arena = analysis._source_derivation_arena
                         if fault == "registry":
@@ -260,4 +260,4 @@ def test_final_source_callback_rechecks_dependency_context_and_generation(final_
 
     with pytest.raises(CompilationError, match="retained"):
         inspect()
-    assert len(calls) == 3
+    assert len(calls) == 1

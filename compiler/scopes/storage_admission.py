@@ -407,16 +407,48 @@ class StorageAdmission:
         return proof
 
     def admits_many(self, proof, plan, member, bindings):
-        self.validate(proof, plan)
+        active = _ACTIVE.get()
+        if (type(self) is not StorageAdmission or self._live is not True
+                or type(active) is not tuple or len(active) != 3 or active[0] is not self):
+            raise CompilationError("storage admission requires its active synchronous emission scope")
+        if proof is not self._proof or plan is not self._plan:
+            raise CompilationError("storage admission cannot consume another checked plan or lifetime proof")
+        # Iteration can invoke arbitrary caller code. Fence it once, using the
+        # unchanged complete source, dependency and retained-attachment checks.
         bindings = tuple(bindings)
         self._check()
+        if _ACTIVE.get() is not active or self._live is not True:
+            raise CompilationError("storage admission changed its active synchronous emission scope")
+        anchors, snapshot = active[1], active[2]
+        if (type(anchors) is not tuple
+                or any(type(item) is not _Identity or len(item) != 1 for item in anchors)
+                or self._anchors() != anchors):
+            raise CompilationError("storage admission changed its detached canonical record")
+        admitted = self._admitted
+        # Exact builtin shapes make both the final table comparison and every
+        # following lookup callback-free, including equal/hash-spoofed keys.
+        if (type(admitted) is not FrozenDict
+                or any(type(key) is not tuple or len(key) != 2
+                       or any(type(part) is not int for part in key)
+                       or type(entry) is not tuple or len(entry) != 3 or type(entry[2]) is not str
+                       for key, entry in dict.items(admitted))):
+            raise CompilationError("storage admission changed its builtin canonical membership table")
+        if (type(snapshot) is not tuple or len(snapshot) != 2
+                or type(snapshot[0]) is not _Identity or len(snapshot[0]) != 1
+                or type(snapshot[1]) is not tuple
+                or any(type(row) is not tuple or len(row) != 2
+                       or type(row[0]) is not tuple or len(row[0]) != 2
+                       or any(type(part) is not int for part in row[0])
+                       or type(row[1]) is not _Identity or len(row[1]) != 1
+                       for row in snapshot[1])
+                or _mapping(admitted) != snapshot):
+            raise CompilationError("storage admission changed its detached canonical membership")
         roots = []
         for binding in bindings:
-            admitted = self._admitted.get((id(member), id(binding)))
-            if admitted is None or admitted[0] is not member or admitted[1] is not binding:
+            entry = dict.get(admitted, (id(member), id(binding)))
+            if entry is None or entry[0] is not member or entry[1] is not binding:
                 raise CompilationError("storage admission requires its exact admitted original binding")
-            roots.append(admitted[2])
-        self._check()
+            roots.append(entry[2])
         return tuple(roots)
 
     def __exit__(self, kind, value, traceback):

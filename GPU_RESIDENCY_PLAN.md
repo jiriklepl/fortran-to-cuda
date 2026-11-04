@@ -8,12 +8,12 @@ Historical reports and timing controls remain unchanged.
 
 ## Current integration checkpoint: 2026-11-04
 
-The integrated generic guarded-condition and immutable-container changes pass
+The generic guarded-condition and immutable-container changes pass
 [381 focused checks](/tmp/fortran-residency-generic-integration-20261104-01/qualification.json).
-The [fresh maintained campaign](/tmp/fortran-maintained-current807-c3-native-full-12/execution/compiler/initial-01/completion.json)
-passes all 12,867 selected compiler cases in 48 disjoint whole-file batches;
+The [fresh maintained campaign](/tmp/fortran-maintained-current807-c3-native-full-13/qualification-current-checkpoint.json),
+including the admission consolidation below, passes all 12,882 selected compiler cases in 48 disjoint whole-file batches;
 this is not a single pytest invocation. Both mandatory CUDA IEEE cases pass.
-The [paired pipeline run](/tmp/fortran-maintained-current807-c3-native-full-12/execution/pipeline/initial-01/completion.json)
+The [paired pipeline run](/tmp/fortran-maintained-current807-c3-native-full-13/execution/pipeline/initial-01/completion.json)
 passes 4,502 tests with exactly 29 declared optional skips. The compiler's 1,309
 marked CUDA exclusions include the nine new guarded-condition modes already
 covered by the separate device fixture; the paired exclusions remain 18.
@@ -42,6 +42,19 @@ immutable-container snapshots has not resolved that repeated-work structure.
 The next bounded change must preserve callback boundaries and validation while
 removing duplicate checks, followed by normal compilation within the same cap.
 No current-runtime ELMM application correctness or performance is qualified.
+
+The [admission consolidation](/tmp/fortran-admission-single-fence-20261104-01/qualification.json)
+passes 139 focused cases, including 15 new callback/table-integrity regressions
+and nine existing full-artifact equivalence checks. It keeps the existing full
+check once after iterable callbacks, followed by exact builtin table and anchor
+validation before callback-free lookup. Entry/exit, source, lifetime, dependency
+and public validators remain unchanged. One-binding and 2,048-binding controls
+both require one full sweep per membership query. [Normal attempt 28](/tmp/fortran-parent-graph-current-28/plan.json)
+is running with unchanged source selection and limits. Its source snapshot
+contains this admission change without the private indexed-section enhancement.
+The fresh maintained campaign above passes, with all 1,525 source files and
+owned process groups independently audited. No compilation-speed or application
+benefit is granted from these correctness checks alone.
 
 Fresh historical controls require a matching original-runtime calibration too.
 The first fresh `7a612e4` control used its historical CUDA 13.4 profile and

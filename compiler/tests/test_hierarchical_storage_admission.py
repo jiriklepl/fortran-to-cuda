@@ -196,7 +196,7 @@ def test_final_live_source_callback_cannot_change_returned_ownership(final_plan,
                 result = original(self)
                 if self is inputs:
                     calls.append(self)
-                    if len(calls) == 3:
+                    if len(calls) == 1:
                         draft = owner.builder._conditional_return_draft
                         if fault == "descriptor_consumer":
                             descriptor._analysis._conditional_descriptor_consumers.pop(descriptor.identity)
@@ -213,5 +213,5 @@ def test_final_live_source_callback_cannot_change_returned_ownership(final_plan,
             pytest.fail("the final callback must be fenced before membership returns")
     with pytest.raises(CompilationError):
         inspect()
-    assert len(calls) == 3
+    assert len(calls) == 1
     assert active_admission() is None
