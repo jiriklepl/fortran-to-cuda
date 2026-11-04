@@ -53,13 +53,13 @@ def _project(analysis, procedure, reachability, storage):
         bindings[id(binding)] = binding
         paths.setdefault(id(binding), []).append(access)
     result = []
+    if not storage.descriptors_unchanged(tuple(binding.root for binding in bindings.values())):
+        raise CompilationError("native CALL changes a reserved descriptor")
     for key, binding in bindings.items():
         accesses = paths[key]
         actions = frozenset(item.kind for item in accesses)
         if actions - {"read", "write", "undefine", "association", "descriptor"}:
             raise CompilationError("native CALL contains an unsupported storage effect: " + binding.root)
-        if not storage.descriptor_unchanged(binding.root):
-            raise CompilationError("native CALL changes a reserved descriptor: " + binding.root)
         if "parameter" in binding.attributes:
             if actions - {"read", "association", "descriptor"}:
                 raise CompilationError("native CALL writes original constant storage: " + binding.root)

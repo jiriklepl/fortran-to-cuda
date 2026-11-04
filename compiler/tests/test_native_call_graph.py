@@ -89,6 +89,93 @@ def test_complete_original_call_keeps_graph_domain_and_host_reservations(tmp_pat
     assert "is_contiguous(visits" not in changed.lower()
 
 
+def module_helper_source():
+    # Ordinary numeric formals allow companion discovery. Its record-valued
+    # joined loop still has no numerical implementation, so the discovered
+    # native-only subtree must not impose artificial publication boundaries.
+    return (SOURCE.replace("call update(points,a)", "call update(a)")
+            .replace("subroutine update(items,input)", "subroutine update(input)")
+            .replace("type(record),target,intent(inout)::items(:)\n", "")
+            .replace("do i=1,size(items)", "do i=-1,2")
+            .replace("p=>items(i)", "p=>points(i)")
+            .replace("p%flux=input(1,1,1)+i", "p%flux=input(1,1,1)+i+2"))
+
+
+def test_discovered_native_only_companion_uses_complete_caller_transaction(tmp_path, monkeypatch):
+    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+
+    from compiler.scopes import module_owner
+
+    original = module_owner.ModuleOwner.__init__
+    discoveries = []
+
+    def construct(self, parent, routine, *args, **kwargs):
+        result = original(self, parent, routine, *args, **kwargs)
+        if routine.qualified == "native_graph::update":
+            discoveries.append(self)
+            assert self.boundaries
+            assert not any(unit.leaves for unit in self.units)
+        return result
+
+    monkeypatch.setattr(module_owner.ModuleOwner, "__init__", construct)
+    path, builder, outputs, report = generate(tmp_path, module_helper_source())
+    owner, = report["scopes"]
+    assert discoveries
+    assert not owner["boundaries"]
+    assert "native_graph::update" not in {row["procedure"] for row in owner["checked_execution_plan"]["procedures"]}
+    operation, = [op for unit in owner["planning_segments"] for op in unit["operations"]["native_operations"]
+                   if op["kind"] == "complete original native CALL"]
+    assert operation["resource_effects"] == {"native_graph::a": ["read"]}
+    assert set(operation["host_metadata"]) == {"native_graph::points", "native_graph::visits"}
+    assert outputs[report["sources"][str(path)]["replacement"]].count("call update(a)") == 1
+    validate_checked_execution_plans(report, capture_facts=builder.facts)
+    assert builder.finish()
+
+
+def test_discovered_companion_with_gpu_descendant_keeps_checked_child(tmp_path):
+    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+
+    worker = """subroutine numerical(input)
+real(8),intent(in)::input(-1:,-1:,-1:)
+integer::i,j,k
+do k=-1,6
+do j=-1,6
+do i=-1,6
+b(i,j,k)=3*input(i,j,k)
+enddo
+enddo
+enddo
+end subroutine
+"""
+    text = module_helper_source().replace("!$omp parallel do", "call numerical(input)\n!$omp parallel do", 1)
+    text = text.replace("end module", worker + "end module")
+    _path, builder, _outputs, report = generate(tmp_path, text)
+    owner, = report["scopes"]
+    members = {row["procedure"]: row for row in owner["checked_execution_plan"]["procedures"]}
+    assert members["native_graph::update"]["boundaries"]
+    assert members["native_graph::numerical"]["units"]
+    assert not any(op["kind"] == "complete original native CALL" for unit in owner["planning_segments"]
+                   for op in unit["operations"]["native_operations"])
+    validate_checked_execution_plans(report, capture_facts=builder.facts)
+    assert builder.finish()
+
+
+def test_discovered_companion_reusing_an_existing_child_keeps_shared_calls(tmp_path):
+    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+
+    text = module_helper_source().replace("call update(a)", "call shared()\ncall update(a)")
+    text = text.replace("!$omp parallel do", "call shared()\n!$omp parallel do", 1)
+    text = text.replace("end module", "subroutine shared()\nvisits=visits+1\nend subroutine\nend module")
+    _path, builder, _outputs, report = generate(tmp_path, text)
+    owner, = report["scopes"]
+    members = {row["procedure"]: row for row in owner["checked_execution_plan"]["procedures"]}
+    assert members["native_graph::update"]["boundaries"]
+    assert {call["caller"] for call in members["native_graph::shared"]["calls"]} == {
+        "native_graph::advance", "native_graph::update"}
+    validate_checked_execution_plans(report, capture_facts=builder.facts)
+    assert builder.finish()
+
+
 @pytest.mark.parametrize("change", ["unknown", "pointer_field", "reallocate"])
 def test_unproved_call_retains_a_boundary_and_original_execution(tmp_path, change):
     text = SOURCE

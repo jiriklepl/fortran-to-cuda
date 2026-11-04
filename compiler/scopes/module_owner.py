@@ -27,6 +27,25 @@ def _reusable_plan(value):
     return value
 
 
+def _native_only_discovery(child, members, previous, call_sites):
+    """Discard only an isolated speculative subtree with cuts and no GPU work.
+
+    A reused companion may have acquired another CALL site while scanning.
+    Keep that candidate: the local rollback does not own that shared member.
+    Complete native effects and lifetime still require separate admission at
+    the original caller after the speculative subtree has been rolled back.
+    """
+    if any(tuple(getattr(member, "call_sites", ())) != call_sites[name]
+           for name, member in previous.items()):
+        return False
+    discovered = [child, *(member for name, member in members.items() if name not in previous)]
+    return (any(member.boundaries for member in discovered)
+            and not any(member.device_tasks or member.source_device_tasks or member.storage_transfers
+                        or any(call.scalar_element_coordinates is not None
+                               for call in getattr(member, "return_calls", ()))
+                        or any(unit.leaves for unit in member.units) for member in discovered))
+
+
 def _readonly_mapping(mapping, roots):
     return getattr(getattr(mapping, "formal_binding", None), "root", None) in roots
 
@@ -416,7 +435,7 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
                            "ordinary numeric formals and read-only optional scalars; one canonical mapping; shared original SAVE scalars; saved arrays remain native")}
 
 
-def borrow_module(parent, node, *, reached=None):
+def borrow_module(parent, node, *, reached=None, allow_native_collapse=True):
     """Try one original module body after its complete borrowed worker failed."""
     if hasattr(node, "fort_inline_region"):
         return False
@@ -533,10 +552,24 @@ def borrow_module(parent, node, *, reached=None):
             raise CompilationError("original module companion procedure budget exhausted")
         checkpoint = owner.builder.scope_checkpoint()
         members, resources = dict(owner.members), dict(owner.resources)
+        call_sites = {name: tuple(getattr(member, "call_sites", ())) for name, member in members.items()}
         owner.active.append(routine.qualified)
         try:
             existing = ModuleOwner(parent, routine, mappings, immutable_inputs, reached, readonly_inputs,
                                    original_call=node)
+            if (allow_native_collapse and parameterized and not elements
+                    and _native_only_discovery(existing, owner.members, members, call_sites)):
+                from compiler.scopes.segments import native_call_fragment
+
+                try:
+                    # Native-only does not mean admissible as one task. Keep
+                    # the useful checked continuation if its caller lacks a
+                    # complete storage/effect proof for the original CALL.
+                    native_call_fragment(parent.builder, (node,))
+                except CompilationError:
+                    pass
+                else:
+                    raise CompilationError("discovered native-only companion retains cuts; try complete original CALL")
             caller_arrays = _caller_arrays(parent, resolved, existing, immutable_inputs, reached)
             owner.members[routine.qualified] = existing
         except CompilationError:

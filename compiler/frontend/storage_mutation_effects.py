@@ -1710,11 +1710,18 @@ class StorageMutationEffects:
         return _preserves_record(self._record)
 
     def descriptor_unchanged(self, resource):
+        return self.descriptors_unchanged((resource,))
+
+    def descriptors_unchanged(self, resources):
+        """Check a buffer set against one freshly validated storage proof."""
+        if type(resources) is not tuple or any(type(resource) is not str for resource in resources):
+            raise CompilationError("storage descriptor query requires an exact resource tuple")
         self.validate()
         record = self._record
         private = set(record["private_local_resources"])
-        return resource in record["resources"] and not record["frontiers"] and not any(
-            event["resource"] == resource or event["resource"] not in private
+        wanted = set(resources)
+        return wanted <= set(record["resources"]) and not record["frontiers"] and not any(
+            event["resource"] in wanted or event["resource"] not in private
             for bucket in ("mutations", "escapes") for event in record[bucket])
 
 

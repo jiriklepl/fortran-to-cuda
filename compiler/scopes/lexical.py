@@ -961,7 +961,7 @@ class LexicalOwner:
                 try:
                     self.check_host_read_actuals(nodes[0])
                     from compiler.scopes.module_owner import borrow_module
-                    if borrow_module(self, nodes[0]):
+                    if borrow_module(self, nodes[0], allow_native_collapse=False):
                         return
                 except CompilationError as companion_error:
                     error = CompilationError(str(error) + "; original-body continuation: " + str(companion_error))
