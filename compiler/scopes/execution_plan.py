@@ -739,6 +739,9 @@ class CheckedExecutionPlan:
                 proof.validate(member.builder.analysis, member.routine.qualified, proof._selection, proof.demanded)
             else:
                 raise CompilationError("execution plan prefix lacks a supported registered authority")
+        from compiler.scopes.guarded_conditions import chains
+        for member in self.members:
+            chains(member, self.units(member))
         if self.interval is not None:
             self.interval.validate(self)
         return self

@@ -156,6 +156,7 @@ class Unit:
     native_source: str | None = None
     publication_only: bool = False
     host_metadata: object = None
+    guarded_condition: object = None
 
 
 @dataclass
@@ -1045,29 +1046,55 @@ class LexicalOwner:
             return
         if kind == "If_Construct":
             try:
-                publication = None
+                conditions = []
                 for header in group.content:
                     if _kind(header) in {"If_Then_Stmt", "Else_If_Stmt"}:
                         proof = condition_fragment(self.builder, header, native_host_reads=True)
+                        conditions.append((header, proof))
                         if hasattr(self, "return_conditions"):
                             self.return_conditions.append((header, proof))
-                        if proof.effects:
-                            if _kind(header) == "Else_If_Stmt":
-                                raise CompilationError("ELSEIF payload publication requires nested original guards")
-                            publication = header
-                if publication is not None:
-                    self.admit((publication,), condition_only=True)
+                guarded = any(_kind(header) == "Else_If_Stmt" and proof.effects for header, proof in conditions)
+                if guarded:
+                    if self.builder.config.scope_execution != "graph":
+                        raise CompilationError("ELSEIF payload publication requires nested original guards")
+                    from compiler.scopes.guarded_conditions import geometry
+                    original, = self.builder.inline.original_selection((group,))
+                    headers, closing = geometry(self, original)
             except CompilationError as error:
                 self.boundary((group,), str(error))
                 return
-            body = []
+            body, publication_units, header = [], [], None
+            proofs = {id(current): proof for current, proof in conditions}
             for item in group.content:
                 if _kind(item) in {"If_Then_Stmt", "Else_If_Stmt", "Else_Stmt", "End_If_Stmt"}:
+                    if header is not None and (proof := proofs.get(id(header))) is not None and proof.effects:
+                        before = len(self.units)
+                        try:
+                            self.admit((header,), condition_only=True)
+                        except CompilationError as error:
+                            if guarded:
+                                # Earlier bodies may already own units and
+                                # patches. Reject this candidate through its
+                                # existing transaction; a whole-chain cut must
+                                # not overlap those partial admissions.
+                                raise CompilationError("guarded IF publication admission failed: " + str(error)) from error
+                            self.boundary((group,), str(error))
+                            return
+                        if guarded:
+                            if len(self.units) != before+1:
+                                raise CompilationError("guarded ELSEIF lost its admitted publication unit")
+                            publication_units.append((header, self.units[-1]))
                     if body:
                         self.scan(body, depth+1)
-                    body = []
+                    header, body = item, []
                 else:
                     body.append(item)
+            if guarded:
+                from compiler.scopes.guarded_conditions import GuardedConditionChain
+                chain = GuardedConditionChain(self, original, headers, closing, tuple(publication_units))
+                for _header, unit in publication_units:
+                    unit.guarded_condition = chain
+                chain.validate(self)
         elif kind == "Call_Stmt":
             self._scan_call(group)
         elif kind == "If_Stmt":
@@ -1810,6 +1837,10 @@ class LexicalOwner:
                     unit_edits[identity][ordinal] = (first, last, text)
             for unit in plan.units(member):
                 member.unit_emission(unit).source_edits = tuple(unit_edits[id(unit)])
+            from compiler.scopes.guarded_conditions import chains
+            conditional_closures = [chain.apply(member, member_source_edits)
+                                    for chain in chains(member, plan.units(member))]
+            member_source_edits.extend(conditional_closures)
             if member is not self and hasattr(member, "emit_companion"):
                 from compiler.scopes.companion_emission import publish_original_companion
 
