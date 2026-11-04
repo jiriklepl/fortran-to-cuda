@@ -142,8 +142,20 @@ def _joined_completion_facts(analysis, procedure, selected, *, call_completion=N
                 if _kind(target) == "Part_Ref":
                     target = target.items[0]
                 field = native_lifetime.field(routine, target) if native_lifetime is not None else None
-                binding = field.binding if field is not None else analysis._binding(
-                    analysis.source_scope_for(node, routine.scope), target)
+                binding = field.binding if field is not None else None
+                scope = analysis.source_scope_for(node, routine.scope)
+                if (binding is None and graph_pointers and _kind(target) == "Data_Ref"
+                        and _kind(target.items[0]) == "Name"):
+                    base = analysis._binding(scope, target.items[0])
+                    # The complete graph has already checked this field and
+                    # confined the descriptor to its original loop. For join
+                    # analysis, conservatively mark the entire pointed-to
+                    # object written; the descriptor's PRIVATE clause grants
+                    # no private payload or permission to skip coherence.
+                    binding = next((pointer.target.binding for pointer in graph_pointers
+                                    if pointer.binding is base), None)
+                if binding is None:
+                    binding = analysis._binding(scope, target)
                 if binding is not None:
                     written.add(binding.root)
             elif _kind(node) == "Loop_Control" and node.items[1] is not None:

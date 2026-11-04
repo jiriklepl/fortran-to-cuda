@@ -117,6 +117,21 @@ end program
 
 
 def fixture_source(variant):
+    if variant == "confined_record_write":
+        return SOURCE.replace("type(profile)::metadata", """type(profile)::metadata
+type record
+real(8)::flux,aux
+end type
+type(record),target::points(-1:2)""").replace("real(8),intent(in)::scale", """real(8),intent(in)::scale
+type(record),pointer::p
+integer::i
+!$omp parallel do private(i,p) schedule(guided,5)
+do i=lbound(points,1),ubound(points,1)
+p=>points(i)
+p%flux=scale+a(1,1,1)+i
+p%aux=2*p%flux
+enddo
+!$omp end parallel do""")
     if variant == "cross_procedure":
         return SOURCE.replace("subroutine advance()\ninteger::i,j,k", """subroutine advance()
 call produce()
@@ -138,6 +153,30 @@ call correct(-0.5d0*a(0,0,0))""")
     return SOURCE
 
 
+def fixture_driver(variant):
+    if variant != "confined_record_write":
+        return DRIVER
+    return DRIVER.replace("nm=>metadata", "nm=>metadata,np=>points").replace(
+        "call native_advance()", "points%flux=-123.d0\npoints%aux=-127.d0\n"
+        "np%flux=points%flux\nnp%aux=points%aux\ncall native_advance()").replace(
+        "write(native_unit)na,nb,ns,no,nm%flux,nm%visits", """if(lbound(points,1)/=-1.or.ubound(points,1)/=2) error stop 'record bounds changed'
+if(any(transfer(points%flux,[0_int64],4)/=transfer(np%flux,[0_int64],4))) error stop 'record flux differs'
+if(any(transfer(points%aux,[0_int64],4)/=transfer(np%aux,[0_int64],4))) error stop 'record auxiliary differs'
+write(native_unit)np%flux,np%aux
+write(candidate_unit)points%flux,points%aux
+write(native_unit)na,nb,ns,no,nm%flux,nm%visits""")
+
+
+def test_confined_record_writes_keep_native_read_transaction(tmp_path):
+    _path, _builder, _outputs, report = generate(tmp_path, fixture_source("confined_record_write"))
+    owner, = report["scopes"]
+    operation, = demanded_operations(report)
+    assert not owner["boundaries"], owner["boundaries"]
+    assert owner["checked_execution_plan"]["numerical_invocations"] == 3
+    assert operation["resource_effects"] == {"demand_owner::a": ["read"]}
+    assert all("points" not in row["resource"] for row in owner["checked_execution_plan"]["resources"])
+
+
 def test_3d_native_demand_cost_is_not_inferred_from_numerical_profile(tmp_path):
     path, _builder, outputs, report = generate(tmp_path, SOURCE, policy="auto")
     owner, = report["scopes"]
@@ -155,7 +194,8 @@ def test_3d_native_demand_cost_is_not_inferred_from_numerical_profile(tmp_path):
 
 
 @pytest.mark.cuda
-@pytest.mark.parametrize("variant", ["host_read", "managed_correction", "pointer_boundary", "cross_procedure"])
+@pytest.mark.parametrize("variant", ["host_read", "managed_correction", "pointer_boundary", "cross_procedure",
+                                     "confined_record_write"])
 def test_3d_native_demand_keeps_current_host_read_and_complete_fields(tmp_path, variant):
     fc = shutil.which("gfortran-15") or shutil.which("gfortran")
     nvcc = shutil.which("nvcc")
@@ -236,7 +276,8 @@ def test_3d_native_demand_keeps_current_host_read_and_complete_fields(tmp_path, 
             objects.append(str(target))
             compiled.add(descriptor["path"])
     assert compiled == {item["path"] for item in manifest["build_sources"]}
-    for name, text in (("reference", original.replace("demand_owner", "reference_owner")), ("driver", DRIVER)):
+    for name, text in (("reference", original.replace("demand_owner", "reference_owner")),
+                       ("driver", fixture_driver(variant))):
         path, target = build / (name + ".f90"), build / (name + ".o")
         path.write_text(text)
         run([*fflags, "-c", str(path), "-o", str(target)])
@@ -246,7 +287,7 @@ def test_3d_native_demand_keeps_current_host_read_and_complete_fields(tmp_path, 
     observed = run([str(executable)], trace=True)
     assert "NATIVE_DEMAND_COMPLETE_FIELDS_BITWISE_OK" in observed.stdout
     expected = (build / "native-fields.bin").read_bytes()
-    assert len(expected) == 2 * ((4 * 8**3 + 4) * 8 + 4)
+    assert len(expected) == 2 * ((4 * 8**3 + 4 + (8 if variant == "confined_record_write" else 0)) * 8 + 4)
     assert (build / "candidate-fields.bin").read_bytes() == expected
     calls = observed.stderr.split("BEGIN_DEMAND_CALL")[1:]
     assert len(calls) == 2
@@ -278,7 +319,7 @@ def test_3d_native_demand_keeps_current_host_read_and_complete_fields(tmp_path, 
             assert downloaded == downloads[name], trace
             assert len({item["buffer_handle"] for item in selected}) == int(bool(selected)), trace
         launches = [index for index, item in enumerate(events) if item["kind"] == "launch"]
-        if variant in {"host_read", "cross_procedure"}:
+        if variant in {"host_read", "cross_procedure", "confined_record_write"}:
             assert not any(item["kind"] in {"upload", "download"} for item in events[launches[0]+1:launches[1]]), trace
         elif variant == "managed_correction":
             interrupted = [item for item in events[launches[0]+1:launches[1]] if item["kind"] in {"upload", "download"}]
