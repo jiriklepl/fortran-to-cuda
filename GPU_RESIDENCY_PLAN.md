@@ -31,20 +31,34 @@ Builtin-type checks use identity, preventing subclass spoofing. The actual-paren
 counted 40,344,451 saved identity slots, including 37,280,084 for those immutable
 containers. This motivates the change; application benefit remains unmeasured.
 
-[Normal parent attempt 27](/tmp/fortran-parent-graph-current-27/plan.json) is
-running with the same original SGS→Convection interval, runtime `807bdd62…`,
-CUDA 13.5 profile `d32bc253…` and 2,400-second target limit. No current-runtime
-ELMM application correctness or performance qualification is granted yet.
+[Normal parent attempt 27](/tmp/fortran-parent-graph-current-27/result.json)
+also ends at the unchanged 2,400-second target limit, with the same original
+SGS→Convection interval, runtime `807bdd62…` and CUDA 13.5 profile `d32bc253…`.
+All 1,524 source and 1,996 input guards hold, and the controller and worker group
+exit. No package, application or GPU execution is accepted. The terminal stack
+is in the third full `StorageAdmission._check()` within one `admits_many()` call.
+Each check still traverses whole-plan state and retained attachments; removing
+immutable-container snapshots has not resolved that repeated-work structure.
+The next bounded change must preserve callback boundaries and validation while
+removing duplicate checks, followed by normal compilation within the same cap.
+No current-runtime ELMM application correctness or performance is qualified.
 
 Fresh historical controls require a matching original-runtime calibration too.
 The first fresh `7a612e4` control used its historical CUDA 13.4 profile and
 correctly fell back to CPU under CUDA 13.5. That failed coverage gate remains
 recorded. The [fresh original-runtime calibration](/tmp/fortran-7a612-runtime9517-cuda135-calibration-01/qualification.json)
 uses unchanged samplers and policy, issuing profile `e2a1cd94…`. Fresh control
-builds pass. Their scientific gate is still pending: a fresh AUTO run executes
-seven SGS kernels and 90 additional Convection-owner kernels, exposing the old
-validator's incorrect assumption that all kernels must belong to SGS. Exact GPU
-implementation attribution is limited by historical native-operation trace tags.
+builds pass. The [six-case scientific gate](/tmp/fortran-current807-cuda135-controls-02/control-correctness-04/qualification.json)
+and [independent audit](/tmp/fortran-current807-cuda135-controls-02/control-correctness-04/peer-review-terminal.json)
+pass native, be58 and 7a612e4 on both two-step cases: all 20 fields, bounds, halos,
+6/10 outputs, direct application return codes and four FFTW plans. Both GPU
+controls retain exactly seven SGS kernels. Fresh AUTO additionally executes 90
+Convection-owner kernels in channel-simple; channel has no additional kernels.
+The corrected observer recognizes only declared compiled Convection owners and
+catalog context. Those additional launches retain coarse owner attribution;
+historical native-operation tags do not identify an exact GPU implementation.
+Earlier harness failures and the SGS-only-total assertion failure remain recorded.
+These are short control checks, not natural-run or performance qualification.
 
 The entries below preserve earlier checkpoints and their limitations.
 
