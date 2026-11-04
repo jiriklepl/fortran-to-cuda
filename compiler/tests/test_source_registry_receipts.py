@@ -133,3 +133,53 @@ def test_compact_receipt_uses_builtin_dictionary_length(monkeypatch):
 
     monkeypatch.setattr(FrozenDict, "__len__", foreign_length)
     assert same_intrinsic_source_attachments(analysis, state)
+
+
+@pytest.mark.parametrize("mapping_type", [dict, FrozenDict])
+def test_equal_but_distinct_inert_keys_keep_original_lookup_semantics(mapping_type):
+    key = "source-registry-entry-that-is-not-interned"
+    replacement = key.encode().decode()
+    assert replacement == key
+    assert replacement is not key
+    original = Equal()
+    mapping = mapping_type({key: original, "other": object()})
+    analysis, state = receipt(mapping)
+    dict.pop(mapping, key)
+    dict.__setitem__(mapping, replacement, original)
+    assert same_intrinsic_source_attachments(analysis, state)
+    dict.__setitem__(mapping, replacement, Equal())
+    assert not same_intrinsic_source_attachments(analysis, state)
+
+
+@pytest.mark.parametrize("mapping_type", [dict, FrozenDict])
+def test_unchanged_key_order_checks_every_value_without_equality(mapping_type):
+    mapping = mapping_type({f"entry-{index}": Equal() for index in range(128)})
+    analysis, state = receipt(mapping)
+    assert same_intrinsic_source_attachments(analysis, state)
+    dict.__setitem__(mapping, "entry-127", Equal())
+    assert not same_intrinsic_source_attachments(analysis, state)
+
+
+def test_compact_receipt_cannot_bypass_inert_key_guard_with_forged_columns():
+    class Foreign:
+        def __eq__(self, other):
+            raise AssertionError("foreign key equality must not run at the source fence")
+
+        __hash__ = object.__hash__
+
+    key, value = Foreign(), Equal()
+    mapping = {key: value}
+    analysis = SimpleNamespace(modules=mapping)
+    state = (None, (("modules", mapping,
+                    (_MAPPING_COLUMNS, (key,), (value,), (id(value),), dict)),))
+    assert not same_intrinsic_source_attachments(analysis, state)
+
+
+@pytest.mark.parametrize("saved_values", [(), (Equal(),)])
+def test_retained_values_column_does_not_replace_original_identity_column(saved_values):
+    original, changed = Equal(), Equal()
+    mapping = {"entry": changed}
+    analysis = SimpleNamespace(modules=mapping)
+    state = (None, (("modules", mapping,
+                    (_MAPPING_COLUMNS, tuple(mapping), saved_values, (id(original),), dict)),))
+    assert not same_intrinsic_source_attachments(analysis, state)

@@ -46,7 +46,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--require-markers",
         action="store_true",
-        help="Require the legacy '! kernels' file and '! kernel' routine markers.",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--list-candidates",
@@ -155,6 +155,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--gpu-collective", action="store_true",
                         help="Opt-in entry is called by every thread of one existing OpenMP team.")
     args = parser.parse_args()
+    if args.require_markers:
+        parser.error("--require-markers was removed; omit it and select an entry with --kernel or --list-candidates")
     args.memory_model = args.memory_model or ("scoped" if args.form_scopes else "call")
     args.gpu_policy = args.gpu_policy or ("sections" if args.form_scopes else "always")
     if args.scope_preflight and not args.form_scopes:
@@ -210,11 +212,11 @@ def _offload_config(args):
 
 def _list_candidates(source_file: Path, args: argparse.Namespace, options: CompilerOptions) -> None:
     records = []
-    for candidate in discover_file(source_file, require_markers=args.require_markers):
+    for candidate in discover_file(source_file):
         reason = candidate.reason
         if candidate.lowerable:
             try:
-                function = lower_file(source_file, candidate.qualified_name, require_markers=args.require_markers)
+                function = lower_file(source_file, candidate.qualified_name)
                 function, plan = prepare_function(function, options=options)
                 generate_sources(function, plan, common_header=args.common_header, offload_config=_offload_config(args),
                                  memory_model=args.memory_model)
@@ -327,7 +329,7 @@ def main() -> None:
         if args.list_candidates:
             _list_candidates(source_file, args, options)
             return
-        function = lower_file(source_file, args.kernel, require_markers=args.require_markers)
+        function = lower_file(source_file, args.kernel)
         function, plan = prepare_function(function, options=options)
         sources = generate_sources(function, plan, common_header=args.common_header, offload_config=_offload_config(args),
                                    memory_model=args.memory_model)

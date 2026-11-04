@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import fields
+from operator import is_
 
 from compiler.frontend.source_functions import _validate_resolution, _walk
 from compiler.ir import CompilationError, SourceLocation
@@ -49,9 +50,11 @@ def same_intrinsic_source_attachments(analysis, state):
             if not frozenset(map(id, map(type, dict.keys(value)))).issubset((id(str), id(int))):
                 return False
             try:
-                # Built-in dictionary lookup and id retain the same identity
-                # test without one Python frame per original source entry.
-                current = tuple(map(id, map(dict.__getitem__.__get__(value), contents[1])))
+                # Identical ordered keys permit a built-in values iterator.
+                # Keep the original ID column authoritative in both paths.
+                values = (dict.values(value) if all(map(is_, dict.keys(value), contents[1]))
+                          else map(dict.__getitem__.__get__(value), contents[1]))
+                current = tuple(map(id, values))
             except KeyError:
                 return False
             if current != contents[3]:
