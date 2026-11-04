@@ -820,6 +820,59 @@ class CheckedExecutionPlan:
         self._require_owner()
         return json.loads(self._record)
 
+    def emission_preparation(self):
+        """Issue ordered output tickets, while the original plan stays authority.
+
+        This is a private preparation handoff, not another source analyser or
+        an importable execution plan. Original objects are used only before
+        the owned output image is issued.
+        """
+        from compiler.scopes.emission_image import _prepare
+
+        if type(self) is not CheckedExecutionPlan:
+            raise CompilationError("emission preparation requires its exact checked plan")
+        self.validate()
+        tickets = []
+        for member_index, procedure in enumerate(self._procedures):
+            member = procedure.member
+            name = member.routine.qualified
+            selected = getattr(self._owner, "graph_unit_ids", {}).get(name, {})
+            for ordinal, unit in enumerate(procedure.units):
+                task = selected.get(str(ordinal))
+                if type(task) is not str and type(task) is not int and task is not None:
+                    raise CompilationError("emission ticket has an invalid selected source task")
+                resources = []
+                for root, binding in {**unit.arrays, **(unit.host_metadata or {})}.items():
+                    canonical = member.canonical(binding).root
+                    slot = member.resources[root][1]
+                    if type(root) is not str or type(canonical) is not str or type(slot) is not int or slot < 1:
+                        raise CompilationError("emission ticket lost its canonical resource slot")
+                    resources.append((root, canonical, slot))
+                tickets.append((self.identity, self.execution_identity, member_index, name,
+                                ordinal, task, tuple(resources), tuple(unit.scalars),
+                                (str(member.routine.scope.path), unit.scope.first, unit.scope.last)))
+        # TARGET declaration edits can belong to a defining module without an
+        # executable member. Source sessions authenticate this complete input
+        # inventory; individual unit edits retain their narrower exact span.
+        sources = tuple(dict.fromkeys(str(path) for _builder, analysis, _routine, _config, _facts
+                                      in self._contexts for path in analysis.sources))
+        return _prepare(self, tuple(tickets), sources)
+
+    def seal_emission_image(self, preparation, *, units, edits=(), artifacts=(), scopes=()):
+        """Finish callback-bearing validation before issuing owned output bytes."""
+        from compiler.scopes.emission_image import EmissionPreparation, _seal
+        from compiler.scopes.storage_admission import active_admission
+
+        if type(self) is not CheckedExecutionPlan or type(preparation) is not EmissionPreparation:
+            raise CompilationError("emission image requires its exact checked preparation")
+        self._require_owner()
+        preparation.check(self)
+        self.validate()
+        admission = active_admission()
+        if admission is not None:
+            admission.seal_image_preparation(preparation, self)
+        return _seal(preparation, self, units=units, edits=edits, artifacts=artifacts, scopes=scopes)
+
 
 def _procedure_row(member, units, emission_identity):
     path = str(member.routine.scope.path)

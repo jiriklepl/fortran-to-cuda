@@ -2987,23 +2987,8 @@ class ScopeBuilder:
         self.scan(nodes)
         return self.finish()
 
-    def finish(self, *, materialize_native_effects=None):
-        """Publish source edits and build artifacts after approved scope work."""
-        draft = getattr(self, "_conditional_return_draft", None)
-        if draft is not None:
-            proof = getattr(draft.owner, "return_contract", None)
-            if proof is None:
-                raise CompilationError("prospective returned-domain captures cannot publish without sealed exhaustive coverage")
-            proof.validate()
-        if self._native_ancestor_selection is not None:
-            self._native_ancestor_selection.validate(self.analysis)
-        self._check_reached_publication()
-        self._validate_reached_window_fresh()
-        self.validate_selection_activation()
-        self._validate_numerical_regions()
-        self.analysis.verify_publication()
-        if any(sha256(package.path.read_bytes()).hexdigest() != package.digest for package in self.packages.values()):
-            raise CompilationError("normalized source changed while scope artifacts were being prepared")
+    def _materialize_code_artifacts(self):
+        """Finish code artifacts without publishing a report or manifest."""
         for registry in self.region_owners.values():
             if registry.used:
                 registry.refresh(self)
@@ -3037,6 +3022,33 @@ class ScopeBuilder:
         if self.scopes and self.config.scope_measurement != "native":
             self.outputs.update(self.runtime_outputs)
             self.outputs["scoped-runtime.json"] = json.dumps(self.runtime,indent=2)+"\n"
+        return provenance, patches
+
+    def finish(self, *, materialize_native_effects=None):
+        """Publish source edits and build artifacts after approved scope work."""
+        draft = getattr(self, "_conditional_return_draft", None)
+        if draft is not None:
+            proof = getattr(draft.owner, "return_contract", None)
+            if proof is None:
+                raise CompilationError("prospective returned-domain captures cannot publish without sealed exhaustive coverage")
+            proof.validate()
+        if self._native_ancestor_selection is not None:
+            self._native_ancestor_selection.validate(self.analysis)
+        self._check_reached_publication()
+        self._validate_reached_window_fresh()
+        self.validate_selection_activation()
+        self._validate_numerical_regions()
+        self.analysis.verify_publication()
+        if any(sha256(package.path.read_bytes()).hexdigest() != package.digest for package in self.packages.values()):
+            raise CompilationError("normalized source changed while scope artifacts were being prepared")
+        provenance, patches = self._materialize_code_artifacts()
+        owned_guard = getattr(self, "_owned_emission_prepared_channels", None)
+        if owned_guard is not None:
+            from compiler.scopes.generation_transaction import _verify_prepared_publication
+
+            # Final report construction may invoke validators and diagnostic
+            # providers. Pin all completed channels before those callbacks.
+            finished_channels = _verify_prepared_publication(self, owned_guard)
         report = {
             "schema_version":1, "entry":self.entry.qualified,
             **({"provider_only_lifetime": self.provider_lifetime_record}
@@ -3116,7 +3128,13 @@ class ScopeBuilder:
             self.provider_lifetime_record["source_edits_identity"] = lifetime_digest(patches)
             self.provider_lifetime_record["execution_identity"] = lifetime_digest(self.provider_lifetime_record)
             self.provider_only_lifetime.validate()
-        self.outputs["scope-manifest.json"] = json.dumps(report,indent=2)+"\n"
+        manifest_text = json.dumps(report,indent=2)+"\n"
+        if owned_guard is not None:
+            from compiler.scopes.generation_transaction import _publication_channels
+
+            if _publication_channels(self) != finished_channels:
+                raise CompilationError("owned emission output changed during final report publication")
+        self.outputs["scope-manifest.json"] = manifest_text
         return self.outputs, report
 
 

@@ -134,9 +134,19 @@ class HierarchicalRegionOwner(GraphOwner, OriginalSelectionOwner):
 
     def _emit_position_epoch(self, nodes, checkpoint, *, native_cleanup=True):
         accepted = GraphOwner._emit_position_epoch(self, nodes, checkpoint, native_cleanup=native_cleanup)
-        if accepted and self.builder.scopes[-1].get("owner_variant") is not None:
-            self.builder.scopes[-1]["selected_end_retirement"] = dict(self.emission.selected_end_retirement)
+        if accepted and not getattr(self.emission, "owned_hierarchical_record_finished", False):
+            self._finish_hierarchical_record()
         return accepted
+
+    def _finish_hierarchical_record(self):
+        if self.builder.scopes[-1].get("owner_variant") is not None:
+            self.builder.scopes[-1]["selected_end_retirement"] = dict(self.emission.selected_end_retirement)
+
+    def _finish_prepared_graph_record(self):
+        """Retain selected-end publication before the owned image is sealed."""
+        GraphOwner._finish_prepared_graph_record(self)
+        self._finish_hierarchical_record()
+        self.emission.owned_hierarchical_record_finished = True
 
 
 def _has_nested_calls(owner, selected):

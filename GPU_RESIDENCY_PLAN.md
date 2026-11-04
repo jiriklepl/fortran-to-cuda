@@ -10,10 +10,10 @@ Historical reports and timing controls remain unchanged.
 
 The generic guarded-condition and immutable-container changes pass
 [381 focused checks](/tmp/fortran-residency-generic-integration-20261104-01/qualification.json).
-The [fresh maintained campaign](/tmp/fortran-maintained-current807-c3-native-full-13/qualification-current-checkpoint.json),
-including the admission consolidation below, passes all 12,882 selected compiler cases in 48 disjoint whole-file batches;
+The [fresh maintained campaign](/tmp/fortran-maintained-current807-c3-native-full-14/qualification-current-checkpoint.json),
+including the owned emission implementation below, passes all 12,942 selected compiler cases in 48 disjoint whole-file batches;
 this is not a single pytest invocation. Both mandatory CUDA IEEE cases pass.
-The [paired pipeline run](/tmp/fortran-maintained-current807-c3-native-full-13/execution/pipeline/initial-01/completion.json)
+The [paired pipeline run](/tmp/fortran-maintained-current807-c3-native-full-14/execution/pipeline/initial-01/completion.json)
 passes 4,502 tests with exactly 29 declared optional skips. The compiler's 1,309
 marked CUDA exclusions include the nine new guarded-condition modes already
 covered by the separate device fixture; the paired exclusions remain 18.
@@ -58,16 +58,33 @@ to remove the whole-plan-per-unit scaling problem. The fresh maintained campaign
 above passes, with all source files and process groups independently audited;
 current-runtime application correctness and speedup remain unqualified.
 
-The next private slice uses owned primitive emission inputs, with full semantic
-checks at batch boundaries and unit-local canonical slots during preparation.
-The existing generation transaction retains atomic adoption and rollback.
-Its [first flat gate](/tmp/fortran-owned-emission-image-20261104-01/tests-batch-03-completion.json)
-passes 36 cases with complete output/manifest equality and strict-package checks.
-For 1/7/64 real units, full validation calls are 5/5/5, versus 7/13/70 on the old
-path. Callback poisoning, source/slot/transaction-marker rejection, exact ticket
-consumption and preparation/publication rollback pass. Hierarchical children and
-module companions must pass the same gate before another ELMM attempt. This is
-private compiler work, with no application timing claim.
+Owned primitive emission inputs now separate callback-bearing preparation from
+publication of finished text. Full semantic checks remain at batch boundaries;
+unit-local canonical slots avoid a whole-plan scan for each prepared unit. The
+existing generation transaction keeps atomic adoption and rollback, with sealed
+output checks across final validators and cache adoption. The
+[component qualification](/tmp/fortran-owned-emission-image-20261104-01/qualification.json)
+reconciles 199 distinct passing checks, including hierarchical children and
+module companions, exact output/manifest equality and strict-package validation.
+This is a reconciled focused gate, not one clean 199-test invocation; earlier
+failures and their corrections remain recorded. For 1/7/64 real flat units,
+full validation calls are 5/5/5, versus 7/13/70 on the old path. Hierarchical
+1/7-unit controls also stay at five checks. Callback poisoning, source/slot and
+transaction-marker rejection, exact ticket consumption and preparation,
+publication and cache rollback pass. The fresh maintained campaign above covers
+these exact source bytes; it establishes no application timing improvement.
+
+[Normal attempt 29](/tmp/fortran-parent-graph-current-29/result.json) stops before
+legacy emission because the selected owner cannot yet use the owned-input path.
+Its capability report identifies 103 supported ordinary units and 13 unsupported
+combined OpenMP numerical-team units across 52 members. No other owner blocker
+is reported. The attempt finishes in 1,084.735 seconds, with all 1,528 source and
+2,059 input guards held and both process groups exited. It produces no accepted
+package or application execution. The next separate slice ports the existing
+team emitter's finished patches into primitive inputs, preserving its original
+participation, failure and copyback behavior. It also hardens capture of the
+final-publication guard before callbacks. Those changes need their own tests and
+normal-parent acceptance; the maintained result above does not qualify them.
 
 Fresh historical controls require a matching original-runtime calibration too.
 The first fresh `7a612e4` control used its historical CUDA 13.4 profile and

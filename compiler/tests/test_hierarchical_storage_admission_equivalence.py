@@ -91,6 +91,10 @@ def emit(directory, parent, source, kind, monkeypatch, enabled, *, fault=None):
         return original_unit(self, current, index)
 
     with monkeypatch.context() as patch:
+        # Keep this legacy full-vs-admission control independent of the owned
+        # image route, which has its own complete artifact-equivalence tests.
+        patch.setattr(LexicalOwner, "supports_owned_emission", lambda _self, _plan: False)
+        patch.setattr(LexicalOwner, "supports_owned_unit_emission", lambda _self, _unit: False)
         patch.setattr(storage_admission, "emission_admission", actual_scope)
         patch.setattr(StorageEpochProof, "validate", full)
         patch.setattr(LexicalOwner, "emit_unit", unit)
