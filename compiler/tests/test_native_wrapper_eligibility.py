@@ -124,7 +124,8 @@ def test_full_call_boundary_never_constructs_child_or_old_payload_retirement(tmp
     (patch,) = patches
     assert type(patch.lifecycle) is SameFamilyNativeCallLifecycle
     assert patch.original_source.lower().count(CALL) == 1
-    assert "native-guard routing policy 1" in patch.reason
+    assert "native CALL requires complete synchronous original effects" in patch.reason
+    assert "procedure-dummy association requires exact callback authority" in patch.reason
     generated = outputs[report["sources"][str(path)]["replacement"]]
     assert WRAPPER in generated
     assert generated.lower().count(CALL) == text.lower().count(CALL)

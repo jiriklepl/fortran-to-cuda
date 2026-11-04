@@ -30,7 +30,7 @@ from compiler.frontend.source_objects import _members, _TypeBuilder
 from compiler.ir import CompilationError
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
-VERSION = 14
+VERSION = 15
 HOST_CONTROL_VERSION = 5
 JOINED_SOURCE_BUDGET_VERSION = 1
 
@@ -2083,7 +2083,10 @@ def prove_resource_reachability(analysis, procedure, original_selection, demande
     """
     if not isinstance(original_selection, tuple) or not original_selection:
         raise CompilationError("resource reachability requires an exact nonempty original tuple")
-    if not isinstance(demanded, tuple) or not demanded or len({id(item) for item in demanded}) != len(demanded):
+    # An empty demand requests the complete original access inventory without
+    # a Cartesian set of separation obligations. It grants no alias authority:
+    # a consumer must account for every external storage path itself.
+    if not isinstance(demanded, tuple) or len({id(item) for item in demanded}) != len(demanded):
         raise CompilationError("resource reachability requires distinct exact demanded bindings")
     if len(demanded) > analysis.operation_limit:
         raise ResourceReachabilityBudgetExceeded("resource reachability demand budget exhausted")

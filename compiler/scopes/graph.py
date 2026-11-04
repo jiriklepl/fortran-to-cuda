@@ -31,9 +31,10 @@ def _scope_effects(member, scope, arrays, scalars):
     """Project admitted effects, never reconstruct them from source INTENT."""
     actions = defaultdict(set)
     scalar_reads, scalar_writes, metadata = set(), set(), set()
+    reserved = {root: binding for operation in scope.native for root, binding in operation.host_metadata.items()}
 
     def canonical(root):
-        binding = arrays.get(root) or scalars.get(root)
+        binding = arrays.get(root) or scalars.get(root) or reserved.get(root)
         return member.canonical(binding).root if binding is not None else root
 
     for call in scope.calls:
@@ -41,6 +42,10 @@ def _scope_effects(member, scope, arrays, scalars):
         for root, kinds in effects.items():
             actions[canonical(root)].update(kinds)
     for operation in scope.native:
+        if operation.call_effects is not None:
+            for binding, role, kinds in operation.call_effects.resources:
+                if role != "constant":
+                    actions[canonical(binding.root)].update(kinds & {"read", "write"})
         for root, kinds in operation.effects.items():
             actions[canonical(root)].update(kinds)
         for item in operation.summary.get("operations", ()):

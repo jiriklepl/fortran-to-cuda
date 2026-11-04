@@ -231,6 +231,48 @@ This uses the existing reached native-access path. The graph-parent path still
 needs caller-context integration; this fixture does not qualify ELMM cross-stage
 retention or an application speedup.
 
+The graph-parent now has a complete native-CALL access path independent of the
+future-work inventory. It composes the existing complete call graph and stable
+storage proof, retains every external access, and uses ordinary host coherence
+for numeric arrays. Fixed record fields and scalar state reserve their physical
+host ranges through the same runtime, without payload transfers. Registration
+checks aliases against earlier and later managed buffers. Callee-private
+temporaries stay internal; unknown effects, dynamic fields, hidden storage and
+unproved managed definitions retain a local boundary. Native-only wrappers try
+this path directly; a rejected call cannot recursively retry companion discovery.
+Source policy 15 permits an empty demand to request the full access inventory,
+without granting storage separation. Runtime code and ABI are unchanged.
+
+The [affected campaign](/tmp/fortran-native-call-qualified-01/completion.json)
+passes 1,326 tests with no failures or skips, 11 marked CUDA cases excluded, and
+all 1,367 compiler/paired-reader source guards held. A final equivalent
+visibility-guard simplification passes 44 overlapping focused cases; its
+[comparison](/tmp/fortran-native-call-qualified-01/final-format-equivalence.json)
+checks equivalent syntax and all 41 generated artifacts against the GPU-tested
+package. The strict reader and lint checks pass. The
+[five CUDA modes](/tmp/fortran-native-call-graph-device-03.xml) cover traced and
+untraced execution, disabled-device fallback, resource rejection and real runtime
+alias rejection. All three complete fields, halos, bounds, record values and
+the once-only call counter match native byte for byte. Each ordinary invocation
+has two launches in one residency domain: 4,096 input bytes upload once, no
+payload transfer occurs between kernels, and 8,192 output bytes download at
+return. A rejected reservation publishes the queued prefix, executes the original
+call once, and permits a fresh domain for the consumer; no completed work is
+replayed. Initial observer assumptions and the repaired recursive-retry failure
+remain recorded in the development evidence.
+
+The [original ELMM call queries](/tmp/fortran-parent31-full-native-call-01/completion.json)
+prove complete accesses and stable storage for both `ComputeUVWFluxesWM` and
+`ComputeViscsWM` at their actual `SubgridStresses` call sites, using 55,744 and
+3,518 instantiation work steps respectively. All 69 application source guards
+hold. This does not yet admit both calls into a regenerated application:
+read-only mesh arrays lack GPU capture facts, and viscosity has partial entry
+definitions. Next, compose the existing typed read-only reservations for those
+mesh reads and qualify precise write regions or reached definition preflight
+for viscosity. Do not invent capture facts or treat a possible write as a whole
+definition. Parent regeneration, corrected short-run coverage, natural runs and
+application performance qualification remain outstanding.
+
 The unused `compiler/debugging` AST example, saved JSON and standalone viewer
 are removed. The example executed a hardcoded developer Windows path at import;
 none of the three files has an executable caller or documentation link. The
