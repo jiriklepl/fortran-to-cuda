@@ -265,13 +265,31 @@ The [original ELMM call queries](/tmp/fortran-parent31-full-native-call-01/compl
 prove complete accesses and stable storage for both `ComputeUVWFluxesWM` and
 `ComputeViscsWM` at their actual `SubgridStresses` call sites, using 55,744 and
 3,518 instantiation work steps respectively. All 69 application source guards
-hold. This does not yet admit both calls into a regenerated application:
-read-only mesh arrays lack GPU capture facts, and viscosity has partial entry
-definitions. Next, compose the existing typed read-only reservations for those
-mesh reads and qualify precise write regions or reached definition preflight
-for viscosity. Do not invent capture facts or treat a possible write as a whole
-definition. Parent regeneration, corrected short-run coverage, natural runs and
-application performance qualification remain outstanding.
+hold. The complete native-CALL path now composes the existing typed read-only
+reservations for mesh arrays without GPU capture facts. Managed storage keeps
+its actual entry coverage; the existing runtime preflight checks whole-access
+requirements when the CALL is reached, including definitions established by
+earlier checked tasks. No possible write grants a whole definition.
+
+The [mesh and reached-definition qualification](/tmp/fortran-native-call-mesh-qualified-01/qualification.json)
+passes 374 affected CPU tests and 25 CUDA cases. Five source variants cover an
+unchanged input, an uncaptured read-only mesh, an unallocated mesh behind an
+untaken branch, a fully GPU-produced native input, and a partially produced
+input. Each runs traced, untraced, with CUDA hidden, and with resource or real
+alias rejection. Complete fields, halos, bounds, record values, mesh values and
+once-only calls match native byte for byte across two invocations. A native read
+of the GPU-produced field downloads 4,096 bytes once and preserves the device
+replica for its consumer. Insufficient whole coverage retires the domain,
+publishes only the produced region, and executes the original CALL once before
+the later consumer reopens a domain. All 1,367 source guards hold; runtime and ABI
+are unchanged. Writes still use conservative whole-array coherence.
+
+The [standalone ELMM fragment probe](/tmp/fortran-parent31-native-admission-01/completion.json)
+correctly rejects both calls without the parent-issued selected-position lifetime
+contract for their formal arrays. It neither changes capture facts nor establishes
+application admission. A fresh parent generation uses the original lifetime
+issuer and source configuration. Actual viscosity coverage, corrected short-run
+coverage, natural runs and application performance qualification remain outstanding.
 
 The unused `compiler/debugging` AST example, saved JSON and standalone viewer
 are removed. The example executed a hardcoded developer Windows path at import;
