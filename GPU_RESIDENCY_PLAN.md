@@ -6,7 +6,7 @@ The original proposal is preserved at
 `/tmp/fortran-residency-implementation-24/GPU_RESIDENCY_PLAN.original.md`.
 Historical reports and timing controls remain unchanged.
 
-## Current integration checkpoint: 2026-11-03
+## Current integration checkpoint: 2026-11-04
 
 Build06 passes all four two-step GPU/hidden-GPU cases and both natural runs
 (109 and 2,458 steps), including all 20 fields, bounds, halos and all 6/114
@@ -25,11 +25,17 @@ selected reference-runtime tests pass for the retained region-limit and
 continuation changes, scratch handling, direct transport and source quotes;
 six marked CUDA cases are outside that selection.
 
-The current runtime is `807bdd62…`. Fresh calibration passes and issues profile
-`47031362…`; its [receipt](/tmp/fortran-current-runtime-calibration-807bdd62-01/qualification.json)
-records the raw measurements and source guards. Current-runtime application
-correctness and performance remain unqualified. Fresh native, be58 and 7a612e4
-comparison controls pass focused correctness checks.
+The current runtime is `807bdd62…`. Its CUDA 13.4 calibration issued profile
+`47031362…`; that [receipt](/tmp/fortran-current-runtime-calibration-807bdd62-01/qualification.json)
+remains historical evidence. The environment now supplies CUDA 13.5 and the old
+toolkit is absent. A [fresh calibration](/tmp/fortran-current-runtime-calibration-807bdd62-cuda135-01/qualification.json)
+passes in 250.81 seconds on the same GPU with four native threads and issues
+profile `d32bc253…`. All 1,182 input guards hold, all owned worker groups exit,
+and physical-copy, structural source-submit and native-source cost models are
+available. Legacy scalar-source pricing remains explicitly excluded. This is a
+new measurement, with no old coefficients reused. Current-runtime application
+correctness and performance remain unqualified. The earlier fresh native, be58
+and 7a612e4 comparison controls passed focused correctness checks.
 
 The maintained compiler checkpoint `705efb5` has the following verification.
 The original maintained compiler invocation fails and remains recorded. Its
@@ -292,9 +298,63 @@ owned processes exit. The 1,300 marked compiler CUDA cases remain outside the
 selection. Existing runtime `807bdd62…` GPU field/copy controls are reused through
 the emitted-code equivalence evidence; no new residency GPU fixture run is
 claimed. Runtime, ABI, public schemas and profile `47031362…` are unchanged.
-[Parent attempt 25](/tmp/fortran-parent-graph-current-25/plan.json) is running with
-the original inputs, selected SGS→Convection interval and compiler budgets.
+[Parent attempt 25](/tmp/fortran-parent-graph-current-25/plan.json) was interrupted
+by the environment reset without a worker result or completion record. Its old
+session handle and host worker are absent. The
+[interruption receipt](/tmp/fortran-parent25-interruption-20261104-01/qualification.json)
+confirms that all 1,520 source and 1,896 input guards still hold; it establishes
+neither compiler success nor a timeout. The original attempt files remain intact.
+A [bounded diagnostic](/tmp/fortran-parent25-compiler-profile-01/plan.json) uses
+the same source and first candidate, with 300 unprofiled seconds followed by a
+120-second profile window. It too was interrupted before final statistics or a
+worker result. Its saved start-of-profile stack locates native dependency-proof
+validation during the original nested source scan; all 3,424 inputs still match.
+This partial stack supplies no timing attribution or compiler verdict.
 Application correctness and the 10%, 2× and 20× performance gates remain open.
+
+The retired strict-marker selector is removed from lowering and discovery.
+Explicit `--require-markers` or Python `require_markers` requests now fail with
+migration guidance; marker comments remain accepted. All 110 affected frontend,
+discovery and CLI tests pass. Source-registry checks now iterate builtin values
+when retained key identities and order match, preserving the original key-type
+fence and authoritative ID comparison. All 229 affected source tests pass. The
+[composed current-tree check](/tmp/fortran-main-residency-cleanup-composition-20261104-02/qualification.json)
+passes 140 cases, including complete emitted-artifact equivalence and late
+mutation rejection. The [fresh whole-suite qualification](/tmp/fortran-maintained-current807-c3-native-full-11/qualification-current-checkpoint.json)
+passes all 12,837 compiler cases in 48 disjoint whole-file batches and all 4,502
+paired cases in one invocation, with exactly 29 declared optional skips. Both
+mandatory CUDA IEEE cases pass; the 1,300/18 marked CUDA exclusions are unchanged.
+Independent audits verify the complete node unions, source/tool/profile guards
+and exited process groups. The compiler campaign is not a single pytest invocation.
+A separate
+retained-state comparator experiment is not promoted: its final small-fixture
+measurements do not justify the added comparison logic.
+
+The [exact original `Bound_Phi` probe](/tmp/fortran-bound-phi-generic-probe-20261104-01/qualification.json)
+preserves runtime dimensions, boundary flags and all serial branches, with only
+Phi captured. It returns a strictly validated package with zero GPU scopes:
+all six face updates stop at the generic `ELSEIF` publication restriction.
+Read-only host flags need no payload copy, but their existing native alias
+reservations must still precede each reached predicate. The next generic slice
+preserves lazy predicate evaluation while emitting those existing access units.
+Its [private composition](/tmp/fortran-elseif-current-main-composition-20261104-01/qualification.json)
+passes 332 CPU checks and the 12-case device fixture (three CPU cases and nine
+traced/untraced/hidden device modes), with 104 traced kernels verified. A reached
+managed predicate downloads four bytes without invalidating its GPU replica or
+requiring a later upload. Existing conservative alias retirements remain explicit.
+The original Bound_Phi body now generates 34 segments and eight GPU leaves;
+two reversed-section typed-guard cuts remain. Generated artifacts match the
+qualified device build. This private work has no actual ELMM pressure execution
+or natural-run qualification yet.
+
+[Parent attempt 26](/tmp/fortran-parent-graph-current-26/result.json), using the
+new calibration and unchanged selected interval/budgets, ends at the 2,400-second
+target limit. All 1,520 source and 1,966 external guards hold, owned groups exit,
+and no package is accepted. Its stack is inside active `StorageAdmission`
+retained-state reconstruction during unit emission, rather than the earlier
+full-epoch path. This identifies the next diagnostic location, not an exclusive
+attribution of the entire compile interval. A first-admission census/profile is
+required before another package attempt.
 
 The following entries preserve earlier checkpoints and their limitations.
 
@@ -1532,7 +1592,7 @@ Evidence paths below are development records, not released performance claims.
 | Four-mode checkpoint50 | Fresh native/be58/7a612/candidate50 builds; new multidimensional mapping and default unpriced source access envelopes; independent SGS/CD2/CD4 roots and original CPU pressure. All eight short correctness/profile processes and eight separate natural full20 qualifications pass; be58/7a612/candidate field bytes match in both natural cases | [Exact 64-process checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/four-mode-checkpoint-50/README.md): eight excluded warmups plus 56 measured samples, fixed rotation, four native threads/FFTW plans and full startup/output/solver/teardown clock. The 10% median gate **fails BOTH**: candidate is 16.8%/13.4% slower than fresh 7a612 for simple109/channel100, with **0/7 paired wins against both 7a612 and be58 in each case**. Small native median differences overlap variation; no robust gain. Separate profiles show actual channel 324 CD4 kernels within 367 total, 509,826,752 B/232 copies; simple keeps original advection2, 79 kernels/452,472,512 B/214 copies. Historical controls retain their original runtime/profile; candidate uses 275894c9/no profile/forced sections. No AUTO qualification, future call-group domain claim or reuse of these samples |
 | Four-mode checkpoint51 | Fresh common49 sources, fresh SGS and original Convection owner with two checked three-call branch domains; actual08 source/28 GNU/13 CUDA gates, full public build and natural 109/2458 checks of all 20 fields pass. Candidate BIN and shape hashes match both GPU controls | [Fresh 64-process checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/four-mode-checkpoint-51/README.md) retains eight excluded warmups and 56 samples with unchanged complete-process clock, rotation and FFTW4. The primary 10% and comfortable gates **fail BOTH**: 4.8%/6.5% slower than fresh 7a612, paired wins 1/7 and 0/7. Candidate medians are 13.8%/9.1% lower than native, with 7/7 paired wins each; 2×/20× remain unmet. Separate channel profile: 367 logical kernels including 324 tile kernels, 304 copies/347,849,408 B; simple retains advection 2, 79 kernels/178 copies/298,341,056 B. Source/API/copy and instrumented CPU diagnostics remain separate from untraced samples; no causal 50-to-51 or AUTO claim |
 | Reviewed caller captures | [Source-bound audit](benchmarks/reports/gpu-residency-implementation-20261023/capture-storage-audit.json) records complete cell-type-array initialization and defined grid-spacing scalars before marching | The new `containers/requests/elmm-residency-auto.json` transports these facts. Neither opaque host reservations nor a numerical tile proof grants initializedness; unknown conditional scalar snapshots remain rejected |
-| Cleanup | Removed the unused companion graph/catalog/UnifiedScopeBridge prototype and its self-only tests | Historical evidence remains intact. Further option removal waits for migration to the single production path |
+| Cleanup | Removed the unused companion graph/catalog/UnifiedScopeBridge prototype and its self-only tests; removed strict-marker selection with explicit migration errors | Historical evidence remains intact. Marker comments and discovery metadata remain accepted; 110 affected frontend/discovery/CLI tests pass. Other option removal requires evidence that current callers have migrated |
 
 Main working-tree changes and the nested solver/companion changes require separate
 repository review/commits. The failed checkpoint51 performance gate is measured

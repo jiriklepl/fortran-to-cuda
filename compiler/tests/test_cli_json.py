@@ -11,6 +11,25 @@ ROOT = Path(__file__).resolve().parents[2]
 OUTPUTS = {"generated_code.cu", "generated_cpp_impl.cpp", "generated_interface.f90", "common_functions.cuh"}
 
 
+@pytest.mark.parametrize("selection", [("--kernel", "advance"), ("--list-candidates",)])
+def test_retired_marker_option_rejects_without_reading_source_or_changing_outputs(tmp_path, selection):
+    source = tmp_path / "not-read.f90"
+    output = tmp_path / "existing"
+    output.mkdir()
+    sentinel = output / "keep.txt"
+    sentinel.write_text("untouched")
+    result = subprocess.run(
+        [sys.executable, "-m", "compiler", "--require-markers", "--input", str(source),
+         *selection, "--output-dir", str(output), "--json"],
+        cwd=ROOT, capture_output=True, text=True, check=False, timeout=30,
+    )
+    assert result.returncode == 2
+    assert "--require-markers was removed; omit it" in result.stderr
+    assert result.stdout == ""
+    assert not source.exists()
+    assert {p.name: p.read_text() for p in output.iterdir()} == {"keep.txt": "untouched"}
+
+
 def compile_report(tmp_path, body, *arguments, entry="advance"):
     source = tmp_path / "input.f90"
     source.write_text(

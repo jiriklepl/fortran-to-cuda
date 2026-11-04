@@ -161,8 +161,8 @@ python -m compiler --input fortran-stencils/elmm_cdu.f90 --kernel CDU --output-d
 `--kernel NAME`, or `--kernel MODULE::NAME` when several modules contain the same
 name. Reachable helpers in the same module are discovered and inlined without
 markers; unrelated unsupported routines remain untouched. The input must still
-parse as Fortran 2008. Use `--require-markers` for the previous strict selection
-contract, including markers on every reachable helper.
+parse as Fortran 2008. The retired `--require-markers` option and Python
+`require_markers` keyword now report an error; omit them and select entries by name.
 
 Inspect candidates without generating files:
 
@@ -177,7 +177,7 @@ under the selected options. A rejected procedure is not a promise of automatic
 host fallback; the application integration must retain its native implementation.
 The Python `discover_file(path)` API reports the narrower frontend result in
 `ProcedureCandidate.lowerable`; callers must still run `prepare_function` and
-`generate_sources`. `lower_file(path, entry, require_markers=False)` preserves
+`generate_sources`. `lower_file(path, entry)` preserves
 explicit entry selection and supports the same module qualification.
 
 Normal generation also accepts `--json`:
@@ -222,7 +222,6 @@ python -m compiler --input FILE --kernel NAME [options]
 | --- | --- | --- |
 | `--input`, `-i` | required | Fortran source file |
 | `--kernel`, `-k` | required except when listing | Entry subroutine or `module::name`, matched case-insensitively |
-| `--require-markers` | off | Require legacy file and routine markers |
 | `--list-candidates` | off | Report each module procedure's generation eligibility; write no files |
 | `--json` | off | Machine-readable candidate list or generation result; verbose diagnostics use stderr |
 | `--output-dir`, `-o` | current directory | Destination directory |
@@ -2708,7 +2707,7 @@ allocations, transfers, launches, and releases to stderr for validation.
 ## Supported Fortran subset
 
 Module subroutines are selectable without annotations. Legacy markers remain
-accepted, and `--require-markers` makes them mandatory:
+accepted as comments and discovery metadata:
 
 ```fortran
 ! kernels

@@ -49,6 +49,9 @@ from compiler.ir.intrinsics import (
     model_inquiry,
 )
 
+_REMOVED_MARKER_SELECTOR = object()
+_REMOVED_MARKER_MESSAGE = "require_markers was removed; select entries by name and omit the keyword"
+
 # Supported target ABI values for the standard intrinsic kind exports. Keep
 # source-effect authority distinct when this declaration resolver changes.
 INTRINSIC_KIND_VERSION = 3
@@ -271,14 +274,13 @@ class _KindScope:
 
 
 class _Lowerer:
-    def __init__(self, path: Path, *, require_markers: bool = False):
+    def __init__(self, path: Path):
         self.path = str(path)
         self.symbols: list[Symbol] = []
         self.routines: dict[tuple[str, str], _Routine] = {}
         self.routine_nodes: dict[tuple[str, str], tuple[str, Any]] = {}
         self.module_kinds: dict[str, _KindScope] = {}
         self.annotated: set[tuple[str, str]] = set()
-        self.require_markers = require_markers
         self.active_kinds = _KindScope()
         self.parents: dict[tuple[str, str], tuple[str, str] | None] = {}
         self.active_frames: list[tuple] = []
@@ -330,8 +332,7 @@ class _Lowerer:
                         type(child).__name__ == "Comment" and str(child).strip().lower() == "! kernel"
                         for child in subroutine.content
                     )
-                    if not self.require_markers or annotated:
-                        self.register_routine(subroutine, module_name, None, annotated)
+                    self.register_routine(subroutine, module_name, None, annotated)
 
     def register_routine(self, node, module, parent, annotated=False):
         statement = next(child for child in node.content
@@ -875,8 +876,7 @@ class _Lowerer:
         provenance = (*location.call_stack, f"{routine.name} at {self.path}:{location.line} -> {name}")
         key = self.call_key(name, routine)
         if key is None:
-            reason = "unannotated or unknown" if self.require_markers else "unknown or external"
-            raise CompilationError(f"call to {reason} kernel {name}", location)
+            raise CompilationError(f"call to unknown or external kernel {name}", location)
         return self.resolve_routine(key, provenance)
 
     def call(self, callee, argument_list, bindings, declarations, ancestors,
@@ -1520,17 +1520,9 @@ class _Lowerer:
         return ScalarType.INTEGER
 
 
-def _parse_file(path: Path, *, require_markers: bool, source_text: str | None = None) -> Any:
+def _parse_file(path: Path, *, source_text: str | None = None) -> Any:
     path = Path(path)
     try:
-        if require_markers:
-            if source_text is None:
-                with path.open(encoding="utf-8") as source:
-                    first_line = source.readline()
-            else:
-                first_line = source_text.split("\n", 1)[0]
-            if first_line.strip().lower() != "! kernels":
-                raise CompilationError("kernel files must begin with '! kernels'", SourceLocation(str(path)))
         source = str(path)
         if source_text is not None:
             source = StringIO(source_text)
@@ -1543,25 +1535,28 @@ def _parse_file(path: Path, *, require_markers: bool, source_text: str | None = 
         raise CompilationError(f"invalid Fortran syntax: {error}", SourceLocation(str(path))) from error
 
 
-def lower_file(path: str | Path, entry_name: str, *, require_markers: bool = False,
+def lower_file(path: str | Path, entry_name: str, *, require_markers=_REMOVED_MARKER_SELECTOR,
                source_text: str | None = None) -> FunctionIR:
     """Lower an entry and its reachable same-module helpers into typed IR.
 
-    Markers are optional unless ``require_markers`` is selected. The entry can
-    be qualified as ``module::procedure`` to disambiguate a multi-module file.
+    Select ``module::procedure`` to disambiguate a multi-module file. Marker
+    comments remain accepted and never restrict entry or helper selection.
     Unreachable procedures are parsed but their unsupported semantics are ignored.
     When supplied, captured text replaces the live root file while its filename
     retains source form and diagnostic identity. The caller authenticates text
     and any expanded include dependencies before using this route.
     """
+    # Reject the retired keyword explicitly, including False and None.
+    if require_markers is not _REMOVED_MARKER_SELECTOR:
+        raise CompilationError(_REMOVED_MARKER_MESSAGE)
     path = Path(path)
-    tree = _parse_file(path, require_markers=require_markers, source_text=source_text)
-    return _lower_tree(tree, path, entry_name, require_markers=require_markers)
+    tree = _parse_file(path, source_text=source_text)
+    return _lower_tree(tree, path, entry_name)
 
 
-def _lower_tree(tree, path, entry_name, *, require_markers=False):
+def _lower_tree(tree, path, entry_name):
     """Share source-backed file and compiler-owned string entry resolution."""
-    lowerer = _Lowerer(path, require_markers=require_markers)
+    lowerer = _Lowerer(path)
     lowerer.discover(tree)
     requested = entry_name.lower().split("::")
     matches = [
@@ -1571,21 +1566,22 @@ def _lower_tree(tree, path, entry_name, *, require_markers=False):
     ]
     if len(matches) != 1:
         reason = "not found" if not matches else "ambiguous across modules"
-        qualifier = "annotated " if require_markers else ""
-        raise CompilationError(f"{qualifier}entry kernel {entry_name!r} is {reason}", SourceLocation(str(path)))
+        raise CompilationError(f"entry kernel {entry_name!r} is {reason}", SourceLocation(str(path)))
     return lowerer.lower(lowerer.resolve_routine(matches[0]))
 
 
-def discover_file(path: str | Path, *, require_markers: bool = False) -> tuple[ProcedureCandidate, ...]:
+def discover_file(path: str | Path, *, require_markers=_REMOVED_MARKER_SELECTOR) -> tuple[ProcedureCandidate, ...]:
     """Inspect every module subroutine, reporting frontend rejections separately.
 
     ``lowerable`` only covers parsing, types, and supported constructs. It does
     not promise dependence legality or successful generation; callers must run
     the normal compiler pipeline before selecting a candidate for replacement.
     """
+    if require_markers is not _REMOVED_MARKER_SELECTOR:
+        raise CompilationError(_REMOVED_MARKER_MESSAGE)
     path = Path(path)
-    tree = _parse_file(path, require_markers=require_markers)
-    index = _Lowerer(path, require_markers=require_markers)
+    tree = _parse_file(path)
+    index = _Lowerer(path)
     index.discover(tree)
     candidates = []
     for key, (module, node) in index.routine_nodes.items():
@@ -1594,7 +1590,7 @@ def discover_file(path: str | Path, *, require_markers: bool = False) -> tuple[P
         statement = next(child for child in node.content if type(child).__name__ == "Subroutine_Stmt")
         reason = None
         try:
-            lowerer = _Lowerer(path, require_markers=require_markers)
+            lowerer = _Lowerer(path)
             lowerer.discover(tree)
             lowerer.lower(lowerer.resolve_routine(key))
         except CompilationError as error:

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from compiler.analysis import build_execution_plan
-from compiler.frontend import lower_file
+from compiler.frontend import discover_file, lower_file
 from compiler.ir import (
     ArrayAccess,
     Assignment,
@@ -335,25 +335,32 @@ def test_unsupported_called_declaration_has_call_provenance(tmp_path: Path) -> N
     assert "entry at" in str(failure.value)
 
 
-def test_strict_mode_rejects_unannotated_call(tmp_path: Path) -> None:
+def test_marked_entry_accepts_unannotated_helper(tmp_path: Path) -> None:
     path = source_file(
         tmp_path,
         "subroutine helper\nend subroutine\n"
         + one_routine("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", "call helper"),
     )
-    with pytest.raises(CompilationError, match="unannotated or unknown"):
-        lower_file(path, "entry", require_markers=True)
+    assert lower_file(path, "entry").name == "entry"
 
 
-def test_annotation_contract(tmp_path: Path) -> None:
+def test_marker_comments_remain_discovery_metadata_without_a_file_header(tmp_path: Path) -> None:
     path = source_file(
         tmp_path, one_routine("real(knd), intent(out) :: a(:)\ninteger, intent(in) :: n", ""), annotated=False
     )
-    with pytest.raises(CompilationError, match="begin with"):
-        lower_file(path, "entry", require_markers=True)
-    path = source_file(tmp_path, "subroutine entry\nend subroutine entry")
-    with pytest.raises(CompilationError, match="not found"):
-        lower_file(path, "entry", require_markers=True)
+    assert lower_file(path, "entry").name == "entry"
+    (candidate,) = discover_file(path)
+    assert candidate.annotated
+
+
+@pytest.mark.parametrize("value", [True, False, None])
+@pytest.mark.parametrize("api", [lower_file, discover_file], ids=["lower_file", "discover_file"])
+def test_retired_marker_keyword_rejects_before_source_access(tmp_path: Path, api, value) -> None:
+    missing = tmp_path / "not-read.f90"
+    args = (missing, "entry") if api is lower_file else (missing,)
+    with pytest.raises(CompilationError, match="require_markers was removed; select entries by name"):
+        api(*args, require_markers=value)
+    assert not missing.exists()
 
 
 @pytest.mark.parametrize("component", ["u", "v", "w"])
