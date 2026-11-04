@@ -100,3 +100,40 @@ def test_transitive_original_effect_evidence_is_retained(tmp_path, mutation):
         analysis._resource_reachability_proofs.clear()
     with pytest.raises(CompilationError):
         proof.validate(analysis, "work::owner", selection)
+
+
+@pytest.mark.parametrize("extra_arrays", [0, 32])
+def test_complete_call_storage_validation_work_is_independent_of_buffer_count(tmp_path, monkeypatch, extra_arrays):
+    from compiler.frontend.storage_mutation_effects import StorageMutationEffects
+
+    names = ["extra_" + str(index) for index in range(extra_arrays)]
+    text = SOURCE.replace("real(8)::old(4),future(4)",
+                          "real(8)::old(4),future(4)\n" + "\n".join("real(8)::" + name + "(4)" for name in names))
+    text = text.replace("p=>items(i)", "p=>items(i)\n" + "\n".join("p%aux=p%aux+" + name + "(i)" for name in names))
+    analysis, selection, proof = issue(tmp_path, text)
+    assert len(proof.resources) == extra_arrays + 2
+    original = StorageMutationEffects.validate
+    calls = []
+
+    def validate(self, *args, **kwargs):
+        if self is proof.storage:
+            calls.append(self)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(StorageMutationEffects, "validate", validate)
+    proof.validate(analysis, "work::owner", selection)
+    # Complete CALL graphs can have many native-only roots. Authentication
+    # must remain bounded independently of that physical buffer inventory.
+    assert 1 <= len(calls) <= 3
+
+
+def test_descriptor_batch_preserves_membership_and_source_authentication(tmp_path):
+    analysis, _, proof = issue(tmp_path)
+    resources = tuple(binding.root for binding, _, _ in proof.resources)
+    assert proof.storage.descriptors_unchanged(resources)
+    assert not proof.storage.descriptors_unchanged((*resources, "work::missing"))
+    with pytest.raises(CompilationError, match="exact resource tuple"):
+        proof.storage.descriptors_unchanged(list(resources))
+    analysis._storage_mutation_effects.clear()
+    with pytest.raises(CompilationError):
+        proof.storage.descriptors_unchanged(resources)

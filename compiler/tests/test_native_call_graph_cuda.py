@@ -7,7 +7,7 @@ import shutil
 import pytest
 
 from compiler.tests import test_graph_storage_epochs_cuda as build_support
-from compiler.tests.test_native_call_graph import SOURCE, generate, mesh_source
+from compiler.tests.test_native_call_graph import SOURCE, generate, mesh_source, module_helper_source
 from compiler.tests.test_native_opaque_write_cuda import API_OBSERVER
 
 DRIVER = """program verify
@@ -45,11 +45,13 @@ end program
 """
 
 
-@pytest.fixture(scope="module", params=["input", "mesh", "guarded_mesh", "produced", "partial"])
+@pytest.fixture(scope="module", params=["input", "mesh", "guarded_mesh", "produced", "partial", "module_helper"])
 def binaries(tmp_path_factory, request):
     checked = build_support.checked
     variant = request.param
     source_text, driver, capture_updates = SOURCE, DRIVER, {}
+    if variant == "module_helper":
+        source_text = module_helper_source()
     if variant in {"mesh", "guarded_mesh"}:
         source_text = mesh_source()
         driver = driver.replace("visits=0", "visits=0\nallocate(mesh(-1:2))\nmesh=[3.d0,5.d0,7.d0,11.d0]")

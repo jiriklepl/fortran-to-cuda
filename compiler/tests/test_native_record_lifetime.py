@@ -170,18 +170,44 @@ end subroutine
             .replace('end module', worker+updates+'end module'))
 
 
-def test_authentic_hierarchy_emission_and_strict_transport(tmp_path):
+@pytest.mark.parametrize('mode', ['retained', 'diagnostic_decline', 'scalar_formal'])
+def test_authentic_hierarchy_emission_and_strict_transport(tmp_path, monkeypatch, mode):
     import json
 
     from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
 
-    from compiler.tests.test_joined_boundary_lifecycle import emit
-    path, builder, middle, patches, outputs, report = emit(tmp_path, hierarchical_source())
-    patch, = patches
-    assert patch.lifecycle._native_graph is patch.completion._graph
-    assert patch.lifecycle.public()['version'] == 20
-    assert patch.validate(middle, require_source=True) is patch
-    assert patch.completion.public()['requires_domain_retirement']
+    source = hierarchical_source()
+    if mode == 'scalar_formal':
+        source = source.replace('call update(points,values,1)', 'call update(points,values,n)')
+    if mode != 'retained':
+        from compiler.scopes import segments
+        from compiler.tests.test_joined_boundary_lifecycle import emit
+
+        def decline(*_args, **_kwargs):
+            raise CompilationError('diagnostic complete-CALL admission decline')
+
+        if mode == 'diagnostic_decline':
+            monkeypatch.setattr(segments, 'native_call_fragment', decline)
+        path, builder, middle, patches, outputs, report = emit(tmp_path, source)
+        patch, = patches
+        assert patch.lifecycle._native_graph is patch.completion._graph
+        assert patch.lifecycle.public()['version'] == 20
+        assert patch.validate(middle, require_source=True) is patch
+        assert patch.completion.public()['requires_domain_retirement']
+    else:
+        from compiler.tests.test_hierarchical_child_regions import fixture
+
+        path, builder = fixture(tmp_path, source)
+        outputs, report = builder.run()
+        scope, = report['scopes']
+        member, = [row for row in scope['checked_execution_plan']['procedures']
+                    if row['procedure'] == 'hierarchical::middle']
+        operation, = [op for unit in member['units'] for op in unit['operations']['native_operations']
+                       if op['kind'] == 'complete original native CALL']
+        assert operation['resource_effects'] == {'hierarchical::right': ['read', 'write']}
+        assert operation['preserves_original_source']
+        assert 'argument::n' not in operation['host_metadata']
+        assert not member['boundaries']
     generated = outputs[report['sources'][str(path)]['replacement']]
     assert 'call record_worker(native_points,right,n)' in generated
     assert 'type(record),target,intent(inout)::points(:)' in generated

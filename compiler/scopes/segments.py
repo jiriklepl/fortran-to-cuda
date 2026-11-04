@@ -765,6 +765,11 @@ def native_call_fragment(builder, nodes):
     proof = prove_native_call_effects(analysis, builder.entry.qualified, originals)
     bindings, effects, metadata, constants, readonly = {}, {}, {}, {}, {}
     for binding, role, actions in proof.resources:
+        if actions <= {"association"}:
+            # Passing an unused actual performs no payload/descriptor access.
+            # The complete CALL/storage proof retains its association and
+            # excludes escapes; no physical host reservation is needed.
+            continue
         # Reject locally, before accepting an owner unit. A private SAVE
         # object or a hidden callee module object cannot acquire a caller
         # address merely because its source effects are now understood.
@@ -772,6 +777,11 @@ def native_call_fragment(builder, nodes):
                 and builder.visible_binding(builder.entry, binding.root) is not binding):
             raise CompilationError("native CALL reservation lost its original visible storage: " + binding.root)
         if role == "reservation":
+            if binding.rank == 0 and binding.root.startswith("argument::"):
+                # Companion handle forwarding currently proves array actuals.
+                # A scalar dummy may instead denote a temporary expression;
+                # it cannot acquire caller-owned storage identity by name.
+                raise CompilationError("native CALL scalar formal lacks caller-owned reservation: " + binding.root)
             metadata[binding.root] = binding
         elif role == "constant":
             constants[binding.root] = binding

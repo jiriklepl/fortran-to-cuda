@@ -305,6 +305,59 @@ accounts for 90 kernels in simple and 18 in channel; channel still lacks observe
 GPU advection through that parent package. These checks qualify the observer,
 not the newly generated candidate, performance or shared SGS/Convection residency.
 
+The next [parent32 package](/tmp/fortran-parent-graph-current-32/result.json)
+passed strict publication with 276 artifacts and all 1,367 compiler/reader and
+150 input guards intact. Its fresh application build and separate full-field
+diagnostic relink also passed. The [four short executions](/tmp/fortran-current807-parent32-short-01/qualification.json)
+pass all 20 fields, bounds, halos and outputs for both two-step configurations,
+with CUDA visible and hidden. The production binary remains unchanged by the
+CALL observer. Visible-device totals are 90 kernels and 174 physical copies
+(305,771,200 bytes) in simple; 18 kernels and 72 copies (155,697,152 bytes) in
+channel. These include initialization and two steps. Channel executes six SGS
+and twelve Convection kernels but no observed advection kernels. Both wall-model
+helpers still retain native cuts in this package. This is short correctness and
+coverage evidence, not natural-run qualification or a performance improvement.
+
+The follow-up compiler work addresses three independent problems: complete CALL
+descriptor authentication repeats once per buffer; association-only actuals
+unnecessarily acquire physical reservations; and a discovered native-only
+companion can retain cuts without containing GPU work. Bulk descriptor queries
+retain fresh source/storage authentication. An isolated speculative companion
+with cuts and no GPU descendants is rolled back only after proving that the
+original CALL can be admitted as one coherent native task. Reused companions,
+checked scalar-element associations and allocation-transfer tasks remain intact.
+Failed native admission keeps its useful checked continuation. The companion
+reader counts an actual BYTE reservation as a lexical physical use only when
+its canonical descriptor and opaque storage role match. Used scalar formals
+still require a separate caller-owned storage contract and retain native
+retirement until that mapping exists. The new parent33 run freezes these changes
+and preserves the original target, source facts, runtime and calibration.
+
+The [same-proof descriptor comparison](/tmp/fortran-native-descriptor-batch-01/comparison/actual-effects.json)
+reduces root storage validations from 43 to two for `ComputeUVWFluxesWM` and
+from 26 to two for `ComputeViscsWM`, retaining identical projected roles and all
+69 original source guards. This measures compiler proof-validation work only.
+Parent33 reaches whole-CALL admission but still rejects the first helper for
+missing `argument::pr` storage facts and the second for `argument::temperature`.
+Their existing read-only formal associations need a checked caller-owned host
+reservation contract; module-only read reservations cannot establish that
+contract. Adding GPU capture or initialization facts is not the remedy.
+That exploratory parent33 generation ultimately declined at the final native
+reservation role union (`native opaque storage overlaps a canonical numeric or
+scalar backing role`); it produced no qualified replacement package. Parent34
+repeats the original guarded generation with the corrected admission-first
+routing. Its result is a separate gate from the synthetic and reader tests.
+
+The [native-CALL retention checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/native-call-retention-checkpoint-20261105.json)
+passes 1,463 affected compiler/reader checks, the full companion non-CUDA suite
+(4,525 tests and 511 subtests; 39 skips), and 33 CUDA controls on the final routing
+revision. All 1,370 source guards hold. The CUDA controls retain full-field,
+halo, bounds, once-only execution and physical-copy checks across six native
+CALL variants and three scalar-association modes. Earlier scalar-association
+and continuation regressions, the stale SCons-environment failure, and the
+parent33 role-union failure remain recorded. The paired reader commit is
+`5c2828f`; runtime/ABI, tolerances and application performance gates are unchanged.
+
 The unused `compiler/debugging` AST example, saved JSON and standalone viewer
 are removed. The example executed a hardcoded developer Windows path at import;
 none of the three files has an executable caller or documentation link. The
