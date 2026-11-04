@@ -1782,10 +1782,16 @@ class LexicalOwner:
                             is not None for name, graph in self.task_graphs.items()))
 
     def _owned_publication_targets(self, plan):
-        """Companion refresh must have joined every affected output channel."""
+        """Join restored artifact maps before capturing publication targets."""
         root = self.builder
         targets, seen = [], set()
         for member in plan.members:
+            # Unit emission and module-companion emission refresh their maps.
+            # A lexical coordinator with no units reaches neither path, yet
+            # alternative rejection may have restored the root's maps since
+            # its proxy was created. Use the same original-owner refresh while
+            # preparation is still provisional and fully checked at sealing.
+            member.refresh()
             builder = member.builder
             if id(builder) in seen:
                 continue

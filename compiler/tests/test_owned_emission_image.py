@@ -534,8 +534,95 @@ def check_member_package(directory, owner, outputs, report):
     return manifest
 
 
+@pytest.mark.parametrize("kind", ["lexical", "hierarchical"])
+def test_zero_unit_companion_rejoins_restored_output_channels(tmp_path, monkeypatch, kind):
+    from compiler.frontend import source_effects
+    from compiler.frontend.summary_cache import SummaryCache
+    from compiler.tests.test_lexical_source_owner import INTERNAL_SOURCE
+
+    monkeypatch.setattr(source_effects, "_DEFAULT_SUMMARY_CACHE", SummaryCache())
+    if kind == "lexical":
+        source = INTERNAL_SOURCE.replace("do j=-2,n-3\nb(j)=b(j)+a(j)\nenddo\n", "")
+        path, parent = source_builder(tmp_path, source=source)
+        emit = emit_branch
+    else:
+        path, parent = member_fixture(tmp_path, "readonly")
+
+        def emit(builder):
+            return emit_member_branch(builder, "readonly")
+    source_before = path.read_bytes()
+    original = LexicalOwner._emit_checked_lexical
+    restored_children = []
+
+    def restore_then_emit(self, nodes, checkpoint, plan, **keywords):
+        children = [member for member in plan.members
+                    if member is not self and not plan.units(member)
+                    and not hasattr(member, "emit_companion")]
+        assert children, "the original lexical coordinator must have no emitted unit"
+        # Ordinary alternative rejection restores these exact artifact maps.
+        # No source, effect, descriptor or checked-plan authority is replaced.
+        self.builder.restore_scope_checkpoint(self.builder.scope_checkpoint())
+        assert all(member.builder.outputs is not self.builder.outputs for member in children)
+        assert all(member.builder.edits is not self.builder.edits for member in children)
+        restored_children.extend(children)
+        return original(self, nodes, checkpoint, plan, **keywords)
+
+    monkeypatch.setattr(LexicalOwner, "_emit_checked_lexical", restore_then_emit)
+    with monkeypatch.context() as patch:
+        patch.setattr(LexicalOwner, "supports_owned_emission", lambda _self, _plan: False)
+        patch.setattr(LexicalOwner, "supports_owned_unit_emission", lambda _self, _unit: False)
+        for _ in range(2):
+            with GenerationTransaction(parent) as branch:
+                emit(branch.builder)
+        with GenerationTransaction(parent) as branch:
+            old_owner, old_outputs, old_report = emit(branch.builder)
+            old_manifest = check_member_package(tmp_path / "legacy", old_owner, old_outputs, old_report)
+
+    restored_children.clear()
+    with GenerationTransaction(parent) as branch:
+        owner, outputs, report = emit(branch.builder)
+        manifest = check_member_package(tmp_path / "owned", owner, outputs, report)
+        assert restored_children
+        assert all(member.builder.outputs is branch.builder.outputs for member in restored_children)
+        assert all(member.builder.edits is branch.builder.edits for member in restored_children)
+        assert all(member.builder.scopes is branch.builder.scopes for member in restored_children)
+        assert outputs == old_outputs
+        assert manifest == old_manifest
+    assert path.read_bytes() == source_before
+    assert not parent.outputs
+    assert not parent.edits
+    assert not parent.scopes
+
+
+def test_companion_refresh_does_not_adopt_an_independent_scope_sink(tmp_path, monkeypatch):
+    _path, parent = member_fixture(tmp_path, "readonly")
+    original = LexicalOwner._owned_publication_targets
+
+    def detach_scopes(self, plan):
+        child = next(member for member in plan.members
+                     if member is not self and not plan.units(member)
+                     and not hasattr(member, "emit_companion"))
+        child.builder.scopes = list(self.builder.scopes)
+        return original(self, plan)
+
+    monkeypatch.setattr(LexicalOwner, "_owned_publication_targets", detach_scopes)
+
+    def attempt():
+        with GenerationTransaction(parent) as branch:
+            emit_member_branch(branch.builder, "readonly")
+            branch.adopt()
+
+    with pytest.raises(CompilationError, match="shared prepared output channels"):
+        attempt()
+    assert not parent.outputs
+    assert not parent.edits
+    assert not parent.scopes
+
+
 @pytest.mark.parametrize("kind", ["readonly", "native_write", "module"])
 def test_real_hierarchical_and_companion_images_preserve_all_artifacts(tmp_path, monkeypatch, kind):
+    import gc
+
     from compiler.frontend import source_effects
     from compiler.frontend.summary_cache import SummaryCache
     from compiler.scopes.storage_admission import active_admission
@@ -543,12 +630,16 @@ def test_real_hierarchical_and_companion_images_preserve_all_artifacts(tmp_path,
     monkeypatch.setattr(source_effects, "_DEFAULT_SUMMARY_CACHE", SummaryCache())
     path, parent = member_fixture(tmp_path, kind)
     original, facts = path.read_bytes(), deepcopy(parent.facts)
+    # Keep speculative warmup graphs alive through both routes. Their weak
+    # retention otherwise makes manifest cache counters depend on GC timing.
+    warmups = []
     with monkeypatch.context() as patch:
         patch.setattr(LexicalOwner, "supports_owned_emission", lambda _self, _plan: False)
         patch.setattr(LexicalOwner, "supports_owned_unit_emission", lambda _self, _unit: False)
         for _ in range(2):
             with GenerationTransaction(parent) as branch:
-                emit_member_branch(branch.builder, kind)
+                warmups.append(emit_member_branch(branch.builder, kind))
+        gc.collect()
         with GenerationTransaction(parent) as branch:
             owner, old_outputs, old_report = emit_member_branch(branch.builder, kind)
             old_manifest = check_member_package(tmp_path / "legacy", owner, old_outputs, old_report)
@@ -572,6 +663,7 @@ def test_real_hierarchical_and_companion_images_preserve_all_artifacts(tmp_path,
 
     monkeypatch.setattr(LexicalOwner, "_seal_owned_emission", seal)
     monkeypatch.setattr(LexicalOwner, "_publish_owned_emission", staticmethod(publish))
+    gc.collect()
     with GenerationTransaction(parent) as branch:
         owner, new_outputs, new_report = emit_member_branch(branch.builder, kind)
         new_manifest = check_member_package(tmp_path / "owned", owner, new_outputs, new_report)

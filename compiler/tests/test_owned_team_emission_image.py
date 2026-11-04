@@ -76,6 +76,8 @@ def strict_package(directory, owner, outputs, report):
     ("combined", False), ("separate", False), ("combined", True),
 ])
 def test_original_team_images_preserve_every_artifact(tmp_path, monkeypatch, kind, companion):
+    import gc
+
     from compiler.frontend import source_effects
     from compiler.frontend.summary_cache import SummaryCache
     from compiler.scopes.storage_admission import active_admission
@@ -84,12 +86,15 @@ def test_original_team_images_preserve_every_artifact(tmp_path, monkeypatch, kin
     paths, parent = team_fixture(tmp_path, kind, companion=companion)
     originals = tuple(path.read_bytes() for path in paths)
     facts = deepcopy(parent.facts)
+    # Retain weakly cached warmup graphs until both complete packages exist.
+    warmups = []
     with monkeypatch.context() as patch:
         patch.setattr(LexicalOwner, "supports_owned_emission", lambda _self, _plan: False)
         patch.setattr(LexicalOwner, "supports_owned_unit_emission", lambda _self, _unit: False)
         for _ in range(2):
             with GenerationTransaction(parent) as branch:
-                emit_branch(branch.builder)
+                warmups.append(emit_branch(branch.builder))
+        gc.collect()
         with GenerationTransaction(parent) as branch:
             old_owner, old_outputs, old_report = emit_branch(branch.builder)
             assert teams(old_owner)
@@ -104,6 +109,7 @@ def test_original_team_images_preserve_every_artifact(tmp_path, monkeypatch, kin
         return original_publish(targets, image, tickets)
 
     monkeypatch.setattr(LexicalOwner, "_publish_owned_emission", staticmethod(publish))
+    gc.collect()
     with GenerationTransaction(parent) as branch:
         owner, outputs, report = emit_branch(branch.builder)
         manifest = strict_package(tmp_path / "owned", owner, outputs, report)

@@ -127,6 +127,8 @@ def emit(directory, parent, source, kind, monkeypatch, enabled, *, fault=None):
 
 @pytest.mark.parametrize("kind", ["readonly", "native_write", "scalar_element", "empty_six", "atomic_varying"])
 def test_real_hierarchical_emission_keeps_identical_sources_and_manifest(tmp_path, monkeypatch, kind):
+    import gc
+
     from compiler.frontend import source_effects
     from compiler.frontend.summary_cache import SummaryCache
 
@@ -138,11 +140,15 @@ def test_real_hierarchical_emission_keeps_identical_sources_and_manifest(tmp_pat
     # Registered original-source queries are monotonic across rejected
     # generation branches. Materialize them through one ordinary full run so
     # both comparisons start from the same parsed authority and cache state.
+    # Retain their weakly cached graphs through both comparisons, including GC.
+    warmups = []
     for _warm in range(2):
         with GenerationTransaction(parent) as branch:
-            emit(tmp_path, branch.builder, source, kind, monkeypatch, enabled=False)
+            warmups.append(emit(tmp_path, branch.builder, source, kind, monkeypatch, enabled=False))
+    gc.collect()
     with GenerationTransaction(parent) as branch:
         first = emit(tmp_path, branch.builder, source, kind, monkeypatch, enabled=False)
+    gc.collect()
     with GenerationTransaction(parent) as branch:
         second = emit(tmp_path, branch.builder, source, kind, monkeypatch, enabled=True)
     assert first[0] == second[0]
