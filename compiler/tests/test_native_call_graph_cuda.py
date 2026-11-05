@@ -10,6 +10,7 @@ from compiler.tests import test_graph_storage_epochs_cuda as build_support
 from compiler.tests.test_native_call_graph import SOURCE, generate, mesh_source, module_helper_source
 from compiler.tests.test_native_formal_host_reads import direct_source
 from compiler.tests.test_native_formal_host_reads import source as formal_source
+from compiler.tests.test_native_function_plan_identity import function_source
 from compiler.tests.test_native_opaque_write_cuda import API_OBSERVER
 
 DRIVER = """program verify
@@ -48,15 +49,17 @@ end program
 
 
 @pytest.fixture(scope="module", params=["input", "mesh", "guarded_mesh", "produced", "partial", "module_helper",
-                                      "formal", "forwarded_formal", "guarded_formal"])
+                                      "formal", "forwarded_formal", "guarded_formal", "function_formal"])
 def binaries(tmp_path_factory, request):
     checked = build_support.checked
     variant = request.param
     source_text, driver, capture_updates = SOURCE, DRIVER, {}
     if variant == "module_helper":
         source_text = module_helper_source()
-    if variant in {"formal", "forwarded_formal", "guarded_formal"}:
+    if variant in {"formal", "forwarded_formal", "guarded_formal", "function_formal"}:
         source_text = direct_source() if variant == "formal" else formal_source()
+        if variant == "function_formal":
+            source_text = function_source()
         driver = driver.replace("integer::i,j,k,step,unit", "integer::i,j,k,step,unit\nreal(8),allocatable::mesh(:)")
         driver = driver.replace("visits=0", "visits=0\nallocate(mesh(-step:3-step))\nmesh=[3.d0,5.d0,7.d0,11.d0]")
         driver = driver.replace("call advance()", "call advance(mesh)")
@@ -140,7 +143,8 @@ def test_complete_native_call_keeps_fields_and_readonly_replica(binaries, mode):
         environment.pop(name, None)
     build_support.checked([str(native)], directory, mode + "-native", environment)
     expected = (directory / "fields.bin").read_bytes()
-    mesh_values = 4 if variant in {"mesh", "guarded_mesh", "formal", "forwarded_formal", "guarded_formal"} else 0
+    mesh_values = 4 if variant in {"mesh", "guarded_mesh", "formal", "forwarded_formal", "guarded_formal",
+                                  "function_formal"} else 0
     assert len(expected) == 2 * ((3 * 8**3 + 8 + mesh_values) * 8 + 4)
     if mode != "untraced":
         environment["FORT_RUNTIME_TRACE"] = "1"
@@ -167,7 +171,7 @@ def test_complete_native_call_keeps_fields_and_readonly_replica(binaries, mode):
         launches = [index for index, event in enumerate(events) if event["kind"] == "launch"]
         fault_ordinal = 1 if variant in {"guarded_mesh", "guarded_formal"} else 0
         failed = mode in {"resource", "alias"} and ordinal == fault_ordinal
-        native_child = failed and variant in {"forwarded_formal", "guarded_formal"}
+        native_child = failed and variant in {"forwarded_formal", "guarded_formal", "function_formal"}
         absent_child = variant == "guarded_formal" and ordinal == 0
         if native_child or absent_child:
             # A caller-side reservation fails before entering the child: retire
