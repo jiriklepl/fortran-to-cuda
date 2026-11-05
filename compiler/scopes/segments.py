@@ -144,12 +144,13 @@ def _native_analysis(analysis, *, complete_source=()):
     return result
 
 
-def _host_read_candidate(builder, binding):
-    """A missing GPU capture proof can admit only original module storage."""
+def _host_read_storage_candidate(builder, binding):
+    """Recognize original storage for a BYTE reservation, without READ authority."""
+    formal = binding
     actual = getattr(builder, "_native_host_array_actuals", {}).get(binding.root)
     if actual is not None:
-        # An original read-only dummy may borrow this operation's stable
-        # module allocation. The caller reserves that actual's BYTE range
+        # An original read-only dummy may borrow this operation's original
+        # allocation. The caller reserves that actual's BYTE range
         # before association, and complete effects below must still be reads.
         if (binding.intent != "in" or binding.rank != actual.rank
                 or binding.attributes & {"pointer", "optional", "allocatable", "volatile", "asynchronous", "value"}):
@@ -165,9 +166,49 @@ def _host_read_candidate(builder, binding):
     candidate = (module is not None and module.bindings.get(parts[1]) is binding and binding.rank > 0
             and ("allocatable" in binding.attributes or fixed) and not binding.attributes & forbidden
             and binding.dtype in {"real", "integer"} and binding.kind in {4, 8})
+    scope = module
+    if not candidate and binding.root.startswith("argument::") and builder.config.scope_execution == "graph":
+        # Formals of this invocation denote caller-owned allocations. A child
+        # may refer to the same root through its original canonical mapping;
+        # it cannot reserve an unrelated procedure's similarly named dummy.
+        scopes = [builder.entry.scope]
+        member = getattr(builder, "_native_host_owner", None)
+        if member is not None:
+            owner = member.owner
+            if (member.builder is not builder or member.routine is not builder.entry
+                    or owner.builder.analysis is not builder.analysis or owner.builder.entry is not owner.routine
+                    or (owner.members.get(member.routine.qualified) is not member
+                        and (member.routine.qualified in owner.members or member.routine.qualified not in owner.active))):
+                return False
+            scopes.append(owner.routine.scope)
+            if actual is not None:
+                parent, call = member.parent, member.original_source_call
+                if (parent is None or call is None or parent.builder.analysis is not builder.analysis
+                        or parent.builder.entry is not parent.routine
+                        or builder.analysis.routines.get(parent.routine.qualified) is not parent.routine):
+                    return False
+                graph, selected = builder.analysis._selected_source(parent.routine.qualified, (call,))
+                if len(selected) != 1 or graph.nodes[selected[0]].kind != "call":
+                    return False
+                resolved = parent.builder.execution_source_call(parent.routine, call)
+                mappings = [mapping for mapping in resolved.mappings if mapping.formal_binding is formal]
+                if (resolved.procedure != member.routine.qualified or len(mappings) != 1
+                        or mappings[0].binding is None or mappings[0].section is not None
+                        or _kind(mappings[0].actual) != "Name"
+                        or parent.canonical(mappings[0].binding) is not actual
+                        or member.canonical_bindings.get(formal.root) is not actual):
+                    return False
+        scope = binding.declaring_scope
+        routine = builder.analysis.routines.get(scope.qualified)
+        candidate = (any(scope is original for original in scopes) and routine is not None
+            and routine.scope is scope and binding.name in routine.arguments
+            and scope.bindings.get(binding.name) is binding and binding.rank > 0
+            and binding.intent in {"in", "inout"} and "allocatable" in binding.attributes
+            and not binding.attributes & (forbidden | {"target"})
+            and binding.dtype in {"real", "integer"} and binding.kind in {4, 8})
     if not candidate:
         return False
-    specification = next((node for node in getattr(module.node, "content", ())
+    specification = next((node for node in getattr(scope.node, "content", ())
                           if _kind(node) == "Specification_Part"), None)
     for node in walk(specification):
         if _kind(node) in {"Common_Stmt", "Equivalence_Stmt"}:
@@ -178,6 +219,11 @@ def _host_read_candidate(builder, binding):
             if match is None or binding.name.lower() in {name.strip().lower() for name in match[1].split(",")}:
                 return False
     return True
+
+
+def _host_read_candidate(builder, binding):
+    """Storage eligibility is provisional; complete effects must prove READ."""
+    return _host_read_storage_candidate(builder, binding)
 
 
 @dataclass

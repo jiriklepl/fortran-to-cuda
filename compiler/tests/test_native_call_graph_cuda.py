@@ -8,6 +8,8 @@ import pytest
 
 from compiler.tests import test_graph_storage_epochs_cuda as build_support
 from compiler.tests.test_native_call_graph import SOURCE, generate, mesh_source, module_helper_source
+from compiler.tests.test_native_formal_host_reads import direct_source
+from compiler.tests.test_native_formal_host_reads import source as formal_source
 from compiler.tests.test_native_opaque_write_cuda import API_OBSERVER
 
 DRIVER = """program verify
@@ -45,13 +47,36 @@ end program
 """
 
 
-@pytest.fixture(scope="module", params=["input", "mesh", "guarded_mesh", "produced", "partial", "module_helper"])
+@pytest.fixture(scope="module", params=["input", "mesh", "guarded_mesh", "produced", "partial", "module_helper",
+                                      "formal", "forwarded_formal", "guarded_formal"])
 def binaries(tmp_path_factory, request):
     checked = build_support.checked
     variant = request.param
     source_text, driver, capture_updates = SOURCE, DRIVER, {}
     if variant == "module_helper":
         source_text = module_helper_source()
+    if variant in {"formal", "forwarded_formal", "guarded_formal"}:
+        source_text = direct_source() if variant == "formal" else formal_source()
+        driver = driver.replace("integer::i,j,k,step,unit", "integer::i,j,k,step,unit\nreal(8),allocatable::mesh(:)")
+        driver = driver.replace("visits=0", "visits=0\nallocate(mesh(-step:3-step))\nmesh=[3.d0,5.d0,7.d0,11.d0]")
+        driver = driver.replace("call advance()", "call advance(mesh)")
+        driver = driver.replace("write(unit)a,b,c,points%flux,points%aux,visits",
+                                "write(unit)a,b,c,points%flux,points%aux,visits\n"
+                                "if(lbound(mesh,1)/=-step.or.ubound(mesh,1)/=3-step)error stop 'mesh bounds'\n"
+                                "write(unit)mesh\ndeallocate(mesh)")
+        if variant == "guarded_formal":
+            source_text = source_text.replace("subroutine advance(mesh)",
+                                              "subroutine advance(mesh,run)\nlogical,intent(in)::run")
+            source_text = source_text.replace("call child(mesh)", "if(run)then\ncall child(mesh)\nendif")
+            driver = driver.replace("allocate(mesh(-step:3-step))\nmesh=[3.d0,5.d0,7.d0,11.d0]",
+                                    "if(step==2)then\nallocate(mesh(-step:3-step))\nmesh=[3.d0,5.d0,7.d0,11.d0]\nendif")
+            driver = driver.replace("call advance(mesh)", "call advance(mesh,step==2)")
+            driver = driver.replace("if(visits/=1)", "if(visits/=step-1)")
+            driver = driver.replace("if(lbound(mesh,1)", "if(step==2)then\nif(lbound(mesh,1)")
+            driver = driver.replace("write(unit)mesh\ndeallocate(mesh)",
+                                    "write(unit)mesh\ndeallocate(mesh)\nelse\n"
+                                    "if(allocated(mesh))error stop 'unreached mesh inspected'\n"
+                                    "write(unit)[0.d0,0.d0,0.d0,0.d0]\nendif")
     if variant in {"mesh", "guarded_mesh"}:
         source_text = mesh_source()
         driver = driver.replace("visits=0", "visits=0\nallocate(mesh(-1:2))\nmesh=[3.d0,5.d0,7.d0,11.d0]")
@@ -115,7 +140,7 @@ def test_complete_native_call_keeps_fields_and_readonly_replica(binaries, mode):
         environment.pop(name, None)
     build_support.checked([str(native)], directory, mode + "-native", environment)
     expected = (directory / "fields.bin").read_bytes()
-    mesh_values = 4 if variant in {"mesh", "guarded_mesh"} else 0
+    mesh_values = 4 if variant in {"mesh", "guarded_mesh", "formal", "forwarded_formal", "guarded_formal"} else 0
     assert len(expected) == 2 * ((3 * 8**3 + 8 + mesh_values) * 8 + 4)
     if mode != "untraced":
         environment["FORT_RUNTIME_TRACE"] = "1"
@@ -140,8 +165,25 @@ def test_complete_native_call_keeps_fields_and_readonly_replica(binaries, mode):
         events = [dict(re.findall(r"(\w+)=([^ ]+)", line)) | {"kind": line.split()[1]}
                   for line in trace.splitlines() if line.startswith("FORT_SCOPED ") and "provenance_version=1" in line]
         launches = [index for index, event in enumerate(events) if event["kind"] == "launch"]
-        fault_ordinal = 1 if variant == "guarded_mesh" else 0
+        fault_ordinal = 1 if variant in {"guarded_mesh", "guarded_formal"} else 0
         failed = mode in {"resource", "alias"} and ordinal == fault_ordinal
+        native_child = failed and variant in {"forwarded_formal", "guarded_formal"}
+        absent_child = variant == "guarded_formal" and ordinal == 0
+        if native_child or absent_child:
+            # A caller-side reservation fails before entering the child: retire
+            # the completed producer, then execute that original child once.
+            # The untaken branch never inspects its unallocated actual.
+            assert len(launches) == 1, trace
+            assert sum(item["kind"] == "close" for item in events) == 1, trace
+            assert len({item["domain"] for item in events}) == 1, trace
+            transfers = [item for item in events if item["kind"] in {"upload", "download"}]
+            assert sorted((item["kind"], int(item["buffer"]), int(item["bytes"])) for item in transfers) == sorted([
+                ("upload", identities["native_graph::a"], 4096),
+                ("download", identities["native_graph::b"], 4096)]), trace
+            if absent_child:
+                assert "OPAQUE_BYTES_RANGE" not in trace, trace
+            ledgers.append(transfers)
+            continue
         retired = failed or variant == "partial"
         # Prework rejection publishes the completed prefix, executes the CALL
         # once, and permits a new domain for the later consumer. Queued work

@@ -61,10 +61,10 @@ def _caller_arrays(parent, resolved, child, immutable_inputs, reached):
                     | set(getattr(child, "parameterized_native_bindings", {}))) if parameterized else set()
     native_arrays = [mapping for mapping in associations if mapping.formal_binding.root in native_roots]
     if native_arrays:
-        from compiler.scopes.segments import _host_read_candidate
+        from compiler.scopes.segments import _host_read_storage_candidate
         for mapping in native_arrays:
-            if mapping.formal_binding.intent != "in" or not _host_read_candidate(parent.builder, mapping.binding):
-                raise CompilationError("native-only formal requires its original stable read-only module actual")
+            if mapping.formal_binding.intent != "in" or not _host_read_storage_candidate(parent.builder, mapping.binding):
+                raise CompilationError("native-only formal requires its original caller-owned read-only actual")
     arrays = [mapping for mapping in associations if mapping not in native_arrays
               if (("argument::" + mapping.formal in child.resources) if parameterized else
                   parent.owner.resources.get(parent.canonical(mapping.binding).root, (None, None))[1] in numbers)]

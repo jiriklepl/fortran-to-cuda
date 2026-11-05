@@ -30,6 +30,10 @@ def _readonly(summary, root):
         raise CompilationError("host-only native storage cannot acquire a managed write: " + root)
 
 
+def _readonly_version(binding):
+    return 2 if binding.root.startswith("argument::") and "allocatable" in binding.attributes else 1
+
+
 @dataclass(frozen=True)
 class NativeReadonlyPermit:
     identity: str
@@ -62,6 +66,20 @@ class NativeReadonlyPermit:
         ancestry = (DerivationArena.accepts(arena, self._arena)
                     if type(arena) is DerivationArena and self._arena is not None else None)
         actual = self._actual
+        member = getattr(self._builder, "_native_host_owner", None)
+        owner = getattr(member, "owner", None)
+        parent = getattr(member, "parent", None)
+        association = (() if member is None else
+                       (id(member.original_source_call), id(parent), id(parent.builder), id(parent.routine),
+                        id(parent.builder.analysis), id(parent.builder.entry),
+                        id(member.canonical_bindings),
+                        tuple((root, id(value)) for root, value in member.canonical_bindings.items()),
+                        id(parent.canonical_bindings),
+                        tuple((root, id(value)) for root, value in parent.canonical_bindings.items())))
+        ownership = (() if member is None else
+                     (id(member), id(member.builder), id(member.routine), id(owner),
+                      id(owner.builder), id(owner.routine), id(owner.builder.analysis), id(owner.builder.entry),
+                      id(owner.members.get(member.routine.qualified)), tuple(owner.active), association))
         actual_state = (() if actual is None else
             (tuple((part.name, id(getattr(actual, part.name))) for part in fields(actual)),
              id(actual.declaring_scope.bindings.get(actual.name))))
@@ -83,7 +101,7 @@ class NativeReadonlyPermit:
                 id(getattr(self._builder, "_native_host_array_actuals", {}).get(binding.root)),
                 tuple((part.name, id(getattr(binding, part.name))) for part in fields(binding)),
                 id(binding.declaring_scope.bindings.get(binding.name)),
-                tuple(id(node) for node in self._selection), self._summary_state(self._summary), actual_state,
+                tuple(id(node) for node in self._selection), self._summary_state(self._summary), actual_state, ownership,
                 id(captures.get(binding.root)), id(captures.get(actual.root)) if actual is not None else None, role)
 
     def _summary_state(self, summary):
@@ -125,6 +143,7 @@ class NativeReadonlyPermit:
         _readonly(self._summary, self.binding.root)
         record = json.loads(self._record)
         if (sha256(self._record.encode()).hexdigest() != self.identity
+                or record["version"] != _readonly_version(self.binding)
                 or _encoded(self.binding.public()) != _encoded(record["binding"])
                 or (None if self._actual is None else _encoded(self._actual.public())) != self._actual_record
                 or self._summary["summary_identity"] != record["summary_identity"]
@@ -359,7 +378,7 @@ def readonly_accesses(builder, analysis, nodes, summary, bindings):
         if root != binding.root or not _host_read_candidate(builder, binding):
             raise CompilationError("native opaque READ requires its original readonly storage candidate")
         _readonly(summary, root)
-        record = {"version": 1, "authority": "complete original reached native operation",
+        record = {"version": _readonly_version(binding), "authority": "complete original reached native operation",
                   "procedure": builder.entry.qualified, "source_graph": consumer_graph.identity,
                   "selected_node_ids": list(selected), "binding": binding.public(),
                   "analysis_identity": summary["analysis_identity"], "summary_identity": summary["summary_identity"],
