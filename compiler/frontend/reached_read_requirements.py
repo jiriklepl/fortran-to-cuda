@@ -174,14 +174,22 @@ def _upward_reads(unit, mapper, *, conditional=False):
                 definitions[symbol] = value
             else:
                 definitions.pop(symbol, None)
-    # A preceding iteration must not be able to supply a supposedly incoming
-    # value.  Exact per-iteration self updates are sufficient; shifted reads or
-    # multiple target mappings need a separate dependence proof.
+    # A preceding iteration must not supply a supposedly incoming value.
+    # Identical injective coordinates for every loop iterator imply that any
+    # read/write collision belongs to the same iteration. Invariant axes may
+    # differ (boundary planes), including values that coincide at runtime.
+    # This does not infer that those planes are disjoint or initialized.
     for symbol in reads.keys() & writes.keys():
         mappings = {box.axes for box in (*reads[symbol], *writes[symbol])}
         if len(mappings) != 1 and not conditional:
-            raise ReachedReadRequirementsUnsupported(
-                "reached read/write storage requires identical per-iteration self-update mappings")
+            for read in reads[symbol]:
+                for write in writes[symbol]:
+                    mapper.tick(1 + len(read.axes))
+                    matched = {left.axis for left, right in zip(read.axes, write.axes, strict=True)
+                               if left.axis is not None and left == right}
+                    if matched != set(range(len(unit.region.loops))):
+                        raise ReachedReadRequirementsUnsupported(
+                            "reached read/write storage requires identical per-iteration self-update mappings")
     return {symbol: _merge_boxes(boxes) for symbol, boxes in reads.items()}, set(writes)
 
 
