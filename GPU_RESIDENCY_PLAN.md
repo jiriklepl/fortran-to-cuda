@@ -379,11 +379,31 @@ array; fields and native record updates remain bit-identical to native execution
 The separate committed parent34 package also passes generation, build and four
 two-step ELMM checks (both configurations, visible and hidden GPU), including all
 20 fields, bounds, halos and outputs. Its copy counts and GPU coverage match
-parent32; it predates the new formal reservation support. Frozen parent35 applies
-that support to the unchanged original interval and already retains
-`ComputeViscsWM` with READ reservations for Pr, Temperature and Moisture. Its
-final graph and application gates remain pending. Neither these diagnostic runs
-nor the synthetic copy checks establish a new application speedup.
+parent32; it predates the new formal reservation support. Frozen parent35 retains
+`ComputeViscsWM` with READ reservations for Pr, Temperature and Moisture, but
+fails final plan sealing: its native CALL closure includes scalar functions,
+which the portable fingerprint incorrectly queried as structured subroutines.
+The failed attempt retains all original source/input guards and emits no package.
+
+The [native-function plan checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/native-function-plan-checkpoint-20261105.json)
+binds complete function templates to their existing original function authority.
+It also normalizes registered joined-storage references so fresh parses yield
+the same native-call fingerprint. Functions keep their original CPU execution;
+they gain no structured-entry or GPU authority. Qualification passes 1,503
+affected compiler/reader tests, 205 plan/storage tests and 54 CUDA controls, with
+all 1,373 source guards intact. Actual ELMM `ComputeUVWFluxesWM` and
+`ComputeViscsWM` closures pass too, including their internal scalar functions.
+Runtime, ABI and calibration are unchanged. Parent36 is the frozen application
+candidate; its final graph and application gates remain pending at this checkpoint.
+
+Parent36's additional diagnostics identify the missing CD4 child route:
+`CD4divU/V/W` automatic scratch-array bounds read `tilenx/tileny/tilenz` before
+the original body starts. The conditional-return specification check rejects
+those reads. A small source fixture reproduces the same rejection. The next
+capability must establish host-valid specification reads before CALL entry,
+preserving device replicas on READ; relaxing the check alone would permit
+stale host bounds. Neither these diagnostics nor the synthetic copy checks
+establish a new application speedup.
 
 The unused `compiler/debugging` AST example, saved JSON and standalone viewer
 are removed. The example executed a hardcoded developer Windows path at import;

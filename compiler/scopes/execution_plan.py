@@ -85,8 +85,11 @@ def _portable_proof_references(analysis, authorities):
         references[proof.identity] = _digest({"portable_reached_read_requirements_version": 1,
                                               "requirements": portable(public)})
 
+    from compiler.frontend.descriptor_teams import DescriptorTeamProof
+    from compiler.frontend.descriptor_worksharing import OriginalWorksharingStorage
     from compiler.frontend.native_call_effects import NativeCallEffects
     from compiler.frontend.native_demand import SourceBoundNativeDemandEffects
+    from compiler.frontend.source_functions import _original, _source_identity
 
     def original_selection(source, procedure, originals):
         graph, selected = source._selected_source(procedure, originals)
@@ -115,13 +118,39 @@ def _portable_proof_references(analysis, authorities):
         reachability = proof.reachability
         graph = reachability.native_graph
         for template in graph.templates:
-            originals = (template._selection if template._selection is not None else
-                         tuple(template._routine.execution.content))
-            reference(template, "identity", original_selection(source, template.procedure, originals))
+            if template.procedure in source.routines:
+                originals = (template._selection if template._selection is not None else
+                             tuple(template._routine.execution.content))
+                selection = original_selection(source, template.procedure, originals)
+            else:
+                # Native CALL closures also contain scalar functions. They
+                # have original function authority, never structured-entry
+                # registration. Bind the complete callee to that existing
+                # authority without inventing an executable entry graph.
+                routine = _original(source, template.procedure)
+                if template._selection is not None or routine is not template._routine:
+                    raise CompilationError("portable native function requires its complete original callee")
+                selection = {"source_inputs": source.inputs.identity(), "procedure": template.procedure,
+                             "complete_original_function": _source_identity(source, routine)}
+            reference(template, "identity", selection)
         reference(graph, "identity", original_selection(source, graph.procedure, graph._selection))
         reference(reachability, "proof_identity",
                   original_selection(source, reachability.procedure, reachability._selection))
         if type(proof) is NativeCallEffects:
+            # Confined-pointer storage receipts include this graph's exact
+            # in-process identity. Normalize the issued receipts after the
+            # graph, and before the storage proof that contains them.
+            for joined in proof.storage._joined_storage:
+                if type(joined) is DescriptorTeamProof:
+                    joined.validate(source, joined.procedure, joined.selected_node_ids)
+                    selection = original_selection(source, joined.procedure, joined._originals)
+                elif type(joined) is OriginalWorksharingStorage:
+                    joined.validate(source, joined._routine)
+                    selection = original_selection(source, joined._routine.qualified,
+                                                   tuple(joined._routine.execution.content))
+                else:
+                    raise CompilationError("portable native storage requires its original joined callee authority")
+                reference(joined, "proof_identity", selection)
             reference(proof.storage, "identity", original_selection(source, proof.procedure, proof._selection))
         reference(proof, "identity", original_selection(source, proof.procedure, proof._selection))
     return portable
