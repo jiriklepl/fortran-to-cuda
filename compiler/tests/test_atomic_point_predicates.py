@@ -124,7 +124,7 @@ def test_same_patch_count_registration_placeholders_render_own_all_reservations(
     bindings = routine.scope.bindings
     # This isolates reservation transport. Original bindings/references remain
     # authentic; eligibility and trace rendering are outside the key regression.
-    monkeypatch.setattr(compiler.scopes.segments, '_host_read_candidate', lambda *_: True)
+    monkeypatch.setattr(compiler.scopes.segments, '_host_read_storage_candidate', lambda *_: True)
     monkeypatch.setattr(compiler.scopes.provenance, 'position', lambda *_args, **_kwargs: [])
     builder = SimpleNamespace(config=SimpleNamespace(scope_execution='graph'), device_budget=4096,
         entry=routine, capture_many=lambda values: [dict(FACT) for _ in values],

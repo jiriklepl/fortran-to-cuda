@@ -422,8 +422,22 @@ calls still fail runtime input-definition preflight; both cases also reject 36
 viscosity boundary-plane tasks. A small original-source fixture reproduces a
 separate restriction in reached-read admission: differing invariant plane
 coordinates are rejected even when all loop-iterator coordinates match. This
-is the next bounded coverage fix; the native CALL initialization and CD4 entry
-obligations remain separate and must not be waived.
+is addressed by the [reached-plane-read checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/reached-face-read-checkpoint-20261105.json).
+Matching injective coordinates for every loop iterator prove that any read/write
+collision occurs in that same iteration. Invariant plane coordinates may differ
+or coincide at runtime. The proof retains exact incoming rectangles and source
+order; it grants no initialization to unread cells. Shifted and permuted
+cross-iteration accesses still decline.
+
+Qualification passes 105 focused checks, 361 dependent checks and two CUDA
+controls. Each nonempty device case executes two kernels and uploads its input
+plane once; full arrays, bounds and untouched halos match native bit-for-bit.
+Zero-trip and hidden-GPU cases perform no payload copies or kernels. An obsolete
+reservation mock also failed on the pre-change frozen compiler; its test now
+mocks the current storage-candidate helper. Parent37 is generating from an
+immutable snapshot with the same ELMM target, facts, runtime and calibration.
+Its application coverage and timing gates remain pending. Native CALL input
+initialization and CD4 entry obligations remain separate and must not be waived.
 
 Parent36's additional diagnostics identify the missing CD4 child route:
 `CD4divU/V/W` automatic scratch-array bounds read `tilenx/tileny/tilenz` before
