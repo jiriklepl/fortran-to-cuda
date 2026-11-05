@@ -119,6 +119,19 @@ inline Region unite(Region a, const Region &b, Budget &budget) {
     return a;
 }
 struct Effects { Region reads, writes, overwrites; };
+template<class State> inline Region physical_values(const State &b) {
+    // Merge complementary mirror partitions before applying the union budget.
+    Region physical = b.host_current;
+    physical.insert(physical.end(), b.device_current.begin(), b.device_current.end());
+    coalesce(physical);
+    Budget budget;
+    return unite(b.initialized, physical, budget);
+}
+template<class State> inline Region tracked_accesses(const State &b, const Region &requested) {
+    Budget budget;
+    const auto unknown = difference(requested, physical_values(b), budget);
+    return difference(requested, unknown, budget);
+}
 struct AdmittedReads { Region initialized, host_current; };
 // The compiler establishes these exact upward reads at their original source
 // point. Already tracked values keep their current mirror; only previously
@@ -142,6 +155,17 @@ template<class State> inline Prepared prepare(State &b, const Effects &e, bool d
     auto current = unite(device ? b.device_current : b.host_current, e.writes, budget);
     auto opposite = difference(device ? b.host_current : b.device_current, e.writes, budget);
     return {device, std::move(initialized), std::move(current), std::move(opposite)};
+}
+// Original CPU execution may touch only part of its declared envelope. Known
+// values in possible read/preservation regions have already reached the host.
+// Unknown holes stay unknown: only proved overwrites add definitions/current
+// values. Possible writes invalidate overlapping device replicas regardless.
+template<class State> inline Prepared prepare_original_host(const State &b, const Effects &e) {
+    Budget budget;
+    auto initialized = unite(b.initialized, e.overwrites, budget);
+    auto current = unite(b.host_current, e.overwrites, budget);
+    auto opposite = difference(b.device_current, e.writes, budget);
+    return {false, std::move(initialized), std::move(current), std::move(opposite)};
 }
 }} // namespace fort_scoped::coherence
 #endif

@@ -214,7 +214,8 @@ typedef struct fort_scope_scratch_stats_v1 {
 enum fort_scope_plan_endpoint { FORT_SCOPE_PLAN_COMPLETE = 0, FORT_SCOPE_PLAN_CONTINUE = 1 };
 enum fort_scope_plan_kind { FORT_SCOPE_PLAN_NATIVE = 0, FORT_SCOPE_PLAN_WORKER = 1,
                            FORT_SCOPE_PLAN_FORGET = 2, FORT_SCOPE_PLAN_DISCARD = 3,
-                           FORT_SCOPE_PLAN_TEAM_ENTRY = 4, FORT_SCOPE_PLAN_TEAM_NATIVE_CALL = 5 };
+                           FORT_SCOPE_PLAN_TEAM_ENTRY = 4, FORT_SCOPE_PLAN_TEAM_NATIVE_CALL = 5,
+                           FORT_SCOPE_PLAN_ORIGINAL_HOST = 6 };
 int fort_scope_plan_forget_sections_v1(fort_scope_t context, fort_buffer_t buffer,
                                        const fort_scope_section *sections, size_t count);
 typedef struct fort_scope_plan_binding {
@@ -624,6 +625,19 @@ int fort_scope_layout_get(fort_scope_t context, fort_buffer_t buffer, fort_scope
  * Existing end/cancel calls complete each acquired resource. */
 int fort_scope_access_begin_v1(fort_scope_t context, const fort_scope_plan_binding *bindings,
                                size_t count, int device, void **devices);
+/* Acquire conservative may-access envelopes of unchanged original CPU work.
+ * Caller must prove complete effects, stable canonical storage and synchronous
+ * completion. All tracked physical values in read/preservation regions reach
+ * the host; unknown holes are neither copied nor declared initialized. Pending
+ * conflicting device work and overlapping DMA readers obey ordinary task
+ * ordering. READ retains device replicas. Successful host_end invalidates
+ * possible writes on the device, but only proved overwrites add definitions.
+ * The source body executes exactly once after successful acquisition. Complete
+ * every binding with host_end; cancel only before that body starts. Failures
+ * after source execution must never cause replay. Numerical/device access uses
+ * access_begin_v1 and retains its strict initialization requirements. */
+int fort_scope_original_host_begin_v1(fort_scope_t context, const fort_scope_plan_binding *bindings,
+                                       size_t count);
 /* Checked opaque device transaction. Bindings describe physical canonical
  * roots, using the same exact read/write/overwrite rules as generated tasks.
  * Types/ranks/element sizes are checked before any access or provider call.

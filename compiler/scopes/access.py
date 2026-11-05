@@ -25,15 +25,17 @@ class NativeAcquisitionCode:
     expression: str
 
 
-def native_access_begin(count, *, bindings="fort_bindings", context="fort_context"):
+def native_access_begin(count, *, bindings="fort_bindings", context="fort_context", original_host=False):
     """Drain dependencies and acquire every native resource as one transaction."""
     if not count:
         return "FORT_SCOPE_OK"
     pointer = f"c_loc({bindings})" if count else "c_null_ptr"
+    if original_host:
+        return f"fort_scope_original_host_begin_v1({context}, {pointer}, {count}_c_size_t)"
     return f"fort_scope_access_begin_v1({context}, {pointer}, {count}_c_size_t, 0_c_int, c_null_ptr)"
 
 
-def build_native_acquisition(accesses, prefix="fort_native_task", *, context="fort_context"):
+def build_native_acquisition(accesses, prefix="fort_native_task", *, context="fort_context", original_host=False):
     """Collect already-guarded exact effects before the first prepared access.
 
     Coordinate preparation must precede ``prepare``. The runtime copies every
@@ -48,7 +50,8 @@ def build_native_acquisition(accesses, prefix="fort_native_task", *, context="fo
         prepare += [f"{bindings}({index}) = fort_scope_plan_binding()",
                     f"{bindings}({index})%buffer = {handle}", f"{bindings}({index})%access = {access}"]
     return NativeAcquisitionCode(specification, tuple(prepare),
-                                 native_access_begin(len(accesses), bindings=bindings, context=context))
+                                 native_access_begin(len(accesses), bindings=bindings, context=context,
+                                                     original_host=original_host))
 
 
 def _statement_lines(statement):

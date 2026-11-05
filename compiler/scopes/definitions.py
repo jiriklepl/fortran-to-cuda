@@ -42,6 +42,13 @@ def summarize(scope, *, entry_undefined=()):
         return (whole - kills) | writes, (undefined | kills) - writes
 
     def native(operation, whole, undefined):
+        from compiler.scopes.original_host import validate
+
+        if validate(operation):
+            # The unchanged CALL synchronizes tracked may-accesses when
+            # reached. Its conservative envelope adds no entry requirement
+            # and grants no new definitions, including after partial writes.
+            return whole, undefined
         if not operation.coherence_sections.available:
             # A whole overwrite removes preservation reads, never explicit RHS
             # reads. The original source must define those before this point.

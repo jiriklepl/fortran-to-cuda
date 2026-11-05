@@ -439,6 +439,21 @@ immutable snapshot with the same ELMM target, facts, runtime and calibration.
 Its application coverage and timing gates remain pending. Native CALL input
 initialization and CD4 entry obligations remain separate and must not be waived.
 
+The [original-host access checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/original-host-access-checkpoint-20261105.json)
+adds a distinct CPU may-access contract for unchanged original CALLs with complete
+registered effects, stable storage and synchronous completion. It synchronizes
+tracked values within read/preservation ranges without requiring untouched holes
+to be initialized. Reads preserve device replicas; possible writes invalidate
+their overlap without granting definition credit. Numerical tasks keep strict
+initialization checks. Runtime and planning share the region transitions.
+
+Qualification passes 2,194 compiler/runtime checks, 4,595 companion checks plus
+511 subtests (39 optional skips), and 55 CUDA cases covering partial producers,
+original CPU reads/writes, subsequent GPU consumers and prework failures. All
+1,379 source guards hold. Task-acquisition ABI 2 and runtime `966c7d59` require
+fresh calibration; the sampler now measures both host acquisition paths. Actual
+ELMM use of this new contract, natural correctness and timing remain open.
+
 Parent36's additional diagnostics identify the missing CD4 child route:
 `CD4divU/V/W` automatic scratch-array bounds read `tilenx/tileny/tilenz` before
 the original body starts. The conditional-return specification check rejects

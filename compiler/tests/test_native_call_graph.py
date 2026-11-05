@@ -83,7 +83,7 @@ def test_complete_original_call_keeps_graph_domain_and_host_reservations(tmp_pat
     assert not any(demand._plan is None for demand in builder._resource_demands.values())
     changed = outputs[report["sources"][str(path)]["replacement"]]
     assert changed.count("call update(points,a)") == 1
-    assert "fort_scope_access_begin_v1" in changed
+    assert "fort_scope_original_host_begin_v1" in changed
     assert "storage_size(visits" in changed.lower()
     assert "shape(visits" not in changed.lower()
     assert "is_contiguous(visits" not in changed.lower()
@@ -220,7 +220,7 @@ def test_call_reservations_remain_inside_original_condition(tmp_path):
 
 
 @pytest.mark.parametrize("produced_whole", [False, True])
-def test_call_whole_definition_requirement_is_checked_when_reached(tmp_path, produced_whole):
+def test_call_may_access_does_not_require_untouched_cells_defined(tmp_path, produced_whole):
     text = SOURCE.replace("call update(points,a)", "call update(points,b)")
     if not produced_whole:
         for axis in ("i", "j", "k"):
@@ -235,13 +235,15 @@ def test_call_whole_definition_requirement_is_checked_when_reached(tmp_path, pro
     assert operation["resource_effects"] == {"native_graph::b": ["read"]}
     plan_unit, = [unit for proc in owner["checked_execution_plan"]["procedures"] for unit in proc["units"]
                   if any(op["kind"] == "complete original native CALL" for op in unit["operations"]["native_operations"])]
-    assert plan_unit["ordered_definitions"]["required_whole"] == ["native_graph::b"]
+    assert plan_unit["ordered_definitions"]["required_whole"] == []
+    assert plan_unit["ordered_definitions"]["whole_on_return"] == []
+    assert operation["original_host_access"]["plan_kind"] == 6
     assert not plan_unit["ordered_definitions"]["possible_definition_changes"]
     assert builder.facts["captures"]["native_graph::b"]["initialized"] == "none"
     changed = outputs[report["sources"][str(path)]["replacement"]]
     call = changed.index("call update(points,b)")
     preflight = changed.rfind("fort_scope_plan_validate(fort_context)", 0, call)
-    acquisition = changed.rfind("fort_scope_access_begin_v1", 0, call)
+    acquisition = changed.rfind("fort_scope_original_host_begin_v1", 0, call)
     assert 0 <= preflight < acquisition < call
     assert "FORT_SCOPE_UNINITIALIZED" in changed[:call]
     assert "fort_native_ready = .true." in changed[preflight:call]
@@ -254,7 +256,8 @@ def test_unknown_entry_definitions_do_not_create_native_definition_credit(tmp_pa
     assert all(fact["initialized"] == "none" for fact in builder.facts["captures"].values())
     unit, = [unit for proc in owner["checked_execution_plan"]["procedures"] for unit in proc["units"]
              if any(op["kind"] == "complete original native CALL" for op in unit["operations"]["native_operations"])]
-    assert unit["ordered_definitions"]["required_whole"] == ["native_graph::a"]
+    assert unit["ordered_definitions"]["required_whole"] == []
+    assert unit["ordered_definitions"]["whole_on_return"] == []
     assert not unit["ordered_definitions"]["possible_definition_changes"]
 
 

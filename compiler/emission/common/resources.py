@@ -111,7 +111,11 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
         "numerical_contract": numerical_build_contract(),
         "headers": sorted(name for name in outputs if name.endswith((".h", ".hpp", ".cuh"))),
         "task_acquisition": {
-            "abi_version": 1, "begin": "fort_scope_access_begin_v1",
+            "abi_version": 2, "begin": "fort_scope_access_begin_v1",
+            "original_host_begin": "fort_scope_original_host_begin_v1",
+            "original_host_plan_kind": 6,
+            "original_host_effects": "synchronize tracked may-accesses; only must-overwrites add definitions",
+            "host_access_cost": "maximum measured strict and original-host acquisition cost",
             "validation": "all resource effects before transfers or numerical execution",
             "host_completion": "one completion for task downloads; independent and disjoint accesses do not wait",
             "upload_lifetime": "exact pending DMA read sections; completion events precede unrelated numerical work",

@@ -1414,14 +1414,7 @@ Effects effects(const Buffer &b, const fort_scope_access *access) {
     return e;
 }
 Region physical_values(const Buffer &b) {
-    // Mirror partitions can contain up to 32 rectangles each. Coalesce their
-    // combined neighbours before applying the bounded union; appending a
-    // complementary 33rd cell must not reject a physically contiguous value.
-    Region physical = b.host_current;
-    physical.insert(physical.end(),b.device_current.begin(),b.device_current.end());
-    coalesce(physical);
-    Budget budget;
-    return unite(b.initialized,physical,budget);
+    return fort_scoped::coherence::physical_values(b);
 }
 void reconcile(Context &c, Buffer &b, bool device) {
     // Every rectangle copied is current at the source. Copying already-current
@@ -1459,17 +1452,25 @@ struct AccessPreparation {
     Region writes;
     bool reconciled = false;
 };
-AccessPreparation prepare_effects(Buffer &b, const Effects &e, bool device) {
+AccessPreparation prepare_effects(Buffer &b, const Effects &e, bool device, bool original_host=false) {
+    require(!original_host || !device, FORT_SCOPE_ARGUMENT, "original host access cannot acquire device pointers");
     require(!b.prepared, FORT_SCOPE_STATE, "buffer access already prepared");
     AccessPreparation result{&b, {b.initialized, b.host_current, b.device_current}, {}, {}, e.writes, false};
     // Simulate the complete acquisition against private metadata. In
     // particular, a later undefined read or invalid binding cannot publish an
     // earlier buffer or leave a write prepared for work that never ran.
-    auto ensure_state = [&](const Region &requested) {
+    auto ensure_state = [&](Region requested) {
         if (requested.empty()) return;
         Budget budget;
-        require(difference(requested, result.state.initialized, budget).empty(), FORT_SCOPE_UNINITIALIZED,
-                "access reads an uninitialized section");
+        if (original_host) {
+            // Synchronize only tracked physical values. A may-read envelope
+            // is not evidence that every cell is read or even initialized.
+            // Keep physical versions surviving a semantic definition kill.
+            requested = fort_scoped::coherence::tracked_accesses(b, requested);
+        } else {
+            require(difference(requested, result.state.initialized, budget).empty(), FORT_SCOPE_UNINITIALIZED,
+                    "access reads an uninitialized section");
+        }
         auto &chosen = device ? result.state.device_current : result.state.host_current;
         auto missing = difference(requested, chosen, budget);
         auto updated = unite(chosen, missing, budget);
@@ -1481,7 +1482,8 @@ AccessPreparation prepare_effects(Buffer &b, const Effects &e, bool device) {
         const auto preserve = difference(e.writes, e.overwrites, budget);
         ensure_state(e.reads);
         ensure_state(preserve);
-        return prepare(result.state, e, device);
+        return original_host ? fort_scoped::coherence::prepare_original_host(result.state, e)
+                             : prepare(result.state, e, device);
     };
     try { result.prepared = compute(); }
     catch (const Fragmented &) {
@@ -1503,8 +1505,8 @@ AccessPreparation prepare_effects(Buffer &b, const Effects &e, bool device) {
     }
     return result;
 }
-AccessPreparation prepare_access(Buffer &b, const fort_scope_access *access, bool device) {
-    return prepare_effects(b,effects(b,access),device);
+AccessPreparation prepare_access(Buffer &b, const fort_scope_access *access, bool device, bool original_host=false) {
+    return prepare_effects(b,effects(b,access),device,original_host);
 }
 void acquire_prepared_accesses(Context &c, std::vector<AccessPreparation> &prepared,
                                bool device, void **devices) {
@@ -1551,7 +1553,7 @@ void acquire_prepared_accesses(Context &c, std::vector<AccessPreparation> &prepa
     }
 }
 void begin_accesses(Context &c, const fort_scope_plan_binding *bindings, size_t count,
-                    bool device, void **devices) {
+                    bool device, void **devices, bool original_host=false) {
     require(!count || bindings, FORT_SCOPE_ARGUMENT, "missing task access bindings");
     require(!device || !count || devices, FORT_SCOPE_ARGUMENT, "missing device pointer outputs");
     drain_accesses(c,bindings,count);
@@ -1561,7 +1563,7 @@ void begin_accesses(Context &c, const fort_scope_plan_binding *bindings, size_t 
     for (size_t i=0; i<count; ++i) {
         require(seen.insert(bindings[i].buffer).second, FORT_SCOPE_ALIAS,
                 "task access bindings repeat a canonical buffer");
-        prepared.push_back(prepare_access(buffer(c, bindings[i].buffer), &bindings[i].access, device));
+        prepared.push_back(prepare_access(buffer(c, bindings[i].buffer), &bindings[i].access, device, original_host));
     }
     if (device) {
         std::vector<fort_buffer_t> handles;
@@ -2981,7 +2983,9 @@ extern "C" int fort_scope_plan_add_costs_v2(fort_scope_t h, uint32_t kind, uint6
     return with(h, [&](Context &c) {
         PlanningTimer timing(c, h, "query_construction");
         require(c.plan_recording && !c.plan_installed, FORT_SCOPE_STATE, "reset the planning query before recording");
-        require(kind <= FORT_SCOPE_PLAN_FORGET && (gpu_available == 0 || gpu_available == 1),
+        require((kind <= FORT_SCOPE_PLAN_FORGET || kind == FORT_SCOPE_PLAN_ORIGINAL_HOST) &&
+                (gpu_available == 0 || gpu_available == 1) &&
+                (kind != FORT_SCOPE_PLAN_ORIGINAL_HOST || !gpu_available),
                 FORT_SCOPE_ARGUMENT, "invalid planning operation kind or availability");
         require(c.graph_planning || c.plan.size() < 256, FORT_SCOPE_BOUNDARY, "planning record budget exceeded");
         require(kind != FORT_SCOPE_PLAN_WORKER || unit, FORT_SCOPE_ARGUMENT, "worker planning unit requires an identity");
@@ -2999,7 +3003,8 @@ extern "C" int fort_scope_plan_add_compute_costs_v3(fort_scope_t h, uint32_t kin
     return with(h, [&](Context &c) {
         PlanningTimer timing(c, h, "query_construction");
         require(c.plan_recording && !c.plan_installed, FORT_SCOPE_STATE, "reset the planning query before recording");
-        require(kind <= FORT_SCOPE_PLAN_FORGET && (gpu_available == 0 || gpu_available == 1) &&
+        require((kind <= FORT_SCOPE_PLAN_FORGET || kind == FORT_SCOPE_PLAN_ORIGINAL_HOST) &&
+                (gpu_available == 0 || gpu_available == 1) &&
                 (kind == FORT_SCOPE_PLAN_WORKER || !gpu_available),
                 FORT_SCOPE_ARGUMENT, "invalid planning operation kind or availability");
         require(c.graph_planning || c.plan.size() < 256, FORT_SCOPE_BOUNDARY, "planning record budget exceeded");
@@ -4212,6 +4217,13 @@ extern "C" int fort_scope_access_begin_v1(fort_scope_t h, const fort_scope_plan_
         require(device == 0 || device == 1, FORT_SCOPE_ARGUMENT, "invalid task access execution mode");
         if (count) note_numerical_activity(c);
         begin_accesses(c, bindings, count, device != 0, devices);
+    });
+}
+extern "C" int fort_scope_original_host_begin_v1(fort_scope_t h, const fort_scope_plan_binding *bindings,
+                                                  size_t count) {
+    return with(h, [&](Context &c) {
+        if (count) note_numerical_activity(c);
+        begin_accesses(c, bindings, count, false, nullptr, true);
     });
 }
 static int execute_external_transaction(fort_scope_t h,const fort_scope_external_call_v1 *call,
