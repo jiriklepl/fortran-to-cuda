@@ -358,6 +358,33 @@ and continuation regressions, the stale SCons-environment failure, and the
 parent33 role-union failure remain recorded. The paired reader commit is
 `5c2828f`; runtime/ABI, tolerances and application performance gates are unchanged.
 
+The [caller-owned native READ checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/native-formal-read-checkpoint-20261105.json)
+extends that same reservation path to original allocatable caller arguments.
+Complete native effects must prove READ even when the caller declares INOUT.
+Checked IN children borrow the original caller's canonical handle, preserving
+physical origins and bounds. The exact source CALL and mapping are authenticated
+before admission and checked again after source callbacks. These reservations
+grant neither initialized coverage nor GPU capture or write permission. The
+version-two READ permit and paired reader (`13213de`) preserve that distinction;
+the runtime and calibration are unchanged.
+
+Qualification passes 1,492 affected compiler/reader tests, 4,534 companion tests
+and 511 subtests (39 skips), and 49 CUDA controls, with all 1,372 source guards
+held. The 15 new device cases cover direct and forwarded caller arrays, changed
+allocation lower bounds, an untaken branch with an unallocated actual, hidden
+GPU fallback, and prework resource/alias rejection. Successful mixed execution
+uploads the unchanged GPU input once and performs no GPU copy for the host-only
+array; fields and native record updates remain bit-identical to native execution.
+
+The separate committed parent34 package also passes generation, build and four
+two-step ELMM checks (both configurations, visible and hidden GPU), including all
+20 fields, bounds, halos and outputs. Its copy counts and GPU coverage match
+parent32; it predates the new formal reservation support. Frozen parent35 applies
+that support to the unchanged original interval and already retains
+`ComputeViscsWM` with READ reservations for Pr, Temperature and Moisture. Its
+final graph and application gates remain pending. Neither these diagnostic runs
+nor the synthetic copy checks establish a new application speedup.
+
 The unused `compiler/debugging` AST example, saved JSON and standalone viewer
 are removed. The example executed a hardcoded developer Windows path at import;
 none of the three files has an executable caller or documentation link. The

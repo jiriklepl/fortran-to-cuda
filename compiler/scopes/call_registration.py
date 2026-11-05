@@ -49,8 +49,8 @@ def register_original_actuals(owner, arrays, *, scalar_elements=(), native_array
     native = getattr(owner, "original_native_actual_registrations", {})
     owner.original_native_actual_registrations = native
     for mapping in native_arrays:
-        from compiler.scopes.segments import _host_read_candidate
-        if (mapping.formal_binding.intent != "in" or not _host_read_candidate(owner.builder, mapping.binding)
+        from compiler.scopes.segments import _host_read_storage_candidate
+        if (mapping.formal_binding.intent != "in" or not _host_read_storage_candidate(owner.builder, mapping.binding)
                 or str(mapping.actual).lower().startswith("fort_")):
             raise CompilationError("native actual registration requires its original read-only association")
         owner.declaration(mapping.binding)
