@@ -159,6 +159,7 @@ module fort_scoped_memory
   end type
   integer(c_int32_t), parameter, public :: FORT_SCOPE_TEAM_ABI_VERSION=1, FORT_SCOPE_PLAN_TEAM_ENTRY=4
   integer(c_int32_t), parameter, public :: FORT_SCOPE_PLAN_TEAM_NATIVE_CALL=5
+  integer(c_int32_t), parameter, public :: FORT_SCOPE_PLAN_ORIGINAL_HOST=6
   integer(c_int64_t), parameter, public :: FORT_SCOPE_TEAM_PROTOCOL_ID=int(z'4654434f4c4c0001',kind=c_int64_t)
   type, bind(C), public :: fort_scope_team_costs
     integer(c_int32_t) :: version=1, valid=0, cpu_threads=0, expected_omp_level=1
@@ -270,6 +271,7 @@ module fort_scoped_memory
   public :: fort_scope_numerical_environment_supported
   public :: fort_scope_layout_get, fort_scope_host_begin, fort_scope_host_end
   public :: fort_scope_access_begin_v1
+  public :: fort_scope_original_host_begin_v1
   public :: fort_scope_buffer_valid_v1
   public :: fort_scope_device_begin, fort_scope_device_end, fort_scope_cancel_access
   public :: fort_scope_gpu_enter, fort_scope_gpu_leave, fort_scope_note_launch, fort_scope_wait
@@ -701,6 +703,13 @@ module fort_scoped_memory
       type(c_ptr), value :: bindings, devices
       integer(c_size_t), value :: count
       integer(c_int), value :: device
+      integer(c_int) :: status
+    end function
+    function fort_scope_original_host_begin_v1(context, bindings, count) bind(C) result(status)
+      import c_int, c_int64_t, c_ptr, c_size_t
+      integer(c_int64_t), value :: context
+      type(c_ptr), value :: bindings
+      integer(c_size_t), value :: count
       integer(c_int) :: status
     end function
     function fort_scope_host_end(context, buffer) bind(C) result(status)

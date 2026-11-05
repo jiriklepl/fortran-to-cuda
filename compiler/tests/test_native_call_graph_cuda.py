@@ -48,7 +48,7 @@ end program
 """
 
 
-@pytest.fixture(scope="module", params=["input", "mesh", "guarded_mesh", "produced", "partial", "module_helper",
+@pytest.fixture(scope="module", params=["input", "mesh", "guarded_mesh", "produced", "partial", "partial_write", "module_helper",
                                       "formal", "forwarded_formal", "guarded_formal", "function_formal"])
 def binaries(tmp_path_factory, request):
     checked = build_support.checked
@@ -99,13 +99,16 @@ def binaries(tmp_path_factory, request):
                                     "write(unit)mesh\ndeallocate(mesh)\nelse\n"
                                     "if(allocated(mesh))error stop 'unreached mesh inspected'\n"
                                     "write(unit)[0.d0,0.d0,0.d0,0.d0]\nendif")
-    elif variant in {"produced", "partial"}:
+    elif variant in {"produced", "partial", "partial_write"}:
         source_text = SOURCE.replace("call update(points,a)", "call update(points,b)")
         capture_updates["native_graph::b"] = {"storage": "stable", "initialized": "none",
                                               "escapes": False, "allocation_changes": False}
-        if variant == "partial":
+        if variant in {"partial", "partial_write"}:
             for axis in ("i", "j", "k"):
                 source_text = source_text.replace(f"do {axis}=-1,6", f"do {axis}=0,5", 1)
+        if variant == "partial_write":
+            source_text = source_text.replace("intent(in)::input", "intent(inout)::input").replace(
+                "p%aux=2*p%flux", "p%aux=2*p%flux\ninput(i,1,1)=input(i,1,1)+i")
 
     def emit(directory):
         from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
@@ -188,7 +191,7 @@ def test_complete_native_call_keeps_fields_and_readonly_replica(binaries, mode):
                 assert "OPAQUE_BYTES_RANGE" not in trace, trace
             ledgers.append(transfers)
             continue
-        retired = failed or variant == "partial"
+        retired = failed
         # Prework rejection publishes the completed prefix, executes the CALL
         # once, and permits a new domain for the later consumer. Queued work
         # still executes once; execution and storage context IDs are distinct.
@@ -197,7 +200,24 @@ def test_complete_native_call_keeps_fields_and_readonly_replica(binaries, mode):
         assert len({item["domain"] for item in events}) == (2 if retired else 1), trace
         assert len({item["context"] for item in events if item["domain_role"] == "execution"}) == (2 if retired else 1), trace
         transfers = [item for item in events if item["kind"] in {"upload", "download"}]
-        producer_bytes = 6**3 * 8 if variant == "partial" else 4096
+        producer_bytes = 6**3 * 8 if variant in {"partial", "partial_write"} else 4096
+        if variant in {"partial", "partial_write"} and not retired:
+            # Unknown halo cells remain unknown through the original READ.
+            # Exact source reads at the later consumer admit only its missing
+            # host values. The produced interior keeps its device replica.
+            totals = {}
+            for item in transfers:
+                key = item["kind"], int(item["buffer"])
+                totals[key] = totals.get(key, 0) + int(item["bytes"])
+            assert totals == {("upload", identities["native_graph::a"]): 4096,
+                              ("upload", identities["native_graph::b"]): (
+                                  4096 if variant == "partial_write" else 4096 - producer_bytes),
+                              ("download", identities["native_graph::b"]): producer_bytes,
+                              ("download", identities["native_graph::c"]): 4096}, trace
+            between = [item for item in events[launches[0]+1:launches[1]] if item["kind"] == "download"]
+            assert sum(int(item["bytes"]) for item in between) == producer_bytes, trace
+            ledgers.append(transfers)
+            continue
         assert sorted((item["kind"], int(item["buffer"]), int(item["bytes"])) for item in transfers) == sorted([
             ("upload", identities["native_graph::a"], producer_bytes),
             ("download", identities["native_graph::b"], producer_bytes),

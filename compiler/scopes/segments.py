@@ -20,6 +20,8 @@ from compiler.frontend.source_effects import _kind
 from compiler.ir import CompilationError
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, MODEL_INQUIRIES
 from compiler.scopes.native_opaque_accesses import public_accesses
+from compiler.scopes.original_host import public as original_host_public
+from compiler.scopes.original_host import validate as original_host_access
 
 
 @dataclass
@@ -840,11 +842,9 @@ def native_call_fragment(builder, nodes):
                 # grant only a host reservation, never a device definition.
                 readonly[binding.root] = metadata[binding.root] = binding
             else:
-                # This is entry coverage, not the reached domain's current
-                # coverage. Earlier checked tasks may define the array. The
-                # whole-access DefinitionSummary below requires the existing
-                # lexical preflight before host acquisition and original CALL;
-                # rejection publishes the prefix and executes native once.
+                # Capture proves storage identity/lifetime, never whole input
+                # coverage. Original CPU may-access acquisition synchronizes
+                # only tracked values without defining untouched cells.
                 builder.capture(binding)
     graph, selected = analysis._selected_source(builder.entry.qualified, originals)
     summary = {"complete": True, "analysis_identity": graph.authority_identity,
@@ -1465,6 +1465,7 @@ class StructuredScope:
                                    "resource_effects": {root: sorted(actions) for root, actions in sorted(operation.effects.items())},
                                    "managed_resources": sorted(operation.coherence_effects),
                                    "native_opaque_accesses": public_accesses(operation),
+                                   "original_host_access": original_host_public(operation),
                                    "native_environment": [proof.public() for proof in operation.native_environment],
                                    "metadata_constructors": [proof.public() for proof in operation.constructor_proofs],
                                    "native_local_state": [proof.public() for proof in operation.native_states.values()],
@@ -1555,6 +1556,7 @@ class StructuredScope:
             return lines
 
         def native_hooks(operation):
+            original_host = original_host_access(operation)
             if operation.call_effects is not None:
                 operation.call_effects.validate(operation.proof_analysis, builder.entry.qualified,
                     tuple(builder.inline.original_selection(operation.nodes)))
@@ -1582,7 +1584,8 @@ class StructuredScope:
             accesses = refined(operation, query=False)
             from compiler.scopes.access import build_native_acquisition
             if accesses is not None:
-                task = build_native_acquisition((access.handle, access.access_name) for access in accesses)
+                task = build_native_acquisition(((access.handle, access.access_name) for access in accesses),
+                                                original_host=original_host)
                 lines += ["block", *[line for access in accesses for line in access.specification], *task.specification]
                 for access in accesses:
                     lines += [*access.prepare]
@@ -1593,7 +1596,7 @@ class StructuredScope:
                 flags += ["FORT_SCOPE_WRITE_ALL"] if "write" in actions else []
                 flags += ["FORT_SCOPE_OVERWRITE_ALL"] if root in operation.coherence_overwrites else []
                 prepared.append((handles[root], "fort_scope_access(flags=" + " + ".join(flags) + ")"))
-            task = build_native_acquisition(prepared)
+            task = build_native_acquisition(prepared, original_host=original_host)
             return [*lines, "block", *task.specification, *task.prepare, *_checked(task.expression), "end block"]
 
         def native_end(operation):
@@ -1603,6 +1606,7 @@ class StructuredScope:
             return [line for handle in roots for line in _checked(f"fort_scope_host_end(fort_context, {handle})")]
 
         def native_plan(operation):
+            kind = "FORT_SCOPE_PLAN_ORIGINAL_HOST" if original_host_access(operation) else "FORT_SCOPE_PLAN_NATIVE"
             lines = []
             if operation.source_reads is not None:
                 if preflight_failure is None:
@@ -1631,7 +1635,7 @@ class StructuredScope:
                           f"fort_bindings({index})%access%flags = " + " + ".join(flags)]
             count = len(accesses) if accesses is not None else len(operation.coherence_effects)
             lines += ["if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_plan_add( &",
-                      "    fort_context, FORT_SCOPE_PLAN_NATIVE, 0_c_int64_t, &",
+                      f"    fort_context, {kind}, 0_c_int64_t, &",
                       f"    {'c_loc(fort_bindings)' if count else 'c_null_ptr'}, {count}_c_size_t, &",
                       "    0.0_c_double, 0.0_c_double, 0_c_int)",
                       *(["end block " + block] if accesses is not None else []), *choose(),

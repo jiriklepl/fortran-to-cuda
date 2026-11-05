@@ -621,10 +621,18 @@ int main(int argc, char **argv) {
     const size_t lo[] = {1, 1, 1}, hi[] = {4, 4, 4};
     const fort_scope_section rectangle{lo, hi};
     const fort_scope_access read_rectangle{0, 1, &rectangle, 0, nullptr, 0, nullptr};
-    cost("host_access_seconds", measure(512, [&] {
+    const auto strict_host_access = measure(512, [&] {
         SCOPE(fort_scope_host_begin(context, buffer, &read_rectangle));
         SCOPE(fort_scope_host_end(context, buffer));
-    }));
+    });
+    const fort_scope_plan_binding original_host_binding{buffer, read_rectangle};
+    const auto original_host_access = measure(512, [&] {
+        SCOPE(fort_scope_original_host_begin_v1(context, &original_host_binding, 1));
+        SCOPE(fort_scope_host_end(context, buffer));
+    });
+    // Both host policies use the existing calibrated term. Cover the more
+    // expensive transaction rather than silently reusing strict-only costs.
+    cost("host_access_seconds", std::max(strict_host_access, original_host_access));
     int previous = 0;
     void *stream_pointer = nullptr;
     // A newly initialized source scope also owns mandatory stream/pool

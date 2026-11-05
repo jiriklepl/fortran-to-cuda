@@ -172,12 +172,15 @@ inline bool gpu_estimate_available(const Operation &op) {
     return op.kind == FORT_SCOPE_PLAN_WORKER && op.gpu_available &&
         (!op.compute_costs || (op.compute_costs->known_backends & FORT_SCOPE_COMPUTE_GPU));
 }
+inline bool native_operation(const Operation &op) {
+    return op.kind == FORT_SCOPE_PLAN_NATIVE || op.kind == FORT_SCOPE_PLAN_ORIGINAL_HOST;
+}
 inline double compute(const Operation &op, const fort_scope_plan_costs &costs, bool gpu) {
     if (op.compute_costs) {
         const auto &totals = *op.compute_costs;
         require(valid_compute_costs(totals), "invalid_backend_compute_costs");
         require(totals.known_backends & (gpu ? FORT_SCOPE_COMPUTE_GPU : FORT_SCOPE_COMPUTE_GENERATED_CPU),
-                gpu ? "gpu_compute_unavailable" : (op.kind == FORT_SCOPE_PLAN_NATIVE ?
+                gpu ? "gpu_compute_unavailable" : (native_operation(op) ?
                 "coordinated_host_compute_unavailable" : "generated_cpu_compute_unavailable"));
         return gpu ? totals.gpu_seconds : totals.generated_cpu_seconds;
     }
@@ -270,7 +273,9 @@ inline void validate_metadata(const Inputs &input, bool check_work, bool check_c
     }
     size_t workers = 0;
     for (const auto &op : input.operations) {
-        require(op.kind <= FORT_SCOPE_PLAN_TEAM_NATIVE_CALL, "unknown_planning_operation");
+        require(op.kind <= FORT_SCOPE_PLAN_ORIGINAL_HOST, "unknown_planning_operation");
+        require(op.kind != FORT_SCOPE_PLAN_ORIGINAL_HOST || !op.gpu_available,
+                "original_host_cannot_execute_on_device");
         if (op.kind == FORT_SCOPE_PLAN_TEAM_ENTRY || op.kind == FORT_SCOPE_PLAN_TEAM_NATIVE_CALL) {
             require(op.bindings.empty() && !op.unit && !op.gpu_available && !op.flops && !op.memory_bytes,
                     op.kind == FORT_SCOPE_PLAN_TEAM_ENTRY ? "invalid_collective_entry_marker" :
@@ -579,12 +584,16 @@ inline void copy_region(State &s,Resource &b,const Region &parts,bool upload,
         }
     }
 }
-inline void ensure(State &s, Resource &b, const Region &requested, bool device,
+inline void ensure(State &s, Resource &b, Region requested, bool device,
                    const Inputs &input, const fort_scope_plan_costs &costs,
-                   const EvidenceSink *sink = nullptr, uint64_t unit = 0, const char *phase = "operation") {
+                   const EvidenceSink *sink = nullptr, uint64_t unit = 0, const char *phase = "operation",
+                   bool original_host = false) {
     if (requested.empty()) return;
     coherence::Budget budget;
-    require(coherence::difference(requested, b.initialized, budget).empty(), "uninitialized_read");
+    if (original_host) {
+        require(!device, "original_host_cannot_execute_on_device");
+        requested = coherence::tracked_accesses(b, requested);
+    } else require(coherence::difference(requested, b.initialized, budget).empty(), "uninitialized_read");
     auto &current = device ? b.device_current : b.host_current;
     auto missing = coherence::difference(requested, current, budget);
     auto updated = coherence::unite(current, missing, budget);
@@ -642,9 +651,11 @@ inline void execute(State &s, const Operation &op, bool gpu,
             EvidenceEvent event; event.event = "requirement"; event.operation = &op; event.unit = op.unit;
             event.gpu = gpu; event.resource = &b; event.binding = &binding; event.preservation_reads = &preserve; (*sink)(event);
         }
-        ensure(s, b, binding.effects.reads, gpu, input, costs, sink, op.unit, "read");
-        ensure(s, b, preserve, gpu, input, costs, sink, op.unit, "preserve");
-        prepared.push_back(coherence::prepare(b, binding.effects, gpu));
+        const bool original_host = op.kind == FORT_SCOPE_PLAN_ORIGINAL_HOST;
+        ensure(s, b, binding.effects.reads, gpu, input, costs, sink, op.unit, "read", original_host);
+        ensure(s, b, preserve, gpu, input, costs, sink, op.unit, "preserve", original_host);
+        prepared.push_back(original_host ? coherence::prepare_original_host(b, binding.effects)
+                                         : coherence::prepare(b, binding.effects, gpu));
     }
     if (!gpu && s.count.downloads != previous_downloads) wait(s,costs);
     else if (!gpu) {
@@ -666,7 +677,7 @@ inline void execute(State &s, const Operation &op, bool gpu,
             // wait for, or mark complete, the later device computation.
         }
     }
-    seconds(s.time, !op.compute_costs && input.team_costs && op.kind == FORT_SCOPE_PLAN_NATIVE
+    seconds(s.time, !op.compute_costs && input.team_costs && native_operation(op)
             ? native_compute(op, input, costs) : compute(op, costs, gpu));
     if (input.team_costs && op.kind == FORT_SCOPE_PLAN_WORKER) {
         const auto &team = *input.team_costs;
@@ -855,6 +866,12 @@ inline DefinitionValidation validate_definitions(const Inputs &input) noexcept {
                 result.buffer = binding.buffer;
                 auto &state = states[index.at(binding.buffer)];
                 coherence::Budget budget;
+                if (op.kind == FORT_SCOPE_PLAN_ORIGINAL_HOST) {
+                    // Original CPU may-accesses preserve known values without
+                    // claiming that untouched holes are read or initialized.
+                    prepared.push_back(coherence::unite(state, binding.effects.overwrites, budget));
+                    continue;
+                }
                 const auto preservation = coherence::difference(binding.effects.writes, binding.effects.overwrites, budget);
                 const auto required = coherence::unite(binding.effects.reads, preservation, budget);
                 if (!coherence::difference(required, state, budget).empty()) {
@@ -902,7 +919,7 @@ inline Result select(const Inputs &input, const fort_scope_plan_costs &costs,
         double native = 0;
         for (const auto &op : input.operations) if (!detail::definition_only(op)) {
             detail::seconds(native, detail::native_compute(op, input, costs));
-            if (!op.compute_costs && op.kind == FORT_SCOPE_PLAN_NATIVE && op.flops == 0 && op.memory_bytes == 0)
+            if (!op.compute_costs && detail::native_operation(op) && op.flops == 0 && op.memory_bytes == 0)
                 result.native_common_compute_excluded = true;
         }
         result.decision.native_seconds = native;
