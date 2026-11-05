@@ -434,10 +434,17 @@ controls. Each nonempty device case executes two kernels and uploads its input
 plane once; full arrays, bounds and untouched halos match native bit-for-bit.
 Zero-trip and hidden-GPU cases perform no payload copies or kernels. An obsolete
 reservation mock also failed on the pre-change frozen compiler; its test now
-mocks the current storage-candidate helper. Parent37 is generating from an
-immutable snapshot with the same ELMM target, facts, runtime and calibration.
-Its application coverage and timing gates remain pending. Native CALL input
-initialization and CD4 entry obligations remain separate and must not be waived.
+mocks the current storage-candidate helper. Parent37 now passes generation,
+build, full-field relink and four short application checks from that immutable
+snapshot. The [application checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/parent37-application-checkpoint-20261105.json)
+records 36 additional boundary kernels in each two-step case, but also 72 extra
+copies and 3,932,928 additional bytes. This establishes coverage, not speedup.
+The hidden-device diagnostic reader needed a correction: a domain opened in SGS
+can be reused by sibling Convection through their checked parent. The reader
+now validates both original coordinator routes and the complete return contract;
+187 tests and 309 subtests pass. The original failed receipt remains intact, and
+the two saved simple runs were revalidated without execution. Native CALL input
+initialization and CD4 entry obligations remain separate.
 
 The [original-host access checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/original-host-access-checkpoint-20261105.json)
 adds a distinct CPU may-access contract for unchanged original CALLs with complete
