@@ -393,8 +393,37 @@ they gain no structured-entry or GPU authority. Qualification passes 1,503
 affected compiler/reader tests, 205 plan/storage tests and 54 CUDA controls, with
 all 1,373 source guards intact. Actual ELMM `ComputeUVWFluxesWM` and
 `ComputeViscsWM` closures pass too, including their internal scalar functions.
-Runtime, ABI and calibration are unchanged. Parent36 is the frozen application
-candidate; its final graph and application gates remain pending at this checkpoint.
+Runtime, ABI and calibration are unchanged. Parent36 returned and saved its
+complete package, but the original companion reader rejected formal native
+reservations whose local dummy bounds and INTENT differed from the canonical
+caller allocation. The reader now checks these through the existing typed
+native-access and original-CALL validator. Module reservations still require
+their exact canonical descriptor; explicit formals retain their own descriptor.
+No capture, definition or device authority is added.
+
+The [formal-return checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/native-formal-return-checkpoint-20261105.json)
+records 4,564 passing companion tests and 511 subtests, 39 optional skips, and
+all 1,374 guarded source files unchanged. The paired reader commit is `6e8d99c`.
+
+The [successor reader qualification](/tmp/fortran-parent36-reader-successor-01/qualification.json)
+accepts all 276 saved artifacts without changing or regenerating them. The
+original failed publication remains recorded. The fresh application build and
+full-field relink pass, followed by [four short ELMM checks](/tmp/fortran-current807-parent36-short-01/qualification.json)
+covering both configurations with CUDA visible and hidden. All 20 fields,
+bounds, halos and outputs pass at unchanged tolerances. The [physical-copy
+comparison](/tmp/fortran-current807-parent36-short-01/comparison.json) has zero
+change in either case: simple still executes 90 kernels and 174 copies
+(305,771,200 bytes), and channel 18 kernels and 72 copies (155,697,152 bytes),
+including initialization and two timesteps. No application speedup is claimed.
+
+The [new definition trace](/tmp/fortran-parent36-definition-diagnosis-01/diagnosis.json)
+shows why static CALL retention alone is insufficient. The admitted wall-model
+calls still fail runtime input-definition preflight; both cases also reject 36
+viscosity boundary-plane tasks. A small original-source fixture reproduces a
+separate restriction in reached-read admission: differing invariant plane
+coordinates are rejected even when all loop-iterator coordinates match. This
+is the next bounded coverage fix; the native CALL initialization and CD4 entry
+obligations remain separate and must not be waived.
 
 Parent36's additional diagnostics identify the missing CD4 child route:
 `CD4divU/V/W` automatic scratch-array bounds read `tilenx/tileny/tilenz` before
