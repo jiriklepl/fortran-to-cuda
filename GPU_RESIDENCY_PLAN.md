@@ -26,12 +26,14 @@ natural campaign passes all four 109-step `channel-simple` cases, then stops on
 the **native** 2,458-step `channel` comparison: 15 fields and 16 outputs disagree
 with historical references, with a maximum field difference of approximately
 `3.18e-4`. All inputs remain unchanged and every process exits. The adapted
-harness omitted the fixed FFTW-plan control used by those references. A new
-campaign restores that established control and starts with long native channel
-to test this explanation before running the other seven cases. The failed run
-is preserved; tolerances, binaries, physics and deterministic pressure reference
-are unchanged. Full natural correctness and the rotated timing gates remain
-open; the prepared timing campaign cannot execute before correctness passes.
+harness omitted the fixed FFTW-plan control used by those references. Restoring
+that established control resolves the discrepancy: the same native binary now
+passes all 20 fields and 114 outputs at 2,458 steps against both reference
+families, with the exact four FFTW plans observed. The remaining seven cases
+are running. The failed run is preserved; tolerances, binaries, physics and the
+deterministic pressure reference are unchanged. Full natural correctness and
+the rotated timing gates remain open; the prepared timing campaign cannot
+execute before correctness passes.
 
 ## Integration record: 2026-11-04 onward
 
