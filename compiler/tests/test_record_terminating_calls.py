@@ -206,10 +206,16 @@ def test_fatal_branch_does_not_trim_later_caller_lifetime_effects(tmp_path):
         prove(fixture(tmp_path, text, sealed=True))
 
 
-def test_genuine_emission_retains_whole_body_fixed_result_termination_and_none_facts(tmp_path):
+@pytest.mark.parametrize("route", ["retained", "retirement"])
+def test_genuine_emission_retains_whole_body_fixed_result_termination_and_none_facts(tmp_path, monkeypatch, route):
     import json
 
-    from compiler.tests.test_descriptor_record_calls import emitted_record_retirement, emitted_source
+    from compiler.tests.test_descriptor_record_calls import (
+        decline_complete_record_call,
+        emitted_record_retention,
+        emitted_record_retirement,
+        emitted_source,
+    )
     from compiler.tests.test_graph_storage_epochs import builder_at
     from compiler.tests.test_owned_record_whole_body import fixed_result_source
 
@@ -219,9 +225,12 @@ def test_genuine_emission_retains_whole_body_fixed_result_termination_and_none_f
     text = DIAGNOSTICS+emitted_source().replace("module epochs\n", "module epochs\nuse diagnostics,only:fail\n")
     assert text.count(before) == 1
     text = text.replace(before, after)
+    if route == "retirement":
+        decline_complete_record_call(monkeypatch)
     path, builder = builder_at(tmp_path, text)
     outputs, report = builder.run()
-    storage, completion = emitted_record_retirement(path, builder, outputs, report)
+    inspect = emitted_record_retention if route == "retained" else emitted_record_retirement
+    storage, completion = inspect(path, builder, outputs, report)
     assert {row["procedure"] for row in storage["closure"]} == {
         "epochs::touch", "epochs::update", "epochs::sample", "diagnostics::fail_message"}
     assert storage["fixed_array_function_results"][0]["procedure"] == "epochs::sample"
@@ -229,7 +238,7 @@ def test_genuine_emission_retains_whole_body_fixed_result_termination_and_none_f
     assert fatal["requires_original_call_execution"]
     assert not fatal["returns_to_caller"]
     assert not fatal["continuation_authorized"]
-    event, = completion["original_observable_terminal_instances"]
+    event, = completion["terminal_calls" if route == "retained" else "original_observable_terminal_instances"]
     assert event["termination"] == fatal
     assert not event["returns_to_caller"]
     assert event["original_order_and_branch_required"]
@@ -243,7 +252,7 @@ def test_genuine_emission_retains_whole_body_fixed_result_termination_and_none_f
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content)
     for name, value in [("report.json", report), ("facts.json", builder.facts),
-                        ("retirement-records.json", {"storage": storage, "completion": completion})]:
+                        (route+"-records.json", {"storage": storage, "completion": completion})]:
         (tmp_path/name).write_text(json.dumps(value, indent=2)+"\n")
 
 

@@ -17,6 +17,13 @@ copies because of this emitter bug. Regenerate it before claiming compact-copy
 application behavior or performance. Automatic computation pricing, the full
 maintained suites and all new speedup gates remain open.
 
+The [source-policy retention correction](benchmarks/reports/gpu-residency-implementation-20261023/source-policy-retention-20261108/README.md)
+preserves exact native-CALL proof policy objects during generation adoption.
+The 149 source/transaction tests, 137 proof-integrity tests, eight source/CUDA
+controls and four affinity-dependent queries pass. Stable record calls retain
+the domain; explicit admission-decline controls preserve retirement coverage.
+The full maintained-suite restart is still required.
+
 ## Previous checkpoint: 2026-11-07
 
 The [normal source-storage RK checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/source-storage-rk-20261107/README.md)
