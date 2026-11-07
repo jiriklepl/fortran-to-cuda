@@ -60,6 +60,15 @@ exclusive CPU/GPU budget. Qualify actual AUTO group selection with native
 consumer/publication costs, alongside the CD4 coverage work; preserve the forced
 sections result and do not substitute an application-specific exception.
 
+The primary cases select different advection methods: `channel-simple` uses
+second order and `channel` uses FD4. Reconciliation of parent38's retained
+two-step diagnostics confirms GPU submissions in all six second-order advection
+routines for simple, and none in the three FD4 routines for channel. The short
+configurations differ from their primary counterparts only in the step limit.
+The next short-run gate must use each case's configured procedures, keep source
+region review separate from submission counts, and never count Convection's
+constant initializers as evidence that its advection equations ran on GPU.
+
 The [source-only specification-read slice](benchmarks/reports/gpu-residency-implementation-20261023/specification-reads-checkpoint-20261107.json)
 passes 183 affected checks, including 42 new cases, and identifies the six
 original scratch-bound reads in each actual CD4 procedure. It reuses the existing
