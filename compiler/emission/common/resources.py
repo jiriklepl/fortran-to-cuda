@@ -177,6 +177,12 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
             },
         },
         "planning_abi_version": 2,
+        "planning_metadata": {
+            "abi_version": 1, "check": "fort_scope_plan_host_sections_current_v1",
+            "regions": "exact canonical physical sections; initialized and host current",
+            "pending_writes": "overlapping queued writes reject without submission or waits",
+            "purity": "no definition, replica, allocation, transfer or execution changes",
+        },
         "planning_candidate_memo": {
             "storage": "bounded metadata LRU; owned exact keys and worker choice vectors only",
             "eligibility": "validated fresh host-only graph query; no pending work, device allocation or scratch",

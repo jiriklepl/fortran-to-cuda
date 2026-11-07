@@ -280,6 +280,7 @@ module fort_scoped_memory
   public :: fort_scope_stats_get, fort_scope_unregister, fort_scope_close, fort_scope_abandon
 
   public :: fort_scope_plan_host_current
+  public :: fort_scope_plan_host_sections_current_v1
   public :: fort_scope_plan_reset, fort_scope_plan_add, fort_scope_plan_select, fort_scope_plan_next
   public :: fort_scope_plan_add_compute_costs_v3
   public :: fort_scope_plan_validate
@@ -439,6 +440,13 @@ module fort_scoped_memory
     function fort_scope_plan_host_current(context, buffer) bind(C) result(status)
       import c_int, c_int64_t
       integer(c_int64_t), value :: context, buffer
+      integer(c_int) :: status
+    end function
+    function fort_scope_plan_host_sections_current_v1(context, buffer, sections, count) bind(C) result(status)
+      import c_int, c_int64_t, c_size_t, fort_scope_section
+      integer(c_int64_t), value :: context, buffer
+      type(fort_scope_section), intent(in) :: sections(*)
+      integer(c_size_t), value :: count
       integer(c_int) :: status
     end function
     function fort_scope_plan_reset(context) bind(C) result(status)

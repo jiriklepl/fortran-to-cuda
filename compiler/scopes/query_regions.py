@@ -667,9 +667,6 @@ def _emit_region(proof, ordinal):
         spec += registration.specification
         code += [*registration.prepare, "endif"]
     code += [f"if (fort_status /= FORT_SCOPE_OK) exit {block}"]
-    for root in proof.table_reads:
-        handle = "fort_buffer_" + str(anchor.resources[root][1])
-        code += [f"if (fort_scope_plan_host_current({anchor.context}, {handle}) /= FORT_SCOPE_OK) exit {block}"]
     temporaries = {}
 
     def expression(value):
@@ -688,8 +685,17 @@ def _emit_region(proof, ordinal):
         spec.append(f"integer(c_int64_t) :: {name}")
         if value.kind == "element":
             table = builder.visible(anchor.routine, value.binding.root)
+            handle = "fort_buffer_" + str(anchor.resources[value.binding.root][1])
+            lower, upper, section = name + "_lower", name + "_upper", name + "_section"
+            spec.extend([f"integer(c_size_t), target :: {lower}(1), {upper}(1)",
+                         f"type(fort_scope_section) :: {section}(1)"])
             code.extend([f"if (int({args[0]},c_int64_t) < lbound({table},1,kind=c_int64_t)) exit {block}",
                 f"if (int({args[0]},c_int64_t) > ubound({table},1,kind=c_int64_t)) exit {block}",
+                f"{lower}(1) = int(int({args[0]},c_int64_t) - lbound({table},1,kind=c_int64_t),c_size_t)",
+                f"{upper}(1) = {lower}(1) + 1_c_size_t",
+                f"{section}(1) = fort_scope_section(c_loc({lower}),c_loc({upper}))",
+                f"if (fort_scope_plan_host_sections_current_v1({anchor.context}, {handle}, &",
+                f"{section}, 1_c_size_t) /= FORT_SCOPE_OK) exit {block}",
                 f"{name} = int({table}({args[0]}),c_int64_t)"])
         elif value.kind == "unary":
             code.append(f"{name} = {value.value}(int({args[0]},c_int64_t))")

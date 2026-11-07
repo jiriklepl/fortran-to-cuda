@@ -419,6 +419,11 @@ int fort_scope_batch_report_get_v1(fort_scope_t context, fort_scope_batch_report
 /* Pure check for INTEGER payloads used by planning controls. No transfers or
  * definition changes; the complete payload must already be host current. */
 int fort_scope_plan_host_current(fort_scope_t context, fort_buffer_t buffer);
+/* Region form of the same pure check. Coordinates are canonical physical
+ * offsets; unrelated undefined or device-current regions are not observed.
+ * Pending overlapping writes reject the query without submitting or waiting. */
+int fort_scope_plan_host_sections_current_v1(fort_scope_t context, fort_buffer_t buffer,
+                                             const fort_scope_section *sections, size_t count);
 int fort_scope_plan_reset(fort_scope_t context);
 /* CONTINUE retains ownership: select installs ordered CPU choices even when
  * GPU estimates are unavailable. Complete prior workers and wait before the
