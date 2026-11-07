@@ -22,13 +22,26 @@ from compiler.tests.test_source_scopes import run
 from compiler.tests.test_tile_private import SOURCE
 
 
-def priced_source(child):
+def priced_source(child, *, mixed=False):
     # The exact repeated arithmetic belongs to the original program and is
     # lowered by the normal source proof. No cost or rate is overridden.
     terms = ["(tmp(li+1)-tmp(li-1))"] * 32
     expression = " &\n       + ".join(" + ".join(terms[i:i+4]) for i in range(0, len(terms), 4))
     source = SOURCE.replace("b(i)=b(i)+(tmp(li+1)-tmp(li-1))", "b(i)=b(i)+ &\n       " + expression)
     assert source != SOURCE
+    if mixed:
+        source = source.replace("!$omp parallel private", "call prepare(a,b,n)\n!$omp parallel private", 1)
+        source = source.rsplit("end module", 1)[0] + """subroutine prepare(a,b,n)
+integer,intent(in)::n
+real(8),intent(in)::a(-3:)
+real(8),intent(inout)::b(-3:)
+integer::i
+do i=1,n
+ b(i)=b(i)+a(i)*0.25_8
+enddo
+end subroutine
+end module
+"""
     if child:
         source = source.rsplit("end module", 1)[0] + """subroutine outer(a,b,n,t)
 integer,intent(in)::n,t
@@ -41,7 +54,7 @@ end module
     return source
 
 
-def _compile_priced_source(directory, child):
+def _compile_priced_source(directory, child, *, transfers="direct"):
     profile_path = os.environ.get("FORT_TEST_SOURCE_PROFILE")
     if not profile_path:
         pytest.skip("independently calibrated source-task profile required")
@@ -51,12 +64,13 @@ def _compile_priced_source(directory, child):
     if not all((nvcc, host, fortran)):
         pytest.skip("CUDA and GNU Fortran toolchains required")
     original = directory / "source.f90"
-    original.write_text(priced_source(child))
+    original.write_text(priced_source(child, mixed=transfers == "auto"))
     facts = {"schema_version": 1, "participation": "serial",
              "sources": {str(original): sha256(original.read_bytes()).hexdigest()},
              "captures": {"argument::" + name: deepcopy(FACT) for name in ("a", "b")}}
     builder = ScopeBuilder([original], "stencil::" + ("outer" if child else "advance"), facts=facts,
-        options=CompilerOptions(), config=OffloadConfig(policy="auto", scope_execution="graph", profile=profile))
+        options=CompilerOptions(), config=OffloadConfig(policy="auto", scope_execution="graph", profile=profile,
+                                                       scope_transfers=transfers))
     outputs, manifest = builder.run()
     assert manifest["scope_count"] == 1, manifest.get("graph_owner_attempt")
     task, = manifest["scopes"][0]["source_device_tasks"]
@@ -164,6 +178,46 @@ def priced_source_builds(tmp_path_factory):
 @pytest.fixture(scope="module", params=[False, True], ids=["root", "nested"])
 def compiled_priced_source(request, priced_source_builds):
     return priced_source_builds(request.param)
+
+
+@pytest.fixture(scope="module", params=[False, True], ids=["root", "nested"])
+def compiled_auto_transfer_source(request, tmp_path_factory):
+    return _compile_priced_source(tmp_path_factory.mktemp("compiled_auto_transfer_source"), request.param,
+                                  transfers="auto")
+
+
+@pytest.mark.cuda
+@pytest.mark.parametrize("hidden", [False, True], ids=["gpu", "hidden"])
+def test_mixed_auto_transfer_graph_executes_original_team_once(compiled_auto_transfer_source, hidden):
+    build, executable = compiled_auto_transfer_source
+    pricing = json.loads((build / "profile-input.json").read_text())["pricing"]
+    schedule = pricing["native_protocol"]["c_schedule"]
+    name = {1: "static", 2: "dynamic", 3: "guided", 4: "auto"}[schedule["base_kind"]]
+    modifier = "monotonic:" if schedule["monotonic_modifier"] else "nonmonotonic:"
+    setting = modifier + name + ("," + str(schedule["chunk"]) if schedule["chunk"] else "")
+    environment = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "OMP_SCHEDULE": setting,
+                   "OMP_THREAD_LIMIT": "4", "OMP_MAX_ACTIVE_LEVELS": "1", "FORT_RUNTIME_TRACE": "1", "FORT_OFFLOAD_TRACE": "1"}
+    environment.pop("CUDA_VISIBLE_DEVICES", None)
+    if hidden:
+        environment["CUDA_VISIBLE_DEVICES"] = ""
+    result = run([str(executable)], cwd=build, env=environment)
+    mode = "hidden" if hidden else "gpu"
+    (build / f"auto-{mode}.stdout").write_text(result.stdout)
+    (build / f"auto-{mode}.stderr").write_text(result.stderr)
+    assert "PRICED_ORIGINAL_TEAM_FULL_FIELDS_AND_HALOS_OK" in result.stdout
+    cases = re.findall(r"PRICED_CASE_BEGIN (\d+) (\d+)\n(.*?)PRICED_CASE_END \1 \2", result.stderr, re.S)
+    assert len(cases) == 6
+    for size, _repeat, events in cases:
+        quotes = re.findall(r"FORT_SOURCE_QUOTE .*?available=(\d+) gpu=(\d+) reason=(\d+)", events)
+        assert len(quotes) == int(int(size) > 0), events
+        if not int(size) or hidden:
+            assert "FORT_SCOPED launch " not in events
+            assert "FORT_SCOPED upload " not in events
+            assert "FORT_SCOPED download " not in events
+        if int(size) and not hidden:
+            # Placement is measured, not forced; both choices must retain the
+            # source task and its calibrated runtime quote in the mixed graph.
+            assert quotes[0][0] == "1", events
 
 
 @pytest.mark.cuda

@@ -287,7 +287,11 @@ def _admit_source_device_task(member, nodes, *, transport="direct"):
     config = member.builder.config
     if config.scope_execution != "graph" or config.policy not in {"sections", "auto"}:
         return False
-    if config.policy == "auto" and (config.profile is None or config.scope_transfers not in {"direct", "coalesced"}):
+    # Source quotes snapshot the domain's AUTO copy policy and its calibrated
+    # physical-copy costs through the ordinary coherence simulator. Requiring
+    # explicit direct transfers here silently removes otherwise proved teams
+    # before that runtime choice can be evaluated.
+    if config.policy == "auto" and (config.profile is None or config.scope_transfers not in {"direct", "coalesced", "auto"}):
         return False
     originals = member.builder.inline.original_selection(tuple(nodes))
     proof = source_device_task(member.builder.analysis, member.routine, originals, builder=member.builder)
