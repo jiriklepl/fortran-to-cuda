@@ -40,6 +40,35 @@ def assert_original_attributes(owner, original):
         assert getattr(owner, name) is value, name
 
 
+@pytest.mark.parametrize("adopt", [False, True])
+def test_interned_context_preserves_exact_private_policy_receipts(tmp_path, adopt):
+    from compiler.frontend.source_dependency_receipts import _SourceOwnership
+
+    parent = builder_fixture(tmp_path / "source")
+    context = parent.analysis.source_authority_context()
+    projection = parent.analysis.private_projection()
+    projection._allocation_authorizations = dict(parent.analysis._allocation_authorizations)
+    assert projection.source_authority_context() is context
+    assert projection._allocation_authorizations is not context.policy["_allocation_authorizations"]
+    ownership = _SourceOwnership.capture(projection)
+    parent.coordinators["private-native"] = SimpleNamespace(analysis=projection, receipt=ownership)
+    before = projection._allocation_authorizations
+    with GenerationTransaction(parent) as transaction:
+        holder = transaction.builder.coordinators["private-native"]
+        assert holder.analysis is projection
+        assert holder.receipt is ownership
+        ownership.require()
+        assert projection._allocation_authorizations is before
+        if adopt:
+            transaction.adopt()
+    ownership.require()
+    assert projection._allocation_authorizations is before
+    # Equal content is not permission to retarget an issued source receipt.
+    projection._allocation_authorizations = dict(before)
+    with pytest.raises(CompilationError, match="retained source or policy changed"):
+        ownership.require()
+
+
 def test_real_companion_attempt_then_failure_leaves_all_parent_state_unchanged(tmp_path):
     parent = builder_fixture(tmp_path / "source")
     original, analysis = dict(vars(parent)), dict(vars(parent.analysis))

@@ -1,13 +1,16 @@
-"""A whole original native record call retires and rearms checked children."""
+"""Complete native record calls retain storage, with retirement as fallback."""
 import json
 import re
 
 import pytest
 
 from compiler.tests import test_graph_storage_epochs_cuda as base
+from compiler.tests.test_descriptor_record_calls import decline_complete_record_call
+from compiler.tests.test_hierarchical_child_regions import fixture
 from compiler.tests.test_hierarchical_child_regions_cuda import copy_bytes, events_in, procedure
 from compiler.tests.test_joined_boundary_lifecycle import emit
-from compiler.tests.test_joined_boundary_lifecycle_cuda import DRIVER as PREVIOUS_DRIVER, environment
+from compiler.tests.test_joined_boundary_lifecycle_cuda import DRIVER as PREVIOUS_DRIVER
+from compiler.tests.test_joined_boundary_lifecycle_cuda import environment
 from compiler.tests.test_native_record_lifetime import hierarchical_source
 
 
@@ -27,23 +30,42 @@ def source():
             .replace('values(i)=p%flux', 'values(i+2)=p%flux'))
 
 
-def sealed_emission(directory):
+def sealed_emission(directory, route='retained'):
     from elmm_pipeline.local_adapter import _scope_package_build
-    original, builder, middle, patches, outputs, report = emit(directory, source())
+    if route == 'retirement':
+        with pytest.MonkeyPatch.context() as diagnostic:
+            decline_complete_record_call(diagnostic)
+            original, builder, middle, patches, outputs, report = emit(directory, source())
+        patch, = patches
+        assert patch.validate(middle, require_source=True) is patch
+        assert patch.completion.public()['requires_domain_retirement']
+        assert patch.lifecycle._native_graph is patch.completion._graph
+        records = {'completion': patch.completion.public(), 'storage': patch.lifecycle.public()}
+    else:
+        original, builder = fixture(directory, source())
+        outputs, report = builder.run()
+        owner = builder._conditional_return_draft.validate().owner
+        middle, = [member for member in owner.members.values() if member.routine.qualified == 'hierarchical::middle']
+        operation, = [op for unit in middle.units for op in unit.scope.native if op.call_effects is not None]
+        proof = operation.call_effects
+        assert proof.validate(operation.proof_analysis, middle.routine.qualified, operation.nodes) is proof
+        assert operation.coherence_effects == {'hierarchical::right': {'read', 'write'}}
+        assert set(operation.host_metadata) == {'hierarchical::native_points'}
+        assert not operation.overwrites
+        assert operation.preserve_original
+        assert not middle.boundaries
+        records = {'completion': proof.reachability.native_graph.public(), 'storage': proof.storage.public(),
+                   'call_effects': proof.public()}
     # Preserve the exact first returned package before the second publication
     # check below revisits the builder-owned output dictionary.
     outputs = dict(outputs)
-    patch, = patches
-    assert patch.validate(middle, require_source=True) is patch
-    assert patch.completion.public()['requires_domain_retirement']
-    assert patch.lifecycle._native_graph is patch.completion._graph
     assert builder.finish()
     scope, = report['scopes']
     assert {name.split('#')[0] for name in scope['gpu_leaves']} == {
         'hierarchical::producer', 'hierarchical::consumer'}
     member, = [m for m in scope['checked_execution_plan']['storage_epoch']['return_contract']['members']
                if m['procedure'] == 'hierarchical::middle']
-    assert any(row['kind'] == 'reached_retirement' and row['rearm_allowed'] for row in member['routes'])
+    assert any(row['kind'] == 'reached_retirement' and row['rearm_allowed'] for row in member['routes']) is (route == 'retirement')
     transformed = outputs[report['sources'][str(original)]['replacement']]
     worker = source()[source().index('subroutine record_worker('):source().index('end module')]
     assert worker in transformed
@@ -57,14 +79,14 @@ def sealed_emission(directory):
     manifest = json.loads((package / 'scope-manifest.json').read_text())
     _scope_package_build({'artifact_root': str(package), 'scope_manifest': manifest,
                           'tool': 'local', 'memory_model': 'scoped'})
-    (directory / 'native-record-proof.json').write_text(json.dumps({
-        'completion': patch.completion.public(), 'storage': patch.lifecycle.public(),
+    (directory / 'native-record-proof.json').write_text(json.dumps({**records, 'route': route,
         'original_native_worker': worker}, indent=2) + '\n')
     return original, outputs, manifest
 
 
-def test_record_halo_source_retains_real_retirement_authority_and_strict_transport(tmp_path):
-    sealed_emission(tmp_path)
+@pytest.mark.parametrize('route', ['retained', 'retirement'])
+def test_record_halo_source_retains_exact_call_authority_and_strict_transport(tmp_path, route):
+    sealed_emission(tmp_path, route)
 
 
 DRIVER = (PREVIOUS_DRIVER.replace('JOINED', 'RECORD')
@@ -75,21 +97,21 @@ DRIVER = (PREVIOUS_DRIVER.replace('JOINED', 'RECORD')
           .replace("write(*,'(*(ES26.17E3,1X))')observed,left,right", "write(*,'(*(ES26.17E3,1X))')observed,left,right,native_points%flux,native_points%aux"))
 
 
-@pytest.fixture(scope='module')
-def binaries(tmp_path_factory):
+@pytest.fixture(scope='module', params=['retained', 'retirement'])
+def binaries(tmp_path_factory, request):
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(base, 'emit', sealed_emission)
+        patch.setattr(base, 'emit', lambda directory: sealed_emission(directory, request.param))
         patch.setattr(base, 'DRIVER', DRIVER)
         directory, candidate, native = base.epoch_binaries.__wrapped__(tmp_path_factory)
     manifest = json.loads((directory / 'scope-manifest.json').read_text())
     provenance = {row['id']: row for row in manifest['runtime_provenance']['records']}
-    return directory, candidate, native, provenance
+    return directory, candidate, native, provenance, request.param
 
 
 @pytest.mark.cuda
 @pytest.mark.parametrize('mode', ['traced', 'untraced', 'hidden'])
-def test_original_record_call_retires_and_rearms_without_managing_record_payload(binaries, mode):
-    directory, candidate, native, provenance = binaries
+def test_original_record_call_preserves_fields_and_expected_residency(binaries, mode):
+    directory, candidate, native, provenance, route = binaries
     env = environment(mode)
     reference = base.checked([str(native)], directory, mode+'-native', env)
     result = base.checked([str(candidate)], directory, mode+'-candidate', env)
@@ -111,15 +133,16 @@ def test_original_record_call_retires_and_rearms_without_managing_record_payload
                        'download_bytes': copy_bytes(events, 'download')})
         (directory / (mode+'-ledger.json')).write_text(json.dumps(ledger, indent=2)+'\n')
         if mode == 'hidden':
-            assert not launches and copy_bytes(events, 'upload') == copy_bytes(events, 'download') == 0
+            assert not launches
+            assert copy_bytes(events, 'upload') == copy_bytes(events, 'download') == 0
             continue
         assert [procedure(events[i], provenance) for i in launches] == [
             'hierarchical::producer', 'hierarchical::consumer'] * 2
         for stage in range(2):
             first, last = launches[2*stage:2*stage+2]
             between = events[first+1:last]
-            assert events[first]['domain'] != events[last]['domain']
-            assert any(e['kind'] == 'domain_retire' for e in between)
+            assert (events[first]['domain'] != events[last]['domain']) is (route == 'retirement')
+            assert any(e['kind'] == 'domain_retire' for e in between) is (route == 'retirement')
             assert copy_bytes(between, 'download') == 8*n
             assert copy_bytes(between, 'upload') == 8*n
         assert copy_bytes(events, 'upload') == 16*n

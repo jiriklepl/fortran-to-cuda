@@ -216,10 +216,16 @@ def test_final_storage_validation_cannot_detach_an_original_prefix_statement(tmp
     assert fired
 
 
-def test_authentic_emission_keeps_whole_callee_and_none_facts(tmp_path):
+@pytest.mark.parametrize("route", ["retained", "retirement"])
+def test_authentic_emission_keeps_whole_callee_and_none_facts(tmp_path, monkeypatch, route):
     import json
 
-    from compiler.tests.test_descriptor_record_calls import emitted_record_retirement, emitted_source
+    from compiler.tests.test_descriptor_record_calls import (
+        decline_complete_record_call,
+        emitted_record_retention,
+        emitted_record_retirement,
+        emitted_source,
+    )
     from compiler.tests.test_graph_storage_epochs import builder_at
 
     before = "subroutine touch"+SOURCE.split("subroutine touch", 1)[1].rsplit("end module", 1)[0]
@@ -227,9 +233,12 @@ def test_authentic_emission_keeps_whole_callee_and_none_facts(tmp_path):
     source = emitted_source()
     assert source.count(before) == 1
     source = source.replace(before, after)
+    if route == "retirement":
+        decline_complete_record_call(monkeypatch)
     path, builder = builder_at(tmp_path, source)
     outputs, report = builder.run()
-    storage, completion = emitted_record_retirement(path, builder, outputs, report)
+    inspect = emitted_record_retention if route == "retained" else emitted_record_retirement
+    storage, completion = inspect(path, builder, outputs, report)
     assert {row["procedure"] for row in storage["closure"]} == {
         "epochs::touch", "epochs::sample", "epochs::update"}
     result, = storage["fixed_array_function_results"]
@@ -241,7 +250,7 @@ def test_authentic_emission_keeps_whole_callee_and_none_facts(tmp_path):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content)
     for name, value in [("report.json", report), ("facts.json", builder.facts),
-                        ("retirement-records.json", {"storage": storage, "completion": completion})]:
+                        (route+"-records.json", {"storage": storage, "completion": completion})]:
         (tmp_path/name).write_text(json.dumps(value, indent=2)+"\n")
     assert path.read_text() == source
 

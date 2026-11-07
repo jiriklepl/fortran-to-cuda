@@ -252,7 +252,15 @@ class GenerationTransaction:
         authority = {id(value): value for value in session.roots.values()} if session is not None else {}
         context = getattr(analysis, "_source_authority_context", None)
         if context is not None:
+            from compiler.frontend.authority_context import CONTEXT_FIELDS
+
+            context.require(analysis)
             authority.update((id(value), value) for value in context.policy.values())
+            # Interned contexts can belong to an equal-policy facade. Exact
+            # source receipts retain this analysis's immutable policy objects,
+            # which need not be the objects first stored in that context.
+            authority.update((id(original[name]), original[name])
+                             for name in CONTEXT_FIELDS if name in original)
         clone = _GenerationCopy(self._analysis, memo=authority)
         # Register first: cached proof objects can refer to this same analysis.
         detached = {name: clone(value) for name, value in original.items() if name != "_summary_cache"}

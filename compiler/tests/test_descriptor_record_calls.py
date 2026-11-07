@@ -198,9 +198,88 @@ def emitted_record_retirement(path, builder, outputs, report):
     return storage, completion
 
 
-def test_authentic_graph_emission_retains_record_storage_receipt_and_none_facts(tmp_path):
+def decline_complete_record_call(monkeypatch):
+    """Keep the retirement fallback covered after complete CALL admission."""
+    from compiler.scopes import segments
+
+    def decline(*_args, **_kwargs):
+        raise CompilationError("diagnostic complete-CALL admission decline")
+
+    monkeypatch.setattr(segments, "native_call_fragment", decline)
+
+
+def emitted_record_retention(path, builder, outputs, report):
+    """A stable complete CALL synchronizes payload without retiring storage."""
+    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+
+    from compiler.scopes.lexical import LexicalBoundaryPatch
+
+    assert report["scope_count"] == 1
+    owner = builder._conditional_return_draft.validate().owner
+    member, = [member for member in owner.members.values()
+               if member.routine.qualified == "epochs::record_wrapper"]
+    assert not any(isinstance(patch, LexicalBoundaryPatch) for _first, _last, patch in member.patches)
+    operation, = [op for unit in member.units for op in unit.scope.native if op.call_effects is not None]
+    assert operation.kind == "complete original native CALL"
+    assert tuple(map(str, operation.nodes)) == ("CALL touch(records, a)",)
+    proof = operation.call_effects
+    assert proof.validate(operation.proof_analysis, member.routine.qualified, operation.nodes) is proof
+    assert proof.storage._native_graph is proof.reachability.native_graph
+    storage, completion = proof.storage.public(), proof.reachability.native_graph.public()
+    assert storage["complete"]
+    assert not storage["frontiers"]
+    assert not storage["mutations"]
+    assert not storage["escapes"]
+    assert storage["source_inputs"]["sources"] == builder.facts["sources"]
+    assert storage["native_lifetime_context"]["whole_original_call_and_all_callees_required"]
+    originals = {**builder.analysis.routines,
+                 **{template.procedure: template._routine for template in proof.reachability.native_graph.templates}}
+    for row in storage["closure"]:
+        assert row["body_sha256"] == _hash(str(originals[row["procedure"]].scope.node))
+    for flag in ("payload_access_authorized", "entry_definition_authority", "capture_authorized",
+                 "execution_authorized", "motion_authorized", "gpu_legality_established", "alias_authority"):
+        assert storage[flag] is False
+    for flag in ("alias_authorized", "capture_authorized", "definitions_authorized", "motion_authorized",
+                 "internal_cuts_authorized"):
+        assert proof.public()[flag] is False
+    assert operation.coherence_effects == {"argument::a": {"read", "write"}}
+    assert set(operation.host_metadata) == {"epochs::records"}
+    assert not operation.overwrites
+    assert operation.preserve_original
+    assert operation.summary["native_completion"]["available"]
+    assert completion["effect_and_association_barriers_absent"]
+    assert not completion["retirement_lifetime_obligations"]
+    scope, = report["scopes"]
+    assert {name.split("#")[0] for name in scope["gpu_leaves"]} == {"epochs::producer", "epochs::consumer"}
+    contract = scope["checked_execution_plan"]["storage_epoch"]["return_contract"]
+    returned, = [row for row in contract["members"] if row["procedure"] == member.routine.qualified]
+    route, = returned["routes"]
+    assert route == {"kind": "checked_unit", "ordinal": 0,
+                     "selected_node_ids": storage["original_selection"]["selected_node_ids"]}
+    assert not returned["entry_exit"]["definition_authority"]
+    assert not contract["cross_cut_replica_retention_authorized"]
+    assert all(row["initialized"] == "none" for row in builder.facts["captures"].values())
+    generated = outputs[report["sources"][str(path)]["replacement"]]
+    wrapper = generated[generated.index("subroutine record_wrapper("):generated.index("subroutine touch(")]
+    assert wrapper.count("call touch(records,a)") == 1
+    assert wrapper.index("fort_scope_original_host_begin_v1") < wrapper.index("call touch(records,a)")
+    assert wrapper.index("call touch(records,a)") < wrapper.index("fort_scope_host_end")
+    # Rejected preflight/error paths may still close the domain. The normal
+    # CALL uses one checked unit, with no lexical lifetime cut (checked above).
+    original_callees = "subroutine touch" + path.read_text().split("subroutine touch", 1)[1].split("subroutine advance", 1)[0]
+    assert original_callees in generated
+    assert builder.finish()
+    validate_checked_execution_plans(report, capture_facts=builder.facts)
+    return storage, completion
+
+
+@pytest.mark.parametrize("route", ["retained", "retirement"])
+def test_authentic_graph_emission_retains_record_storage_receipt_and_none_facts(tmp_path, monkeypatch, route):
+    if route == "retirement":
+        decline_complete_record_call(monkeypatch)
     path, builder, outputs, report = emit_record_fixture(tmp_path)
-    storage, completion = emitted_record_retirement(path, builder, outputs, report)
+    inspect = emitted_record_retention if route == "retained" else emitted_record_retirement
+    storage, completion = inspect(path, builder, outputs, report)
     assert {row["procedure"] for row in storage["closure"]} == {"epochs::touch"}
     (tmp_path/"report.json").write_text(json.dumps(report, indent=2)+"\n")
     (tmp_path/"facts.json").write_text(json.dumps(builder.facts, indent=2)+"\n")
@@ -208,7 +287,7 @@ def test_authentic_graph_emission_retains_record_storage_receipt_and_none_facts(
         destination = tmp_path/"generated"/name
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(content)
-    (tmp_path/"retirement-records.json").write_text(json.dumps(
+    (tmp_path/(route+"-records.json")).write_text(json.dumps(
         {"storage": storage, "completion": completion}, indent=2)+"\n")
     assert str(path) in report["sources"]
     assert outputs
