@@ -146,6 +146,20 @@ grid-spacing capture facts. A fresh source-bound review carries the six existing
 Convection grid-spacing/cell-type facts into a separate successor recipe. No
 new application coverage, natural-run correctness or speedup is claimed here.
 
+The [borrowed-query checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/borrowed-query-regions-20261107/README.md)
+extends the existing group-pricing engine into reached arms of checked retained
+children. Queries use only existing live canonical handles and never register
+storage or seed definitions. The 117 distinct affected checks pass across the
+broad and corrected mutation runs, with four new and five existing CUDA controls.
+Actual CUDA execution observes a two-worker group after an earlier GPU producer,
+with one input upload and no intermediate download. Prices in these dispatch
+tests are synthetic; application profitability remains unqualified. Runtime and
+calibrated collective identities are unchanged. This change is later than frozen
+AUTO43. Frozen AUTO42 separately passes its public build and all four short
+full20/halo/output checks, but still runs only SGS and viscosity boundaries on
+GPU and fails both configured-advection coverage gates. Tiling metadata remains
+an explicit prerequisite for applying the new query path to actual FD2 work.
+
 ## Integration record: 2026-11-04 onward
 
 The generic guarded-condition and immutable-container changes pass
