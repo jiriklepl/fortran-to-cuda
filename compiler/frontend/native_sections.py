@@ -655,7 +655,13 @@ def _analyze_native_accesses(analysis, routine, *, logical):
                                       for node in walk(routine.scope.node)):
             raise CompilationError("native OpenMP participation and completion require source proof")
         check_module_ownership(routine.scope.parent)
+        reached_resources = set()
         for node in walk(routine.execution):
+            if (not logical and not getattr(analysis, "_native_sections_include_entry", True)
+                    and _kind(node) in {"Name", "Part_Ref", "Data_Ref"}):
+                binding, _indices = reference(node)
+                if binding is not None and binding.rank:
+                    reached_resources.add(binding.root)
             if _kind(node) == "Assignment_Stmt":
                 target = node.items[0]
                 if _kind(target) in {"Name", "Data_Ref"}:
@@ -679,6 +685,14 @@ def _analyze_native_accesses(analysis, routine, *, logical):
             for entity in _children(entities):
                 shape = entity.items[1] if entity.items[1] is not None else dimension
                 binding = analysis._binding(routine.scope, entity.items[0])
+                if (not getattr(analysis, "_native_sections_include_entry", True)
+                        and binding is not None and binding.root not in reached_resources):
+                    # This selection executes after original specification
+                    # evaluation. An unrelated automatic array's shape is not
+                    # part of this body's physical access geometry. Keep entry
+                    # queries and every referenced descriptor fully checked;
+                    # this grants no entry-read or allocation authority.
+                    continue
                 if binding is not None and binding.root in private_roots:
                     # The registered completion token proves this original
                     # fixed local storage stays private to the retained native
