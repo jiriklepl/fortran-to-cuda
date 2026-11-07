@@ -30,7 +30,10 @@ def _prefix_segments(analysis, procedure, originals, *, position=None):
 
     Earlier IF bodies are included in full. Bodies of untaken sibling arms of
     an enclosing IF are excluded, while every preceding predicate remains.
-    Loops and associations need separate backedge/association authority.
+    At an enclosing structured DO loop, require preservation over its COMPLETE
+    original execution instead of using a first-iteration prefix. Since this
+    filter can only remove existing definitions, that invariant covers every
+    reached iteration and every intermediate point. Associations remain closed.
     """
     if position is None:
         exit_proof = prove_original_sequence_exit(analysis, procedure, originals)
@@ -58,8 +61,22 @@ def _prefix_segments(analysis, procedure, originals, *, position=None):
             return exit_proof, result
         branches = [(node, ordinal) for node in graph.nodes.values() if node.kind == "branch"
                     for ordinal, (_condition, body) in enumerate(node.alternatives) if body == parent.id]
+        loops = [node for node in graph.nodes.values() if node.kind == "loop"
+                 and node.children and node.children[-1] == parent.id]
+        if len(loops) == 1 and not branches:
+            loop = loops[0]
+            source, = graph.source_nodes(loop.id)
+            if _kind(source) != "Block_Nonlabel_Do_Construct":
+                raise EntryPreservationUnsupported("entry preservation requires an original structured DO loop")
+            # Supersede inner prefixes with the complete enclosing loop. Its
+            # native proof includes headers, all arms, selected calls, suffixes
+            # and backedges. Any undefinedness/lifetime hazard rejects coverage
+            # even when a subsequent write might restore it.
+            result = ((source,),)
+            cursor = loop.id
+            continue
         if len(branches) != 1:
-            raise EntryPreservationUnsupported("entry preservation cannot cross a loop backedge or association")
+            raise EntryPreservationUnsupported("entry preservation cannot cross an unproved loop or association")
         branch, ordinal = branches[0]
         source, = graph.source_nodes(branch.id)
         if _kind(source) != "If_Construct":
@@ -285,19 +302,24 @@ def _entry_record(analysis, procedure, anchor, segments, preservations, preserve
                   projection=None, original_segments=()):
     """Encode authenticated state; this pure projection grants no new facts."""
     graph = analysis.structure(procedure)
+    selected = anchor.public()["selected_node_ids"]
+    invariant = any(len(segment) == 1 and _kind(segment[0]) == "Block_Nonlabel_Do_Construct"
+                    and any(node.startswith(analysis._selected_source(procedure, segment)[1][0] + "/body/")
+                            for node in selected) for segment in segments)
     segment_records = []
     for segment, preservation in zip(segments, preservations, strict=True):
         original_graph, identities = analysis._selected_source(procedure, segment)
         if original_graph is not graph:
             raise CompilationError("entry preservation lost its exact original segment graph")
         segment_records.append({"selected_node_ids": list(identities), "preservation_identity": preservation.identity})
-    record = {"version": 4 if projection is not None else 2 if position is None else 3,
+    record = {"version": 5 if invariant else 4 if projection is not None else 2 if position is None else 3,
         "kind": "original_invocation_entry_definition_preservation", "procedure": procedure,
         "source_inputs": analysis.inputs.identity(), "source_graph": graph.identity,
         "segments": segment_records, "entry_capture_facts_identity": facts_identity,
         "preserved_resources": [binding.root for binding in preserved],
         "definition_source": "independent original invocation-entry WHOLE facts after original entry undefinition",
-        "prefix": "exact prior original statements and reached predicates; no enclosing loop or association",
+        "prefix": ("exact outer prefix and complete enclosing-loop preservation invariant; no association"
+                   if invariant else "exact prior original statements and reached predicates; no enclosing loop or association"),
         "semantics": "preserve existing definedness; no stale replica or unchanged-value assumption",
         "new_definition_authority": False, "execution_authorized": False, "payload_access_authorized": False,
         "descriptor_lifetime_authority": False, "alias_authority": False, "cross_exit_retention_authorized": False}

@@ -8,6 +8,16 @@ Historical reports and timing controls remain unchanged.
 
 ## Current checkpoint: 2026-11-07
 
+The [complete loop-invariant checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/loop-entry-preservation-20261107/README.md)
+extends the existing array-entry preservation engine across enclosing loops.
+The complete loop must preserve the independently admitted definitions; a
+first-iteration prefix cannot justify later traversals. The matching version-5
+reader checks the actual loop container and complete outer prefix. Source and
+reader regressions pass, as do six CUDA/native controls with exact fields and
+halos. The normal control submits 12 kernels in four fresh domains and never
+downloads its read-only input. Domain cuts remain in place. This does not yet
+qualify CD4 conditional scalar capture or selected-root entry preservation.
+
 The [independent calibration checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/independent-calibration-20261107/README.md)
 now preserves valid independent measurements after an accuracy-only collective
 rejection. All 238 affected checks pass. The original failed runtime `2d0d8214`

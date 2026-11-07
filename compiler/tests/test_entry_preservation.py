@@ -5,7 +5,6 @@ from copy import copy, deepcopy
 import pytest
 
 from compiler.frontend.entry_preservation import (
-    EntryPreservationUnsupported,
     prove_preserved_entry_definitions,
 )
 from compiler.ir import CompilationError
@@ -180,12 +179,51 @@ def test_non_numeric_array_facts_do_not_enter_the_numeric_preservation_slice(tmp
     assert prove_preserved_entry_definitions(analysis, "local_groups::run", originals, (binding,), facts) is None
 
 
-def test_previous_loop_traversal_cannot_reuse_invocation_entry_coverage(tmp_path):
+def test_previous_loop_traversal_cannot_reuse_entry_coverage_killed_by_original_out(tmp_path):
     source = SOURCE.replace("logical,intent(in)::flag", "logical,intent(in)::flag\ninteger::stage")
     source = source.replace("call unknown_prefix()\nif(flag)", "do stage=1,2\nif(flag)")
     source = source.replace("endif\ncall unknown_suffix()", "endif\nenddo\ncall unknown_suffix()")
-    with pytest.raises(EntryPreservationUnsupported, match="backedge"):
-        prove(prepared(tmp_path, source=source))
+    assert prove(prepared(tmp_path, source=source)) is None
+
+
+def loop_source(*, suffix="", nested=False):
+    source = SOURCE.replace("intent(out)", "intent(inout)")
+    source = source.replace("logical,intent(in)::flag", "logical,intent(in)::flag\ninteger::stage,inner")
+    source = source.replace("call unknown_prefix()", "a(:)=a(:)+1.0_8\ndo stage=1,n" +
+                            ("\ndo inner=1,n" if nested else ""))
+    return source.replace("endif\ncall unknown_suffix()", "endif\n" + suffix +
+                          ("\nenddo" if nested else "") + "\nenddo\ncall unknown_suffix()")
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_complete_loop_invariant_preserves_every_reached_iteration(tmp_path, nested):
+    parts = prepared(tmp_path, source=loop_source(nested=nested))
+    proof = prove(parts)
+    assert proof is not None
+    assert {binding.root for binding in proof.preserved} == {"argument::a", "argument::b"}
+    assert proof.public()["version"] == 5
+    assert len(proof._segments) == 2
+    loop, = proof._segments[-1]
+    assert type(loop).__name__ == "Block_Nonlabel_Do_Construct"
+    assert "call third" in str(loop).lower()  # Includes selected calls and later iterations.
+    assert all(token.complete for token in proof._preservations)
+    assert proof.validate(parts[1], "local_groups::run", parts[2], parts[3], parts[4]) is proof
+
+
+@pytest.mark.parametrize("suffix", ["call unknown_iteration_tail()", "deallocate(a)",
+                                    "if(.not.flag)call kill(a)", "call kill(a)"])
+def test_loop_tail_and_untaken_arm_cannot_reseed_prior_iteration_definitions(tmp_path, suffix):
+    source = loop_source(suffix=suffix).replace("end module", KILL + "end module")
+    proof = prove(prepared(tmp_path, source=source))
+    assert proof is None or "argument::a" not in {binding.root for binding in proof.preserved}
+
+
+def test_loop_proof_rejects_substituting_only_the_first_iteration_prefix(tmp_path):
+    parts = prepared(tmp_path, source=loop_source())
+    proof = prove(parts)
+    object.__setattr__(proof, "_segments", proof._segments[:-1])
+    with pytest.raises(CompilationError):
+        proof.validate(parts[1], "local_groups::run", parts[2], parts[3], parts[4])
 
 
 def test_side_effect_in_original_predicate_cannot_be_omitted_from_prefix(tmp_path):
