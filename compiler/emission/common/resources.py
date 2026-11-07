@@ -121,6 +121,12 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
             "upload_lifetime": "exact pending DMA read sections; completion events precede unrelated numerical work",
             "completion_statistics": "fort_scope_completion_stats_get_v1",
         },
+        "specification_entry": {
+            "abi_version": 1, "observe": "fort_scope_observe_all_v1",
+            "regions": "all initialized regions in the live domain; undefined holes remain undefined",
+            "replicas": "read-only publication preserves current device replicas and generations",
+            "failure": "stop before original entry; never replay",
+        },
         "graph_execution": {
             "abi_version": 1, "execute": "fort_scope_graph_execute_v1",
             "enqueue": "fort_scope_graph_enqueue_v1", "flush": "fort_scope_graph_flush_v1",

@@ -799,6 +799,12 @@ int fort_scope_source_quote_v2(fort_scope_t context, const fort_scope_external_c
  * Retire destroys a dead resource without publication and completes borrowed
  * host-memory uses before returning; its handle becomes stale. */
 int fort_scope_observe_v1(fort_scope_t context, const fort_buffer_t *buffers, size_t count);
+/* Conservative pre-entry observation of all currently registered resources.
+ * Drains their queued users and publishes only initialized regions. Preserves
+ * device replicas, allocations and generations; leaves no prepared access.
+ * Does not inspect unregistered descriptors or infer any definitions. A caller
+ * must stop on error, before original argument/specification evaluation. */
+int fort_scope_observe_all_v1(fort_scope_t context);
 int fort_scope_discard_v1(fort_scope_t context, fort_buffer_t buffer);
 int fort_scope_retire_v1(fort_scope_t context, fort_buffer_t buffer);
 int fort_scope_host_begin(fort_scope_t context, fort_buffer_t buffer, const fort_scope_access *access);

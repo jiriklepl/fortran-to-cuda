@@ -1048,6 +1048,19 @@ ordered definition proof. Unsupported preservation of undefined holes or
 unmapped nested definition changes remains a boundary. Numerical workers retain
 their separate physical access and definition handling.
 
+Checked module children can retain call-free integer array-element bounds under
+conditional-return contract version 5. Each original CALL carries its own
+pre-entry observation phase, authenticated against the original declarations
+and emitted source. `fort_scope_observe_all_v1` drains queued users and publishes
+initialized regions before argument association and bound evaluation, preserving
+device replicas, allocation generations and undefined holes. It inspects no
+unregistered source descriptor and leaves no access transaction open across the
+child. A publication error stops execution before entry; it never replays source
+work. Source functions, unproved aliases and retained child-local allocations
+remain boundaries. This first slice conservatively observes the whole live
+domain; it does not yet price or minimize that publication footprint. Its changed
+runtime identity requires fresh calibration before application qualification.
+
 Serial source scopes support whole-array and proved rectangular bindings,
 numerical leaves, mode-bearing call-only wrappers, registered hidden module
 arrays (including visible reexports), exact native view sections and conservative

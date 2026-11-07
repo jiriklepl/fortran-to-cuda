@@ -4483,22 +4483,36 @@ extern "C" int fort_scope_source_quote_v2(fort_scope_t h,const fort_scope_extern
     if(!native_costs) return protect([&] {throw Error(FORT_SCOPE_ARGUMENT,"missing native-live protocol costs");});
     return source_quote(h,call,work,base,protocol,native_costs,compatible,out);
 }
+static void observe_resources(Context &c, const fort_buffer_t *handles, size_t count) {
+    require(!count || handles, FORT_SCOPE_ARGUMENT, "missing observed buffers");
+    drain_resources(c,handles,count);
+    std::vector<std::vector<fort_scope_section>> regions(count);
+    std::vector<fort_scope_plan_binding> bindings(count);
+    for (size_t i=0; i<count; ++i) {
+        auto &b = buffer(c, handles[i]);
+        for (const auto &part : b.initialized)
+            regions[i].push_back({part.lo.data(),part.hi.data()});
+        bindings[i] = {handles[i],{0,regions[i].size(),regions[i].data(),0,nullptr,0,nullptr}};
+    }
+    if (count) note_numerical_activity(c);
+    begin_accesses(c,bindings.data(),count,false,nullptr);
+    for (size_t i=0; i<count; ++i) end(c,buffer(c,handles[i]),false);
+    trace(c,"observe",nullptr,count);
+}
 extern "C" int fort_scope_observe_v1(fort_scope_t h, const fort_buffer_t *handles, size_t count) {
+    return with(h, [&](Context &c) { observe_resources(c,handles,count); });
+}
+extern "C" int fort_scope_observe_all_v1(fort_scope_t h) {
     return with(h, [&](Context &c) {
-        require(!count || handles, FORT_SCOPE_ARGUMENT, "missing observed buffers");
-        drain_resources(c,handles,count);
-        std::vector<std::vector<fort_scope_section>> regions(count);
-        std::vector<fort_scope_plan_binding> bindings(count);
-        for (size_t i=0; i<count; ++i) {
-            auto &b = buffer(c, handles[i]);
-            for (const auto &part : b.initialized)
-                regions[i].push_back({part.lo.data(),part.hi.data()});
-            bindings[i] = {handles[i],{0,regions[i].size(),regions[i].data(),0,nullptr,0,nullptr}};
-        }
-        if (count) note_numerical_activity(c);
-        begin_accesses(c,bindings.data(),count,false,nullptr);
-        for (size_t i=0; i<count; ++i) end(c,buffer(c,handles[i]),false);
-        trace(c,"observe",nullptr,count);
+        // Original specification expressions run before the callee body can
+        // acquire anything. Enumerate the live domain, never source descriptors
+        // or variable names; hidden aliases therefore see the current value.
+        std::vector<fort_buffer_t> handles;
+        handles.reserve(c.buffers.size());
+        for(const auto &entry:c.buffers) handles.push_back(entry.first);
+        std::sort(handles.begin(),handles.end());
+        observe_resources(c,handles.data(),handles.size());
+        trace(c,"observe_all",nullptr,handles.size());
     });
 }
 extern "C" int fort_scope_discard_v1(fort_scope_t h, fort_buffer_t handle) {

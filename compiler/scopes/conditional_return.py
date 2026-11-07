@@ -182,6 +182,8 @@ class CheckedBorrowedCall:
                 or not any(a == first and b == last and text is self.source for a, b, text in member.patches)
                 or getattr(member, "external_control_placeholders", {}).get(self.marker) != (self.callee, member.context)):
             raise CompilationError("returned-domain call lost its exact checked control forwarding")
+        from compiler.scopes.specification_entry import call_record
+        call_record(member, self)
         analysis = member.builder.analysis
         scope = analysis.source_scope_for(self.node, member.routine.scope)
         current = resolve_source_call(analysis, scope, self.node)
@@ -244,6 +246,8 @@ def retain_call(member, node, callee, resolved, marker, source, handle_bindings,
 def _entry_exit(member):
     """Only lifecycle outside the reached execution inventory is checked here."""
     routine, analysis = member.routine, member.builder.analysis
+    from compiler.scopes.specification_entry import projection
+    specification = projection(member)
     _validate_scope(analysis, routine.scope)
     spec = _part(routine.scope.node, "Specification_Part")
     aliases = {"Common_Stmt", "Equivalence_Stmt", "Namelist_Stmt", "Cray_Pointer_Stmt",
@@ -261,6 +265,8 @@ def _entry_exit(member):
         if binding.name in routine.arguments and binding.intent == "out" and "allocatable" in binding.attributes:
             raise CompilationError("conditional return cannot cross allocatable OUT entry deallocation")
         for bound in (*binding.shape_nodes, *binding.lower_bound_nodes):
+            if specification is not None:
+                continue  # Separate source proof; every caller must publish before entry.
             for node in walk(bound):
                 kind = _kind(node)
                 if kind in {"Data_Ref", "Function_Reference", "Structure_Constructor"}:
@@ -276,6 +282,7 @@ def _entry_exit(member):
             raise CompilationError("conditional return cannot retain child-local storage beyond its original exit")
     return {"procedure": routine.qualified, "original_body_sha256": sha256(str(routine.scope.node).encode()).hexdigest(),
             "specification": "original numeric scalar/descriptor declarations; no hidden calls, aliases or finalization",
+            **({"specification_reads": specification.public()} if specification is not None else {}),
             "exit": "no retained child-local allocation; original RETURN keeps caller controls",
             "opaque_resources": sorted(opaque), "definition_authority": False}
 
@@ -746,6 +753,7 @@ def _coverage(member):
         mark((call.node,), "checked_lexical_child", procedure=call.callee.routine.qualified,
              source_call=dict(call.record),
              namespace_owner=None if namespace is None else namespace.routine.qualified)
+    from compiler.scopes.specification_entry import call_record
     for call in member.return_calls:
         call.validate(member)
         forward = dict(call.handle_bindings)
@@ -755,9 +763,11 @@ def _coverage(member):
             canonical = member.canonical(binding).root
             canonical_handles[str(slot)] = member.owner.resources[canonical][1]
             canonical_resources[root] = canonical
+        specification = call_record(member, call)
         mark((call.node,), "checked_child", procedure=call.callee.routine.qualified,
              canonical_handles=canonical_handles, canonical_resources=canonical_resources,
-             handle_forwarding={str(slot): number for slot, number in call.handle_bindings})
+             handle_forwarding={str(slot): number for slot, number in call.handle_bindings},
+             **({"specification_entry": specification} if specification is not None else {}))
     for header, proof in member.return_conditions:
         current = member.graph.node_id(header, role="condition")
         if proof.effects or not proof.summary.get("complete"):
@@ -801,7 +811,9 @@ def _record(owner):
                        for member in owner.members.values() for _first,_last,patch in member.patches
                        if hasattr(patch,"lifecycle"))
     lexical = any(member.source_lexical_calls for member in owner.members.values())
-    return {"version": 4 if lexical else 3 if preservation else 2 if selected_root is not None else 1,
+    specification = any(getattr(member, "specification_reads", None) is not None for member in owner.members.values())
+    return {"version": 5 if specification else 4 if lexical else 3 if preservation else 2 if selected_root is not None else 1,
+            **({"specification_entry_policy_version": 1} if specification else {}),
             **({"lexical_child_policy_version": 1} if lexical else {}),
             **({"native_call_preservation_policy_version": 2} if preservation else {}),
             "kind": "checked_conditional_return", "entry": owner.routine.qualified,

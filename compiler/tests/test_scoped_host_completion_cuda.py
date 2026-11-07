@@ -130,9 +130,29 @@ int main(int argc,char **argv) {
         check(fort_scope_access_begin_v1(f.context,bindings,2,0,nullptr));
         assert(f.host_a[0]==11 && f.host_x[0]==22);
         assert(f.completions().event_records==before.event_records+1);
-        assert(f.completions().event_waits==before.event_waits+1);
+        // A pageable download may already have completed before the runtime
+        // queries its event. Both outcomes share the one recorded fence.
+        assert(f.completions().event_waits>=before.event_waits);
+        assert(f.completions().event_waits<=before.event_waits+1);
         assert(f.completions().stream_waits==before.stream_waits);
         check(fort_scope_host_end(f.context,f.a)); check(fort_scope_host_end(f.context,f.x));
+    } else if(!std::strcmp(mode,"observe_all")) {
+        auto read=read_all();
+        check(fort_scope_device_begin(f.context,f.x,&read,reinterpret_cast<void **>(&f.px)));
+        check(fort_scope_device_end(f.context,f.x));
+        f.start_delay();
+        const auto before=f.stats();
+        check(fort_scope_observe_all_v1(f.context));
+        assert(f.host_a[0]==1 && f.host_x[0]==10);
+        const auto observed=f.stats();
+        assert(observed.downloads==before.downloads+1);
+        check(fort_scope_device_begin(f.context,f.a,&read,reinterpret_cast<void **>(&f.pa)));
+        check(fort_scope_device_end(f.context,f.a));
+        check(fort_scope_device_begin(f.context,f.x,&read,reinterpret_cast<void **>(&f.px)));
+        check(fort_scope_device_end(f.context,f.x));
+        check(fort_scope_observe_all_v1(f.context));
+        assert(f.stats().uploads==before.uploads && f.stats().downloads==observed.downloads);
+        assert(f.stats().allocations==before.allocations);
     } else if(!std::strcmp(mode,"reuse")) {
         auto read=read_all(),write=overwrite_all();
         for(int round=0;round<3;++round) {
@@ -173,7 +193,7 @@ def cuda_completion_executable(tmp_path_factory):
 
 
 @pytest.mark.cuda
-@pytest.mark.parametrize("mode", ["independent", "overlap", "disjoint", "read_mirror", "downloads", "reuse"])
+@pytest.mark.parametrize("mode", ["independent", "overlap", "disjoint", "read_mirror", "downloads", "observe_all", "reuse"])
 def test_host_completion_with_pending_real_gpu_work(cuda_completion_executable, mode):
     result = subprocess.run([str(cuda_completion_executable), mode], capture_output=True, text=True, timeout=15)
     if result.returncode == 77:
