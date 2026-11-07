@@ -8,6 +8,17 @@ Historical reports and timing controls remain unchanged.
 
 ## Current checkpoint: 2026-11-07
 
+The [reached native specification checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/reached-native-specification-20261107/README.md)
+keeps unrelated automatic-array declarations from obscuring exact native point
+reads after procedure entry. All nine original CD4 tile-size assignments now
+have exact read proofs. The 548-check regression suite and two CUDA controls
+pass; strict package validation also passes. Two GPU children retain their
+shared metadata across an intervening CPU point read, uploading its four bytes
+once and downloading none before the second kernel. Entry and referenced-array
+descriptor checks remain intact. This fixes the metadata admission cause in
+isolation; CD4 field-read transport, regenerated application coverage and all
+new performance gates remain unqualified.
+
 The [reached RK validation checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/byte-rk-validation-20261107/README.md)
 corrects the companion reader's missing direct source-task module-use accounting.
 The unchanged newly generated SGS→Convection package passes strict validation,

@@ -28,7 +28,7 @@ from compiler.ir import CompilationError, SourceLocation
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
 # Bump when source-effect, call-composition or summary semantics change.
-SOURCE_SUMMARY_VERSION = 23
+SOURCE_SUMMARY_VERSION = 24
 SOURCE_GENERIC_INTERFACE_VERSION = 2
 SOURCE_CLOSURE_BOUND_VERSION = 1
 _DEFAULT_SUMMARY_CACHE = SummaryCache()
