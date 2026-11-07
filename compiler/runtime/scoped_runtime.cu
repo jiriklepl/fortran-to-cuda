@@ -2893,15 +2893,31 @@ void planning_evidence(Context &context, fort_scope_t handle, const fort_scope_p
     } catch (...) {}
 }
 }
+namespace {
+void require_planning_host_current(Context &c, fort_buffer_t handle, const Region &reads) {
+    const auto &actual = buffer(c, handle);
+    require(!actual.prepared, FORT_SCOPE_STATE, "planning payload has an unfinished access");
+    // Queued writes have not changed actual host coverage yet. Their virtual
+    // effects must also exclude stale snapshots; neither query drains work.
+    const auto &current = virtual_buffer(c, handle);
+    Budget budget;
+    require(difference(reads, actual.initialized, budget).empty() &&
+            difference(reads, actual.host_current, budget).empty() &&
+            difference(reads, current.initialized, budget).empty() &&
+            difference(reads, current.host_current, budget).empty(), FORT_SCOPE_BOUNDARY,
+            "planning payload must already be initialized and host current in every requested region");
+}
+}
 extern "C" int fort_scope_plan_host_current(fort_scope_t h, fort_buffer_t handle) {
     return with(h, [&](Context &c) {
         const auto &b = buffer(c, handle);
-        require(!b.prepared, FORT_SCOPE_STATE, "planning payload has an unfinished access");
-        Budget budget;
-        const Region full = empty(b.full()) ? Region{} : Region{b.full()};
-        require(difference(full, b.initialized, budget).empty() &&
-                difference(full, b.host_current, budget).empty(), FORT_SCOPE_BOUNDARY,
-                "planning payload must already be fully initialized and host current");
+        require_planning_host_current(c, handle, empty(b.full()) ? Region{} : Region{b.full()});
+    }, Change::None);
+}
+extern "C" int fort_scope_plan_host_sections_current_v1(fort_scope_t h, fort_buffer_t handle,
+                                                        const fort_scope_section *items, size_t count) {
+    return with(h, [&](Context &c) {
+        require_planning_host_current(c, handle, sections(buffer(c, handle), items, count, false));
     }, Change::None);
 }
 extern "C" int fort_scope_plan_reset_mode(fort_scope_t h, uint32_t endpoint_mode) {

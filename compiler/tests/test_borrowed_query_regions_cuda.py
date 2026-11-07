@@ -62,8 +62,8 @@ end program
 """
 
 
-@pytest.fixture(scope="module")
-def binaries(tmp_path_factory):
+@pytest.fixture(scope="module", params=["ordinary", "partial_metadata"])
+def binaries(request, tmp_path_factory):
     from compiler.tests import test_native_ancestor_runtime as support
 
     nvcc, host = shutil.which("nvcc"), shutil.which("g++-14")
@@ -72,15 +72,25 @@ def binaries(tmp_path_factory):
     directory = tmp_path_factory.mktemp("borrowed_query")
     profile = actual_profile(directory, nvcc, host)
     original = support.fixture
+    partial = request.param == "partial_metadata"
+    source = NESTED
+    if partial:
+        source = source.replace("integer::opaque_visits=0",
+            "integer::opaque_visits=0\ninteger,protected::tiles(-2:5)=[1,1,1,1,1,1,1,1]")
+        source = source.replace("integer::i\ndo i=1,n\nb(i)=",
+            "integer::i,tn\ntn=tiles(1)\ndo i=1,n-tn+1\nb(i)=")
 
     def fixture(*args, **kwargs):
         path, builder = original(*args, **kwargs)
         builder.config = OffloadConfig("auto", profile)
+        if partial:
+            builder.facts["captures"]["ancestor_fixture::tiles"] = {
+                "storage": "stable", "initialized": "none", "escapes": False, "allocation_changes": False}
         return path, builder
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(support, "fixture", fixture)
-        return build_native_ancestor(directory, source=NESTED, driver_source=DRIVER)
+        return build_native_ancestor(directory, source=source, driver_source=DRIVER, selected_window=partial)
 
 
 @pytest.mark.cuda

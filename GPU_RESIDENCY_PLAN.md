@@ -8,6 +8,23 @@ Historical reports and timing controls remain unchanged.
 
 ## Current checkpoint: 2026-11-07
 
+The latest [partial metadata query checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/partial-metadata-queries-20261107/README.md)
+replaces whole-vector readiness with exact element checks for protected INTEGER
+metadata. A reached native read can establish the needed element without
+inventing definitions for unrelated entries. Pure runtime checks reject stale
+or undefined requested regions, including overlapping queued writes, without
+copies or submission. The focused 29 checks, 77 existing regressions and eight
+CUDA controls pass; five existing CUDA query/failure controls also pass. The
+CUDA controls observe two-worker grouped execution with unchanged fields and
+no extra transfer. Runtime `2d0d8214` requires fresh costs. Its first calibration
+is rejected because the collective memory holdout has 27.75% error against the
+unchanged 25% limit. All observations remain recorded; no profile is published
+or old costs retagged. AUTO44 generation remains pending.
+The separately frozen AUTO43 passes four short full-field/output cases, but
+still executes only SGS and viscosity boundaries on GPU. Its CD4 source teams
+remain blocked by selected-region scalar definedness. Neither source emission
+nor these short checks establish the application speedup gates.
+
 The [aggregate graph-budget regression](benchmarks/reports/gpu-residency-implementation-20261023/aggregate-graph-budget-checkpoint-20261107.json)
 extends the earlier removal of two 32-unit restrictions. Complete mixed-team
 inventories and scheduling groups no longer spend the per-operation effect

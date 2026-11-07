@@ -167,9 +167,11 @@ def test_tiling_recipe_uses_host_current_probe_before_exact_payload_snapshot(tmp
     _outputs, _report, text, proofs = emit(tmp_path, source)
     proof, = proofs
     assert proof.table_reads == ("tilemeta::tiles",)
-    probe = text.index("fort_scope_plan_host_current(")
+    probe = text.index("fort_scope_plan_host_sections_current_v1(")
     snapshot = text.index("= int(tiles(", probe)
     assert probe < snapshot
+    assert "lbound(tiles,1,kind=c_int64_t)" in text[:probe]
+    assert "fort_scope_plan_host_current(" not in text
     assert "/= FORT_SCOPE_OK) exit" in text[probe:snapshot]
     assert "coefficient = scale / 2.0" in text or "coefficient=scale/2.0" in text
 
