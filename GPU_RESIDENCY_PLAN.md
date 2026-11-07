@@ -466,8 +466,18 @@ the host cost. Fixed longer observations reduce short-protocol sampling noise;
 the large numerical holdout keeps its own original sampling budget. Both prior
 failed campaigns remain recorded, including the holdout timeout. The unchanged
 25% collective accuracy gate passes at 4.4% and 19.0% error, 269 regression checks
-pass, and normal emitted-code and physical-copy validation pass. Actual ELMM
-use of this new contract, natural correctness and timing remain open.
+pass, and normal emitted-code and physical-copy validation pass.
+
+The [parent38 application checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/parent38-application-checkpoint-20261107.json)
+qualifies the original-host contract in actual ELMM. Generation, fresh build,
+full-field relink and all four short checks pass at unchanged tolerances. Across
+initialization plus two timesteps, simple decreases from 246 transfers and
+309,704,128 bytes to 148 transfers and 280,980,544 bytes; channel decreases from
+144 transfers and 159,630,080 bytes to 72 transfers and 157,712,768 bytes. All
+transfers use the same direct transport, with one DMA per recorded transfer.
+GPU coverage is unchanged: 126 and 54 kernels respectively. This establishes
+lower traffic and passing short correctness, not end-to-end speedup. Natural
+109/2,458-step correctness and the complete timing protocol remain open.
 
 The [wide-team checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/wide-graph-team-checkpoint-20261107.json)
 removes two remaining 32-unit restrictions from production graph admission.
@@ -478,7 +488,7 @@ unchanged input once across intervening native work. Only the native-modified
 plane is uploaded again. Zero-trip, hidden-device and wrong-team paths pass;
 129 affected tests, three CUDA checks and the companion build reader pass.
 This changes the conservative compiler protocol fingerprint, so the accepted
-calibration above remains bound to `a8ad86e` and the ongoing parent38 application
+calibration above remains bound to `a8ad86e` and the passed parent38 short
 qualification. The successor needs fresh calibration before AUTO/application
 qualification; no application speedup is established by this component test.
 
