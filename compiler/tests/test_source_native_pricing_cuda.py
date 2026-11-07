@@ -41,7 +41,8 @@ def synthetic_gpu_ranking(original):
 
 @pytest.mark.cuda
 @pytest.mark.parametrize("synthetic_gpu", [False, True], ids=["measured-native-only", "synthetic-gpu-dispatch"])
-def test_generated_native_source_team_between_gpu_workers_keeps_readonly_replica(tmp_path, monkeypatch, synthetic_gpu):
+@pytest.mark.parametrize("transfers", ["direct", "auto"])
+def test_generated_native_source_team_between_gpu_workers_keeps_readonly_replica(tmp_path, monkeypatch, synthetic_gpu, transfers):
     profile_path = os.environ.get("FORT_TEST_SOURCE_PROFILE")
     if not profile_path:
         pytest.skip("independent fresh native-live source calibration required")
@@ -123,7 +124,10 @@ call advance(a,b,n,t)
 end subroutine
 """)
     client = build / "client.cu"
-    client.write_text("#define EXPECT_SOURCE_GPU " + str(int(synthetic_gpu)) + "\n" + r'''
+    # The checked child borrows its caller's domain and copy policy. Its source
+    # provider must also work when the caller configured AUTO transfers.
+    client.write_text("#define EXPECT_SOURCE_GPU " + str(int(synthetic_gpu)) + "\n" +
+                     "#define CALLER_TRANSFERS FORT_SCOPE_TRANSFERS_" + transfers.upper() + "\n" + r'''
 #include "scoped_runtime.h"
 #include <cuda_runtime.h>
 #include <cassert>
@@ -151,6 +155,7 @@ int main(){
  expected_a=a;expected_b=b;
  fort_scope_domain_t domain=0;fort_scope_t context=0;fort_buffer_t ha=0,hb=0;
  check(fort_scope_domain_create_v1(0,&domain));check(fort_scope_create_in_domain_v1(domain,&context));
+ check(fort_scope_set_transfers(context,CALLER_TRANSFERS));
  fort_scope_layout la{1,FORT_SCOPE_REAL64,8,a.data(),&extent,&lower,1},lb{1,FORT_SCOPE_REAL64,8,b.data(),&extent,&lower,1};
  check(fort_scope_register(context,1,1,&la,1,&ha));check(fort_scope_register(context,2,1,&lb,1,&hb));
  fort_scope_access read{};read.flags=FORT_SCOPE_READ_ALL;fort_scope_access rw{};rw.flags=FORT_SCOPE_READ_ALL|FORT_SCOPE_WRITE_ALL;
@@ -202,7 +207,11 @@ int main(){
         result = run(argv, cwd=build)
         (build / f"command-{index}.stdout").write_text(result.stdout)
         (build / f"command-{index}.stderr").write_text(result.stderr)
-    environment = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "OMP_SCHEDULE": "static",
+    schedule = task["pricing"]["native_protocol"]["c_schedule"]
+    name = {1: "static", 2: "dynamic", 3: "guided", 4: "auto"}[schedule["base_kind"]]
+    modifier = "monotonic:" if schedule["monotonic_modifier"] else "nonmonotonic:"
+    setting = modifier + name + ("," + str(schedule["chunk"]) if schedule["chunk"] else "")
+    environment = {**os.environ, "OMP_NUM_THREADS": "4", "OMP_DYNAMIC": "FALSE", "OMP_SCHEDULE": setting,
                    "OMP_THREAD_LIMIT": "4", "OMP_MAX_ACTIVE_LEVELS": "1", "FORT_RUNTIME_TRACE": "1", "FORT_OFFLOAD_TRACE": "1"}
     environment.pop("CUDA_VISIBLE_DEVICES", None)
     result = run([str(executable)], cwd=build, env=environment)
@@ -212,8 +221,9 @@ int main(){
     cases = re.findall(r"LIVE_ORIGINAL_BEGIN (\d+)\n(.*?)LIVE_ORIGINAL_END \1", result.stderr, re.S)
     assert len(cases) == 2
     for _, events in cases:
+        available = task["pricing"].get("gpu_protocol_available", profile["source_tasks"]["available"])
         expected = (r"available=1 gpu=1 reason=0" if synthetic_gpu else
-                    r"available=1 gpu=0 reason=0" if profile["source_tasks"]["available"] else r"available=0 gpu=0 reason=1")
+                    r"available=1 gpu=0 reason=0" if available else r"available=0 gpu=0 reason=1")
         assert re.search(r"FORT_SOURCE_QUOTE .*" + expected, events), events
         for name in ("prepare", "start", "commit"):
             assert events.count("FORT_SCOPED source_native_" + name + " ") == (0 if synthetic_gpu else 1)

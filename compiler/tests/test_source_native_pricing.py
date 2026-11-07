@@ -36,8 +36,21 @@ def live_issued(directory):
                                      native_live=True)
 
 
-def live_emitted(directory, child):
+def live_emitted(directory, child, *, transfers="direct", with_worker=False):
     source = SOURCE
+    if with_worker:
+        source = source.replace("!$omp parallel private", "call prepare(a,b,n)\n!$omp parallel private", 1)
+        source = source.rsplit("end module", 1)[0] + """subroutine prepare(a,b,n)
+integer,intent(in)::n
+real(8),intent(in)::a(-3:)
+real(8),intent(inout)::b(-3:)
+integer::i
+do i=1,n
+ b(i)=b(i)+a(i)*0.25_8
+enddo
+end subroutine
+end module
+"""
     if child:
         source = source.rsplit("end module", 1)[0] + """subroutine outer(left,right,n,t)
 integer,intent(in)::n,t
@@ -55,7 +68,7 @@ end module
              "captures": {"argument::" + name: deepcopy(FACT) for name in names}}
     return path, ScopeBuilder([path], "stencil::" + ("outer" if child else "advance"), facts=facts,
         options=CompilerOptions(), config=OffloadConfig(policy="auto", scope_execution="graph",
-                                                        profile=live_profile())).run()
+                                                        profile=live_profile(), scope_transfers=transfers)).run()
 
 
 def test_live_pricing_requires_separate_measured_management_and_retains_historical_endpoint(tmp_path):
@@ -109,7 +122,10 @@ def test_unqualified_gpu_protocol_is_explicit_native_only_and_never_a_zero_cost(
 
 @pytest.mark.parametrize("child", [False, True])
 def test_emitted_live_alternative_brackets_exact_original_team_and_keeps_canonical_registration(tmp_path, child):
+    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+
     path, (outputs, report) = live_emitted(tmp_path, child)
+    validate_checked_execution_plans(report)
     task, = report["scopes"][0]["source_device_tasks"]
     assert task["version"] == 4
     assert task["kind"] == "scheduled_original_tile_private_team_live"
@@ -133,6 +149,27 @@ def test_emitted_live_alternative_brackets_exact_original_team_and_keeps_canonic
         artifact = build / name
         artifact.parent.mkdir(parents=True, exist_ok=True)
         artifact.write_text(text)
+
+
+@pytest.mark.parametrize("child", [False, True])
+@pytest.mark.parametrize("transfers", ["direct", "auto"])
+def test_mixed_graph_keeps_priced_source_teams_with_automatic_transfers(tmp_path, child, transfers):
+    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+
+    path, (outputs, report) = live_emitted(tmp_path, child, transfers=transfers, with_worker=True)
+    assert report["scope_count"] == 1, report.get("graph_owner_attempt")
+    validate_checked_execution_plans(report)
+    scope, = report["scopes"]
+    task, = scope["source_device_tasks"]
+    assert task["kind"] == "scheduled_original_tile_private_team_live"
+    assert task["pricing"]["endpoints"]["native"].startswith("typed host transaction")
+    assert task["execution_binding"]["provider"]["metadata"]["version"] == 6
+    # The ordinary worker configures the owning context once. The source task
+    # consumes that same context and never installs a separate copy policy.
+    code = outputs[report["sources"][str(path)]["replacement"]]
+    assert "fort_configure(" in code
+    assert "fort_scope_source_host_start_v1(" in code
+    assert scope["estimate_available"] is False
 
 
 @pytest.mark.native

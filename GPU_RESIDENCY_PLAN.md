@@ -97,8 +97,26 @@ removes a duplicate managed replacement from the ordinary-entry source branch;
 that branch now retains the original CALL directly. Strict publication checks
 remain unchanged. Fifteen real CUDA cases pass, including direct ordinary entry,
 nested checked entry, hidden devices and reached retirement.
-The immediate gate is a qualified AUTO package, followed by real backend/copy
-ledgers and full-field checks before another performance comparison.
+The [AUTO41 checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/auto41-and-source-transfers-20261107/README.md)
+now passes strict package validation, public build and all four two-step
+full20/halo/output checks, including hidden-GPU controls. Its frozen `2f24f9b`
+binary executes six SGS and 36 viscosity-boundary kernels in each enabled case,
+with 107,643,264 payload bytes and 60 completed copy records including
+initialization. Neither case executes its configured advection on GPU: AUTO
+selects native FD2, and no CD4 source task was admitted. Both coverage gates
+remain failed; natural correctness and new performance are unqualified.
+
+A subsequent compiler change permits priced source teams in mixed graphs with
+AUTO transfers, using the existing worker's context configuration and coherence
+simulator. It passes 133 affected checks, four mixed CUDA-enabled/hidden checks
+and four real CUDA retention controls. Read-only replicas survive native source
+work with exact copy-count assertions. This change is not in AUTO41. The tests
+also expose a source-protocol calibration mismatch (`dynamic,1` measured versus
+the application's unchanged `static`): qualify matching costs before claiming
+application AUTO source placement. Source-only AUTO setup and shared source-task
+emission remain separate gates. Paired reader `af5c100` validates aggregate inline
+schedule summaries without turning them into source or GPU execution evidence;
+214 tests and 309 subtests pass, with one optional integration skip.
 
 ## Integration record: 2026-11-04 onward
 
