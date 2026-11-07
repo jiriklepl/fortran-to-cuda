@@ -458,8 +458,16 @@ Qualification passes 2,194 compiler/runtime checks, 4,595 companion checks plus
 511 subtests (39 optional skips), and 55 CUDA cases covering partial producers,
 original CPU reads/writes, subsequent GPU consumers and prework failures. All
 1,379 source guards hold. Task-acquisition ABI 2 and runtime `966c7d59` require
-fresh calibration; the sampler now measures both host acquisition paths. Actual
-ELMM use of this new contract, natural correctness and timing remain open.
+fresh calibration. The [calibration checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/host-calibration-checkpoint-20261107.json)
+now qualifies those costs against CUDA 13.5. It corrects a sample-vector comparison
+that could select the smaller host-acquisition median and discard the other
+protocol's samples. Both sample sets are retained; their larger median supplies
+the host cost. Fixed longer observations reduce short-protocol sampling noise;
+the large numerical holdout keeps its own original sampling budget. Both prior
+failed campaigns remain recorded, including the holdout timeout. The unchanged
+25% collective accuracy gate passes at 4.4% and 19.0% error, 269 regression checks
+pass, and normal emitted-code and physical-copy validation pass. Actual ELMM
+use of this new contract, natural correctness and timing remain open.
 
 Parent36's additional diagnostics identify the missing CD4 child route:
 `CD4divU/V/W` automatic scratch-array bounds read `tilenx/tileny/tilenz` before

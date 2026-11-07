@@ -100,8 +100,9 @@ static std::vector<double> measure(int rounds, Before setup, Operation operation
 template<class Operation> static std::vector<double> measure(int rounds, Operation operation) {
     return measure(rounds, [] {}, operation, [] {});
 }
-static void cost(const char *name, const std::vector<double> &durations) {
-    record("\"kind\":\"scoped_cost\",\"name\":" + quoted(name), durations);
+static void cost(const char *name, const std::vector<double> &durations, const char *protocol = nullptr) {
+    record("\"kind\":\"scoped_cost\",\"name\":" + quoted(name) +
+           (protocol ? ",\"protocol\":" + quoted(protocol) : ""), durations);
 }
 static void transfer_cost(const char *name, const std::vector<double> &durations,
                           const std::string &extra = "") {
@@ -630,9 +631,10 @@ int main(int argc, char **argv) {
         SCOPE(fort_scope_original_host_begin_v1(context, &original_host_binding, 1));
         SCOPE(fort_scope_host_end(context, buffer));
     });
-    // Both host policies use the existing calibrated term. Cover the more
-    // expensive transaction rather than silently reusing strict-only costs.
-    cost("host_access_seconds", std::max(strict_host_access, original_host_access));
+    // Preserve both sample vectors. The profile builder takes the larger
+    // median; vector comparison would rank their first differing samples.
+    cost("host_access_seconds", strict_host_access, "strict");
+    cost("host_access_seconds", original_host_access, "original_host");
     int previous = 0;
     void *stream_pointer = nullptr;
     // A newly initialized source scope also owns mandatory stream/pool

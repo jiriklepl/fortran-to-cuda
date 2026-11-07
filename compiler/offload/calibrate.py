@@ -274,6 +274,7 @@ def profile_with_scoped_measurements(
     costs = {"cold_driver_startup_seconds": statistics.median(cold)}
     allocations: dict[str, list[tuple[int, float]]] = {"allocation_seconds": [], "release_seconds": []}
     planning = []
+    host_protocols = {}
     transfer_records = []
     physical_copy_records = []
     for record in records:
@@ -299,11 +300,24 @@ def profile_with_scoped_measurements(
                 raise CalibrationError("duplicate scoped allocation byte count")
             allocations[name].append((size, _median(record)))
         elif kind == "scoped_cost":
+            if "protocol" in record:
+                protocol = record["protocol"]
+                if (name != "host_access_seconds" or set(record) != {"kind", "name", "protocol", "seconds"}
+                        or protocol not in ("strict", "original_host") or protocol in host_protocols or name in costs):
+                    raise CalibrationError("invalid or duplicate host acquisition protocol measurement")
+                host_protocols[protocol] = _median(record)
+                continue
             if name not in SCOPED_COST_NAMES or name in costs or name in allocations or name == "planning_operation_seconds":
                 raise CalibrationError(f"unknown or duplicate scoped cost measurement: {name}")
+            if name == "host_access_seconds" and host_protocols:
+                raise CalibrationError("host acquisition protocols cannot mix with a legacy cost measurement")
             costs[name] = _median(record)
         else:
             raise CalibrationError("unknown scoped measurement")
+    if host_protocols:
+        if set(host_protocols) != {"strict", "original_host"}:
+            raise CalibrationError("host acquisition requires both strict and original-host measurements")
+        costs["host_access_seconds"] = max(host_protocols.values())
     allocation_sizes = {size for size, _ in allocations["allocation_seconds"]}
     release_sizes = {size for size, _ in allocations["release_seconds"]}
     if len(allocation_sizes) < 3 or allocation_sizes != release_sizes:
@@ -330,7 +344,8 @@ def profile_with_scoped_measurements(
             "gpu_setup": "complete warm GPU scope lifecycle: create, first enter/leave, and close including mandatory stream/pool destruction",
             "create": "scope metadata creation; cleanup excluded",
             "register": "three-dimensional whole-root registration with negative lower bounds; unregister excluded",
-            "host_access": "read access begin/end to an already-current host rectangle; no transfer",
+            "host_access": ("maximum median of strict and original-host read acquisition/end; already-current rectangle; no transfer"
+                            if host_protocols else "read access begin/end to an already-current host rectangle; no transfer"),
             "device_access": "access begin/end to an already-allocated device rectangle; no transfer or wait",
             "allocation": "first device begin/end and completion wait on undefined storage; includes access bookkeeping",
             "release": "unregister of allocated undefined storage and completion wait; includes unregister bookkeeping",
