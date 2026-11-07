@@ -48,8 +48,13 @@ def _bounds(region):
     }
 
 
-def kernel_parameters(region):
-    parameters = [cpp_declaration(value) for value in abi_arguments(region.parameters)]
+def kernel_parameters(region, scalar_bytes=frozenset()):
+    if any(symbol not in region.parameters or symbol.rank
+           or symbol.dtype not in {ScalarType.REAL, ScalarType.REAL32} for symbol in scalar_bytes):
+        raise ValueError("byte scalar transport requires original real scalar parameters")
+    parameters = [f"fort_scalar_bytes<{cpp_type(value.symbol)}> {value.name}"
+                  if value.symbol in scalar_bytes else cpp_declaration(value)
+                  for value in abi_arguments(region.parameters)]
     for axis in range(len(region.outer_loops)):
         parameters += [f"int fort_tile_lower{axis}", f"int fort_tile_step{axis}", f"std::size_t fort_tile_extent{axis}"]
     parameters += ["unsigned char* fort_tile_scratch", "std::size_t fort_tile_stride"]
@@ -151,7 +156,7 @@ def _scratch_blocks(region, addressing=None):
     return producer, consumer, result
 
 
-def generate_tile_function(region: TilePrivateRegion, *, addressing=None, device=True):
+def generate_tile_function(region: TilePrivateRegion, *, addressing=None, device=True, scalar_bytes=frozenset()):
     """Emit one logical tile; usable by the CUDA kernel or a CPU equivalence probe.
 
     The input IR is supplied by ordinary trusted lowering of proof.phases; the
@@ -182,7 +187,7 @@ def generate_tile_function(region: TilePrivateRegion, *, addressing=None, device
     } != expected_scratch:
         raise ValueError("tile-private lowered storage/axes differ from original source proof")
     producer, consumer, addressing = _scratch_blocks(region, addressing)
-    parameters = kernel_parameters(region) + ["std::size_t fort_tile_slot", "std::size_t fort_tile_ordinal"]
+    parameters = kernel_parameters(region, scalar_bytes) + ["std::size_t fort_tile_slot", "std::size_t fort_tile_ordinal"]
     prefix = "static __device__" if device else "static"
     lines = [
         f"{prefix} void fort_tile_one_{region.id}(" + ", ".join(parameters) + ") {",
@@ -210,15 +215,15 @@ def generate_tile_function(region: TilePrivateRegion, *, addressing=None, device
             f"fort_tile_scratch + fort_tile_slot * fort_tile_stride + fort_tile_offset{index});"
         )
     lines += ["    // Complete original producer phase; no duplicated or omitted evaluations."]
-    lines += sequential_block(producer, 1, [0], device=device, addressing=addressing)
+    lines += sequential_block(producer, 1, [0], device=device, addressing=addressing, scalar_bytes=scalar_bytes)
     lines += ["    // Same-thread phase barrier: producer completes before original consumer."]
-    lines += sequential_block(consumer, 1, [1000], device=device, addressing=addressing)
+    lines += sequential_block(consumer, 1, [1000], device=device, addressing=addressing, scalar_bytes=scalar_bytes)
     return lines + ["}", ""]
 
 
-def generate_kernel(region: TilePrivateRegion, *, addressing=None):
-    lines = generate_tile_function(region, addressing=addressing)
-    parameters = kernel_parameters(region) + ["std::size_t fort_tile_first", "std::size_t fort_tile_count"]
+def generate_kernel(region: TilePrivateRegion, *, addressing=None, scalar_bytes=frozenset()):
+    lines = generate_tile_function(region, addressing=addressing, scalar_bytes=scalar_bytes)
+    parameters = kernel_parameters(region, scalar_bytes) + ["std::size_t fort_tile_first", "std::size_t fort_tile_count"]
     lines += [
         f"static __global__ void kernel_tile_private_{region.id}(" + ", ".join(parameters) + ") {",
         "    const std::size_t fort_tile_grid_stride = static_cast<std::size_t>(gridDim.x) * blockDim.x;",
@@ -294,7 +299,7 @@ static int fort_tile_submit_batches(fort_scope_t context, std::size_t total,
 """.strip().splitlines()
 
 
-def _rectangular_point_phase(loops, body, phase_index, addressing):
+def _rectangular_point_phase(loops, body, phase_index, addressing, scalar_bytes=frozenset()):
     """Distribute independent points without forming a multidimensional size.
 
     Each extent is at most 2**32 from the original INTEGER loop bounds. Adding
@@ -309,7 +314,7 @@ def _rectangular_point_phase(loops, body, phase_index, addressing):
         suffixes.append(suffix)
         lines += indent(["{"], depth)
         depth += 1
-        lines += indent(_loop_snapshot(loop, suffix, device=True), depth)
+        lines += indent(_loop_snapshot(loop, suffix, device=True, scalar_bytes=scalar_bytes), depth)
         lines += indent([f"if (fort_internal_extent{suffix}) {{"], depth)
         depth += 1
     lines += indent(["static_assert(sizeof(std::size_t)>=8, \"cooperative point coordinates require 64-bit size_t\");",
@@ -324,7 +329,7 @@ def _rectangular_point_phase(loops, body, phase_index, addressing):
         lines += indent([f"{loop.iterator.cpp_name} = {iteration_value(suffix, ordinal)};"], depth)
         if loop.iterator in addressing.wide_iterators:
             lines += indent([f"const long long {wide_iterator_name(loop.iterator)} = {loop.iterator.cpp_name};"], depth)
-    lines += sequential_block(body, depth, [phase_index * 1000], device=True, addressing=addressing)
+    lines += sequential_block(body, depth, [phase_index * 1000], device=True, addressing=addressing, scalar_bytes=scalar_bytes)
     lines += indent(["fort_point_carry=blockDim.x;"], depth)
     for suffix in reversed(suffixes):
         lines += indent(["{", f"const std::size_t advanced=fort_internal_ordinal{suffix}+fort_point_carry;",
@@ -340,7 +345,7 @@ def _rectangular_point_phase(loops, body, phase_index, addressing):
     return lines
 
 
-def generate_cooperative_kernel(region, proof, *, addressing=None):
+def generate_cooperative_kernel(region, proof, *, addressing=None, scalar_bytes=frozenset()):
     """One CTA per tile, preserving point bodies and both phase barriers.
 
     Multidimensional independent points use mixed-radix coordinates without a
@@ -355,7 +360,7 @@ def generate_cooperative_kernel(region, proof, *, addressing=None):
     if addressing is not None and addressing != proof.lowered.addressing:
         raise ValueError("cooperative addressing differs from original source lowering")
     producer, consumer, addressing = _scratch_blocks(region, proof.lowered.addressing)
-    parameters = kernel_parameters(region) + ["std::size_t fort_tile_first", "std::size_t fort_tile_count"]
+    parameters = kernel_parameters(region, scalar_bytes) + ["std::size_t fort_tile_first", "std::size_t fort_tile_count"]
     lines = [f"static __global__ void kernel_tile_private_cta_{region.id}(" + ", ".join(parameters) + ") {",
              "    std::size_t fort_tile_slot = blockIdx.x;",
              "    while (fort_tile_slot < fort_tile_count) {",
@@ -387,7 +392,7 @@ def generate_cooperative_kernel(region, proof, *, addressing=None):
         if len(loops) > 1:
             if proof.public()["version"] != 2:
                 raise ValueError("rectangular point distribution requires its current source proof")
-            lines += _rectangular_point_phase(loops, body, phase_index, addressing)
+            lines += _rectangular_point_phase(loops, body, phase_index, addressing, scalar_bytes)
             lines += ["        __syncthreads(); // Every original point completes before phase/scratch reuse."]
             continue
         depth = 2
@@ -396,7 +401,7 @@ def generate_cooperative_kernel(region, proof, *, addressing=None):
             ordinal = "fort_internal_ordinal" + suffix
             lines += indent(["{"], depth)
             depth += 1
-            lines += indent(_loop_snapshot(loop, suffix, device=True), depth)
+            lines += indent(_loop_snapshot(loop, suffix, device=True, scalar_bytes=scalar_bytes), depth)
             first = "threadIdx.x" if axis == len(loops) - 1 else "0"
             increment = "blockDim.x" if axis == len(loops) - 1 else "1"
             lines += indent([f"for (std::size_t {ordinal} = {first}; {ordinal} < fort_internal_extent{suffix}; {ordinal}+={increment}) {{",
@@ -404,7 +409,7 @@ def generate_cooperative_kernel(region, proof, *, addressing=None):
             depth += 1
             if loop.iterator in addressing.wide_iterators:
                 lines += indent([f"const long long {wide_iterator_name(loop.iterator)} = {loop.iterator.cpp_name};"], depth)
-        lines += sequential_block(body, depth, [phase_index * 1000], device=True, addressing=addressing)
+        lines += sequential_block(body, depth, [phase_index * 1000], device=True, addressing=addressing, scalar_bytes=scalar_bytes)
         for _ in loops:
             depth -= 1
             lines += indent(["}"], depth)

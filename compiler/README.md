@@ -2238,6 +2238,20 @@ native proof. This can preserve a reached path with a conservative native
 boundary; it grants no GPU metadata capture. Source, token, budget and other
 component failures remain fatal. Explicit native metadata proofs are unchanged.
 
+Direct tile source tasks can transport a stable plain REAL(4)/REAL(8) scalar as
+an aligned unsigned-character aggregate when its value is not independently
+proved whole-defined. The Fortran interface passes its original address; the C
+entry copies bytes only after the positive-domain checks. Kernels decode those
+bytes at each original scalar reference, retaining the original branches and
+loops. This is storage authority, not scalar readability or a new definition.
+Pointer, allocatable, optional, TARGET, VALUE, volatile and asynchronous captures
+remain excluded, and integer metadata keeps its existing value-read checks.
+Source-task version 2 and provider version 9 bind the byte representation and
+capture identity into generated artifacts. This transport currently requires
+direct unpriced tile access envelopes at the default batch size. Queued, priced,
+line and experimental-batch providers reject it until separately qualified.
+The runtime coherence and transaction API are unchanged.
+
 An original combined `PARALLEL DO` can also execute a complete private line
 snapshot followed by its serial consumer. The compiler proves that transverse
 iterations own disjoint lines, preserves the snapshot before every original

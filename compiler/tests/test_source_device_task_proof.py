@@ -49,7 +49,7 @@ def test_source_task_public_record_cannot_mutate_original_numerical_work_or_fiel
     assert proof.validate() is proof
 
 
-def test_conditional_scalar_needs_independent_whole_definition_and_keeps_FP_guard(tmp_path):
+def test_conditional_scalar_distinguishes_byte_storage_from_whole_definition_and_keeps_FP_guard(tmp_path):
     source = SOURCE.replace("advance(a,b,n,t)", "advance(a,b,n,t,scale)")
     source = source.replace("integer,intent(in)::n,t", "integer,intent(in)::n,t\nreal(8),intent(in)::scale")
     source = source.replace("  b(i)=b(i)+(tmp(li+1)-tmp(li-1))", """  if(mod(i,2)==0)then
@@ -67,16 +67,19 @@ def test_conditional_scalar_needs_independent_whole_definition_and_keeps_FP_guar
                            config=OffloadConfig(policy="sections", scope_execution="graph"))
     analysis, routine = builder.analysis, builder.entry
     nodes = tuple(routine.execution.content)
-    with pytest.raises(CompilationError, match="already be whole-defined"):
-        source_device_task(analysis, routine, nodes, builder=builder)
-    builder.facts["captures"]["argument::scale"]["initialized"] = "whole"
-    proof = source_device_task(analysis, routine, nodes, builder=builder)
+    byte_proof = source_device_task(analysis, routine, nodes, builder=builder)
+    assert [b.root for b in byte_proof.byte_scalars] == ["argument::scale"]
+    assert all(b.root != "argument::scale" for b in byte_proof.readable_scalars)
+    facts["captures"]["argument::scale"]["initialized"] = "whole"
+    builder = ScopeBuilder([path], routine.qualified, facts=facts, options=CompilerOptions(),
+                           config=OffloadConfig(policy="sections", scope_execution="graph"))
+    proof = source_device_task(builder.analysis, builder.entry, tuple(builder.entry.execution.content), builder=builder)
     capture, = [item for item in proof.public()["scalar_captures"] if item["resource"] == "argument::scale"]
     assert capture["authority"]["kind"] == "explicit checked whole-defined scalar entry fact"
     assert capture["authority"]["finite_or_constant_authorized"] is False
     assert any(binding.root == "argument::scale" for binding in proof.readable_scalars)
     builder.facts["captures"]["argument::scale"]["initialized"] = "none"
-    with pytest.raises(CompilationError, match="whole-defined"):
+    with pytest.raises(CompilationError, match="lost original"):
         proof.validate()
 
 
