@@ -3,6 +3,8 @@
 A query records cost alternatives; existing numerical and native effect proofs still authorize
 every operation at its original execution point. No future read admission,
 floating-point preparation, host publication, or device work occurs here.
+Checked parameterized children may query an entered arm using existing live
+handles. They cannot create a domain, register storage or seed definitions.
 """
 
 from __future__ import annotations
@@ -103,6 +105,8 @@ def _worker_signature(step):
 def _signature(proof):
     owner = proof.owner
     return (id(owner), id(proof.anchor), proof.identity, proof.configuration, proof.first, proof.last,
+            tuple(getattr(proof.anchor, name) for name in
+                  ("context", "enabled", "query_plan", "epoch_pristine", "control_guard")),
             id(owner.execution_plan), tuple((id(member), id(member.execution_plan),
                 tuple(id(unit) for unit in member.units), tuple(id(unit) for unit in member.graph_native_tasks))
                 for member in owner.members.values()),
@@ -115,6 +119,9 @@ def _signature(proof):
                 tuple((root, _value_signature(value)) for root, value in step.recipes), step.scalar_writes)
                 for step in proof.steps),
             tuple((root, _binding_signature(binding)) for root, binding in proof.arrays),
+            tuple((root, id(proof.anchor.resources.get(root, (None, None))[0]),
+                   proof.anchor.resources.get(root, (None, None))[1])
+                  for root, _binding in proof.arrays),
             tuple(proof.table_reads), tuple(proof.metadata_inputs))
 
 
@@ -171,7 +178,8 @@ class QueryRegionProof:
                         else "INTEGER shadow" if isinstance(value, MetadataValue) else value.root)
                         for resource, value in step.mappings},
                     "recipe_roots": [root for root, _value in step.recipes]} for step in self.steps],
-                "entry_definitions": "reviewed invocation facts only before the first close",
+                "entry_definitions": ("reviewed invocation facts only before the first close"
+                    if self.anchor is self.owner else "existing live handles only; no registration or new definitions"),
                 "floating_point_preparation": "original reached source; unpriced in graph estimate",
                 "future_source_read_admission": False, "early_payload_transfers": False}
 
@@ -179,6 +187,7 @@ class QueryRegionProof:
 class _Discovery:
     def __init__(self, owner):
         self.owner = owner
+        self.anchor = owner
         self.declines = []
         self.active = set()
         self.unit_maps = {}
@@ -208,14 +217,20 @@ class _Discovery:
             raise CompilationError("query metadata lacks stable ordinary storage: " + resource)
         # A helper-local variable may be defined later. Only an independently
         # reconstructed total INTEGER slice can supply such an ahead value.
-        root_binding = self.owner.builder.visible_binding(self.owner.routine, binding.root)
+        root_binding = self.anchor.builder.visible_binding(self.anchor.routine, binding.root)
         if root_binding is not binding:
             raise CompilationError("query metadata changed its exact visible binding")
         if binding.rank:
-            fact = self.owner.builder.capture(binding)
+            fact = self.anchor.builder.capture(binding)
             if fact.get("storage") != "stable" or fact.get("allocation_changes") is not False:
                 raise CompilationError("query array lacks an invocation-stable descriptor: " + resource)
-            if fact.get("source_sections") is not None or fact.get("initialized") not in {"whole", "none", "sections"}:
+            if self.anchor is not self.owner:
+                # A checked child's caller owns registration and definitions.
+                # Never import its first invocation's capture coverage here.
+                retained = self.anchor.resources.get(binding.root)
+                if retained is None or retained[0] is not binding:
+                    raise CompilationError("borrowed query requires an existing exact forwarded resource")
+            elif fact.get("source_sections") is not None or fact.get("initialized") not in {"whole", "none", "sections"}:
                 raise CompilationError("query array needs reviewed existing anchor coverage: " + resource)
         return binding
 
@@ -246,8 +261,8 @@ class _Discovery:
             indices = tuple(getattr(node.items[1], "items", ()))
             if len(indices) != 1:
                 raise CompilationError("query metadata table requires one exact index")
-            fact = self.owner.builder.capture(binding)
-            if fact.get("initialized") != "whole":
+            fact = self.anchor.builder.capture(binding)
+            if self.anchor is self.owner and fact.get("initialized") != "whole":
                 raise CompilationError("query table snapshot lacks existing whole input definitions")
             return MetadataValue("element", binding=binding,
                                  children=(self.expression(member, indices[0], environment),), source=node)
@@ -493,7 +508,18 @@ def discover_query_regions(owner):
         return
     discovery = _Discovery(owner)
     drafts, resources = [], {}
-    for anchor, first, last, steps in discovery.entered(owner, owner.graph.root_id):
+    from compiler.scopes.module_owner import ModuleOwner
+
+    anchors = [owner, *(member for member in owner.members.values()
+                       if type(member) is ModuleOwner and hasattr(member, "retention_allowed")
+                       and member.resource_slot_namespace is member)]
+
+    def entered():
+        for anchor in anchors:
+            discovery.anchor = anchor
+            yield from discovery.entered(anchor, anchor.graph.root_id)
+
+    for anchor, first, last, steps in entered():
         arrays, tables, scalars = {}, set(), set()
         try:
             if sum(len(_worker_signature(step)[2]) for step in steps) < 2:
@@ -518,8 +544,11 @@ def discover_query_regions(owner):
                     if not isinstance(canonical, MetadataValue) and canonical.root in tables and binding.root in step.unit.written:
                         raise CompilationError("query metadata table is written inside this source region")
             for root, binding in arrays.items():
-                owner.add_resource(binding)
-                resources[root] = binding
+                if anchor is owner:
+                    owner.add_resource(binding)
+                    resources[root] = binding
+                elif root not in anchor.resources or anchor.resources[root][0] is not binding:
+                    raise CompilationError("borrowed query cannot introduce a new resource or registration")
             drafts.append((anchor, first, last, steps, tuple(sorted(arrays.items())), tuple(sorted(tables)), tuple(sorted(scalars))))
         except CompilationError as error:
             discovery.declines.append({"procedure": anchor.routine.qualified, "span": [first, last], "reason": str(error)})
@@ -581,18 +610,22 @@ def emit_query_regions(owner, record, motions):
 def _emit_region(proof, ordinal):
     proof.validate()
     owner, anchor = proof.owner, proof.anchor
-    builder = owner.builder
+    borrowed = anchor is not owner
+    builder = anchor.builder
     tag = proof.identity[:12]
     block, own = "fort_query_" + tag, "fort_query_owned_" + tag
     imports = ["use iso_c_binding", "use fort_scoped_memory"]
     spec = ["integer(c_int) :: fort_status, fort_live", "logical :: fort_can", "type(c_ptr) :: fort_pointer",
             "type(fort_scope_layout) :: fort_layout", "type(fort_scope_plan_decision) :: fort_decision"]
     code = ["fort_status = FORT_SCOPE_OK", "fort_can = .true.",
-            f"if (.not. {anchor.epoch_pristine}) exit {block}"]
+            (f"if ({anchor.context} == 0) exit {block}" if borrowed
+             else f"if (.not. {anchor.epoch_pristine}) exit {block}")]
     leaves = {step.call.procedure for step in proof.steps if step.call is not None}
-    configuration = builder.owner_transfer_setup(leaves, imports, context=anchor.context)
+    configuration = [] if borrowed else builder.owner_transfer_setup(leaves, imports, context=anchor.context)
     from compiler.scopes.source import DTYPES, _fortran_list
     for root, binding in proof.arrays:
+        if borrowed:
+            continue  # Original CALL association already checked this descriptor.
         name = builder.visible(anchor.routine, root)
         if "allocatable" in binding.attributes:
             code += [f"if (fort_can) fort_can = allocated({name})"]
@@ -602,13 +635,19 @@ def _emit_region(proof, ordinal):
         from compiler.scopes.registration import expected_descriptor_conditions
         code += [f"if (fort_can) fort_can = {condition}" for condition in
                  expected_descriptor_conditions(builder.capture(binding), binding.rank, name)]
-    code += [f"if (.not. fort_can) exit {block}", f"if ({anchor.context} == 0) then",
-        f"fort_status = fort_scope_resident_create_v1(0_c_int, {anchor.context})",
-        f"if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_set_device_budget({anchor.context}, &",
-        f"{builder.device_budget}_c_size_t)", *configuration, "endif"]
+    if not borrowed:
+        code += [f"if (.not. fort_can) exit {block}", f"if ({anchor.context} == 0) then",
+            f"fort_status = fort_scope_resident_create_v1(0_c_int, {anchor.context})",
+            f"if (fort_status == FORT_SCOPE_OK) fort_status = fort_scope_set_device_budget({anchor.context}, &",
+            f"{builder.device_budget}_c_size_t)", *configuration, "endif"]
     for index, (root, binding) in enumerate(proof.arrays):
         name = builder.visible(anchor.routine, root)
-        handle = "fort_buffer_" + str(owner.resources[root][1])
+        handle = "fort_buffer_" + str(anchor.resources[root][1])
+        if borrowed:
+            code += ["fort_live = 0",
+                f"fort_status = fort_scope_buffer_valid_v1({anchor.context}, {handle}, fort_live)",
+                f"if (fort_status /= FORT_SCOPE_OK .or. fort_live == 0) exit {block}"]
+            continue
         extent, lower = f"fort_query_extents_{index}", f"fort_query_lowers_{index}"
         spec += [f"integer(c_size_t), target :: {extent}({binding.rank})",
                  f"integer(c_int64_t), target :: {lower}({binding.rank})"]
@@ -623,13 +662,13 @@ def _emit_region(proof, ordinal):
             f"fort_pointer, c_loc({extent}), c_loc({lower}), 1_c_int64_t)"]
         from compiler.scopes.registration import build_registration
         registration = build_registration(builder.capture(binding), binding.rank, handle,
-            f"fort_query_defined_{index}", f"{owner.resources[root][1]}_c_int64_t", "fort_layout",
+            f"fort_query_defined_{index}", f"{anchor.resources[root][1]}_c_int64_t", "fort_layout",
             context=anchor.context, on_error=(f"exit {block}",), entry_guard=anchor.epoch_pristine)
         spec += registration.specification
         code += [*registration.prepare, "endif"]
     code += [f"if (fort_status /= FORT_SCOPE_OK) exit {block}"]
     for root in proof.table_reads:
-        handle = "fort_buffer_" + str(owner.resources[root][1])
+        handle = "fort_buffer_" + str(anchor.resources[root][1])
         code += [f"if (fort_scope_plan_host_current({anchor.context}, {handle}) /= FORT_SCOPE_OK) exit {block}"]
     temporaries = {}
 
@@ -688,7 +727,7 @@ def _emit_region(proof, ordinal):
         args = [anchor.context]
         for array in public["array_parameters"]:
             parameter = parameters[array["name"].lower()]
-            args.append("fort_buffer_" + str(owner.resources[mappings[parameter.resource].root][1]))
+            args.append("fort_buffer_" + str(anchor.resources[mappings[parameter.resource].root][1]))
         for scalar in public["scalar_parameters"]:
             if scalar["name"] not in public["planning"]["scalar_inputs"]:
                 continue
