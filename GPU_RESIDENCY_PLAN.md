@@ -489,8 +489,12 @@ plane is uploaded again. Zero-trip, hidden-device and wrong-team paths pass;
 129 affected tests, three CUDA checks and the companion build reader pass.
 This changes the conservative compiler protocol fingerprint, so the accepted
 calibration above remains bound to `a8ad86e` and the passed parent38 short
-qualification. The successor needs fresh calibration before AUTO/application
-qualification; no application speedup is established by this component test.
+qualification. The [successor calibration](benchmarks/reports/gpu-residency-implementation-20261023/wide-graph-calibration-checkpoint-20261107.json)
+now passes against `80faf1e`, with all costs freshly measured and collective
+validation errors of 15.2% and 9.2%. All 269 profile regressions and ordinary
+emitted-code/physical-copy checks pass. Application qualification of that
+successor remains separate; no application speedup is established by these
+component tests.
 
 Parent36's additional diagnostics identify the missing CD4 child route:
 `CD4divU/V/W` automatic scratch-array bounds read `tilenx/tileny/tilenz` before
