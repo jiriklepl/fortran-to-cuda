@@ -1790,10 +1790,11 @@ class LexicalOwner:
             return self._emit_checked_lexical(nodes, checkpoint, plan, native_cleanup=native_cleanup)
 
     def supports_owned_emission(self, plan):
-        """Ordinary checked members; other families retain their old routing."""
+        """Checked units and direct source teams finish before publication."""
         from compiler.frontend.immutable_graph import original_type
         from compiler.scopes.graph import GraphOwner, _motion_runs
         from compiler.scopes.hierarchical_regions import HierarchicalRegionOwner
+        from compiler.scopes.source_device_tasks import SourceDevicePatch
         from compiler.scopes.storage_admission import _supported
 
         return (_supported(plan) and original_type(self) in {GraphOwner, HierarchicalRegionOwner}
@@ -1807,7 +1808,13 @@ class LexicalOwner:
                 # Preserve that route without inventing image tickets for work
                 # that the original source will perform without instrumentation.
                 and (self.builder.config.policy != "auto" or plan.automatic_native_reason() is None)
-                and all(not member.device_tasks and not member.source_device_tasks for member in plan.members)
+                # Direct source patches render and validate inside admission;
+                # their artifacts and edits enter the complete owned image.
+                # Other transports and external tasks retain their own route.
+                and all(not member.device_tasks
+                        and all(original_type(task) is SourceDevicePatch and task._transport == "direct"
+                                for task in member.source_device_tasks)
+                        for member in plan.members)
                 and all(member.supports_owned_unit_emission(unit)
                         for member in plan.members for unit in plan.units(member))
                 and not any(next(_motion_runs(graph, self.task_schedules[name], self.graph_task_spans[name]), None)

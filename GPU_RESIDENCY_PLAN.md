@@ -118,6 +118,19 @@ emission remain separate gates. Paired reader `af5c100` validates aggregate inli
 schedule summaries without turning them into source or GPU execution evidence;
 214 tests and 309 subtests pass, with one optional integration skip.
 
+The [source-emission checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/source-owned-emission-20261107/README.md)
+now admits checked direct source teams to detached graph publication. All proof,
+scratch, pricing and provider callbacks finish within admission; sealed output
+retains every contextual artifact byte. The affected suite passes 172 tests,
+with eight final regression checks and twelve CUDA controls covering source GPU
+execution, fallback and read-only replica retention. This is not yet actual CD4
+application coverage. A fresh static-schedule calibration matches the original
+C schedule identity and validates physical-copy/native-transaction costs, but
+its source-launch model fails one training point and two holdouts. Those GPU
+costs remain unavailable; no samples or coefficients are substituted. The next
+ELMM generation diagnoses source-task retention with this honest availability
+state before further coverage and performance qualification.
+
 ## Integration record: 2026-11-04 onward
 
 The generic guarded-condition and immutable-container changes pass
