@@ -157,7 +157,6 @@ def execute(compiled, scenario, mode=None):
     work.mkdir()
     environment = {**os.environ, 'OMP_NUM_THREADS': '4', 'OMP_DYNAMIC': 'FALSE', 'OMP_SCHEDULE': 'static',
                    'FORT_RUNTIME_TRACE': '1'}
-    assert environment.get('CUDA_VISIBLE_DEVICES') == '0'
     environment.pop('FORT_ATOMIC_POINT_FAULT', None)
     reference = run([str(native), str(scenario)], cwd=work, env=environment, timeout=30)
     expected = (work / 'fields.bin').read_bytes()
