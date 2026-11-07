@@ -8,6 +8,22 @@ Historical reports and timing controls remain unchanged.
 
 ## Current checkpoint: 2026-11-07
 
+The [normal source-storage RK checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/source-storage-rk-20261107/README.md)
+passes strict regeneration, the public build, four short controls and natural
+109/2,458-step candidate correctness with all 20 fields, halos and outputs.
+Normal providers now execute all six CD2 routines in simple and all three CD4
+teams in channel. Channel traffic falls to 330,474,560 bytes over initialization
+plus two steps, but fragmentation increases to 1,038 copy records. A separate
+channel100 profile records 51,900 copies / 16.52 GB and 20,700 kernels; host
+`cudaMemcpy3DAsync` spans total 7.37 seconds and overlap device work. Twelve new
+fragmented-copy CUDA controls pass, including unknown holes, read-only replica
+retention and budget fallback. Fresh physical-copy and native-transaction costs
+qualify for this runtime; collective and GPU submission estimates remain
+unavailable. Evaluate AUTO physical copies and boundary retention next. This
+forced-sections CPU-pressure candidate has no new qualified
+speedup or complete-maintained-suite result. Earlier entries describe their
+own frozen checkpoints.
+
 The [checked source-storage emission checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/source-storage-emission-20261107/README.md)
 now emits source-v2 transactions through source record 3 and provider record 10
 on the direct unpriced tile path. All four generated root/nested packages pass
@@ -15,8 +31,8 @@ strict validation, and 16 CUDA/native tests pass with exact fields, halos and
 copy ledgers, including unknown field initialization and conditional real scalar
 reads. The broad suite passes 936 checks; its sole obsolete provider-version
 assertion passes after correction in the final 20-check run. Priced and queued
-contracts remain unchanged. Full ELMM regeneration with this compiler and the
-native point-read fix is next; no new application or performance gate is claimed.
+contracts remain unchanged. The subsequent RK checkpoint above qualifies ELMM
+regeneration and natural correctness; performance remains a separate gate.
 
 The [source storage transport checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/source-storage-transport-20261107/README.md)
 adds a distinct source-v2 transaction on the existing coherence engine. It
