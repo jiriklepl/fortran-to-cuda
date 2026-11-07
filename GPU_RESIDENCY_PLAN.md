@@ -38,8 +38,17 @@ failed run is preserved; tolerances, binaries, physics and the deterministic
 pressure reference are unchanged. This qualifies the frozen parent38
 `a8ad86e` build with original CPU PoisFFT and explicit sections placement.
 It does not qualify the later compiler changes on ELMM or production AUTO
-placement. The 64-process rotated timing campaign is prepared with the same
-primary configurations, but no timing or speedup gate is claimed yet.
+placement. The [64-process rotated timing campaign](benchmarks/reports/gpu-residency-implementation-20261023/parent38-performance-20261107/README.md)
+now passes its complete protocol and all output checks, retaining all 56 measured
+samples. It **fails the combined performance checkpoint**: simple109 improves
+35.0% against fresh 7a (seven paired wins), while channel100 regresses 12.5%
+(zero paired wins). Native speedups are only 1.077×/1.047×; be58 is faster in
+all seven pairs in both cases. None of the both-case 10%, 2×, 20× or robust-win
+gates passes. The fresh 20× budgets are 0.574056/0.649552 seconds, with remaining
+candidate gaps of 10.089524/11.759403 seconds. The next performance diagnosis
+must attribute the channel regression and losses to be58 before drawing further
+payoff conclusions from reduced traffic. Traced diagnosis stays separate from
+these untraced complete-process measurements.
 
 ## Integration record: 2026-11-04 onward
 
