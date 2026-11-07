@@ -1452,8 +1452,13 @@ struct AccessPreparation {
     Region writes;
     bool reconciled = false;
 };
-AccessPreparation prepare_effects(Buffer &b, const Effects &e, bool device, bool original_host=false) {
-    require(!original_host || !device, FORT_SCOPE_ARGUMENT, "original host access cannot acquire device pointers");
+enum class AccessContract { Defined, OriginalHost, OriginalDevice };
+AccessPreparation prepare_effects(Buffer &b, const Effects &e, bool device,
+                                  AccessContract contract=AccessContract::Defined) {
+    require(contract!=AccessContract::OriginalHost || !device, FORT_SCOPE_ARGUMENT,
+            "original host access cannot acquire device pointers");
+    require(contract!=AccessContract::OriginalDevice || device, FORT_SCOPE_ARGUMENT,
+            "original device access requires device pointers");
     require(!b.prepared, FORT_SCOPE_STATE, "buffer access already prepared");
     AccessPreparation result{&b, {b.initialized, b.host_current, b.device_current}, {}, {}, e.writes, false};
     // Simulate the complete acquisition against private metadata. In
@@ -1462,11 +1467,18 @@ AccessPreparation prepare_effects(Buffer &b, const Effects &e, bool device, bool
     auto ensure_state = [&](Region requested) {
         if (requested.empty()) return;
         Budget budget;
-        if (original_host) {
+        if (contract==AccessContract::OriginalHost) {
             // Synchronize only tracked physical values. A may-read envelope
             // is not evidence that every cell is read or even initialized.
             // Keep physical versions surviving a semantic definition kill.
             requested = fort_scoped::coherence::tracked_accesses(b, requested);
+        } else if (contract==AccessContract::OriginalDevice) {
+            // Copy object representations, never evaluate a value or promote
+            // may-reads to definitions. Untracked storage still belongs to the
+            // original host allocation. Newer tracked device values win even
+            // after a semantic definition kill.
+            auto unknown = difference(requested, fort_scoped::coherence::physical_values(result.state), budget);
+            result.state.host_current = unite(result.state.host_current, unknown, budget);
         } else {
             require(difference(requested, result.state.initialized, budget).empty(), FORT_SCOPE_UNINITIALIZED,
                     "access reads an uninitialized section");
@@ -1482,8 +1494,11 @@ AccessPreparation prepare_effects(Buffer &b, const Effects &e, bool device, bool
         const auto preserve = difference(e.writes, e.overwrites, budget);
         ensure_state(e.reads);
         ensure_state(preserve);
-        return original_host ? fort_scoped::coherence::prepare_original_host(result.state, e)
-                             : prepare(result.state, e, device);
+        if (contract==AccessContract::OriginalHost)
+            return fort_scoped::coherence::prepare_original_host(result.state, e);
+        if (contract==AccessContract::OriginalDevice)
+            return fort_scoped::coherence::prepare_original_device(result.state, e);
+        return prepare(result.state, e, device);
     };
     try { result.prepared = compute(); }
     catch (const Fragmented &) {
@@ -1505,8 +1520,9 @@ AccessPreparation prepare_effects(Buffer &b, const Effects &e, bool device, bool
     }
     return result;
 }
-AccessPreparation prepare_access(Buffer &b, const fort_scope_access *access, bool device, bool original_host=false) {
-    return prepare_effects(b,effects(b,access),device,original_host);
+AccessPreparation prepare_access(Buffer &b, const fort_scope_access *access, bool device,
+                                 AccessContract contract=AccessContract::Defined) {
+    return prepare_effects(b,effects(b,access),device,contract);
 }
 void acquire_prepared_accesses(Context &c, std::vector<AccessPreparation> &prepared,
                                bool device, void **devices) {
@@ -1553,7 +1569,7 @@ void acquire_prepared_accesses(Context &c, std::vector<AccessPreparation> &prepa
     }
 }
 void begin_accesses(Context &c, const fort_scope_plan_binding *bindings, size_t count,
-                    bool device, void **devices, bool original_host=false) {
+                    bool device, void **devices, AccessContract contract=AccessContract::Defined) {
     require(!count || bindings, FORT_SCOPE_ARGUMENT, "missing task access bindings");
     require(!device || !count || devices, FORT_SCOPE_ARGUMENT, "missing device pointer outputs");
     drain_accesses(c,bindings,count);
@@ -1563,7 +1579,7 @@ void begin_accesses(Context &c, const fort_scope_plan_binding *bindings, size_t 
     for (size_t i=0; i<count; ++i) {
         require(seen.insert(bindings[i].buffer).second, FORT_SCOPE_ALIAS,
                 "task access bindings repeat a canonical buffer");
-        prepared.push_back(prepare_access(buffer(c, bindings[i].buffer), &bindings[i].access, device, original_host));
+        prepared.push_back(prepare_access(buffer(c, bindings[i].buffer), &bindings[i].access, device, contract));
     }
     if (device) {
         std::vector<fort_buffer_t> handles;
@@ -1575,7 +1591,7 @@ void begin_accesses(Context &c, const fort_scope_plan_binding *bindings, size_t 
         // requested root. Preserve those newly materialized versions too.
         if (queued!=c.commands.size())
             for (size_t i=0;i<count;++i)
-                prepared[i]=prepare_access(buffer(c,bindings[i].buffer),&bindings[i].access,true);
+                prepared[i]=prepare_access(buffer(c,bindings[i].buffer),&bindings[i].access,true,contract);
     }
     acquire_prepared_accesses(c,prepared,device,devices);
 }
@@ -4239,14 +4255,15 @@ extern "C" int fort_scope_original_host_begin_v1(fort_scope_t h, const fort_scop
                                                   size_t count) {
     return with(h, [&](Context &c) {
         if (count) note_numerical_activity(c);
-        begin_accesses(c, bindings, count, false, nullptr, true);
+        begin_accesses(c, bindings, count, false, nullptr, AccessContract::OriginalHost);
     });
 }
 static int execute_external_transaction(fort_scope_t h,const fort_scope_external_call_v1 *call,
                                         fort_scope_external_worker_v1 worker,
                                         fort_scope_source_worker_v1 source_worker, bool source_task,
                                         uint64_t expected_launches, void *user,
-                                        fort_scope_external_report_v1 *out) {
+                                        fort_scope_external_report_v1 *out,
+                                        AccessContract contract=AccessContract::Defined) {
     if(out) { *out={}; out->version=FORT_SCOPE_EXTERNAL_ABI_VERSION; }
     if(call && call->binding_count) native_hint_gpu_generation.advance();
     const int status=with(h,[&](Context &c) {
@@ -4280,7 +4297,7 @@ static int execute_external_transaction(fort_scope_t h,const fort_scope_external
         }
         bool submission_uncertain=false;
         try {
-            begin_accesses(c,bindings.data(),bindings.size(),true,devices.data());
+            begin_accesses(c,bindings.data(),bindings.size(),true,devices.data(),contract);
             initialize(c);
             for(size_t i=0;i<views.size();++i) views[i].device=devices[i];
             note_numerical_activity(c);
@@ -4360,6 +4377,12 @@ extern "C" int fort_scope_source_execute_v1(fort_scope_t h,const fort_scope_exte
                                              uint64_t expected_launches,fort_scope_source_worker_v1 worker,
                                              void *user,fort_scope_external_report_v1 *out) {
     return execute_external_transaction(h,call,nullptr,worker,true,expected_launches,user,out);
+}
+extern "C" int fort_scope_source_execute_v2(fort_scope_t h,const fort_scope_external_call_v1 *call,
+                                             uint64_t expected_launches,fort_scope_source_worker_v1 worker,
+                                             void *user,fort_scope_external_report_v1 *out) {
+    return execute_external_transaction(h,call,nullptr,worker,true,expected_launches,user,out,
+                                        AccessContract::OriginalDevice);
 }
 extern "C" int fort_scope_source_host_prepare_v1(fort_scope_t h,const fort_scope_external_call_v1 *call,
                                                  uint64_t *out) {
@@ -4502,16 +4525,21 @@ extern "C" int fort_scope_source_quote_v2(fort_scope_t h,const fort_scope_extern
 static void observe_resources(Context &c, const fort_buffer_t *handles, size_t count) {
     require(!count || handles, FORT_SCOPE_ARGUMENT, "missing observed buffers");
     drain_resources(c,handles,count);
+    std::vector<Region> physical(count);
     std::vector<std::vector<fort_scope_section>> regions(count);
     std::vector<fort_scope_plan_binding> bindings(count);
     for (size_t i=0; i<count; ++i) {
         auto &b = buffer(c, handles[i]);
-        for (const auto &part : b.initialized)
+        // Original entry expressions may observe newer physical bytes whose
+        // logical definition is unknown or was killed. Publication must not
+        // lose those versions, and does not turn them into value-read proofs.
+        physical[i] = physical_values(b);
+        for (const auto &part : physical[i])
             regions[i].push_back({part.lo.data(),part.hi.data()});
         bindings[i] = {handles[i],{0,regions[i].size(),regions[i].data(),0,nullptr,0,nullptr}};
     }
     if (count) note_numerical_activity(c);
-    begin_accesses(c,bindings.data(),count,false,nullptr);
+    begin_accesses(c,bindings.data(),count,false,nullptr,AccessContract::OriginalHost);
     for (size_t i=0; i<count; ++i) end(c,buffer(c,handles[i]),false);
     trace(c,"observe",nullptr,count);
 }

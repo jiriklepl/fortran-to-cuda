@@ -8,6 +8,19 @@ Historical reports and timing controls remain unchanged.
 
 ## Current checkpoint: 2026-11-07
 
+The [source storage transport checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/source-storage-transport-20261107/README.md)
+adds a distinct source-v2 transaction on the existing coherence engine. It
+preserves byte representations and replicas without inventing definitions for
+may-read/write envelopes. Pre-entry observation now publishes tracked physical
+versions even when definition evidence is absent. Runtime/reader suites and 33
+CUDA controls pass, as does a regenerated mixed-child package. A separate
+two-step channel diagnostic redirects the old providers to the new transaction:
+all 18 CD4 tasks commit, with 324 CD4 kernel submissions and all 20 fields, halos
+and outputs passing strict tolerances. Traffic rises to 544 MB including
+initialization. This is diagnostic coverage, not production compiler integration
+or speedup. New source/provider records, normal regeneration, current runtime
+costs, natural correctness and timing qualification remain required.
+
 The [reached native specification checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/reached-native-specification-20261107/README.md)
 keeps unrelated automatic-array declarations from obscuring exact native point
 reads after procedure entry. All nine original CD4 tile-size assignments now
