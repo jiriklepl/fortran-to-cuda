@@ -208,6 +208,38 @@ def test_normal_emitter_configures_complete_model_independently_of_legacy_packin
     assert emitted.report["transfer_configuration"]["physical_copy_calibration"]["available"] is (mode == "auto")
 
 
+@pytest.mark.parametrize("mode", ["auto", "direct"])
+@pytest.mark.parametrize("matching_runtime", [False, True])
+def test_collective_decline_preserves_independently_valid_copy_costs(tmp_path, mode, matching_runtime):
+    from compiler.driver.options import CompilerOptions
+    from compiler.driver.pipeline import prepare_function
+    from compiler.emission.common.resources import read_scoped_runtime
+    from compiler.emission.cuda.scoped import generate_scoped
+    from compiler.frontend import lower_file
+    from compiler.offload.config import OffloadConfig
+    from compiler.tests.test_scoped_batch_sources import FLAT, transfer_profile
+
+    value = transfer_profile()
+    value["scoped"]["physical_copies"] = fitted_profile()["scoped"]["physical_copies"]
+    assert "collective" not in value["scoped"]
+    if not matching_runtime:
+        value["scoped"]["runtime_id"] = "f" * 64
+    source = tmp_path / "numerical.f90"
+    source.write_text(FLAT)
+    options = CompilerOptions(opt_level=0, gpu_policy="sections", memory_model="scoped", scope_transfers=mode)
+    function, plan = prepare_function(lower_file(source, "advance"), options=options)
+    config = OffloadConfig("sections", value, 4, True, scope_transfers=mode)
+    emitted = generate_scoped(function, plan, config, "common_functions.cuh",
+                              runtime_id=read_scoped_runtime()[1]["runtime_id"])
+    expected = matching_runtime and mode == "auto"
+    assert emitted.report["transfer_configuration"]["physical_copy_calibration"]["available"] is expected
+    assert ("fort_scope_set_copy_costs_v2(" in emitted.cuda) is expected
+    # Independent copies cannot supply a missing collective placement model.
+    assert not emitted.report["planning"]["profile_available"]
+    assert not emitted.report["automatic_estimate_available"]
+    assert "fort_scope_set_team_costs_v1(fort_context, nullptr, 0)" in emitted.cuda
+
+
 @pytest.mark.parametrize("mutation", ["work", "overlap", "slice_overflow"])
 def test_independent_geometry_validation_rejects_incorrect_work_and_overlapping_or_wrapped_rows(mutation):
     from compiler.offload.physical_copy_fit import _geometry

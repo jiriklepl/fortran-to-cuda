@@ -131,3 +131,70 @@ def test_fragmented_source_storage_preserves_unknown_holes_and_readonly_replicas
     prefix.with_suffix(".stderr").write_text(result.stderr)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "SOURCE_STORAGE_FRAGMENTED_COPIES_OK" in result.stdout
+
+
+@pytest.fixture(scope="module")
+def collective_configured_binary(tmp_path_factory):
+    """Exercise the public owner configuration, without manual cost setters."""
+    from compiler.driver.options import CompilerOptions
+    from compiler.driver.pipeline import prepare_function
+    from compiler.emission.common.resources import read_common_header, read_scoped_runtime
+    from compiler.emission.cuda.scoped import generate_scoped
+    from compiler.frontend import lower_file
+    from compiler.offload.config import OffloadConfig
+    from compiler.offload.physical_copy_fit import physical_copies_from_measurements
+    from compiler.tests.test_module_allocatable_scopes_runtime import _run
+    from compiler.tests.test_physical_copy_profile import observations
+    from compiler.tests.test_scoped_batch_sources import FLAT
+    from compiler.tests.test_scoped_batch_sources_cuda import actual_profile
+
+    nvcc, host = shutil.which("nvcc"), shutil.which("g++-14")
+    if not nvcc or not host:
+        pytest.skip("CUDA toolkit and supported GNU compiler unavailable")
+    directory = tmp_path_factory.mktemp("collective_copy_configuration")
+    profile = actual_profile(directory, nvcc, host)
+    # Deliberately synthetic, independently fitted selector evidence. Actual
+    # hardware identities enable the compatibility check; these are not prices
+    # for performance claims. No collective computation model is supplied.
+    rows = observations()
+    for row in rows:
+        if row["name"] == "direct":
+            row["seconds"] = [sample * 1e5 for sample in row["seconds"]]
+    profile["scoped"]["physical_copies"] = physical_copies_from_measurements(rows, profile)
+    assert "collective" not in profile["scoped"]
+    (directory / "profile.json").write_text(json.dumps(profile, indent=2))
+    source = directory / "original.f90"
+    source.write_text(FLAT)
+    options = CompilerOptions(opt_level=0, gpu_policy="sections", memory_model="scoped", scope_transfers="auto")
+    function, plan = prepare_function(lower_file(source, "advance"), options=options)
+    artifacts, manifest = read_scoped_runtime()
+    emitted = generate_scoped(function, plan, OffloadConfig("sections", profile, 4, True, scope_transfers="auto"),
+                              "common_functions.cuh", runtime_id=manifest["runtime_id"])
+    assert not emitted.report["planning"]["profile_available"]
+    assert not emitted.report["automatic_estimate_available"]
+    for name, content in artifacts.items():
+        (directory / name).write_text(content)
+    (directory / "common_functions.cuh").write_text(read_common_header())
+    (directory / "entry.cu").write_text(emitted.cuda)
+    (directory / "entry-report.json").write_text(json.dumps(emitted.report, indent=2))
+    entry = emitted.report["transfer_configuration"]["entry"]
+    client = CLIENT.replace(CONFIGURE, f'extern "C" int {entry}(fort_scope_t);\n')
+    client = client.replace("if(compact||limited)configure(ctx,false);", f"check({entry}(ctx));")
+    assert "fort_scope_set_copy_costs" not in client
+    (directory / "client.cu").write_text(client)
+    executable = directory / "run"
+    argv = [nvcc, "-std=c++17", "-arch=sm_86", "-ccbin", host, "-Xcompiler=-fopenmp",
+            *cuda_compile_options(), "scoped_runtime.cu", "entry.cu", "client.cu", "-o", str(executable)]
+    (directory / "command.json").write_text(json.dumps(argv) + "\n")
+    result = _run(argv, directory, timeout=180)
+    (directory / "build.stdout").write_text(result.stdout)
+    (directory / "build.stderr").write_text(result.stderr)
+    return executable
+
+
+@pytest.mark.cuda
+@pytest.mark.parametrize("mode", ["readonly", "writer"])
+@pytest.mark.parametrize("ownership", ["private", "borrowed"])
+def test_collective_owner_uses_copy_costs_without_compute_calibration(collective_configured_binary, mode, ownership):
+    test_fragmented_source_storage_preserves_unknown_holes_and_readonly_replicas(
+        collective_configured_binary, mode, ownership, "compact")

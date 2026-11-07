@@ -6,7 +6,18 @@ The original proposal is preserved at
 `/tmp/fortran-residency-implementation-24/GPU_RESIDENCY_PLAN.original.md`.
 Historical reports and timing controls remain unchanged.
 
-## Current checkpoint: 2026-11-07
+## Current checkpoint: 2026-11-08
+
+The [collective copy-cost correction](benchmarks/reports/gpu-residency-implementation-20261023/collective-copy-owner-20261108/README.md)
+keeps qualified physical-copy costs active when collective computation costs
+are unavailable. Four generated-configuration CUDA controls pass, including
+read-only replica retention and eight-byte partial-write re-upload. The earlier
+AUTO RK package passes natural 109/2,458-step correctness but selected only direct
+copies because of this emitter bug. Regenerate it before claiming compact-copy
+application behavior or performance. Automatic computation pricing, the full
+maintained suites and all new speedup gates remain open.
+
+## Previous checkpoint: 2026-11-07
 
 The [normal source-storage RK checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/source-storage-rk-20261107/README.md)
 passes strict regeneration, the public build, four short controls and natural
