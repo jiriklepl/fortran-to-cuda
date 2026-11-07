@@ -13,10 +13,16 @@ from compiler.tests.test_tile_task_provider_cuda import source_runtime_object  #
 
 @pytest.mark.parametrize("kind", [4, 8])
 @pytest.mark.parametrize("mapping", ["thread", "cooperative"])
-def test_conditional_scalar_bytes_against_fortran(tmp_path, source_runtime_object, kind, mapping):  # noqa: F811
+@pytest.mark.parametrize("storage_transport", [False, True], ids=["strict-fields", "storage-fields"])
+def test_conditional_scalar_bytes_against_fortran(tmp_path, source_runtime_object, kind, mapping, storage_transport):  # noqa: F811
     nvcc, host, fc, runtime = source_runtime_object
     builder, nodes = byte_fixture(tmp_path, kind)
-    proof = issue(builder, nodes)
+    if storage_transport:
+        from compiler.frontend.source_device_tasks import source_device_task
+
+        proof = source_device_task(builder.analysis, builder.entry, nodes, builder=builder, storage_transport=True)
+    else:
+        proof = issue(builder, nodes)
     provider = emit_tile_task_provider(proof.team, readable_scalars=proof, mapping=mapping, access_envelopes=True)
     (tmp_path / "provider.cu").write_text(provider.cuda_source)
     element, iso = ("float", "c_float") if kind == 4 else ("double", "c_double")
@@ -71,11 +77,11 @@ int main(){{
   if(n){{check(fort_scope_create(0,&context));const std::int64_t lb=lower;
    fort_scope_layout la{{1,{('FORT_SCOPE_REAL32' if kind == 4 else 'FORT_SCOPE_REAL64')},{kind},a.data(),&extent,&lb,1}};
    fort_scope_layout lbview{{1,{('FORT_SCOPE_REAL32' if kind == 4 else 'FORT_SCOPE_REAL64')},{kind},b.data(),&extent,&lb,1}};
-   check(fort_scope_register(context,1,1,&la,1,&ha));check(fort_scope_register(context,2,1,&lbview,1,&hb));}}
+   check(fort_scope_register(context,1,1,&la,{0 if storage_transport else 1},&ha));check(fort_scope_register(context,2,1,&lbview,{0 if storage_transport else 1},&hb));}}
   fort_scope_external_report_v1 report{{}};check({provider.entry}(context,ha,hb,{arguments},&report));
   assert(!std::fetestexcept(FE_INVALID));
   if(n){{assert(report.started==1&&report.committed==1);fort_scope_access read{{}};read.flags=FORT_SCOPE_READ_ALL;
-   check(fort_scope_host_begin(context,hb,&read));check(fort_scope_host_end(context,hb));
+   {('assert(fort_scope_host_begin(context,hb,&read)==FORT_SCOPE_UNINITIALIZED);check(fort_scope_observe_v1(context,&hb,1));' if storage_transport else 'check(fort_scope_host_begin(context,hb,&read));check(fort_scope_host_end(context,hb));')}
    fort_scope_stats stats{{}};check(fort_scope_stats_get(context,&stats));
    assert(stats.launches==1&&stats.uploads==2&&stats.downloads==1);
    assert(stats.upload_bytes==(2*n+3)*sizeof({element})&&stats.download_bytes==n*sizeof({element}));

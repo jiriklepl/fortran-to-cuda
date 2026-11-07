@@ -8,6 +8,16 @@ Historical reports and timing controls remain unchanged.
 
 ## Current checkpoint: 2026-11-07
 
+The [checked source-storage emission checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/source-storage-emission-20261107/README.md)
+now emits source-v2 transactions through source record 3 and provider record 10
+on the direct unpriced tile path. All four generated root/nested packages pass
+strict validation, and 16 CUDA/native tests pass with exact fields, halos and
+copy ledgers, including unknown field initialization and conditional real scalar
+reads. The broad suite passes 936 checks; its sole obsolete provider-version
+assertion passes after correction in the final 20-check run. Priced and queued
+contracts remain unchanged. Full ELMM regeneration with this compiler and the
+native point-read fix is next; no new application or performance gate is claimed.
+
 The [source storage transport checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/source-storage-transport-20261107/README.md)
 adds a distinct source-v2 transaction on the existing coherence engine. It
 preserves byte representations and replicas without inventing definitions for

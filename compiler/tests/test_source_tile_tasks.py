@@ -14,7 +14,7 @@ from compiler.tests.test_graph_source_owner import FACT, walk_graph
 from compiler.tests.test_tile_private import SOURCE
 
 
-def emit(tmp_path, *, policy="sections", child=False):
+def emit(tmp_path, *, policy="sections", child=False, initialized="whole"):
     source = SOURCE
     if child:
         source = source.rsplit("end module", 1)[0] + """subroutine outer(left,right,n,t)
@@ -29,6 +29,8 @@ end module
     path.write_text(source)
     facts = {"schema_version": 1, "participation": "serial", "sources": {str(path): sha256(path.read_bytes()).hexdigest()},
              "captures": {"argument::" + root: dict(FACT) for root in (("left", "right") if child else ("a", "b"))}}
+    for fact in facts["captures"].values():
+        fact["initialized"] = initialized
     builder = ScopeBuilder([path], "stencil::" + ("outer" if child else "advance"), facts=facts,
         options=CompilerOptions(), config=OffloadConfig(policy=policy, scope_execution="graph"))
     outputs, report = builder.run()
@@ -87,10 +89,11 @@ def test_sections_consumes_whole_team_proof_on_same_graph_without_definition_cre
         # reusable source helper has its own private naming slots.
         assert set(task["execution_binding"]["registration_slots"].values()) == {1, 2}
     provider = task["execution_binding"]["provider"]
-    assert provider["metadata"]["version"] == 7
+    assert task["version"] == 3
+    assert provider["metadata"]["version"] == 10
     assert provider["metadata"]["access_envelopes"]["initialization_authorized"] is False
     assert provider["entry"] + ".cu" in outputs
-    assert "fort_scope_source_execute_v1(" in outputs[provider["entry"] + ".cu"]
+    assert "fort_scope_source_execute_v2(" in outputs[provider["entry"] + ".cu"]
     assert "#define CUDA_CALLABLE" in outputs["common_functions.cuh"]
     assert "namespace generated_kernels::numeric" in outputs["numeric.hpp"]
 
@@ -98,7 +101,7 @@ def test_sections_consumes_whole_team_proof_on_same_graph_without_definition_cre
 def test_auto_keeps_unpriced_original_team_without_source_provider_emission(tmp_path):
     _, outputs, report = emit(tmp_path, policy="auto")
     assert all(not scope.get("source_device_tasks") for scope in report["scopes"])
-    assert not any("fort_scope_source_execute_v1(" in text for name, text in outputs.items() if name.endswith(".cu"))
+    assert not any("status=fort_scope_source_execute_v" in text for name, text in outputs.items() if name.endswith(".cu"))
 
 
 @pytest.mark.native
