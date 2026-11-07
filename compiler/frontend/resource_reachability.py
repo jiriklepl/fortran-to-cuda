@@ -1387,6 +1387,11 @@ class _Scan:
             DescriptorTerminationUnsupported,
             prove_descriptor_termination,
         )
+        # Termination's issuer accepts direct named CALLs only. An unresolved
+        # type-bound/indirect designator is an ordinary effect boundary, not
+        # malformed original source and not evidence of process termination.
+        if _kind(node) != "Call_Stmt" or _kind(node.items[0]) != "Name":
+            return False
         try:
             proof = prove_descriptor_termination(self.analysis, routine.qualified, node,
                                                  tick=self.tick, resolution_tick=lambda *_args: self.tick())

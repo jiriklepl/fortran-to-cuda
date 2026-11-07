@@ -11,11 +11,11 @@ if TYPE_CHECKING:
     from compiler.ir import ParallelRegion, RegionAddressing
 
 
-def _loop_step(loop: Loop) -> str:
-    return str(loop.step) if isinstance(loop.step, int) else render_expression(loop.step)
+def _loop_step(loop: Loop, scalar_bytes=frozenset()) -> str:
+    return str(loop.step) if isinstance(loop.step, int) else render_expression(loop.step, scalar_bytes=scalar_bytes)
 
 
-def _loop_snapshot(loop: Loop, suffix: str, active: str | None = None, *, device: bool = False) -> list[str]:
+def _loop_snapshot(loop: Loop, suffix: str, active: str | None = None, *, device: bool = False, scalar_bytes=frozenset()) -> list[str]:
     """Evaluate bounds once and count positive or negative Fortran DO trips."""
     lower = f"fort_internal_lower{suffix}"
     upper = f"fort_internal_upper{suffix}"
@@ -27,9 +27,9 @@ def _loop_snapshot(loop: Loop, suffix: str, active: str | None = None, *, device
 
     location = str(loop.location).replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r")
     lines = [
-        f"const int {lower} = {evaluate(render_expression(loop.lower))};",
-        f"const int {upper} = {evaluate(render_expression(loop.upper))};",
-        f"const int {stride} = {evaluate(_loop_step(loop))};",
+        f"const int {lower} = {evaluate(render_expression(loop.lower, scalar_bytes=scalar_bytes))};",
+        f"const int {upper} = {evaluate(render_expression(loop.upper, scalar_bytes=scalar_bytes))};",
+        f"const int {stride} = {evaluate(_loop_step(loop, scalar_bytes))};",
     ]
     condition = f"({active}) && {stride} == 0" if active else f"{stride} == 0"
     failure = (
@@ -83,21 +83,22 @@ def sequential_block(
     *,
     device: bool = False,
     addressing: RegionAddressing | None = None,
+    scalar_bytes=frozenset(),
 ) -> list[str]:
     lines: list[str] = []
     for statement in block.statements:
         if isinstance(statement, Assignment):
-            lines.extend(indent([render_assignment(statement, addressing=addressing)], depth))
+            lines.extend(indent([render_assignment(statement, addressing=addressing, scalar_bytes=scalar_bytes)], depth))
             continue
         if isinstance(statement, If):
-            lines.extend(indent([f"if ({render_expression(statement.condition, addressing=addressing)}) {{"], depth))
+            lines.extend(indent([f"if ({render_expression(statement.condition, addressing=addressing, scalar_bytes=scalar_bytes)}) {{"], depth))
             lines.extend(
-                sequential_block(statement.then_body, depth + 1, counter, device=device, addressing=addressing)
+                sequential_block(statement.then_body, depth + 1, counter, device=device, addressing=addressing, scalar_bytes=scalar_bytes)
             )
             if statement.else_body.statements:
                 lines.extend(indent(["} else {"], depth))
                 lines.extend(
-                    sequential_block(statement.else_body, depth + 1, counter, device=device, addressing=addressing)
+                    sequential_block(statement.else_body, depth + 1, counter, device=device, addressing=addressing, scalar_bytes=scalar_bytes)
                 )
             lines.extend(indent(["}"], depth))
             continue
@@ -105,7 +106,7 @@ def sequential_block(
         counter[0] += 1
         ordinal = f"fort_internal_ordinal{suffix}"
         lines.extend(indent(["{"], depth))
-        lines.extend(indent(_loop_snapshot(statement, suffix, device=device), depth + 1))
+        lines.extend(indent(_loop_snapshot(statement, suffix, device=device, scalar_bytes=scalar_bytes), depth + 1))
         lines.extend(
             indent(
                 [
@@ -115,7 +116,7 @@ def sequential_block(
                 depth + 1,
             )
         )
-        lines.extend(sequential_block(statement.body, depth + 2, counter, device=device, addressing=addressing))
+        lines.extend(sequential_block(statement.body, depth + 2, counter, device=device, addressing=addressing, scalar_bytes=scalar_bytes))
         lines.extend(
             indent(
                 [

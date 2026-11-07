@@ -8,6 +8,17 @@ Historical reports and timing controls remain unchanged.
 
 ## Current checkpoint: 2026-11-07
 
+The [conditional scalar transport checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/byte-scalar-transport-20261107/README.md)
+adds storage-only byte capture for plain real scalars in direct tile tasks.
+Floating-point values are decoded at their original device references, preserving
+conditional reads without asserting whole-defined entry state. Source record 2
+and provider record 9 are validated together. The 740-check regression set,
+171-check final reader set and four CUDA/native controls pass. All three original
+CD4 teams now emit and compile with byte captures for dxmin/dymin/dzmin; their
+application execution is not yet qualified. AUTO/queued variants remain unpriced
+and cannot consume this new contract. This avoids the scalar capture rejection
+without claiming that the incomplete whole-RK preservation audit succeeded.
+
 The [complete loop-invariant checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/loop-entry-preservation-20261107/README.md)
 extends the existing array-entry preservation engine across enclosing loops.
 The complete loop must preserve the independently admitted definitions; a

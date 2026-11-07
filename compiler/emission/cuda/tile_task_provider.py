@@ -101,13 +101,13 @@ def _children(expression):
     return ()
 
 
-def _scalar_safety(lowered, readable):
+def _scalar_safety(lowered, readable, byte_roots=frozenset()):
     """No new value read solely behind an original branch or inactive loop.
 
     Both exact phases cover a positive point box when the proved tile domain is
     positive. Their point-loop headers therefore execute. Branch-only scalar
-    inputs still need an independent initialized-source proof; a readonly dummy
-    or a by-reference ABI alone does not supply one.
+    inputs need independent readability or checked byte transport decoded only
+    at the original reference. A readonly dummy alone supplies neither.
     """
     parameters = set(lowered.region.parameters)
     unconditional, conditional = set(), set()
@@ -147,7 +147,7 @@ def _scalar_safety(lowered, readable):
     bindings = {symbol: binding for binding, symbol in lowered.bindings}
     for symbol in conditional - unconditional:
         binding = bindings.get(symbol)
-        if binding is not None and "parameter" not in binding.attributes and binding.root not in readable:
+        if binding is not None and "parameter" not in binding.attributes and binding.root not in readable and binding.root not in byte_roots:
             _fail("conditional scalar value requires independent initialized-source authority: " + binding.root)
 
 
@@ -309,7 +309,7 @@ def emit_tile_task_provider(team, *, mapping="cooperative", readable_scalars=Non
     target_bytes = BATCH_TARGET_BYTES if batch_target_bytes is None else batch_target_bytes
     if mapping not in {"cooperative", "thread"}:
         _fail("unknown checked tile mapping")
-    readable = set()
+    readable, byte_roots = set(), set()
     if readable_scalars is not None:
         from compiler.frontend.source_device_tasks import SourceDeviceTaskProof
 
@@ -317,9 +317,13 @@ def emit_tile_task_provider(team, *, mapping="cooperative", readable_scalars=Non
             _fail("scalar readability requires this team's issued source-device attachment")
         readable_scalars.validate()
         readable = {binding.root for binding in readable_scalars.readable_scalars}
+        byte_roots = {binding.root for binding in readable_scalars.byte_scalars}
+    if byte_roots and (line_team or not access_envelopes or pricing is not None or placement is not None
+                       or queued_single or queued_team or batch_target_bytes is not None):
+        _fail("byte scalar capture requires direct unpriced tile access envelopes")
     lowered = tuple(lower_tile_private(proof, region_id=index) for index, proof in enumerate(team.units))
     for unit in lowered:
-        _scalar_safety(unit, readable)
+        _scalar_safety(unit, readable, byte_roots)
     suffix = team.identity[:20] + ("_cta" if mapping == "cooperative" else "_thread") + "_batch"
     if batch_target_bytes is not None:
         suffix += f"_b{target_bytes // (1024 * 1024)}m"
@@ -346,6 +350,10 @@ def emit_tile_task_provider(team, *, mapping="cooperative", readable_scalars=Non
         suffix += "_q1"
     elif queued_team:
         suffix += "_qt"
+    if byte_roots:
+        # One team can have different capture states in different checked scopes.
+        suffix = (team.identity[:10] + ("_cta" if mapping == "cooperative" else "_thread")
+                  + "_s" + readable_scalars.identity[:8] + "_batch_boxes_bytes")
     entry, module = "fort_tile_task_" + suffix, "fort_tile_module_" + suffix
     parameters = []
     for binding in team.scalars:
@@ -363,7 +371,11 @@ def emit_tile_task_provider(team, *, mapping="cooperative", readable_scalars=Non
     ctype = {"c_int": "int", "c_float": "float", "c_double": "double"}
     arguments = ["fort_scope_t context", *[f"fort_buffer_t field{i}" for i in range(len(team.fields))],
                  *[f"const {ctype[p.kind]}* {p.name}" for p in parameters], "fort_scope_external_report_v1* report"]
-    state_fields = [f"{ctype[p.kind]} {p.name};" for p in parameters]
+    def byte_parameter(parameter):
+        return parameter.role == "scalar" and parameter.binding.root in byte_roots
+
+    state_fields = [f"fort_scalar_bytes<{ctype[p.kind]}> {p.name};" if byte_parameter(p)
+                    else f"{ctype[p.kind]} {p.name};" for p in parameters]
     state_fields += [f"std::size_t total[{len(lowered)}],stride[{len(lowered)}];", "std::size_t batch;", "unsigned char* scratch;"]
     kernels, checks, submits, plan, envelopes = [], [], [], [], []
     queued_launches = []
@@ -373,16 +385,19 @@ def emit_tile_task_provider(team, *, mapping="cooperative", readable_scalars=Non
         if parameter.name in loaded:
             return
         loaded.add(parameter.name)
-        scalar_loads.extend([f"if (!{parameter.name}) return fail(FORT_SCOPE_ARGUMENT);", f"state.{parameter.name}=*{parameter.name};"])
+        capture = (f"std::memcpy(state.{parameter.name}.bytes,{parameter.name},sizeof(state.{parameter.name}.bytes));"
+                   if byte_parameter(parameter) else f"state.{parameter.name}=*{parameter.name};")
+        scalar_loads.extend([f"if (!{parameter.name}) return fail(FORT_SCOPE_ARGUMENT);", capture])
 
     for index, unit in enumerate(lowered):
         region = unit.region
+        scalar_bytes = frozenset(symbol for binding, symbol in unit.bindings if binding.root in byte_roots)
         if mapping == "cooperative":
             cooperative = prove_cooperative_tile_private(team.units[index], region_id=index)
-            kernels += generate_cooperative_kernel(region, cooperative, addressing=unit.addressing)
+            kernels += generate_cooperative_kernel(region, cooperative, addressing=unit.addressing, scalar_bytes=scalar_bytes)
             kernel = f"kernel_tile_private_cta_{index}"
         else:
-            kernels += generate_kernel(region, addressing=unit.addressing)
+            kernels += generate_kernel(region, addressing=unit.addressing, scalar_bytes=scalar_bytes)
             kernel = f"kernel_tile_private_{index}"
         symbols = {symbol: binding for binding, symbol in unit.bindings}
         scalar = {symbol: f"state.{param['scalar', binding.root, None].name}" for binding, symbol in unit.bindings
@@ -534,9 +549,11 @@ def emit_tile_task_provider(team, *, mapping="cooperative", readable_scalars=Non
             state_fields=state_fields, kernels=kernels, plan=plan, checks=checks, envelopes=envelopes,
             bindings=bindings, values=values, kernel=kernel, mapping=mapping, support=_SUPPORT,
             readable_scalars=readable_scalars, launch_abi=_launch_abi(lowered[0].region), target_bytes=target_bytes)
+    from compiler.emission.cuda.scalar_bytes import support_code as scalar_byte_support
+
     source = ["#include <cuda_runtime.h>", '#include "scoped_runtime.h"', '#include "common_functions.cuh"',
               '#include "numeric.hpp"', "#include <algorithm>", "#include <climits>", "#include <cstdint>",
-              "using generated_kernels::indexing::F_IDX;", "namespace {", _SUPPORT,
+              "using generated_kernels::indexing::F_IDX;", *(scalar_byte_support() if byte_roots else []), "namespace {", _SUPPORT,
               "struct tile_state {", *state_fields, "};", *kernels,
               "static int submit(void* opaque,const fort_scope_external_view_v1* views,std::size_t count,void* stream,int* started,std::uint64_t* accepted) {",
               "*started=0; *accepted=0;", "auto& state=*static_cast<tile_state*>(opaque);",
@@ -669,6 +686,13 @@ def emit_tile_task_provider(team, *, mapping="cooperative", readable_scalars=Non
             "preflight": "metadata only before CUDA, scratch and payload acquisition",
             "pricing": "unpriced; explicit sections only",
         })
+    if byte_roots:
+        record.update(version=9, scalar_transport={
+            "version": 1, "resources": [b.root for b in readable_scalars.byte_scalars],
+            "host": "copy object representation after positive domain; no typed real value read",
+            "device": "decode at each original scalar reference; retain original control",
+            "abi": "trivial aligned unsigned-char aggregate; original scalar size and alignment",
+            "definitions_authorized": False})
     if line_team:
         record.update(kind="original_line_snapshot_team", line_snapshot_prework={
             "version": 1, "source": "exact original line proof and regenerated producer/consumer IR",

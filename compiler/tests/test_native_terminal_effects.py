@@ -224,6 +224,43 @@ def test_hard_termination_budget_failure_is_not_reinterpreted_as_a_call_barrier(
     assert not getattr(data[1], '_native_effect_graphs', {})
 
 
+@pytest.mark.parametrize('seal', [False, True])
+def test_type_bound_call_remains_an_unknown_effect_without_trying_named_termination(tmp_path, seal, monkeypatch):
+    from compiler.frontend.native_preservation import prove_native_preservation
+
+    source = '''module work
+implicit none
+type :: receiver
+contains
+procedure :: update
+end type
+type(receiver) :: object
+real(8) :: a(8),later(8)
+integer :: number
+contains
+subroutine owner()
+call object%update()
+end subroutine
+subroutine update(self)
+class(receiver),intent(inout)::self
+number=number+1
+end subroutine
+end module
+'''
+    data = setup(tmp_path, source=source, seal=seal)
+
+    def wrong_issuer(*_args, **_kwargs):
+        pytest.fail('An indirect designator cannot enter the named termination issuer')
+
+    monkeypatch.setattr(descriptor_termination, 'prove_descriptor_termination', wrong_issuer)
+    proof = issue(data)
+    assert any(item.kind == 'call' and 'indirect' in item.reason for item in proof.barriers)
+    assert not proof.native_graph.terminal_calls
+    preserved = prove_native_preservation(data[1], 'work::owner', data[2], data[3])
+    assert not preserved.complete
+    assert {root for root, _reasons in preserved.invalidations} == {item.root for item in data[3]}
+
+
 def test_serialized_graph_is_not_completion_authority(tmp_path):
     data = setup(tmp_path)
     proof = issue(data)

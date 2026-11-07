@@ -13,6 +13,17 @@ from hashlib import sha256
 from compiler.ir import CompilationError
 
 _ISSUER = object()
+_BYTE_CAPTURE = "original real scalar storage; byte transport without value read"
+
+
+def _byte_scalar_fact(binding, fact):
+    if (binding.rank or binding.dtype != "real" or binding.kind not in {4, 8}
+            or binding.attributes & {"pointer", "allocatable", "optional", "target", "value", "volatile", "asynchronous"}
+            or fact.get("storage") != "stable" or fact.get("escapes") is not False
+            or fact.get("allocation_changes") is not False):
+        raise CompilationError("source task byte capture requires stable plain real scalar storage: " + binding.root)
+    return {key: fact[key] for key in ("storage", "allocation_changes", "escapes", "lifetime") if key in fact}
+
 
 
 def _encoded(value):
@@ -67,10 +78,16 @@ def _scalar_captures(analysis, routine, team, builder, nodes, prefix):
                 raise CompilationError("source task scalar requires independent whole-defined capture authority: " + binding.root)
             fact = builder.capture(binding)
             if fact["initialized"] != "whole":
-                raise CompilationError("source task scalar capture must already be whole-defined: " + binding.root)
-            authority = {"kind": "explicit checked whole-defined scalar entry fact", "fact": {
-                key: fact[key] for key in ("storage", "initialized", "allocation_changes", "escapes", "lifetime") if key in fact},
-                "finite_or_constant_authorized": False}
+                from compiler.frontend.tile_private import TilePrivateTeamProof
+
+                if type(team) is not TilePrivateTeamProof:
+                    raise CompilationError("source task scalar capture must already be whole-defined: " + binding.root)
+                authority = {"kind": _BYTE_CAPTURE, "fact": _byte_scalar_fact(binding, fact),
+                             "finite_or_constant_authorized": False}
+            else:
+                authority = {"kind": "explicit checked whole-defined scalar entry fact", "fact": {
+                    key: fact[key] for key in ("storage", "initialized", "allocation_changes", "escapes", "lifetime") if key in fact},
+                    "finite_or_constant_authorized": False}
         result.append({"resource": binding.root, "descriptor": binding.public(), "authority": authority})
     return result
 
@@ -85,7 +102,8 @@ def _derive(analysis, routine, nodes, team, builder, prefix=None):
     fields = tuple(team.fields)
     if not fields or len({binding.root for binding, _written in fields}) != len(fields):
         raise CompilationError("source device task requires independent canonical field bindings")
-    return {"version": 1, "kind": "original_line_snapshot_team" if type(team) is OriginalLineSnapshotTeamProof else "original_tile_private_team", "procedure": routine.qualified,
+    captures = _scalar_captures(analysis, routine, team, builder, nodes, prefix)
+    return {"version": 2 if any(c["authority"]["kind"] == _BYTE_CAPTURE for c in captures) else 1, "kind": "original_line_snapshot_team" if type(team) is OriginalLineSnapshotTeamProof else "original_tile_private_team", "procedure": routine.qualified,
             "source_graph": graph.identity, "source_inputs": analysis.inputs.identity(),
             "selected_node_ids": list(selected), "team": team.public(),
             "resources": [{"resource": binding.root, "descriptor": binding.public(),
@@ -93,7 +111,7 @@ def _derive(analysis, routine, nodes, team, builder, prefix=None):
                            "regions": "complete physical root; read before partial writes",
                            "initialization_authorized": False} for binding, written in fields],
             "scalars": [binding.public() for binding in team.scalars],
-            "scalar_captures": _scalar_captures(analysis, routine, team, builder, nodes, prefix),
+            "scalar_captures": captures,
             "scratch": [binding.public() for binding in team.scratch_bindings],
             "transaction": {"runtime": "fort_scope_source_execute_v1", "stream": "supplied",
                             "scratch": "prework lease outside non-reentrant transaction",
@@ -109,6 +127,7 @@ class SourceDeviceTaskProof:
     team: object = field(repr=False, compare=False)
     fields: tuple = field(repr=False, compare=False)
     readable_scalars: tuple = field(repr=False, compare=False)
+    byte_scalars: tuple = field(repr=False, compare=False)
     scalar_capture_facts: tuple = field(repr=False, compare=False)
     _scalar_prefix: object = field(repr=False, compare=False)
     _builder: object = field(repr=False, compare=False)
@@ -132,9 +151,12 @@ class SourceDeviceTaskProof:
         if (len(self.fields) != len(self.team.fields) or any(a is not b or written != old_written
                 for (a, written), (b, old_written) in zip(self.fields, self.team.fields, strict=True))):
             raise CompilationError("source device task changed its exact original field objects")
-        if (len(self.readable_scalars) != len(self.team.scalars)
-                or any(a is not b for a, b in zip(self.readable_scalars, self.team.scalars, strict=True))
-                or self.scalar_capture_facts != tuple(_encoded(item) for item in record["scalar_captures"])):
+        for attached, byte_capture in ((self.readable_scalars, False), (self.byte_scalars, True)):
+            expected = tuple(binding for binding, capture in zip(self.team.scalars, record["scalar_captures"], strict=True)
+                             if (capture["authority"]["kind"] == _BYTE_CAPTURE) == byte_capture)
+            if len(attached) != len(expected) or any(a is not b for a, b in zip(attached, expected, strict=True)):
+                raise CompilationError("source device task scalar readability attachment changed")
+        if self.scalar_capture_facts != tuple(_encoded(item) for item in record["scalar_captures"]):
             raise CompilationError("source device task scalar readability attachment changed")
         return self
 
@@ -170,7 +192,10 @@ def source_device_task(analysis, routine, original_nodes, *, builder=None):
     identity = sha256(record.encode()).hexdigest()
     if identity in registry:
         return registry[identity].validate(analysis, routine, nodes)
-    proof = SourceDeviceTaskProof(identity, team, tuple(team.fields), tuple(team.scalars),
+    byte_roots = {c["resource"] for c in public["scalar_captures"] if c["authority"]["kind"] == _BYTE_CAPTURE}
+    proof = SourceDeviceTaskProof(identity, team, tuple(team.fields),
+        tuple(b for b in team.scalars if b.root not in byte_roots),
+        tuple(b for b in team.scalars if b.root in byte_roots),
         tuple(_encoded(item) for item in public["scalar_captures"]), prefix, builder, analysis, routine, nodes, record, _ISSUER)
     registry[proof.identity] = proof
     return proof.validate()
