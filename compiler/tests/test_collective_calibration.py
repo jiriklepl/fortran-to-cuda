@@ -18,6 +18,7 @@ from compiler.offload.collective_calibration import (
     fixture_source,
     normalize_fortran_options,
     profile_with_collective_measurements,
+    profile_with_collective_outcome,
 )
 from compiler.offload.profile import (
     SCOPED_TEAM_COST_NAMES,
@@ -186,6 +187,108 @@ def test_missing_incompatible_or_unphysical_measurements_fail_closed(change):
 def test_missing_collective_calibration_is_not_replaced_with_serial_rates():
     with pytest.raises(ProfileError, match="collective synchronization"):
         scoped_collective_costs(base(), "a" * 64)
+
+
+def test_rejected_collective_model_keeps_independent_costs_and_all_failed_observations():
+    original = profile_with_collective_measurements(base(), measurements(), calibration={})
+    before = deepcopy(original)
+    records = measurements()
+    records[-1]["predicted_seconds"] = 16e-6
+    records.append({"kind": "collective_validation", "seconds": [40e-6] * 5, "predicted_seconds": 8e-6})
+    result = profile_with_collective_outcome(original, records, calibration={"fixture": "test"},
+                                             stage="protocol_holdout")
+    assert original == before
+    assert "collective" not in result["scoped"]  # An older accepted model cannot survive rejection.
+    assert result["rates"] == original["rates"]
+    assert result["scoped"]["costs"] == original["scoped"]["costs"]
+    unavailable = result["scoped"]["calibration"]["unavailable_collective"]
+    assert unavailable["available"] is unavailable["costs_published"] is unavailable["retry_performed"] is False
+    assert unavailable["measurements"] == records
+    assert len(unavailable["validation_failures"]) == 2
+    assert [row["relative_error"] for row in unavailable["validation_failures"]] == pytest.approx([0.5, 4])
+    assert all(row["maximum_relative_error"] == .25 for row in unavailable["validation_failures"])
+    assert "costs" not in unavailable
+    records.clear()
+    assert unavailable["measurements"]
+    with pytest.raises(ProfileError, match="unavailable"):
+        scoped_collective_costs(result, "a" * 64)
+    accepted = profile_with_collective_outcome(result, measurements(), calibration={}, stage="protocol_holdout")
+    assert "unavailable_collective" not in accepted["scoped"]["calibration"]
+    assert scoped_collective_costs(accepted, "a" * 64)
+
+
+@pytest.mark.parametrize("fault", ["missing_cost", "bad_prediction", "nonfinite_error", "malformed_tail",
+                                  "failed_fields", "wrong_threads"])
+def test_fit_rejection_never_hides_fatal_protocol_or_numerical_failures(fault):
+    records = measurements()
+    records[-1]["predicted_seconds"] = 16e-6
+    if fault == "missing_cost":
+        records.pop(1)
+    elif fault == "bad_prediction":
+        records[-1]["predicted_seconds"] = float("nan")
+    elif fault == "nonfinite_error":
+        records[-1]["predicted_seconds"] = 5e-324
+        records[-1]["seconds"] = [1e308] * 5
+    elif fault == "malformed_tail":
+        records.append({"kind": "collective_cost", "name": "native_worker_seconds", "seconds": [True] * 5})
+    elif fault == "failed_fields":
+        records.append({"kind": "collective_auto_holdout", "seconds": [8e-6] * 5,
+                        "predicted_seconds": 8e-6, "gpu_applied": True, "gpu_workers": 1,
+                        "field_agreement": False})
+    else:
+        records[0]["threads"] = 3
+    with pytest.raises(ValueError, match="collective|auto holdout"):
+        profile_with_collective_outcome(base(), records, calibration={}, stage="protocol_holdout")
+
+
+@pytest.mark.parametrize("malformed", [False, True])
+def test_public_calibrator_continues_independent_source_phase_only_after_accuracy_rejection(
+        monkeypatch, tmp_path, malformed, capsys):
+    import json
+
+    from compiler.offload import calibrate, collective_calibration, source_protocol
+    from compiler.tests.test_offload_profile import observations
+
+    monkeypatch.setattr(calibrate, "_tool", lambda path, candidates: candidates[0])
+
+    def run(argv, directory, log, *, timeout):
+        if "--version" in argv:
+            return "NVCC V13.4.92" if argv[0] == "nvcc" else "GCC 14.4.0"
+        if argv[0].endswith("/calibration"):
+            return "\n".join(json.dumps(row) for row in observations())
+        return ""
+
+    monkeypatch.setattr(calibrate, "_run", run)
+    monkeypatch.setattr(calibrate, "_calibrate_scoped", lambda *args: base())
+    phases = []
+
+    def collective(profile, *args, **kwargs):
+        phases.append("collective")
+        records = measurements()
+        records[-1]["predicted_seconds"] = float("nan") if malformed else 16e-6
+        return profile_with_collective_outcome(profile, records, calibration={}, stage="protocol_holdout")
+
+    def source(profile, *args, **kwargs):
+        phases.append("source")
+        assert "collective" not in profile["scoped"]
+        assert profile["scoped"]["costs"] == base()["scoped"]["costs"]
+        return profile
+
+    monkeypatch.setattr(collective_calibration, "calibrate_collective", collective)
+    monkeypatch.setattr(source_protocol, "calibrate_source_protocol", source)
+    output = tmp_path / "profile.json"
+    status = calibrate.main(["--output", str(output), "--scoped-costs", "--collective-costs", "--source-task-costs"])
+    if malformed:
+        assert status == 2
+        assert phases == ["collective"]
+        assert not output.exists()
+    else:
+        assert status == 0
+        assert phases == ["collective", "source"]
+        result = validate_profile(json.loads(output.read_text()))
+        assert "collective" not in result["scoped"]
+        assert result["scoped"]["calibration"]["unavailable_collective"]["measurements"]
+        assert "Collective estimates unavailable" in capsys.readouterr().err
 
 
 def test_changed_protocol_source_preserves_base_profile_but_disables_team_estimates():

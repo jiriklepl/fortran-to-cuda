@@ -22,6 +22,13 @@ recorded command. Historical profiles without the contract remain readable as
 evidence; they cannot price the changed backend, and automatic placement uses
 native execution until compatible calibration is supplied.
 
+An accuracy-only rejection of the optional collective model keeps that model
+unavailable and retains its complete observations in the calibration provenance.
+Independent base, transfer and source-task measurements can still be published;
+the rejected collective coefficients cannot drive placement. Compilation,
+execution, numerical agreement, identity and malformed-observation failures
+remain fatal. Calibration never retries a rejected fit automatically.
+
 ```mermaid
 flowchart LR
     F[Original Fortran] --> P[fparser frontend]
