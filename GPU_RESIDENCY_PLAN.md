@@ -8,6 +8,18 @@ Historical reports and timing controls remain unchanged.
 
 ## Current checkpoint: 2026-11-07
 
+The [independent calibration checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/independent-calibration-20261107/README.md)
+now preserves valid independent measurements after an accuracy-only collective
+rejection. All 238 affected checks pass. The original failed runtime `2d0d8214`
+records were retained without resampling, then only the previously unreached
+source-task phase ran once. Physical-copy and native-transaction costs qualify;
+collective and GPU source-submission models remain explicitly unavailable.
+Generated-cost and package checks pass, all input guards hold, and all workers
+exit. This publishes a valid partial profile, not an application improvement.
+AUTO44 remains unstarted. The next capability issue is CD4 conditional scalar
+capture: preserving entry guarantees across its enclosing loop requires proof,
+and conditional reads cannot be promoted to unconditional reads.
+
 The latest [partial metadata query checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/partial-metadata-queries-20261107/README.md)
 replaces whole-vector readiness with exact element checks for protected INTEGER
 metadata. A reached native read can establish the needed element without

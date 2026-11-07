@@ -602,6 +602,10 @@ def calibrate(args: argparse.Namespace) -> dict:
             profile = calibrate_collective(profile, args, directory, nvcc, host, run=_run, tool=_tool)
         except ValueError as error:
             raise CalibrationError(str(error)) from error
+        unavailable = profile["scoped"].get("calibration", {}).get("unavailable_collective")
+        if unavailable is not None:
+            print("Collective estimates unavailable: " + unavailable["reason"] +
+                  "; retaining observations and continuing independent measurements.", file=sys.stderr, flush=True)
     if getattr(args, "source_task_costs", False):
         if not getattr(args, "scoped_costs", False):
             raise CalibrationError("--source-task-costs requires --scoped-costs")

@@ -27,6 +27,15 @@ from .profile import (
     validate_profile,
 )
 
+
+class CollectiveModelUnavailable(ValueError):
+    """Complete valid observations rejected by the unchanged accuracy gate."""
+
+    def __init__(self, failures):
+        super().__init__("collective protocol model validation differs by more than 25%")
+        self.failures = deepcopy(failures)
+
+
 REPETITIONS = 16
 # Keep each source-proven team below its existing effect budget. Pool fixed
 # complete team passes into each observation; no numerical call forks a team.
@@ -587,10 +596,16 @@ def calibrate_collective(profile, args, directory, nvcc, host, *, run, tool):
             for name in ("collective_calibration.py", "calibrate.py", "profile.py")
         },
     }
-    initial = profile_with_collective_measurements(profile, records, calibration=provenance)
+    initial = profile_with_collective_outcome(profile, records, calibration=provenance,
+                                             stage="protocol_holdout")
+    if "collective" not in initial["scoped"]:
+        # No accepted prices exist to drive the public AUTO holdout. Keep the
+        # rejection and let independent calibration phases continue once.
+        return initial
     records += _validate_auto_holdout(initial, args, root, nvcc, host, fortran, flags, environment, run, commands)
     (root / "measurements.jsonl").write_text("".join(json.dumps(row) + "\n" for row in records))
-    return profile_with_collective_measurements(profile, records, calibration=provenance)
+    return profile_with_collective_outcome(profile, records, calibration=provenance,
+                                           stage="public_auto_holdout")
 
 
 def _validate_auto_holdout(profile, args, root, nvcc, host, fortran, flags, environment, run, commands):
@@ -799,8 +814,8 @@ def profile_with_collective_measurements(profile, records, *, calibration):
     version, options = identity.get("compiler_version"), identity.get("compiler_options")
     if not isinstance(version, str) or not version or not isinstance(options, str) or not options:
         raise ValueError("collective Fortran compiler identity is missing")
-    costs = {}
-    for row in records:
+    costs, failures = {}, []
+    for ordinal, row in enumerate(records):
         if row.get("kind") == "collective_identity":
             continue
         if row.get("kind") not in {
@@ -832,9 +847,16 @@ def profile_with_collective_measurements(profile, records, *, calibration):
                 type(predicted) not in {float, int}
                 or not math.isfinite(predicted)
                 or predicted <= 0
-                or abs(statistics.median(samples) - predicted) / predicted > 0.25
             ):
-                raise ValueError("collective protocol model validation differs by more than 25%")
+                raise ValueError("collective protocol validation requires a finite positive prediction")
+            observed = statistics.median(samples)
+            error = abs(observed - predicted) / predicted
+            if not math.isfinite(error):
+                raise ValueError("collective protocol validation error is not finite")
+            if error > 0.25:
+                failures.append({"record_index": ordinal, "kind": row["kind"],
+                    "observed_median_seconds": observed, "predicted_seconds": predicted,
+                    "relative_error": error, "maximum_relative_error": 0.25})
             continue
         name = row.get("name")
         allowed = SCOPED_TEAM_RATE_NAMES if row["kind"] == "collective_rate" else SCOPED_TEAM_COST_NAMES
@@ -883,6 +905,37 @@ def profile_with_collective_measurements(profile, records, *, calibration):
         },
     }
     try:
-        return validate_profile(result)
+        result = validate_profile(result)
     except ProfileError as error:
         raise ValueError(str(error)) from error
+    # Validate every record, required cost and identity first. A bad fit cannot
+    # hide a later malformed sample, missing stage or failed numerical holdout.
+    if failures:
+        raise CollectiveModelUnavailable(failures)
+    return result
+
+
+def profile_with_collective_outcome(profile, records, *, calibration, stage):
+    """Keep a rejected optional model absent, preserving independent costs.
+
+    Only the typed accuracy rejection is recoverable. Protocol, compilation,
+    execution, numerical, identity and malformed-observation failures remain
+    fatal. No rejected coefficient enters the scheduling profile.
+    """
+    if stage not in {"protocol_holdout", "public_auto_holdout"}:
+        raise ValueError("unknown collective calibration outcome stage")
+    original = deepcopy(profile)
+    provenance = original["scoped"].setdefault("calibration", {})
+    provenance.pop("unavailable_collective", None)
+    try:
+        return profile_with_collective_measurements(original, records, calibration=calibration)
+    except CollectiveModelUnavailable as error:
+        original["scoped"].pop("collective", None)
+        provenance["unavailable_collective"] = {
+            "schema_version": 1, "available": False, "stage": stage,
+            "reason": str(error), "validation_failures": deepcopy(error.failures),
+            "measurements": deepcopy(records), "calibration": deepcopy(calibration),
+            "protocol_sources": collective_protocol_identity(),
+            "costs_published": False, "retry_performed": False,
+        }
+        return validate_profile(original)
