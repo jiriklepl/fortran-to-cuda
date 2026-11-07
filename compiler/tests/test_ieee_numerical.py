@@ -15,7 +15,7 @@ from compiler.tests.test_native import cuda_device as cuda_device
 
 @pytest.mark.native
 @pytest.mark.parametrize("precision", [4, 8])
-@pytest.mark.parametrize("backend", ["serial", "cuda"])
+@pytest.mark.parametrize("backend", ["serial", pytest.param("cuda", marks=pytest.mark.cuda)])
 def test_ordered_minmax_and_degenerate_clamps(tmp_path, precision, backend, request):
     if backend == "cuda":
         request.getfixturevalue("cuda_device")
