@@ -258,8 +258,6 @@ def _facts(original, *, native=False, budget=None):
 
 @pytest.fixture(scope="module")
 def source_team_binaries(tmp_path_factory):
-    if os.environ.get("FORT_TEST_COLLECTIVE_SOURCE_RUNTIME") != "1":
-        pytest.skip("explicit source-team CUDA acceptance window required")
     nvcc = shutil.which("nvcc")
     host = shutil.which("g++-14") or shutil.which("g++")
     fortran = shutil.which("gfortran-15") or shutil.which("gfortran")
@@ -429,6 +427,7 @@ def test_full_team_shared_scope_launches_once_per_worker_and_preserves_fields(so
 
 
 @pytest.mark.native
+@pytest.mark.cuda
 def test_zero_device_budget_uses_existing_cpu_team_without_cuda_work(source_team_binaries):
     result = _execute(source_team_binaries, "resource")
     assert "COUNTERS created=6 registered=18 closed=6" in result.stdout
@@ -438,6 +437,7 @@ def test_zero_device_budget_uses_existing_cpu_team_without_cuda_work(source_team
 
 
 @pytest.mark.native
+@pytest.mark.cuda
 def test_uncalibrated_collective_auto_is_successful_unchanged_native(source_team_binaries):
     result = _execute(source_team_binaries, "auto")
     assert "COUNTERS created=0 registered=0 closed=0" in result.stdout
@@ -445,6 +445,7 @@ def test_uncalibrated_collective_auto_is_successful_unchanged_native(source_team
 
 
 @pytest.mark.native
+@pytest.mark.cuda
 def test_wrong_total_team_budget_preserves_original_call_and_barriers(source_team_binaries):
     result = _execute(source_team_binaries, "basic", env={"OMP_THREAD_LIMIT": "3"})
     assert "COUNTERS created=0 registered=0 closed=0" in result.stdout
@@ -452,6 +453,7 @@ def test_wrong_total_team_budget_preserves_original_call_and_barriers(source_tea
 
 
 @pytest.mark.native
+@pytest.mark.cuda
 def test_unqualified_serial_caller_keeps_original_entry(source_team_binaries):
     result = _execute(source_team_binaries, "basic", mode="serial")
     assert "COUNTERS created=0 registered=0 closed=0" in result.stdout
@@ -459,6 +461,7 @@ def test_unqualified_serial_caller_keeps_original_entry(source_team_binaries):
 
 
 @pytest.mark.native
+@pytest.mark.cuda
 def test_hidden_unallocated_lifetime_boundary_preserves_original_team(source_team_binaries):
     """Unproved hidden lifetime rejects admission, without touching native code.
 
