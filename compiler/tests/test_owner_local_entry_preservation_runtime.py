@@ -107,7 +107,13 @@ def preserved_group_binaries(tmp_path_factory):
         "argument::a", "argument::b", "argument::c"}
     tasks = [task for member in plan["storage_epoch"]["members"] for task in member.get("source_device_tasks", [])]
     assert len(tasks) == 3
-    assert all(task["execution_binding"]["provider"]["metadata"]["version"] == 7 for task in tasks)
+    for task in tasks:
+        metadata = task["execution_binding"]["provider"]["metadata"]
+        assert task["version"] == 3
+        assert metadata["version"] == 10
+        assert metadata["field_transport"]["version"] == 2
+        assert metadata["field_transport"]["definitions_authorized"] is False
+        assert metadata["access_envelopes"]["initialization_authorized"] is False
     return result
 
 
@@ -175,9 +181,15 @@ def test_preserved_source_teams_keep_coherence_and_never_reseed_retired_entry(pr
         assert [int(item["bytes"]) for item in b_uploads] == [152, 152], result.stderr
         assert ledger["download_bytes"] == 608, result.stderr
     else:
-        assert len(launches) == 1, result.stderr
-        assert ledger["domains"] >= 1, result.stderr
-        assert ledger["field_allocations"] == 2, result.stderr
-        assert ledger["source_commits"] == 1, result.stderr
-        assert ledger["upload_bytes"] == 304, result.stderr
-        assert ledger["download_bytes"] == 152, result.stderr
+        # The second team falls back before submission and retires the old
+        # domain. Source-v2 transport lets the third team acquire the native
+        # result in a fresh domain without reusing retired entry definitions.
+        assert len(launches) == 2, result.stderr
+        launched = [dict(re.findall(r"(\w+)=([^ ]+)", line)) for line in launches]
+        assert len({item["domain"] for item in launched}) == 2, result.stderr
+        assert len({item["implementation"] for item in launched}) == 2, result.stderr
+        assert ledger["domains"] == 2, result.stderr
+        assert ledger["field_allocations"] == 4, result.stderr
+        assert ledger["source_commits"] == 2, result.stderr
+        assert ledger["upload_bytes"] == 608, result.stderr
+        assert ledger["download_bytes"] == 304, result.stderr
