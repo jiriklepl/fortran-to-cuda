@@ -12,7 +12,8 @@ from compiler.tests.test_source_scopes import run
 from compiler.tests.test_source_tile_tasks import emit
 
 
-@pytest.fixture(scope="module", params=[False, True], ids=["root", "nested"])
+@pytest.fixture(scope="module", params=[(False, "whole"), (True, "whole"), (False, "none"), (True, "none")],
+                ids=["root", "nested", "root-unknown", "nested-unknown"])
 def compiled_source_task(request, tmp_path_factory):
     directory = tmp_path_factory.mktemp("compiled_source_task")
     nvcc = shutil.which("nvcc")
@@ -20,8 +21,8 @@ def compiled_source_task(request, tmp_path_factory):
     fortran = shutil.which("gfortran-15") or shutil.which("gfortran")
     if not all((nvcc, host, fortran)):
         pytest.skip("CUDA and Fortran toolchains required")
-    child = request.param
-    original, outputs, manifest = emit(directory, child=child)
+    child, initialized = request.param
+    original, outputs, manifest = emit(directory, child=child, initialized=initialized)
     build = directory / "build"
     build.mkdir()
     for name, text in outputs.items():
@@ -29,6 +30,9 @@ def compiled_source_task(request, tmp_path_factory):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
     (build / "scope-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    from compiler.tests.test_reached_native_specification_cuda import validate_package
+
+    validate_package(build)
     objects = []
     for role in ("common_runtime", "shared_entry", "original_source"):
         for index, artifact in enumerate(manifest["build_sources"]):

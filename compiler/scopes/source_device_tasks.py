@@ -295,6 +295,12 @@ def _admit_source_device_task(member, nodes, *, transport="direct"):
         return False
     originals = member.builder.inline.original_selection(tuple(nodes))
     proof = source_device_task(member.builder.analysis, member.routine, originals, builder=member.builder)
+    if config.policy == "sections" and transport == "direct":
+        from compiler.frontend.tile_private import TilePrivateTeamProof
+
+        if type(proof.team) is TilePrivateTeamProof:
+            proof = source_device_task(member.builder.analysis, member.routine, originals,
+                                       builder=member.builder, storage_transport=True)
     pricing = None
     if config.policy == "auto":
         from compiler.frontend.line_snapshot_team import OriginalLineSnapshotTeamProof

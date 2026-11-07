@@ -92,10 +92,13 @@ def _scalar_captures(analysis, routine, team, builder, nodes, prefix):
     return result
 
 
-def _derive(analysis, routine, nodes, team, builder, prefix=None):
+def _derive(analysis, routine, nodes, team, builder, prefix=None, *, storage_transport=False):
     from compiler.frontend.line_snapshot_team import OriginalLineSnapshotTeamProof
+    from compiler.frontend.tile_private import TilePrivateTeamProof
 
     team.validate(analysis, routine, nodes)
+    if type(storage_transport) is not bool or (storage_transport and type(team) is not TilePrivateTeamProof):
+        raise CompilationError("source storage transport requires its original tile team")
     graph, selected = analysis._selected_source(routine.qualified, nodes)
     if not selected:
         raise CompilationError("source device task requires a complete original selection")
@@ -103,17 +106,18 @@ def _derive(analysis, routine, nodes, team, builder, prefix=None):
     if not fields or len({binding.root for binding, _written in fields}) != len(fields):
         raise CompilationError("source device task requires independent canonical field bindings")
     captures = _scalar_captures(analysis, routine, team, builder, nodes, prefix)
-    return {"version": 2 if any(c["authority"]["kind"] == _BYTE_CAPTURE for c in captures) else 1, "kind": "original_line_snapshot_team" if type(team) is OriginalLineSnapshotTeamProof else "original_tile_private_team", "procedure": routine.qualified,
+    return {"version": 3 if storage_transport else 2 if any(c["authority"]["kind"] == _BYTE_CAPTURE for c in captures) else 1, "kind": "original_line_snapshot_team" if type(team) is OriginalLineSnapshotTeamProof else "original_tile_private_team", "procedure": routine.qualified,
             "source_graph": graph.identity, "source_inputs": analysis.inputs.identity(),
             "selected_node_ids": list(selected), "team": team.public(),
             "resources": [{"resource": binding.root, "descriptor": binding.public(),
                            "access": "readwrite" if written else "read",
-                           "regions": "complete physical root; read before partial writes",
+                           "regions": ("original physical may-access bytes; preserve partial writes without initialization"
+                                       if storage_transport else "complete physical root; read before partial writes"),
                            "initialization_authorized": False} for binding, written in fields],
             "scalars": [binding.public() for binding in team.scalars],
             "scalar_captures": captures,
             "scratch": [binding.public() for binding in team.scratch_bindings],
-            "transaction": {"runtime": "fort_scope_source_execute_v1", "stream": "supplied",
+            "transaction": {"runtime": "fort_scope_source_execute_v2" if storage_transport else "fort_scope_source_execute_v1", "stream": "supplied",
                             "scratch": "prework lease outside non-reentrant transaction",
                             "submission": "started before first attempt; exact accepted source-kernel count",
                             "failure": "prework original whole span once; attempted failure poisons; no replay"},
@@ -124,6 +128,7 @@ def _derive(analysis, routine, nodes, team, builder, prefix=None):
 @dataclass(frozen=True, slots=True)
 class SourceDeviceTaskProof:
     identity: str
+    storage_transport: bool
     team: object = field(repr=False, compare=False)
     fields: tuple = field(repr=False, compare=False)
     readable_scalars: tuple = field(repr=False, compare=False)
@@ -145,7 +150,8 @@ class SourceDeviceTaskProof:
                 or len(nodes) != len(self._nodes) or any(a is not b for a, b in zip(nodes, self._nodes, strict=True))
                 or getattr(analysis, "_source_device_task_proofs", {}).get(self.identity) is not self):
             raise CompilationError("source device task requires its registered original proof")
-        record = _derive(analysis, routine, nodes, self.team, self._builder, self._scalar_prefix)
+        record = _derive(analysis, routine, nodes, self.team, self._builder, self._scalar_prefix,
+                         storage_transport=self.storage_transport)
         if _encoded(record) != self._record:
             raise CompilationError("source device task lost original source, numerical work or field identity")
         if (len(self.fields) != len(self.team.fields) or any(a is not b or written != old_written
@@ -164,14 +170,14 @@ class SourceDeviceTaskProof:
         return {"identity": self.identity, **json.loads(self._record)}
 
 
-def source_device_task(analysis, routine, original_nodes, *, builder=None):
+def source_device_task(analysis, routine, original_nodes, *, builder=None, storage_transport=False):
     from compiler.frontend.line_snapshot_team import prove_line_snapshot_team
     from compiler.frontend.tile_private import prove_tile_private_team
     from compiler.scopes.segments import directive
 
     nodes = tuple(original_nodes)
     for proof in getattr(analysis, "_source_device_task_proofs", {}).values():
-        if (proof._builder is builder and len(nodes) == len(proof._nodes)
+        if (proof._builder is builder and proof.storage_transport is storage_transport and len(nodes) == len(proof._nodes)
                 and all(a is b for a, b in zip(nodes, proof._nodes, strict=True))):
             return proof.validate(analysis, routine, nodes)
     issuer = prove_line_snapshot_team if any((directive(node) or "").startswith("parallel do") for node in nodes) else prove_tile_private_team
@@ -184,7 +190,7 @@ def source_device_task(analysis, routine, original_nodes, *, builder=None):
         if builder is None or builder.analysis is not analysis or builder.entry is not routine:
             raise CompilationError("source task scalar requires independent whole-defined capture authority")
         prefix = prove_reached_scalar_definitions(builder, nodes, demands)
-    public = _derive(analysis, routine, nodes, team, builder, prefix)
+    public = _derive(analysis, routine, nodes, team, builder, prefix, storage_transport=storage_transport)
     record = _encoded(public)
     registry = getattr(analysis, "_source_device_task_proofs", None)
     if registry is None:
@@ -193,7 +199,7 @@ def source_device_task(analysis, routine, original_nodes, *, builder=None):
     if identity in registry:
         return registry[identity].validate(analysis, routine, nodes)
     byte_roots = {c["resource"] for c in public["scalar_captures"] if c["authority"]["kind"] == _BYTE_CAPTURE}
-    proof = SourceDeviceTaskProof(identity, team, tuple(team.fields),
+    proof = SourceDeviceTaskProof(identity, storage_transport, team, tuple(team.fields),
         tuple(b for b in team.scalars if b.root not in byte_roots),
         tuple(b for b in team.scalars if b.root in byte_roots),
         tuple(_encoded(item) for item in public["scalar_captures"]), prefix, builder, analysis, routine, nodes, record, _ISSUER)

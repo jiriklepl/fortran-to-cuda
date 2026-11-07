@@ -181,7 +181,7 @@ def test_direct_default_does_not_select_queued_transport(tmp_path, monkeypatch):
     _outputs, manifest, _facts = emit(tmp_path / "inputs", monkeypatch, queued=False)
     task, = manifest["scopes"][0]["source_device_tasks"]
     assert task["kind"] == "original_tile_private_team"
-    assert task["execution_binding"]["provider"]["metadata"]["version"] == 7
+    assert task["execution_binding"]["provider"]["metadata"]["version"] == 10
 
 
 def test_actual_generated_caller_report_branches_never_replay_accepted_work(tmp_path, monkeypatch):

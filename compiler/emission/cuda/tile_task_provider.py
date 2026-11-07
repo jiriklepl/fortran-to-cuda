@@ -310,6 +310,7 @@ def emit_tile_task_provider(team, *, mapping="cooperative", readable_scalars=Non
     if mapping not in {"cooperative", "thread"}:
         _fail("unknown checked tile mapping")
     readable, byte_roots = set(), set()
+    storage_transport = False
     if readable_scalars is not None:
         from compiler.frontend.source_device_tasks import SourceDeviceTaskProof
 
@@ -318,6 +319,10 @@ def emit_tile_task_provider(team, *, mapping="cooperative", readable_scalars=Non
         readable_scalars.validate()
         readable = {binding.root for binding in readable_scalars.readable_scalars}
         byte_roots = {binding.root for binding in readable_scalars.byte_scalars}
+        storage_transport = readable_scalars.storage_transport
+    if storage_transport and (line_team or not access_envelopes or pricing is not None or placement is not None
+                              or queued_single or queued_team or batch_target_bytes is not None):
+        _fail("source storage transport requires direct unpriced tile access envelopes")
     if byte_roots and (line_team or not access_envelopes or pricing is not None or placement is not None
                        or queued_single or queued_team or batch_target_bytes is not None):
         _fail("byte scalar capture requires direct unpriced tile access envelopes")
@@ -354,6 +359,9 @@ def emit_tile_task_provider(team, *, mapping="cooperative", readable_scalars=Non
         # One team can have different capture states in different checked scopes.
         suffix = (team.identity[:10] + ("_cta" if mapping == "cooperative" else "_thread")
                   + "_s" + readable_scalars.identity[:8] + "_batch_boxes_bytes")
+    if storage_transport:
+        suffix = (team.identity[:10] + ("_cta" if mapping == "cooperative" else "_thread")
+                  + "_s" + readable_scalars.identity[:8] + "_batch_storage")
     entry, module = "fort_tile_task_" + suffix, "fort_tile_module_" + suffix
     parameters = []
     for binding in team.scalars:
@@ -655,13 +663,18 @@ def emit_tile_task_provider(team, *, mapping="cooperative", readable_scalars=Non
             "import", "integer(c_int64_t),value :: context",
             *[f"integer(c_int64_t),value :: field{i}" for i in range(len(team.fields))],
             "integer(c_int64_t),intent(out) :: token", "end function"]
+    if storage_transport:
+        original = "status=fort_scope_source_execute_v1(context,&call,expected,submit,&state,report);"
+        if source.count(original) != 1:
+            _fail("source storage transport lost its exact transaction")
+        source[source.index(original)] = original.replace("source_execute_v1", "source_execute_v2")
     cuda_source, fortran_source = "\n".join(source), "\n".join(fortran)
     record = {"version": 2, "kind": "original_tile_private_team", "team_identity": team.identity,
               "scalar_readability_identity": readable_scalars.identity if readable_scalars is not None else None,
               "unit_proof_identities": [unit.identity for unit in team.units], "mapping": mapping,
               "entry": entry, "module": module, "parameters": [item.public() for item in parameters],
               "cuda_sha256": sha256(cuda_source.encode()).hexdigest(), "fortran_sha256": sha256(fortran_source.encode()).hexdigest(),
-              "transaction": "fort_scope_source_execute_v1", "scratch": "bounded original tile batches; same-stream source-order units",
+              "transaction": "fort_scope_source_execute_v2" if storage_transport else "fort_scope_source_execute_v1", "scratch": "bounded original tile batches; same-stream source-order units",
               "batching": {"version": 1 if batch_target_bytes is None else 2, "target_bytes": target_bytes, "minimum_tiles": 1,
                            "planned_launches": "sum ceil(unit_tiles/batch_tiles)"},
               "definitions_authorized": False, "placement_authorized": False, "pricing": "unpriced; explicit sections only"}
@@ -686,13 +699,20 @@ def emit_tile_task_provider(team, *, mapping="cooperative", readable_scalars=Non
             "preflight": "metadata only before CUDA, scratch and payload acquisition",
             "pricing": "unpriced; explicit sections only",
         })
-    if byte_roots:
+    if byte_roots or storage_transport:
         record.update(version=9, scalar_transport={
             "version": 1, "resources": [b.root for b in readable_scalars.byte_scalars],
             "host": "copy object representation after positive domain; no typed real value read",
             "device": "decode at each original scalar reference; retain original control",
             "abi": "trivial aligned unsigned-char aggregate; original scalar size and alignment",
             "definitions_authorized": False})
+    if storage_transport:
+        record.update(version=10, field_transport={
+            "version": 2, "source_proof_identity": readable_scalars.identity,
+            "regions": "original physical may-access bytes; preserve partial writes without initialization",
+            "conditional_reads": "original source control retained",
+            "definitions_authorized": False, "pricing_authorized": False,
+        })
     if line_team:
         record.update(kind="original_line_snapshot_team", line_snapshot_prework={
             "version": 1, "source": "exact original line proof and regenerated producer/consumer IR",
