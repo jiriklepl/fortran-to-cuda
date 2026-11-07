@@ -167,5 +167,16 @@ template<class State> inline Prepared prepare_original_host(const State &b, cons
     auto opposite = difference(b.device_current, e.writes, budget);
     return {false, std::move(initialized), std::move(current), std::move(opposite)};
 }
+// Original device work preserves every byte in a possible write envelope
+// before execution, except independently proved overwrites. Thus its complete
+// resulting representation is current even where the source did not write.
+// Representation freshness does not prove those values initialized.
+template<class State> inline Prepared prepare_original_device(const State &b, const Effects &e) {
+    Budget budget;
+    auto initialized = unite(b.initialized, e.overwrites, budget);
+    auto current = unite(b.device_current, e.writes, budget);
+    auto opposite = difference(b.host_current, e.writes, budget);
+    return {true, std::move(initialized), std::move(current), std::move(opposite)};
+}
 }} // namespace fort_scoped::coherence
 #endif

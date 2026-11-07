@@ -710,6 +710,21 @@ typedef int (*fort_scope_source_worker_v1)(void *user, const fort_scope_external
 int fort_scope_source_execute_v1(fort_scope_t context, const fort_scope_external_call_v1 *call,
                                  uint64_t expected_launches, fort_scope_source_worker_v1 worker,
                                  void *user, fort_scope_external_report_v1 *report);
+/* Original source storage transport. This distinct entry uses the same typed
+ * v1 call/views/report and completion/failure engine, but reads and writes are
+ * MAY-access envelopes. The compiler must preserve the original conditional
+ * value reads, physical layouts, allocation lifetimes and complete source work.
+ * Read/preservation bytes are synchronized without evaluating their values.
+ * Unknown bytes originate at the host only when no current physical version
+ * exists. Read-only copies retain both replicas. Possible writes invalidate
+ * only the overlapping host replica; only independently proved overwrites add
+ * initialized regions. Untouched bytes in write envelopes are preserved.
+ * This contract does NOT authorize strict numerical/library reads, motion,
+ * speculative evaluation or pricing. v1 and external library execution retain
+ * their strict initializedness checks. No callback on an empty transaction. */
+int fort_scope_source_execute_v2(fort_scope_t context, const fort_scope_external_call_v1 *call,
+                                 uint64_t expected_launches, fort_scope_source_worker_v1 worker,
+                                 void *user, fort_scope_external_report_v1 *report);
 /* Original CPU work outside the runtime lock. Prepare validates ALL canonical
  * typed effects before acquiring existing host coherence. It grants no entry
  * definitions. Start must immediately precede the original work; completion
@@ -798,14 +813,15 @@ int fort_scope_source_quote_v2(fort_scope_t context, const fort_scope_external_c
                               const fort_scope_source_costs_v1 *source_costs,
                               const fort_scope_source_host_costs_v1 *native_costs, int compatible,
                               fort_scope_source_quote_result_v1 *result);
-/* Explicit observation publishes every defined section of the selected
- * canonical resources with one host wait. Undefined holes remain undefined.
+/* Explicit observation publishes every tracked physical section of the selected
+ * canonical resources with one host wait. Unknown definitions remain unknown,
+ * including current representations surviving a semantic definition kill.
  * Discard forgets values without publication and retains reusable storage.
  * Retire destroys a dead resource without publication and completes borrowed
  * host-memory uses before returning; its handle becomes stale. */
 int fort_scope_observe_v1(fort_scope_t context, const fort_buffer_t *buffers, size_t count);
 /* Conservative pre-entry observation of all currently registered resources.
- * Drains their queued users and publishes only initialized regions. Preserves
+ * Drains their queued users and publishes tracked physical regions. Preserves
  * device replicas, allocations and generations; leaves no prepared access.
  * Does not inspect unregistered descriptors or infer any definitions. A caller
  * must stop on error, before original argument/specification evaluation. */

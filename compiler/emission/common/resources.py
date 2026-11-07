@@ -80,6 +80,15 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
             "failure": "explicit rejection before submission may fall back; attempted or unknown work poisons",
             "cost_estimate_available": False,
         },
+        "source_storage_tasks": {
+            "abi_version": 2, "execute": "fort_scope_source_execute_v2",
+            "bindings_abi_version": 1,
+            "access": "original conditional may-access envelopes; byte transport without value evaluation",
+            "definitions": "only independently proved overwrites; representation freshness is separate",
+            "readonly": "retain original replica and add a current destination replica",
+            "failure": "same source submission counts and external transaction completion contract",
+            "cost_estimate_available": False,
+        },
         "source_host_tasks": {
             "abi_version": 1,
             "prepare": "fort_scope_source_host_prepare_v1", "start": "fort_scope_source_host_start_v1",
@@ -122,9 +131,9 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
             "completion_statistics": "fort_scope_completion_stats_get_v1",
         },
         "specification_entry": {
-            "abi_version": 2, "observe": "fort_scope_observe_v1", "fallback": "fort_scope_observe_all_v1",
+            "abi_version": 3, "observe": "fort_scope_observe_v1", "fallback": "fort_scope_observe_all_v1",
             "handle_check": "fort_scope_buffer_valid_v1",
-            "regions": "initialized mapped metadata regions; whole domain if mappings or live handles are unavailable",
+            "regions": "tracked physical metadata regions without definition authority; whole domain if mappings or live handles are unavailable",
             "replicas": "read-only publication preserves current device replicas and generations",
             "failure": "stop before original entry; never replay",
         },
