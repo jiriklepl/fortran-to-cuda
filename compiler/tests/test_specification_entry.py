@@ -10,6 +10,15 @@ from compiler.tests.test_native_ancestor import SOURCE, fixture
 ENTRY_SOURCE = SOURCE.replace("real(8)::observed", "real(8)::observed\ninteger::tile(1)=[8]").replace(
     "integer::i\ncall producer", "integer::i\nreal(8)::scratch(tile(1))\ncall producer")
 
+NESTED_ENTRY_SOURCE = ENTRY_SOURCE.replace("call middle(a,b,n,flag)", "call wrapper(a,b,n,flag)", 1).replace(
+    "subroutine middle(a,b,n,flag)", """subroutine wrapper(a,b,n,flag)
+real(8),intent(inout)::a(:),b(:)
+integer,intent(in)::n
+logical,intent(in)::flag
+call middle(a,b,n,flag)
+end subroutine
+subroutine middle(a,b,n,flag)""", 1)
+
 
 def test_bound_reads_get_a_checked_phase_before_child_entry(tmp_path):
     outputs, _report, scope, proof = compile_fixture(tmp_path, ENTRY_SOURCE)
@@ -26,6 +35,25 @@ def test_bound_reads_get_a_checked_phase_before_child_entry(tmp_path):
     coordinator, = [row for row in scope["module_coordinators"] if row["procedure"] == middle["procedure"]]
     assert text.index("fort_specification_status = fort_scope_observe_all_v1") < text.index("call " + coordinator["entry"])
     assert "real(8)::scratch(tile(1))" in text
+
+
+def test_nested_bound_reads_publish_once_inside_the_managed_branch(tmp_path):
+    from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
+
+    _outputs, report, scope, proof = compile_fixture(tmp_path, NESTED_ENTRY_SOURCE)
+    validate_checked_execution_plans(report)
+    caller, = [member for member in proof["members"] if member["procedure"] == "ancestor_fixture::wrapper"]
+    route, = [route for route in caller["routes"] if "specification_entry" in route]
+    phase = route["specification_entry"]
+    edit, = [edit for edit in report["source_edits"]
+             if [edit["first_line"], edit["last_line"]] == phase["source_span"]]
+    text = edit["replacement"]
+    child, = [child for child in scope["module_coordinators"] if child["procedure"] == route["procedure"]]
+    assert text.count("fort_specification_status = fort_scope_observe_all_v1") == 1
+    assert text.count("call " + child["entry"] + "(") == 1
+    assert text.index("fort_specification_status = fort_scope_observe_all_v1") < text.index("call " + child["entry"])
+    # The ordinary ABI never reads absent context/handle arguments.
+    assert text.rstrip().endswith("else\ncall middle(a,b,n,flag)\nendif")
 
 
 @pytest.mark.parametrize("mutation", ["proof", "source", "publication", "order"])

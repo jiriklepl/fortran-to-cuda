@@ -64,11 +64,32 @@ The [source-only specification-read slice](benchmarks/reports/gpu-residency-impl
 passes 183 affected checks, including 42 new cases, and identifies the six
 original scratch-bound reads in each actual CD4 procedure. It reuses the existing
 effect scanner and authenticates original declarations without requiring a
-whole-body native-write proof. No entry guard is relaxed and no GPU execution
-is enabled yet. The next integration must acquire those reads before the checked
-CALL enters Fortran, bind the phase in the authoritative graph and strict reader,
-and reuse the existing tile-private scratch lifetime where proved. CD4's private
-team scratch must not become an ordinary caller-owned field allocation.
+whole-body native-write proof. The subsequent
+[entry-coherence implementation](benchmarks/reports/gpu-residency-implementation-20261023/specification-entry-20261107/README.md)
+binds publication before argument association and specification evaluation to
+the checked CALL and paired reader. Its current conservative implementation
+observes all initialized regions of the live domain, preserves device replicas
+and never inspects unreached descriptors. It passes 301 affected checks and 29
+separate CUDA cases; this is not yet actual CD4 GPU coverage. Narrowing publication
+to the proved metadata bindings remains necessary before claiming efficient
+retention. CD4's private team scratch must not become an ordinary caller-owned
+field allocation.
+
+Runtime `61c81da9` has a
+[fresh matching calibration](benchmarks/reports/gpu-residency-implementation-20261023/entry-calibration-and-auto-routing-20261107/README.md).
+Proved native-only wrappers now use the same routing under AUTO and sections.
+[AUTO emission](benchmarks/reports/gpu-residency-implementation-20261023/auto-owned-emission-20261107/README.md)
+also shares the validated detached-image path, preserving runtime choices and
+the native preflight for missing estimates. AUTO40 gets past the previous native
+wrapper failure, then rejects nested-call pre-entry publication before producing
+a package. All inputs held; no new application result replaces parent38.
+The [nested-entry correction](benchmarks/reports/gpu-residency-implementation-20261023/nested-entry-publication-20261107/README.md)
+removes a duplicate managed replacement from the ordinary-entry source branch;
+that branch now retains the original CALL directly. Strict publication checks
+remain unchanged. Fifteen real CUDA cases pass, including direct ordinary entry,
+nested checked entry, hidden devices and reached retirement.
+The immediate gate is a qualified AUTO package, followed by real backend/copy
+ledgers and full-field checks before another performance comparison.
 
 ## Integration record: 2026-11-04 onward
 
