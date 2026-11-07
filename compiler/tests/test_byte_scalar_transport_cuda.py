@@ -11,6 +11,7 @@ from compiler.tests.test_tile_private_cuda import RUNTIME, checked
 from compiler.tests.test_tile_task_provider_cuda import source_runtime_object  # noqa: F401
 
 
+@pytest.mark.cuda
 @pytest.mark.parametrize("kind", [4, 8])
 @pytest.mark.parametrize("mapping", ["thread", "cooperative"])
 @pytest.mark.parametrize("storage_transport", [False, True], ids=["strict-fields", "storage-fields"])

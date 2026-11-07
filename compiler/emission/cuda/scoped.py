@@ -1,6 +1,7 @@
 """Numerical entries borrowing common buffers through the versioned public ABI."""
 
 import json
+from contextlib import suppress
 from dataclasses import dataclass, replace
 from hashlib import sha256
 
@@ -238,10 +239,9 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
             compiler_identity(config.profile)
             costs = scoped_costs(config.profile, runtime_id)
             if config.scope_transfers == "auto":
-                try:
+                # Missing complete-path observations retain direct copies.
+                with suppress(ProfileError):
                     physical_copy_costs = scoped_physical_copy_costs(config.profile, runtime_id)
-                except ProfileError:
-                    pass  # Missing complete-path observations retain direct copies.
             try:
                 transfer_costs = scoped_transfer_costs(config.profile, runtime_id)
                 transfer_profile_reason = None
@@ -250,6 +250,10 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         except ProfileError as error:
             profile_reason = str(error)
             transfer_profile_reason = str(error)
+    # Complete physical-copy measurements use the validated serial runtime
+    # costs. Missing collective computation costs must not disable that
+    # independent transport model on a collective owning context.
+    copy_base_costs = costs
     if config.collective:
         try:
             if costs is None:
@@ -284,7 +288,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         # copy geometry. Planning v1 has no complete calibrated model for it.
         costs = None
         profile_reason = "transfer_estimates_unavailable"
-    if costs is None:
+    if copy_base_costs is None:
         physical_copy_costs = None
     copy_setup = []
     if physical_copy_costs is not None:
@@ -292,7 +296,7 @@ def generate_scoped(function, plan, config, common_header, *, runtime_id=None, r
         from compiler.emission.cuda.batch import base_cost_lines, physical_copy_cost_lines
         copy_configure_name = c_name + "_configure_copy_v2"
         lines += [f"static int {copy_configure_name}(fort_scope_t fort_context) {{",
-                  *indent(base_cost_lines(config.profile, costs)),
+                  *indent(base_cost_lines(config.profile, copy_base_costs)),
                   *indent(physical_copy_cost_lines(physical_copy_costs)),
                   "    const auto profile = " + profile_expression(config.profile) + ";",
                   "    return fort_scope_set_copy_costs_v2(fort_context, &copy_costs, &costs, scoped_host_compatible(profile));", "}"]
