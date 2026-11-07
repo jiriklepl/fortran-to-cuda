@@ -2659,7 +2659,7 @@ class ScopeBuilder:
         # Reusable source graphs are bounded per procedure. Reached segments
         # have their own expansion budget; mutually exclusive branches must not
         # spend one eagerly flattened transitive closure budget together.
-        if len(calls) > 32:
+        if self.config.scope_execution != "graph" and len(calls) > 32:
             raise CompilationError("bounded source scope exceeds call generation budget")
         summaries, graphs, depth = {}, {}, 0
         for call in calls:

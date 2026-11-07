@@ -50,7 +50,8 @@ end module
 '''
 
 
-def emit(directory, source=SOURCE, *, configured_include=None, include_marker=False, policy='sections'):
+def emit(directory, source=SOURCE, *, configured_include=None, include_marker=False, policy='sections',
+         scope_execution='reached'):
     directory.mkdir(parents=True, exist_ok=True)
     path = directory/'owner.f90'
     path.write_text(source)
@@ -81,7 +82,7 @@ def emit(directory, source=SOURCE, *, configured_include=None, include_marker=Fa
     facts = {'schema_version': 1, 'participation': 'serial', 'sources': hashes,
              'captures': {'argument::'+name: FACT for name in ('a', 'b', 'out')}}
     builder = ScopeBuilder([path], 'joined_owner::step', facts=facts, options=CompilerOptions(),
-                           config=OffloadConfig(policy=policy, scope_execution='reached', host_threads=4),
+                           config=OffloadConfig(policy=policy, scope_execution=scope_execution, host_threads=4),
                            analysis_sources=configured)
     outputs, report = builder.run()
     replacement = report['sources'].get(str(path), {}).get('replacement')
@@ -100,6 +101,24 @@ def teams(report):
                 if operations.get('joined_team'):
                     records.append((operations['joined_team'], operations))
     return records
+
+
+@pytest.mark.parametrize('count', [33, 48])
+def test_graph_team_keeps_all_numerical_units_across_native_work(tmp_path, count):
+    increment = '!$omp do\ndo i=-2,n-3\nb(i)=b(i)+a(i)\nenddo\n!$omp end do\n'
+    source = SOURCE.replace(TEAM, OPENING + PRODUCER + increment * (count - 2)
+                            + CORRECTION + CONSUMER + '!$omp end parallel\n')
+    path, _, report, text = emit(tmp_path, source, scope_execution='graph')
+    assert path.read_text() == source
+    (team, operations), = teams(report)
+    assert len(team['numerical_units']) == count
+    assert not report['scopes'][0]['boundaries']
+    assert team['completion']['retains_original_team_and_directives']
+    assert text.count('!$omp do') == text.count('!$omp end do') == count + 1
+    assert text.count('b(i)=b(i)+a(i)') == count - 2
+    native = native_operation_at(operations, source, 'b(i)=b(i)+sum(a)')
+    assert native['completion']['native_effects_authority']
+    assert native['sections']['available']
 
 
 def native_operation_at(operations, source, statement):

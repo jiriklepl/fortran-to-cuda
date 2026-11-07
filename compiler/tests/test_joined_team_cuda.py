@@ -123,6 +123,16 @@ def source_case(label):
     if label in INDIRECT_CASES:
         return indirect_source(label)
     source = SOURCE
+    if label == 'many_numerical':
+        increment = '''!$omp do
+do j=3,m+2
+do i=-2,n-3
+b(i,j)=b(i,j)+a(i,j)
+enddo
+enddo
+!$omp end do
+'''
+        return source.replace('if(flag) then\n', increment * 31 + 'if(flag) then\n', 1)
     if label == 'many_segments':
         correction = '''if(flag) then
 !$omp do
@@ -231,6 +241,15 @@ write(unit) a,b,out''')
 
 @pytest.fixture(scope='module')
 def joined_binaries(tmp_path_factory):
+    return build_joined_binaries(tmp_path_factory, CASES)
+
+
+@pytest.fixture(scope='module')
+def wide_joined_binaries(tmp_path_factory):
+    return build_joined_binaries(tmp_path_factory, ('many_numerical',))
+
+
+def build_joined_binaries(tmp_path_factory, labels):
     nvcc = shutil.which('nvcc')
     host = shutil.which('g++-14') or shutil.which('g++')
     fortran = shutil.which('gfortran-15') or shutil.which('gfortran')
@@ -250,16 +269,16 @@ def joined_binaries(tmp_path_factory):
         'schema_version': 1, 'cuda_flags': cuda_flags, 'fortran_flags': fortran_flags,
         'architecture': architecture}, indent=2)+'\n')
     cache, reuse, binaries = {}, [], {}
-    for label in CASES:
+    for label in labels:
         case = directory/label
         facts = {'schema_version': 1, 'participation': 'serial',
                  'captures': {'argument::'+name: FACT for name in ('a', 'b', 'out')}}
         if label == 'zero_budget':
             facts['device_budget_bytes'] = 0
         original, output, manifest = generate(case, source_case(label), entry='joined_owner::step',
-            facts=facts, checkout=checkout, scope_execution='reached')
+            facts=facts, checkout=checkout, scope_execution='graph' if label == 'many_numerical' else 'reached')
         (team, operations), = teams(manifest)
-        assert len(team['numerical_units']) == 2
+        assert len(team['numerical_units']) == (33 if label == 'many_numerical' else 2)
         assert not manifest['scopes'][0]['boundaries']
         if label in INDIRECT_CASES:
             inspected = [item for item in operations['native_operations'] if item.get('indirect_inspector')]
@@ -323,12 +342,13 @@ def joined_binaries(tmp_path_factory):
     return binaries
 
 
-def execute(compiled, label, *, threads=4):
+def execute(compiled, label, *, threads=4, trace_label=None):
     candidate, build, expected, manifest = compiled[label]
     result = run([str(candidate)], cwd=build, env={**os.environ, 'OMP_NUM_THREADS': str(threads),
         'OMP_DYNAMIC': 'FALSE', 'FORT_RUNTIME_TRACE': '1'})
-    (build/('threads-'+str(threads)+'.stdout')).write_text(result.stdout)
-    (build/('threads-'+str(threads)+'.stderr')).write_text(result.stderr)
+    trace_label = trace_label or 'threads-'+str(threads)
+    (build/(trace_label+'.stdout')).write_text(result.stdout)
+    (build/(trace_label+'.stderr')).write_text(result.stderr)
     assert (build/'fields.bin').read_bytes() == expected
     assert 'FIELDS_OK' in result.stdout
     assert 'array temporary' not in result.stderr.lower()
@@ -429,3 +449,24 @@ def test_many_reached_native_segments_keep_residency_and_complete_fields(joined_
         definitions = [json.loads(line.removeprefix('FORT_SCOPED evidence '))
                        for line in trace.splitlines() if line.startswith('FORT_SCOPED evidence ')]
         assert all(row['status'] == 0 for row in definitions if row['event'] == 'definition_validation')
+
+
+@pytest.mark.cuda
+def test_graph_team_over_32_units_preserves_fields_and_single_input_upload(wide_joined_binaries):
+    result, _ = execute(wide_joined_binaries, 'many_numerical')
+    for ordinal, n, m, trace in calls(result.stderr):
+        assert trace.count('FORT_SCOPED launch ') == (33 if n else 0)
+        assert transfer_bytes(trace, 'upload') == n*m*8 + (n*8 if ordinal % 2 == 0 else 0)
+        assert transfer_bytes(trace, 'download') == 2*n*m*8
+
+
+@pytest.mark.cuda
+@pytest.mark.parametrize('hidden', [False, True])
+def test_graph_team_over_32_units_keeps_original_prework_fallback(wide_joined_binaries, monkeypatch, hidden):
+    if hidden:
+        monkeypatch.setenv('CUDA_VISIBLE_DEVICES', '')
+    result, _ = execute(wide_joined_binaries, 'many_numerical', threads=4 if hidden else 2,
+                        trace_label='hidden' if hidden else 'mismatched-team')
+    for _, _, _, trace in calls(result.stderr):
+        assert 'FORT_SCOPED launch ' not in trace
+        assert transfer_bytes(trace, 'upload') == transfer_bytes(trace, 'download') == 0
