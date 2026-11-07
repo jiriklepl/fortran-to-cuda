@@ -1,9 +1,9 @@
 """Pre-entry publication for independently proved original array bounds.
 
-The first implementation deliberately observes the whole live domain. This
-needs no guessed identity for private metadata and never inspects a descriptor
-on a path that has not reached the original CALL. Observation preserves device
-replicas; the original compiler alone evaluates the bounds, after publication.
+Use original CALL handle forwarding when every bound array is already tracked.
+Missing mappings or retired handles retain whole-domain observation. Neither
+path inspects original descriptors; Fortran evaluates the bounds after reads
+are coherent. Observation preserves device replicas and allocation identity.
 """
 from hashlib import sha256
 
@@ -36,7 +36,47 @@ def projection(member):
     return proof
 
 
-def publication(context):
+def observation_bindings(parent, child, forwarding):
+    proof = projection(child)
+    if proof is None:
+        return ()
+    roots = proof.public()["array_resources"]
+    if not all(root in child.resources for root in roots):
+        return ()
+    rows = []
+    for root in roots:
+        _binding, callee_slot = child.resources[root]
+        caller_slot = forwarding.get(callee_slot)
+        actuals = [binding for binding, slot in parent.resources.values() if slot == caller_slot]
+        if len(actuals) != 1:
+            raise CompilationError("specification entry lost its original metadata handle forwarding")
+        rows.append({"resource": root, "callee_slot": callee_slot, "caller_slot": caller_slot,
+                     "canonical_resource": parent.canonical(actuals[0]).root})
+    return tuple(rows)
+
+
+def publication(context, bindings=()):
+    if bindings:
+        slots = sorted({row["caller_slot"] for row in bindings})
+        return ["block", "use iso_c_binding, only: c_int, c_int64_t, c_size_t, c_loc",
+            "use fort_scoped_memory, only: fort_scope_observe_v1, fort_scope_observe_all_v1, &",
+            "fort_scope_buffer_valid_v1, FORT_SCOPE_OK",
+            "integer(c_int) :: fort_specification_status, fort_specification_valid",
+            "integer :: fort_specification_index", "logical :: fort_specification_precise",
+            f"integer(c_int64_t), target :: fort_specification_buffers({len(slots)})",
+            f"if ({context} /= 0) then",
+            *[f"fort_specification_buffers({index}) = fort_buffer_{slot}" for index, slot in enumerate(slots, 1)],
+            "fort_specification_precise = .true.", f"do fort_specification_index = 1, {len(slots)}",
+            f"fort_specification_status = fort_scope_buffer_valid_v1({context}, &",
+            "fort_specification_buffers(fort_specification_index), fort_specification_valid)",
+            "if (fort_specification_status /= FORT_SCOPE_OK) error stop 'original specification handle check failed'",
+            "if (fort_specification_valid == 0) fort_specification_precise = .false.", "enddo",
+            "if (fort_specification_precise) then",
+            f"fort_specification_status = fort_scope_observe_v1({context}, &",
+            f"c_loc(fort_specification_buffers), {len(slots)}_c_size_t)", "else",
+            f"fort_specification_status = fort_scope_observe_all_v1({context})", "endif",
+            "if (fort_specification_status /= FORT_SCOPE_OK) error stop 'original specification publication failed'",
+            "endif", "end block"]
     return ["block", "use iso_c_binding, only: c_int",
             "use fort_scoped_memory, only: fort_scope_observe_all_v1, FORT_SCOPE_OK",
             "integer(c_int) :: fort_specification_status",
@@ -46,21 +86,24 @@ def publication(context):
             "endif", "end block"]
 
 
-def preflight(parent, child):
-    return publication(parent.context) if projection(child) is not None else []
+def preflight(parent, child, forwarding):
+    return (publication(parent.context, observation_bindings(parent, child, forwarding))
+            if projection(child) is not None else [])
 
 
 def call_record(parent, call):
     proof = projection(call.callee)
     if proof is None:
         return None
-    text = "\n".join(fortran_lines(publication(parent.context))) + "\n"
+    bindings = observation_bindings(parent, call.callee, dict(call.handle_bindings))
+    text = "\n".join(fortran_lines(publication(parent.context, bindings))) + "\n"
     marker = "call " + call.callee.entry + "("
     if call.source.count(text) != 1 or call.source.find(marker) <= call.source.find(text):
         raise CompilationError("specification entry lost publication before its original checked CALL")
-    return {"version": 1, "proof_identity": proof.identity, "context": parent.context,
+    return {"version": 2, "proof_identity": proof.identity, "context": parent.context,
             "source_span": list(statement_span(call.node)), "publication_sha256": sha256(text.encode()).hexdigest(),
-            "runtime": "fort_scope_observe_all_v1",
-            "policy": "publish initialized domain regions before original argument and specification evaluation",
+            "runtime": "fort_scope_observe_v1" if bindings else "fort_scope_observe_all_v1",
+            "bindings": list(bindings),
+            "policy": "publish mapped metadata; observe the domain when mappings or live handles are unavailable",
             "replicas": "preserve valid device replicas and allocation generations",
             "failure": "stop before child entry; never replay"}

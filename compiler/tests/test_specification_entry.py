@@ -23,7 +23,7 @@ subroutine middle(a,b,n,flag)""", 1)
 def test_bound_reads_get_a_checked_phase_before_child_entry(tmp_path):
     outputs, _report, scope, proof = compile_fixture(tmp_path, ENTRY_SOURCE)
     assert proof["version"] == 5
-    assert proof["specification_entry_policy_version"] == 1
+    assert proof["specification_entry_policy_version"] == 2
     middle, = [row for row in proof["members"] if row["procedure"] == "ancestor_fixture::middle"]
     source = middle["entry_exit"]["specification_reads"]
     assert source["array_resources"] == ["ancestor_fixture::tile"]
