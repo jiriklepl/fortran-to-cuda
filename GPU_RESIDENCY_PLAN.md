@@ -50,6 +50,16 @@ must attribute the channel regression and losses to be58 before drawing further
 payoff conclusions from reduced traffic. Traced diagnosis stays separate from
 these untraced complete-process measurements.
 
+The separate channel100 GPU profiles explain why lower traffic against parent37
+was insufficient: parent38 transfers 7.886 GB versus 5.299 GB for 7a, and launches
+2,700 kernels versus 301. Its extra kernels are 600 zero fills and 1,800 viscosity
+boundary kernels, totaling only 0.010291 seconds of device work; substantial CD4
+computation remains native. All three profiles pass outputs and cleanup. These
+are diagnostic activity measurements, not additional performance samples or an
+exclusive CPU/GPU budget. Qualify actual AUTO group selection with native
+consumer/publication costs, alongside the CD4 coverage work; preserve the forced
+sections result and do not substitute an application-specific exception.
+
 The [source-only specification-read slice](benchmarks/reports/gpu-residency-implementation-20261023/specification-reads-checkpoint-20261107.json)
 passes 183 affected checks, including 42 new cases, and identifies the six
 original scratch-bound reads in each actual CD4 procedure. It reuses the existing
