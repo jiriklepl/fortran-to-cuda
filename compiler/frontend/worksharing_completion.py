@@ -84,8 +84,9 @@ def ordered_worksharing_inventory(analysis, procedure, selected):
     _joined_completion_facts(analysis, procedure, selected, worksharing=units)
     if not units:
         raise CompilationError("worksharing inventory requires a separate original PARALLEL and DO")
-    if len(units) > analysis.operation_limit:
-        raise CompilationError("ordered worksharing inventory source-unit budget exhausted")
+    # This inventory enumerates the already authenticated source graph without
+    # expanding effects. Its complete original team must not spend the separate
+    # per-demand effect budget merely because it contains many worksharing DOs.
     if any(_directive(ending) == "end do nowait" for _, _, ending in units if ending is not None):
         raise CompilationError("worksharing cuts require completion at every original DO; NOWAIT remains native")
     originals = tuple(node for identity in identities for node in graph.source_nodes(identity))

@@ -121,6 +121,38 @@ def test_graph_team_keeps_all_numerical_units_across_native_work(tmp_path, count
     assert native['sections']['available']
 
 
+@pytest.mark.parametrize('interleaved_native', [False, True])
+def test_graph_team_count_does_not_spend_per_demand_effect_budget(tmp_path, monkeypatch, interleaved_native):
+    import compiler.scopes.source as source_module
+
+    original_analysis = source_module.SourceEffects
+
+    def bounded_analysis(*args, **kwargs):
+        return original_analysis(*args, **kwargs, operations=32)
+
+    monkeypatch.setattr(source_module, 'SourceEffects', bounded_analysis)
+    count = 34
+    increment = '!$omp do\ndo i=-2,n-3\nb(i)=b(i)+a(i)\nenddo\n!$omp end do\n'
+    middle = ((CORRECTION + increment) if interleaved_native else increment) * (count - 2)
+    source = SOURCE.replace(TEAM, OPENING + PRODUCER + middle
+                            + CORRECTION + CONSUMER + '!$omp end parallel\n')
+    path, _, report, text = emit(tmp_path, source, scope_execution='graph')
+    (team, operations), = teams(report)
+    assert path.read_text() == source
+    assert len(team['numerical_units']) == count
+    assert not report['scopes'][0]['boundaries']
+    assert team['budgets']['planning_units'] > team['budgets']['reached_effect_limit'] == 32
+    assert team['budgets']['largest_reached_native_effects'] <= 32
+    assert team['budgets']['procedure_source_operations'] <= team['budgets']['source_operation_limit']
+    assert team['budgets']['source_operation_limit'] > 32
+    assert 'planning_unit_limit' not in team['budgets']
+    native_count = count - 1 if interleaved_native else 1
+    assert text.count('!$omp do') == text.count('!$omp end do') == count + native_count
+    native = native_operation_at(operations, source, 'b(i)=b(i)+sum(a)')
+    assert native['completion']['native_effects_authority']
+    assert native['sections']['available']
+
+
 def native_operation_at(operations, source, statement):
     line = source.splitlines().index(statement) + 1
     operation, = [item for item in operations['native_operations']

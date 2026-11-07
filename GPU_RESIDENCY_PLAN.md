@@ -6,7 +6,34 @@ The original proposal is preserved at
 `/tmp/fortran-residency-implementation-24/GPU_RESIDENCY_PLAN.original.md`.
 Historical reports and timing controls remain unchanged.
 
-## Current integration checkpoint: 2026-11-04
+## Current checkpoint: 2026-11-07
+
+The [aggregate graph-budget regression](benchmarks/reports/gpu-residency-implementation-20261023/aggregate-graph-budget-checkpoint-20261107.json)
+extends the earlier removal of two 32-unit restrictions. Complete mixed-team
+inventories and scheduling groups no longer spend the per-operation effect
+budget by counting work units. Numerical and native worksharing authority tokens
+remain valid for their owning analysis, instead of being evicted while a live
+graph still references them. Two regressions retain 34 numerical units with
+either one or 33 original native units under a 32-operation per-demand proof
+budget. Each individual effect proof, source identity and original completion
+check still applies. All 185 affected checks pass; a final diagnostic correction
+also passes all 19 mixed-team checks. Runtime and collective cost identities
+still match the accepted wide-team calibration; no new device or speedup result
+is inferred from this source-admission change.
+
+Parent38 remains a separately frozen `a8ad86e` application candidate. Its first
+natural campaign passes all four 109-step `channel-simple` cases, then stops on
+the **native** 2,458-step `channel` comparison: 15 fields and 16 outputs disagree
+with historical references, with a maximum field difference of approximately
+`3.18e-4`. All inputs remain unchanged and every process exits. The adapted
+harness omitted the fixed FFTW-plan control used by those references. A new
+campaign restores that established control and starts with long native channel
+to test this explanation before running the other seven cases. The failed run
+is preserved; tolerances, binaries, physics and deterministic pressure reference
+are unchanged. Full natural correctness and the rotated timing gates remain
+open; the prepared timing campaign cannot execute before correctness passes.
+
+## Integration record: 2026-11-04 onward
 
 The generic guarded-condition and immutable-container changes pass
 [381 focused checks](/tmp/fortran-residency-generic-integration-20261104-01/qualification.json).

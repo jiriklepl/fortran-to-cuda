@@ -113,13 +113,14 @@ class JoinedTeam(StructuredScope):
             raise CompilationError('original joined team contains no supported numerical worksharing unit')
         source = builder.analysis.structure(builder.entry.qualified)
         self.source_operation_count = source.operation_count
+        self.source_operation_limit = source.operation_limit
         self.reached_effect_count = max((len(operation.summary['operations']) for operation in self.native), default=0)
         # The authenticated local skeleton and each reached proof already have
-        # their own budgets. Adding every independently proved segment's
-        # expanded effects would recreate eager whole-owner closure rejection.
-        if (len(self.calls) + len(self.native) > builder.analysis.operation_limit
-                or self.reached_effect_count > builder.analysis.operation_limit):
-            raise CompilationError('mixed original team exceeds bounded source-unit/reached-effect budget')
+        # their own budgets. Neither the number of independently proved units
+        # nor their summed effects may turn that proof budget into a residency
+        # window: retain the complete original team and bound each proof only.
+        if self.reached_effect_count > builder.analysis.operation_limit:
+            raise CompilationError('mixed original team exceeds reached-effect budget')
         self.extra_patches = []
 
     def _window(self, selected):
@@ -271,9 +272,8 @@ class JoinedTeam(StructuredScope):
                                  'completion': proof.public()} for call, proof, span in self.numerical_units],
             'native_rejections': self.rejections,
             'budgets': {'procedure_source_operations': self.source_operation_count,
-                'source_operation_limit': self.builder.analysis.operation_limit,
+                'source_operation_limit': self.source_operation_limit,
                 'planning_units': len(self.calls) + len(self.native),
-                'planning_unit_limit': self.builder.analysis.operation_limit,
                 'largest_reached_native_effects': self.reached_effect_count,
                 'reached_effect_limit': self.builder.analysis.operation_limit,
                 'expanded_owner_effects': self.operation_count,
