@@ -219,6 +219,7 @@ def _registered_authorities(owner, owned_types):
     from compiler.frontend.source_functions import NativeSourceFunctionProof
     from compiler.frontend.source_placement import SourcePlacement
     from compiler.frontend.source_span_exit import OriginalSequenceExitProof
+    from compiler.frontend.specification_reads import SpecificationReadsProof
     from compiler.frontend.storage_mutation_effects import StorageMutationEffects
     from compiler.frontend.structured_effects import StructuredSummary
     from compiler.frontend.supported_path_storage import SupportedPathDescriptorComposition
@@ -258,6 +259,7 @@ def _registered_authorities(owner, owned_types):
         OriginalMetadataConstructorProof: "_metadata_constructor_proofs",
         OriginalLocalAllocationProof: "_local_allocation_proofs",
         ReadonlyAllocatableInputProof: "_readonly_allocatable_inputs",
+        SpecificationReadsProof: "_specification_reads",
         NativeAncestorSelection: "_native_ancestor_selections",
         ConditionalUnitDescriptorProof: "_conditional_unit_descriptors",
         StorageMutationEffects: "_storage_mutation_effects",

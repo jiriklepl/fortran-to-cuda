@@ -239,6 +239,27 @@ int main(int argc,char **argv) {
         assert(cudaEventDestroy(marker)==cudaSuccess); check(fort_scope_gpu_leave(f.context,previous));
         enqueue(f,0); f.observe(f.b);
         for(int i=0;i<8;++i) assert(f.host_b[i]==102+i);
+    } else if(mode=="entry_observe" || mode=="entry_failure") {
+        if(mode=="entry_failure") { chain(f); check(fort_scope_observe_all_v1(f.context)); }
+        chain(f); assert(queued(f).pending_tasks==2);
+        if(mode=="entry_failure") setenv("FORT_SCOPE_TEST_FAIL_GRAPH_LAUNCH","1",1);
+        const int status=fort_scope_observe_all_v1(f.context);
+        if(mode=="entry_failure") {
+            assert(status==FORT_SCOPE_EXECUTION);
+            assert(fort_scope_observe_all_v1(f.context)==FORT_SCOPE_EXECUTION);
+            assert(fort_scope_graph_flush_v1(f.context)==FORT_SCOPE_EXECUTION);
+            assert(fort_scope_graph_queue_cancel_v1(f.context)==FORT_SCOPE_EXECUTION);
+            check(fort_scope_abandon(f.context)); return 0;
+        }
+        check(status);
+        assert(!queued(f).pending_tasks && f.stats().launches==2);
+        for(int i=0;i<8;++i) assert(f.host_b[i]==i+2 && f.host_out[i]==3*(i+2));
+        assert(f.stats().upload_bytes==64 && f.stats().download_bytes==128);
+        fort_scope_access read{}; read.flags=FORT_SCOPE_READ_ALL; void *pointer=nullptr;
+        check(fort_scope_device_begin(f.context,f.b,&read,&pointer));
+        check(fort_scope_device_end(f.context,f.b)); assert(pointer==f.pb);
+        check(fort_scope_observe_all_v1(f.context));
+        assert(f.stats().upload_bytes==64 && f.stats().download_bytes==128);
     } else {
         if(mode=="resource_fallback" || mode=="launch_failure") {
             chain(f); f.observe(f.out); // Warm directly before exercising actual graph APIs.
@@ -315,7 +336,7 @@ def cuda_queue_executable(tmp_path_factory):
 @pytest.mark.cuda
 @pytest.mark.parametrize("mode", ["owned", "repeated", "selective", "war", "queue_off", "graphs_off",
                                  "resource_fallback", "launch_failure", "mirrors", "host_mirror", "long_mirrors", "pressure",
-                                 "plan_suffix"])
+                                 "plan_suffix", "entry_observe", "entry_failure"])
 def test_deferred_real_cuda_queue(cuda_queue_executable, mode):
     result = subprocess.run([str(cuda_queue_executable), mode], capture_output=True, text=True, timeout=20)
     if result.returncode == 77:

@@ -307,6 +307,8 @@ class ModuleOwner(MappedReachedControl, LexicalOwner):
                 self.add_resource(binding)
         self.owner.builder.region_owners[routine.qualified] = proxy.inline
         from compiler.scopes.conditional_return import check_entry
+        from compiler.scopes.specification_entry import prepare as prepare_specification_entry
+        prepare_specification_entry(self)
         check_entry(self)
         from compiler.scopes.native_ancestor import prepare
         self.nodes = prepare(proxy, _children(routine.execution))
@@ -664,6 +666,8 @@ def borrow_module(parent, node, *, reached=None, allow_native_collapse=True):
             scalar_elements=elements, native_arrays=native_arrays,
             unallocated_inputs=tuple(mapping.binding.root for mapping in registrations
                 if _readonly_mapping(mapping, readonly_roots)))
+    from compiler.scopes.specification_entry import preflight as specification_preflight
+    preflight += specification_preflight(parent, existing)
     lines = [*parent.rearm_epoch(), f"if ({parent.enabled}) then", *preflight, "endif",
              f"if ({parent.enabled}) then", *_call(existing.entry, [*arguments, *controls]),
              "else", *parent.original((node,)).splitlines(), "endif"]
