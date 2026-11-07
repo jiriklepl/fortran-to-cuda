@@ -87,4 +87,8 @@ def borrowed(owner, nodes, lines):
         # The owning native latch selects the exact original CALL before any
         # rearm, eager actual registration, or diagnostic runtime frame.
         result = [f"if ({native}) then", *owner.original(nodes).splitlines(), "else", *result, "endif"]
-    return [f"if ({owner.control_guard}) then", *result, "else", *lines, "endif"] if owner.control_guard else result
+    # The ordinary entry has no borrowed context. Preserve its original CALL
+    # directly, instead of copying the managed replacement into a second,
+    # unreachable control arm (including its registration and entry hooks).
+    return ([f"if ({owner.control_guard}) then", *result,
+             "else", *owner.original(nodes).splitlines(), "endif"] if owner.control_guard else result)
