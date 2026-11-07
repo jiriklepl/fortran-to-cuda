@@ -3,6 +3,7 @@
 import json
 import sys
 from copy import copy, deepcopy
+from dataclasses import replace
 from hashlib import sha256
 
 import pytest
@@ -28,7 +29,7 @@ from compiler.tests.test_ordinary_numerical_regions import ORDINARY_CHILD_SOURCE
 from compiler.tests.test_owned_emission_image import emit_branch, emit_member_branch, member_fixture
 
 
-def team_fixture(directory, kind="combined", *, companion=False):
+def team_fixture(directory, kind="combined", *, companion=False, policy="sections"):
     """Reuse the source fixtures, with the ordinary graph owner being tested."""
     child = environment_source(CHILD_SOURCE) if kind == "combined" else ORDINARY_CHILD_SOURCE
     paths = tuple(directory / name for name in ("math.f90", "child.f90", "owner.f90"))
@@ -46,6 +47,13 @@ def team_fixture(directory, kind="combined", *, companion=False):
         paths, ENTRY if companion else CHILD, facts=facts, options=CompilerOptions(),
         config=OffloadConfig(policy="sections", scope_execution="graph", host_threads=4),
     )
+    if policy == "auto":
+        from compiler.offload.collective_calibration import profile_with_collective_measurements
+        from compiler.tests.test_collective_calibration import measurements
+        from compiler.tests.test_scoped_planning_entries import calibration
+
+        profile = profile_with_collective_measurements(calibration(), measurements(), calibration={})
+        builder.config = replace(builder.config, policy=policy, profile=profile)
     return paths, builder
 
 
@@ -75,7 +83,8 @@ def strict_package(directory, owner, outputs, report):
 @pytest.mark.parametrize(("kind", "companion"), [
     ("combined", False), ("separate", False), ("combined", True),
 ])
-def test_original_team_images_preserve_every_artifact(tmp_path, monkeypatch, kind, companion):
+@pytest.mark.parametrize("policy", ["sections", "auto"])
+def test_original_team_images_preserve_every_artifact(tmp_path, monkeypatch, kind, companion, policy):
     import gc
 
     from compiler.frontend import source_effects
@@ -83,7 +92,7 @@ def test_original_team_images_preserve_every_artifact(tmp_path, monkeypatch, kin
     from compiler.scopes.storage_admission import active_admission
 
     monkeypatch.setattr(source_effects, "_DEFAULT_SUMMARY_CACHE", SummaryCache())
-    paths, parent = team_fixture(tmp_path, kind, companion=companion)
+    paths, parent = team_fixture(tmp_path, kind, companion=companion, policy=policy)
     originals = tuple(path.read_bytes() for path in paths)
     facts = deepcopy(parent.facts)
     # Retain weakly cached warmup graphs until both complete packages exist.
@@ -99,6 +108,8 @@ def test_original_team_images_preserve_every_artifact(tmp_path, monkeypatch, kin
             old_owner, old_outputs, old_report = emit_branch(branch.builder)
             assert teams(old_owner)
             old_manifest = strict_package(tmp_path / "legacy", old_owner, old_outputs, old_report)
+            old_team_records = tuple(unit.scope.public()["combined_numerical_team"]
+                                     for _member, unit in teams(old_owner))
 
     published = []
     original_publish = LexicalOwner._publish_owned_emission
@@ -131,15 +142,18 @@ def test_original_team_images_preserve_every_artifact(tmp_path, monkeypatch, kin
                 assert slot == actual_slot
         current_teams = teams(owner)
         assert current_teams
-        for member, unit in current_teams:
+        assert any(record["original_cpu_alternative"]["available"]
+                   for record in old_team_records) is (policy == "auto")
+        for (member, unit), expected_team in zip(current_teams, old_team_records, strict=True):
             state = member.unit_emission(unit)
             assert state.prepared is not None
             public = unit.scope.public()["combined_numerical_team"]
+            assert public == expected_team
             assert public["host_threads"] == 4
             assert public["expected_omp_level"] == 1
             assert public["closed_is_absorbing"]
             assert not public["nested_team_created"]
-            assert not public["native_effects_authority"]
+            assert public["native_effects_authority"] is public["original_cpu_alternative"]["available"]
             assert public["completion"]["proof_identity"] == unit.scope.prepared.completion_proof.identity
         text = outputs[report["sources"][str(paths[1])]["replacement"]]
         assert text.count("call ieee_set_halting_mode(ieee_invalid,.false.)") == 1
@@ -153,10 +167,10 @@ def test_original_team_images_preserve_every_artifact(tmp_path, monkeypatch, kin
             prepared = helper_member.unit_emission(helper_unit).prepared
             replacement, = (replacement for first, last, replacement in prepared.finished_edits
                             if (first, last) == (helper_unit.scope.first, helper_unit.scope.last))
-            # Use the exact source-bound replacement. A companion retains its
-            # pristine native body before the generated team's sole vote.
+            # A companion or AUTO's independently proved native alternative
+            # retains a pristine body before the generated team's vote.
             assert replacement.count("fort_team_environment_supported = .true.") == 1
-            assert replacement.count("call cell_formula(g,s,a(i),i)") == (2 if companion else 1)
+            assert replacement.count("call cell_formula(g,s,a(i),i)") == 1 + bool(companion or policy == "auto")
             vote = replacement.index("fort_team_environment_supported = .true.")
             group = replacement.rfind("!$omp parallel", 0, vote)
             assert group >= 0
@@ -173,7 +187,7 @@ def test_original_team_images_preserve_every_artifact(tmp_path, monkeypatch, kin
             assert body.count("call cell_formula(g,s,a(i),i)") == 1
         else:
             assert "!$omp end do nowait" in text
-            assert text.count("call touch_face(b)") == 1
+            assert text.count("call touch_face(b)") == 1 + (policy == "auto")
     assert tuple(path.read_bytes() for path in paths) == originals
     assert parent.facts == facts
     assert not parent.outputs
@@ -214,8 +228,9 @@ def test_team_image_publication_never_calls_live_team_authorities(tmp_path, monk
 
 
 @pytest.mark.parametrize("fault", ["source", "canonical_slot", "completion"])
-def test_team_image_seal_rejects_changed_source_or_receipt(tmp_path, monkeypatch, fault):
-    paths, parent = team_fixture(tmp_path)
+@pytest.mark.parametrize("policy", ["sections", "auto"])
+def test_team_image_seal_rejects_changed_source_or_receipt(tmp_path, monkeypatch, fault, policy):
+    paths, parent = team_fixture(tmp_path, policy=policy)
     original_seal = LexicalOwner._seal_owned_emission
     changed = []
 
