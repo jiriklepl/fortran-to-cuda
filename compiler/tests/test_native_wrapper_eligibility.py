@@ -61,8 +61,10 @@ def setup(tmp_path, text=None):
     return path, builder, owner, calls[1], routine
 
 
-def test_original_wrapper_with_exact_callback_is_source_native_only_without_any_generation(tmp_path):
+@pytest.mark.parametrize("policy", ["sections", "auto"])
+def test_original_wrapper_with_exact_callback_is_source_native_only_without_any_generation(tmp_path, policy):
     _path, builder, owner, call, routine = setup(tmp_path)
+    builder.config = replace(builder.config, policy=policy)
     original_members, original_resources = dict(owner.members), dict(owner.resources)
     assert native_only_wrapper(owner, call, routine)
     assert owner.members == original_members
@@ -85,7 +87,8 @@ def test_original_wrapper_with_exact_callback_is_source_native_only_without_any_
     assert graph.same_family_call_view().public()["available"]
 
 
-def test_full_call_boundary_never_constructs_child_or_old_payload_retirement(tmp_path, monkeypatch):
+@pytest.mark.parametrize("policy", ["sections", "auto"])
+def test_full_call_boundary_never_constructs_child_or_old_payload_retirement(tmp_path, monkeypatch, policy):
     from elmm_pipeline.checked_execution_plan import validate_checked_execution_plans
 
     from compiler.scopes import conditional_return, module_owner
@@ -95,6 +98,11 @@ def test_full_call_boundary_never_constructs_child_or_old_payload_retirement(tmp
         "call middle(n,change)\ncall relocate(left,right)\nenddo",
     )
     path, builder = fixture(tmp_path, text)
+    builder.config = replace(builder.config, policy=policy)
+    if policy == "auto":
+        from compiler.tests.test_scoped_planning_entries import calibration
+        # Exercise AUTO discovery; absent costs intentionally bypass all owners.
+        builder.config = replace(builder.config, profile=calibration())
     original = module_owner.ModuleOwner.__init__
 
     def constructor(self, parent, routine, *args, **kwargs):
@@ -199,19 +207,17 @@ def test_registered_mapped_routes_are_not_replaced(tmp_path, attribute):
     assert not native_only_wrapper(owner, call, routine)
 
 
-@pytest.mark.parametrize("mode", ["interval", "auto", "provider", "version"])
+@pytest.mark.parametrize("mode", ["interval", "provider", "version"])
 def test_other_policy_or_owner_roles_are_conservatively_unknown(tmp_path, monkeypatch, mode):
     from compiler.scopes import native_guard
 
     _path, builder, owner, call, routine = setup(tmp_path)
     if mode == "interval":
         owner.interval_draft = object()
-    elif mode == "auto":
-        builder.config = replace(builder.config, policy="auto")
     elif mode == "provider":
         builder.provider_only_lifetime = object()
     else:
-        monkeypatch.setattr(native_guard, "GUARDED_NATIVE_ROUTING_VERSION", 2)
+        monkeypatch.setattr(native_guard, "GUARDED_NATIVE_ROUTING_VERSION", 3)
     assert not native_only_wrapper(owner, call, routine)
 
 
@@ -223,12 +229,14 @@ def test_other_policy_or_owner_roles_are_conservatively_unknown(tmp_path, monkey
         "allocate(scratch(n))",
     ],
 )
-def test_complete_descendant_graph_still_rejects_unjoined_unknown_or_import_work(tmp_path, body):
+@pytest.mark.parametrize("policy", ["sections", "auto"])
+def test_complete_descendant_graph_still_rejects_unjoined_unknown_or_import_work(tmp_path, body, policy):
     wrapper = WRAPPER.replace(
         "integer::i\nif(allocated(records))",
         "integer::i\nreal(8),allocatable::scratch(:)\n" + body + "\nif(allocated(records))",
     )
-    _path, _builder, owner, call, routine = setup(tmp_path, source(wrapper))
+    _path, builder, owner, call, routine = setup(tmp_path, source(wrapper))
+    builder.config = replace(builder.config, policy=policy)
     assert not native_only_wrapper(owner, call, routine)
 
 

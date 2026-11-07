@@ -154,7 +154,7 @@ class GuardedNativeChild(LexicalOwner):
             self.boundary((group,), 'reached original native operation; effects unavailable')
 
 
-GUARDED_NATIVE_ROUTING_VERSION = 1
+GUARDED_NATIVE_ROUTING_VERSION = 2
 
 
 def _formal_internal_child(analysis, routine, node):
@@ -172,12 +172,16 @@ def _formal_internal_child(analysis, routine, node):
 
 
 def native_only_wrapper(parent, node, routine):
-    """Fresh policy exclusion before any companion state is constructed.
+    """Fresh capability exclusion before any companion state is constructed.
 
     A formal-bearing immediate internal child only enters GuardedNativeChild,
     whose scanner never creates checked numerical/device work. The COMPLETE
     native graph still validates every callee, actual callback and normal-return
     effect; this routing choice grants no execution, capture or payload credit.
+    AUTO shares this capability proof with explicit GPU placement: a source
+    route that cannot emit device work must not acquire a different lifetime
+    merely because numerical placement is costed. The caller still admits the
+    complete coherent native operation or performs its proved retirement.
     Unknown source shapes retain ordinary checked-child preference.
     """
     from compiler.frontend.device_tasks import _task_contract
@@ -187,8 +191,8 @@ def native_only_wrapper(parent, node, routine):
     builder, owner = parent.builder, parent.owner
     if builder.analysis.routines.get(routine.qualified) is not routine:
         raise CompilationError("native-only wrapper requires its exact original routine")
-    if (GUARDED_NATIVE_ROUTING_VERSION != 1 or builder.config.scope_execution != "graph"
-            or builder.config.policy != "sections" or builder.config.collective
+    if (GUARDED_NATIVE_ROUTING_VERSION != 2 or builder.config.scope_execution != "graph"
+            or builder.config.policy not in {"sections", "auto"} or builder.config.collective
             or owner.interval_draft is not None or parent.interval_draft is not None
             or getattr(owner.builder, "_conditional_return_draft", None) is None
             or getattr(builder, "_reached_window_binding", None) is not None
