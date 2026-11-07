@@ -117,7 +117,7 @@ class JoinedTeam(StructuredScope):
         # The authenticated local skeleton and each reached proof already have
         # their own budgets. Adding every independently proved segment's
         # expanded effects would recreate eager whole-owner closure rejection.
-        if (len(self.calls) > 32 or len(self.calls) + len(self.native) > builder.analysis.operation_limit
+        if (len(self.calls) + len(self.native) > builder.analysis.operation_limit
                 or self.reached_effect_count > builder.analysis.operation_limit):
             raise CompilationError('mixed original team exceeds bounded source-unit/reached-effect budget')
         self.extra_patches = []
@@ -277,7 +277,6 @@ class JoinedTeam(StructuredScope):
                 'largest_reached_native_effects': self.reached_effect_count,
                 'reached_effect_limit': self.builder.analysis.operation_limit,
                 'expanded_owner_effects': self.operation_count,
-                'numerical_unit_limit': 32,
                 'effect_budget_role': 'each reached proof; expanded effects are not summed across ownership'},
             'native_abi': 'unchanged original body; absent borrowed controls are never read',
             'pristine_original_entry': {

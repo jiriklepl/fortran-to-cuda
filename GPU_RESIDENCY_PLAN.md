@@ -469,6 +469,19 @@ failed campaigns remain recorded, including the holdout timeout. The unchanged
 pass, and normal emitted-code and physical-copy validation pass. Actual ELMM
 use of this new contract, natural correctness and timing remain open.
 
+The [wide-team checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/wide-graph-team-checkpoint-20261107.json)
+removes two remaining 32-unit restrictions from production graph admission.
+Complete mixed OpenMP teams with 33 and 48 numerical units now retain every
+task, with existing source-analysis and reached-effect budgets intact. A real
+33-kernel chain preserves all fields and halos bit-for-bit and uploads its
+unchanged input once across intervening native work. Only the native-modified
+plane is uploaded again. Zero-trip, hidden-device and wrong-team paths pass;
+129 affected tests, three CUDA checks and the companion build reader pass.
+This changes the conservative compiler protocol fingerprint, so the accepted
+calibration above remains bound to `a8ad86e` and the ongoing parent38 application
+qualification. The successor needs fresh calibration before AUTO/application
+qualification; no application speedup is established by this component test.
+
 Parent36's additional diagnostics identify the missing CD4 child route:
 `CD4divU/V/W` automatic scratch-array bounds read `tilenx/tileny/tilenz` before
 the original body starts. The conditional-return specification check rejects
