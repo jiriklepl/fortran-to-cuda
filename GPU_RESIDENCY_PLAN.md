@@ -8,6 +8,18 @@ Historical reports and timing controls remain unchanged.
 
 ## Current checkpoint: 2026-11-07
 
+The [reached RK validation checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/byte-rk-validation-20261107/README.md)
+corrects the companion reader's missing direct source-task module-use accounting.
+The unchanged newly generated SGS→Convection package passes strict validation,
+builds, and passes all four short GPU/hidden-GPU runs with all 20 fields, halos
+and outputs. Forced placement executes all six original CD2 advection loops in
+`channel-simple`, but no CD4 kernels in `channel`. A separate observer confirms
+18 whole-array tilenx definition rejections and 18 CD4 field-read rejections,
+all before task submission. Source storage transport and precise native reads
+are the next issues; neither failure permits inventing whole-field definitions.
+Traffic remains high. The 135/701 reader suites pass. No new natural-run or
+performance gate is claimed, and AUTO44 remains unstarted.
+
 The [conditional scalar transport checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/byte-scalar-transport-20261107/README.md)
 adds storage-only byte capture for plain real scalars in direct tile tasks.
 Floating-point values are decoded at their original device references, preserving
