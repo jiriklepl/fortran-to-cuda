@@ -30,14 +30,20 @@ from .profile import (
 REPETITIONS = 16
 # Keep each source-proven team below its existing effect budget. Pool fixed
 # complete team passes into each observation; no numerical call forks a team.
-BATCH_PASSES = 8
+# Short 128-owner observations showed several-fold variation in coordinator
+# and native-call stages. Use a fixed longer batch for training AND holdouts;
+# never adjust the batch or discard observations to make a fit pass.
+BATCH_PASSES = 64
 OBSERVED_REPETITIONS = REPETITIONS * BATCH_PASSES
 WARMUP_SAMPLES = 3
 MEASURED_SAMPLES = 9
 COMPUTE_STEPS = 64
 AUTO_WORK_CALLS = 16
 AUTO_OWNER_CALLS = 1
-AUTO_OBSERVED_OWNER_CALLS = AUTO_OWNER_CALLS * BATCH_PASSES
+# The large numerical holdout already has long observations. Preserve its
+# fixed sampling budget independently of the short coordination measurements.
+AUTO_BATCH_PASSES = 8
+AUTO_OBSERVED_OWNER_CALLS = AUTO_OWNER_CALLS * AUTO_BATCH_PASSES
 FORTRAN_FLAGS = ("-std=f2018", "-O3", "-fopenmp")
 PROTOCOL_FIT_SIZES = (4096, 16384)
 PROTOCOL_HOLDOUT_SIZE = 8192
@@ -229,7 +235,7 @@ def fixture_facts(path, threads):
     }
 
 
-def _driver(public, kind, threads, precision):
+def _driver(public, kind, threads, precision, *, batch_passes=BATCH_PASSES):
     width = precision // 8
     # Numerical capture names are public ABI fields, not parsed emitted CUDA.
     arguments = {"a": "ha", "b": "hb", "c": "hc", "n": "n"}
@@ -302,13 +308,13 @@ do s=1,{WARMUP_SAMPLES + MEASURED_SAMPLES}
 status=fort_scope_team_observer_reset_v1({threads}_c_int32_t)
 if(status/=0) error stop 'observer reset'
 if(mode==2.or.mode==4) then
-do pass=1,merge(1,{BATCH_PASSES},mode==4)
+do pass=1,merge(1,{batch_passes},mode==4)
 call qualified(a,b,c,permutation,n)
 enddo
 else
 !$omp parallel default(none) shared(a,b,c,n,context,ha,hb,hc,mode,expected_version,expected_options) &
 !$omp private(r,status) num_threads({threads})
-do r=1,{OBSERVED_REPETITIONS}
+do r=1,{REPETITIONS * batch_passes}
 if(mode==0) then
 call fort_scope_team_observe_begin_v1(FORT_SCOPE_TEAM_OBSERVE_COMPUTE)
 call work(a,b,c,n)
@@ -558,6 +564,7 @@ def calibrate_collective(profile, args, directory, nvcc, host, *, run, tool):
         "protocol_holdout_size": PROTOCOL_HOLDOUT_SIZE,
         "repetitions": REPETITIONS,
         "team_passes_per_sample": BATCH_PASSES,
+        "auto_holdout_team_passes_per_sample": AUTO_BATCH_PASSES,
         "observed_repetitions_per_sample": OBSERVED_REPETITIONS,
         "warmup_samples": WARMUP_SAMPLES,
         "measured_samples": MEASURED_SAMPLES,
@@ -620,7 +627,7 @@ def _validate_auto_holdout(profile, args, root, nvcc, host, fortran, flags, envi
         if item["procedure"] == "team_operations::work"
     )
     driver = build / "driver.f90"
-    driver.write_text(_driver(public, "compute", args.threads, args.precision))
+    driver.write_text(_driver(public, "compute", args.threads, args.precision, batch_passes=AUTO_BATCH_PASSES))
     objects = []
     for role in ("common_runtime", "shared_entry", "original_source"):
         for item in manifest["build_sources"]:
