@@ -51,6 +51,15 @@ entries. Source-call boundaries do not imply transfers, allocation release or
 synchronization. Valid read-only mirrors can coexist on CPU and GPU; writes,
 actual consumers and the device memory budget determine movement.
 
+Checked local CALL groups may preserve independently supplied array-entry
+definitions inside a loop when the existing native-effect analysis proves a
+preservation invariant over the complete enclosing loop. The proof includes
+loop headers, all branches, calls and suffixes; it never assumes the first
+iteration's prefix describes later iterations. Undefinition, uncertain effects
+and storage changes remove the affected guarantees. Version-5 preservation
+records link the complete original loop to the checked graph. Domain retirement
+and replica validity still follow their existing contracts.
+
 
 Proved scalar motion and loop fusion are enabled by default. Equal rectangular
 loop domains fuse only when fresh dependence analysis proves the combined region
