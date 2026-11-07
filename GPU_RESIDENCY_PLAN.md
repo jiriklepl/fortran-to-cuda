@@ -29,11 +29,17 @@ with historical references, with a maximum field difference of approximately
 harness omitted the fixed FFTW-plan control used by those references. Restoring
 that established control resolves the discrepancy: the same native binary now
 passes all 20 fields and 114 outputs at 2,458 steps against both reference
-families, with the exact four FFTW plans observed. The remaining seven cases
-are running. The failed run is preserved; tolerances, binaries, physics and the
-deterministic pressure reference are unchanged. Full natural correctness and
-the rotated timing gates remain open; the prepared timing campaign cannot
-execute before correctness passes.
+families, with the exact four FFTW plans observed. The
+[complete natural campaign](benchmarks/reports/gpu-residency-implementation-20261023/parent38-natural-checkpoint-20261107.json)
+now passes **all eight cases**: fresh native, be58, 7a612e4 and parent38 at 109
+and 2,458 steps. All 20 fields, bounds, halos, six/114 outputs and exact four
+FFTW plans pass; every input guard holds and every worker group exits. The
+failed run is preserved; tolerances, binaries, physics and the deterministic
+pressure reference are unchanged. This qualifies the frozen parent38
+`a8ad86e` build with original CPU PoisFFT and explicit sections placement.
+It does not qualify the later compiler changes on ELMM or production AUTO
+placement. The 64-process rotated timing campaign is prepared with the same
+primary configurations, but no timing or speedup gate is claimed yet.
 
 ## Integration record: 2026-11-04 onward
 
