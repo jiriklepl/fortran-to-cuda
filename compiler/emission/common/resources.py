@@ -122,8 +122,9 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
             "completion_statistics": "fort_scope_completion_stats_get_v1",
         },
         "specification_entry": {
-            "abi_version": 1, "observe": "fort_scope_observe_all_v1",
-            "regions": "all initialized regions in the live domain; undefined holes remain undefined",
+            "abi_version": 2, "observe": "fort_scope_observe_v1", "fallback": "fort_scope_observe_all_v1",
+            "handle_check": "fort_scope_buffer_valid_v1",
+            "regions": "initialized mapped metadata regions; whole domain if mappings or live handles are unavailable",
             "replicas": "read-only publication preserves current device replicas and generations",
             "failure": "stop before original entry; never replay",
         },

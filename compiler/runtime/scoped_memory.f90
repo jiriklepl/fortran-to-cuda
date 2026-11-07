@@ -272,7 +272,7 @@ module fort_scoped_memory
   public :: fort_scope_layout_get, fort_scope_host_begin, fort_scope_host_end
   public :: fort_scope_access_begin_v1
   public :: fort_scope_original_host_begin_v1
-  public :: fort_scope_observe_all_v1
+  public :: fort_scope_observe_v1, fort_scope_observe_all_v1
   public :: fort_scope_buffer_valid_v1
   public :: fort_scope_device_begin, fort_scope_device_end, fort_scope_cancel_access
   public :: fort_scope_gpu_enter, fort_scope_gpu_leave, fort_scope_note_launch, fort_scope_wait
@@ -710,6 +710,13 @@ module fort_scoped_memory
       import c_int, c_int64_t, c_ptr, c_size_t
       integer(c_int64_t), value :: context
       type(c_ptr), value :: bindings
+      integer(c_size_t), value :: count
+      integer(c_int) :: status
+    end function
+    function fort_scope_observe_v1(context, buffers, count) bind(C) result(status)
+      import c_int, c_int64_t, c_ptr, c_size_t
+      integer(c_int64_t), value :: context
+      type(c_ptr), value :: buffers
       integer(c_size_t), value :: count
       integer(c_int) :: status
     end function

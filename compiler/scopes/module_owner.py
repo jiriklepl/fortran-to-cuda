@@ -667,7 +667,7 @@ def borrow_module(parent, node, *, reached=None, allow_native_collapse=True):
             unallocated_inputs=tuple(mapping.binding.root for mapping in registrations
                 if _readonly_mapping(mapping, readonly_roots)))
     from compiler.scopes.specification_entry import preflight as specification_preflight
-    preflight += specification_preflight(parent, existing)
+    preflight += specification_preflight(parent, existing, handle_bindings)
     lines = [*parent.rearm_epoch(), f"if ({parent.enabled}) then", *preflight, "endif",
              f"if ({parent.enabled}) then", *_call(existing.entry, [*arguments, *controls]),
              "else", *parent.original((node,)).splitlines(), "endif"]

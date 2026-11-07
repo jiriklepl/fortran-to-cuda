@@ -76,7 +76,7 @@ effect scanner and authenticates original declarations without requiring a
 whole-body native-write proof. The subsequent
 [entry-coherence implementation](benchmarks/reports/gpu-residency-implementation-20261023/specification-entry-20261107/README.md)
 binds publication before argument association and specification evaluation to
-the checked CALL and paired reader. Its current conservative implementation
+the checked CALL and paired reader. Its initial conservative implementation
 observes all initialized regions of the live domain, preserves device replicas
 and never inspects unreached descriptors. It passes 301 affected checks and 29
 separate CUDA cases; this is not yet actual CD4 GPU coverage. Narrowing publication
@@ -130,6 +130,21 @@ its source-launch model fails one training point and two holdouts. Those GPU
 costs remain unavailable; no samples or coefficients are substituted. The next
 ELMM generation diagnoses source-task retention with this honest availability
 state before further coverage and performance qualification.
+
+The [mapped-entry checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/mapped-specification-entry-20261107/README.md)
+now limits specification publication to authenticated metadata allocations when
+their forwarded handles remain live. Missing mappings or handles preserve the
+whole-domain fallback. The 165-check affected suite, overlapping 14-check
+multiple-array/reader slice and 15 CUDA/control cases pass. A device-written
+automatic-array bound downloads exactly four bytes while its unrelated dirty
+field stays on the GPU; the next consumer requires no reupload. Compiler and
+reader policy 2 share runtime `187cf859`. Fresh matching calibration passes
+physical-copy/native-transaction checks but rejects the GPU source model at one
+training point; its costs remain unavailable. Separately frozen AUTO42 passes
+graph publication but admits no CD4 source tasks because its RK request omits
+grid-spacing capture facts. A fresh source-bound review carries the six existing
+Convection grid-spacing/cell-type facts into a separate successor recipe. No
+new application coverage, natural-run correctness or speedup is claimed here.
 
 ## Integration record: 2026-11-04 onward
 

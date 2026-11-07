@@ -813,7 +813,7 @@ def _record(owner):
     lexical = any(member.source_lexical_calls for member in owner.members.values())
     specification = any(getattr(member, "specification_reads", None) is not None for member in owner.members.values())
     return {"version": 5 if specification else 4 if lexical else 3 if preservation else 2 if selected_root is not None else 1,
-            **({"specification_entry_policy_version": 1} if specification else {}),
+            **({"specification_entry_policy_version": 2} if specification else {}),
             **({"lexical_child_policy_version": 1} if lexical else {}),
             **({"native_call_preservation_policy_version": 2} if preservation else {}),
             "kind": "checked_conditional_return", "entry": owner.routine.qualified,
