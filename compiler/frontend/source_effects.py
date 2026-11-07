@@ -3028,8 +3028,10 @@ class SourceEffects:
         from compiler.frontend.worksharing_completion import prove_worksharing_completion
         proof = prove_worksharing_completion(self, requested, joined, selected)
         if proof.identity not in self._worksharing_completions:
-            if len(self._worksharing_completions) >= self.operation_limit:
-                self._worksharing_completions.pop(next(iter(self._worksharing_completions)))
+            # These are authoritative tokens for original source DOs, not a
+            # disposable lookup cache. Eviction revokes earlier units of a live
+            # graph. Their lifetime is the owning source analysis; each token
+            # remains bounded by an authenticated original team and selection.
             self._worksharing_completions[proof.identity] = proof
         return self._worksharing_completions[proof.identity]
 
@@ -3042,8 +3044,8 @@ class SourceEffects:
         from compiler.frontend.worksharing_completion import prove_worksharing_native_completion
         proof = prove_worksharing_native_completion(self, requested, joined, selected)
         if proof.identity not in self._worksharing_native_completions:
-            if len(self._worksharing_native_completions) >= self.operation_limit:
-                self._worksharing_native_completions.pop(next(iter(self._worksharing_native_completions)))
+            # Native cuts interleaved with numerical units must retain their
+            # original authority for the same complete analysis lifetime.
             self._worksharing_native_completions[proof.identity] = proof
         return self._worksharing_native_completions[proof.identity]
 
