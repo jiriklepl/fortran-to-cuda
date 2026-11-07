@@ -50,6 +50,16 @@ must attribute the channel regression and losses to be58 before drawing further
 payoff conclusions from reduced traffic. Traced diagnosis stays separate from
 these untraced complete-process measurements.
 
+The [source-only specification-read slice](benchmarks/reports/gpu-residency-implementation-20261023/specification-reads-checkpoint-20261107.json)
+passes 183 affected checks, including 42 new cases, and identifies the six
+original scratch-bound reads in each actual CD4 procedure. It reuses the existing
+effect scanner and authenticates original declarations without requiring a
+whole-body native-write proof. No entry guard is relaxed and no GPU execution
+is enabled yet. The next integration must acquire those reads before the checked
+CALL enters Fortran, bind the phase in the authoritative graph and strict reader,
+and reuse the existing tile-private scratch lifetime where proved. CD4's private
+team scratch must not become an ordinary caller-owned field allocation.
+
 ## Integration record: 2026-11-04 onward
 
 The generic guarded-condition and immutable-container changes pass
