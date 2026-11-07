@@ -3,6 +3,7 @@
 import json
 from contextlib import contextmanager
 from copy import copy, deepcopy
+from dataclasses import replace
 from hashlib import sha256
 
 import pytest
@@ -620,7 +621,8 @@ def test_companion_refresh_does_not_adopt_an_independent_scope_sink(tmp_path, mo
 
 
 @pytest.mark.parametrize("kind", ["readonly", "native_write", "module"])
-def test_real_hierarchical_and_companion_images_preserve_all_artifacts(tmp_path, monkeypatch, kind):
+@pytest.mark.parametrize("policy", ["sections", "auto"])
+def test_real_hierarchical_and_companion_images_preserve_all_artifacts(tmp_path, monkeypatch, kind, policy):
     import gc
 
     from compiler.frontend import source_effects
@@ -629,6 +631,10 @@ def test_real_hierarchical_and_companion_images_preserve_all_artifacts(tmp_path,
 
     monkeypatch.setattr(source_effects, "_DEFAULT_SUMMARY_CACHE", SummaryCache())
     path, parent = member_fixture(tmp_path, kind)
+    if policy == "auto":
+        from compiler.tests.test_scoped_planning_entries import calibration
+
+        parent.config = replace(parent.config, policy=policy, profile=calibration())
     original, facts = path.read_bytes(), deepcopy(parent.facts)
     # Keep speculative warmup graphs alive through both routes. Their weak
     # retention otherwise makes manifest cache counters depend on GC timing.

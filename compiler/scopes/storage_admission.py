@@ -542,7 +542,7 @@ def _supported(plan):
     owner = plan._owner
     epoch = getattr(owner, "position_epoch", None)
     if (not sealed(owner) or owner.builder.config.scope_execution != "graph"
-            or owner.builder.config.policy != "sections" or owner.builder.config.scope_measurement is not None):
+            or owner.builder.config.policy not in {"sections", "auto"} or owner.builder.config.scope_measurement is not None):
         return False
     if type(epoch) is CallGroupStorageEpoch:
         return epoch._managed is not None

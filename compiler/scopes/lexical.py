@@ -1209,7 +1209,7 @@ class LexicalOwner:
         from compiler.scopes.joined_team import JoinedTeam
 
         config = self.builder.config
-        return (config.scope_execution == "graph" and config.policy == "sections"
+        return (config.scope_execution == "graph" and config.policy in {"sections", "auto"}
                 and config.scope_measurement is None and self.owner.exact_window is None
                 and getattr(self.builder, "provider_only_lifetime", None) is None
                 and getattr(self.owner.builder, "provider_only_lifetime", None) is None
@@ -1803,6 +1803,10 @@ class LexicalOwner:
                 and getattr(self, "position_epoch", None) is None
                 and self.interval_draft is None
                 and getattr(self.builder, "_native_ancestor_selection", None) is None
+                # A native preflight intentionally emits no prepared units.
+                # Preserve that route without inventing image tickets for work
+                # that the original source will perform without instrumentation.
+                and (self.builder.config.policy != "auto" or plan.automatic_native_reason() is None)
                 and all(not member.device_tasks and not member.source_device_tasks for member in plan.members)
                 and all(member.supports_owned_unit_emission(unit)
                         for member in plan.members for unit in plan.units(member))
