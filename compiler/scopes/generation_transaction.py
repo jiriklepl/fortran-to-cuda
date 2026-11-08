@@ -324,7 +324,13 @@ class GenerationTransaction:
             raise CompilationError("owned emission images changed during final publication validation")
         # Rebind every nested builder, inline registry and bound closure to the
         # adopted root while retaining their internal alias relationships.
-        copier = _GenerationCopy(self._analysis, {id(self.builder): self.parent, id(winner): self.parent})
+        # Adoption only rebinds completed emission metadata. Private analyses
+        # first encountered here were already used to issue the candidate's
+        # exact receipts; forking them now replaces identity-bound registries
+        # after validation. Existing speculative analyses were detached on
+        # entry and remain covered by the commit/rollback below.
+        copier = _GenerationCopy(lambda _analysis: None,
+                                 {id(self.builder): self.parent, id(winner): self.parent})
         state = {name: copier(value) for name, value in vars(winner).items()
                  if name != "_generation_transaction_marker"}
         for (builder, _guard), before in zip(owned, snapshots, strict=True):

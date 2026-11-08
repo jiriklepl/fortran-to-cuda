@@ -5,8 +5,51 @@ import pytest
 
 from compiler.frontend.native_call_effects import prove_native_call_effects
 from compiler.frontend.resource_reachability import prove_resource_reachability
+from compiler.frontend.source_effects import SourceEffects
 from compiler.ir import CompilationError
 from compiler.tests.test_native_graph_associations import SOURCE, setup
+
+
+@pytest.mark.parametrize("mutation", [None, "registry", "record", "selection"])
+def test_complete_call_retains_an_ordinary_joined_callee(tmp_path, mutation):
+    path = tmp_path / "ordinary_join.f90"
+    path.write_text("""module ordinary_join
+implicit none
+real(8)::a(4),b(4)
+contains
+subroutine owner()
+call step()
+end subroutine
+subroutine step()
+integer::i
+!$omp parallel do private(i)
+do i=1,4
+b(i)=a(i)+1.0_8
+enddo
+!$omp end parallel do
+end subroutine
+end module
+""")
+    analysis = SourceEffects([path])
+    analysis.seal_session()
+    selection = tuple(analysis.routines["ordinary_join::owner"].execution.content)
+    proof = prove_native_call_effects(analysis, "ordinary_join::owner", selection)
+    assert proof.validate(analysis, "ordinary_join::owner", selection) is proof
+    assert {binding.root: (role, actions) for binding, role, actions in proof.resources} == {
+        "ordinary_join::a": ("managed", frozenset({"read"})),
+        "ordinary_join::b": ("managed", frozenset({"write"})),
+    }
+    assert not proof.public()["definitions_authorized"]
+    if mutation is not None:
+        _, _, ordinary = proof.reachability._completion[0]
+        if mutation == "registry":
+            analysis._joined_completions[ordinary.identity] = copy(ordinary)
+        elif mutation == "record":
+            object.__setattr__(ordinary, "_record", {})
+        else:
+            object.__setattr__(ordinary, "selected_node_ids", ordinary.selected_node_ids[:-1])
+        with pytest.raises(CompilationError):
+            proof.validate(analysis, "ordinary_join::owner", selection)
 
 
 def issue(tmp_path, source=SOURCE):

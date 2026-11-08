@@ -204,6 +204,29 @@ def test_registered_original_tokens_and_syntax_keep_exact_identity(tmp_path):
     assert proof.validate(parent.analysis, parent.entry.qualified, originals) is proof
 
 
+def test_adoption_keeps_completed_private_analysis_receipts_in_their_registry(tmp_path):
+    from compiler.frontend.resource_reachability import prove_native_effect_graph
+    from compiler.tests.test_native_nested_directive_ownership import ENTRY as NATIVE_ENTRY
+    from compiler.tests.test_native_nested_directive_ownership import fixture
+
+    parent = builder_fixture(tmp_path / "source")
+    native_path = tmp_path / "native"
+    native_path.mkdir()
+    with GenerationTransaction(parent) as transaction:
+        # This analysis is created by the candidate, after its original work
+        # state was forked. Its exact proofs are already complete at adoption.
+        analysis, selected = fixture(native_path)
+        proof = prove_native_effect_graph(analysis, NATIVE_ENTRY, selected)
+        registry = analysis._joined_completions
+        transaction.builder.coordinators["completed-native"] = SimpleNamespace(analysis=analysis, proof=proof)
+        assert proof.validate(analysis, NATIVE_ENTRY, selected) is proof
+        transaction.adopt()
+    retained = parent.coordinators["completed-native"]
+    assert retained.analysis is analysis and retained.proof is proof
+    assert analysis._joined_completions is registry
+    assert proof.validate(analysis, NATIVE_ENTRY, selected) is proof
+
+
 def test_explicit_adoption_accepts_complete_real_companion_state(tmp_path):
     parent = builder_fixture(tmp_path / "source")
     original_facts, analysis = parent.facts, parent.analysis

@@ -14,6 +14,7 @@ from compiler.frontend.authority_context import context_for
 from compiler.frontend.call_bindings import _fixed_array_bounds, _original_call_control
 from compiler.frontend.descriptor_teams import DescriptorTeamProof
 from compiler.frontend.native_completion import (
+    NativeCompletionProof,
     NativeGraphCompletionProof,
     _formal_array_call_rows,
     _graph_completion_attachments,
@@ -70,9 +71,21 @@ def _prerequisites(analysis, reachability, storage):
     for edge in reachability.calls:
         owners.append(edge)
     attachments = []
-    for _, _, completion in reachability._completion:
+    for procedure, selected, completion in reachability._completion:
+        if type(completion) is NativeCompletionProof:
+            # Complete CALL inventories can retain an ordinary original join.
+            # Keep its exact token and registry alongside the graph's checked
+            # source-budget receipt; this is not fixed-array write authority.
+            completion.validate(analysis, procedure, selected)
+            if (tuple(selected) != completion.selected_node_ids or not any(
+                    name == procedure and tuple(identities) == tuple(selected) and proof is completion
+                    for template in graph.templates for name, identities, proof in template.completion)):
+                raise CompilationError('native prerequisites lost their retained ordinary join')
+            owners.append(completion)
+            entries.append(('_joined_completions', completion.identity, completion))
+            continue
         if type(completion) is not NativeGraphCompletionProof:
-            raise CompilationError('native opaque write requires exact strong graph completion')
+            raise CompilationError('native prerequisites require exact original completion proofs')
         attachments.extend(_graph_completion_attachments(completion))
         entries.append(('_native_graph_completions', completion.identity, completion))
         for team in completion._reduction_teams:
@@ -175,7 +188,8 @@ def _derive(analysis, procedure, selection, binding, reachability, storage):
         raise CompilationError('native opaque write original effect inventory changed')
     teams, completions = [], []
     for name, identities, completion in reachability._completion:
-        if (completion._graph is not graph or completion._call_storage is not None
+        if (type(completion) is not NativeGraphCompletionProof
+                or completion._graph is not graph or completion._call_storage is not None
                 or not completion._reduction_teams):
             raise CompilationError('native opaque write requires the same strong array completion graph')
         completion.validate(analysis, name, identities)
