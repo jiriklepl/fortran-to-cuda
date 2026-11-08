@@ -2532,3 +2532,23 @@ Evidence paths below are development records, not released performance claims.
 Main working-tree changes and the nested solver/companion changes require separate
 repository review/commits. The failed checkpoint51 performance gate is measured
 evidence, not a completed 10%/2×/20× milestone or production AUTO qualification.
+## Single-operation copy experiment — 2026-11-08
+
+The [copy-policy evidence](benchmarks/reports/gpu-residency-copy-v3-20261108/README.md)
+identifies fragmented channel transfers as a practical next target. The exact
+candidate's channel100 timeline has 22,996 `cudaMemcpy3DAsync` calls and 5.528 s
+of their API intervals; these overlap GPU activity and are not exclusive time.
+A bounded private packing pilot reduces channel100 median time from 16.237523 s
+to 14.592456 s, with three of three paired wins (10.13%). This is experimental,
+not the seven-round production checkpoint, and remains slower than native.
+
+Copy-cost ABI/schema 3 now allows one operation when calibrated geometry and
+complete-path pricing justify packing. It uses the existing coherence, staging,
+budget, completion and failure paths. Read-only replicas survive; old copy
+profiles are rejected and must be recalibrated. Fresh runtime-matching calibration
+and eight independent held-out geometries pass; all five nominal warm selections
+are measured faster. Initial 102 CPU/34 CUDA checks, final 42 manifest checks,
+276 related checks and 36 companion checks pass (overlapping groups).
+Application regeneration is running from the qualified 2619b7f basis with only
+the copy-policy changes. Public build, short/natural correctness and seven-round
+production timing are pending. The external descriptor draft is preserved.

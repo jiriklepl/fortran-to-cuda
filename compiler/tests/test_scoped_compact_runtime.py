@@ -29,7 +29,7 @@ class CopyCosts(c.Structure):
 
 def synthetic_copy_costs():
     """Complete-path diagnostic selector coefficients; never a hardware profile."""
-    result = CopyCosts(2, 1, .5)
+    result = CopyCosts(3, 1, .5)
     for direction in range(2):
         for path in ("direct", "compact_cold", "compact_reuse"):
             rate = getattr(result, path)[direction]
@@ -49,13 +49,13 @@ def synthetic_copy_costs():
 
 def configured(library, *, mode=3, budget=None, calibrated=True):
     scope = Scope(library)
-    library.fort_scope_set_copy_costs_v2.argtypes = [TOKEN, c.POINTER(CopyCosts), c.POINTER(Costs), c.c_int]
+    library.fort_scope_set_copy_costs_v3.argtypes = [TOKEN, c.POINTER(CopyCosts), c.POINTER(Costs), c.c_int]
     scope.check(library.fort_scope_set_transfers(scope.handle, mode))
     if budget is not None:
         scope.check(library.fort_scope_set_device_budget(scope.handle, budget))
     if calibrated:
         base, copy = costs(), synthetic_copy_costs()
-        scope.check(library.fort_scope_set_copy_costs_v2(scope.handle, c.byref(copy), c.byref(base), 1))
+        scope.check(library.fort_scope_set_copy_costs_v3(scope.handle, c.byref(copy), c.byref(base), 1))
     return scope
 
 
@@ -145,7 +145,7 @@ def test_uncovered_physical_rate_executes_exact_direct_without_new_definition_cr
     # direct-path range. The planner must not price it, while execution
     # still performs each exact original copy safely.
     copy.direct[1].minimum_payload_bytes = 256
-    scope.check(pinned.fort_scope_set_copy_costs_v2(scope.handle, c.byref(copy), c.byref(base), 1))
+    scope.check(pinned.fort_scope_set_copy_costs_v3(scope.handle, c.byref(copy), c.byref(base), 1))
     values, handle = prepare(scope)
     scope.cpu_begin(handle, access(flags=1)); scope.cpu_end(handle)
     assert list(values) == [1000 + i if i < 8 or i >= 56 else -42 for i in range(64)]

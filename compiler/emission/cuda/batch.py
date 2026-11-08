@@ -59,7 +59,7 @@ def transfer_cost_lines(profile, costs):
 
 def physical_copy_cost_lines(calibration):
     """Emit the optional versioned record after profile/runtime validation."""
-    result = ["fort_scope_copy_costs_v2 copy_costs{}; copy_costs.version = FORT_SCOPE_COPY_COST_ABI_VERSION;"]
+    result = ["fort_scope_copy_costs_v3 copy_costs{}; copy_costs.version = FORT_SCOPE_COPY_COST_ABI_VERSION;"]
     if calibration is None:
         return result
     result += ["copy_costs.valid = 1;",

@@ -30,7 +30,7 @@ void check(int s){if(s){std::fprintf(stderr,"scope %d: %s\n",s,fort_scope_error(
 void ck(cudaError_t s){if(s!=cudaSuccess){std::fprintf(stderr,"CUDA %s\n",cudaGetErrorString(s));std::abort();}}
 Pricing prices(bool variant=false) {
     // Explicit synthetic dispatch rates: D=10, cold=9, warm=1. No hardware price.
-    Pricing p{};p.copy.version=2;p.copy.valid=1;p.copy.minimum_relative_saving=.5;
+    Pricing p{};p.copy.version=FORT_SCOPE_COPY_COST_ABI_VERSION;p.copy.valid=1;p.copy.minimum_relative_saving=.5;
     p.base.version=FORT_SCOPE_PLANNING_ABI_VERSION;p.base.valid=1;p.base.max_allocation_bytes=1u<<28;
     p.base.cpu_flops=p.base.cpu_bandwidth=p.base.gpu_flops=p.base.gpu_bandwidth=p.base.h2d_bandwidth=p.base.d2h_bandwidth=1e12;
     p.base.create_seconds=p.base.register_seconds=p.base.host_access_seconds=p.base.device_access_seconds=
@@ -66,7 +66,7 @@ struct App {
         if(borrowed){check(fort_scope_domain_create_v1(0,&domain));check(fort_scope_create_in_domain_v1(domain,&context));}
         else check(fort_scope_create(0,&context));
         const auto p=prices(variant);check(fort_scope_set_transfers(context,FORT_SCOPE_TRANSFERS_AUTO));
-        check(fort_scope_set_copy_costs_v2(context,&p.copy,&p.base,1));
+        check(fort_scope_set_copy_costs_v3(context,&p.copy,&p.base,1));
         if(limited)check(fort_scope_set_device_budget(context,bytes));
         for(size_t i=0;i<bytes;++i)host[i]=value(i,element,x,0);
         const size_t shape[]={x,y,z};const int64_t lower[]={-17,2,-9};

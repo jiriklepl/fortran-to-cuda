@@ -178,11 +178,13 @@ static std::vector<PhysicalGeometry> physical_geometries() {
     struct Shape {size_t count,width,height,depth;};
     const Shape shapes[3][10]={
         {{2,1,1,1},{4,128,1,1},{49,64,1,1},{2,131072,1,1},{},{},{1,262144,1,1},{1,524288,1,1},{1,1048576,1,1},{1,2097152,1,1}},
-        {{2,1,8,1},{4,8,64,1},{49,128,32,1},{2,512,256,1},{},{}},
-        {{2,1,8,4},{4,8,16,16},{49,64,4,4},{2,256,64,64},{16,1,64,64},{64,1,8,8}}};
+        {{2,1,8,1},{4,8,64,1},{49,128,32,1},{2,512,256,1},{},{},
+         {1,1,64,1},{1,3,64,1},{1,128,64,1},{1,1,1024,1}},
+        {{2,1,8,4},{4,8,16,16},{49,64,4,4},{2,256,64,64},{16,1,64,64},{64,1,8,8},
+         {1,1,64,64},{1,3,64,64},{1,128,64,64},{1,3,8,8}}};
     std::vector<PhysicalGeometry> result;
     for(const unsigned word:{1u,4u,8u})for(unsigned kind=0;kind<3;++kind)for(const auto &s:shapes[kind]) {
-        if(!s.count || (s.count==1 && word!=8))continue;
+        if(!s.count || (s.count==1 && kind==0 && word!=8))continue;
         const size_t pitch=s.width+(kind?64:0),height=s.height+(kind==2?2:0);
         const size_t stride=(pitch*height*s.depth+64)*word;
         PhysicalGeometry g{word,1u<<kind,word+s.count*stride,{}};
@@ -218,10 +220,10 @@ static void describe_physical_copies() {
     const auto geometries=physical_geometries();
     for(const auto &g:geometries) {
         const auto p=prepare_physical(g);const auto n=p.operations.size();
-        const size_t compact=n>1?2:0;
+        const size_t compact=2;
         records+=2*(1+compact);batches+=16*(1+compact);
         kernels+=16*compact*p.plan.chunks.size();dmas+=16*(n+compact);
-        std::cout<<"{\"kind\":\"scoped_copy_geometry\",\"version\":2,\"word_bytes\":"<<g.word
+        std::cout<<"{\"kind\":\"scoped_copy_geometry\",\"version\":3,\"word_bytes\":"<<g.word
             <<",\"physical_bytes\":"<<g.physical<<",\"payload_bytes\":"<<p.plan.bytes<<",\"rows\":"<<p.plan.rows
             <<",\"descriptor_work\":"<<p.plan.work<<",\"kernel_chunks\":"<<p.plan.chunks.size()
             <<",\"layout_mask\":"<<g.expected_layout<<",\"operations\":[";
@@ -229,7 +231,7 @@ static void describe_physical_copies() {
             std::cout<<'['<<o.offset<<','<<o.width<<','<<o.height<<','<<o.depth<<','<<o.pitch<<','<<o.physical_height<<']';}
         std::cout<<"]}\n";
     }
-    std::cout<<"{\"kind\":\"scoped_copy_protocol\",\"version\":2,\"geometries\":"<<geometries.size()
+    std::cout<<"{\"kind\":\"scoped_copy_protocol\",\"version\":3,\"geometries\":"<<geometries.size()
         <<",\"records\":"<<records<<",\"verified_batches\":"<<batches<<",\"copy_kernel_launches\":"<<kernels
         <<",\"transfer_dma_calls\":"<<dmas<<",\"excluded_warmups_per_path\":1,\"retained_rotated_rounds\":7}\n";
 }
@@ -260,7 +262,7 @@ static void measure_physical_copies() {
         unsigned char *device=nullptr;CUDA(cudaMalloc(reinterpret_cast<void**>(&device),physical));
         size_t requested=0;for(const auto size:compact::capacities)if(size>=plan.bytes) {requested=size;break;}
         if(!requested)throw std::runtime_error("physical calibration capacity unavailable");
-        const unsigned methods=ops.size()>1?3:1;
+        const unsigned methods=3;
         for(const bool upload:{true,false}) {
             std::vector<double> durations[3];
             for(int round=-1;round<7;++round)for(unsigned ordinal=0;ordinal<methods;++ordinal) {
@@ -328,7 +330,7 @@ static void measure_physical_copies() {
                 if(round>=0)durations[method].push_back(seconds);
             }
             for(unsigned method=0;method<methods;++method) {
-                const auto fields="\"kind\":\"scoped_copy\",\"version\":2,\"name\":"+quoted(method?"compact":"direct")+geometry.str()+
+                const auto fields="\"kind\":\"scoped_copy\",\"version\":3,\"name\":"+quoted(method?"compact":"direct")+geometry.str()+
                     ",\"direction\":"+quoted(upload?"h2d":"d2h")+",\"pool_state\":"+quoted(method==0?"none":method==1?"cold":"reuse")+
                     ",\"capacity_bytes\":"+std::to_string(method?requested:0);
                 record(fields,durations[method]);

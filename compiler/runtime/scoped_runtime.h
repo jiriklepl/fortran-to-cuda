@@ -320,8 +320,8 @@ typedef struct fort_scope_batch_costs {
  * Submission terms count original operations or compact kernel chunks.
  * Empirical errors are diagnostics, not global profitability bounds.
  * No field grants memory validity, execution, source motion or lifetime. */
-#define FORT_SCOPE_COPY_COST_ABI_VERSION 2
-typedef struct fort_scope_copy_rate_v2 {
+#define FORT_SCOPE_COPY_COST_ABI_VERSION 3
+typedef struct fort_scope_copy_rate_v3 {
     double batch_seconds, submission_seconds, byte_seconds, row_seconds, descriptor_seconds;
     double median_relative_error, p90_relative_error, maximum_relative_error;
     size_t minimum_payload_bytes, maximum_payload_bytes, minimum_rows, maximum_rows;
@@ -329,12 +329,12 @@ typedef struct fort_scope_copy_rate_v2 {
     size_t minimum_operations, maximum_operations, minimum_descriptor_work, maximum_descriptor_work;
     size_t minimum_kernel_chunks, maximum_kernel_chunks;
     uint32_t word_bytes_mask, layout_combinations_mask;
-} fort_scope_copy_rate_v2;
-typedef struct fort_scope_copy_costs_v2 {
+} fort_scope_copy_rate_v3;
+typedef struct fort_scope_copy_costs_v3 {
     uint32_t version, valid;
     double minimum_relative_saving;
-    fort_scope_copy_rate_v2 direct[2], compact_cold[2], compact_reuse[2];
-} fort_scope_copy_costs_v2;
+    fort_scope_copy_rate_v3 direct[2], compact_cold[2], compact_reuse[2];
+} fort_scope_copy_costs_v3;
 /* Access rectangles describe ordinal zero. For begin/count, shift the chosen
  * axis by the minimum/maximum of step*begin and step*(begin+count-1).
  * FIXED_AXIS permits immutable input sections independent of the partition.
@@ -402,7 +402,7 @@ int fort_scope_set_transfer_costs_v1(fort_scope_t context, const fort_scope_batc
                                     int compatible);
 /* Configuration precedes registration; a matching generated hardware/runtime
  * guard supplies compatible. Missing/invalid costs cannot select compact. */
-int fort_scope_set_copy_costs_v2(fort_scope_t context, const fort_scope_copy_costs_v2 *costs,
+int fort_scope_set_copy_costs_v3(fort_scope_t context, const fort_scope_copy_costs_v3 *costs,
                                 const fort_scope_plan_costs *base, int compatible);
 /* One active batch per context; synchronous on return. compatible=-1 previews
  * bounded metadata/cost selection without CUDA, callbacks, resources, schedule

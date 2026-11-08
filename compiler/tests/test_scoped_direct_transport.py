@@ -75,8 +75,8 @@ def test_published_runtime_keeps_direct_default_and_explicit_compact_calibration
     assert all(name in files for name in manifest['headers'])
     assert manifest['scope_transfers']['default'] == 'direct'
     physical = manifest['scope_transfers']['physical_copies']
-    assert physical['abi_version'] == 2
-    assert physical['configure'] == 'fort_scope_set_copy_costs_v2'
+    assert physical['abi_version'] == 3
+    assert physical['configure'] == 'fort_scope_set_copy_costs_v3'
     assert physical['configure'] in files['scoped_runtime.h']
     assert {'section_batch.hpp', 'section_batch_cost.hpp'} <= set(manifest['headers'])
     # The independently requested alternatives and shared storage APIs remain.

@@ -301,8 +301,8 @@ def read_scoped_runtime() -> tuple[dict[str, str], dict]:
             "budget_scope": "active, allocating and cached staging for scoped and chunked/hybrid calls",
             "automatic_placement": "calibrated pinned synchronous pricing; AUTO may use exact compact physical copies only with matching bounded layout calibration; otherwise direct placement baseline",
             "physical_copies": {
-                "abi_version": 2, "configure": "fort_scope_set_copy_costs_v2",
-                "selection": "AUTO only; one-operation copies and explicit DIRECT retain the direct path",
+                "abi_version": 3, "configure": "fort_scope_set_copy_costs_v3",
+                "selection": "AUTO only; single and multiple operations require measured geometry support; explicit DIRECT retains the direct path",
                 "coverage": "complete-batch empirical geometry, word and observed layout-combination bounds; no cost extrapolation",
                 "prediction": "median-fit complete direct/cold/reuse paths; strict 50 percent warm saving; bounded submitted-copy credit may fund a cold purchase, always charged at its full cold price; empirical errors are diagnostic",
                 "startup_credit": "one model/device record and four bounded capacity balances in the shared pool; successful direct submissions only, ownership changes reset; no future work, completion or data authority",
