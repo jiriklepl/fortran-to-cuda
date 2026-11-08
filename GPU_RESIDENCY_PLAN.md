@@ -4,9 +4,46 @@ This is the implementation plan approved on 2026-10-22. It supersedes the
 conceptual proposal: its projected payoff table was not measurement evidence.
 The original proposal is preserved at
 `/tmp/fortran-residency-implementation-24/GPU_RESIDENCY_PLAN.original.md`.
-Historical reports and timing controls remain unchanged.
+Historical timing controls remain unchanged. External repository cleanup removed
+the large `gpu-residency-implementation-20261023` report archive. Earlier notes
+below describe their original checkpoints; links into that archive are historical
+references, not currently available report files. The cleanup is preserved.
 
 ## Current checkpoint: 2026-11-08
+
+The [local empty native CALL checkpoint](benchmarks/reports/gpu-residency-empty-call-20261108/README.md)
+passes normal generation, the public build, four short controls and both natural
+109/2,458-step runs. All 20 fields are bitwise equal to the prior AUTO-copy
+candidate; bounds, halos, outputs and strict tolerances pass. Generic descriptor
+guards retain the domain when the original native wrapper has no payload work.
+The original CALL still executes once; active/unproved work keeps publication.
+Four CUDA controls and 172 affected source/reader/native checks pass.
+
+Application transfer bytes and DMA counts are **unchanged**. In simple, the cut
+moves from empty resistance work to diffusion; channel still cuts at velocity
+boundary work. Initialization-plus-two-step totals are:
+
+| Case | H2D bytes | D2H bytes | DMA calls |
+|---|---:|---:|---:|
+| channel-simple | 134,664,192 | 146,316,352 | 148 |
+| channel | 184,158,208 | 146,316,352 | 730 |
+
+The matching reader is `75cbcbd`. Exact sources and hashes are retained in
+`/tmp/fortran-parent-graph-empty-native-20261108-01`; natural qualification is
+`/tmp/fortran-empty-native-rk-natural-20261108-02/qualification.json` and the
+copy comparison is
+`/tmp/fortran-empty-native-rk-short-20261108-01/baseline-copy-comparison.json`.
+The interrupted first natural attempt remains failed. New reports stay local
+under the existing ignored reports directory; no removed archive is restored.
+
+The next change connects existing complete joined-worksharing
+lifetime proofs to selected descriptor capture. Its six focused and 298 affected
+checks pass, but its application generation/execution remain separate gates.
+The baseline maintained campaign has 17,125 unique analysis passes, 15 GPU
+opt-ins outstanding and an unfinished CUDA continuation. Fresh seven-rotation
+timings and all new speedup gates remain open.
+
+## Earlier checkpoint notes (archive removed externally)
 
 The [AUTO physical-copy RK checkpoint](benchmarks/reports/gpu-residency-implementation-20261023/automatic-copy-rk-20261108/README.md)
 now passes normal regeneration, public build and all four short all-field/output

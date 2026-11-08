@@ -301,6 +301,7 @@ class ConditionalReturnDraft:
         self._selected_root_receipt = selected_root
         self._consumers = []
         self._native_preservations = {}
+        self._empty_native_calls = {}
 
     def selection_identity(self):
         self.validate()
@@ -746,7 +747,8 @@ def _coverage(member):
                  "unproved_lifetime_or_escape"), rearm_allowed=patch.lifecycle is not None,
                  **({"loop_entry": dict(patch.counted_entry.authority)} if patch.counted_entry is not None else {}),
                  **({"call_preservation": patch.lifecycle.public()}
-                    if type(patch.lifecycle) is SameFamilyNativeCallLifecycle else {}))
+                    if type(patch.lifecycle) is SameFamilyNativeCallLifecycle else {}),
+                 **({"empty_call_guard": patch.empty_call.public()} if patch.empty_call is not None else {}))
     for call in member.source_lexical_calls:
         call.validate(member)
         namespace = call.callee.resource_slot_namespace
@@ -810,12 +812,14 @@ def _record(owner):
     preservation = any(type(patch.lifecycle) is SameFamilyNativeCallLifecycle
                        for member in owner.members.values() for _first,_last,patch in member.patches
                        if hasattr(patch,"lifecycle"))
+    empty_call = any(getattr(patch, "empty_call", None) is not None
+                     for member in owner.members.values() for _first, _last, patch in member.patches)
     lexical = any(member.source_lexical_calls for member in owner.members.values())
     specification = any(getattr(member, "specification_reads", None) is not None for member in owner.members.values())
     return {"version": 5 if specification else 4 if lexical else 3 if preservation else 2 if selected_root is not None else 1,
             **({"specification_entry_policy_version": 2} if specification else {}),
             **({"lexical_child_policy_version": 1} if lexical else {}),
-            **({"native_call_preservation_policy_version": 2} if preservation else {}),
+            **({"native_call_preservation_policy_version": 3 if empty_call else 2} if preservation else {}),
             "kind": "checked_conditional_return", "entry": owner.routine.qualified,
             "source_inputs": owner.builder.analysis.inputs.identity(),
             "selection_identity": draft.selection_identity(),
