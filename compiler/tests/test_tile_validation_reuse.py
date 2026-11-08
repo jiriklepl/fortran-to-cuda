@@ -111,8 +111,13 @@ def test_scalar_entry_fact_is_revalidated_after_geometry_receipt(tmp_path):
     task = source_device_task(builder.analysis, routine, nodes, builder=builder)
     assert task.team is proof
     assert task.validate() is task
+    capture, = [item for item in task.public()["scalar_captures"] if item["resource"] == "argument::scale"]
+    assert capture["authority"]["kind"] == "explicit checked whole-defined scalar entry fact"
     builder.facts["captures"]["argument::scale"]["initialized"] = "none"
-    with pytest.raises(CompilationError, match="whole-defined"):
+    # Geometry is still valid, but byte-only storage authority cannot replace
+    # the original task's whole-defined scalar capture after issuance.
+    assert proof.validate() is proof
+    with pytest.raises(CompilationError, match="source device task lost original"):
         task.validate()
 
 
