@@ -2595,3 +2595,28 @@ application pilot to improve before spending another full campaign on it.
 Require no regression against the fastest existing implementation in both cases
 before promoting a new optimization. This adds a guard to the original research
 gates; it does not replace the 20× objective or relax correctness.
+
+
+### Follow-up: why the copy policy was inactive
+
+The domain-close observer has no `copy_costs`: physical calibration lives in an
+execution `Context` while the expensive downloads occur at storage retirement.
+A private correction gives that calibration the residency lifetime. Both short
+all20 checks pass, but channel's mixed 17-operation batches still reject packing.
+A second private change prices exact download regions independently only when
+keeping the whole batch would not preserve a profitable startup observation.
+It executes 60 single-operation compact copies in the two-step channel check;
+both cases pass all20/halo/output checks with identical payload-byte totals and
+numerical launch records. The naive intermediate partition, which lost useful
+multi-operation startup observations, remains recorded as a failed experiment.
+
+These runtime experiments are isolated under `/tmp`; production is unchanged.
+Their [evidence](benchmarks/reports/gpu-residency-copy-v3-speedup-20261108/README.md)
+includes the exact runtime, full-field results and physical-copy ledgers. A
+three-round pilot against the original candidate and be58 was interrupted after
+external CPU searches contaminated the timings. Its samples remain recorded at
+`/tmp/fortran-copy-partition-pilot-20261108-01`; no speedup claim is made.
+Retry the bounded pilot on idle hardware before another full campaign. A useful
+result would still require shared planner pricing, domain-lifetime regressions
+and fresh calibration before production acceptance. Coverage expansion remains
+paused while the measured application regressions are unresolved.
