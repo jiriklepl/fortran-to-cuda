@@ -11,6 +11,12 @@ references, not currently available report files. The cleanup is preserved.
 
 ## Current checkpoint: 2026-11-08
 
+The latest [64-process copy-policy comparison](benchmarks/reports/gpu-residency-copy-v3-speedup-20261108/README.md)
+does **not** deliver a new application gain. The candidate is 18.16% slower than
+be58 on simple109 and 47.69% slower on channel100. Stop coverage expansion until
+an isolated change improves complete-process performance. The detailed results
+and the failed single-copy admission gate are recorded below.
+
 The [local empty native CALL checkpoint](benchmarks/reports/gpu-residency-empty-call-20261108/README.md)
 passes normal generation, the public build, four short controls and both natural
 109/2,458-step runs. All 20 fields are bitwise equal to the prior AUTO-copy
@@ -2532,6 +2538,7 @@ Evidence paths below are development records, not released performance claims.
 Main working-tree changes and the nested solver/companion changes require separate
 repository review/commits. The failed checkpoint51 performance gate is measured
 evidence, not a completed 10%/2×/20× milestone or production AUTO qualification.
+
 ## Single-operation copy experiment — 2026-11-08
 
 The [copy-policy evidence](benchmarks/reports/gpu-residency-copy-v3-20261108/README.md)
@@ -2549,6 +2556,42 @@ profiles are rejected and must be recalibrated. Fresh runtime-matching calibrati
 and eight independent held-out geometries pass; all five nominal warm selections
 are measured faster. Initial 102 CPU/34 CUDA checks, final 42 manifest checks,
 276 related checks and 36 companion checks pass (overlapping groups).
-Application regeneration is running from the qualified 2619b7f basis with only
-the copy-policy changes. Public build, short/natural correctness and seven-round
-production timing are pending. The external descriptor draft is preserved.
+Normal regeneration, strict package validation, the public build and all eight
+short full20/halo/output checks pass from the qualified 2619b7f basis with only
+the copy-policy changes. The external descriptor draft is preserved.
+
+The [production comparison](benchmarks/reports/gpu-residency-copy-v3-speedup-20261108/README.md)
+retains one excluded warmup and seven rotated complete-process measurements per
+case/mode, with fresh samples for all four binaries. All 64 output comparisons
+pass. Its medians are:
+
+| Case | Native | be58 | `7a612e4` | Copy-v3 candidate | Candidate speedup over native |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| simple109 | 11.586099 s | 9.466523 s | 16.634371 s | 11.185685 s | 1.036× |
+| channel100 | 13.031851 s | 10.992937 s | 11.105197 s | 16.235619 s | 0.803× |
+
+The candidate wins 7/7 pairs against native and `7a612e4` in simple, and 0/7
+against either in channel. It loses all 7 pairs against be58 in both cases.
+The two-case 10%, 2× and 20× checkpoints **fail**. Compared with the earlier
+candidate campaign, both medians differ by less than 1%; these are separate
+campaigns, not paired evidence of an improvement.
+
+The application selects **zero single-operation compact copies**. Its short
+payload bytes, numerical launch records and 28 channel multi-operation compact
+copies are unchanged. The explicit admission check fails and its failure is
+retained in `/tmp/fortran-copy-v3-speedup-20261108-01/short-transport.log`.
+The private pilot's gain therefore did not reach the production policy. Checking
+actual selection should precede a full timing campaign; nominal warm holdouts
+are insufficient. Natural simple109 and channel2458 now both pass all 20 fields,
+bounds, halos and outputs at unchanged tolerances, with field bytes bitwise equal
+to the prior candidate. Fresh-control natural qualification and the full
+maintained-suite continuation remain open.
+
+Next: keep be58 as the fastest measured baseline alongside the original native
+and `7a612e4` controls; do not count gains over a regressed control as success.
+Diagnose the actual rejected copy decisions, including pending work, geometry
+support and pool state. Require the intended path to execute and a short paired
+application pilot to improve before spending another full campaign on it.
+Require no regression against the fastest existing implementation in both cases
+before promoting a new optimization. This adds a guard to the original research
+gates; it does not replace the 20× objective or relax correctness.
