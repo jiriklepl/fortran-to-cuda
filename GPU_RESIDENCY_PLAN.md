@@ -2448,6 +2448,52 @@ replace them. Median acceptance and seven-of-seven paired wins are distinct.
 If the measured ceiling prevents 20×, publish the remaining gap without changing
 the workload or timing definition.
 
+## Fresh performance checkpoint — 2026-11-08
+
+The [64-process comparison](benchmarks/reports/gpu-residency-speedup-20261108/README.md)
+measures the application-qualified frozen `2619b7f` candidate against newly built
+native, be58 and `7a612e4` controls. Later compiler commits and the descriptor
+draft are excluded. The candidate reuses its qualified build from this date;
+the historical `7a612e4` runtime has a genuine fresh compatible calibration.
+Each case/mode has one excluded warmup and seven rotated complete-process
+measurements, with four threads and all startup, pressure solving and output
+included. All 56 samples and paired results are retained.
+
+| Case | Native median | be58 median | `7a612e4` median | Candidate median | Native speedup | Candidate vs `7a612e4` | Paired wins vs `7a612e4` |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| simple109 | 11.768500 s | 9.448505 s | 16.801202 s | 11.271427 s | 1.044× | 32.91% lower wall time | 7/7 |
+| channel100 | 13.186841 s | 11.257578 s | 11.340621 s | 16.321227 s | 0.808× | 43.92% higher wall time | 0/7 |
+
+The two-case 10% checkpoint **fails**; 2× and 20× remain unmet. Candidate paired
+wins against native are 7/7 and 0/7, and against be58 are 0/7 in both cases.
+The measured 20× budgets are 0.588425 s and 0.659342 s; candidate wall times
+remain 19.155× and 24.754× above those budgets.
+
+All eight short checks pass all 20 fields, bounds, halos and outputs at unchanged
+tolerances. All 64 timing processes pass output comparison. Candidate natural
+109/2,458-step qualification already passes, but the freshly built controls
+have not repeated their natural qualification. These are preliminary timing
+results, with no release or research milestone accepted. The maintained CUDA
+suite was intentionally interrupted to prioritize this comparison; no complete
+maintained-suite pass is claimed.
+
+Separate two-step diagnostics include initialization. Channel records 402
+candidate runtime launches and 730 upload/download events, versus seven and
+70 for each historical control. Candidate transfers total 330,474,560 bytes,
+versus 123,232,256 bytes for each control. These are compact runtime records,
+not a CUDA activity timeline or a causal attribution. Forced `sections` compute
+placement with calibrated AUTO copies remains diagnostic; GPU source-compute
+pricing is unqualified. Fresh `7a612e4` records 97 launches in simple109's
+two-step diagnostic, so its current choices must not inherit the old report's
+SGS-only description.
+
+The next bounded performance experiment should isolate channel Convection
+placement and retained residency, then measure CPU/GPU time on this exact build
+to distinguish kernel work, launch/management costs and transfers. Use these
+fresh controls for the next comparison; additional source-proof machinery alone
+does not establish an application improvement. Full samples, raw-run links,
+input hashes and separate diagnostic counts are in the report above.
+
 ## Implementation ledger (in progress)
 
 Evidence paths below are development records, not released performance claims.
