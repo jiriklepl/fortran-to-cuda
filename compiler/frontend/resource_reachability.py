@@ -30,7 +30,7 @@ from compiler.frontend.source_objects import _members, _TypeBuilder
 from compiler.ir import CompilationError
 from compiler.ir.intrinsics import ARRAY_INQUIRIES, INTRINSICS, MODEL_INQUIRIES
 
-VERSION = 15
+VERSION = 16
 HOST_CONTROL_VERSION = 5
 JOINED_SOURCE_BUDGET_VERSION = 1
 
@@ -1509,7 +1509,14 @@ class _Scan:
                             self.tick()
                             if _kind(part) == "Comment" and str(part).lstrip().lower().startswith("!$omp"):
                                 directives.append(part)
-                    if any(id(part) not in owned for part in directives):
+                    if source_budget is not None:
+                        # The authenticated ordinary join checks the complete
+                        # original group, including conditional worksharing.
+                        # Its retained receipt revalidates that exact syntax;
+                        # owning these directives does not suppress payload or
+                        # the independent host-effect checks below.
+                        owned.update(id(part) for part in directives)
+                    elif any(id(part) not in owned for part in directives):
                         try:
                             # Only the new fixed-array route widens ownership.
                             # Its existing issuer checks every exact original

@@ -36,11 +36,29 @@ copy comparison is
 The interrupted first natural attempt remains failed. New reports stay local
 under the existing ignored reports directory; no removed archive is restored.
 
-The next change connects existing complete joined-worksharing
-lifetime proofs to selected descriptor capture. Its six focused and 298 affected
-checks pass, but its application generation/execution remain separate gates.
+The descriptor-capture follow-up now keeps complete original OpenMP selections
+through the native-effect consumer. Its ten focused and 414 affected checks
+pass. The first generation, before the consumer fix, changed only a local guard
+name and its manifest: 292 of 294 artifacts were byte-identical. That package
+was not rebuilt or timed. Generation with the consumer fix is still in progress;
+application execution and traffic reduction remain separate gates.
+
+The effect graph also now recognizes nested conditional worksharing directives
+covered by its authenticated complete original join. It retains both branches'
+payload effects, independent host-access checks and the final join; unknown
+tasks, missing joins and changed proof objects still fail. Source policy 16
+invalidates earlier graph identities. All 396 affected checks pass. A frozen
+ELMM source diagnosis now clears the former unowned-directive barriers in all
+three `BoundUVW_do_BC` groups, as well as both diffusion groups, with exact
+storage proofs and source guards. This is source analysis, not GPU execution or
+a transfer reduction. Evidence:
+`/tmp/fortran-nested-directive-integration-20261108-01.xml` and
+`/tmp/fortran-native-group-host-access-diagnosis-20261108-03/result.json`.
+
 The baseline maintained campaign has 17,125 unique analysis passes, 15 GPU
-opt-ins outstanding and an unfinished CUDA continuation. Fresh seven-rotation
+opt-ins outstanding and an unfinished CUDA continuation. Its observed late-veto
+skip is conditional on the resource-fallback case having no GPU prefix; it is
+retained as a skip, not a pass. Fresh seven-rotation
 timings and all new speedup gates remain open.
 
 ## Earlier checkpoint notes (archive removed externally)
